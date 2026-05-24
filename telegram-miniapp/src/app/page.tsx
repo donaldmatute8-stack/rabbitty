@@ -2,19 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { ethers } from 'ethers';
+import { motion } from 'framer-motion';
+import { ChevronLeft, MessageCircle, Maximize, ShoppingBag, MoreHorizontal } from 'lucide-react';
 
-const BUNZ_CONTRACT = '0x8d0CC6dcD796e9B14bd25BA2A21291aa3Af39fcB';
-const BUNZ_ABI = [
-  "function balanceOf(address account) view returns (uint256)",
-  "function spendBunz(address business, uint256 amount)"
-];
-
-export default function WalletPage() {
-  const [user, setUser] = useState<any>(null);
-  const [balance, setBalance] = useState('0');
-  const [loading, setLoading] = useState(false);
+export default function FeedPage() {
   const [WebApp, setWebApp] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState("bunz'in");
 
   useEffect(() => {
     import('@twa-dev/sdk').then((mod) => {
@@ -22,206 +15,173 @@ export default function WalletPage() {
       app.ready();
       app.expand();
       setWebApp(app);
-      
-      const tgUser = app.initDataUnsafe.user;
-      if (tgUser) {
-        setUser(tgUser);
-        const wallet = generateWalletFromUserId(tgUser.id);
-        loadBalance(wallet.address);
-      }
     });
   }, []);
 
-  const generateWalletFromUserId = (userId: number) => {
-    const privateKey = ethers.keccak256(ethers.toUtf8Bytes(`rabbitty-${userId}-seed`));
-    return new ethers.Wallet(privateKey);
-  };
-
-  const loadBalance = async (address: string) => {
-    try {
-      const provider = new ethers.JsonRpcProvider('https://ethereum-sepolia-rpc.publicnode.com');
-      const contract = new ethers.Contract(BUNZ_CONTRACT, BUNZ_ABI, provider);
-      const bal = await contract.balanceOf(address);
-      setBalance(ethers.formatEther(bal));
-    } catch (error) {
-      console.error('Error loading balance:', error);
-    }
-  };
-
-  const handleQRScan = async (qrCode: string) => {
-    setLoading(true);
-    try {
-      const response = await fetch('https://rabbitty-oracle-production.up.railway.app/process-consumption', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ receiptHash: qrCode })
-      });
-      const data = await response.json();
-      
-      if (data.success) {
-        if (WebApp) {
-          WebApp.showPopup({
-            title: '¡Ganaste bunz!',
-            message: `Recibiste ${data.reward} bunz`,
-            buttons: [{ type: 'ok' }]
-          });
-        }
-        const wallet = generateWalletFromUserId(user!.id);
-        loadBalance(wallet.address);
-      }
-    } catch (error) {
-      if (WebApp) WebApp.showAlert('Código QR inválido');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const scanQR = () => {
+  const closeApp = () => {
     if (WebApp) {
-      WebApp.showScanQrPopup({
-        text: 'Escanea el QR del negocio para ganar bunz'
-      }, (qrCode: string) => {
-        handleQRScan(qrCode);
-        return true;
-      });
+      WebApp.close();
     }
   };
 
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#FF6B35] to-[#FF4081] flex items-center justify-center p-6">
-        <div className="text-center">
-          <div className="w-32 h-32 mx-auto mb-6 bg-white rounded-3xl flex items-center justify-center shadow-2xl">
-            <Image 
-              src="/logo.png" 
-              alt="Rabbitty" 
-              width={100} 
-              height={100}
-              className="rounded-2xl"
-            />
-          </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Rabbitty</h1>
-          <p className="text-white/80 mb-8">Abre en Telegram para continuar</p>
-        </div>
-      </div>
-    );
-  }
+  const tabs = ["bunz'in", "Stock", "Freehands"];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-gradient-to-br from-[#FF6B35] to-[#FF4081] px-6 pt-12 pb-8 rounded-b-[32px]">
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-lg">
-              <Image src="/logo.png" alt="Rabbitty" width={40} height={40} />
-            </div>
-            <div>
-              <h1 className="text-white font-bold text-xl">Rabbitty</h1>
-              <p className="text-white/70 text-sm">Tu billetera bunz</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            {user.photo_url ? (
-              <img src={user.photo_url} alt="Profile" className="w-10 h-10 rounded-full border-2 border-white/30" />
-            ) : (
-              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white font-bold">
-                {user.first_name?.[0]}
-              </div>
-            )}
-          </div>
-        </div>
+    <div className="min-h-screen bg-[#FAFAFA] flex flex-col font-sans">
+      {/* Safe Area Top */}
+      <div className="h-6 w-full bg-[#FAFAFA]"></div>
 
-        <div className="text-center">
-          <p className="text-white/70 text-base mb-1">Tu balance</p>
-          <p className="text-white text-5xl font-bold mb-1">
-            {Number(balance).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-          </p>
-          <p className="text-white/80 text-lg">bunz</p>
-        </div>
-      </div>
-
-      <div className="px-6 -mt-4">
-        <button
-          onClick={scanQR}
-          disabled={loading}
-          className="w-full bg-white rounded-2xl py-5 shadow-lg flex items-center justify-center gap-3 mb-6 active:scale-[0.98] transition"
+      {/* Top Header */}
+      <header className="flex items-center justify-between px-4 py-2 bg-[#FAFAFA] sticky top-0 z-50">
+        <button 
+          onClick={closeApp} 
+          className="p-2 -ml-2 text-black hover:bg-black/5 rounded-full transition-colors"
+          aria-label="Back"
         >
-          <span className="text-2xl">📷</span>
-          <span className="text-gray-800 font-semibold text-lg">
-            {loading ? 'Procesando...' : 'Escanear para ganar'}
-          </span>
+          <ChevronLeft className="w-6 h-6" strokeWidth={2} />
         </button>
-
-        <div className="grid grid-cols-4 gap-3 mb-6">
-          <a href="/map" className="bg-white rounded-2xl p-4 text-center shadow-sm">
-            <span className="text-2xl block mb-1">🗺️</span>
-            <span className="text-xs text-gray-600 font-medium">Mapa</span>
-          </a>
-          <a href="/pay" className="bg-white rounded-2xl p-4 text-center shadow-sm">
-            <span className="text-2xl block mb-1">💳</span>
-            <span className="text-xs text-gray-600 font-medium">Pagar</span>
-          </a>
-          <a href="/history" className="bg-white rounded-2xl p-4 text-center shadow-sm">
-            <span className="text-2xl block mb-1">📊</span>
-            <span className="text-xs text-gray-600 font-medium">Historial</span>
-          </a>
-          <a href="/referral" className="bg-white rounded-2xl p-4 text-center shadow-sm">
-            <span className="text-2xl block mb-1">🎁</span>
-            <span className="text-xs text-gray-600 font-medium">Invitar</span>
-          </a>
+        
+        <div className="flex-1 flex justify-center items-center relative h-12">
+          {/* Using the new geometric rabbit logo */}
+          <Image 
+            src="/logo-main.png" 
+            alt="Rabbitty Logo" 
+            width={48} 
+            height={48}
+            className="object-contain"
+            priority
+          />
         </div>
+        
+        <div className="w-10"></div> {/* Spacer to balance the header */}
+      </header>
 
-        <div className="bg-white rounded-2xl p-5 shadow-sm mb-24">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-gray-800 font-bold text-lg">Actividad reciente</h2>
-            <a href="/history" className="text-[#FF6B35] text-sm font-medium">Ver todo</a>
-          </div>
-          
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 bg-green-50 rounded-xl">
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">☕</span>
-                <div>
-                  <p className="font-semibold text-gray-800 text-sm">Café Cultura</p>
-                  <p className="text-xs text-gray-500">Hoy, 10:30</p>
-                </div>
-              </div>
-              <span className="text-green-600 font-bold">+50</span>
-            </div>
+      {/* Tabs */}
+      <nav className="flex items-center justify-between px-6 pt-4 pb-0 bg-[#FAFAFA] border-b border-gray-100">
+        {tabs.map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`pb-3 relative text-sm font-medium transition-colors ${
+              activeTab === tab ? 'text-black' : 'text-gray-400'
+            }`}
+          >
+            {tab}
+            {activeTab === tab && (
+              <motion.div
+                layoutId="activeTabIndicator"
+                className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#FF0066]"
+                initial={false}
+                transition={{ type: "spring", stiffness: 500, damping: 30 }}
+              />
+            )}
+          </button>
+        ))}
+      </nav>
+
+      {/* Feed Area */}
+      <main className="flex-1 overflow-y-auto pb-24">
+        {activeTab === "bunz'in" && (
+          <div className="flex flex-col gap-4 mt-4 px-4">
             
-            <div className="flex items-center justify-between p-3 bg-red-50 rounded-xl">
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">🍕</span>
-                <div>
-                  <p className="font-semibold text-gray-800 text-sm">Pizza Napoli</p>
-                  <p className="text-xs text-gray-500">Ayer, 19:00</p>
+            {/* Card 1 */}
+            <div className="bg-white rounded-[24px] shadow-sm overflow-hidden flex flex-col border border-gray-50">
+              {/* Image placeholder mimicking the photo from the screenshot */}
+              <div className="relative w-full aspect-[4/3] bg-gray-100">
+                <Image 
+                  src="/logo-main.png" 
+                  alt="Post Content"
+                  fill
+                  className="object-cover opacity-20 scale-150 blur-xl"
+                />
+                {/* Simulated photo content */}
+                <div className="absolute inset-0 flex items-center justify-center p-4">
+                   <div className="w-full h-full bg-gradient-to-br from-yellow-100 via-orange-50 to-white rounded-xl flex items-center justify-center shadow-inner relative overflow-hidden">
+                      <div className="text-center">
+                        <span className="text-6xl mb-2 block">🥗</span>
+                        <span className="font-medium text-gray-500">Delicious Toast</span>
+                      </div>
+                   </div>
                 </div>
               </div>
-              <span className="text-red-500 font-bold">-100</span>
+              
+              <div className="p-4 flex items-start justify-between">
+                <div>
+                  <h3 className="text-black font-medium text-base mb-1">Conejito</h3>
+                  <p className="text-gray-500 text-sm font-light">iPhone X – 1 minute ago</p>
+                </div>
+                <button className="p-2 text-gray-800 hover:bg-gray-100 rounded-full transition-colors">
+                  <MoreHorizontal className="w-5 h-5" />
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
-      </div>
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t px-6 py-3">
-        <div className="flex justify-around">
-          <a href="/" className="flex flex-col items-center gap-1 text-[#FF6B35]">
-            <span className="text-xl">💰</span>
-            <span className="text-xs font-medium">Wallet</span>
-          </a>
-          <a href="/map" className="flex flex-col items-center gap-1 text-gray-400">
-            <span className="text-xl">🗺️</span>
-            <span className="text-xs font-medium">Mapa</span>
-          </a>
-          <a href="/social" className="flex flex-col items-center gap-1 text-gray-400">
-            <span className="text-xl">📱</span>
-            <span className="text-xs font-medium">Social</span>
-          </a>
-          <a href="/profile" className="flex flex-col items-center gap-1 text-gray-400">
-            <span className="text-xl">👤</span>
-            <span className="text-xs font-medium">Perfil</span>
-          </a>
+            {/* Card 2 */}
+            <div className="bg-white rounded-[24px] shadow-sm overflow-hidden flex flex-col border border-gray-50">
+              <div className="relative w-full aspect-[4/3] bg-gray-100">
+                <Image 
+                  src="/logo-main.png" 
+                  alt="Post Content"
+                  fill
+                  className="object-cover opacity-20 scale-150 blur-xl"
+                />
+                <div className="absolute inset-0 flex items-center justify-center p-4">
+                   <div className="w-full h-full bg-gradient-to-br from-pink-50 via-white to-gray-50 rounded-xl flex items-center justify-center shadow-inner">
+                      <div className="text-center">
+                        <span className="text-6xl mb-2 block">☕</span>
+                        <span className="font-medium text-gray-500">Morning Coffee</span>
+                      </div>
+                   </div>
+                </div>
+              </div>
+              
+              <div className="p-4 flex items-start justify-between">
+                <div>
+                  <h3 className="text-black font-medium text-base mb-1">Conejito</h3>
+                  <p className="text-gray-500 text-sm font-light">iPhone X – 5 minutes ago</p>
+                </div>
+                <button className="p-2 text-gray-800 hover:bg-gray-100 rounded-full transition-colors">
+                  <MoreHorizontal className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {activeTab === "Stock" && (
+          <div className="flex items-center justify-center h-48 text-gray-400">
+            Stock Content
+          </div>
+        )}
+
+        {activeTab === "Freehands" && (
+          <div className="flex items-center justify-center h-48 text-gray-400">
+            Freehands Content
+          </div>
+        )}
+      </main>
+
+      {/* Bottom Navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-gray-100 pb-safe-bottom">
+        <div className="flex items-center justify-between px-8 py-3">
+          
+          <button className="flex flex-col items-center justify-center w-12 h-12">
+            <span className="font-['Brush_Script_MT',_cursive] text-3xl text-[#FF0066] leading-none" style={{ fontFamily: 'Brush Script MT, cursive' }}>Ra</span>
+          </button>
+          
+          <button className="flex flex-col items-center justify-center w-12 h-12 text-gray-400 hover:text-black transition-colors">
+            <MessageCircle className="w-6 h-6" strokeWidth={1.5} />
+          </button>
+          
+          <button className="flex flex-col items-center justify-center w-12 h-12 text-gray-400 hover:text-black transition-colors">
+            <Maximize className="w-6 h-6" strokeWidth={1.5} />
+          </button>
+          
+          <button className="flex flex-col items-center justify-center w-12 h-12 text-[#10B981] hover:text-green-600 transition-colors">
+            <ShoppingBag className="w-6 h-6" strokeWidth={1.5} />
+          </button>
+
         </div>
       </nav>
     </div>
