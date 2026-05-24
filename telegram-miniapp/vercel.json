@@ -1,6 +1,13 @@
 {
+  "version": 2,
+  "public": true,
   "github": {
     "silent": true
   },
-  "public": true
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/next"
+    }
+  ]
 }
