@@ -37,12 +37,8 @@ export default function Header({ onBack, showBack = true }: HeaderProps) {
         />
       </div>
       
-      {/* Balance (Right Side) */}
-      <div className="flex items-center justify-end min-w-[3rem]">
-         <div className="bg-gray-50 border border-gray-100 rounded-full px-2 py-1 flex items-center justify-center">
-            <span className="text-[11px] font-semibold text-[#111111]">{balance !== '0' ? balance : '1250'} bunz</span>
-         </div>
-      </div>
+      {/* Spacer para mantener balance (Right Side) */}
+      <div className="w-10" />
     </header>
   );
 }

@@ -20,12 +20,14 @@ export default function BottomNav() {
         
         {/* Home / Feed */}
         <Link href="/" className="flex flex-col items-center justify-center w-14 h-14">
-          <span 
-            className="font-['Georgia',_serif] text-[28px] leading-none transition-colors" 
-            style={{ color: getColor(isFeed) }}
-          >
-            Ra
-          </span>
+          <div className="w-8 h-8 flex items-center justify-center">
+            <img 
+              src="/logo-main.png" 
+              alt="Ra"
+              className="w-full h-full object-contain opacity-80"
+              style={{ filter: isFeed ? 'brightness(0) saturate(100%) invert(27%) sepia(85%) saturate(3015%) hue-rotate(325deg) brightness(97%) contrast(93%)' : 'none' }}
+            />
+          </div>
         </Link>
         
         {/* Discover / Mapa / Explorar */}
