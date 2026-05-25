@@ -26,13 +26,13 @@ export default function Header({ onBack, showBack = true }: HeaderProps) {
       )}
       
       {/* Logo Conejo Centrado */}
-      <div className="absolute left-1/2 -translate-x-1/2">
+      <div className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center">
         <Image 
           src="/logo-main.png" 
           alt="Rabbitty" 
-          width={32} 
-          height={32} 
-          className="object-contain"
+          width={40} 
+          height={40} 
+          className="object-contain opacity-90"
           priority 
         />
       </div>

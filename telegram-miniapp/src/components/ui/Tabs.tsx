@@ -10,7 +10,7 @@ interface TabsProps {
 
 export default function Tabs({ tabs, activeTab, onChange }: TabsProps) {
   return (
-    <nav className="flex items-center gap-6 px-4 pt-4 bg-white">
+    <nav className="flex items-center justify-center gap-6 px-4 pt-4 bg-white">
       {tabs.map((tab) => (
         <button
           key={tab}

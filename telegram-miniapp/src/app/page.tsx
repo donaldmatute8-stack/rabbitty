@@ -117,13 +117,6 @@ export default function FeedPage() {
         {/* Tabs */}
         <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
 
-        {/* Error Banner */}
-        {error && (
-          <div className="mx-4 mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-xl">
-            <p className="text-sm text-yellow-700">{error}</p>
-          </div>
-        )}
-
         {/* Feed */}
         <div className="pt-4">
           {loading ? (
