@@ -1,195 +1,140 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
+import { Search, Navigation, MapPin, Filter, Crosshair } from 'lucide-react';
+import BottomNav from '@/components/BottomNav';
+import Header from '@/components/ui/Header';
+import Badge from '@/components/ui/Badge';
+import EmptyState from '@/components/ui/EmptyState';
 
-interface Business {
-  id: string;
-  name: string;
-  type: string;
-  rewardRate: number;
-  distance: string;
-  rating: number;
-  image: string;
-  lat: number;
-  lng: number;
-}
+const FILTERS = ['Todos', 'Cafés', 'Restaurantes', 'Gimnasios', 'Retail', 'Belleza'];
 
-const MOCK_BUSINESSES: Business[] = [
-  { id: '1', name: 'Café Cultura', type: 'Café', rewardRate: 25, distance: '120m', rating: 4.8, image: '☕', lat: 19.4326, lng: -99.1332 },
-  { id: '2', name: 'Pizza Napoli', type: 'Restaurante', rewardRate: 30, distance: '350m', rating: 4.6, image: '🍕', lat: 19.4330, lng: -99.1328 },
-  { id: '3', name: 'Gimnasio Power', type: 'Gym', rewardRate: 20, distance: '500m', rating: 4.9, image: '💪', lat: 19.4320, lng: -99.1340 },
-  { id: '4', name: 'TechZone', type: 'Electrónica', rewardRate: 15, distance: '800m', rating: 4.5, image: '💻', lat: 19.4335, lng: -99.1315 },
-  { id: '5', name: 'Libros Universo', type: 'Librería', rewardRate: 18, distance: '1.2km', rating: 4.7, image: '📚', lat: 19.4310, lng: -99.1350 },
+const NEARBY_BUSINESSES = [
+  { id: '1', name: 'Café Cultura', type: 'Café', rewardRate: 25, distance: '120m', rating: 4.8, lat: 0, lng: 0 },
+  { id: '2', name: 'Pizza Napoli', type: 'Restaurante', rewardRate: 30, distance: '350m', rating: 4.6, lat: 0, lng: 0 },
+  { id: '3', name: 'Gimnasio Power', type: 'Gym', rewardRate: 20, distance: '500m', rating: 4.9, lat: 0, lng: 0 },
+  { id: '4', name: 'TechZone', type: 'Electrónica', rewardRate: 15, distance: '800m', rating: 4.5, lat: 0, lng: 0 },
 ];
 
 export default function MapPage() {
-  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [WebApp, setWebApp] = useState<any>(null);
+  const [activeFilter, setActiveFilter] = useState('Todos');
+  const [showList, setShowList] = useState(true);
 
   useEffect(() => {
     import('@twa-dev/sdk').then((mod) => {
       const app = mod.default;
       app.ready();
       app.expand();
-      setWebApp(app);
-      setUserLocation({ lat: 19.4326, lng: -99.1332 });
     });
   }, []);
 
-  const filteredBusinesses = MOCK_BUSINESSES.filter(b => {
-    if (selectedCategory !== 'all' && b.type.toLowerCase() !== selectedCategory) return false;
-    if (searchQuery && !b.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    return true;
-  });
-
-  const categories = [
-    { id: 'all', icon: '🏪', label: 'Todos' },
-    { id: 'café', icon: '☕', label: 'Cafés' },
-    { id: 'restaurante', icon: '🍽️', label: 'Restaurantes' },
-    { id: 'gym', icon: '💪', label: 'Gyms' },
-    { id: 'tienda', icon: '🛍️', label: 'Tiendas' },
-  ];
-
-  const goToBusiness = (business: Business) => {
-    if (WebApp) {
-      WebApp.showPopup({
-        title: business.name,
-        message: `${business.type} • ${business.rewardRate}% de recompensa\n⭐ ${business.rating} • 📍 ${business.distance}`,
-        buttons: [
-          { id: 'navigate', type: 'default', text: 'Navegar' },
-          { id: 'pay', type: 'default', text: 'Pagar' },
-          { type: 'cancel' }
-        ]
-      });
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-[#FF6B35] to-[#FF4081] text-white p-4 pt-8">
-        <h1 className="text-2xl font-bold mb-4">🗺️ Cerca de ti</h1>
-        
-        {/* Search */}
-        <div className="relative">
-          <input
-            type="text"
-            placeholder="Buscar negocios..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white/20 backdrop-blur text-white placeholder-white/70 px-4 py-3 pl-12 rounded-2xl border-none focus:outline-none focus:ring-2 focus:ring-white/50"
-          />
-          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl">🔍</span>
-        </div>
-      </div>
+    <div className="page-wrap pb-28 bg-white">
+      <div style={{ height: 'var(--safe-top)' }} />
 
-      {/* Categories */}
-      <div className="sticky top-0 bg-white shadow-sm z-10">
-        <div className="flex gap-2 p-4 overflow-x-auto scrollbar-hide">
-          {categories.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => setSelectedCategory(cat.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-full whitespace-nowrap font-medium transition ${
-                selectedCategory === cat.id
-                  ? 'bg-[#FF6B35] text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              <span>{cat.icon}</span>
-              <span className="text-sm">{cat.label}</span>
+      <Header />
+
+      <main className="flex-1 relative">
+        {/* Map Placeholder */}
+        <div className="h-[50vh] bg-[#F5F5F5] relative">
+          <div className="absolute inset-0 flex items-center justify-center">
+            <EmptyState
+              icon={<MapPin className="w-12 h-12 text-[#8A8A8A]" />}
+              title="Mapa en desarrollo"
+              description="Integración con Google Maps próximamente."
+            />
+          </div>
+
+          {/* Map Controls */}
+          <div className="absolute top-4 right-4 flex flex-col gap-2">
+            <button className="w-10 h-10 bg-white rounded-full shadow-md flex items-center justify-center active:scale-95 transition-transform">
+              <Crosshair className="w-5 h-5 text-[#111111]" />
             </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Map Placeholder */}
-      <div className="relative h-64 bg-gradient-to-br from-blue-100 to-green-100">
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-center">
-            <span className="text-6xl">🗺️</span>
-            <p className="text-gray-500 mt-2">Mapa interactivo</p>
-            <p className="text-xs text-gray-400">{filteredBusinesses.length} negocios encontrados</p>
+            <button 
+              onClick={() => setShowList(!showList)}
+              className="w-10 h-10 bg-white rounded-full shadow-md flex items-center justify-center active:scale-95 transition-transform"
+            >
+              <Navigation className="w-5 h-5 text-[#111111]" />
+            </button>
           </div>
         </div>
-        
-        {/* User location marker */}
-        {userLocation && (
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-            <div className="w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-lg animate-pulse" />
-            <div className="absolute -inset-2 bg-blue-500/20 rounded-full animate-ping" />
-          </div>
-        )}
 
-        {/* Business markers */}
-        {filteredBusinesses.map((business, index) => (
-          <button
-            key={business.id}
-            onClick={() => goToBusiness(business)}
-            className="absolute bg-white rounded-full p-2 shadow-lg hover:scale-110 transition"
-            style={{
-              top: `${20 + (index * 15)}%`,
-              left: `${10 + (index * 20)}%`,
-            }}
-          >
-            <span className="text-2xl">{business.image}</span>
-            <div className="absolute -top-1 -right-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">
-              {business.rewardRate}%
-            </div>
-          </button>
-        ))}
-      </div>
-
-      {/* Business List */}
-      <div className="p-4 space-y-4 pb-24">
-        <h2 className="text-lg font-bold text-gray-800">Negocios cercanos</h2>
-        
-        {filteredBusinesses.map((business) => (
-          <button
-            key={business.id}
-            onClick={() => goToBusiness(business)}
-            className="w-full bg-white rounded-2xl p-4 shadow-md flex items-center gap-4 hover:shadow-lg transition text-left"
-          >
-            <div className="w-16 h-16 bg-gradient-to-br from-orange-100 to-pink-100 rounded-xl flex items-center justify-center text-3xl">
-              {business.image}
-            </div>
-            
-            <div className="flex-1">
-              <div className="flex items-center justify-between mb-1">
-                <h3 className="font-bold text-gray-800">{business.name}</h3>
-                <span className="text-sm text-gray-500">{business.distance}</span>
-              </div>
-              
-              <p className="text-sm text-gray-500 mb-2">{business.type}</p>
-              
-              <div className="flex items-center gap-3">
-                <span className="flex items-center gap-1 text-sm">
-                  <span className="text-yellow-500">⭐</span>
-                  <span className="font-bold">{business.rating}</span>
-                </span>
-                
-                <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full font-bold">
-                  +{business.rewardRate}% bunz
-                </span>
-              </div>
-            </div>
-            
-            <span className="text-2xl text-gray-400">→</span>
-          </button>
-        ))}
-      </div>
-
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4">
-        <button
-          onClick={() => { if (WebApp) WebApp.showScanQrPopup({ text: 'Escanea para pagar' }); }}
-          className="w-full bg-gradient-to-r from-[#FF6B35] to-[#FF4081] text-white py-4 rounded-2xl font-bold text-lg shadow-lg active:scale-95 transition flex items-center justify-center gap-3"
+        {/* Bottom Sheet - Business List */}
+        <motion.div
+          initial={{ y: 100 }}
+          animate={{ y: showList ? 0 : 300 }}
+          transition={{ type: 'spring', damping: 25 }}
+          className="bg-white rounded-t-3xl shadow-[0_-4px_20px_rgba(0,0,0,0.1)]"
         >
-          <span className="text-2xl">📷</span>
-          <span>Escanear QR para Pagar</span>
-        </button>
-      </div>
+          {/* Handle */}
+          <div className="flex justify-center pt-3 pb-2">
+            <div className="w-12 h-1 bg-gray-300 rounded-full" />
+          </div>
+
+          {/* Search & Filters */}
+          <div className="px-4 pb-3">
+            <div className="relative mb-3">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#8A8A8A]" strokeWidth={1.5} />
+              <input
+                type="text"
+                placeholder="Buscar negocios..."
+                className="w-full bg-[#F5F5F5] rounded-xl pl-12 pr-4 py-3 text-[15px] text-[#111111] placeholder-[#8A8A8A] focus:outline-none focus:ring-2 focus:ring-[#E91E63]/20"
+              />
+            </div>
+
+            <div className="flex gap-2 overflow-x-auto">
+              {FILTERS.map((filter) => (
+                <button
+                  key={filter}
+                  onClick={() => setActiveFilter(filter)}
+                  className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                    activeFilter === filter
+                      ? 'bg-[#111111] text-white'
+                      : 'bg-[#F5F5F5] text-[#8A8A8A]'
+                  }`}
+                >
+                  {filter}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Business List */}
+          <div className="px-4 pb-6 space-y-3 max-h-[40vh] overflow-y-auto">
+            {NEARBY_BUSINESSES.map((business, i) => (
+              <motion.div
+                key={business.id}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.06 }}
+                className="bg-[#F5F5F5] rounded-xl p-4 flex items-center gap-4"
+              >
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#E91E63] to-[#C2185B] flex items-center justify-center text-white text-lg font-bold flex-shrink-0">
+                  {business.name[0]}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <p className="font-medium text-[15px] text-[#111111] truncate">{business.name}</p>
+                    <span className="text-xs text-[#8A8A8A]">{business.distance}</span>
+                  </div>
+                  <p className="text-[13px] text-[#8A8A8A]">{business.type}</p>
+                </div>
+
+                <div className="flex flex-col items-end gap-1">
+                  <Badge variant="bunz">+{business.rewardRate}% bunz</Badge>
+                  <div className="flex items-center gap-1 text-[12px] text-[#8A8A8A]">
+                    ⭐ {business.rating}
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      </main>
+
+      <BottomNav />
     </div>
   );
 }

@@ -1,158 +1,134 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { ArrowUpRight, ArrowDownRight, Filter } from 'lucide-react';
+import BottomNav from '@/components/BottomNav';
+import Header from '@/components/ui/Header';
+import Badge from '@/components/ui/Badge';
+import EmptyState from '@/components/ui/EmptyState';
 
-interface Transaction {
-  id: string;
-  type: 'earned' | 'spent';
-  amount: number;
-  business: string;
-  date: string;
-  description: string;
-  icon: string;
-}
-
-const MOCK_HISTORY: Transaction[] = [
-  { id: '1', type: 'earned', amount: 50, business: 'Café Cultura', date: 'Hoy, 10:30 AM', description: 'Compra de $200', icon: '☕' },
-  { id: '2', type: 'spent', amount: 100, business: 'Pizza Napoli', date: 'Ayer, 7:00 PM', description: 'Cena', icon: '🍕' },
-  { id: '3', type: 'earned', amount: 30, business: 'Gimnasio Power', date: 'Ayer, 9:00 AM', description: 'Membresía mensual', icon: '💪' },
-  { id: '4', type: 'earned', amount: 75, business: 'TechZone', date: '22 Ene, 3:45 PM', description: 'Compra de audífonos', icon: '💻' },
-  { id: '5', type: 'spent', amount: 50, business: 'Café Cultura', date: '21 Ene, 11:20 AM', description: 'Desayuno', icon: '☕' },
-  { id: '6', type: 'earned', amount: 25, business: 'Libros Universo', date: '20 Ene, 4:00 PM', description: 'Libro de ficción', icon: '📚' },
-  { id: '7', type: 'earned', amount: 100, business: 'Pizza Napoli', date: '19 Ene, 8:00 PM', description: 'Cena familiar', icon: '🍕' },
-  { id: '8', type: 'spent', amount: 25, business: 'Café Cultura', date: '18 Ene, 9:30 AM', description: 'Café mañanero', icon: '☕' },
+const TRANSACTIONS = [
+  { id: '1', type: 'earned', amount: 50, business: 'Café Cultura', date: 'Hoy, 10:30 AM', description: 'Desayuno', category: 'Comida' },
+  { id: '2', type: 'spent', amount: 100, business: 'Pizza Napoli', date: 'Ayer, 7:00 PM', description: 'Cena', category: 'Comida' },
+  { id: '3', type: 'earned', amount: 30, business: 'Gimnasio Power', date: 'Ayer, 9:00 AM', description: 'Membresía', category: 'Fitness' },
+  { id: '4', type: 'earned', amount: 75, business: 'TechZone', date: '22 Ene, 3:45 PM', description: 'Audífonos', category: 'Tecnología' },
+  { id: '5', type: 'spent', amount: 200, business: 'Spa Relax', date: '20 Ene, 2:00 PM', description: 'Masaje', category: 'Belleza' },
 ];
 
-export default function HistoryPage() {
-  const [filter, setFilter] = useState<'all' | 'earned' | 'spent'>('all');
-  const [selectedMonth, setSelectedMonth] = useState('Enero 2026');
-  const [WebApp, setWebApp] = useState<any>(null);
+const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio'];
 
+export default function HistoryPage() {
   useEffect(() => {
     import('@twa-dev/sdk').then((mod) => {
       const app = mod.default;
       app.ready();
       app.expand();
-      setWebApp(app);
     });
   }, []);
 
-  const filteredTransactions = MOCK_HISTORY.filter(t => {
-    if (filter === 'all') return true;
-    return t.type === filter;
-  });
-
-  const totalEarned = filteredTransactions
-    .filter(t => t.type === 'earned')
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const totalSpent = filteredTransactions
-    .filter(t => t.type === 'spent')
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const showTransactionDetail = (tx: Transaction) => {
-    if (WebApp) {
-      WebApp.showPopup({
-        title: tx.type === 'earned' ? '🎉 Bunz Ganados' : '💳 Pago Realizado',
-        message: `${tx.business}\n${tx.description}\nCantidad: ${tx.amount} bunz\nFecha: ${tx.date}`,
-        buttons: [{ type: 'ok' }]
-      });
-    }
-  };
+  const totalEarned = TRANSACTIONS.filter(t => t.type === 'earned').reduce((s, t) => s + t.amount, 0);
+  const totalSpent = TRANSACTIONS.filter(t => t.type === 'spent').reduce((s, t) => s + t.amount, 0);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-[#FF6B35] to-[#FF4081] text-white p-4 pt-8">
-        <h1 className="text-2xl font-bold mb-4">📊 Historial</h1>
-        
-        {/* Month Selector */}
-        <div className="flex items-center gap-2 mb-4">
-          <button className="bg-white/20 backdrop-blur p-2 rounded-lg">←</button>
-          <span className="font-medium">{selectedMonth}</span>
-          <button className="bg-white/20 backdrop-blur p-2 rounded-lg">→</button>
-        </div>
-      </div>
+    <div className="page-wrap pb-28 bg-white">
+      <div style={{ height: 'var(--safe-top)' }} />
 
-      {/* Stats Cards */}
-      <div className="p-4 -mt-6">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-white rounded-2xl p-4 shadow-lg">
-            <p className="text-gray-500 text-sm mb-1">Ganado</p>
-            <p className="text-2xl font-bold text-green-500">+{totalEarned}</p>
-            <p className="text-xs text-gray-400">bunz</p>
-          </div>
-          <div className="bg-white rounded-2xl p-4 shadow-lg">
-            <p className="text-gray-500 text-sm mb-1">Gastado</p>
-            <p className="text-2xl font-bold text-red-500">-{totalSpent}</p>
-            <p className="text-xs text-gray-400">bunz</p>
-          </div>
-        </div>
-      </div>
+      <Header />
 
-      {/* Filters */}
-      <div className="px-4 mb-4">
-        <div className="flex gap-2">
-          {(['all', 'earned', 'spent'] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`flex-1 py-2 px-4 rounded-full text-sm font-medium transition ${
-                filter === f
-                  ? 'bg-[#FF6B35] text-white'
-                  : 'bg-gray-200 text-gray-700'
-              }`}
-            >
-              {f === 'all' ? 'Todos' : f === 'earned' ? 'Ganados' : 'Gastados'}
+      <main className="flex-1 px-4 pt-2">
+        <h1 className="text-2xl font-semibold text-[#111111] mb-6 px-2">Historial</h1>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 gap-3 mb-6 px-2">
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-green-50 rounded-xl p-4"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+                <ArrowDownRight className="w-4 h-4 text-green-600" />
+              </div>
+              <span className="text-xs text-green-600 font-medium">Ganado</span>
+            </div>
+            <p className="text-2xl font-bold text-[#111111]">{totalEarned}</p>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="bg-gray-50 rounded-xl p-4"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                <ArrowUpRight className="w-4 h-4 text-[#111111]" />
+              </div>
+              <span className="text-xs text-[#8A8A8A] font-medium">Gastado</span>
+            </div>
+            <p className="text-2xl font-bold text-[#111111]">{totalSpent}</p>
+          </motion.div>
+        </div>
+
+        {/* Filters */}
+        <div className="flex items-center gap-2 mb-4 px-2 overflow-x-auto">
+          <button className="flex items-center gap-1 px-3 py-1.5 bg-[#111111] text-white rounded-full text-sm font-medium">
+            <Filter className="w-3.5 h-3.5" />
+            Todos
+          </button>
+          <button className="px-3 py-1.5 bg-[#F5F5F5] text-[#8A8A8A] rounded-full text-sm">
+            Ganado
+          </button>
+          <button className="px-3 py-1.5 bg-[#F5F5F5] text-[#8A8A8A] rounded-full text-sm">
+            Gastado
+          </button>
+          {MONTHS.slice(-3).map(month => (
+            <button key={month} className="px-3 py-1.5 bg-[#F5F5F5] text-[#8A8A8A] rounded-full text-sm whitespace-nowrap">
+              {month}
             </button>
           ))}
         </div>
-      </div>
 
-      {/* Transaction List */}
-      <div className="px-4 pb-24 space-y-3">
-        <h2 className="text-lg font-bold text-gray-800 mb-2">Transacciones</h2>
-        
-        {filteredTransactions.map((tx) => (
-          <button
-            key={tx.id}
-            onClick={() => showTransactionDetail(tx)}
-            className="w-full bg-white rounded-2xl p-4 shadow-md flex items-center gap-4 hover:shadow-lg transition text-left"
-          >
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${
-              tx.type === 'earned' 
-                ? 'bg-green-100' 
-                : 'bg-red-100'
-            }`}>
-              {tx.icon}
-            </div>
-            
-            <div className="flex-1">
-              <div className="flex items-center justify-between mb-1">
-                <h3 className="font-bold text-gray-800">{tx.business}</h3>
-                <span className={`font-bold ${
-                  tx.type === 'earned' ? 'text-green-500' : 'text-red-500'
-                }`}>
-                  {tx.type === 'earned' ? '+' : '-'}{tx.amount}
-                </span>
+        {/* Transaction List */}
+        <div className="space-y-2">
+          <p className="px-2 text-[13px] font-semibold text-[#8A8A8A] uppercase tracking-wider mb-2">
+            Enero 2026
+          </p>
+
+          {TRANSACTIONS.map((tx, i) => (
+            <motion.div
+              key={tx.id}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.05 }}
+              className="bg-white border border-gray-100 rounded-xl p-4 flex items-center gap-4"
+            >
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                tx.type === 'earned' ? 'bg-green-50' : 'bg-gray-50'
+              }`}>
+                {tx.type === 'earned' ? (
+                  <ArrowDownRight className="w-5 h-5 text-green-600" />
+                ) : (
+                  <ArrowUpRight className="w-5 h-5 text-[#111111]" />
+                )}
               </div>
-              <p className="text-sm text-gray-500">{tx.description}</p>
-              <p className="text-xs text-gray-400 mt-1">{tx.date}</p>
-            </div>
-          </button>
-        ))}
-      </div>
 
-      {/* Export Button */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4">
-        <button
-          onClick={() => { if (WebApp) WebApp.showAlert('Historial exportado a CSV'); }}
-          className="w-full bg-gray-100 text-gray-700 py-3 rounded-2xl font-medium flex items-center justify-center gap-2"
-        >
-          <span>📥</span>
-          <span>Exportar Historial</span>
-        </button>
-      </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-0.5">
+                  <p className="font-medium text-[#111111] text-[15px] truncate">{tx.business}</p>
+                  <span className={`font-semibold text-[15px] ${tx.type === 'earned' ? 'text-green-600' : 'text-[#111111]'}`}>
+                    {tx.type === 'earned' ? '+' : '-'}{tx.amount}
+                  </span>
+                </div>
+                <p className="text-[13px] text-[#8A8A8A]">{tx.description} • {tx.date}</p>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </main>
+
+      <BottomNav />
     </div>
   );
 }

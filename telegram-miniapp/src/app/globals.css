@@ -1,14 +1,13 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-:root {
-  --primary: #FF6B35;
-  --primary-dark: #E55A2B;
-}
+@import "tailwindcss";
+@source "../";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import "../styles/tokens.css";
+@import "../styles/animations.css";
 
 * {
   box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 html {
@@ -16,39 +15,88 @@ html {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  overscroll-behavior: none;
 }
 
-/* Safe area for Telegram Mini App */
-.safe-top {
-  padding-top: env(safe-area-inset-top, 20px);
-}
+/* Safe areas */
+.safe-top { padding-top: var(--safe-top); }
+.safe-bottom { padding-bottom: var(--safe-bottom); }
 
-.safe-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 20px);
-}
+/* Scrollbar hide */
+::-webkit-scrollbar { width: 0; height: 0; }
 
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-}
-
-/* Button press effect */
+/* Tap feedback with tokens */
 button:active, a:active {
-  transform: scale(0.98);
-  transition: transform 0.1s;
+  transform: scale(0.97);
+  transition: transform var(--duration-fast) var(--ease-default);
 }
 
-/* Focus states */
-button:focus, a:focus, input:focus {
-  outline: none;
+button:focus-visible, a:focus-visible, input:focus-visible {
+  outline: 2px solid var(--rabbitty-pink);
+  outline-offset: 2px;
 }
 
-/* Telegram WebApp specific */
-.telegram-webapp body {
-  overflow: hidden;
-  touch-action: pan-y;
+/* Shared page wrapper using tokens */
+.page-wrap {
+  min-height: 100dvh;
+  background: #FFFFFF;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 80px; /* Space for bottom nav */
+}
+
+/* Shared header using tokens */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-4);
+  background: var(--bg-primary);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-header);
+}
+
+/* Primary button using tokens */
+.btn-primary {
+  width: 100%;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-weight: var(--font-medium);
+  font-size: var(--text-body);
+  padding: var(--space-6);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-default);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.btn-primary:active { opacity: 0.8; transform: scale(0.98); }
+
+/* Ghost button using tokens */
+.btn-ghost {
+  background: transparent;
+  color: var(--text-primary);
+  font-weight: var(--font-medium);
+  font-size: var(--text-caption);
+  padding: var(--space-2) var(--space-5);
+  border: none;
+  cursor: pointer;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
 }
