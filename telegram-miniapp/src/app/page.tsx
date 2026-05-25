@@ -31,14 +31,28 @@ export default function FeedPage() {
   const [balance, setBalance] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isScrolled, setIsScrolled] = useState(false);
   const { isConnected, balance: walletBalance } = useWallet();
+
+  // Detectar scroll para comprimir header
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.scrollY > 20) {
+        setIsScrolled(true);
+      } else {
+        setIsScrolled(false);
+      }
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // Cargar datos del backend
   useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true);
-        
+
         // Cargar feed según tab
         const feedData = await api.feed.get(activeTab);
         if (feedData?.items) {
@@ -51,7 +65,7 @@ export default function FeedPage() {
             bunz: item.reward_rate || item.rewardAmount || 0,
           })));
         }
-        
+
         // Cargar balance
         try {
           const balanceData = await api.users.balance();
@@ -60,7 +74,7 @@ export default function FeedPage() {
           // Fallback a mock si no hay auth
           setBalance(1250);
         }
-        
+
         setError(null);
       } catch (err) {
         console.error('Error loading feed:', err);
@@ -72,7 +86,7 @@ export default function FeedPage() {
         setLoading(false);
       }
     };
-    
+
     loadData();
   }, [activeTab]);
 
@@ -82,13 +96,19 @@ export default function FeedPage() {
       const app = mod.default;
       app.ready();
       app.expand();
+      try {
+        app.setBackgroundColor('#FFFFFF');
+        app.setHeaderColor('#FFFFFF');
+      } catch (e) {
+        console.error('Error setting Telegram colors', e);
+      }
     });
   }, []);
 
   const getMockPosts = (): FeedItem[] => {
     if (activeTab === "bunz'in") {
       return [
-        { id: '1', user: 'Café Cultura', device: 'Café y desayunos', time: 'Abierto ahora', label: 'Avocado Toast', bunz: 50, imageUrl: 'https://images.unsplash.com/photo-1603048297172-c92544798d5e?w=800&q=80' },
+        { id: '1', user: 'Café Cultura', device: 'Café y desayunos', time: 'Abierto ahora', label: 'Avocado Toast', bunz: 50, imageUrl: 'https://images.unsplash.com/photo-1525351484163-7529414344d8?w=800&q=80' },
         { id: '2', user: 'Pizza Napoli', device: 'Restaurante italiano', time: 'Abierto hasta 11pm', label: 'Pizza Margherita', bunz: 30, imageUrl: 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=800&q=80' },
         { id: '3', user: 'Gimnasio Power', device: 'Fitness y bienestar', time: 'Abierto 24hrs', label: 'Membresía mensual', bunz: 100, imageUrl: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=800&q=80' },
       ];
@@ -100,7 +120,7 @@ export default function FeedPage() {
       ];
     } else {
       return [
-        { id: '7', user: 'Café Cultura', device: 'Café • Desayuno • Wifi', time: '1.2km • 4.8★', label: 'Avocado Toast', bunz: 50, imageUrl: 'https://images.unsplash.com/photo-1603048297172-c92544798d5e?w=800&q=80' },
+        { id: '7', user: 'Café Cultura', device: 'Café • Desayuno • Wifi', time: '1.2km • 4.8★', label: 'Avocado Toast', bunz: 50, imageUrl: 'https://images.unsplash.com/photo-1525351484163-7529414344d8?w=800&q=80' },
         { id: '8', user: 'Gimnasio Power', device: 'Fitness • Crossfit • Yoga', time: '0.8km • 4.9★', label: 'Clase grupal', bunz: 40, imageUrl: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=800&q=80' },
         { id: '9', user: 'TechZone', device: 'Electrónica • Accesorios', time: '2.5km • 4.6★', label: 'iPhone 15 Case', bunz: 25, imageUrl: 'https://images.unsplash.com/photo-1603313011101-320f26a4f6f6?w=800&q=80' },
       ];
@@ -109,16 +129,15 @@ export default function FeedPage() {
 
   return (
     <div className="page-wrap pb-28 bg-white">
-      <div style={{ height: 'var(--safe-top)' }} />
+      <div className={`sticky top-0 z-[60] bg-white transition-shadow duration-300 ${isScrolled ? 'shadow-[0_2px_8px_rgba(0,0,0,0.04)]' : ''}`}>
+        <div style={{ height: 'var(--safe-top)' }} />
+        <Header showBack={true} isScrolled={isScrolled} />
+        <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} isScrolled={isScrolled} />
+      </div>
 
-      <Header showBack={true} />
-
-      <main className="flex-1 w-full max-w-[600px] mx-auto">
-        {/* Tabs */}
-        <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
-
+      <main className="flex-1 w-full max-w-[600px] mx-auto" style={{ backgroundColor: '#FFFFFF' }}>
         {/* Feed */}
-        <div className="pt-4">
+        <div style={{ paddingLeft: '16px', paddingRight: '16px', paddingTop: '40px' }}>
           {loading ? (
             // Loading skeletons
             <>

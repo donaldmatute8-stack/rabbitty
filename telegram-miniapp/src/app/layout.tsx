@@ -21,7 +21,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es">
+    <html lang="es" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -31,7 +31,7 @@ export default function RootLayout({
           async
         />
       </head>
-      <body className="antialiased bg-[#FAFAFA]">
+      <body className="antialiased bg-white" suppressHydrationWarning>
         <WalletProvider>
           {children}
         </WalletProvider>

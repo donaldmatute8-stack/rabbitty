@@ -15,27 +15,27 @@ interface FeedCardProps {
   index: number;
 }
 
-export default function FeedCard({ 
-  user, 
-  device, 
-  time, 
-  label, 
-  bunz, 
+export default function FeedCard({
+  user,
+  device,
+  time,
+  label,
+  bunz,
   imageUrl,
-  index 
+  index
 }: FeedCardProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.08, duration: 0.4 }}
-      className="bg-white rounded-xl overflow-hidden mb-5 mx-6 border border-gray-100 shadow-sm"
+      className="bg-white rounded-xl overflow-hidden mb-5 w-full shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
     >
       {/* Image area */}
-      <div className="relative aspect-[4/3] bg-gray-50 overflow-hidden">
+      <div className="relative aspect-[3/2] overflow-hidden">
         {imageUrl ? (
-          <img 
-            src={imageUrl} 
+          <img
+            src={imageUrl}
             alt={label}
             className="w-full h-full object-cover"
             loading={index < 2 ? "eager" : "lazy"}
@@ -45,24 +45,18 @@ export default function FeedCard({
             <span className="text-sm text-gray-400 font-medium">{label}</span>
           </div>
         )}
-        
-        {/* Subtle overlay for the title/bunz to maintain function without breaking aesthetics */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
-        
-        <div className="absolute bottom-3 left-3 right-3 flex justify-between items-end">
-          <span className="text-white font-semibold text-lg drop-shadow-sm">{label}</span>
-          <span className="bg-[#E91E63] text-white text-xs font-bold px-2 py-1 rounded">+{bunz} bunz</span>
-        </div>
       </div>
 
       {/* Caption Area - Exact Clone of Showcase */}
-      <div className="pt-3 pb-4 px-4 flex items-start justify-between">
+      <div className="flex items-start justify-between bg-white" style={{ padding: '24px' }}>
         <div>
-          <p className="font-medium text-[#111111] text-[15px]">{user}</p>
-          <p className="text-[#8A8A8A] text-[13px] font-light mt-0.5">{device} — {time}</p>
+          <p className="font-normal text-[#111111] text-[17px] mb-2">{user}</p>
+          <p className="text-[#8A8A8A] text-[14px] font-light">{device} — {time}</p>
+          {/* Mostramos reward debajo como info secundaria ya que en el showcase no está en la imagen */}
+          {bunz > 0 && <p className="text-[#E91E63] text-[14px] font-medium mt-2">+{bunz} bunz en {label}</p>}
         </div>
-        <button className="text-[#8A8A8A] active:opacity-60 transition-opacity flex items-center justify-center mt-1 border border-gray-200 rounded px-1.5 py-0.5">
-          <MoreHorizontal className="w-4 h-4" />
+        <button className="text-[#111111] active:opacity-60 transition-opacity mt-1">
+          <MoreHorizontal className="w-6 h-6" />
         </button>
       </div>
     </motion.div>

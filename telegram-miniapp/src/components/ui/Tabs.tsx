@@ -6,24 +6,53 @@ interface TabsProps {
   tabs: string[];
   activeTab: string;
   onChange: (tab: string) => void;
+  isScrolled?: boolean;
 }
 
-export default function Tabs({ tabs, activeTab, onChange }: TabsProps) {
+export default function Tabs({ tabs, activeTab, onChange, isScrolled = false }: TabsProps) {
   return (
-    <nav className="flex items-center justify-center gap-6 px-4 pt-4 bg-white">
+    <nav
+      className="flex w-full bg-white pt-2 px-0"
+      style={isScrolled ? {
+        position: 'absolute',
+        left: '44px',
+        right: 'auto',
+        top: '50%',
+        transform: 'translateY(-50%)',
+        backgroundColor: 'transparent',
+        paddingTop: '0px',
+        zIndex: 20,
+        gap: '32px',
+        width: 'auto',
+        transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)'
+      } : {
+        transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+        gap: '0px'
+      }}
+    >
       {tabs.map((tab) => (
         <button
           key={tab}
           onClick={() => onChange(tab)}
-          className={`pb-2 relative text-[14px] transition-colors ${
-            activeTab === tab ? 'text-[#111111] font-medium' : 'text-[#8A8A8A] font-normal'
-          }`}
+          style={{
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flex: isScrolled ? '0 0 auto' : '1 1 0%',
+            paddingBottom: isScrolled ? '4px' : '12px',
+            fontSize: isScrolled ? '12px' : '15px',
+            letterSpacing: isScrolled ? '-0.025em' : 'normal',
+            transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)'
+          }}
         >
-          {tab}
+          <span className={`${activeTab === tab ? 'text-[#111111] font-normal' : 'text-[#8A8A8A] font-light'}`}>
+            {tab}
+          </span>
           {activeTab === tab && (
             <motion.div
               layoutId="active-tab"
-              className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-[#E91E63]"
+              className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#E91E63]"
               initial={false}
               transition={{ type: 'spring', stiffness: 500, damping: 35 }}
             />
