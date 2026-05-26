@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Award, Zap, Gift, TrendingUp, Users } from 'lucide-react';
+import { Search, Award, Zap, Gift, TrendingUp, Users, MapPin } from 'lucide-react';
 import BottomNav from '@/components/BottomNav';
 import Header from '@/components/ui/Header';
 import Tabs from '@/components/ui/Tabs';
@@ -25,6 +25,21 @@ interface FeedItem {
 
 const TABS = ["bunz'in", "Stock", "Freehands"];
 
+const CATEGORIES = [
+  { icon: '☕', label: 'Cafés', count: 12, color: '#FFE0EC', iconColor: '#E91E63' },
+  { icon: '🍕', label: 'Restaurantes', count: 8, color: '#FFF4E0', iconColor: '#FF9800' },
+  { icon: '💪', label: 'Gimnasios', count: 5, color: '#E0F0FF', iconColor: '#2196F3' },
+  { icon: '🛍️', label: 'Retail', count: 15, color: '#F0E0FF', iconColor: '#9C27B0' },
+  { icon: '✨', label: 'Belleza', count: 7, color: '#FFE0EC', iconColor: '#E91E63' },
+  { icon: '💻', label: 'Tecnología', count: 4, color: '#E0FFE8', iconColor: '#4CAF50' },
+];
+
+const TRENDING = [
+  { name: 'Café Cultura', desc: 'Café y desayunos', dist: '120m', stars: 4.8, bunz: '+50 bunz', img: '☕' },
+  { name: 'Pizza Napoli', desc: 'Restaurante italiano', dist: '350m', stars: 4.6, bunz: '+30 bunz', img: '🍕' },
+  { name: 'Gimnasio Power', desc: 'Fitness y bienestar', dist: '500m', stars: 4.9, bunz: '+100 bunz', img: '💪' },
+];
+
 export default function FeedPage() {
   const [activeTab, setActiveTab] = useState("bunz'in");
   const [posts, setPosts] = useState<FeedItem[]>([]);
@@ -32,6 +47,7 @@ export default function FeedPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const { isConnected, balance: walletBalance } = useWallet();
 
   // Detectar scroll para comprimir header
@@ -135,36 +151,136 @@ export default function FeedPage() {
         <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} isScrolled={isScrolled} />
       </div>
 
-      <main className="flex-1 w-full max-w-[600px] mx-auto" style={{ backgroundColor: '#FFFFFF' }}>
+      <main className="flex-1 w-full max-w-[600px] mx-auto" style={{ backgroundColor: '#FFFFFF', paddingLeft: 16, paddingRight: 16 }}>
         {/* Feed */}
-        <div style={{ paddingLeft: '16px', paddingRight: '16px', paddingTop: '40px' }}>
-          {loading ? (
-            // Loading skeletons
-            <>
-              <SkeletonCard />
-              <SkeletonCard />
-              <SkeletonCard />
-            </>
-          ) : posts.length > 0 ? (
-            posts.map((post, i) => (
-              <FeedCard
-                key={post.id}
-                id={post.id}
-                user={post.user}
-                device={post.device}
-                time={post.time}
-                label={post.label}
-                bunz={post.bunz}
-                imageUrl={post.imageUrl}
-                index={i}
+        <div style={{ paddingTop: '40px' }}>
+          {activeTab === "bunz'in" && (
+            loading ? (
+              // Loading skeletons
+              <>
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+              </>
+            ) : posts.length > 0 ? (
+              posts.map((post, i) => (
+                <FeedCard
+                  key={post.id}
+                  id={post.id}
+                  user={post.user}
+                  device={post.device}
+                  time={post.time}
+                  label={post.label}
+                  bunz={post.bunz}
+                  imageUrl={post.imageUrl}
+                  index={i}
+                />
+              ))
+            ) : (
+              <EmptyState
+                icon={<Search className="w-8 h-8 text-[#8A8A8A]" />}
+                title="Sin resultados"
+                description={`No hay negocios disponibles en "${activeTab}" aún.`}
               />
-            ))
-          ) : (
-            <EmptyState
-              icon={<Search className="w-8 h-8 text-[#8A8A8A]" />}
-              title="Sin resultados"
-              description={`No hay negocios disponibles en "${activeTab}" aún.`}
-            />
+            )
+          )}
+
+          {activeTab === "Stock" && (
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35 }}
+            >
+              {/* Buscador */}
+              <div style={{ position: "relative", marginBottom: 24 }}>
+                <svg style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)" }} width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <circle cx="7" cy="7" r="5.5" stroke="#AAA" strokeWidth="1.5"/>
+                  <path d="M11 11L14 14" stroke="#AAA" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+                <input 
+                  placeholder="Buscar negocios..." 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{ 
+                    width: "100%", 
+                    backgroundColor: "#F4F4F4", 
+                    border: "none", 
+                    borderRadius: 100, 
+                    padding: "12px 16px 12px 38px", 
+                    fontSize: 15, 
+                    color: "#111", 
+                    outline: "none", 
+                    fontFamily: "var(--font-family-base)" 
+                  }} 
+                />
+              </div>
+
+              <h2 style={{ fontSize: 17, fontWeight: 700, color: "#111", marginBottom: 14 }}>Categorías</h2>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 24 }}>
+                {CATEGORIES.map((cat, i) => (
+                  <motion.div 
+                    key={cat.label} 
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: i * 0.04 }}
+                    style={{ backgroundColor: "#FAFAFA", border: "1px solid #F0F0F0", borderRadius: 14, padding: "14px 10px 12px", display: "flex", flexDirection: "column", alignItems: "center", gap: 6, cursor: "pointer" }}
+                  >
+                    <div style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: cat.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>
+                      {cat.icon}
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#111" }}>{cat.label}</span>
+                    <span style={{ fontSize: 11, color: "#AAA" }}>{cat.count} negocios</span>
+                  </motion.div>
+                ))}
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 13L6 3L10 10L12 6L14 13" stroke="#E91E63" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  <h2 style={{ fontSize: 17, fontWeight: 700, color: "#111" }}>Tendencias</h2>
+                </div>
+                <span style={{ fontSize: 13, color: "#E91E63", fontWeight: 500 }}>Ver todo &rsaquo;</span>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 0, marginBottom: 24 }}>
+                {TRENDING.map((b, i) => (
+                  <motion.div 
+                    key={b.name} 
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.08 }}
+                    style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 14, paddingBottom: 14, borderBottom: i < TRENDING.length - 1 ? "1px solid #F4F4F4" : "none" }}
+                  >
+                    <div style={{ width: 52, height: 52, borderRadius: "50%", backgroundColor: "#F0F0F0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0 }}>
+                      {b.img}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontSize: 15, fontWeight: 700, color: "#111", marginBottom: 2 }}>{b.name}</p>
+                      <p style={{ fontSize: 12, color: "#AAA", marginBottom: 4 }}>{b.desc} — {b.dist}</p>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <span style={{ fontSize: 14 }}>⭐</span>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "#111" }}>{b.stars}</span>
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#E91E63", flexShrink: 0 }}>{b.bunz}</span>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === "Freehands" && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="h-[60vh] bg-[#F4F4F4] rounded-2xl flex items-center justify-center relative overflow-hidden"
+            >
+              <div className="text-center">
+                <MapPin className="w-12 h-12 text-[#AAA] mx-auto mb-3" strokeWidth={1.5} />
+                <p className="text-[#111] font-bold text-[17px] mb-1">Mapa interactivo</p>
+                <p className="text-[#888] text-[13px]">Disponible próximamente</p>
+              </div>
+            </motion.div>
           )}
         </div>
       </main>

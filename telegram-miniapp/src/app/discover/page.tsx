@@ -1,88 +1,58 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Map as MapIcon, List, Star, TrendingUp, Clock, ChevronRight, MapPin, Coffee, Dumbbell, ShoppingBag, Sparkles, Laptop } from 'lucide-react';
+import { motion } from 'framer-motion';
 import BottomNav from '@/components/BottomNav';
-import Header from '@/components/ui/Header';
-import Badge from '@/components/ui/Badge';
-import EmptyState from '@/components/ui/EmptyState';
 
-const CATEGORIES = [
-  { id: '1', name: 'Cafés', icon: <Coffee className="w-5 h-5 text-[#E91E63]" />, bg: 'bg-[#E91E63]/5', count: 12 },
-  { id: '2', name: 'Restaurantes', icon: '🍕', bg: 'bg-[#FF9800]/5', count: 8 },
-  { id: '3', name: 'Gimnasios', icon: <Dumbbell className="w-5 h-5 text-[#2196F3]" />, bg: 'bg-[#2196F3]/5', count: 5 },
-  { id: '4', name: 'Retail', icon: <ShoppingBag className="w-5 h-5 text-[#9C27B0]" />, bg: 'bg-[#9C27B0]/5', count: 15 },
-  { id: '5', name: 'Belleza', icon: <Sparkles className="w-5 h-5 text-[#E91E63]" />, bg: 'bg-[#E91E63]/5', count: 7 },
-  { id: '6', name: 'Tecnología', icon: <Laptop className="w-5 h-5 text-[#4CAF50]" />, bg: 'bg-[#4CAF50]/5', count: 4 },
-];
-
-const TRENDING = [
+const CHATS = [
   { 
     id: '1', 
-    name: 'Café Cultura', 
-    type: 'Café y desayunos', 
-    reward: 50, 
-    rating: 4.8, 
-    distance: '120m',
-    imageUrl: 'https://images.unsplash.com/photo-1497935586351-b67a49e012bf?w=800&q=80'
+    name: 'RabbitBot', 
+    message: '¡Hola! Soy tu asistente. ¿En qué te ayudo?', 
+    time: 'Ahora', 
+    unread: 2, 
+    pinned: true,
+    avatar: '🐰',
+    color: '#E91E63',
+    href: '/bot'
   },
   { 
     id: '2', 
-    name: 'Pizza Napoli', 
-    type: 'Restaurante italiano', 
-    reward: 30, 
-    rating: 4.6, 
-    distance: '350m',
-    imageUrl: 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=800&q=80'
+    name: 'Café Cultura', 
+    message: 'Tu reserva para hoy a las 5:00 PM está confirmada.', 
+    time: '12:30', 
+    unread: 0, 
+    pinned: false,
+    avatar: '☕',
+    color: '#111111',
+    href: '#'
   },
   { 
     id: '3', 
-    name: 'Gimnasio Power', 
-    type: 'Fitness y bienestar', 
-    reward: 100, 
-    rating: 4.9, 
-    distance: '500m',
-    imageUrl: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=800&q=80'
+    name: 'Soporte Rabbitty', 
+    message: 'Hemos resuelto tu duda sobre los bunz.', 
+    time: 'Ayer', 
+    unread: 0, 
+    pinned: false,
+    avatar: '🎧',
+    color: '#2196F3',
+    href: '#'
   },
-];
-
-const NEARBY = [
   { 
     id: '4', 
-    name: 'TechZone', 
-    type: 'Electrónica • Accesorios', 
-    reward: 25, 
-    distance: '800m',
-    imageUrl: 'https://images.unsplash.com/photo-1603313011101-320f26a4f6f6?w=800&q=80'
-  },
-  { 
-    id: '5', 
-    name: 'Nail Studio', 
-    type: 'Belleza • Cuidado Personal', 
-    reward: 40, 
-    distance: '1.2km',
-    imageUrl: 'https://images.unsplash.com/photo-1604654894610-df63bc536371?w=800&q=80'
-  },
+    name: 'Gimnasio Power', 
+    message: 'No olvides tu clase de funcional mañana.', 
+    time: 'Lun', 
+    unread: 0, 
+    pinned: false,
+    avatar: '💪',
+    color: '#4CAF50',
+    href: '#'
+  }
 ];
 
-export default function DiscoverPage() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+export default function MessagesPage() {
   const [isScrolled, setIsScrolled] = useState(false);
-
-  // Detectar scroll para comprimir header
-  useEffect(() => {
-    const handleScroll = () => {
-      if (window.scrollY > 20) {
-        setIsScrolled(true);
-      } else {
-        setIsScrolled(false);
-      }
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
 
   useEffect(() => {
     import('@twa-dev/sdk').then((mod) => {
@@ -92,174 +62,91 @@ export default function DiscoverPage() {
     });
   }, []);
 
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.scrollY > 10) {
+        setIsScrolled(true);
+      } else {
+        setIsScrolled(false);
+      }
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   return (
-    <div className="page-wrap pb-28 bg-white">
+    <div className="page-wrap pb-28 bg-white" style={{ fontFamily: "var(--font-family-base)" }}>
+      {/* Messages Header */}
       <div className={`sticky top-0 z-[60] bg-white transition-shadow duration-300 ${isScrolled ? 'shadow-[0_2px_8px_rgba(0,0,0,0.04)]' : ''}`}>
         <div style={{ height: 'var(--safe-top)' }} />
-        <Header showBack={true} isScrolled={isScrolled} />
+        <div style={{ padding: "16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <h1 style={{ fontSize: 28, fontWeight: 800, color: "#111", letterSpacing: "-0.5px", margin: 0 }}>Mensajes</h1>
+          <button style={{ width: 40, height: 40, borderRadius: "50%", backgroundColor: "#F4F4F4", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path d="M9 17A8 8 0 109 1a8 8 0 000 16zM18 18l-4.35-4.35" stroke="#111" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+        </div>
       </div>
 
-      <main className="flex-1 w-full max-w-[600px] mx-auto px-4" style={{ backgroundColor: '#FFFFFF' }}>
-        {/* Search Bar */}
-        <div className="relative mt-4 mb-4">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#8A8A8A]" strokeWidth={1.5} />
-          <input
-            type="text"
-            placeholder="Buscar negocios..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-[#FAFAFA] border border-[#F0F0F0] rounded-xl pl-12 pr-4 py-3 text-[15px] text-[#111111] placeholder-[#8A8A8A] focus:outline-none focus:border-[#E91E63] focus:bg-white focus:ring-2 focus:ring-[#E91E63]/5 transition-all duration-300"
-          />
-        </div>
-
-        {/* View Toggle */}
-        <div className="flex bg-[#F5F5F5] rounded-xl p-1 mb-6">
-          <button
-            onClick={() => setViewMode('list')}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-300 ${
-              viewMode === 'list' 
-                ? 'bg-white shadow-[0_2px_8px_rgba(0,0,0,0.04)] text-[#111111] font-semibold' 
-                : 'text-[#8A8A8A] active:opacity-60'
-            }`}
-          >
-            <List className="w-4 h-4" strokeWidth={viewMode === 'list' ? 2 : 1.5} />
-            Lista
-          </button>
-          <button
-            onClick={() => setViewMode('map')}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-300 ${
-              viewMode === 'map' 
-                ? 'bg-white shadow-[0_2px_8px_rgba(0,0,0,0.04)] text-[#111111] font-semibold' 
-                : 'text-[#8A8A8A] active:opacity-60'
-            }`}
-          >
-            <MapIcon className="w-4 h-4" strokeWidth={viewMode === 'map' ? 2 : 1.5} />
-            Mapa
-          </button>
-        </div>
-
-        <AnimatePresence mode="wait">
-          {viewMode === 'list' ? (
-            <motion.div
-              key="list-view"
-              initial={{ opacity: 0, y: 15 }}
+      <main className="flex-1 w-full max-w-[600px] mx-auto" style={{ backgroundColor: '#FFFFFF', paddingLeft: 16, paddingRight: 16 }}>
+        
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {CHATS.map((chat, i) => (
+            <motion.a 
+              href={chat.href}
+              key={chat.id} 
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              transition={{ duration: 0.35, ease: 'easeOut' }}
+              transition={{ delay: i * 0.05 }}
+              style={{ 
+                display: "flex", 
+                alignItems: "center", 
+                gap: 14, 
+                paddingTop: 16, 
+                paddingBottom: 16, 
+                borderBottom: i < CHATS.length - 1 ? "1px solid #F4F4F4" : "none",
+                textDecoration: "none",
+                cursor: "pointer",
+                backgroundColor: chat.pinned ? "#FFF0F5" : "transparent",
+                marginLeft: chat.pinned ? -16 : 0,
+                marginRight: chat.pinned ? -16 : 0,
+                paddingLeft: chat.pinned ? 16 : 0,
+                paddingRight: chat.pinned ? 16 : 0,
+              }}
+              className="active:opacity-70 transition-opacity"
             >
-              {/* Categories Grid */}
-              <section className="mb-8">
-                <h2 className="text-lg font-normal text-[#111111] mb-4 px-1">Categorías</h2>
-                <div className="grid grid-cols-3 gap-3">
-                  {CATEGORIES.map((cat, i) => (
-                    <motion.button
-                      key={cat.id}
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: i * 0.04, duration: 0.3 }}
-                      className="flex flex-col items-center p-4 bg-white border border-[#F0F0F0] rounded-2xl active:scale-[0.97] transition-all hover:shadow-[0_4px_12px_rgba(0,0,0,0.02)] hover:border-[#E91E63]/10"
-                    >
-                      <div className={`w-11 h-11 rounded-full ${cat.bg} flex items-center justify-center text-xl mb-3`}>
-                        {cat.icon}
-                      </div>
-                      <span className="text-[13px] font-normal text-[#111111] mb-1">{cat.name}</span>
-                      <span className="text-[11px] text-[#8A8A8A] font-light">{cat.count} negocios</span>
-                    </motion.button>
-                  ))}
-                </div>
-              </section>
-
-              {/* Trending Section */}
-              <section className="mb-8">
-                <div className="flex items-center justify-between mb-4 px-1">
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-[#E91E63]" strokeWidth={1.5} />
-                    <h2 className="text-lg font-normal text-[#111111]">Tendencias</h2>
+              {/* Avatar */}
+              <div style={{ width: 56, height: 56, borderRadius: "50%", backgroundColor: chat.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, flexShrink: 0, position: "relative" }}>
+                {chat.avatar}
+                {chat.pinned && (
+                  <div style={{ position: "absolute", bottom: -2, right: -2, width: 20, height: 20, backgroundColor: "#fff", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1L8 5L12 6L9 9L10 13L6 11L2 13L3 9L0 6L4 5L6 1Z" fill="#C8A830"/></svg>
                   </div>
-                  <button className="flex items-center text-[#E91E63] text-sm font-medium active:opacity-60 transition-opacity">
-                    Ver todo <ChevronRight className="w-4 h-4" />
-                  </button>
+                )}
+              </div>
+              
+              {/* Message Content */}
+              <div style={{ flex: 1, overflow: "hidden" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                  <p style={{ fontSize: 16, fontWeight: 800, color: "#111", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{chat.name}</p>
+                  <p style={{ fontSize: 12, fontWeight: chat.unread > 0 ? 700 : 500, color: chat.unread > 0 ? "#E91E63" : "#AAA", margin: 0, flexShrink: 0 }}>{chat.time}</p>
                 </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                  <p style={{ fontSize: 14, color: chat.unread > 0 ? "#111" : "#888", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontWeight: chat.unread > 0 ? 500 : 400 }}>
+                    {chat.message}
+                  </p>
+                  {chat.unread > 0 && (
+                    <div style={{ width: 22, height: 22, borderRadius: "50%", backgroundColor: "#E91E63", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>{chat.unread}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.a>
+          ))}
+        </div>
 
-                <div className="space-y-4">
-                  {TRENDING.map((biz, i) => (
-                    <motion.div
-                      key={biz.id}
-                      initial={{ opacity: 0, y: 12 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.08, duration: 0.35 }}
-                      className="flex items-center gap-4 p-3 bg-white border border-[#F0F0F0] rounded-2xl active:scale-[0.99] transition-all hover:shadow-[0_4px_12px_rgba(0,0,0,0.03)]"
-                    >
-                      <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
-                        <img src={biz.imageUrl} alt={biz.name} className="w-full h-full object-cover" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-normal text-[#111111] text-[16px] mb-0.5 truncate">{biz.name}</p>
-                        <p className="text-[13px] text-[#8A8A8A] font-light truncate">{biz.type} — {biz.distance}</p>
-                        <div className="flex items-center gap-1 mt-1 text-[12px] text-[#8A8A8A] font-light">
-                          <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
-                          <span className="font-medium text-[#111111]">{biz.rating}</span>
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end justify-center">
-                        <Badge variant="bunz">+{biz.reward} bunz</Badge>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              </section>
-
-              {/* Nearby Section */}
-              <section className="mb-8">
-                <div className="flex items-center gap-2 mb-4 px-1">
-                  <MapPin className="w-5 h-5 text-[#8A8A8A]" strokeWidth={1.5} />
-                  <h2 className="text-lg font-normal text-[#111111]">Cerca de ti</h2>
-                </div>
-
-                <div className="space-y-4">
-                  {NEARBY.map((biz, i) => (
-                    <motion.div
-                      key={biz.id}
-                      initial={{ opacity: 0, y: 12 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.2 + i * 0.08, duration: 0.35 }}
-                      className="flex items-center gap-4 p-3 bg-white border border-[#F0F0F0] rounded-2xl active:scale-[0.99] transition-all hover:shadow-[0_4px_12px_rgba(0,0,0,0.03)]"
-                    >
-                      <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
-                        <img src={biz.imageUrl} alt={biz.name} className="w-full h-full object-cover" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-normal text-[#111111] text-[16px] mb-0.5 truncate">{biz.name}</p>
-                        <p className="text-[13px] text-[#8A8A8A] font-light truncate">{biz.type} — {biz.distance}</p>
-                      </div>
-                      <div className="flex flex-col items-end justify-center">
-                        <Badge variant="bunz">+{biz.reward} bunz</Badge>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              </section>
-            </motion.div>
-          ) : (
-            /* Map View */
-            <motion.div
-              key="map-view"
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-              transition={{ duration: 0.3 }}
-              className="h-[60vh] bg-white border border-[#F0F0F0] rounded-2xl flex items-center justify-center relative overflow-hidden shadow-[0_4px_16px_rgba(0,0,0,0.02)]"
-            >
-              {/* Fake Premium Map Background with simple vector styling */}
-              <div className="absolute inset-0 bg-[#F5F5F3] opacity-40 pointer-events-none" />
-              <EmptyState
-                icon={<MapIcon className="w-12 h-12 text-[#8A8A8A]" strokeWidth={1.5} />}
-                title="Mapa en desarrollo"
-                description="La vista de mapa estará disponible próximamente integrada directamente con Google Maps."
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
       </main>
 
       <BottomNav />

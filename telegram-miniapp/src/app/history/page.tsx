@@ -2,22 +2,19 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowUpRight, ArrowDownRight, Filter, Coffee, Dumbbell, Sparkles, Laptop, UtensilsCrossed } from 'lucide-react';
 import BottomNav from '@/components/BottomNav';
-import Header from '@/components/ui/Header';
-import Badge from '@/components/ui/Badge';
+import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import EmptyState from '@/components/ui/EmptyState';
 
-const TRANSACTIONS = [
-  { id: '1', type: 'earned', amount: 50, business: 'Café Cultura', date: 'Hoy, 10:30 AM', description: 'Desayuno', category: 'Comida', icon: <Coffee className="w-5 h-5 text-green-600" /> },
-  { id: '2', type: 'spent', amount: 100, business: 'Pizza Napoli', date: 'Ayer, 7:00 PM', description: 'Cena', category: 'Comida', icon: <UtensilsCrossed className="w-5 h-5 text-[#111111]" /> },
-  { id: '3', type: 'earned', amount: 30, business: 'Gimnasio Power', date: 'Ayer, 9:00 AM', description: 'Membresía', category: 'Fitness', icon: <Dumbbell className="w-5 h-5 text-green-600" /> },
-  { id: '4', type: 'earned', amount: 75, business: 'TechZone', date: '22 Ene, 3:45 PM', description: 'Audífonos', category: 'Tecnología', icon: <Laptop className="w-5 h-5 text-green-600" /> },
-  { id: '5', type: 'spent', amount: 200, business: 'Spa Relax', date: '20 Ene, 2:00 PM', description: 'Masaje', category: 'Belleza', icon: <Sparkles className="w-5 h-5 text-[#111111]" /> },
-];
+const FILTERS = ["Todos", "Ganado", "Gastado", "Comida", "Fitness", "Tecnología"];
 
-const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio'];
-const FILTERS = ['Todos', 'Ganado', 'Gastado', 'Comida', 'Fitness', 'Tecnología'];
+const TRANSACTIONS = [
+  { id: '1', icon: "☕", color: "#FFF0F0", name: "Café Cultura", sub: "Desayuno — Hoy, 10:30 AM", amount: "+50", positive: true, category: 'Comida', type: 'earned' },
+  { id: '2', icon: "🍕", color: "#FFF4E0", name: "Pizza Napoli", sub: "Cena — Ayer, 7:00 PM", amount: "-100", positive: false, category: 'Comida', type: 'spent' },
+  { id: '3', icon: "💪", color: "#E8FFE8", name: "Gimnasio Power", sub: "Membresía — Ayer, 9:00 AM", amount: "+30", positive: true, category: 'Fitness', type: 'earned' },
+  { id: '4', icon: "💻", color: "#E8F0FF", name: "TechZone", sub: "Audífonos — 22 Ene, 3:45 PM", amount: "+75", positive: true, category: 'Tecnología', type: 'earned' },
+  { id: '5', icon: "✨", color: "#F5E8FF", name: "Spa Relax", sub: "Masaje — 20 Ene, 2:00 PM", amount: "-200", positive: false, category: 'Belleza', type: 'spent' },
+];
 
 export default function HistoryPage() {
   const [activeFilter, setActiveFilter] = useState('Todos');
@@ -31,7 +28,6 @@ export default function HistoryPage() {
     });
   }, []);
 
-  // Detectar scroll para comprimir header
   useEffect(() => {
     const handleScroll = () => {
       if (window.scrollY > 20) {
@@ -44,8 +40,8 @@ export default function HistoryPage() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const totalEarned = TRANSACTIONS.filter(t => t.type === 'earned').reduce((s, t) => s + t.amount, 0);
-  const totalSpent = TRANSACTIONS.filter(t => t.type === 'spent').reduce((s, t) => s + t.amount, 0);
+  const totalEarned = TRANSACTIONS.filter(t => t.type === 'earned').reduce((s, t) => s + parseInt(t.amount.replace('+', '')), 0);
+  const totalSpent = TRANSACTIONS.filter(t => t.type === 'spent').reduce((s, t) => s + parseInt(t.amount.replace('-', '')), 0);
 
   const filteredTransactions = TRANSACTIONS.filter(tx => {
     if (activeFilter === 'Todos') return true;
@@ -55,111 +51,98 @@ export default function HistoryPage() {
   });
 
   return (
-    <div className="page-wrap pb-28 bg-white">
-      <div className={`sticky top-0 z-[60] bg-white transition-shadow duration-300 ${isScrolled ? 'shadow-[0_2px_8px_rgba(0,0,0,0.04)]' : ''}`}>
-        <div style={{ height: 'var(--safe-top)' }} />
-        <Header showBack={true} isScrolled={isScrolled} />
-      </div>
+    <ProfileSubpageLayout title="Historial">
 
-      <main className="flex-1 w-full max-w-[600px] mx-auto px-4 pt-2" style={{ backgroundColor: '#FFFFFF' }}>
-        <h1 className="text-2xl font-normal text-[#111111] mb-6 px-1">Historial</h1>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <motion.div
+        {/* Stats Blocks */}
+        <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+          <motion.div 
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-            className="bg-white border border-[#F0F0F0] rounded-2xl p-5 hover:shadow-[0_4px_12px_rgba(0,0,0,0.02)] transition-all"
+            style={{ flex: 1, border: "1px solid #F0F0F0", borderRadius: 14, padding: "12px 14px" }}
           >
-            <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center">
-                <ArrowDownRight className="w-4 h-4 text-green-600" />
-              </div>
-              <span className="text-xs text-[#8A8A8A] font-normal">Ganado</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v6m0 0l-3-3m3 3l3-3" stroke="#4CAF50" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <span style={{ fontSize: 12, color: "#4CAF50", fontWeight: 600 }}>Ganado</span>
             </div>
-            <p className="text-2xl font-semibold text-[#111111]">{totalEarned} <span className="text-[14px] font-normal text-[#8A8A8A]">bunz</span></p>
+            <span style={{ fontSize: 24, fontWeight: 800, color: "#111" }}>{totalEarned}</span>
+            <span style={{ fontSize: 13, color: "#AAA", marginLeft: 4 }}>bunz</span>
           </motion.div>
-
-          <motion.div
+          
+          <motion.div 
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1, duration: 0.3 }}
-            className="bg-white border border-[#F0F0F0] rounded-2xl p-5 hover:shadow-[0_4px_12px_rgba(0,0,0,0.02)] transition-all"
+            transition={{ delay: 0.1 }}
+            style={{ flex: 1, border: "1px solid #F0F0F0", borderRadius: 14, padding: "12px 14px" }}
           >
-            <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center">
-                <ArrowUpRight className="w-4 h-4 text-[#111111]" />
-              </div>
-              <span className="text-xs text-[#8A8A8A] font-normal">Gastado</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 13V7m0 0l-3 3m3-3l3 3" stroke="#E91E63" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <span style={{ fontSize: 12, color: "#E91E63", fontWeight: 600 }}>Gastado</span>
             </div>
-            <p className="text-2xl font-semibold text-[#111111]">{totalSpent} <span className="text-[14px] font-normal text-[#8A8A8A]">bunz</span></p>
+            <span style={{ fontSize: 24, fontWeight: 800, color: "#111" }}>{totalSpent}</span>
+            <span style={{ fontSize: 13, color: "#AAA", marginLeft: 4 }}>bunz</span>
           </motion.div>
         </div>
 
         {/* Filters */}
-        <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-1 scrollbar-hide">
-          <div className="flex-shrink-0 pl-1">
-            <Filter className="w-4 h-4 text-[#8A8A8A]" strokeWidth={1.5} />
-          </div>
-          {FILTERS.map((filter, idx) => (
-            <button
-              key={filter}
-              onClick={() => setActiveFilter(filter)}
-              className={`px-4 py-2 rounded-xl text-sm transition-all duration-300 ${
-                activeFilter === filter
-                  ? 'bg-[#111111] text-white font-medium shadow-sm'
-                  : 'bg-[#FAFAFA] border border-[#F0F0F0] text-[#8A8A8A] hover:bg-gray-50 active:scale-95'
-              }`}
+        <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 12 }} className="scrollbar-hide">
+          {FILTERS.map((f, i) => (
+            <button 
+              key={f} 
+              onClick={() => setActiveFilter(f)}
+              style={{ 
+                flexShrink: 0, 
+                padding: "7px 14px", 
+                borderRadius: 100, 
+                border: "none", 
+                fontSize: 13, 
+                fontWeight: 600, 
+                cursor: "pointer", 
+                backgroundColor: activeFilter === f ? "#111" : "#F0F0F0", 
+                color: activeFilter === f ? "#fff" : "#666", 
+                fontFamily: "var(--font-family-base)",
+                transition: "all 0.2s"
+              }}
             >
-              {filter}
+              {f}
             </button>
           ))}
         </div>
 
-        {/* Transaction List */}
-        <div className="space-y-4">
-          <p className="text-[12px] font-semibold text-[#8A8A8A] uppercase tracking-wider mb-2 px-1">
-            Enero 2026
-          </p>
+        {/* List */}
+        <div style={{ paddingTop: 8 }}>
+          <p style={{ fontSize: 11, fontWeight: 700, color: "#AAA", letterSpacing: "0.8px", marginBottom: 4 }}>ENERO 2026</p>
 
           {filteredTransactions.length > 0 ? (
             filteredTransactions.map((tx, i) => (
-              <motion.div
-                key={tx.id}
+              <motion.div 
+                key={tx.id} 
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05, duration: 0.3 }}
-                className="bg-white border border-[#F0F0F0] rounded-2xl p-4 flex items-center gap-4 active:scale-[0.99] transition-all hover:shadow-[0_4px_12px_rgba(0,0,0,0.02)]"
+                transition={{ delay: i * 0.05 }}
+                style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 14, paddingBottom: 14, borderBottom: i < filteredTransactions.length - 1 ? "1px solid #F4F4F4" : "none" }}
               >
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                  tx.type === 'earned' ? 'bg-green-50/50 border border-green-100/50' : 'bg-gray-50 border border-gray-100'
-                }`}>
+                <div style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: tx.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
                   {tx.icon}
                 </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-0.5">
-                    <p className="font-normal text-[#111111] text-[16px] truncate">{tx.business}</p>
-                    <span className={`font-semibold text-[16px] ${tx.type === 'earned' ? 'text-green-600' : 'text-[#111111]'}`}>
-                      {tx.type === 'earned' ? '+' : '-'}{tx.amount}
-                    </span>
-                  </div>
-                  <p className="text-[13px] text-[#8A8A8A] font-light">{tx.description} — {tx.date}</p>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 15, fontWeight: 700, color: "#111", marginBottom: 2 }}>{tx.name}</p>
+                  <p style={{ fontSize: 12, color: "#AAA" }}>{tx.sub}</p>
                 </div>
+                <span style={{ fontSize: 15, fontWeight: 700, color: tx.positive ? "#4CAF50" : "#E91E63", flexShrink: 0 }}>
+                  {tx.amount}
+                </span>
               </motion.div>
             ))
           ) : (
-            <EmptyState
-              icon={<Filter className="w-8 h-8 text-[#8A8A8A]" />}
-              title="Sin transacciones"
-              description={`No se encontraron transacciones en la categoría "${activeFilter}".`}
-            />
+            <div style={{ padding: "40px 0" }}>
+              <EmptyState
+                icon={<div style={{ fontSize: 32 }}>🔍</div>}
+                title="Sin transacciones"
+                description={`No se encontraron transacciones en "${activeFilter}".`}
+              />
+            </div>
           )}
         </div>
-      </main>
-
-      <BottomNav />
-    </div>
+    </ProfileSubpageLayout>
   );
 }

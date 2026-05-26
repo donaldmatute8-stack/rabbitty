@@ -1,152 +1,122 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import Image from 'next/image';
-import Link from 'next/link';
-import { ArrowRight, Users, Store, HelpCircle } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import Header from '@/components/ui/Header';
 
 export default function RoleSelectionPage() {
-  const [user, setUser] = useState<any>(null);
+  const router = useRouter();
 
-  useEffect(() => {
-    import('@twa-dev/sdk').then((mod) => {
-      const app = mod.default;
-      app.ready();
-      app.expand();
-      const tgUser = app.initDataUnsafe.user;
-      if (tgUser) setUser(tgUser);
-      else setUser({ first_name: 'Bruce' });
-    });
-  }, []);
+  const handleSelectMember = () => {
+    // In the future this might call an API. For now, go to main feed
+    router.push('/');
+  };
+
+  const handleSelectBusiness = () => {
+    router.push('/business');
+  };
 
   return (
-    <div className="page-wrap bg-white flex flex-col justify-between py-6">
+    <div className="min-h-[100dvh] flex flex-col bg-[#F4F4F4]" style={{ fontFamily: "var(--font-family-base)" }}>
       <div style={{ height: 'var(--safe-top)' }} />
+      <Header showBack={true} isScrolled={false} />
 
-      {/* Header Centered */}
-      <header className="flex items-center justify-between px-6 py-2 relative">
-        <div className="w-10" />
-        <div className="flex items-center justify-center">
-          <img 
-            src="/logo.png" 
-            alt="Rabbitty" 
-            className="h-10 w-auto object-contain"
-          />
-        </div>
-        <button className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-[#8A8A8A] active:scale-95 transition-transform border border-gray-100">
-          <HelpCircle className="w-5 h-5" strokeWidth={1.5} />
-        </button>
-      </header>
+      <main className="flex-1 flex flex-col w-full max-w-[600px] mx-auto mt-4" style={{ paddingLeft: 16, paddingRight: 16 }}>
+        <motion.div 
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{ textAlign: "center", marginTop: 12 }}
+        >
+          <h1 style={{ fontSize: 38, fontWeight: 700, color: "var(--text-dark)", letterSpacing: "-0.5px", lineHeight: 1.15 }}>
+            Welcome, Bruce.
+          </h1>
+          <p style={{ marginTop: 16, fontSize: 15, color: "#666", lineHeight: 1.55 }}>
+            Rabbitty is about Sharing Experiences,<br/>
+            simply and efficiently use your time and<br/>
+            social life. Benefit yourself with bunz.
+          </p>
+        </motion.div>
 
-      {/* Main Content */}
-      <main className="flex-1 w-full max-w-[600px] mx-auto px-6 pt-6 flex flex-col justify-center">
-        
-        {/* Welcome Section */}
-        <div className="text-center mb-8">
-          <motion.h1 
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-[28px] font-normal text-[#111111] mb-3"
-          >
-            Bienvenido, {user?.first_name || 'Bruce'}.
-          </motion.h1>
-          
-          <motion.p 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.15 }}
-            className="text-[#8A8A8A] text-[14px] leading-relaxed font-light px-4"
-          >
-            Rabbitty te conecta con experiencias y recompensas. Aprovecha tu tiempo y vida social ganando y utilizando bunz en tus comercios favoritos.
-          </motion.p>
-        </div>
-
-        {/* Subtitle */}
-        <motion.p 
+        <motion.div 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.25 }}
-          className="text-[12px] font-semibold text-[#8A8A8A] uppercase tracking-wider mb-4 px-1 text-center"
+          transition={{ delay: 0.1 }}
+          style={{ marginTop: 32, textAlign: "center" }}
         >
-          Elige cómo deseas continuar
-        </motion.p>
+          <p style={{ fontSize: 14, fontWeight: 700, color: "var(--text-dark)" }}>
+            You don't have any accounts
+          </p>
+        </motion.div>
 
-        {/* Role Cards */}
-        <div className="space-y-4 mb-8">
-          {/* Member Card */}
-          <motion.div
+        <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 16 }}>
+          <motion.button 
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.35 }}
+            transition={{ delay: 0.2 }}
+            onClick={handleSelectMember}
+            className="active:scale-[0.98] transition-transform text-left"
+            style={{
+              backgroundColor: "#fff",
+              borderRadius: 12,
+              border: "1px solid var(--border-light)",
+              padding: "24px 24px 20px",
+              cursor: "pointer",
+            }}
           >
-            <Link 
-              href="/" 
-              className="group block bg-white rounded-2xl p-5 border border-[#F0F0F0] active:scale-[0.98] transition-all hover:shadow-[0_4px_12px_rgba(233,30,99,0.03)] hover:border-[#E91E63]/10"
-            >
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-xl bg-[#E91E63]/5 border border-[#E91E63]/10 flex items-center justify-center text-[#E91E63] flex-shrink-0">
-                  <Users className="w-6 h-6" strokeWidth={1.5} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h2 className="font-medium text-[#111111] text-[16px] mb-0.5">
-                    Ser Miembro
-                  </h2>
-                  <p className="text-[#8A8A8A] text-[13px] font-light leading-relaxed mb-3">
-                    Registra consumos, comparte en el feed social y gana tokens bunz.
-                  </p>
-                  <div className="flex items-center gap-1.5 text-[#E91E63] font-medium text-[14px] transition-transform duration-300 group-hover:translate-x-1">
-                    <span>Acceder como miembro</span>
-                    <ArrowRight className="w-4 h-4" strokeWidth={2} />
-                  </div>
-                </div>
-              </div>
-            </Link>
-          </motion.div>
+            <p style={{ fontSize: 15, fontWeight: 700, color: "var(--text-dark)", marginBottom: 4 }}>
+              Become a member.
+            </p>
+            <p style={{ fontSize: 12, color: "#888", marginBottom: 14 }}>
+              Enter the Rabbitty Experience
+            </p>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ color: "var(--primary-color)", fontSize: 16 }}>→</span>
+              <span style={{ fontSize: 13, fontWeight: 500, color: "var(--primary-color)" }}>Open an account</span>
+            </div>
+          </motion.button>
 
-          {/* Business Card */}
-          <motion.div
+          <motion.button 
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.45 }}
+            transition={{ delay: 0.3 }}
+            onClick={handleSelectBusiness}
+            className="active:scale-[0.98] transition-transform text-left"
+            style={{
+              backgroundColor: "#fff",
+              borderRadius: 12,
+              border: "1px solid var(--border-light)",
+              padding: "24px 24px 20px",
+              cursor: "pointer",
+            }}
           >
-            <Link 
-              href="/business" 
-              className="group block bg-white rounded-2xl p-5 border border-[#F0F0F0] active:scale-[0.98] transition-all hover:shadow-[0_4px_12px_rgba(0,0,0,0.02)]"
-            >
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center text-[#111111] flex-shrink-0">
-                  <Store className="w-6 h-6" strokeWidth={1.5} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h2 className="font-medium text-[#111111] text-[16px] mb-0.5">
-                    Tengo un Negocio
-                  </h2>
-                  <p className="text-[#8A8A8A] text-[13px] font-light leading-relaxed mb-3">
-                    Afíliate, crea campañas de fidelización y recibe bunz como método de pago.
-                  </p>
-                  <div className="flex items-center gap-1.5 text-[#E91E63] font-medium text-[14px] transition-transform duration-300 group-hover:translate-x-1">
-                    <span>Panel de Negocios</span>
-                    <ArrowRight className="w-4 h-4" strokeWidth={2} />
-                  </div>
-                </div>
-              </div>
-            </Link>
-          </motion.div>
+            <p style={{ fontSize: 15, fontWeight: 700, color: "var(--text-dark)", marginBottom: 14 }}>
+              Own a Business? Affiliate now.
+            </p>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ color: "var(--primary-color)", fontSize: 16 }}>→</span>
+              <span style={{ fontSize: 13, fontWeight: 500, color: "var(--primary-color)" }}>Open an account</span>
+            </div>
+          </motion.button>
         </div>
+
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+          style={{ marginTop: 40, textAlign: "center" }}
+        >
+          <p style={{ fontSize: 14, fontWeight: 600, color: "#999" }}>No activity</p>
+        </motion.div>
+
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.6 }}
+          style={{ marginTop: "auto", paddingBottom: 32, paddingTop: 32, textAlign: "center" }}
+        >
+          <p style={{ fontSize: 12, color: "#bbb" }}>© Rabbitty</p>
+        </motion.div>
       </main>
-
-      {/* Footer */}
-      <footer className="text-center pt-4">
-        <motion.p 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.55 }}
-          className="text-[#8A8A8A] text-[12px] font-light"
-        >
-          © Rabbitty Mini App
-        </motion.p>
-      </footer>
     </div>
   );
 }

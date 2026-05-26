@@ -15,7 +15,8 @@ html {
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-family-base);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: var(--bg-primary);
@@ -23,9 +24,6 @@ body {
   overscroll-behavior: none;
 }
 
-body, html {
-  background-color: #FFFFFF !important;
-}
 
 @layer base {
 /* Safe areas */
@@ -53,6 +51,8 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   flex-direction: column;
   padding-bottom: 80px; /* Space for bottom nav */
 }
+
+
 
 /* Shared header using tokens */
 .page-header {

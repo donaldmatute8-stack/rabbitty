@@ -1,186 +1,158 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import Button from '@/components/ui/Button';
-import { ChevronRight, MapPin, Camera, Sparkles } from 'lucide-react';
+import { motion } from "framer-motion";
+import { useRouter } from 'next/navigation';
 
-const STEPS = [
-  {
-    id: 'welcome',
-    title: 'Bienvenido a Rabbitty',
-    description: 'La app que recompensa tu estilo de vida y tu tiempo con amigos.',
-    icon: '🐰',
-  },
-  {
-    id: 'how-it-works',
-    title: '¿Cómo funciona?',
-    description: 'Escanea códigos QR en comercios afiliados para ganar bunz automáticamente en cada visita.',
-    icon: '📱',
-  },
-  {
-    id: 'spend-bunz',
-    title: 'Utiliza tus bunz',
-    description: 'Canjea tus bunz acumulados en cualquier negocio de la red. ¡Consume más, gana más!',
-    icon: '💰',
-  },
-  {
-    id: 'permissions',
-    title: 'Configura tus accesos',
-    description: 'Solicitamos acceso a tu cámara y ubicación para habilitar el escaneo rápido de QR y mapa de comercios.',
-    icon: '🔐',
-  },
+const FLOATING_CARDS = [
+  { x: "72%", y: "12%", rotate: 20, delay: 0 },
+  { x: "15%", y: "18%", rotate: -15, delay: 0.3 },
+  { x: "80%", y: "38%", rotate: 10, delay: 0.6 },
+  { x: "8%", y: "42%", rotate: -20, delay: 0.2 },
+  { x: "65%", y: "58%", rotate: 25, delay: 0.8 },
+  { x: "20%", y: "62%", rotate: -10, delay: 0.5 },
 ];
 
+function FloatingCard({ x, y, rotate, delay }: { x: string; y: string; rotate: number; delay: number }) {
+  return (
+    <motion.div
+      style={{
+        position: "absolute",
+        left: x,
+        top: y,
+        transform: `rotate(${rotate}deg)`,
+        width: 32,
+        height: 20,
+        backgroundColor: "#4CAF50",
+        borderRadius: 4,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: [0, -8, 0] }}
+      transition={{
+        opacity: { delay, duration: 0.4 },
+        y: { delay, duration: 3.5, repeat: Infinity, ease: "easeInOut" },
+      }}
+    >
+      <div style={{ width: 18, height: 2, backgroundColor: "rgba(255,255,255,0.5)", borderRadius: 1 }} />
+    </motion.div>
+  );
+}
+
 export default function OnboardingPage() {
-  const [currentStep, setCurrentStep] = useState(0);
-  const [direction, setDirection] = useState(1);
-  const [permissions, setPermissions] = useState({ camera: false, location: false });
+  const router = useRouter();
 
-  useEffect(() => {
-    import('@twa-dev/sdk').then((mod) => {
-      const app = mod.default;
-      app.ready();
-      app.expand();
-    });
-  }, []);
-
-  const nextStep = () => {
-    if (currentStep < STEPS.length - 1) {
-      setDirection(1);
-      setCurrentStep(prev => prev + 1);
-    }
+  const handleStart = () => {
+    router.push('/signup');
   };
 
-  const prevStep = () => {
-    if (currentStep > 0) {
-      setDirection(-1);
-      setCurrentStep(prev => prev - 1);
-    }
+  const handleLogin = () => {
+    router.push('/login');
   };
-
-  const togglePermission = (type: 'camera' | 'location') => {
-    setPermissions(prev => ({ ...prev, [type]: !prev[type] }));
-  };
-
-  const step = STEPS[currentStep];
 
   return (
-    <div className="page-wrap bg-white flex flex-col justify-between pb-8">
-      <div style={{ height: 'var(--safe-top)' }} />
-
-      {/* Progress Dots */}
-      <div className="flex justify-center gap-2 pt-8 pb-4">
-        {STEPS.map((_, i) => (
-          <div
-            key={i}
-            className={`h-1.5 rounded-full transition-all duration-300 ${
-              i === currentStep ? 'w-8 bg-[#E91E63]' : 'w-1.5 bg-gray-200'
-            }`}
-          />
-        ))}
+    <div
+      className="min-h-[100dvh]"
+      style={{
+        fontFamily: "var(--font-family-base)",
+        backgroundColor: "var(--bg-primary)",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
+    >
+      <div style={{ paddingTop: 72, paddingLeft: 28 }}>
+        <motion.h1
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          style={{
+            fontSize: 40,
+            fontWeight: 800,
+            color: "var(--text-primary)",
+            lineHeight: 1.2,
+            letterSpacing: "-0.5px",
+          }}
+        >
+          Awake 'n'
+          <br />
+          bunz it
+        </motion.h1>
       </div>
 
-      {/* Content */}
-      <main className="flex-1 w-full max-w-[600px] mx-auto px-6 flex flex-col items-center justify-center">
-        <AnimatePresence mode="wait" custom={direction}>
-          <motion.div
-            key={currentStep}
-            custom={direction}
-            initial={{ opacity: 0, x: direction * 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: direction * -50 }}
-            transition={{ duration: 0.35, ease: 'easeInOut' }}
-            className="flex flex-col items-center text-center max-w-[320px]"
+      <div style={{ flex: 1, position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {FLOATING_CARDS.map((c, i) => (
+          <FloatingCard key={i} {...c} />
+        ))}
+
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+          style={{ position: "relative", width: 260, height: 240 }}
+        >
+          <svg width="260" height="240" viewBox="0 0 260 240" fill="none">
+            <ellipse cx="90" cy="130" rx="40" ry="75" fill="#E8E0D4" transform="rotate(-8 90 130)"/>
+            <ellipse cx="90" cy="100" rx="22" ry="28" fill="#F5EDE0"/>
+            <rect x="68" y="84" width="44" height="6" rx="3" fill="#333" fillOpacity="0.12"/>
+            <line x1="54" y1="73" x2="52" y2="58" stroke="#555" strokeWidth="3" strokeLinecap="round"/>
+            <line x1="56" y1="73" x2="64" y2="60" stroke="#555" strokeWidth="3" strokeLinecap="round"/>
+            <ellipse cx="143" cy="148" rx="38" ry="72" fill="#D0C5B0" transform="rotate(5 143 148)"/>
+            <ellipse cx="143" cy="118" rx="21" ry="27" fill="#E8DBc8"/>
+            <rect x="122" y="102" width="42" height="6" rx="3" fill="#333" fillOpacity="0.12"/>
+            <ellipse cx="200" cy="138" rx="36" ry="68" fill="#C4A882" transform="rotate(-3 200 138)"/>
+            <ellipse cx="200" cy="110" rx="20" ry="26" fill="#D4B896"/>
+            <rect x="180" y="95" width="40" height="6" rx="3" fill="#555" fillOpacity="0.2"/>
+            <rect x="76" y="118" width="28" height="8" rx="4" fill="#F0D8C0"/>
+            <rect x="134" y="134" width="26" height="8" rx="4" fill="#DEC8A8"/>
+          </svg>
+        </motion.div>
+      </div>
+
+      <div style={{
+        backgroundColor: "var(--bg-subtle)",
+        borderRadius: "28px 28px 0 0",
+        padding: "28px 24px 40px",
+      }}>
+        <motion.button
+          onClick={handleStart}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="active:scale-[0.98] transition-transform"
+          style={{
+            width: "100%",
+            backgroundColor: "var(--bg-primary)",
+            color: "#444",
+            fontSize: 16,
+            fontWeight: 500,
+            padding: "17px 0",
+            borderRadius: 100,
+            border: "none",
+            cursor: "pointer",
+            boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+            fontFamily: "var(--font-family-base)",
+          }}
+        >
+          Start bunzing
+        </motion.button>
+
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.7 }}
+          style={{ textAlign: "center", marginTop: 20, fontSize: 14, color: "#888" }}
+        >
+          Already have an account?{" "}
+          <span 
+            onClick={handleLogin}
+            style={{ color: "var(--rabbitty-pink)", fontWeight: 500, cursor: "pointer" }}
+            className="active:opacity-70 transition-opacity"
           >
-            {/* Icon / Illustration */}
-            <div className="w-32 h-32 rounded-full bg-[#E91E63]/5 flex items-center justify-center mb-8 relative border border-[#E91E63]/10">
-              <div className="absolute inset-0 bg-[#E91E63]/5 rounded-full blur-md opacity-40 pointer-events-none" />
-              {step.id === 'permissions' ? (
-                <div className="flex flex-col gap-2 scale-90 relative z-10">
-                  {/* Camera Permission */}
-                  <button
-                    onClick={() => togglePermission('camera')}
-                    className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all duration-300 ${
-                      permissions.camera
-                        ? 'bg-[#E91E63]/10 border-[#E91E63] text-[#E91E63]'
-                        : 'bg-white border-[#E0E0E0] text-[#111111]'
-                    }`}
-                  >
-                    <Camera className="w-4 h-4" />
-                    <span className="text-xs font-semibold">Cámara</span>
-                    {permissions.camera && <span className="text-xs font-bold ml-1">✓</span>}
-                  </button>
-
-                  {/* Location Permission */}
-                  <button
-                    onClick={() => togglePermission('location')}
-                    className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all duration-300 ${
-                      permissions.location
-                        ? 'bg-[#E91E63]/10 border-[#E91E63] text-[#E91E63]'
-                        : 'bg-white border-[#E0E0E0] text-[#111111]'
-                    }`}
-                  >
-                    <MapPin className="w-4 h-4" />
-                    <span className="text-xs font-semibold">Ubicación</span>
-                    {permissions.location && <span className="text-xs font-bold ml-1">✓</span>}
-                  </button>
-                </div>
-              ) : (
-                <span className="text-5xl relative z-10">{step.icon}</span>
-              )}
-            </div>
-
-            {/* Title */}
-            <h1 className="text-2xl font-normal text-[#111111] mb-3">
-              {step.title}
-            </h1>
-
-            {/* Description */}
-            <p className="text-[#8A8A8A] text-[14px] leading-relaxed font-light">
-              {step.description}
-            </p>
-          </motion.div>
-        </AnimatePresence>
-      </main>
-
-      {/* Navigation Buttons */}
-      <div className="w-full max-w-[400px] mx-auto px-6 space-y-3">
-        {currentStep === STEPS.length - 1 ? (
-          <a href="/role-selection" className="block w-full">
-            <Button variant="pink" fullWidth size="lg">
-              Comenzar
-              <Sparkles className="w-4 h-4 ml-1" />
-            </Button>
-          </a>
-        ) : (
-          <div className="flex flex-col gap-2">
-            <Button variant="primary" fullWidth size="lg" onClick={nextStep}>
-              Continuar
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-
-            <div className="flex justify-between items-center px-2 pt-2">
-              {currentStep > 0 ? (
-                <button
-                  onClick={prevStep}
-                  className="text-xs font-medium text-[#8A8A8A] active:opacity-60 transition-opacity"
-                >
-                  Atrás
-                </button>
-              ) : (
-                <div />
-              )}
-              
-              <button
-                onClick={() => setCurrentStep(STEPS.length - 1)}
-                className="text-xs font-medium text-[#8A8A8A] active:opacity-60 transition-opacity"
-              >
-                Saltar
-              </button>
-            </div>
-          </div>
-        )}
+            Login.
+          </span>
+        </motion.p>
       </div>
     </div>
   );

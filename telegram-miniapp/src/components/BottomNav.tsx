@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { MessageCircle, Maximize, ShoppingBag } from 'lucide-react';
+import { MessageCircle, Maximize, User } from 'lucide-react';
 
 export default function BottomNav() {
   const pathname = usePathname();
@@ -43,9 +43,8 @@ export default function BottomNav() {
           <Maximize className="w-[26px] h-[26px]" strokeWidth={1.5} />
         </Link>
 
-        {/* Profile */}
         <Link href="/profile" className="flex flex-col items-center justify-center w-14 h-14 transition-colors" style={{ color: getColor(isProfile) }}>
-          <ShoppingBag className="w-[26px] h-[26px]" strokeWidth={1.5} />
+          <User className="w-[26px] h-[26px]" strokeWidth={1.5} />
         </Link>
 
       </div>
