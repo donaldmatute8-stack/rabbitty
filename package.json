@@ -8,6 +8,7 @@
     "dev:bot": "cd src/miniapp && python telegram-bot.py",
     "install:backend": "cd src/backend && pip install -r requirements.txt",
     "install:frontend": "cd telegram-miniapp && npm install",
+    "postinstall": "npm run install:frontend",
     "test": "echo 'Tests not implemented yet'",
     "build": "cd telegram-miniapp && npm run build"
   },
