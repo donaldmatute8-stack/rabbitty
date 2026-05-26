@@ -4,12 +4,12 @@
   "description": "Give to Get - The Bunz reward ecosystem",
   "scripts": {
     "dev:backend": "cd src/backend && python server.py",
-    "dev:frontend": "cd src/frontend && npm run dev",
+    "dev:frontend": "cd telegram-miniapp && npm run dev",
     "dev:bot": "cd src/miniapp && python telegram-bot.py",
     "install:backend": "cd src/backend && pip install -r requirements.txt",
-    "install:frontend": "cd src/frontend && npm install",
+    "install:frontend": "cd telegram-miniapp && npm install",
     "test": "echo 'Tests not implemented yet'",
-    "build": "cd src/frontend && npm run build"
+    "build": "cd telegram-miniapp && npm run build"
   },
   "keywords": [
     "web3",
