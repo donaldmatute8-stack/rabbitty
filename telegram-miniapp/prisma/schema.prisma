@@ -1,0 +1,203 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Profile {
+  id                   String   @id @default(uuid())
+  smart_wallet_address String   @unique // The ERC-4337 Smart Wallet address
+  signer_wallet        String // The In-App Wallet address (owner)
+  role                 Role     @default(RABBITTER)
+  email                String   @unique
+  first_name           String?
+  bunz_balance         Int       @default(0)
+  pending_bunz         Int       @default(0) // Locked referral rewards until level up
+  level                Int       @default(1)
+  
+  telegram_id          String?   @unique
+  referral_code        String?   @unique
+  referred_by_id       String?
+  referred_by          Profile?  @relation("ReferralNetwork", fields: [referred_by_id], references: [id])
+  referrals            Profile[] @relation("ReferralNetwork")
+  
+  nft_token_id         String? // Stored when the dynamic NFT is minted
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+
+  business             Business? // A profile with AFFILIATE role can own one business
+  transactions         Transaction[]
+  notifications        Notification[]
+  achievements         ProfileAchievement[]
+  purchased_offers     PurchasedOffer[]
+  reservations         Reservation[]
+}
+
+model Business {
+  id                String   @id @default(uuid())
+  profileId         String   @unique
+  profile           Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  
+  name              String
+  description       String   @db.Text
+  category          String
+  schedule          String?  @db.Text
+  location_lat      String?
+  location_lng      String?
+  logo_base64       String?  @db.Text
+  
+  reward_percentage Int      @default(10) // 10% to 100%
+  minting_credit    Int      @default(0)  // Balance of bunz the business can mint
+  
+  daily_bunz_cap    Int      @default(1000) // Maximum bunz allowed to be spent here daily
+  daily_bunz_taken  Int      @default(0)    // How many bunz have been spent or reserved today
+  last_cap_reset    DateTime @default(now()) // To check if we need to reset daily_bunz_taken
+
+  is_active         Boolean  @default(false)
+  
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+  
+  transactions      Transaction[]
+  offers            Offer[]
+  reservations      Reservation[]
+}
+
+// ==========================================
+// Phase 5: Social, Gamification & Messaging
+// ==========================================
+
+model Notification {
+  id              String   @id @default(uuid())
+  profileId       String
+  profile         Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  
+  title           String
+  message         String   @db.Text
+  type            String   @default("INFO") // INFO, SUCCESS, ALERT
+  is_read         Boolean  @default(false)
+  
+  created_at      DateTime @default(now())
+}
+
+model Offer {
+  id              String   @id @default(uuid())
+  businessId      String
+  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  
+  title           String
+  description     String   @db.Text
+  bunz_price      Int
+  daily_quantity  Int      @default(5) // Max times this offer can be claimed per day
+  is_active       Boolean  @default(true)
+  image_base64    String?  @db.Text
+  
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+  
+  purchases       PurchasedOffer[]
+}
+
+model PurchasedOffer {
+  id              String   @id @default(uuid())
+  profileId       String
+  profile         Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  
+  offerId         String
+  offer           Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  
+  status          String   @default("ACTIVE") // ACTIVE, REDEEMED, EXPIRED
+  qr_code_data    String   @default(uuid())
+  
+  created_at      DateTime @default(now())
+  redeemed_at     DateTime?
+}
+
+model Reservation {
+  id              String   @id @default(uuid())
+  profileId       String
+  profile         Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  
+  businessId      String
+  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  
+  reserved_bunz   Int      // The amount of bunz cap reserved
+  status          String   @default("ACTIVE") // ACTIVE, CONSUMED, CANCELLED
+  
+  created_at      DateTime @default(now())
+  expires_at      DateTime
+}
+
+model Achievement {
+  id              String   @id @default(uuid())
+  title           String
+  description     String   @db.Text
+  icon_svg        String?  @db.Text
+  target_value    Int      @default(1) // E.g., 5 transactions to unlock
+  bunz_reward     Int      @default(0) // Optional reward for unlocking
+  
+  profiles        ProfileAchievement[]
+}
+
+model ProfileAchievement {
+  id              String   @id @default(uuid())
+  profileId       String
+  profile         Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  
+  achievementId   String
+  achievement     Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+  
+  unlocked_at     DateTime @default(now())
+  
+  @@unique([profileId, achievementId])
+}
+
+enum Role {
+  RABBITTER
+  AFFILIATE
+}
+
+enum TransactionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  INSTANT
+}
+
+enum TransactionType {
+  MINT // User receives Bunz
+  SPEND // User spends Bunz
+}
+
+model Transaction {
+  id                    String            @id @default(uuid())
+  businessId            String
+  business              Business          @relation(fields: [businessId], references: [id])
+  rabbitterProfileId    String
+  rabbitter             Profile           @relation(fields: [rabbitterProfileId], references: [id])
+  
+  type                  TransactionType   @default(MINT)
+  
+  fiat_amount_claimed   Int               // Amount claimed by rabbitter
+  fiat_amount_approved  Int?              // Amount modified/approved by affiliate
+  bunz_amount           Int               // Bunz reward generated
+  
+  status                TransactionStatus @default(PENDING)
+  receipt_photo_base64  String?           @db.Text
+  
+  created_at            DateTime          @default(now())
+  updated_at            DateTime          @updatedAt
+}
+
+model QRLoginSession {
+  id              String   @id @default(uuid())
+  status          String   @default("PENDING") // PENDING, APPROVED, EXPIRED
+  wallet_address  String?
+  created_at      DateTime @default(now())
+  expires_at      DateTime
+}

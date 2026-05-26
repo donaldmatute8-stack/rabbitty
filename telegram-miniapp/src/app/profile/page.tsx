@@ -3,20 +3,24 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import { useWallet } from '@/contexts/WalletContext';
 import BottomNav from '@/components/BottomNav';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 
 const MENU_ITEMS = [
-  { icon: "💳", label: "Historial de transacciones", badge: null, href: '/history' },
+  { icon: "💳", label: "Mi Billetera", badge: null, href: '/profile/wallet' },
+  { icon: "📜", label: "Historial de transacciones", badge: null, href: '/history' },
   { icon: "👥", label: "Programa de referidos", badge: null, href: '/referral' },
   { icon: "🔔", label: "Notificaciones", badge: 3, href: '/notifications' },
   { icon: "🛡", label: "Seguridad y Privacidad", badge: null, href: '/security' },
-  { icon: "❓", label: "Ayuda y Soporte", badge: null, href: '/privacy' },
+  { icon: "❓", label: "Ayuda y Soporte", badge: null, href: '/profile/support' },
   { icon: "🚀", label: "Ver Onboarding", badge: "Dev", href: '/onboarding' },
 ];
 
 export default function ProfilePage() {
+  const { address } = useWallet();
   const [user, setUser] = useState<any>(null);
+  const [dbProfile, setDbProfile] = useState<any>(null);
   const [isScrolled, setIsScrolled] = useState(false);
 
   useEffect(() => {
@@ -29,6 +33,20 @@ export default function ProfilePage() {
       else setUser({ first_name: 'Bruce', username: 'bruce_wayne' });
     });
   }, []);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!address) return;
+      try {
+        const res = await fetch(`/api/auth/profile?wallet=${address}`);
+        const data = await res.json();
+        setDbProfile(data.profile);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    fetchProfile();
+  }, [address]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -85,10 +103,17 @@ export default function ProfilePage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
         >
-          <Link href="/business" style={{ display: 'block', backgroundColor: "#111", borderRadius: 14, padding: "12px 16px", marginBottom: 10, flexDirection: "column", gap: 2, textDecoration: 'none' }} className="active:scale-[0.98] transition-transform">
-            <p style={{ fontSize: 13, fontWeight: 700, color: "#fff", marginBottom: 2 }}>¿Tienes un negocio?</p>
-            <p style={{ fontSize: 11, color: "#888", margin: 0 }}>Afíliate y otorga bunz</p>
-          </Link>
+          {dbProfile?.role === 'AFFILIATE' ? (
+            <Link href="/business" style={{ display: 'block', backgroundColor: "#E91E63", borderRadius: 14, padding: "12px 16px", marginBottom: 10, textDecoration: 'none' }} className="active:scale-[0.98] transition-transform">
+              <p style={{ fontSize: 13, fontWeight: 800, color: "#fff", marginBottom: 2 }}>🏢 Entrar a mi Panel de Negocio</p>
+              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.8)", margin: 0 }}>Gestiona recompensas y bunz</p>
+            </Link>
+          ) : (
+            <Link href="/business" style={{ display: 'block', backgroundColor: "#111", borderRadius: 14, padding: "12px 16px", marginBottom: 10, flexDirection: "column", gap: 2, textDecoration: 'none' }} className="active:scale-[0.98] transition-transform">
+              <p style={{ fontSize: 13, fontWeight: 700, color: "#fff", marginBottom: 2 }}>¿Tienes un negocio?</p>
+              <p style={{ fontSize: 11, color: "#888", margin: 0 }}>Afíliate y otorga bunz</p>
+            </Link>
+          )}
 
           <Link href="/referral" style={{ display: 'flex', width: "100%", backgroundColor: "#FFE8F0", border: "1.5px solid #FFBCD4", borderRadius: 14, padding: "14px 0", flexDirection: "column", alignItems: "center", cursor: "pointer", gap: 2, textDecoration: 'none' }} className="active:scale-[0.98] transition-transform">
             <span style={{ fontSize: 14, fontWeight: 700, color: "#E91E63" }}>Invitar amigos</span>
