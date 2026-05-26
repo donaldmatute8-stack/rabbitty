@@ -43,3 +43,5 @@ yarn-error.log*
 next-env.d.ts
 backend-oracle/
 ROADMAP.md
+
+/src/generated/prisma

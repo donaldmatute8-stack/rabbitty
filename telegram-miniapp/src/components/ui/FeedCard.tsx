@@ -13,16 +13,19 @@ interface FeedCardProps {
   bunz: number;
   imageUrl?: string;
   index: number;
+  onReserve?: (businessId: string) => void;
 }
 
 export default function FeedCard({
+  id,
   user,
   device,
   time,
   label,
   bunz,
   imageUrl,
-  index
+  index,
+  onReserve
 }: FeedCardProps) {
   return (
     <motion.div
@@ -53,12 +56,21 @@ export default function FeedCard({
         <div>
           <p className="font-normal text-[#111111] text-[17px] mb-2">{user}</p>
           <p className="text-[#8A8A8A] text-[14px] font-light">{device} — {time}</p>
-          {/* Mostramos reward debajo como info secundaria ya que en el showcase no está en la imagen */}
-          {bunz > 0 && <p className="text-[#E91E63] text-[14px] font-medium mt-2">+{bunz} bunz en {label}</p>}
+          {bunz > 0 && <p className="text-[#E91E63] text-[14px] font-medium mt-2">+{bunz}% bunz de recompensa</p>}
         </div>
-        <button className="text-[#111111] active:opacity-60 transition-opacity mt-1">
-          <MoreHorizontal className="w-6 h-6" />
-        </button>
+        <div className="flex flex-col items-end gap-3 mt-1">
+          <button className="text-[#111111] active:opacity-60 transition-opacity">
+            <MoreHorizontal className="w-6 h-6" />
+          </button>
+          {onReserve && (
+            <button 
+              onClick={() => onReserve(id)}
+              className="bg-black text-white text-xs font-bold px-4 py-2 rounded-full active:scale-95 transition-transform"
+            >
+              Reservar Visita
+            </button>
+          )}
+        </div>
       </div>
     </motion.div>
   );

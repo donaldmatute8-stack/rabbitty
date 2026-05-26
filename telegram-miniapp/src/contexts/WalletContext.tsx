@@ -1,14 +1,14 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { bunzWallet } from '@/services/wallet';
+import { TonConnectUIProvider, useTonWallet, useTonConnectUI } from '@tonconnect/ui-react';
 
 interface WalletContextType {
   address: string | null;
   balance: string;
   isConnected: boolean;
   connect: () => Promise<void>;
-  disconnect: () => void;
+  disconnect: () => Promise<void>;
   refreshBalance: () => Promise<void>;
 }
 
@@ -17,43 +17,45 @@ const WalletContext = createContext<WalletContextType>({
   balance: '0',
   isConnected: false,
   connect: async () => {},
-  disconnect: () => {},
+  disconnect: async () => {},
   refreshBalance: async () => {},
 });
 
-export function WalletProvider({ children }: { children: React.ReactNode }) {
-  const [address, setAddress] = useState<string | null>(null);
+function WalletProviderInner({ children }: { children: React.ReactNode }) {
+  const wallet = useTonWallet();
+  const [tonConnectUI] = useTonConnectUI();
   const [balance, setBalance] = useState('0');
+
+  const address = wallet ? wallet.account.address : null;
+
+  useEffect(() => {
+    if (address) {
+      refreshBalance();
+    } else {
+      setBalance('0');
+    }
+  }, [address]);
 
   const connect = async () => {
     try {
-      const addr = await bunzWallet.connect();
-      setAddress(addr);
-      
-      // Obtener balance
-      const bal = await bunzWallet.getBalance(addr);
-      setBalance(bal);
+      await tonConnectUI.openModal();
     } catch (error) {
-      console.error('Wallet connection failed:', error);
-      // Fallback para testing sin wallet
-      setAddress('0x0000000000000000000000000000000000000000');
-      setBalance('0');
+      console.error('TON connection failed:', error);
     }
   };
 
-  const disconnect = () => {
-    setAddress(null);
-    setBalance('0');
+  const disconnect = async () => {
+    try {
+      await tonConnectUI.disconnect();
+    } catch (error) {
+      console.error('TON disconnect failed:', error);
+    }
   };
 
   const refreshBalance = async () => {
     if (address) {
-      try {
-        const bal = await bunzWallet.getBalance(address);
-        setBalance(bal);
-      } catch (error) {
-        console.error('Failed to refresh balance:', error);
-      }
+      // Mock balance for now. In a real app, you'd fetch Jetton balance via TON API
+      setBalance('100.00');
     }
   };
 
@@ -68,6 +70,21 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     }}>
       {children}
     </WalletContext.Provider>
+  );
+}
+
+export function WalletProvider({ children }: { children: React.ReactNode }) {
+  // Use Vercel URL or local
+  const manifestUrl = typeof window !== 'undefined' 
+    ? `${window.location.origin}/tonconnect-manifest.json`
+    : 'https://rabbitty.app/tonconnect-manifest.json';
+
+  return (
+    <TonConnectUIProvider manifestUrl={manifestUrl}>
+      <WalletProviderInner>
+        {children}
+      </WalletProviderInner>
+    </TonConnectUIProvider>
   );
 }
 

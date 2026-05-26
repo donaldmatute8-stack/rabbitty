@@ -5,20 +5,46 @@ import { motion } from 'framer-motion';
 import BottomNav from '@/components/BottomNav';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import EmptyState from '@/components/ui/EmptyState';
+import { useWallet } from '@/contexts/WalletContext';
 
 const FILTERS = ["Todos", "Ganado", "Gastado", "Comida", "Fitness", "Tecnología"];
 
-const TRANSACTIONS = [
-  { id: '1', icon: "☕", color: "#FFF0F0", name: "Café Cultura", sub: "Desayuno — Hoy, 10:30 AM", amount: "+50", positive: true, category: 'Comida', type: 'earned' },
-  { id: '2', icon: "🍕", color: "#FFF4E0", name: "Pizza Napoli", sub: "Cena — Ayer, 7:00 PM", amount: "-100", positive: false, category: 'Comida', type: 'spent' },
-  { id: '3', icon: "💪", color: "#E8FFE8", name: "Gimnasio Power", sub: "Membresía — Ayer, 9:00 AM", amount: "+30", positive: true, category: 'Fitness', type: 'earned' },
-  { id: '4', icon: "💻", color: "#E8F0FF", name: "TechZone", sub: "Audífonos — 22 Ene, 3:45 PM", amount: "+75", positive: true, category: 'Tecnología', type: 'earned' },
-  { id: '5', icon: "✨", color: "#F5E8FF", name: "Spa Relax", sub: "Masaje — 20 Ene, 2:00 PM", amount: "-200", positive: false, category: 'Belleza', type: 'spent' },
-];
+interface TxHistory {
+  id: string;
+  name: string;
+  category: string;
+  amount: string;
+  type: string;
+  date: string;
+  icon: string;
+}
 
 export default function HistoryPage() {
   const [activeFilter, setActiveFilter] = useState('Todos');
   const [isScrolled, setIsScrolled] = useState(false);
+  const [transactions, setTransactions] = useState<TxHistory[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { address } = useWallet();
+
+  useEffect(() => {
+    if (address) {
+      fetchHistory();
+    }
+  }, [address]);
+
+  const fetchHistory = async () => {
+    try {
+      const res = await fetch(`/api/history?wallet=${address}`);
+      const data = await res.json();
+      if (data.success) {
+        setTransactions(data.history);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     import('@twa-dev/sdk').then((mod) => {
@@ -40,10 +66,10 @@ export default function HistoryPage() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const totalEarned = TRANSACTIONS.filter(t => t.type === 'earned').reduce((s, t) => s + parseInt(t.amount.replace('+', '')), 0);
-  const totalSpent = TRANSACTIONS.filter(t => t.type === 'spent').reduce((s, t) => s + parseInt(t.amount.replace('-', '')), 0);
+  const totalEarned = transactions.filter(t => t.type === 'earned').reduce((s, t) => s + parseInt(t.amount.replace('+', '')), 0);
+  const totalSpent = transactions.filter(t => t.type === 'spent').reduce((s, t) => s + parseInt(t.amount.replace('-', '')), 0);
 
-  const filteredTransactions = TRANSACTIONS.filter(tx => {
+  const filteredTransactions = transactions.filter(tx => {
     if (activeFilter === 'Todos') return true;
     if (activeFilter === 'Ganado') return tx.type === 'earned';
     if (activeFilter === 'Gastado') return tx.type === 'spent';
@@ -108,39 +134,48 @@ export default function HistoryPage() {
           ))}
         </div>
 
-        {/* List */}
-        <div style={{ paddingTop: 8 }}>
-          <p style={{ fontSize: 11, fontWeight: 700, color: "#AAA", letterSpacing: "0.8px", marginBottom: 4 }}>ENERO 2026</p>
-
-          {filteredTransactions.length > 0 ? (
+        {/* Feed List */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {loading ? (
+            <div className="flex justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div></div>
+          ) : filteredTransactions.length === 0 ? (
+            <EmptyState icon={<div style={{ fontSize: 32 }}>🔍</div>} title="Sin actividad" description="No hay transacciones aún en esta categoría." />
+          ) : (
             filteredTransactions.map((tx, i) => (
               <motion.div 
-                key={tx.id} 
+                key={tx.id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
-                style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 14, paddingBottom: 14, borderBottom: i < filteredTransactions.length - 1 ? "1px solid #F4F4F4" : "none" }}
+                style={{ 
+                  display: "flex", 
+                  alignItems: "center", 
+                  justifyContent: "space-between", 
+                  backgroundColor: "#FFF", 
+                  padding: "16px", 
+                  borderRadius: 16,
+                  border: "1px solid #F0F0F0"
+                }}
               >
-                <div style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: tx.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
-                  {tx.icon}
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: tx.type === 'earned' ? "#E8FFE8" : "#FFF0F0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>
+                    {tx.icon}
+                  </div>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#111" }}>{tx.name}</h4>
+                    <p style={{ margin: 0, fontSize: 13, color: "#8A8A8A", marginTop: 2 }}>
+                      {tx.category} — {new Date(tx.date).toLocaleDateString()}
+                    </p>
+                  </div>
                 </div>
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: 15, fontWeight: 700, color: "#111", marginBottom: 2 }}>{tx.name}</p>
-                  <p style={{ fontSize: 12, color: "#AAA" }}>{tx.sub}</p>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+                  <span style={{ fontSize: 16, fontWeight: 800, color: tx.type === 'earned' ? "#4CAF50" : "#111" }}>
+                    {tx.amount}
+                  </span>
+                  <span style={{ fontSize: 11, color: "#AAA", fontWeight: 600 }}>bunz</span>
                 </div>
-                <span style={{ fontSize: 15, fontWeight: 700, color: tx.positive ? "#4CAF50" : "#E91E63", flexShrink: 0 }}>
-                  {tx.amount}
-                </span>
               </motion.div>
             ))
-          ) : (
-            <div style={{ padding: "40px 0" }}>
-              <EmptyState
-                icon={<div style={{ fontSize: 32 }}>🔍</div>}
-                title="Sin transacciones"
-                description={`No se encontraron transacciones en "${activeFilter}".`}
-              />
-            </div>
           )}
         </div>
     </ProfileSubpageLayout>
