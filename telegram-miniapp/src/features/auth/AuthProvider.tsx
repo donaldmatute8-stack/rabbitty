@@ -5,7 +5,7 @@ import { ThirdwebProvider } from "thirdweb/react";
 
 // Create a single, shared client instance
 export const client = createThirdwebClient({
-  clientId: process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID || "",
+  clientId: process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID || "12345678901234567890123456789012",
 });
 
 // Define the active chain (Sepolia for dev, Polygon for prod)
