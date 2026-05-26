@@ -30,6 +30,7 @@ export default function FeedCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.08, duration: 0.4 }}
       className="bg-white rounded-xl overflow-hidden mb-5 w-full shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
+      style={{ marginBottom: '20px' }}
     >
       {/* Image area */}
       <div className="relative aspect-[3/2] overflow-hidden">
