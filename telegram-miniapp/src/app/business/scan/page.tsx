@@ -95,7 +95,7 @@ export default function BusinessScanPage() {
   };
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
+    <div className="px-6 pb-6 max-w-2xl mx-auto w-full" style={{ paddingTop: 'calc(max(env(safe-area-inset-top), 16px) + 24px)' }}>
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-black text-black tracking-tight">Escáner de Caja</h1>

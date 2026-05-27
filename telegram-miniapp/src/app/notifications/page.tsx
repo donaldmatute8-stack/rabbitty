@@ -23,6 +23,8 @@ export default function NotificationsPage() {
   useEffect(() => {
     if (address) {
       fetchNotifications();
+    } else {
+      setLoading(false);
     }
   }, [address]);
 

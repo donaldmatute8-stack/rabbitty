@@ -29,6 +29,8 @@ export default function HistoryPage() {
   useEffect(() => {
     if (address) {
       fetchHistory();
+    } else {
+      setLoading(false);
     }
   }, [address]);
 

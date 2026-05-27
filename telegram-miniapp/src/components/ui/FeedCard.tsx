@@ -1,8 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { MoreHorizontal } from 'lucide-react';
-import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 
 interface FeedCardProps {
   id: string;
@@ -13,64 +12,90 @@ interface FeedCardProps {
   bunz: number;
   imageUrl?: string;
   index: number;
-  onReserve?: (businessId: string) => void;
 }
 
-export default function FeedCard({
-  id,
-  user,
-  device,
-  time,
-  label,
-  bunz,
-  imageUrl,
-  index,
-  onReserve
-}: FeedCardProps) {
+export default function FeedCard({ id, user, device, time, label, bunz, imageUrl, index }: FeedCardProps) {
+  const router = useRouter();
+
   return (
     <motion.div
+      onClick={() => router.push(`/affiliate/${id}`)}
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.08, duration: 0.4 }}
-      className="bg-white rounded-xl overflow-hidden mb-5 w-full shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
-      style={{ marginBottom: '20px' }}
+      transition={{ delay: index * 0.07, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+      style={{
+        width: '100%',
+        marginBottom: 16,
+        overflow: 'hidden',
+        borderRadius: 24,
+        background: '#fff',
+        border: '1px solid #F0F0F0',
+        boxShadow: '0 2px 16px rgba(0,0,0,0.05)',
+      }}
     >
-      {/* Image area */}
-      <div className="relative aspect-[3/2] overflow-hidden">
+      {/* Image */}
+      <div style={{ position: 'relative', width: '100%', aspectRatio: '4/3', overflow: 'hidden', background: '#F5F5F5' }}>
         {imageUrl ? (
           <img
             src={imageUrl}
             alt={label}
-            className="w-full h-full object-cover"
-            loading={index < 2 ? "eager" : "lazy"}
+            loading={index < 2 ? 'eager' : 'lazy'}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
           />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-[#F5F5F5]">
-            <span className="text-sm text-gray-400 font-medium">{label}</span>
+          <div style={{
+            position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'linear-gradient(135deg, #FFF0F5 0%, #FCE4EC 100%)',
+            fontSize: 48,
+          }}>
+            🏪
           </div>
         )}
+
+        {/* Bunz badge */}
+        {bunz > 0 && (
+          <div style={{
+            position: 'absolute', top: 12, right: 12,
+            background: '#E91E63', color: '#fff',
+            fontSize: 11, fontWeight: 900,
+            padding: '6px 12px', borderRadius: 999,
+            boxShadow: '0 4px 12px rgba(233,30,99,0.4)',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}>
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgba(255,255,255,0.7)' }} />
+            +{bunz}% BUNZ
+          </div>
+        )}
+
+        {/* Label badge */}
+        <div style={{
+          position: 'absolute', top: 12, left: 12,
+          background: 'rgba(255,255,255,0.9)',
+          backdropFilter: 'blur(8px)',
+          fontSize: 11, fontWeight: 700, color: '#555',
+          padding: '4px 10px', borderRadius: 999,
+        }}>
+          📍 {label}
+        </div>
       </div>
 
-      {/* Caption Area - Exact Clone of Showcase */}
-      <div className="flex items-start justify-between bg-white" style={{ padding: '24px' }}>
-        <div>
-          <p className="font-normal text-[#111111] text-[17px] mb-2">{user}</p>
-          <p className="text-[#8A8A8A] text-[14px] font-light">{device} — {time}</p>
-          {bunz > 0 && <p className="text-[#E91E63] text-[14px] font-medium mt-2">+{bunz}% bunz de recompensa</p>}
+      {/* Body */}
+      <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontWeight: 900, color: '#111', fontSize: 17, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {user}
+          </p>
+          <p style={{ color: '#999', fontSize: 13, fontWeight: 500 }}>{device}</p>
         </div>
-        <div className="flex flex-col items-end gap-3 mt-1">
-          <button className="text-[#111111] active:opacity-60 transition-opacity">
-            <MoreHorizontal className="w-6 h-6" />
-          </button>
-          {onReserve && (
-            <button 
-              onClick={() => onReserve(id)}
-              className="bg-black text-white text-xs font-bold px-4 py-2 rounded-full active:scale-95 transition-transform"
-            >
-              Reservar Visita
-            </button>
-          )}
-        </div>
+        <button style={{
+          flexShrink: 0,
+          background: '#111', color: '#fff',
+          fontSize: 12, fontWeight: 700,
+          padding: '10px 16px', borderRadius: 999,
+          border: 'none', cursor: 'pointer',
+        }}>
+          Ver oferta
+        </button>
       </div>
     </motion.div>
   );

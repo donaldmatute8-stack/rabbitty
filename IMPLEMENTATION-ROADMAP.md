@@ -22,14 +22,13 @@
 ---
 
 ### ✅ PUNTO 2: Business Panel (Dashboard para Negocios)
-**Funcionalidades:**
-- [ ] Configurar % de recompensa dinámico (10%-200%)
-- [ ] Ver crédito de minting disponible/usado
-- [ ] Analytics: consumo por hora/día/semana
-- [ ] Clientes frecuentes y sus hábitos
-- [ ] Escanear QR de Rabbitters para procesar pagos
-- [ ] Historial de recompensas dadas
-- [ ] Solicitar aumento de crédito de minting
+**Funcionalidades (Fase 2 ✅ Completada):**
+- [x] Configurar % de recompensa dinámico (10%-100%)
+- [x] Seleccionar paquetes de "Crédito de Minting" ($10k, $20k, $50k) 
+- [x] Crear negocio vinculándolo a la Smart Wallet del afiliado
+- [x] Analytics y UI Responsive (Sidebar Desktop, BottomNav Mobile)
+- [ ] Escanear QR de Rabbitters para procesar pagos (Pendiente Fase 3)
+- [ ] Historial de recompensas dadas (Pendiente Fase 3)
 
 **Tech Stack:**
 - React.js / Next.js
@@ -105,6 +104,21 @@
 - Real-time updates (WebSockets)
 
 **Tiempo estimado:** 2-3 semanas
+
+---
+
+### ✅ PUNTO 7: Telegram Chat Messaging (Pendiente)
+**Funcionalidades:**
+- [ ] Integrar chat estilo Telegram en la pestaña de mensajes.
+- [ ] Chats P2P (Rabbitters) y B2C (Afiliados-Clientes).
+- [ ] Compartir ubicaciones y promociones por mensaje.
+- [ ] Dejar de usar "mock data".
+
+**Tech Stack:**
+- WebSockets o Firebase Realtime DB
+- UI similar a Telegram nativo
+
+**Tiempo estimado:** 2 semanas
 
 ---
 

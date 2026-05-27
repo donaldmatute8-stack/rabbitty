@@ -19,11 +19,11 @@ export default function BottomNav() {
       className="fixed bottom-0 left-0 right-0 bg-white z-[100]"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 20px)' }}
     >
-      <div className="flex items-center justify-between px-6 py-2">
+      <div className="flex items-center justify-between px-6 py-3">
 
         {/* Home / Feed */}
-        <Link href="/" className="flex flex-col items-center justify-center w-14 h-14">
-          <div className="w-[70px] h-[70px] flex items-center justify-center">
+        <Link href="/" className="flex flex-col items-center justify-center w-16 h-16">
+          <div className="w-[80px] h-[80px] flex items-center justify-center">
             <img
               src="/Ra.png"
               alt="Ra"
@@ -34,17 +34,18 @@ export default function BottomNav() {
         </Link>
 
         {/* Discover / Mapa / Explorar */}
-        <Link href="/discover" className="flex flex-col items-center justify-center w-14 h-14 transition-colors" style={{ color: getColor(isDiscover) }}>
-          <MessageCircle className="w-[26px] h-[26px]" strokeWidth={1.5} />
+        <Link href="/discover" className="flex flex-col items-center justify-center w-16 h-16 transition-colors" style={{ color: getColor(isDiscover) }}>
+          <MessageCircle className="w-[30px] h-[30px]" strokeWidth={1.8} />
         </Link>
 
         {/* Scan */}
-        <Link href="/scan" className="flex flex-col items-center justify-center w-14 h-14 transition-colors" style={{ color: getColor(isScan) }}>
-          <Maximize className="w-[26px] h-[26px]" strokeWidth={1.5} />
+        <Link href="/scan" className="flex flex-col items-center justify-center w-16 h-16 transition-colors" style={{ color: getColor(isScan) }}>
+          <Maximize className="w-[30px] h-[30px]" strokeWidth={1.8} />
         </Link>
 
-        <Link href="/profile" className="flex flex-col items-center justify-center w-14 h-14 transition-colors" style={{ color: getColor(isProfile) }}>
-          <User className="w-[26px] h-[26px]" strokeWidth={1.5} />
+        {/* Profile */}
+        <Link href="/profile" className="flex flex-col items-center justify-center w-16 h-16 transition-colors" style={{ color: getColor(isProfile) }}>
+          <User className="w-[30px] h-[30px]" strokeWidth={1.8} />
         </Link>
 
       </div>
