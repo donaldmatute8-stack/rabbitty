@@ -4,8 +4,6 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import BottomNav from '@/components/BottomNav';
 
-
-
 interface LayoutProps {
   title: React.ReactNode;
   children: React.ReactNode;
@@ -16,48 +14,57 @@ export default function ProfileSubpageLayout({ title, children, showBack = true 
   const router = useRouter();
 
   return (
-    <div className="page-wrap bg-white" style={{ fontFamily: "var(--font-family-base)", paddingBottom: 100 }}>
-      {/* Top spacing to account for iOS/Android status bar (Telegram safe area) */}
-      <div style={{ height: 'max(env(safe-area-inset-top), 16px)' }} />
+    <div className="page-wrap" style={{ background: '#F8F8F8', fontFamily: 'var(--font-family-base)', paddingBottom: 100 }}>
 
-      <main className="flex-1 w-full max-w-[600px] mx-auto" style={{ backgroundColor: '#FFFFFF', paddingLeft: 16, paddingRight: 16 }}>
+      <main style={{ width: '100%', maxWidth: 600, margin: '0 auto', paddingLeft: 16, paddingRight: 16 }}>
 
-        {/* Custom Header Row */}
-        <div style={{ position: "relative", display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginTop: 8, marginBottom: 24 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        {/* Header */}
+        <div style={{
+          position: 'relative',
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          margin: '0 -16px 24px',
+          padding: '16px 20px 20px',
+          paddingTop: 'calc(max(env(safe-area-inset-top), 16px) + 16px)',
+          background: '#fff',
+          borderBottom: '1px solid #F0F0F0',
+          overflow: 'hidden',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, position: 'relative', zIndex: 1 }}>
             {showBack && (
               <button
                 onClick={() => router.back()}
-                style={{ background: "none", border: "none", cursor: "pointer", padding: "8px 8px 8px 0" }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px 8px 8px 0' }}
               >
                 <svg width="10" height="18" viewBox="0 0 10 18" fill="none">
                   <path d="M9 1L1 9L9 17" stroke="#111" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </button>
             )}
-
-            {/* Title or Avatar Block */}
-            <div>
-              {typeof title === 'string' ? (
-                <h1 style={{ fontSize: 32, fontWeight: 800, color: "#111", letterSpacing: "-0.5px", margin: 0, lineHeight: 1.1 }}>
-                  {title}
-                </h1>
-              ) : (
-                title
-              )}
-            </div>
+            {typeof title === 'string' ? (
+              <h1 style={{ fontSize: 30, fontWeight: 900, color: '#111', letterSpacing: '-0.5px', margin: 0, lineHeight: 1.1 }}>
+                {title}
+              </h1>
+            ) : (
+              title
+            )}
           </div>
 
-          <div style={{ position: "absolute", right: -8, top: typeof title === 'string' ? -24 : -16, zIndex: 5, pointerEvents: "none" }}>
-            <img src="/Ra.png" alt="Rabbitty" style={{ width: 100, height: 100, objectFit: 'contain' }} />
+          {/* Rabbit watermark */}
+          <div style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', opacity: 0.07, pointerEvents: 'none' }}>
+            <svg width="80" height="96" viewBox="0 0 38 48" fill="none">
+              <path d="M11 1C11 1 7 4 7 14C7 20 9.5 23 13 23C16.5 23 18 19 18 14C18 6.5 14 1 11 1Z" fill="#111"/>
+              <path d="M27 1C27 1 31 4 31 14C31 20 28.5 23 25 23C21.5 23 20 19 20 14C20 6.5 24 1 27 1Z" fill="#111"/>
+              <ellipse cx="19" cy="33" rx="14" ry="12" fill="#111"/>
+            </svg>
           </div>
         </div>
 
-        {/* Content */}
         <motion.div
-          initial={{ opacity: 0, y: 15 }}
+          initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
+          transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
         >
           {children}
         </motion.div>

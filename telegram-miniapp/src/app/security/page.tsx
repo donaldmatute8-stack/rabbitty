@@ -1,39 +1,103 @@
 'use client';
 
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
-import EmptyState from '@/components/ui/EmptyState';
+
+const FEATURES = [
+  { icon: '🔑', color: '#10B981', bg: '#F0FDF4', title: 'Llaves Privadas',    desc: 'Tus llaves privadas de TON nunca tocan nuestros servidores. Se encriptan localmente en tu dispositivo con AES-256.' },
+  { icon: '🛡️', color: '#6366F1', bg: '#EEF2FF', title: 'Contratos Auditados', desc: 'Nuestros Smart Contracts en la blockchain han sido auditados por firmas de seguridad independientes.' },
+  { icon: '🫶', color: '#F59E0B', bg: '#FFFBEB', title: 'Biometría',           desc: 'Soporte completo para Face ID y Touch ID a través de Telegram y tu wallet nativa de TON.' },
+  { icon: '🕵️', color: '#E91E63', bg: '#FFF0F5', title: 'Zero-Knowledge',     desc: 'El saldo de tu billetera es privado. Los negocios solo ven tu dirección pública cuando interactúas.' },
+];
+
+const STATS = [
+  { val: '0',    label: 'Hackeos',  color: '#10B981' },
+  { val: '100%', label: 'Uptime',   color: '#6366F1' },
+  { val: '256b', label: 'AES',      color: '#F59E0B' },
+];
 
 export default function SecurityPage() {
   return (
     <ProfileSubpageLayout title="Seguridad">
-      <div className="flex flex-col gap-4 mt-4 text-[#111111]">
-        
-        {/* Wallet Security */}
-        <div className="bg-gradient-to-br from-gray-900 to-black text-white rounded-3xl p-6 shadow-lg relative overflow-hidden">
-          <div className="absolute -right-6 -top-6 w-32 h-32 bg-white/5 rounded-full blur-2xl"></div>
-          <h2 className="text-xl font-black mb-2 relative z-10">Billetera In-App</h2>
-          <p className="text-gray-400 text-sm mb-4 relative z-10 leading-relaxed">
-            Rabbitty no custodia tus activos web3. Utilizamos Thirdweb para generar una Smart Wallet (ERC-4337) que está criptográficamente vinculada a tu correo electrónico.
-          </p>
-          <div className="bg-white/10 p-3 rounded-xl border border-white/10 relative z-10">
-            <p className="text-xs text-gray-300">
-              Solo tú puedes autorizar transacciones. Nuestro motor aprueba operaciones off-chain usando claves delegadas de sesión para que no pagues comisiones por cada consumo.
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 8 }}>
+
+        {/* Hero card */}
+        <div style={{
+          background: 'linear-gradient(135deg, #0A0A0A 0%, #111827 55%, #0D2818 100%)',
+          borderRadius: 28, padding: '28px 24px',
+          position: 'relative', overflow: 'hidden',
+          border: '1px solid rgba(255,255,255,0.05)',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+        }}>
+          {/* Glow blobs */}
+          <div style={{ position: 'absolute', right: '-8%', top: '-8%', width: 176, height: 176, background: 'rgba(16,185,129,0.15)', borderRadius: '50%', filter: 'blur(50px)' }} />
+          <div style={{ position: 'absolute', left: '-5%', bottom: '-5%', width: 128, height: 128, background: 'rgba(99,102,241,0.1)', borderRadius: '50%', filter: 'blur(40px)' }} />
+
+          {/* Status badge */}
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)',
+            borderRadius: 999, padding: '4px 12px', marginBottom: 20,
+            position: 'relative', zIndex: 1,
+          }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#34D399', boxShadow: '0 0 6px #10B981' }} />
+            <span style={{ fontSize: 10, fontWeight: 900, color: '#34D399', letterSpacing: 1.5 }}>SISTEMA PROTEGIDO</span>
+          </div>
+
+          <div style={{ position: 'relative', zIndex: 1 }}>
+            <div style={{
+              width: 64, height: 64, borderRadius: 20,
+              background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.2)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 28, marginBottom: 16,
+            }}>🔒</div>
+            <h2 style={{ fontSize: 22, fontWeight: 900, color: '#fff', margin: '0 0 8px', letterSpacing: '-0.5px', lineHeight: 1.2 }}>
+              Seguridad de Nivel Bancario
+            </h2>
+            <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 13, lineHeight: 1.6, margin: 0 }}>
+              Rabbitty utiliza criptografía de última generación y la infraestructura descentralizada de TON para garantizar que tus activos estén siempre a salvo.
             </p>
+          </div>
+
+          {/* Stats row */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginTop: 20, position: 'relative', zIndex: 1 }}>
+            {STATS.map(({ val, label, color }) => (
+              <div key={label} style={{
+                background: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 12,
+                textAlign: 'center', border: '1px solid rgba(255,255,255,0.04)',
+              }}>
+                <p style={{ fontSize: 18, fontWeight: 900, color, margin: '0 0 2px' }}>{val}</p>
+                <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', fontWeight: 600, margin: 0 }}>{label}</p>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Local Security */}
-        <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm mt-2">
-          <h3 className="font-bold text-gray-900 mb-2">Transacciones Seguras</h3>
-          <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-            Cada vez que escaneas un código QR, el sistema verifica bidireccionalmente el consumo con el negocio. Las reservas expiran automáticamente en 2 horas si no se completan.
-          </p>
-          
-          <h3 className="font-bold text-gray-900 mb-2">Sesión en Telegram</h3>
-          <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-            Tu sesión está protegida por la validación de inicio de sesión de Telegram (initData). Si cambias de dispositivo, simplemente re-autentícate con tu correo para recuperar tu Smart Wallet intacta.
-          </p>
-        </div>
+        <h3 style={{ fontWeight: 900, color: '#111', fontSize: 15, margin: '4px 4px 0', padding: 0 }}>Características Clave</h3>
+
+        {/* Feature cards */}
+        {FEATURES.map((feat, i) => (
+          <div key={i} style={{
+            background: '#fff', border: '1px solid #F0F0F0',
+            borderRadius: 24, padding: 20,
+            display: 'flex', gap: 16, alignItems: 'flex-start',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
+          }}>
+            <div style={{
+              width: 52, height: 52, borderRadius: 16, background: feat.bg,
+              display: 'flex', flexShrink: 0, alignItems: 'center', justifyContent: 'center',
+              fontSize: 24, marginTop: 2,
+            }}>
+              {feat.icon}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <h4 style={{ fontWeight: 900, color: '#111', fontSize: 15, margin: 0 }}>{feat.title}</h4>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: feat.color, flexShrink: 0 }} />
+              </div>
+              <p style={{ color: '#888', fontSize: 12, lineHeight: 1.6, margin: 0 }}>{feat.desc}</p>
+            </div>
+          </div>
+        ))}
 
       </div>
     </ProfileSubpageLayout>

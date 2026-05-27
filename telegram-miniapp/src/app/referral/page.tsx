@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Share2, Copy, Users, CheckCircle2, Trophy, Star } from 'lucide-react';
+import { Share2, Copy, CheckCircle2, Trophy } from 'lucide-react';
 import Header from '@/components/ui/Header';
 import BottomNav from '@/components/BottomNav';
 import { useWallet } from '@/contexts/WalletContext';
@@ -13,27 +13,24 @@ export default function ReferralPage() {
   const { address } = useWallet();
 
   useEffect(() => {
-    if (address) {
-      fetchProfile();
-    }
+    if (address) fetchProfile();
+    else setLoading(false);
   }, [address]);
 
   const fetchProfile = async () => {
     try {
       const res = await fetch(`/api/auth/profile?wallet=${address}`);
       const data = await res.json();
-      if (data.profile) {
-        setProfile(data.profile);
-      }
+      if (data.profile) setProfile(data.profile);
     } catch (err) {
-      console.error(err);
+      console.error('[Referral] profile fetch error:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const referralLink = profile?.referral_code 
-    ? `https://t.me/RabbittyBot/app?startapp=ref_${profile.referral_code}` 
+  const referralLink = profile?.referral_code
+    ? `https://t.me/RabbittyBot/app?startapp=ref_${profile.referral_code}`
     : '';
 
   const copyToClipboard = () => {
@@ -44,95 +41,148 @@ export default function ReferralPage() {
     }
   };
 
+  const shareOnTelegram = () => {
+    // @ts-ignore
+    if (window.Telegram?.WebApp?.openTelegramLink) {
+      const url = encodeURIComponent(referralLink);
+      const text = encodeURIComponent('¡Únete a Rabbitty y gana 50 Bunz gratis para comprar en la ciudad!');
+      // @ts-ignore
+      window.Telegram.WebApp.openTelegramLink(`https://t.me/share/url?url=${url}&text=${text}`);
+    }
+  };
+
   return (
-    <div className="page-wrap bg-gray-50 min-h-screen pb-28">
-      <div className="bg-white sticky top-0 z-50 shadow-sm">
+    <div className="page-wrap" style={{ background: '#F8F8F8', minHeight: '100vh', paddingBottom: 112 }}>
+      <div style={{ background: '#fff', position: 'sticky', top: 0, zIndex: 50, borderBottom: '1px solid #F0F0F0' }}>
         <div style={{ height: 'var(--safe-top)' }} />
         <Header showBack={true} />
       </div>
 
-      <main className="p-4 max-w-[600px] mx-auto flex flex-col gap-5 mt-4">
+      <main style={{ padding: '16px 16px 0', maxWidth: 600, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
         {loading ? (
-          <div className="flex justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div></div>
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
+            <div style={{ width: 32, height: 32, borderRadius: '50%', border: '2px solid rgba(233,30,99,0.3)', borderTopColor: '#E91E63', animation: 'spin 0.8s linear infinite' }} />
+          </div>
         ) : (
           <>
-            {/* Level & Pending Bunz Card */}
-            <div className="bg-gradient-to-br from-indigo-900 to-purple-800 rounded-3xl p-6 text-white shadow-lg relative overflow-hidden">
-              <div className="absolute -right-6 -top-6 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
-              
-              <div className="flex justify-between items-start relative z-10">
+            {/* Level + Pending Bunz */}
+            <div style={{
+              background: 'linear-gradient(135deg, #1A0540 0%, #2D1060 55%, #3D0F80 100%)',
+              borderRadius: 28, padding: '24px 20px',
+              position: 'relative', overflow: 'hidden',
+              border: '1px solid rgba(255,255,255,0.05)',
+              boxShadow: '0 12px 40px rgba(45,16,96,0.4)',
+            }}>
+              <div style={{ position: 'absolute', right: '-10%', top: '-10%', width: 176, height: 176, background: 'rgba(255,255,255,0.06)', borderRadius: '50%', filter: 'blur(30px)' }} />
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', position: 'relative', zIndex: 1 }}>
                 <div>
-                  <p className="text-white/70 text-sm font-bold uppercase tracking-wider mb-1">Tu Nivel</p>
-                  <div className="flex items-center gap-2">
-                    <Star className="w-8 h-8 text-yellow-400 fill-yellow-400" />
-                    <span className="text-4xl font-black">{profile?.level || 1}</span>
+                  <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: 900, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8 }}>Tu Nivel</p>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                    <span style={{ fontSize: 52, fontWeight: 900, lineHeight: 1, letterSpacing: -2, color: '#fff' }}>{profile?.level ?? 1}</span>
+                    <span style={{ fontSize: 20, color: '#FCD34D' }}>⭐</span>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-white/70 text-sm font-bold uppercase tracking-wider mb-1">Bunz Pendientes</p>
-                  <p className="text-3xl font-black text-pink-400">{profile?.pending_bunz || 0}</p>
+                <div style={{ textAlign: 'right' }}>
+                  <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: 900, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8 }}>Bunz Pendientes</p>
+                  <p style={{ fontSize: 42, fontWeight: 900, color: '#E91E63', letterSpacing: -1, lineHeight: 1, margin: 0 }}>
+                    {profile?.pending_bunz ?? 0}
+                  </p>
                 </div>
               </div>
 
-              <div className="mt-6 bg-black/20 rounded-2xl p-4">
-                <p className="text-sm leading-snug">
-                  <span className="font-bold text-yellow-400">¿Cómo usar los pendientes?</span> Sube de nivel consumiendo en negocios afiliados para desbloquear tus Bunz de referidos.
+              <div style={{
+                marginTop: 20, background: 'rgba(0,0,0,0.25)', borderRadius: 16, padding: 14,
+                position: 'relative', zIndex: 1,
+              }}>
+                <p style={{ fontSize: 12, lineHeight: 1.5, color: 'rgba(255,255,255,0.7)', margin: 0 }}>
+                  <span style={{ fontWeight: 700, color: '#FCD34D' }}>💡 </span>
+                  Sube de nivel consumiendo en negocios afiliados para desbloquear tus Bunz de referidos.
                 </p>
               </div>
             </div>
 
-            {/* Share Link Card */}
-            <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 mt-2 text-center">
-              <div className="w-16 h-16 bg-pink-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <Users className="w-8 h-8 text-pink-500" />
-              </div>
-              <h2 className="text-2xl font-black text-gray-900 mb-2">Invita Amigos</h2>
-              <p className="text-gray-500 text-sm mb-6">
-                Obtén <span className="font-bold text-pink-500">50 Bunz Pendientes</span> por cada amigo que se una usando tu link. Ellos también recibirán 50 Bunz.
+            {/* Invite card */}
+            <div style={{
+              background: '#fff', borderRadius: 28, padding: 24,
+              border: '1px solid #F0F0F0',
+              boxShadow: '0 2px 16px rgba(0,0,0,0.04)',
+              textAlign: 'center',
+            }}>
+              <div style={{ width: 64, height: 64, background: '#FFF0F5', borderRadius: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: 28 }}>👥</div>
+              <h2 style={{ fontSize: 22, fontWeight: 900, color: '#111', marginBottom: 8, letterSpacing: '-0.5px' }}>Invita y Gana</h2>
+              <p style={{ color: '#888', fontSize: 13, lineHeight: 1.6, marginBottom: 24 }}>
+                Obtén <span style={{ fontWeight: 900, color: '#E91E63' }}>50 Bunz Pendientes</span> por cada amigo.
+                Ellos también reciben 50 Bunz de bienvenida.
               </p>
 
-              <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-4 flex flex-col gap-3">
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Tu Link Único</p>
-                <div className="flex items-center justify-between bg-white rounded-xl p-3 border shadow-sm">
-                  <p className="text-sm font-medium text-gray-700 truncate mr-2">
-                    {referralLink || 'Generando...'}
+              {/* Link box */}
+              <div style={{
+                background: '#F8F8F8', border: '2px dashed #E8E8E8',
+                borderRadius: 20, padding: 16,
+                display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16,
+              }}>
+                <p style={{ fontSize: 9, fontWeight: 900, color: '#BBB', letterSpacing: 1.5, textTransform: 'uppercase', margin: 0 }}>Tu Link Único</p>
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                  background: '#fff', borderRadius: 14, padding: 12,
+                  border: '1px solid #F0F0F0', boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+                }}>
+                  <p style={{ fontSize: 12, fontWeight: 500, color: '#666', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, margin: 0 }}>
+                    {referralLink || (address ? 'Generando...' : 'Conecta tu billetera')}
                   </p>
-                  <button 
+                  <button
                     onClick={copyToClipboard}
-                    className="bg-pink-500 text-white p-2 rounded-lg active:scale-95 transition-transform flex-shrink-0"
+                    disabled={!referralLink}
+                    style={{
+                      background: referralLink ? '#E91E63' : '#E0E0E0',
+                      color: '#fff', padding: 8, borderRadius: 10,
+                      border: 'none', cursor: referralLink ? 'pointer' : 'not-allowed',
+                      flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
                   >
-                    {copied ? <CheckCircle2 className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
+                    {copied ? <CheckCircle2 size={16} /> : <Copy size={16} />}
                   </button>
                 </div>
               </div>
 
-              <button 
-                className="w-full bg-black text-white font-bold py-4 rounded-xl mt-4 flex items-center justify-center gap-2 active:scale-95 transition-transform"
-                onClick={() => {
-                  // @ts-ignore
-                  if (window.Telegram?.WebApp?.openTelegramLink) {
-                    // @ts-ignore
-                    window.Telegram.WebApp.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent('¡Únete a Rabbitty y gana 50 Bunz gratis para comprar en la ciudad!')}`);
-                  }
+              <button
+                onClick={shareOnTelegram}
+                disabled={!referralLink}
+                style={{
+                  width: '100%', background: referralLink ? '#111' : '#E0E0E0',
+                  color: referralLink ? '#fff' : '#999',
+                  fontWeight: 900, fontSize: 14,
+                  padding: '16px 0', borderRadius: 999,
+                  border: 'none', cursor: referralLink ? 'pointer' : 'not-allowed',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                 }}
               >
-                <Share2 className="w-5 h-5" />
+                <Share2 size={16} />
                 Compartir en Telegram
               </button>
             </div>
-            
-            {/* Gamification / Achievements Empty State */}
-            <div className="flex items-center gap-2 mt-6 mb-2">
-              <Trophy className="w-5 h-5 text-gray-400" />
-              <h3 className="font-bold text-gray-700">Tus Medallas</h3>
+
+            {/* Medals */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+              <Trophy size={18} color="#AAA" />
+              <h3 style={{ fontWeight: 900, color: '#111', fontSize: 15, margin: 0 }}>Tus Medallas</h3>
             </div>
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 text-center shadow-sm">
-              <p className="text-gray-400 text-sm">Realiza consumos para empezar a desbloquear insignias y recompensas exclusivas.</p>
+            <div style={{
+              background: '#fff', borderRadius: 24, padding: 24,
+              border: '1px solid #F0F0F0', textAlign: 'center',
+              boxShadow: '0 2px 12px rgba(0,0,0,0.03)',
+            }}>
+              <span style={{ fontSize: 36, display: 'block', marginBottom: 12 }}>🐇</span>
+              <p style={{ color: '#999', fontSize: 13, lineHeight: 1.5, margin: 0 }}>
+                Realiza consumos en negocios afiliados para empezar a desbloquear insignias y recompensas exclusivas.
+              </p>
             </div>
           </>
         )}
       </main>
 
+      <style dangerouslySetInnerHTML={{__html: `@keyframes spin { to { transform: rotate(360deg); } }`}} />
       <BottomNav />
     </div>
   );

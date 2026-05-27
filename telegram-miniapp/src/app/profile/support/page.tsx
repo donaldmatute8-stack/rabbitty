@@ -1,83 +1,124 @@
 'use client';
 
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
-import { Send, MessageCircleQuestion, HelpCircle, AlertCircle } from 'lucide-react';
+import Link from 'next/link';
 
-const FAQS = [
+const OPTIONS = [
   {
-    q: "¿Cómo gano Bunz?",
-    a: "Ve a la página principal y presiona 'Escanear'. Si estás en un negocio afiliado y escaneas tu ticket de consumo, ganarás Bunz automáticamente según su porcentaje de recompensa."
+    icon: '💬', bg: '#FFF0F5', btnBg: '#FFF0F5', btnHover: '#FCE4EC', btnColor: '#E91E63',
+    title: 'Chat de Soporte',
+    desc: 'Habla con nuestro equipo en Telegram para ayuda inmediata.',
+    cta: 'Abrir Chat →', link: 'https://t.me/RabbittySupport',
   },
   {
-    q: "¿Qué son los Bunz pendientes?",
-    a: "Cuando invitas a un amigo, recibes 50 Bunz en estado 'Pendiente'. Para poder gastarlos, necesitas subir de nivel realizando consumos en negocios locales."
+    icon: '❓', bg: '#EEF2FF', btnBg: '#EEF2FF', btnHover: '#E0E7FF', btnColor: '#4F46E5',
+    title: 'Preguntas Frecuentes',
+    desc: 'Encuentra respuestas rápidas a las dudas más comunes sobre Bunz.',
+    cta: 'Leer FAQs →', link: '#',
   },
   {
-    q: "¿Cómo gasto mis Bunz?",
-    a: "En la pestaña 'Stock' de la pantalla principal verás certificados y ofertas. Si tienes suficientes Bunz, dale a 'Adquirir' y se guardarán en tu Inventario."
+    icon: '📖', bg: '#F0FDF4', btnBg: '#F0FDF4', btnHover: '#DCFCE7', btnColor: '#16A34A',
+    title: 'Documentación',
+    desc: 'Aprende todo sobre cómo ganar, canjear y transferir tus Bunz.',
+    cta: 'Ver Docs →', link: '#',
   },
-  {
-    q: "¿Cómo funciona la reserva?",
-    a: "Si ves un negocio en el mapa y quieres ir a gastar tus Bunz ahí, puedes 'Reservar Visita'. Esto apartará parte de su límite diario para asegurar que te los acepten cuando llegues."
-  }
 ];
 
 export default function SupportPage() {
-  const handleSupportClick = () => {
-    // Open Telegram chat with the admin/bot
-    // @ts-ignore
-    if (window.Telegram?.WebApp?.openTelegramLink) {
-      // @ts-ignore
-      window.Telegram.WebApp.openTelegramLink('https://t.me/RabbittySupportBot');
-    } else {
-      window.open('https://t.me/RabbittySupportBot', '_blank');
-    }
-  };
-
   return (
-    <ProfileSubpageLayout title="Ayuda y Soporte">
-      <div className="flex flex-col gap-6 mt-4">
-        
-        {/* Support Button */}
-        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-3xl p-6 text-white text-center shadow-lg relative overflow-hidden">
-          <div className="absolute right-[-20px] top-[-20px] opacity-10">
-            <MessageCircleQuestion className="w-40 h-40" />
+    <ProfileSubpageLayout title="Soporte">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 8 }}>
+
+        {/* Hero */}
+        <div style={{
+          background: 'linear-gradient(135deg, #E91E63 0%, #FF6B35 100%)',
+          borderRadius: 28, padding: '28px 24px',
+          position: 'relative', overflow: 'hidden',
+          boxShadow: '0 12px 40px rgba(233,30,99,0.3)',
+        }}>
+          <div style={{ position: 'absolute', right: '-10%', top: '-10%', width: 176, height: 176, background: 'rgba(255,255,255,0.15)', borderRadius: '50%', filter: 'blur(40px)' }} />
+          <div style={{ position: 'absolute', left: '-5%', bottom: '-15%', width: 144, height: 144, background: 'rgba(0,0,0,0.1)', borderRadius: '50%', filter: 'blur(30px)' }} />
+
+          <div style={{ position: 'relative', zIndex: 1 }}>
+            <div style={{
+              width: 64, height: 64, borderRadius: 20,
+              background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.2)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 28, marginBottom: 20,
+            }}>🤝</div>
+            <h2 style={{ fontSize: 22, fontWeight: 900, color: '#fff', margin: '0 0 8px', letterSpacing: '-0.5px', lineHeight: 1.2 }}>
+              ¿Cómo te podemos ayudar?
+            </h2>
+            <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, lineHeight: 1.6, margin: '0 0 20px' }}>
+              Estamos aquí para resolver cualquier duda sobre Rabbitty, tus recompensas o tu Billetera Ra.
+            </p>
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              background: 'rgba(255,255,255,0.15)', borderRadius: 16, padding: '10px 16px',
+            }}>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff', animation: 'pulse 2s infinite' }} />
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>Tiempo de respuesta: &lt; 2 horas</span>
+            </div>
           </div>
-          <h2 className="text-xl font-black mb-2 relative z-10">¿Necesitas ayuda humana?</h2>
-          <p className="text-blue-100 text-sm mb-6 relative z-10">
-            Estamos disponibles 24/7. Escríbenos directamente por Telegram y un agente (¡o yo!) te responderá al instante.
-          </p>
-          <button 
-            onClick={handleSupportClick}
-            className="w-full bg-white text-blue-600 font-bold py-4 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-transform relative z-10"
-          >
-            <Send className="w-5 h-5" />
-            Contactar por Telegram
-          </button>
         </div>
 
-        {/* FAQs */}
-        <div>
-          <div className="flex items-center gap-2 mb-4 px-1">
-            <HelpCircle className="w-5 h-5 text-gray-400" />
-            <h3 className="font-bold text-gray-900">Preguntas Frecuentes</h3>
-          </div>
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-            {FAQS.map((faq, i) => (
-              <div key={i} className={`p-5 ${i !== FAQS.length - 1 ? 'border-b border-gray-50' : ''}`}>
-                <h4 className="font-bold text-gray-900 text-sm mb-2">{faq.q}</h4>
-                <p className="text-gray-500 text-[13px] leading-relaxed">{faq.a}</p>
+        <h3 style={{ fontWeight: 900, color: '#111', fontSize: 15, margin: '4px 4px 0', padding: 0 }}>Opciones de Contacto</h3>
+
+        {/* Option cards */}
+        {OPTIONS.map((opt, i) => (
+          <div key={i} style={{
+            background: '#fff', border: '1px solid #F0F0F0',
+            borderRadius: 24, padding: 20,
+            display: 'flex', flexDirection: 'column', gap: 16,
+            boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
+          }}>
+            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+              <div style={{
+                width: 52, height: 52, borderRadius: 16, background: opt.bg,
+                display: 'flex', flexShrink: 0, alignItems: 'center', justifyContent: 'center',
+                fontSize: 24,
+              }}>
+                {opt.icon}
               </div>
-            ))}
+              <div>
+                <h4 style={{ fontWeight: 900, color: '#111', fontSize: 15, margin: '0 0 4px' }}>{opt.title}</h4>
+                <p style={{ color: '#888', fontSize: 12, lineHeight: 1.6, margin: 0 }}>{opt.desc}</p>
+              </div>
+            </div>
+            <Link href={opt.link} style={{
+              display: 'block', textAlign: 'center',
+              background: opt.btnBg, color: opt.btnColor,
+              fontWeight: 900, fontSize: 13,
+              padding: '12px 0', borderRadius: 14,
+              textDecoration: 'none',
+            }}>
+              {opt.cta}
+            </Link>
           </div>
-        </div>
+        ))}
 
-        {/* Info */}
-        <div className="flex items-start gap-3 bg-pink-50 p-4 rounded-2xl">
-          <AlertCircle className="w-5 h-5 text-pink-500 shrink-0 mt-0.5" />
-          <p className="text-xs text-pink-700 leading-relaxed">
-            Las transacciones de la plataforma son finales. Si tuviste un problema con un negocio al escanear, incluye el nombre del local en tu mensaje de soporte.
-          </p>
+        {/* Community card */}
+        <div style={{
+          background: 'linear-gradient(135deg, #1A1A2E 0%, #2D1060 100%)',
+          borderRadius: 24, padding: 20,
+          display: 'flex', alignItems: 'center', gap: 16,
+          border: '1px solid rgba(255,255,255,0.05)',
+        }}>
+          <div style={{ fontSize: 36, flexShrink: 0 }}>✈️</div>
+          <div style={{ flex: 1 }}>
+            <p style={{ fontWeight: 900, color: '#fff', fontSize: 15, margin: '0 0 4px' }}>Comunidad Telegram</p>
+            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, lineHeight: 1.4, margin: '0 0 12px' }}>
+              Únete a +2,400 rabbitters. Noticias, tips y soporte de la comunidad.
+            </p>
+            <button style={{
+              background: '#E91E63', color: '#fff',
+              fontSize: 12, fontWeight: 900,
+              padding: '8px 16px', borderRadius: 999,
+              border: 'none', cursor: 'pointer',
+            }}>
+              Unirse al grupo
+            </button>
+          </div>
         </div>
 
       </div>

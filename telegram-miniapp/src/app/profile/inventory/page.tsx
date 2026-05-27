@@ -13,7 +13,11 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (address) fetchInventory();
+    if (address) {
+      fetchInventory();
+    } else {
+      setLoading(false);
+    }
   }, [address]);
 
   const fetchInventory = async () => {

@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Freehands — Rabbitty</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- React -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+  <!-- Babel (JSX + TypeScript in-browser) -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
+
+    :root {
+      --primary-color: #E91E63;
+      --font-family-base: 'Outfit', sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      font-family: 'Outfit', sans-serif;
+    }
+
+    /* Rabbitty beacon animation */
+    .rb-pulse {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(233, 30, 99, 0.35);
+      animation: rb-beacon 2.4s ease-out infinite;
+    }
+    .rb-pulse-1 { width:52px; height:52px; top:-13px; left:-13px; }
+    .rb-pulse-2 { width:52px; height:52px; top:-13px; left:-13px; animation-delay: 0.8s; }
+    .rb-pulse-3 { width:52px; height:52px; top:-13px; left:-13px; animation-delay: 1.6s; }
+    @keyframes rb-beacon {
+      0%   { transform: scale(0.4); opacity: 0.8; }
+      100% { transform: scale(2.2); opacity: 0;   }
+    }
+
+    /* Dark Leaflet override */
+    .leaflet-container { background: #0D0D1A !important; }
+    .leaflet-tile-pane { filter: saturate(0.5) brightness(0.9); }
+
+    /* Scrollable filter pills */
+    .filter-row { scrollbar-width: none; }
+    .filter-row::-webkit-scrollbar { display: none; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel" data-presets="react,typescript">
+    const { useEffect, useRef, useState } = React;
+
+    /* ─── DATA ─────────────────────────────────────────────────────── */
+    const USER_POS = { lat: 19.4326, lng: -99.1332 };
+
+    const AFFILIATES = [
+      { id:1, name:"Café Cultura",   cat:"Cafés",        lat:19.4326, lng:-99.1358, bunz:50,  icon:"☕", badge:"HOT",  visits:156, dist:"120m" },
+      { id:2, name:"Pizza Napoli",   cat:"Restaurantes", lat:19.4302, lng:-99.1308, bunz:30,  icon:"🍕", badge:null,   visits:89,  dist:"350m" },
+      { id:3, name:"Gimnasio Power", cat:"Fitness",      lat:19.4350, lng:-99.1296, bunz:100, icon:"💪", badge:"TOP",  visits:240, dist:"500m" },
+      { id:4, name:"TechZone",       cat:"Tecnología",   lat:19.4289, lng:-99.1368, bunz:75,  icon:"💻", badge:null,   visits:62,  dist:"280m" },
+      { id:5, name:"Spa Relax",      cat:"Belleza",      lat:19.4364, lng:-99.1342, bunz:200, icon:"✨", badge:"NEW",  visits:38,  dist:"650m" },
+      { id:6, name:"Boutique Maya",  cat:"Retail",       lat:19.4312, lng:-99.1382, bunz:40,  icon:"🛍️",badge:null,   visits:74,  dist:"400m" },
+      { id:7, name:"Sushi Zen",      cat:"Restaurantes", lat:19.4353, lng:-99.1320, bunz:60,  icon:"🍱", badge:"HOT",  visits:110, dist:"180m" },
+      { id:8, name:"Panadería Lore", cat:"Cafés",        lat:19.4337, lng:-99.1376, bunz:25,  icon:"🥐", badge:null,   visits:44,  dist:"230m" },
+    ];
+
+    const FILTERS = ["Todos","Cafés","Restaurantes","Fitness","Tecnología","Belleza","Retail"];
+
+    /* ─── RARITY ────────────────────────────────────────────────────── */
+    const RARITY = {
+      common:    { color:"#7EC8E3", label:"Común",      ring:"#7EC8E355" },
+      rare:      { color:"#B57BEE", label:"Raro",       ring:"#B57BEE55" },
+      epic:      { color:"#FF4D8D", label:"Épico",      ring:"#FF4D8D66" },
+      legendary: { color:"#FFD166", label:"Legendario", ring:"#FFD16666" },
+    };
+
+    function getRarity(bunz) {
+      if (bunz >= 151) return "legendary";
+      if (bunz >= 71)  return "epic";
+      if (bunz >= 41)  return "rare";
+      return "common";
+    }
+
+    /* ─── MARKER HTML ───────────────────────────────────────────────── */
+    function markerHTML(a, selected) {
+      const r = RARITY[getRarity(a.bunz)];
+      const sz = selected ? 54 : 46;
+      const glowSize = selected
+        ? `0 0 0 3px #0D0D1A, 0 0 18px ${r.color}, 0 0 36px ${r.color}77`
+        : `0 0 0 2px #0D0D1A, 0 0 10px ${r.color}99, 0 0 22px ${r.color}44`;
+      const scale = selected ? "scale(1.18)" : "scale(1)";
+      const badgeColor = a.badge === "HOT" ? "#FF3D00" : a.badge === "TOP" ? "#FFD166" : "#00E676";
+      const badgeText  = a.badge === "TOP" ? "#111" : "#fff";
+      return `
+        <div style="position:relative;display:flex;flex-direction:column;align-items:center;transform:${scale};transition:transform 0.25s cubic-bezier(.34,1.56,.64,1)">
+          ${a.badge ? `<div style="position:absolute;top:-12px;right:-10px;background:${badgeColor};color:${badgeText};font-size:8px;font-weight:900;padding:2px 6px;border-radius:100px;letter-spacing:.5px;z-index:10;font-family:Outfit,sans-serif;box-shadow:0 2px 8px ${badgeColor}88">${a.badge}</div>` : ''}
+          <div style="position:absolute;top:-20px;left:50%;transform:translateX(-50%);background:${r.color};color:${getRarity(a.bunz)==='legendary'?'#111':'#0D0D1A'};font-size:9px;font-weight:900;padding:2px 8px;border-radius:100px;white-space:nowrap;font-family:Outfit,sans-serif;letter-spacing:.3px;box-shadow:0 2px 10px ${r.color}88">
+            +${a.bunz} bunz
+          </div>
+          <div style="width:${sz}px;height:${sz}px;border-radius:50%;background:linear-gradient(145deg,#1A1A2E,#0D0D1A);display:flex;align-items:center;justify-content:center;font-size:${selected?22:18}px;box-shadow:${glowSize};border:2px solid ${r.color};transition:all .25s">
+            ${a.icon}
+          </div>
+          <div style="width:2px;height:9px;background:linear-gradient(${r.color},transparent);margin-top:-1px"></div>
+          <div style="width:6px;height:6px;border-radius:50%;background:${r.color};box-shadow:0 0 8px ${r.color};margin-top:-2px"></div>
+        </div>`;
+    }
+
+    function userMarkerHTML() {
+      return `
+        <div style="position:relative;width:26px;height:26px">
+          <div style="position:absolute;inset:0;border-radius:50%;background:#E91E63;border:3px solid #fff;box-shadow:0 0 0 2px #E91E63,0 0 20px #E91E6388;z-index:2"></div>
+          <div class="rb-pulse rb-pulse-1"></div>
+          <div class="rb-pulse rb-pulse-2"></div>
+          <div class="rb-pulse rb-pulse-3"></div>
+        </div>`;
+    }
+
+    /* ─── COMPONENT ─────────────────────────────────────────────────── */
+    function Freehands() {
+      const mapRef     = useRef(null);
+      const mapInst    = useRef(null);
+      const layerGroup = useRef(null);
+      const [selected, setSelected]     = useState(null);
+      const [filter, setFilter]         = useState("Todos");
+      const [radarAngle, setRadarAngle] = useState(0);
+
+      const filtered   = filter === "Todos" ? AFFILIATES : AFFILIATES.filter(a => a.cat === filter);
+      const totalBunz  = filtered.reduce((s, a) => s + a.bunz, 0);
+
+      /* Radar sweep RAF */
+      useEffect(() => {
+        let raf, angle = 0;
+        const tick = () => {
+          angle = (angle + 0.9) % 360;
+          setRadarAngle(angle);
+          raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(raf);
+      }, []);
+
+      /* Init map */
+      useEffect(() => {
+        if (!mapRef.current || mapInst.current) return;
+        const map = L.map(mapRef.current, {
+          center: [USER_POS.lat, USER_POS.lng],
+          zoom: 15,
+          zoomControl: false,
+          attributionControl: false,
+        });
+
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+          maxZoom: 19, opacity: 0.92,
+        }).addTo(map);
+
+        const uIcon = L.divIcon({ html: userMarkerHTML(), className:'', iconSize:[26,26], iconAnchor:[13,13] });
+        L.marker([USER_POS.lat, USER_POS.lng], { icon: uIcon, zIndexOffset: 2000 }).addTo(map);
+
+        L.circle([USER_POS.lat, USER_POS.lng], {
+          radius:90, color:'#E91E63', fillColor:'#E91E63', fillOpacity:0.04, weight:1, dashArray:'3 5',
+        }).addTo(map);
+
+        layerGroup.current = L.layerGroup().addTo(map);
+        mapInst.current    = map;
+        map.on('click', () => setSelected(null));
+        return () => { map.remove(); mapInst.current = null; };
+      }, []);
+
+      /* Redraw markers */
+      useEffect(() => {
+        if (!mapInst.current || !layerGroup.current) return;
+        layerGroup.current.clearLayers();
+        filtered.forEach(a => {
+          const r = RARITY[getRarity(a.bunz)];
+          const isSel = selected?.id === a.id;
+          L.circle([a.lat, a.lng], {
+            radius: isSel ? 100 : 70,
+            color: r.color, fillColor: r.color,
+            fillOpacity: isSel ? 0.12 : 0.06,
+            weight: isSel ? 1.5 : 1,
+            dashArray: isSel ? undefined : '4 6',
+          }).addTo(layerGroup.current);
+
+          const icon = L.divIcon({ html: markerHTML(a, isSel), className:'', iconSize:[64,80], iconAnchor:[32,80] });
+          L.marker([a.lat, a.lng], { icon, zIndexOffset: isSel ? 1500 : 800 })
+            .addTo(layerGroup.current)
+            .on('click', e => {
+              L.DomEvent.stopPropagation(e);
+              setSelected(prev => prev?.id === a.id ? null : a);
+              mapInst.current?.panTo([a.lat - 0.0018, a.lng], { animate:true, duration:0.5 });
+            });
+        });
+      }, [filtered, selected]);
+
+      /* Radar geometry */
+      const mapAreaTop = 126, mapAreaBottom = 66;
+      const mapH = 844 - mapAreaTop - mapAreaBottom;
+      const radarCX = 195, radarCY = mapAreaTop + mapH * 0.42;
+
+      return (
+        <div style={{ width:390, height:844, fontFamily:"var(--font-family-base)", position:"relative", overflow:"hidden", backgroundColor:"#0D0D1A" }}>
+
+          {/* ── Header ── */}
+          <div style={{ position:"absolute", top:0, left:0, right:0, zIndex:1000, background:"rgba(10,10,20,0.88)", backdropFilter:"blur(16px)", WebkitBackdropFilter:"blur(16px)", paddingTop:48, paddingLeft:20, paddingRight:20, borderBottom:"1px solid rgba(255,255,255,0.07)" }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+              <button style={{ background:"none", border:"none", cursor:"pointer", padding:4 }}>
+                <svg width="10" height="18" viewBox="0 0 10 18" fill="none"><path d="M9 1L1 9L9 17" stroke="rgba(255,255,255,0.6)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+              <svg width="34" height="42" viewBox="0 0 38 48" fill="none">
+                <path d="M11 1C11 1 7 4 7 14C7 20 9.5 23 13 23C16.5 23 18 19 18 14C18 6.5 14 1 11 1Z" fill="#fff" opacity="0.9"/>
+                <path d="M27 1C27 1 31 4 31 14C31 20 28.5 23 25 23C21.5 23 20 19 20 14C20 6.5 24 1 27 1Z" fill="#fff" opacity="0.9"/>
+                <ellipse cx="19" cy="33" rx="14" ry="12" fill="#fff" opacity="0.9"/>
+                <rect x="8" y="29" width="8.5" height="6" rx="1.5" fill="#C8A830"/>
+                <rect x="21.5" y="29" width="8.5" height="6" rx="1.5" fill="#C8A830"/>
+                <line x1="16.5" y1="32" x2="21.5" y2="32" stroke="#888" strokeWidth="1.2"/>
+                <path d="M13 43L19 41L25 43L19 45.5Z" fill="#ddd"/>
+              </svg>
+              <div style={{ width:18 }} />
+            </div>
+            <div style={{ display:"flex", gap:32, paddingLeft:4 }}>
+              {["bunz'in","Stock","Freehands"].map(tab => (
+                <div key={tab} style={{ paddingBottom:10, borderBottom: tab==="Freehands" ? "2.5px solid #E91E63" : "2.5px solid transparent", fontSize:15, fontWeight: tab==="Freehands" ? 700 : 500, color: tab==="Freehands" ? "#fff" : "rgba(255,255,255,0.35)", cursor:"pointer" }}>
+                  {tab}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Map canvas ── */}
+          <div ref={mapRef} style={{ position:"absolute", top:126, left:0, right:0, bottom:66, zIndex:1 }} />
+
+          {/* ── Hex grid overlay ── */}
+          <div style={{ position:"absolute", top:126, left:0, right:0, bottom:66, zIndex:2, pointerEvents:"none",
+            backgroundImage:`repeating-linear-gradient(60deg,rgba(233,30,99,0.04) 0px,rgba(233,30,99,0.04) 1px,transparent 1px,transparent 30px),
+                             repeating-linear-gradient(120deg,rgba(233,30,99,0.04) 0px,rgba(233,30,99,0.04) 1px,transparent 1px,transparent 30px),
+                             repeating-linear-gradient(0deg,rgba(233,30,99,0.04) 0px,rgba(233,30,99,0.04) 1px,transparent 1px,transparent 30px)` }} />
+
+          {/* ── Radar sweep ── */}
+          <div style={{ position:"absolute", zIndex:3, pointerEvents:"none", width:220, height:220,
+            left:radarCX-110, top:radarCY-110, borderRadius:"50%",
+            background:`conic-gradient(transparent ${radarAngle-30}deg, rgba(233,30,99,0.18) ${radarAngle}deg, transparent ${radarAngle+1}deg)`,
+            border:"1px solid rgba(233,30,99,0.15)" }} />
+          {[80,140,200].map(r => (
+            <div key={r} style={{ position:"absolute", zIndex:2, pointerEvents:"none", width:r, height:r, left:radarCX-r/2, top:radarCY-r/2, borderRadius:"50%", border:"1px solid rgba(233,30,99,0.1)" }} />
+          ))}
+          <div style={{ position:"absolute", zIndex:2, pointerEvents:"none", width:200, height:1, left:radarCX-100, top:radarCY, background:"rgba(233,30,99,0.1)" }} />
+          <div style={{ position:"absolute", zIndex:2, pointerEvents:"none", width:1, height:200, left:radarCX, top:radarCY-100, background:"rgba(233,30,99,0.1)" }} />
+
+          {/* ── HUD bunz pill ── */}
+          <div style={{ position:"absolute", top:138, left:12, right:12, zIndex:500, display:"flex", justifyContent:"center", pointerEvents:"none" }}>
+            <div style={{ background:"linear-gradient(135deg,rgba(233,30,99,0.9),rgba(173,20,87,0.9))", backdropFilter:"blur(12px)", borderRadius:100, padding:"8px 18px", display:"flex", alignItems:"center", gap:10, boxShadow:"0 4px 24px rgba(233,30,99,0.45),inset 0 1px 0 rgba(255,255,255,0.15)" }}>
+              <div style={{ width:28, height:28, borderRadius:"50%", background:"rgba(255,255,255,0.15)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14 }}>🎯</div>
+              <span style={{ color:"#fff", fontWeight:900, fontSize:15, letterSpacing:"-0.3px" }}>{totalBunz.toLocaleString()}</span>
+              <span style={{ color:"rgba(255,255,255,0.75)", fontSize:12, fontWeight:500 }}>bunz en esta zona</span>
+            </div>
+          </div>
+
+          {/* ── Rarity legend ── */}
+          <div style={{ position:"absolute", top:182, left:12, zIndex:500, display:"flex", gap:6, pointerEvents:"none" }}>
+            {Object.entries(RARITY).map(([key, val]) => (
+              <div key={key} style={{ display:"flex", alignItems:"center", gap:3, background:"rgba(0,0,0,0.6)", backdropFilter:"blur(8px)", borderRadius:100, padding:"3px 8px", border:`1px solid ${val.ring}` }}>
+                <div style={{ width:6, height:6, borderRadius:"50%", backgroundColor:val.color, boxShadow:`0 0 6px ${val.color}` }} />
+                <span style={{ fontSize:9, fontWeight:700, color:val.color, letterSpacing:"0.3px" }}>{val.label.toUpperCase()}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* ── Filter pills ── */}
+          <div className="filter-row" style={{ position:"absolute", top:212, left:0, right:0, zIndex:500, padding:"0 12px", overflowX:"auto", display:"flex", gap:7 }}>
+            {FILTERS.map(f => (
+              <button key={f} onClick={e => { e.stopPropagation(); setFilter(f); setSelected(null); }}
+                style={{ flexShrink:0, padding:"6px 13px", borderRadius:100, border: filter===f ? "1px solid #E91E63" : "1px solid rgba(255,255,255,0.12)", fontSize:12, fontWeight:700, cursor:"pointer",
+                  background: filter===f ? "rgba(233,30,99,0.85)" : "rgba(13,13,26,0.8)",
+                  color: filter===f ? "#fff" : "rgba(255,255,255,0.5)",
+                  backdropFilter:"blur(10px)", fontFamily:"var(--font-family-base)",
+                  boxShadow: filter===f ? "0 2px 12px rgba(233,30,99,0.4)" : "none",
+                  transition:"all 0.18s" }}>
+                {f}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Locate button ── */}
+          <button onClick={e => { e.stopPropagation(); mapInst.current?.panTo([USER_POS.lat, USER_POS.lng], { animate:true }); }}
+            style={{ position:"absolute", bottom: selected ? 286 : 82, right:14, zIndex:600, width:46, height:46, borderRadius:"50%", background:"rgba(13,13,26,0.9)", border:"1px solid rgba(233,30,99,0.5)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 4px 16px rgba(0,0,0,0.4),0 0 12px rgba(233,30,99,0.2)", backdropFilter:"blur(10px)", transition:"bottom 0.35s cubic-bezier(.34,1.56,.64,1)" }}>
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <circle cx="10" cy="10" r="4" fill="#E91E63"/>
+              <path d="M10 2v3M10 15v3M2 10h3M15 10h3" stroke="#E91E63" strokeWidth="1.8" strokeLinecap="round"/>
+              <circle cx="10" cy="10" r="7.5" stroke="#E91E6377" strokeWidth="1.2"/>
+            </svg>
+          </button>
+
+          {/* ── Affiliate count ── */}
+          <div style={{ position:"absolute", bottom: selected ? 286 : 82, left:14, zIndex:600, background:"rgba(13,13,26,0.9)", border:"1px solid rgba(255,255,255,0.1)", backdropFilter:"blur(10px)", borderRadius:100, padding:"10px 14px", display:"flex", alignItems:"center", gap:8, boxShadow:"0 4px 16px rgba(0,0,0,0.35)", transition:"bottom 0.35s cubic-bezier(.34,1.56,.64,1)" }}>
+            <div style={{ width:8, height:8, borderRadius:"50%", background:"#E91E63", boxShadow:"0 0 8px #E91E63" }} />
+            <span style={{ fontSize:12, fontWeight:700, color:"rgba(255,255,255,0.8)" }}>{filtered.length} afiliados</span>
+          </div>
+
+          {/* ── Bottom sheet ── */}
+          <div onClick={e => e.stopPropagation()} style={{ position:"absolute", bottom:66, left:0, right:0, zIndex:700, transform: selected ? "translateY(0)" : "translateY(110%)", transition:"transform 0.38s cubic-bezier(.34,1.56,.64,1)" }}>
+            {selected && (() => {
+              const r = RARITY[getRarity(selected.bunz)];
+              return (
+                <div style={{ background:"linear-gradient(180deg,rgba(18,18,32,0.98) 0%,rgba(10,10,20,0.99) 100%)", backdropFilter:"blur(20px)", borderRadius:"24px 24px 0 0", padding:"8px 20px 18px", boxShadow:`0 -6px 40px rgba(0,0,0,0.5),0 -1px 0 ${r.ring}`, border:`1px solid ${r.ring}`, borderBottom:"none" }}>
+                  <div style={{ width:36, height:4, background:"rgba(255,255,255,0.12)", borderRadius:100, margin:"0 auto 16px" }} />
+                  <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:16 }}>
+                    <div style={{ width:60, height:60, borderRadius:18, background:"linear-gradient(145deg,#1A1A2E,#0D0D1A)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:28, border:`2px solid ${r.color}`, boxShadow:`0 0 16px ${r.color}55`, flexShrink:0 }}>
+                      {selected.icon}
+                    </div>
+                    <div style={{ flex:1 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                        <p style={{ fontSize:18, fontWeight:800, color:"#fff" }}>{selected.name}</p>
+                        <span style={{ fontSize:9, fontWeight:900, color:r.color, border:`1px solid ${r.color}66`, borderRadius:100, padding:"2px 7px", letterSpacing:"0.5px" }}>{r.label.toUpperCase()}</span>
+                      </div>
+                      <p style={{ fontSize:13, color:"rgba(255,255,255,0.45)", marginBottom:4 }}>{selected.cat} · {selected.dist}</p>
+                      <div style={{ display:"flex", gap:12 }}>
+                        <span style={{ fontSize:12, color:"rgba(255,255,255,0.6)" }}>⭐ 4.8</span>
+                        <span style={{ fontSize:12, color:"rgba(255,255,255,0.4)" }}>·</span>
+                        <span style={{ fontSize:12, color:"rgba(255,255,255,0.6)" }}>👥 {selected.visits} visitas</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display:"flex", gap:10, marginBottom:16 }}>
+                    <div style={{ flex:1, background:`linear-gradient(135deg,${r.color}22,${r.color}11)`, border:`1px solid ${r.color}44`, borderRadius:14, padding:"12px 10px", textAlign:"center" }}>
+                      <p style={{ fontSize:24, fontWeight:900, color:r.color, letterSpacing:"-0.5px" }}>+{selected.bunz}</p>
+                      <p style={{ fontSize:10, color:r.color, fontWeight:600, opacity:0.8, marginTop:2 }}>bunz por visita</p>
+                    </div>
+                    <div style={{ flex:1, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:14, padding:"12px 10px", textAlign:"center" }}>
+                      <p style={{ fontSize:24, fontWeight:900, color:"rgba(255,255,255,0.85)" }}>{selected.dist}</p>
+                      <p style={{ fontSize:10, color:"rgba(255,255,255,0.4)", fontWeight:600, marginTop:2 }}>distancia</p>
+                    </div>
+                    <div style={{ flex:1, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:14, padding:"12px 10px", textAlign:"center" }}>
+                      <p style={{ fontSize:24, fontWeight:900, color:"rgba(255,255,255,0.85)" }}>#{selected.id}</p>
+                      <p style={{ fontSize:10, color:"rgba(255,255,255,0.4)", fontWeight:600, marginTop:2 }}>ranking zona</p>
+                    </div>
+                  </div>
+                  <button style={{ width:"100%", background:`linear-gradient(135deg,${r.color},${r.color}CC)`, color: getRarity(selected.bunz)==="legendary" ? "#111" : "#0D0D1A", fontSize:15, fontWeight:800, padding:"15px 0", borderRadius:100, border:"none", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:10, fontFamily:"var(--font-family-base)", boxShadow:`0 6px 24px ${r.color}55`, letterSpacing:"0.2px" }}>
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 1C5.686 1 3 3.686 3 7c0 4.5 6 10 6 10s6-5.5 6-10c0-3.314-2.686-6-6-6z" fill="rgba(0,0,0,0.2)"/><circle cx="9" cy="7" r="2.5" fill="rgba(0,0,0,0.45)"/></svg>
+                    Ir y ganar +{selected.bunz} bunz
+                  </button>
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* ── Bottom nav ── */}
+          <div style={{ position:"absolute", bottom:0, left:0, right:0, height:66, background:"rgba(10,10,20,0.97)", backdropFilter:"blur(16px)", borderTop:"1px solid rgba(255,255,255,0.07)", padding:"12px 36px 20px", display:"flex", justifyContent:"space-between", alignItems:"center", zIndex:800 }}>
+            <span style={{ fontFamily:"'Georgia',serif", fontSize:28, fontStyle:"italic", fontWeight:700, color:"#E91E63", letterSpacing:"-1px", textShadow:"0 0 12px #E91E6377" }}>Ra</span>
+            <svg width="26" height="26" viewBox="0 0 26 26" fill="none"><path d="M13 2C7.477 2 3 6.23 3 11.427c0 3.066 1.525 5.793 3.9 7.573v3l3.45-1.9c.857.237 1.765.367 2.65.367 5.523 0 10-4.23 10-9.427C23 6.23 18.523 2 13 2Z" stroke="rgba(255,255,255,0.25)" strokeWidth="1.8"/></svg>
+            <svg width="26" height="26" viewBox="0 0 26 26" fill="none"><rect x="3" y="3" width="20" height="20" rx="2" stroke="#E91E63" strokeWidth="1.8"/><rect x="7" y="7" width="12" height="12" rx="1" stroke="#E91E63" strokeWidth="1.8"/></svg>
+            <svg width="24" height="26" viewBox="0 0 24 26" fill="none"><path d="M4 8h16l-1.5 14H5.5L4 8Z" stroke="rgba(255,255,255,0.25)" strokeWidth="1.8" strokeLinejoin="round"/><path d="M8 8V6a4 4 0 0 1 8 0v2" stroke="rgba(255,255,255,0.25)" strokeWidth="1.8" strokeLinecap="round"/></svg>
+          </div>
+
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<Freehands />);
+  </script>
+</body>
+</html>

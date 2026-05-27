@@ -7,15 +7,16 @@ interface TabsProps {
   activeTab: string;
   onChange: (tab: string) => void;
   isScrolled?: boolean;
+  isDark?: boolean;
 }
 
-export default function Tabs({ tabs, activeTab, onChange, isScrolled = false }: TabsProps) {
+export default function Tabs({ tabs, activeTab, onChange, isScrolled = false, isDark = false }: TabsProps) {
   return (
     <nav
-      className="flex w-full bg-white pt-2 px-0"
+      className={`flex w-full pt-2 px-0 transition-colors duration-500 ${isDark ? 'bg-transparent' : 'bg-white'}`}
       style={isScrolled ? {
         position: 'absolute',
-        left: '44px',
+        left: '16px',
         right: 'auto',
         top: '50%',
         transform: 'translateY(-50%)',
@@ -46,7 +47,9 @@ export default function Tabs({ tabs, activeTab, onChange, isScrolled = false }: 
             transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)'
           }}
         >
-          <span className={`${activeTab === tab ? 'text-[#111111] font-normal' : 'text-[#8A8A8A] font-light'}`}>
+          <span className={`${activeTab === tab 
+            ? (isDark ? 'text-white font-normal' : 'text-[#111111] font-normal') 
+            : (isDark ? 'text-white/40 font-light' : 'text-[#8A8A8A] font-light')}`}>
             {tab}
           </span>
           {activeTab === tab && (

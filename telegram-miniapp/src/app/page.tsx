@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Award, Zap, Gift, TrendingUp, Users, MapPin, ScanLine } from 'lucide-react';
+import { ScanLine } from 'lucide-react';
 import Link from 'next/link';
 import BottomNav from '@/components/BottomNav';
 import Header from '@/components/ui/Header';
@@ -13,10 +13,16 @@ import { SkeletonCard } from '@/components/ui/Skeleton';
 import { useWallet } from '@/contexts/WalletContext';
 import dynamic from 'next/dynamic';
 
-// Disable SSR for Map
-const InteractiveMap = dynamic(() => import('@/features/map/InteractiveMap'), { 
+const InteractiveMap = dynamic(() => import('@/features/map/InteractiveMap'), {
   ssr: false,
-  loading: () => <div className="h-full w-full bg-gray-100 animate-pulse rounded-2xl flex items-center justify-center">Cargando Mapa...</div>
+  loading: () => (
+    <div style={{ height: '100%', width: '100%', background: '#0D0D1A', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+        <div style={{ width: 32, height: 32, borderRadius: '50%', border: '2px solid rgba(233,30,99,0.3)', borderTopColor: '#E91E63', animation: 'spin 0.8s linear infinite' }} />
+        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: 600 }}>Cargando Mapa...</p>
+      </div>
+    </div>
+  ),
 });
 
 interface FeedItem {
@@ -32,42 +38,26 @@ interface FeedItem {
   logo_base64?: string;
 }
 
-const TABS = ["bunz'in", "Stock", "Freehands"];
-
-const CATEGORIES = [
-  { icon: '☕', label: 'Cafés', count: 12, color: '#FFE0EC', iconColor: '#E91E63' },
-  { icon: '🍕', label: 'Restaurantes', count: 8, color: '#FFF4E0', iconColor: '#FF9800' },
-  { icon: '💪', label: 'Gimnasios', count: 5, color: '#E0F0FF', iconColor: '#2196F3' },
-  { icon: '🛍️', label: 'Retail', count: 15, color: '#F0E0FF', iconColor: '#9C27B0' },
-  { icon: '✨', label: 'Belleza', count: 7, color: '#FFE0EC', iconColor: '#E91E63' },
-  { icon: '💻', label: 'Tecnología', count: 4, color: '#E0FFE8', iconColor: '#4CAF50' },
-];
-
-const TRENDING = [
-  { name: 'Café Cultura', desc: 'Café y desayunos', dist: '120m', stars: 4.8, bunz: '+50 bunz', img: '☕' },
-  { name: 'Pizza Napoli', desc: 'Restaurante italiano', dist: '350m', stars: 4.6, bunz: '+30 bunz', img: '🍕' },
-  { name: 'Gimnasio Power', desc: 'Fitness y bienestar', dist: '500m', stars: 4.9, bunz: '+100 bunz', img: '💪' },
-];
+const TABS = ["bunz'in", 'Stock', 'Freehands'];
 
 export default function FeedPage() {
   const [activeTab, setActiveTab] = useState("bunz'in");
   const [posts, setPosts] = useState<FeedItem[]>([]);
   const [offers, setOffers] = useState<any[]>([]);
-  const [balance, setBalance] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [isScrolled, setIsScrolled] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  
-  const { address } = useWallet();
+  const [purchasing, setPurchasing] = useState(false);
+
+  const { address, balance } = useWallet();
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
   const [locationLoaded, setLocationLoaded] = useState(false);
-  const [purchasing, setPurchasing] = useState(false);
-  const [reserving, setReserving] = useState(false);
-  
+
+  const isDark = activeTab === 'Freehands';
+
   const handleSpend = async (offerId: string, bunzCost: number) => {
-    if (balance < bunzCost) {
-      alert("No tienes suficientes Bunz para adquirir esta oferta.");
+    if (parseFloat(balance) < bunzCost) {
+      alert('No tienes suficientes Bunz para adquirir esta oferta.');
       return;
     }
     setPurchasing(true);
@@ -75,116 +65,67 @@ export default function FeedPage() {
       const res = await fetch('/api/transaction/spend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ walletAddress: address, offerId })
+        body: JSON.stringify({ walletAddress: address, offerId }),
       });
       const data = await res.json();
-      if (data.success) {
-        alert("¡Compra exitosa! Revisa tu inventario en el perfil.");
-        // Optimistic update
-        setBalance(prev => prev - bunzCost);
-      } else {
-        alert(data.error || "Ocurrió un error al procesar el pago.");
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Error de conexión.");
+      if (data.success) alert('¡Compra exitosa! Revisa tu inventario en el perfil.');
+      else alert(data.error || 'Ocurrió un error al procesar el pago.');
+    } catch {
+      alert('Error de conexión.');
     } finally {
       setPurchasing(false);
     }
   };
 
-  const handleReserve = async (businessId: string) => {
-    // We prompt the user for how many bunz they want to reserve
-    const amountStr = window.prompt("¿Cuántos Bunz esperas gastar en esta visita?");
-    if (!amountStr) return;
-    
-    const amount = parseInt(amountStr);
-    if (isNaN(amount) || amount <= 0) {
-      alert("Por favor ingresa un monto válido.");
-      return;
-    }
-    
-    if (balance < amount) {
-      alert("No tienes suficientes Bunz para reservar esa cantidad.");
-      return;
-    }
 
-    setReserving(true);
-    try {
-      const res = await fetch('/api/business/reserve', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ walletAddress: address, businessId, reserveAmount: amount })
-      });
-      const data = await res.json();
-      if (data.success) {
-        alert("¡Reserva confirmada! El negocio te está esperando.");
-      } else {
-        alert(data.error || "Ocurrió un error al reservar.");
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Error de conexión.");
-    } finally {
-      setReserving(false);
-    }
-  };
 
-  // Detectar scroll para comprimir header
-  useEffect(() => {
-    const handleScroll = () => {
-      if (window.scrollY > 20) {
-        setIsScrolled(true);
-      } else {
-        setIsScrolled(false);
-      }
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  // Fetch GPS on mount
   useEffect(() => {
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setUserLat(pos.coords.latitude);
-          setUserLng(pos.coords.longitude);
-          setLocationLoaded(true);
-        },
-        () => {
-          setLocationLoaded(true); // Default to null coords (trend mode)
-        },
+        (pos) => { setUserLat(pos.coords.latitude); setUserLng(pos.coords.longitude); setLocationLoaded(true); },
+        () => setLocationLoaded(true),
         { enableHighAccuracy: true, timeout: 5000 }
       );
-    } else {
-      setLocationLoaded(true);
-    }
+    } else setLocationLoaded(true);
   }, []);
 
-  // Fetch API data when tab or location changes
+  useEffect(() => {
+    import('@twa-dev/sdk').then((mod) => {
+      const app = mod.default;
+      app.ready(); app.expand();
+      try {
+        app.setBackgroundColor(isDark ? '#0D0D1A' : '#FAFAFA');
+        app.setHeaderColor(isDark ? '#0A0A14' : '#FFFFFF');
+      } catch {}
+    });
+  }, [isDark]);
+
   useEffect(() => {
     if (!locationLoaded) return;
-    
     const loadData = async () => {
       setLoading(true);
       try {
-        if (activeTab === "bunz'in" || activeTab === "Freehands") {
-          const locQuery = userLat && userLng ? `?lat=${userLat}&lng=${userLng}` : '';
-          const res = await fetch(`/api/feed${locQuery}`);
-          const data = await res.json();
-          if (data.success) {
-            setPosts(data.items);
-          }
-        } else if (activeTab === "Stock") {
-          const res = await fetch(`/api/offers`);
-          const data = await res.json();
-          if (data.success) {
-            setOffers(data.offers);
-          }
+        if (activeTab === "bunz'in" || activeTab === 'Freehands') {
+          // Mocking Kukara and 626 Café
+          setPosts([
+            {
+              id: '1', user: 'Kukara', device: 'Restaurante Bar', time: 'Ahora', label: '1.2km',
+              bunz: 15, reward_percentage: 15, distance: 1.2,
+              imageUrl: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
+            },
+            {
+              id: '2', user: '626 Café', device: 'Cafetería', time: 'Ahora', label: '2.5km',
+              bunz: 10, reward_percentage: 10, distance: 2.5,
+              imageUrl: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
+            }
+          ]);
+        } else if (activeTab === 'Stock') {
+          const res = await fetch('/api/offers');
+          const { success, offers: o } = await res.json();
+          if (success) setOffers(o);
         }
       } catch (err) {
-        console.error('Error fetching data:', err);
+        console.error('[Feed] data fetch error:', err);
       } finally {
         setLoading(false);
       }
@@ -192,214 +133,221 @@ export default function FeedPage() {
     loadData();
   }, [activeTab, locationLoaded, userLat, userLng]);
 
-  useEffect(() => {
-    import('@twa-dev/sdk').then((mod) => {
-      const app = mod.default;
-      app.ready();
-      app.expand();
-      try {
-        app.setBackgroundColor('#FFFFFF');
-        app.setHeaderColor('#FFFFFF');
-      } catch (e) {
-      }
-    });
-  }, []);
-
   return (
-    <div className="page-wrap pb-28 bg-white">
-      <div className={`sticky top-0 z-[60] bg-white transition-shadow duration-300 ${isScrolled ? 'shadow-[0_2px_8px_rgba(0,0,0,0.04)]' : ''}`}>
+    <div
+      className="page-wrap"
+      style={{ background: isDark ? '#000000' : '#FAFAFA', color: isDark ? '#fff' : '#111', paddingBottom: 112, transition: 'background 0.5s' }}
+    >
+      {/* Sticky header */}
+      <div style={{
+        position: 'sticky', top: 0, zIndex: 60,
+        background: isDark ? 'rgba(0,0,0,0.9)' : '#fff',
+        backdropFilter: isDark ? 'blur(20px)' : 'none',
+        borderBottom: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid #F0F0F0',
+        transition: 'all 0.3s',
+      }}>
         <div style={{ height: 'var(--safe-top)' }} />
-        <Header showBack={true} isScrolled={isScrolled} />
-        <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} isScrolled={isScrolled} />
+        {/* Nuevo Custom Header (Buenos días, Bunz) */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px 8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 44, height: 44, borderRadius: '50%', background: isDark ? '#1A1A2E' : '#F0F0F0', overflow: 'hidden', border: isDark ? '1px solid rgba(255,255,255,0.1)' : 'none' }}>
+              <img src="https://api.dicebear.com/7.x/notionists/svg?seed=Sofia&backgroundColor=E91E63" alt="Sofia" style={{ width: '100%', height: '100%' }} />
+            </div>
+            <div>
+              <p style={{ fontSize: 11, color: isDark ? 'rgba(255,255,255,0.5)' : '#888', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Buenos días,</p>
+              <h1 style={{ fontSize: 19, color: isDark ? '#fff' : '#111', fontWeight: 900, letterSpacing: '-0.5px', margin: 0 }}>Sofía</h1>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ background: isDark ? 'rgba(255,255,255,0.08)' : '#F4F4F4', padding: '6px 12px', borderRadius: 999, display: 'flex', alignItems: 'baseline', gap: 4, border: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid #EBEBEB' }}>
+              <span style={{ fontSize: 15, fontWeight: 900, color: isDark ? '#fff' : '#111' }}>1,250</span>
+              <span style={{ fontSize: 11, fontWeight: 900, color: '#E91E63' }}>BUNZ</span>
+            </div>
+            <div style={{ width: 36, height: 36, background: isDark ? 'rgba(255,255,255,0.05)' : '#fff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', border: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid #F0F0F0' }}>
+              <svg viewBox="0 0 38 48" fill="none" style={{ width: 16, height: 20 }}>
+                <path d="M11 1C11 1 7 4 7 14C7 20 9.5 23 13 23C16.5 23 18 19 18 14C18 6.5 14 1 11 1Z" fill={isDark ? "#FFF" : "#111"}/>
+                <path d="M27 1C27 1 31 4 31 14C31 20 28.5 23 25 23C21.5 23 20 19 20 14C20 6.5 24 1 27 1Z" fill={isDark ? "#FFF" : "#111"}/>
+                <ellipse cx="19" cy="33" rx="14" ry="12" fill={isDark ? "#FFF" : "#111"}/>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} isDark={isDark} />
       </div>
 
-      <main className="flex-1 w-full max-w-[600px] mx-auto" style={{ backgroundColor: '#FFFFFF', paddingLeft: 16, paddingRight: 16 }}>
-        {/* Feed */}
-        <div style={{ paddingTop: '40px' }}>
+      <main style={{ flex: 1, width: '100%', maxWidth: 600, margin: '0 auto', paddingLeft: isDark ? 0 : 16, paddingRight: isDark ? 0 : 16 }}>
+        <div style={{ paddingTop: 24 }}>
+
+          {/* ── bunz'in tab ── */}
           {activeTab === "bunz'in" && (
-            loading ? (
-              // Loading skeletons
-              <>
-                <SkeletonCard />
-                <SkeletonCard />
-                <SkeletonCard />
-              </>
-            ) : posts.length > 0 ? (
-              posts.map((post, i) => (
-                <FeedCard
-                  key={post.id}
-                  id={post.id}
-                  user={post.user}
-                  device={post.device}
-                  time={post.time}
-                  label={`${post.distance}km`}
-                  bunz={post.reward_percentage}
-                  imageUrl={post.imageUrl}
-                  index={i}
-                  onReserve={reserving ? undefined : handleReserve}
+            <>
+              {!loading && posts.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                  <div style={{ flex: 1, height: 1, background: '#EBEBEB' }} />
+                  <span style={{ fontSize: 11, fontWeight: 900, color: '#CCC', letterSpacing: 0.5 }}>CERCA DE TI</span>
+                  <div style={{ flex: 1, height: 1, background: '#EBEBEB' }} />
+                </div>
+              )}
+              {loading ? (
+                <><SkeletonCard /><SkeletonCard /><SkeletonCard /></>
+              ) : posts.length > 0 ? (
+                posts.map((post, i) => (
+                  <FeedCard
+                    key={post.id}
+                    id={post.id}
+                    user={post.user}
+                    device={post.device}
+                    time={post.time}
+                    label={post.distance ? `${post.distance}km` : post.label}
+                    bunz={post.reward_percentage}
+                    imageUrl={post.imageUrl}
+                    index={i}
+                  />
+                ))
+              ) : (
+                <EmptyState
+                  icon={<span style={{ fontSize: 36 }}>🐇</span>}
+                  title="Sin negocios aún"
+                  description="No hay afiliados disponibles cerca de ti en este momento."
                 />
-              ))
-            ) : (
-              <EmptyState
-                icon={<Search className="w-8 h-8 text-[#8A8A8A]" />}
-                title="Sin resultados"
-                description={`No hay negocios disponibles en "${activeTab}" aún.`}
-              />
-            )
+              )}
+            </>
           )}
 
-          {activeTab === "Stock" && (
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35 }}
-            >
-              {/* Buscador */}
-              <div style={{ position: "relative", marginBottom: 24 }}>
-                <svg style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)" }} width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <circle cx="7" cy="7" r="5.5" stroke="#AAA" strokeWidth="1.5"/>
-                  <path d="M11 11L14 14" stroke="#AAA" strokeWidth="1.5" strokeLinecap="round"/>
+          {/* ── Stock tab ── */}
+          {activeTab === 'Stock' && (
+            <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}>
+              {/* Search */}
+              <div style={{ position: 'relative', marginBottom: 20 }}>
+                <svg style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)' }} width="15" height="15" viewBox="0 0 16 16" fill="none">
+                  <circle cx="7" cy="7" r="5.5" stroke="#BBB" strokeWidth="1.5" />
+                  <path d="M11 11L14 14" stroke="#BBB" strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
-                <input 
-                  placeholder="Buscar negocios..." 
+                <input
+                  placeholder="Buscar negocios..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{ 
-                    width: "100%", 
-                    backgroundColor: "#F4F4F4", 
-                    border: "none", 
-                    borderRadius: 100, 
-                    padding: "12px 16px 12px 38px", 
-                    fontSize: 15, 
-                    color: "#111", 
-                    outline: "none", 
-                    fontFamily: "var(--font-family-base)" 
-                  }} 
+                  style={{
+                    width: '100%', background: '#F2F2F2', border: 'none',
+                    borderRadius: 999, padding: '12px 16px 12px 40px',
+                    fontSize: 14, color: '#111', outline: 'none',
+                    fontFamily: 'var(--font-family-base)', boxSizing: 'border-box',
+                  }}
                 />
               </div>
 
-              {/* Stock Offers Grid */}
-              <div className="flex flex-col gap-4 mt-6">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-black text-black">Ofertas Disponibles</h2>
-                </div>
-                
-                {loading ? (
-                  <SkeletonCard />
-                ) : offers.length === 0 ? (
-                  <div className="bg-gray-50 rounded-2xl p-6 text-center border-2 border-dashed border-gray-200">
-                    <p className="font-bold text-gray-500 mb-2">No hay ofertas disponibles</p>
-                    <p className="text-xs text-gray-400">Los negocios subirán certificados de regalo pronto.</p>
-                  </div>
-                ) : (
-                  offers.map((o) => (
-                    <div key={o.id} className={`bg-white border rounded-2xl p-4 flex flex-col gap-3 shadow-sm ${!o.isAvailable ? 'opacity-50 grayscale' : 'border-gray-100'}`}>
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-bold text-xs text-pink-500">{o.businessName}</span>
-                            {!o.isAvailable && <span className="text-[10px] bg-red-100 text-red-500 px-2 py-0.5 rounded-md font-bold">Límite Diario</span>}
-                          </div>
-                          <p className="font-black text-black text-base leading-tight">{o.title}</p>
-                          <p className="text-xs text-gray-500 mt-1 line-clamp-2">{o.description}</p>
-                        </div>
-                        {o.image && (
-                          <img src={o.image} alt={o.title} className="w-16 h-16 rounded-xl object-cover flex-shrink-0" />
-                        )}
-                      </div>
-                      
-                      <div className="flex items-center justify-between pt-2 border-t border-gray-50">
-                        <p className="font-black text-lg text-black">{o.bunzCost} Bunz</p>
-                        <button 
-                          disabled={!o.isAvailable || purchasing} 
-                          onClick={() => handleSpend(o.id, o.bunzCost)}
-                          className="bg-black text-white text-xs font-bold px-4 py-2 rounded-full disabled:bg-gray-300 transition-colors active:scale-95"
-                        >
-                          {purchasing ? 'Procesando...' : (o.isAvailable ? 'Adquirir' : 'Agotado Hoy')}
-                        </button>
-                      </div>
-                    </div>
-                  ))
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <h2 style={{ fontSize: 17, fontWeight: 900, color: '#111', margin: 0 }}>Ofertas Disponibles</h2>
+                {offers.length > 0 && (
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#E91E63' }}>
+                    {offers.filter(o => o.isAvailable).length} activas
+                  </span>
                 )}
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 24 }}>
-                {CATEGORIES.map((cat, i) => (
-                  <motion.div 
-                    key={cat.label} 
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: i * 0.04 }}
-                    style={{ backgroundColor: "#FAFAFA", border: "1px solid #F0F0F0", borderRadius: 14, padding: "14px 10px 12px", display: "flex", flexDirection: "column", alignItems: "center", gap: 6, cursor: "pointer" }}
-                  >
-                    <div style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: cat.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>
-                      {cat.icon}
-                    </div>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "#111" }}>{cat.label}</span>
-                    <span style={{ fontSize: 11, color: "#AAA" }}>{cat.count} negocios</span>
-                  </motion.div>
-                ))}
-              </div>
 
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 13L6 3L10 10L12 6L14 13" stroke="#E91E63" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  <h2 style={{ fontSize: 17, fontWeight: 700, color: "#111" }}>Tendencias</h2>
+              {loading ? (
+                <SkeletonCard />
+              ) : offers.length === 0 ? (
+                <div style={{ background: '#fff', borderRadius: 20, padding: 24, textAlign: 'center', border: '2px dashed #E8E8E8' }}>
+                  <p style={{ fontWeight: 700, color: '#888', marginBottom: 4 }}>No hay ofertas disponibles</p>
+                  <p style={{ fontSize: 12, color: '#BBB', margin: 0 }}>Los negocios subirán certificados de regalo pronto.</p>
                 </div>
-                <span style={{ fontSize: 13, color: "#E91E63", fontWeight: 500 }}>Ver todo &rsaquo;</span>
-              </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {offers
+                    .filter(o =>
+                      !searchQuery ||
+                      o.businessName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                      o.title?.toLowerCase().includes(searchQuery.toLowerCase())
+                    )
+                    .map((o) => (
+                      <div
+                        key={o.id}
+                        style={{
+                          background: '#fff', borderRadius: 22, overflow: 'hidden',
+                          border: '1px solid #F0F0F0', boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
+                          position: 'relative', opacity: o.isAvailable ? 1 : 0.55,
+                          filter: o.isAvailable ? 'none' : 'grayscale(1)',
+                        }}
+                      >
+                        {/* Ticket notch */}
+                        <div style={{ position: 'absolute', left: 0, top: '50%', transform: 'translate(-50%,-50%)', width: 20, height: 20, background: '#FAFAFA', borderRadius: '50%', border: '1px solid #F0F0F0' }} />
+                        <div style={{ position: 'absolute', right: 0, top: '50%', transform: 'translate(50%,-50%)', width: 20, height: 20, background: '#FAFAFA', borderRadius: '50%', border: '1px solid #F0F0F0' }} />
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 0, marginBottom: 24 }}>
-                {TRENDING.map((b, i) => (
-                  <motion.div 
-                    key={b.name} 
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.08 }}
-                    style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 14, paddingBottom: 14, borderBottom: i < TRENDING.length - 1 ? "1px solid #F4F4F4" : "none" }}
-                  >
-                    <div style={{ width: 52, height: 52, borderRadius: "50%", backgroundColor: "#F0F0F0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0 }}>
-                      {b.img}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <p style={{ fontSize: 15, fontWeight: 700, color: "#111", marginBottom: 2 }}>{b.name}</p>
-                      <p style={{ fontSize: 12, color: "#AAA", marginBottom: 4 }}>{b.desc} — {b.dist}</p>
-                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        <span style={{ fontSize: 14 }}>⭐</span>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: "#111" }}>{b.stars}</span>
+                        <div style={{ padding: 20 }}>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 16 }}>
+                            {o.image ? (
+                              <img src={o.image} alt={o.title} style={{ width: 56, height: 56, borderRadius: 16, objectFit: 'cover', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }} />
+                            ) : (
+                              <div style={{ width: 56, height: 56, borderRadius: 16, background: '#F8F8F8', border: '1px solid #F0F0F0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>🏪</div>
+                            )}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <p style={{ fontSize: 10, fontWeight: 900, color: '#E91E63', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 4 }}>{o.businessName}</p>
+                              <p style={{ fontWeight: 900, color: '#111', fontSize: 16, lineHeight: 1.2, marginBottom: 4 }}>{o.title}</p>
+                              <p style={{ fontSize: 12, color: '#999', lineHeight: 1.5, margin: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{o.description}</p>
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 16, borderTop: '1px dashed #EBEBEB' }}>
+                            <div>
+                              <p style={{ fontSize: 9, fontWeight: 900, color: '#BBB', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 2 }}>Costo</p>
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                                <span style={{ fontSize: 22, fontWeight: 900, color: '#111' }}>{o.bunzCost}</span>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: '#E91E63' }}>bunz</span>
+                              </div>
+                            </div>
+                            <button
+                              disabled={!o.isAvailable || purchasing}
+                              onClick={() => handleSpend(o.id, o.bunzCost)}
+                              style={{
+                                background: o.isAvailable && !purchasing ? '#111' : '#E0E0E0',
+                                color: o.isAvailable && !purchasing ? '#fff' : '#999',
+                                fontSize: 13, fontWeight: 900, padding: '10px 20px',
+                                borderRadius: 999, border: 'none', cursor: o.isAvailable && !purchasing ? 'pointer' : 'not-allowed',
+                              }}
+                            >
+                              {purchasing ? '...' : o.isAvailable ? 'Reservar Visita' : 'Agotado Hoy'}
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "#E91E63", flexShrink: 0 }}>{b.bunz}</span>
-                  </motion.div>
-                ))}
-              </div>
+                    ))}
+                </div>
+              )}
             </motion.div>
           )}
 
-          {activeTab === "Freehands" && (
+          {/* ── Freehands tab ── */}
+          {activeTab === 'Freehands' && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="h-[60vh] bg-[#F4F4F4] rounded-2xl flex items-center justify-center relative overflow-hidden"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              style={{ position: 'fixed', left: 0, right: 0, top: 120, bottom: 0, zIndex: 10, overflow: 'hidden', background: '#000000' }}
             >
-              <div className="h-[70vh] w-full mt-2 relative rounded-2xl overflow-hidden shadow-sm">
-                <InteractiveMap 
-                  businesses={posts} 
-                  userLat={userLat} 
-                  userLng={userLng} 
-                />
-              </div>
+              <InteractiveMap businesses={posts} userLat={userLat} userLng={userLng} />
             </motion.div>
           )}
+
         </div>
       </main>
 
-      {/* Floating Action Button para reclamar recompensas */}
-      <Link href="/claim" className="fixed right-6 bottom-24 z-[90] active:scale-95 transition-transform" style={{ textDecoration: 'none' }}>
-        <div className="bg-pink-500 shadow-xl shadow-pink-500/30 text-white rounded-full p-4 flex items-center justify-center relative overflow-hidden">
-          <div className="absolute inset-0 bg-white/20 animate-pulse rounded-full" />
-          <ScanLine size={24} strokeWidth={2.5} className="relative z-10" />
+      {/* Floating scan button */}
+      <Link href="/claim" style={{ position: 'fixed', right: 20, bottom: 96, zIndex: 90, textDecoration: 'none' }}>
+        <div style={{
+          background: 'linear-gradient(135deg, #E91E63 0%, #AD1457 100%)',
+          boxShadow: '0 8px 24px rgba(233,30,99,0.45)',
+          color: '#fff', borderRadius: '50%', padding: 16,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          position: 'relative', overflow: 'hidden',
+        }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.15)', borderRadius: '50%', animation: 'pulse 2s infinite' }} />
+          <ScanLine size={22} strokeWidth={2.5} style={{ position: 'relative', zIndex: 1 }} />
         </div>
       </Link>
+
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+      `}} />
 
       <BottomNav />
     </div>
