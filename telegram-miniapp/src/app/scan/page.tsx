@@ -6,14 +6,18 @@ import { X, Flashlight, ImageIcon, QrCode, ArrowLeft, Keyboard } from 'lucide-re
 import { useRouter } from 'next/navigation';
 import BottomNav from '@/components/BottomNav';
 import Button from '@/components/ui/Button';
+import { QRCodeSVG } from 'qrcode.react';
+import { useWallet } from '@/contexts/WalletContext';
 
 export default function ScanPage() {
   const router = useRouter();
+  const { address } = useWallet();
   const [hasCamera, setHasCamera] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [manualCode, setManualCode] = useState('');
   const [showManualInput, setShowManualInput] = useState(false);
+  const [activeTab, setActiveTab] = useState<'scan' | 'my-code'>('scan');
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -61,32 +65,79 @@ export default function ScanPage() {
     setResult(null);
   };
 
+  useEffect(() => {
+    if (activeTab === 'scan' && hasCamera && !showManualInput) {
+      startScanning();
+    } else {
+      stopScanning();
+    }
+  }, [activeTab, hasCamera, showManualInput]);
+
   return (
     <div className="page-wrap bg-[#111111] text-white relative overflow-hidden">
       {/* Floating Header */}
-      <div className="absolute top-0 left-0 right-0 z-50 px-4 flex items-center justify-between" style={{ top: 'calc(var(--safe-top) + 16px)' }}>
-        <button 
-          onClick={() => router.back()}
-          className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center active:scale-95 transition-transform"
-        >
-          <ArrowLeft className="w-5 h-5 text-white" />
-        </button>
-        <span className="text-sm font-semibold tracking-wider uppercase text-white/80">Escanear QR</span>
-        <button 
-          onClick={() => setShowManualInput(!showManualInput)}
-          className={`w-10 h-10 rounded-full flex items-center justify-center active:scale-95 transition-all ${
-            showManualInput 
-              ? 'bg-[#E91E63] border-transparent' 
-              : 'bg-white/10 backdrop-blur-md border border-white/10 text-white'
-          }`}
-        >
-          <Keyboard className="w-5 h-5" />
-        </button>
+      <div className="absolute top-0 left-0 right-0 z-50 px-4 flex flex-col items-center justify-between gap-4" style={{ top: 'calc(var(--safe-top) + 16px)' }}>
+        <div className="flex items-center justify-between w-full">
+          <button 
+            onClick={() => router.back()}
+            className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center active:scale-95 transition-transform"
+          >
+            <ArrowLeft className="w-5 h-5 text-white" />
+          </button>
+          <span className="text-sm font-semibold tracking-wider uppercase text-white/80">Escanear QR</span>
+          <button 
+            onClick={() => setShowManualInput(!showManualInput)}
+            className={`w-10 h-10 rounded-full flex items-center justify-center active:scale-95 transition-all ${
+              showManualInput 
+                ? 'bg-[#E91E63] border-transparent' 
+                : 'bg-white/10 backdrop-blur-md border border-white/10 text-white'
+            }`}
+          >
+            <Keyboard className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Tab Toggle */}
+        <div className="bg-black/40 backdrop-blur-xl border border-white/10 p-1 rounded-full flex w-[240px] mt-2">
+          <button 
+            onClick={() => setActiveTab('scan')}
+            className={`flex-1 py-2 text-xs font-bold rounded-full transition-colors ${activeTab === 'scan' ? 'bg-white text-black' : 'text-white/60'}`}
+          >
+            Cámara
+          </button>
+          <button 
+            onClick={() => setActiveTab('my-code')}
+            className={`flex-1 py-2 text-xs font-bold rounded-full transition-colors ${activeTab === 'my-code' ? 'bg-white text-black' : 'text-white/60'}`}
+          >
+            Mi Código
+          </button>
+        </div>
       </div>
 
-      {/* Camera View / Fallback */}
-      <div className="relative flex-1 flex items-center justify-center">
-        {hasCamera && !showManualInput ? (
+      {/* View Logic */}
+      <div className="relative flex-1 flex items-center justify-center mt-20">
+        {activeTab === 'my-code' ? (
+          <div className="flex flex-col items-center justify-center p-8 bg-white/5 rounded-[40px] border border-white/10 mx-6 backdrop-blur-md">
+            <h2 className="text-xl font-bold text-white mb-2">Tu Código Rabbitter</h2>
+            <p className="text-white/60 text-sm text-center mb-8">Muestra este código en la caja del negocio para acumular Bunz por tu consumo.</p>
+            
+            <div className="bg-white p-4 rounded-3xl">
+              {address ? (
+                <QRCodeSVG value={address} size={200} level="H" className="rounded-xl" />
+              ) : (
+                <div className="w-[200px] h-[200px] bg-gray-100 animate-pulse flex items-center justify-center rounded-xl">
+                  <span className="text-gray-400 text-xs">Cargando Billetera...</span>
+                </div>
+              )}
+            </div>
+            
+            {address && (
+              <p className="text-white/40 text-[10px] font-mono mt-6 truncate w-full max-w-[200px] text-center">
+                {address}
+              </p>
+            )}
+          </div>
+        ) : hasCamera && !showManualInput ? (
           <>
             <video
               ref={videoRef}

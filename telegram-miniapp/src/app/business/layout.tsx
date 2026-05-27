@@ -1,11 +1,19 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
+import { Store, Users, Settings, ArrowLeft, ScanLine } from 'lucide-react';
 import BottomNav from '@/components/BottomNav';
 
 export default function BusinessLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+
+  const NAV_ITEMS = [
+    { id: 'dashboard', label: 'Panel Principal', icon: Store, href: '/business' },
+    { id: 'scan', label: 'Escáner (Caja)', icon: ScanLine, href: '/business/scan' },
+    { id: 'clients', label: 'Mis Clientes', icon: Users, href: '/business/clients' },
+    { id: 'settings', label: 'Configuración', icon: Settings, href: '/business/settings' },
+  ];
 
   return (
     <div className="flex h-screen bg-white">
@@ -25,9 +33,15 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
         </div>
 
         <nav className="flex flex-col gap-2 flex-1">
-          <NavItem active={pathname === '/business'} onClick={() => router.push('/business')} icon="📊" label="Dashboard" />
-          <NavItem active={pathname === '/business/clients'} onClick={() => router.push('/business/clients')} icon="👥" label="Clientes" />
-          <NavItem active={pathname === '/business/settings'} onClick={() => router.push('/business/settings')} icon="⚙️" label="Ajustes" />
+          {NAV_ITEMS.map((item) => (
+            <NavItem 
+              key={item.id}
+              active={pathname === item.href} 
+              onClick={() => router.push(item.href)} 
+              icon={<item.icon size={20} />} 
+              label={item.label} 
+            />
+          ))}
         </nav>
 
         <div className="mt-auto">
@@ -54,7 +68,7 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
   );
 }
 
-function NavItem({ active, onClick, icon, label }: { active: boolean, onClick: () => void, icon: string, label: string }) {
+function NavItem({ active, onClick, icon, label }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string }) {
   return (
     <button 
       onClick={onClick}
@@ -62,7 +76,7 @@ function NavItem({ active, onClick, icon, label }: { active: boolean, onClick: (
         active ? 'bg-black text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-black'
       }`}
     >
-      <span className="text-lg">{icon}</span>
+      <span className="flex items-center justify-center w-6 h-6">{icon}</span>
       {label}
     </button>
   );
