@@ -1,11 +1,10 @@
-import { drizzle } from 'drizzle-orm/libsql';
-import { createClient } from '@libsql/client';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
 import * as schema from './schema';
 
-const dbUrl = process.env.NODE_ENV === "development" ? "file:./dev.db" : (process.env.DATABASE_URL || "file:./dev.db");
-
-const client = createClient({
-  url: dbUrl,
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 
-export const db = drizzle(client, { schema });
+export const db = drizzle(pool, { schema });
