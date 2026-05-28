@@ -1,18 +1,20 @@
 import { Metadata, ResolvingMetadata } from 'next';
-import prisma from '@/lib/prisma';
-import { MapPin, Clock, Tag, ExternalLink } from 'lucide-react';
+import { db } from '@/db';
+import { ownedBusinesses } from '@/db/schema';
+import { eq } from 'drizzle-orm';
+import { MapPin, Tag, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 
 type Props = {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 export async function generateMetadata(
   { params }: Props,
   parent: ResolvingMetadata
 ): Promise<Metadata> {
-  const id = params.id;
-  const business = await prisma.ownedBusiness.findUnique({ where: { id } });
+  const { id } = await params;
+  const business = await db.query.ownedBusinesses.findFirst({ where: eq(ownedBusinesses.id, id) });
 
   if (!business) {
     return { title: 'Negocio no encontrado | Rabbitty' };
@@ -26,7 +28,7 @@ export async function generateMetadata(
     description: `Gana +${business.rewardPercentage}% en Bunz visitando ${business.name}. ${business.description || ''}`,
     openGraph: {
       title: `${business.name} | Gana +${business.rewardPercentage}% Bunz`,
-      description: `Visita ${business.name} en ${business.address} y obtén recompensas criptográficas escaneando tu ticket.`,
+      description: `Visita ${business.name} en ${business.address} y obtén recompensas escaneando tu ticket.`,
       images: [image],
       type: 'website',
     },
@@ -40,7 +42,8 @@ export async function generateMetadata(
 }
 
 export default async function PublicAffiliatePage({ params }: Props) {
-  const business = await prisma.ownedBusiness.findUnique({ where: { id: params.id } });
+  const { id } = await params;
+  const business = await db.query.ownedBusinesses.findFirst({ where: eq(ownedBusinesses.id, id) });
 
   if (!business) {
     return <div className="min-h-screen flex items-center justify-center">Negocio no encontrado</div>;
@@ -48,8 +51,6 @@ export default async function PublicAffiliatePage({ params }: Props) {
 
   const gallery = business.gallery ? JSON.parse(business.gallery) : [];
   const coverImage = gallery.length > 0 ? gallery[0] : 'https://images.unsplash.com/photo-1554118811-1e0d58224f24';
-
-  // Deep Link to open Telegram Mini App on this specific profile
   const telegramDeepLink = `https://t.me/RabbittyBot/app?startapp=affiliate_${business.id}`;
 
   return (
@@ -58,7 +59,6 @@ export default async function PublicAffiliatePage({ params }: Props) {
       <div className="w-full h-72 md:h-96 relative">
         <img src={coverImage} alt={business.name} className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
-        
         <div className="absolute bottom-6 left-6 right-6 text-white max-w-4xl mx-auto">
           <span className="bg-pink-600 text-white text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider mb-3 inline-block">
             {business.category}
@@ -93,7 +93,6 @@ export default async function PublicAffiliatePage({ params }: Props) {
               </div>
             </div>
 
-            {/* Desktop CTA */}
             <div className="w-full md:w-80 bg-gray-50 rounded-2xl p-6 border border-gray-200 text-center flex-shrink-0">
               <div className="w-16 h-16 bg-pink-100 text-pink-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-3xl">
                 🐰
@@ -102,7 +101,7 @@ export default async function PublicAffiliatePage({ params }: Props) {
               <p className="text-sm text-gray-500 mb-6 font-medium">
                 Abre esta oferta en la App oficial de Rabbitty en Telegram para reclamar tus puntos.
               </p>
-              <a 
+              <a
                 href={telegramDeepLink}
                 className="block w-full bg-[#2AABEE] text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-[#229ED9] transition-colors"
               >

@@ -1,32 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/db";
+import { users } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
 export async function PATCH(req: NextRequest) {
   try {
-    const { smart_wallet_address, role } = await req.json();
+    const { telegramId, role } = await req.json();
 
-    if (!smart_wallet_address || !role) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      );
+    if (!telegramId || !role) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    if (role !== "RABBITTER" && role !== "AFFILIATE") {
+    if (role !== "USER" && role !== "AFFILIATE" && role !== "ADMIN") {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 });
     }
 
-    const profile = await prisma.profile.update({
-      where: { smart_wallet_address },
-      data: { role },
-    });
+    const [user] = await db
+      .update(users)
+      .set({ role })
+      .where(eq(users.telegramId, telegramId))
+      .returning();
 
-    return NextResponse.json({ profile }, { status: 200 });
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ user }, { status: 200 });
   } catch (error) {
     console.error("[SET_ROLE]", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
