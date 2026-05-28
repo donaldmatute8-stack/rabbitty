@@ -1,34 +1,35 @@
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { NextResponse } from 'next/server';
+import { db } from '@/db';
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
-    const businesses = await prisma.business.findMany({
-      where: { is_active: true },
-      orderBy: { created_at: "desc" },
+    const businesses = await db.query.ownedBusinesses.findMany({
+      orderBy: (businesses, { desc }) => [desc(businesses.createdAt)],
+      limit: 20
     });
 
-    // Transform to FeedItem format expected by the frontend
-    const items = businesses.map((b) => {
-      // Generate a random distance between 0.1 and 3.5 km for UI realism if GPS isn't used
-      const randomDistance = (Math.random() * 3 + 0.1).toFixed(1);
+    // Map Prisma models to the FeedItem format expected by the frontend
+    const feedItems = businesses.map(b => ({
+      id: b.id,
+      user: b.name,
+      device: b.category,
+      time: 'Reciente',
+      label: 'Cerca', // We will calculate actual distance on the client if needed
+      bunz: b.rewardPercentage,
+      reward_percentage: b.rewardPercentage,
+      distance: 0, 
+      imageUrl: b.gallery.length > 0 ? JSON.parse(b.gallery)[0] : 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=800&q=80',
+      logo_base64: b.logoUrl,
+      lat: b.lat,
+      lng: b.lng,
+      activeDays: JSON.parse(b.activeDays),
+      startTime: b.startTime,
+      endTime: b.endTime
+    }));
 
-      return {
-        id: b.id,
-        user: b.name,
-        device: b.category,
-        time: "Activo ahora",
-        distance: parseFloat(randomDistance),
-        reward_percentage: b.reward_percentage,
-        imageUrl: b.logo_base64,
-        lat: b.location_lat,
-        lng: b.location_lng,
-      };
-    });
-
-    return NextResponse.json({ success: true, items });
-  } catch (error: any) {
-    console.error("[FEED_ERROR]", error);
-    return NextResponse.json({ error: "Error fetching feed" }, { status: 500 });
+    return NextResponse.json({ success: true, data: feedItems });
+  } catch (error) {
+    console.error('Feed API Error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

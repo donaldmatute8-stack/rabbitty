@@ -27,6 +27,7 @@
 - [x] Seleccionar paquetes de "Crédito de Minting" ($10k, $20k, $50k) 
 - [x] Crear negocio vinculándolo a la Smart Wallet del afiliado
 - [x] Analytics y UI Responsive (Sidebar Desktop, BottomNav Mobile)
+- [ ] Configurar ventanas de tiempo (días/horas) para otorgar recompensas (Dynamic Reward Windows)
 - [ ] Escanear QR de Rabbitters para procesar pagos (Pendiente Fase 3)
 - [ ] Historial de recompensas dadas (Pendiente Fase 3)
 
@@ -43,6 +44,7 @@
 **Funcionalidades:**
 - [ ] API REST para validación de transacciones
 - [ ] Verificación bidireccional: Negocio ↔ Usuario
+- [ ] Validación de reglas de tiempo (Días/Horas activas) para recibir/otorgar BUNZ
 - [ ] Generar QR único por transacción (nonce + timestamp)
 - [ ] Anti-replay protection (hash único por consumo)
 - [ ] Rate limiting (max 100 transacciones/hora por negocio)

@@ -1,6 +1,7 @@
 allowBuilds:
   '@prisma/engines': true
   bufferutil: true
+  esbuild: set this to true or false
   keccak: true
   prisma: true
   sharp: true

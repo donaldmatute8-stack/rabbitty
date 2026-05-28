@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Bell, CheckCircle2, Info, AlertCircle, Trash2 } from 'lucide-react';
-import Header from '@/components/ui/Header';
-import BottomNav from '@/components/BottomNav';
+import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import { useWallet } from '@/contexts/WalletContext';
 
 interface Notification {
@@ -66,20 +65,24 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div className="page-wrap bg-gray-50 min-h-screen pb-28">
-      <div className="bg-white sticky top-0 z-50 shadow-sm">
-        <div style={{ height: 'var(--safe-top)' }} />
-        <Header showBack={true} />
-      </div>
-
-      <main className="p-4 max-w-[600px] mx-auto flex flex-col gap-3">
+    <ProfileSubpageLayout title="Notificaciones">
+      <div className="flex flex-col gap-3">
         {loading ? (
           <div className="flex justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div></div>
         ) : notifications.length === 0 ? (
-          <div className="bg-white p-8 rounded-2xl text-center border shadow-sm mt-4">
-            <Bell className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="font-bold text-gray-600">No tienes notificaciones</p>
-            <p className="text-sm text-gray-400 mt-1">Aquí aparecerán tus alertas y recompensas.</p>
+          <div style={{
+            background: '#fff', padding: 32, borderRadius: 24, textAlign: 'center',
+            border: '1px solid #F0F0F0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', marginTop: 16
+          }}>
+            <div style={{
+              width: 64, height: 64, background: '#FFF0F5', borderRadius: 20, 
+              display: 'flex', alignItems: 'center', justifyContent: 'center', 
+              margin: '0 auto 16px', color: '#E91E63'
+            }}>
+              <Bell size={28} />
+            </div>
+            <h3 style={{ fontSize: 18, fontWeight: 900, color: '#111', margin: '0 0 8px 0', letterSpacing: '-0.5px' }}>No tienes notificaciones</h3>
+            <p style={{ fontSize: 13, color: '#888', margin: 0, lineHeight: 1.5 }}>Aquí aparecerán tus alertas y recompensas de Rabbitty.</p>
           </div>
         ) : (
           notifications.map(notif => (
@@ -108,9 +111,7 @@ export default function NotificationsPage() {
             </div>
           ))
         )}
-      </main>
-
-      <BottomNav />
-    </div>
+      </div>
+    </ProfileSubpageLayout>
   );
 }

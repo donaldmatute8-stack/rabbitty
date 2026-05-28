@@ -1,254 +1,430 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { preAuthenticate } from "thirdweb/wallets/in-app";
-import { inAppWallet } from "thirdweb/wallets";
-import { useConnect } from "thirdweb/react";
-import { client, activeChain } from "@/features/auth/AuthProvider";
+import { useWallet } from '@/contexts/WalletContext';
+import { useToast } from '@/contexts/ToastContext';
 
 export default function SignupPage() {
   const router = useRouter();
-  const { connect } = useConnect();
+  const { address } = useWallet();
+  const { showToast } = useToast();
 
   const [step, setStep] = useState(1);
-  const [email, setEmail] = useState('');
-  const [verificationCode, setVerificationCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleBack = () => {
-    if (step === 2) {
-      setStep(1);
-    } else {
-      router.push('/onboarding');
-    }
-  };
+  // User Data
+  const [telegramId, setTelegramId] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [username, setUsername] = useState('');
 
-  // Step 1: Send OTP to email
-  const handleSendCode = async () => {
-    if (!email || !email.includes('@')) {
-      setError('Please enter a valid email.');
-      return;
-    }
-    setLoading(true);
-    setError('');
-    try {
-      await preAuthenticate({
-        client,
-        strategy: "email",
-        email,
-      });
-      setStep(2);
-    } catch (e) {
-      setError('Could not send verification code. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Biometrics
+  const [biometricsEnabled, setBiometricsEnabled] = useState(false);
+  const [biometricsSupported, setBiometricsSupported] = useState(false);
 
-  // Step 2: Verify OTP → create In-App Wallet + Smart Wallet → register in Neon
-  const handleVerify = async () => {
-    if (!verificationCode || verificationCode.length < 6) {
-      setError('Enter the 6-digit code sent to your email.');
-      return;
-    }
-    setLoading(true);
-    setError('');
-    try {
-      const wallet = inAppWallet({
-        smartAccount: {
-          chain: activeChain, // Polygon or Sepolia based on env
-          sponsorGas: true, // Gasless for the user
-        },
-      });
+  // Focus refs
+  const inputRef = useRef<HTMLInputElement>(null);
 
-      const connectedWallet = await connect(async () => {
-        await wallet.connect({
-          client,
-          strategy: "email",
-          email,
-          verificationCode,
+  useEffect(() => {
+    // Load Telegram Data
+    import('@twa-dev/sdk').then((mod) => {
+      const app = mod.default;
+      if (app.initDataUnsafe?.user) {
+        setTelegramId(app.initDataUnsafe.user.id.toString());
+        setFirstName(app.initDataUnsafe.user.first_name || '');
+        setLastName(app.initDataUnsafe.user.last_name || '');
+        setUsername(app.initDataUnsafe.user.username || '');
+      } else {
+        setTelegramId('dev_user_123');
+      }
+
+      // Check Biometrics Support
+      if (app.BiometricManager && app.BiometricManager.isInited) {
+        setBiometricsSupported(app.BiometricManager.isBiometricAvailable);
+      } else if (app.BiometricManager) {
+        app.BiometricManager.init(() => {
+          setBiometricsSupported(app.BiometricManager.isBiometricAvailable);
         });
-        return wallet;
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    // Auto focus on step change
+    if (step === 1 || step === 2) {
+      setTimeout(() => inputRef.current?.focus(), 300);
+    }
+  }, [step]);
+
+  const handleRequestBiometrics = async () => {
+    try {
+      const mod = await import('@twa-dev/sdk');
+      const app = mod.default;
+
+      if (!app.BiometricManager.isBiometricAvailable) {
+        setStep(4);
+        return;
+      }
+
+      app.BiometricManager.requestAccess({ reason: 'Protege tus Bunz con Face ID' }, (granted) => {
+        if (granted) {
+          setBiometricsEnabled(true);
+          showToast('Biométricos activados exitosamente 🔒', 'success');
+        }
+        setStep(4);
       });
+    } catch (e) {
+      setStep(4);
+    }
+  };
 
-      // The smart wallet address is the canonical identity
-      const smartWalletAddress = connectedWallet?.getAccount()?.address ?? '';
-      // The in-app wallet is the underlying signer
-      const signerAddress = smartWalletAddress;
+  const finalizeRegistration = async (skipWallet = false) => {
+    setLoading(true);
+    try {
+      const payload = {
+        telegramId,
+        firstName,
+        lastName,
+        username,
+        tonWalletAddress: skipWallet ? null : address,
+        biometricsEnabled
+      };
 
-      // Register in Neon DB (server-side API route)
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email,
-          smart_wallet_address: smartWalletAddress,
-          signer_wallet: signerAddress,
-        }),
+        body: JSON.stringify(payload)
       });
 
-      if (!res.ok) throw new Error('Registration failed');
-
-      router.push('/welcome');
+      const data = await res.json();
+      if (data.success) {
+        window.location.href = '/'; // Hard refresh to Feed
+      } else {
+        setError(data.error);
+      }
     } catch (e) {
-      console.error(e);
-      setError('Invalid code or connection error. Please try again.');
+      setError('Error de conexión');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleNext = () => {
-    if (step === 1) {
-      handleSendCode();
-    } else {
-      handleVerify();
+  const handleKeyDown = (e: React.KeyboardEvent, nextStep: number) => {
+    if (e.key === 'Enter') {
+      setStep(nextStep);
     }
   };
 
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    backgroundColor: "transparent",
-    border: "none",
-    borderBottom: "1px solid var(--border-default)",
-    padding: "12px 0",
-    fontSize: 17,
-    color: "var(--text-primary)",
-    outline: "none",
-    fontFamily: "var(--font-family-base)",
-  };
+  const totalSteps = 4;
+
+  const [showInfo, setShowInfo] = useState(false);
 
   return (
-    <div
-      className="min-h-[100dvh]"
-      style={{
-        fontFamily: "var(--font-family-base)",
-        backgroundColor: "var(--bg-primary)",
-        display: "flex",
-        flexDirection: "column",
-        padding: "56px 28px 40px",
-      }}
-    >
-      {/* Back / Close */}
-      <div style={{ display: "flex", justifyContent: step === 1 ? "flex-end" : "flex-start", marginBottom: 28 }}>
+    <div className="min-h-[100dvh] bg-[#0A0A0A] text-white flex flex-col font-sans relative overflow-hidden">
+
+      {/* Top Progress Bar */}
+      <div className="absolute top-0 left-0 h-1.5 bg-[var(--rabbitty-pink)] transition-all duration-500 ease-out z-50" style={{ width: `${(step / totalSteps) * 100}%` }} />
+
+      <div className="flex justify-between items-center pb-4 z-10" style={{ paddingLeft: 24, paddingRight: 24, marginTop: 40 }}>
         <button
-          onClick={handleBack}
-          style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}
+          onClick={() => step > 1 ? setStep(step - 1) : router.push('/onboarding')}
+          className="w-12 h-12 bg-white/5 hover:bg-white/10 rounded-full flex items-center justify-center transition-colors border border-white/10 text-white/70"
         >
-          {step === 1 ? (
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <path d="M1 1L17 17M17 1L1 17" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-          ) : (
-            <svg width="10" height="18" viewBox="0 0 10 18" fill="none">
-              <path d="M9 1L1 9L9 17" stroke="var(--text-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          )}
+          ←
         </button>
+        <span className="text-white/30 font-mono text-sm tracking-widest">{step} / {totalSteps}</span>
       </div>
 
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={step}
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -20 }}
-          transition={{ duration: 0.2 }}
-          style={{ flex: 1, display: "flex", flexDirection: "column" }}
-        >
-          <h1
-            style={{
-              fontSize: 34,
-              fontWeight: 800,
-              color: "var(--text-primary)",
-              letterSpacing: "-0.5px",
-              lineHeight: 1.2,
-              marginBottom: 52,
-            }}
-          >
-            {step === 1 ? (
-              <>What's your<br />email address?</>
-            ) : (
-              <>Check your<br />inbox</>
-            )}
-          </h1>
+      <div className="flex-1 flex flex-col justify-center pb-20 relative z-10" style={{ paddingLeft: 24, paddingRight: 24 }}>
+        <AnimatePresence mode="wait">
+          {/* STEP 1: FIRST NAME */}
+          {step === 1 && (
+            <motion.div key="s1" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -30 }} transition={{ duration: 0.4, ease: "easeOut" }} className="flex flex-col">
+              <span className="font-bold mb-4 tracking-widest text-sm" style={{ color: "var(--rabbitty-pink)" }}>IDENTIDAD (1/2)</span>
+              <h1 className="text-4xl md:text-5xl font-black text-white mb-8 tracking-tight leading-tight">
+                ¿Cómo te llamas?
+              </h1>
 
-          <div style={{ flex: 1 }}>
-            {step === 1 ? (
-              <>
-                <input
-                  type="email"
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleNext()}
-                  style={inputStyle}
-                  autoFocus
-                />
-                <p style={{ marginTop: 16, fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5 }}>
-                  We'll send a verification code to confirm it's you.
-                </p>
-              </>
-            ) : (
-              <>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="6-digit code"
-                  value={verificationCode}
-                  onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  onKeyDown={(e) => e.key === 'Enter' && handleNext()}
-                  style={{ ...inputStyle, letterSpacing: 6, fontSize: 22 }}
-                  autoFocus
-                />
-                <p style={{ marginTop: 16, fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5 }}>
-                  Sent to <strong style={{ color: "var(--text-primary)" }}>{email}</strong>
-                </p>
-              </>
-            )}
+              <input
+                ref={inputRef}
+                value={firstName}
+                onChange={e => setFirstName(e.target.value)}
+                onKeyDown={e => handleKeyDown(e, 2)}
+                placeholder="Tu nombre"
+                autoFocus
+                className="w-full bg-transparent border-b-2 border-white/20 text-3xl pb-4 outline-none transition-colors placeholder:text-white/20"
+                style={{ borderColor: firstName ? "var(--rabbitty-pink)" : "rgba(255,255,255,0.2)" }}
+              />
 
-            {error && (
-              <p style={{ marginTop: 16, fontSize: 13, color: "var(--rabbitty-pink)", fontWeight: 500 }}>
-                {error}
+              <div style={{ marginTop: 60 }}>
+                <button
+                  onClick={() => setStep(2)}
+                  disabled={!firstName.trim()}
+                  className="w-full text-black font-black flex items-center justify-center gap-3 transition-transform disabled:opacity-30 disabled:scale-100"
+                  style={{
+                    backgroundColor: "#FFF",
+                    fontSize: 16,
+                    padding: "17px 0",
+                    borderRadius: 100,
+                    border: "none",
+                    cursor: "pointer",
+                    boxShadow: "0 4px 15px rgba(255,255,255,0.1)",
+                    fontFamily: "var(--font-family-base)",
+                  }}
+                >
+                  Continuar <span className="text-xl">→</span>
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* STEP 2: LAST NAME */}
+          {step === 2 && (
+            <motion.div key="s2" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -30 }} transition={{ duration: 0.4, ease: "easeOut" }} className="flex flex-col">
+              <span className="font-bold mb-4 tracking-widest text-sm" style={{ color: "var(--rabbitty-pink)" }}>IDENTIDAD (2/2)</span>
+              <h1 className="text-4xl md:text-5xl font-black text-white mb-8 tracking-tight leading-tight">
+                ¿Y tus apellidos?
+              </h1>
+
+              <input
+                ref={inputRef}
+                value={lastName}
+                onChange={e => setLastName(e.target.value)}
+                onKeyDown={e => handleKeyDown(e, 3)}
+                placeholder="Tus apellidos"
+                autoFocus
+                className="w-full bg-transparent border-b-2 border-white/20 text-3xl pb-4 outline-none transition-colors placeholder:text-white/20"
+                style={{ borderColor: lastName ? "var(--rabbitty-pink)" : "rgba(255,255,255,0.2)" }}
+              />
+
+              <div style={{ marginTop: 60 }}>
+                <button
+                  onClick={() => setStep(3)}
+                  className="w-full text-black font-black flex items-center justify-center gap-3 active:scale-95 transition-transform"
+                  style={{
+                    backgroundColor: "#FFF",
+                    fontSize: 16,
+                    padding: "17px 0",
+                    borderRadius: 100,
+                    border: "none",
+                    cursor: "pointer",
+                    boxShadow: "0 4px 15px rgba(255,255,255,0.1)",
+                    fontFamily: "var(--font-family-base)",
+                  }}
+                >
+                  Confirmar Identidad <span className="text-xl">✓</span>
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* STEP 3: BIOMETRICS */}
+          {step === 3 && (
+            <motion.div key="s3" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -30 }} transition={{ duration: 0.4, ease: "easeOut" }} className="flex flex-col">
+              <div className="w-20 h-20 bg-blue-500/20 text-blue-400 rounded-3xl flex items-center justify-center mb-8 text-4xl border border-blue-500/30"
+                style={{ margin: '0 auto' }}
+              >
+                🛡️
+              </div>
+              <h1 className="text-4xl md:text-5xl font-black text-white mb-6 tracking-tight leading-tight text-center">
+                Protege tus Bunz
+              </h1>
+              <p className="text-white/60 text-lg mb-16 leading-relaxed text-center">
+                Activa <span className="text-white font-bold">Face ID</span> o Touch ID. Así nadie más podrá reclamar tus recompensas ni robar tu billetera.
               </p>
-            )}
-          </div>
-        </motion.div>
+
+              <div className="flex flex-col gap-4 mt-auto">
+                {biometricsSupported ? (
+                  <button
+                    onClick={handleRequestBiometrics}
+                    className="w-full text-white font-black active:scale-95 transition-transform shadow-[0_4px_15px_rgba(59,130,246,0.3)]"
+                    style={{
+                      backgroundColor: "#3B82F6",
+                      fontSize: 16,
+                      padding: "17px 0",
+                      borderRadius: 100,
+                      border: "none",
+                      cursor: "pointer",
+                      fontFamily: "var(--font-family-base)",
+                    }}
+                  >
+                    Activar Face ID
+                  </button>
+                ) : (
+                  <div
+                    className="bg-orange-500/10 rounded-2xl border border-orange-500/30 text-orange-400 text-xs font-medium mb-2 text-center"
+                    style={{ margin: '10px 0', padding: '14px 10px', lineHeight: '1.6' }}
+                  >
+                    Tu dispositivo actual no soporta biométricos o no diste permisos a Telegram.
+                  </div>
+                )}
+                <button
+                  onClick={() => setStep(4)}
+                  className="w-full text-white/60 font-bold active:scale-95 transition-transform"
+                  style={{
+                    backgroundColor: "rgba(255,255,255,0.05)",
+                    fontSize: 16,
+                    padding: "17px 0",
+                    borderRadius: 100,
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    cursor: "pointer",
+                    fontFamily: "var(--font-family-base)",
+                  }}
+                >
+                  Saltar por ahora
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* STEP 4: WALLET */}
+          {step === 4 && (
+            <motion.div key="s4" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -30 }} transition={{ duration: 0.4, ease: "easeOut" }} className="flex flex-col">
+              <div className="w-20 h-20 bg-pink-500/20 text-pink-400 rounded-3xl flex items-center justify-center mb-8 text-4xl border border-pink-500/30 shadow-[0_0_40px_rgba(233,30,99,0.2)]"
+                style={{ margin: '0 auto' }}
+              >
+                💎
+              </div>
+              <h1 className="text-4xl md:text-5xl font-black text-white mb-6 tracking-tight leading-tight flex items-center justify-center gap-3 text-center">
+                Tu Billetera TON
+                <button onClick={() => setShowInfo(true)} className="w-8 h-8 rounded-full bg-white/10 text-white/60 text-sm flex items-center justify-center hover:bg-white/20 transition-colors">
+                  ?
+                </button>
+              </h1>
+              <p className="text-white/60 text-lg mb-12 leading-relaxed text-center"
+                style={{ marginBottom: '20px' }}
+              >
+                Para intercambiar tus bunz por premios reales, necesitas una billetera.
+              </p>
+
+              {address && (
+                <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-green-500/10 p-5 rounded-2xl border border-green-500/30 mb-8 flex items-center gap-4">
+                  <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white text-xl">✓</div>
+                  <div>
+                    <p className="text-sm font-bold text-green-400 uppercase tracking-wider mb-1">Conectada</p>
+                    <p className="text-white font-mono">{address.slice(0, 6)}...{address.slice(-4)}</p>
+                  </div>
+                </motion.div>
+              )}
+
+              {error && <p className="text-red-400 text-sm mb-6 font-medium bg-red-500/10 p-4 rounded-xl border border-red-500/20">{error}</p>}
+
+              <div className="mt-auto flex flex-col gap-4">
+                {address ? (
+                  <button
+                    disabled={loading}
+                    onClick={() => finalizeRegistration(false)}
+                    className="w-full text-white font-black active:scale-95 transition-transform disabled:opacity-50 shadow-[0_4px_15px_rgba(233,30,99,0.3)]"
+                    style={{
+                      background: 'linear-gradient(135deg, var(--rabbitty-pink) 0%, #E91E63 100%)',
+                      fontSize: 16,
+                      padding: "17px 0",
+                      borderRadius: 100,
+                      border: "none",
+                      cursor: "pointer",
+                      fontFamily: "var(--font-family-base)",
+                    }}
+                  >
+                    {loading ? 'Preparando...' : 'Comenzar a ganar'}
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      disabled={loading}
+                      onClick={() => finalizeRegistration(false)}
+                      className="w-full text-black font-black active:scale-95 transition-transform shadow-[0_4px_15px_rgba(255,255,255,0.2)]"
+                      style={{
+                        backgroundColor: "#FFF",
+                        fontSize: 16,
+                        padding: "17px 0",
+                        borderRadius: 100,
+                        border: "none",
+                        cursor: "pointer",
+                        fontFamily: "var(--font-family-base)",
+                      }}
+                    >
+                      {loading ? 'Cargando...' : 'Conectar o Crear Billetera'}
+                    </button>
+                    <button
+                      disabled={loading}
+                      onClick={() => finalizeRegistration(true)}
+                      className="w-full text-white/60 font-bold active:scale-95 transition-transform"
+                      style={{
+                        backgroundColor: "rgba(255,255,255,0.05)",
+                        fontSize: 16,
+                        padding: "17px 0",
+                        borderRadius: 100,
+                        border: "1px solid rgba(255,255,255,0.1)",
+                        cursor: "pointer",
+                        fontFamily: "var(--font-family-base)",
+                      }}
+                    >
+                      {loading ? 'Preparando...' : 'Saltar por ahora'}
+                    </button>
+                  </>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* INFO MODAL */}
+      <AnimatePresence>
+        {showInfo && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowInfo(false)}
+          >
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="w-full bg-[#1A1A1A] rounded-t-3xl"
+              style={{ padding: "40px 24px 30px" }}
+              onClick={e => e.stopPropagation()}
+            >
+              <h3 className="text-2xl font-black text-white mb-4"
+                style={{ paddingBottom: '20px' }}
+              >¿Por qué conectar una billetera?</h3>
+              <p className="text-white/70 mb-4 leading-relaxed">
+                Tus <strong style={{ color: "var(--rabbitty-pink)" }}>bunz</strong> son tokens que se almacenan de forma segura en la economía de Rabbitty.
+              </p>
+              <p className="text-white/70 mb-8 leading-relaxed"
+                style={{ paddingBottom: '20px' }}
+              >
+                Al conectar una billetera, te conviertes en el único dueño real de tus recompensas. Esto te permitirá en el futuro canjear tus bunz por dinero real, transferirlos o enviarlos a tus amigos sin que nosotros podamos impedirlo.
+              </p>
+              <button
+                onClick={() => setShowInfo(false)}
+                className="w-full text-black font-black active:scale-95 transition-transform"
+                style={{
+                  backgroundColor: "#FFF",
+                  fontSize: 16,
+                  padding: "17px 0",
+                  borderRadius: 100,
+                  border: "none",
+                  cursor: "pointer",
+                  fontFamily: "var(--font-family-base)",
+                }}
+              >
+                Entendido
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
 
-      <motion.button
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        onClick={handleNext}
-        disabled={loading}
-        className="active:scale-[0.98] transition-transform"
-        style={{
-          width: "100%",
-          backgroundColor: loading ? "var(--bg-subtle)" : "var(--text-primary)",
-          color: loading ? "var(--text-muted)" : "var(--bg-primary)",
-          fontSize: 16,
-          fontWeight: 600,
-          padding: "17px 0",
-          borderRadius: 100,
-          border: "none",
-          cursor: loading ? "not-allowed" : "pointer",
-          fontFamily: "var(--font-family-base)",
-          transition: "all 0.2s",
-        }}
-      >
-        {loading ? "Please wait…" : step === 1 ? "Send Code" : "Verify & Create Account"}
-      </motion.button>
-
-      <p
-        style={{ textAlign: "center", marginTop: 20, fontSize: 14, color: "var(--text-muted)", cursor: "pointer" }}
-        onClick={() => router.push('/login')}
-      >
-        Already have an account? <span style={{ color: "var(--rabbitty-pink)", fontWeight: 600 }}>Login</span>
-      </p>
+      {/* Decorative gradient blur in background */}
+      <div className="fixed top-1/4 -right-1/4 w-96 h-96 bg-pink-500/20 rounded-full blur-[120px] pointer-events-none" />
+      <div className="fixed bottom-0 -left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-[120px] pointer-events-none" />
     </div>
   );
 }

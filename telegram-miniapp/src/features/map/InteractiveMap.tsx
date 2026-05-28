@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -59,6 +60,9 @@ function markerHTML(a: any, selected: boolean) {
 function userMarkerHTML() {
   return `
     <div style="position:relative;width:26px;height:26px">
+      <!-- Radar Sweep tied to the marker -->
+      <div class="radar-sweep"></div>
+      
       <div style="position:absolute;inset:0;border-radius:50%;background:#E91E63;border:3px solid #fff;box-shadow:0 0 0 2px #E91E63,0 0 20px #E91E6388;z-index:2"></div>
       <div class="rb-pulse rb-pulse-1"></div>
       <div class="rb-pulse rb-pulse-2"></div>
@@ -71,28 +75,20 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
   const mapInst = useRef<any>(null);
   const layerGroup = useRef<any>(null);
   const [selected, setSelected] = useState<any>(null);
-  const [radarAngle, setRadarAngle] = useState(0);
+  const router = useRouter();
 
-  // Radar sweep RAF
-  useEffect(() => {
-    let raf: number;
-    let angle = 0;
-    const tick = () => {
-      angle = (angle + 0.9) % 360;
-      setRadarAngle(angle);
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, []);
+  // Radar sweep RAF removed since we use CSS animation now
 
   // Map Initialization
   useEffect(() => {
     if (!mapRef.current || mapInst.current) return;
     
-    // Default to Mexico City if no user location
-    const centerLat = userLat || 19.4326;
-    const centerLng = userLng || -99.1332;
+    // Default to first business location if no user location, else fallback to Monterrey
+    const fallbackLat = businesses.length > 0 && businesses[0].lat ? parseFloat(businesses[0].lat) : 25.7275;
+    const fallbackLng = businesses.length > 0 && businesses[0].lng ? parseFloat(businesses[0].lng) : -100.312;
+
+    const centerLat = userLat || fallbackLat;
+    const centerLng = userLng || fallbackLng;
 
     const map = L.map(mapRef.current, {
       center: [centerLat, centerLng],
@@ -176,7 +172,22 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
           0%   { transform: scale(0.4); opacity: 0.8; }
           100% { transform: scale(2.2); opacity: 0;   }
         }
-        .leaflet-container { background: #0D0D1A !important; }
+        @keyframes radar-spin {
+          from { transform: translate(-50%, -50%) rotate(0deg); }
+          to { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+        .radar-sweep {
+          position: absolute;
+          top: 13px; left: 13px;
+          width: 800px; height: 800px;
+          background: conic-gradient(from 0deg, transparent 70%, rgba(233,30,99,0.05) 95%, rgba(233,30,99,0.4) 100%);
+          border-radius: 50%;
+          animation: radar-spin 3s linear infinite;
+          pointer-events: none;
+          z-index: 0;
+          mix-blend-mode: screen;
+        }
+        .leaflet-container { background: #000000 !important; }
         .leaflet-tile-pane { filter: saturate(0.5) brightness(0.9); }
       `}} />
 
@@ -187,35 +198,42 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
                           repeating-linear-gradient(0deg,rgba(233,30,99,0.04) 0px,rgba(233,30,99,0.04) 1px,transparent 1px,transparent 30px)`
       }} />
 
-      {/* Radar Sweep */}
-      <div className="absolute inset-0 z-[15] pointer-events-none overflow-hidden mix-blend-screen flex items-center justify-center">
-        <div style={{
-          position: "absolute",
-          width: "400px", height: "400px",
-          background: "conic-gradient(from 0deg, transparent 70%, rgba(233,30,99,0.1) 95%, rgba(233,30,99,0.8) 100%)",
-          borderRadius: "50%",
-          transform: `rotate(${radarAngle}deg)`,
-          filter: "blur(2px)"
-        }} />
-      </div>
+      {/* Radar Sweep is now inside the marker HTML */}
 
       <div ref={mapRef} className="absolute inset-0 z-0" />
 
       {/* Selected Business Floating Card */}
       {selected && (
-        <div className="absolute bottom-6 left-4 right-4 z-[2000]">
-          <div className="bg-[#111111]/90 backdrop-blur-xl border border-white/10 rounded-3xl p-4 shadow-2xl flex items-center gap-4 text-white" style={{ animation: "slideUp 0.3s cubic-bezier(0.16,1,0.3,1)" }}>
-            <div className="w-16 h-16 rounded-2xl bg-gray-800 overflow-hidden flex-shrink-0">
+        <div style={{ position: 'absolute', bottom: 100, left: 16, right: 16, zIndex: 2000 }}>
+          <div 
+            onClick={() => router.push(`/affiliate/${selected.id}`)}
+            style={{ 
+              background: 'rgba(17, 17, 17, 0.95)', 
+              backdropFilter: 'blur(20px)', 
+              WebkitBackdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255, 255, 255, 0.1)', 
+              borderRadius: 24, 
+              padding: 20, 
+              boxShadow: '0 20px 40px rgba(0,0,0,0.8)', 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 16, 
+              color: '#fff',
+              animation: "slideUp 0.3s cubic-bezier(0.16,1,0.3,1)",
+              cursor: 'pointer'
+            }}
+          >
+            <div style={{ width: 64, height: 64, borderRadius: 16, background: '#1A1A2E', overflow: 'hidden', flexShrink: 0, border: '1px solid rgba(255,255,255,0.05)' }}>
               {selected.imageUrl ? (
-                <img src={selected.imageUrl} alt={selected.user} className="w-full h-full object-cover" />
+                <img src={selected.imageUrl} alt={selected.user} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
-                <div className="w-full h-full bg-[#1A1A2E] flex items-center justify-center text-3xl border border-[#2A2A3E]">{getIcon(selected.device)}</div>
+                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>{getIcon(selected.device)}</div>
               )}
             </div>
-            <div className="flex-1">
-              <h3 className="font-black text-lg text-white mb-1 leading-tight">{selected.user}</h3>
-              <p className="text-xs text-white/50 mb-2">{selected.device} • A {selected.distance}km de ti</p>
-              <div className="bg-pink-500/20 text-pink-400 font-bold text-xs py-1.5 px-3 rounded-lg inline-block border border-pink-500/20">
+            <div style={{ flex: 1 }}>
+              <h3 style={{ fontSize: 18, fontWeight: 900, color: '#fff', margin: '0 0 4px 0', lineHeight: 1.2 }}>{selected.user}</h3>
+              <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', margin: '0 0 8px 0' }}>{selected.device} • A {selected.distance || '1.2'}km de ti</p>
+              <div style={{ background: 'rgba(233,30,99,0.15)', color: '#E91E63', fontWeight: 800, fontSize: 12, padding: '6px 12px', borderRadius: 8, display: 'inline-block', border: '1px solid rgba(233,30,99,0.3)' }}>
                 Gana +{selected.reward_percentage}% en Bunz
               </div>
             </div>

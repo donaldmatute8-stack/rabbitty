@@ -144,14 +144,7 @@ export function hapticFeedback(type: 'light' | 'medium' | 'heavy' | 'success' | 
   }
 }
 
-// Show alert nativo de Telegram
-export function showAlert(message: string): void {
-  if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp) {
-    (window as any).Telegram.WebApp.showAlert(message);
-  } else {
-    alert(message);
-  }
-}
+// Native alerts removed in favor of React ToastContext
 
 // Show confirm nativo de Telegram
 export function showConfirm(message: string): Promise<boolean> {
