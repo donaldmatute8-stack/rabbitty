@@ -1,48 +1,44 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/db";
+import { users, ownedBusinesses, transactions } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
 export async function POST(req: Request) {
   try {
-    const { rabbitterWallet, businessId, fiatAmount } = await req.json();
+    const { telegramId, businessId, fiatAmount } = await req.json();
 
-    if (!rabbitterWallet || !businessId || !fiatAmount) {
+    if (!telegramId || !businessId || !fiatAmount) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    // Get the rabbitter profile
-    const rabbitter = await prisma.profile.findUnique({
-      where: { smart_wallet_address: rabbitterWallet }
+    const user = await db.query.users.findFirst({
+      where: eq(users.telegramId, telegramId)
     });
 
-    if (!rabbitter) {
-      return NextResponse.json({ error: "Rabbitter profile not found" }, { status: 404 });
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Get the business to calculate bunz
-    const business = await prisma.business.findUnique({
-      where: { id: businessId }
+    const business = await db.query.ownedBusinesses.findFirst({
+      where: eq(ownedBusinesses.id, businessId)
     });
 
     if (!business) {
       return NextResponse.json({ error: "Business not found" }, { status: 404 });
     }
 
-    // Calculate reward (e.g. 15% of $500 = 75)
-    const bunzAmount = Math.floor(fiatAmount * (business.reward_percentage / 100));
+    const bunzAmount = Math.floor(fiatAmount * (business.rewardPercentage / 100));
 
-    // Create the pending transaction
-    const transaction = await prisma.transaction.create({
-      data: {
-        businessId: business.id,
-        rabbitterProfileId: rabbitter.id,
-        fiat_amount_claimed: fiatAmount,
-        bunz_amount: bunzAmount,
-        status: "PENDING"
-      }
-    });
+    const [transaction] = await db.insert(transactions).values({
+      userId: user.id,
+      businessId: business.id,
+      fiatAmount,
+      bunzMinted: bunzAmount,
+      status: "PENDING"
+    }).returning();
 
     return NextResponse.json({ success: true, transaction });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error creating claim:", error);
     return NextResponse.json({ error: "Failed to create claim" }, { status: 500 });
   }

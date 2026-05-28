@@ -1,32 +1,34 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/db";
+import { ownedBusinesses } from "@/db/schema";
+import { ilike, or } from "drizzle-orm";
 
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const query = searchParams.get("q") || "";
 
-    // Search active businesses by name or category
-    const businesses = await prisma.business.findMany({
-      where: {
-        is_active: true,
-        OR: [
-          { name: { contains: query, mode: 'insensitive' } },
-          { category: { contains: query, mode: 'insensitive' } }
-        ]
-      },
-      select: {
-        id: true,
-        name: true,
-        category: true,
-        logo_base64: true,
-        reward_percentage: true
-      },
-      take: 10
-    });
+    const businesses = await db
+      .select({
+        id: ownedBusinesses.id,
+        name: ownedBusinesses.name,
+        category: ownedBusinesses.category,
+        logoUrl: ownedBusinesses.logoUrl,
+        rewardPercentage: ownedBusinesses.rewardPercentage,
+      })
+      .from(ownedBusinesses)
+      .where(
+        query
+          ? or(
+              ilike(ownedBusinesses.name, `%${query}%`),
+              ilike(ownedBusinesses.category, `%${query}%`)
+            )
+          : undefined
+      )
+      .limit(10);
 
     return NextResponse.json({ success: true, businesses });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error searching businesses:", error);
     return NextResponse.json({ error: "Failed to search" }, { status: 500 });
   }

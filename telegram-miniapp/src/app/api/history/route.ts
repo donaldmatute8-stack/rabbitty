@@ -1,39 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/db";
+import { transactions, ownedBusinesses } from "@/db/schema";
+import { eq, desc } from "drizzle-orm";
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const wallet = searchParams.get("wallet");
+    const telegramId = searchParams.get("telegramId");
 
-    if (!wallet) {
-      return NextResponse.json({ error: "Missing wallet address" }, { status: 400 });
+    if (!telegramId) {
+      return NextResponse.json({ error: "Missing telegramId" }, { status: 400 });
     }
 
-    const profile = await prisma.profile.findUnique({
-      where: { smart_wallet_address: wallet },
-      include: {
-        transactions: {
-          where: { status: "APPROVED" },
-          include: { business: true },
-          orderBy: { created_at: "desc" },
-          take: 50
-        }
-      }
-    });
+    // Get user's transactions joined with business info
+    const rows = await db
+      .select({
+        id: transactions.id,
+        fiatAmount: transactions.fiatAmount,
+        bunzMinted: transactions.bunzMinted,
+        status: transactions.status,
+        createdAt: transactions.createdAt,
+        businessName: ownedBusinesses.name,
+        businessCategory: ownedBusinesses.category,
+      })
+      .from(transactions)
+      .innerJoin(ownedBusinesses, eq(transactions.businessId, ownedBusinesses.id))
+      .where(eq(transactions.status, "MINTED"))
+      .orderBy(desc(transactions.createdAt))
+      .limit(50);
 
-    if (!profile) {
-      return NextResponse.json({ error: "Profile not found" }, { status: 404 });
-    }
-
-    const formattedHistory = profile.transactions.map((tx) => ({
+    const formattedHistory = rows.map((tx) => ({
       id: tx.id,
-      name: tx.business.name,
-      category: tx.business.category,
-      amount: tx.type === "SPEND" ? `-${tx.bunz_amount}` : `+${tx.bunz_amount}`,
-      type: tx.type === "SPEND" ? "spent" : "earned",
-      date: tx.created_at.toISOString(),
-      icon: getCategoryIcon(tx.business.category)
+      name: tx.businessName,
+      category: tx.businessCategory,
+      amount: `+${tx.bunzMinted}`,
+      type: "earned",
+      date: tx.createdAt?.toISOString() ?? "",
+      icon: getCategoryIcon(tx.businessCategory),
     }));
 
     return NextResponse.json({ success: true, history: formattedHistory });
