@@ -3,10 +3,14 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
+import { createThirdwebClient } from "thirdweb";
+import { sepolia } from "thirdweb/chains";
 import { preAuthenticate } from "thirdweb/wallets/in-app";
 import { inAppWallet } from "thirdweb/wallets";
 import { useConnect } from "thirdweb/react";
-import { client, activeChain } from "@/features/auth/AuthProvider";
+
+const client = createThirdwebClient({ clientId: process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID! });
+const activeChain = sepolia;
 
 export default function LoginPage() {
   const router = useRouter();
