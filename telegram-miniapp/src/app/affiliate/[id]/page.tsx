@@ -5,44 +5,28 @@ import { motion } from 'framer-motion';
 import { ChevronLeft, MapPin, Clock, Tag, Navigation, Phone, Globe, MessageCircle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import BottomNav from '@/components/BottomNav';
-
-// Mock affiliate data based on ID
-const getMockAffiliate = (id: string) => {
-  if (id === '2') {
-    return {
-      id: '2',
-      name: '626 Café',
-      category: 'Cafetería y Postres',
-      reward: 10,
-      distance: '2.5km',
-      address: 'Av. Las Palmas 626, Centro',
-      hours: '08:00 - 21:00',
-      description: 'El mejor lugar para disfrutar de un buen café de especialidad y repostería artesanal. Ven y trabaja desde nuestras instalaciones con WiFi de alta velocidad.',
-      imageUrl: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
-      phone: '+52 55 1234 5678',
-      website: 'www.626cafe.mx',
-    };
-  }
-  return {
-    id: '1',
-    name: 'Kukara',
-    category: 'Restaurante Bar',
-    reward: 15,
-    distance: '1.2km',
-    address: 'Calle Falsa 123, Zona Centro',
-    hours: '13:00 - 02:00',
-    description: 'Disfruta de la mejor mixología de la ciudad acompañada de platillos fusión increíbles. Perfecto para el precopeo o una cena inolvidable.',
-    imageUrl: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
-    phone: '+52 55 9876 5432',
-    website: 'www.kukara.mx',
-  };
-};
+import { useToast } from '@/contexts/ToastContext';
 
 export default function AffiliateProfilePage() {
   const router = useRouter();
   const params = useParams();
   const id = params?.id as string;
-  const affiliate = getMockAffiliate(id);
+  const { showToast } = useToast();
+  const [affiliate, setAffiliate] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!id) return;
+    fetch(`/api/business/${id}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.business) {
+          setAffiliate(data.business);
+        }
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [id]);
 
   // Scroll effect for header
   const [isScrolled, setIsScrolled] = useState(false);
@@ -51,6 +35,27 @@ export default function AffiliateProfilePage() {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  if (loading) {
+    return (
+      <div style={{ background: '#FAFAFA', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid #f3f3f3', borderTopColor: '#E91E63', animation: 'spin 1s linear infinite' }} />
+      </div>
+    );
+  }
+
+  if (!affiliate) {
+    return (
+      <div style={{ background: '#FAFAFA', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <p style={{ color: '#888', fontWeight: 600 }}>Negocio no encontrado.</p>
+      </div>
+    );
+  }
+
+  // Parse gallery safely
+  let parsedGallery = [];
+  try { parsedGallery = affiliate.gallery ? JSON.parse(affiliate.gallery) : []; } catch(e){}
+  const coverImage = parsedGallery.length > 0 ? parsedGallery[0] : 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=800&q=80';
 
   return (
     <div style={{ background: '#FAFAFA', minHeight: '100vh', paddingBottom: 180, position: 'relative' }}>
@@ -89,7 +94,7 @@ export default function AffiliateProfilePage() {
 
       {/* Hero Image */}
       <div style={{ position: 'relative', width: '100%', height: 340 }}>
-        <img src={affiliate.imageUrl} alt={affiliate.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        <img src={coverImage} alt={affiliate.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 60%)' }} />
         
         {/* Floating Reward Badge on Hero */}
@@ -107,7 +112,7 @@ export default function AffiliateProfilePage() {
             }}
           >
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff', animation: 'pulse 2s infinite' }} />
-            <span style={{ fontWeight: 900, fontSize: 18 }}>+{affiliate.reward}%</span>
+            <span style={{ fontWeight: 900, fontSize: 18 }}>+{affiliate.rewardPercentage}%</span>
             <span style={{ fontWeight: 700, fontSize: 12 }}>BUNZ</span>
           </motion.div>
         </div>
@@ -154,34 +159,67 @@ export default function AffiliateProfilePage() {
           </div>
         </div>
 
-        {/* Details Section */}
-        <div style={{ background: '#fff', borderRadius: 24, padding: 20, border: '1px solid #F0F0F0', marginBottom: 24 }}>
-          <h3 style={{ fontSize: 16, fontWeight: 900, color: '#111', marginBottom: 16 }}>Detalles</h3>
-          
-          <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
-            <MapPin size={20} color="#999" style={{ flexShrink: 0, marginTop: 2 }} />
+        {/* Info Grid */}
+        <div style={{ background: '#fff', borderRadius: 24, padding: 20, boxShadow: '0 4px 20px rgba(0,0,0,0.03)', border: '1px solid #F0F0F0', marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 12, background: '#F8F8F8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666', flexShrink: 0 }}>
+              <MapPin size={18} />
+            </div>
             <div>
-              <p style={{ margin: '0 0 2px 0', fontSize: 14, fontWeight: 700, color: '#111' }}>{affiliate.address}</p>
-              <p style={{ margin: 0, fontSize: 13, color: '#888' }}>A {affiliate.distance} de ti</p>
+              <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: '#111' }}>{affiliate.address}</p>
+              <p style={{ margin: 0, fontSize: 13, color: '#888', marginTop: 2 }}>A {affiliate.distance || '1.0km'} de ti</p>
             </div>
           </div>
           
-          <div style={{ height: 1, background: '#F5F5F5', margin: '16px 0' }} />
-          
-          <div style={{ display: 'flex', gap: 16 }}>
-            <Clock size={20} color="#999" style={{ flexShrink: 0, marginTop: 2 }} />
+          <div style={{ height: 1, background: '#F5F5F5', margin: '0 -20px 16px -20px' }} />
+
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 12, background: '#F8F8F8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666', flexShrink: 0 }}>
+              <Clock size={18} />
+            </div>
             <div>
-              <p style={{ margin: '0 0 2px 0', fontSize: 14, fontWeight: 700, color: '#111' }}>Horario de atención</p>
-              <p style={{ margin: 0, fontSize: 13, color: '#10B981', fontWeight: 600 }}>Abierto • {affiliate.hours}</p>
+              <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: '#111', display: 'flex', alignItems: 'center', gap: 6 }}>
+                Abierto Ahora <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#4CAF50' }} />
+              </p>
+              <p style={{ margin: 0, fontSize: 13, color: '#888', marginTop: 2 }}>
+                {affiliate.startTime} - {affiliate.endTime}
+              </p>
             </div>
           </div>
         </div>
 
-        {/* Description Section */}
-        <div style={{ background: '#fff', borderRadius: 24, padding: 20, border: '1px solid #F0F0F0', marginBottom: 24 }}>
-          <h3 style={{ fontSize: 16, fontWeight: 900, color: '#111', marginBottom: 12 }}>Acerca de</h3>
-          <p style={{ fontSize: 14, color: '#666', lineHeight: 1.6, margin: 0 }}>
-            {affiliate.description}
+        {/* Dynamic Rewards Schedule */}
+        <div style={{ background: 'linear-gradient(135deg, rgba(233,30,99,0.05) 0%, rgba(173,20,87,0.05) 100%)', borderRadius: 24, padding: 20, border: '1px solid rgba(233,30,99,0.1)', marginBottom: 24 }}>
+          <h3 style={{ margin: '0 0 12px 0', fontSize: 16, fontWeight: 900, color: '#E91E63', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Tag size={18} /> Happy Hour de Bunz
+          </h3>
+          <p style={{ margin: 0, fontSize: 14, color: '#666', lineHeight: 1.5, fontWeight: 500 }}>
+            Escanea tu ticket durante estas horas para llevarte el <strong>+{affiliate.rewardPercentage}%</strong> del valor de tu compra en Bunz.
+          </p>
+          <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ background: '#E91E63', color: '#fff', fontSize: 12, fontWeight: 800, padding: '4px 10px', borderRadius: 100 }}>{affiliate.startTime} a {affiliate.endTime}</span>
+          </div>
+        </div>
+
+        {/* Gallery Slider (New Feature) */}
+        {parsedGallery.length > 0 && (
+          <div style={{ marginBottom: 32 }}>
+            <h3 style={{ margin: '0 0 16px 0', fontSize: 18, fontWeight: 900, color: '#111' }}>Galería</h3>
+            <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8, margin: '0 -20px', padding: '0 20px' }} className="scrollbar-hide">
+              {parsedGallery.map((img: string, i: number) => (
+                <div key={i} style={{ width: 200, height: 140, borderRadius: 20, overflow: 'hidden', flexShrink: 0, border: '1px solid #F0F0F0', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                  <img src={img} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt={`Gallery ${i}`} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* About */}
+        <div style={{ marginBottom: 40 }}>
+          <h3 style={{ margin: '0 0 12px 0', fontSize: 18, fontWeight: 900, color: '#111' }}>Acerca de</h3>
+          <p style={{ margin: 0, fontSize: 15, color: '#666', lineHeight: 1.6 }}>
+            {affiliate.description || 'Este negocio no ha agregado una descripción todavía.'}
           </p>
         </div>
       </div>
@@ -194,7 +232,55 @@ export default function AffiliateProfilePage() {
         zIndex: 90,
         pointerEvents: 'none' // The wrapper is invisible to clicks
       }}>
-        <button style={{
+        <button 
+          onClick={async () => {
+            try {
+              const mod = await import('@twa-dev/sdk');
+              const app = mod.default;
+              
+              const processScan = async (fiatAmount: number) => {
+                try {
+                  const res = await fetch('/api/transaction/spend', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                      initData: app.initData || "mock_init_data", 
+                      businessId: affiliate.id,
+                      fiatAmount
+                    })
+                  });
+                  
+                  const data = await res.json();
+                  if (data.success) {
+                    if (app.closeScanQrPopup) {
+                      try { app.closeScanQrPopup(); } catch(e) {}
+                    }
+                    showToast(`¡Felicidades! Acabas de ganar +${data.bunzEarned} Bunz.`, 'success');
+                  } else {
+                    showToast(`Ticket Rechazado: ${data.error}`, 'error');
+                  }
+                } catch (e) {
+                  showToast("Error al procesar el ticket.", 'error');
+                }
+              };
+
+              try {
+                app.showScanQrPopup({ text: "Escanea tu ticket de compra" }, (qrText: string) => {
+                  processScan(500); // Demo amount
+                  return true;
+                });
+              } catch (e) {
+                console.warn("QR Scanner not supported, falling back to mock input");
+                const mockAmount = window.prompt(`Escáner no soportado. Ingresa el monto simulado de tu consumo en ${affiliate.name} (ej. 500):`, "500");
+                if (mockAmount) {
+                  processScan(Number(mockAmount));
+                }
+              }
+            } catch (err) {
+              console.error(err);
+            }
+          }}
+          style={{
           width: '100%',
           background: '#111', color: '#fff',
           padding: 20, borderRadius: 24,
@@ -206,7 +292,7 @@ export default function AffiliateProfilePage() {
           pointerEvents: 'auto' // Button is clickable
         }}>
           <Tag size={20} />
-          Escanear ticket y ganar +{affiliate.reward}%
+          Escanear ticket y ganar +{affiliate.rewardPercentage}%
         </button>
       </div>
 

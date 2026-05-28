@@ -1,0 +1,66 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+
+export default function AppOpener() {
+  const [showOpener, setShowOpener] = useState(false);
+  const [isRemoving, setIsRemoving] = useState(false);
+
+  useEffect(() => {
+    const hasSeenOpener = sessionStorage.getItem('rabbitty_opener_shown');
+    if (!hasSeenOpener) {
+      setShowOpener(true);
+      // Allow animation to play, then remove from DOM
+      setTimeout(() => {
+        setIsRemoving(true);
+        setTimeout(() => {
+          setShowOpener(false);
+          sessionStorage.setItem('rabbitty_opener_shown', 'true');
+        }, 1200); // Wait for exit animation
+      }, 3500); // Duration of the hold
+    }
+  }, []);
+
+  if (!showOpener) return null;
+
+  return (
+    <AnimatePresence>
+      {!isRemoving && (
+        <motion.div
+          initial={{ opacity: 1 }}
+          exit={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+          transition={{ duration: 1.2, ease: "easeInOut" }}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 99999,
+            backgroundColor: '#0A0A0A',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, filter: 'blur(10px)' }}
+            animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, scale: 1.05, filter: 'blur(5px)' }}
+            transition={{ duration: 2, ease: "easeOut" }}
+            style={{ position: 'relative', width: 220, height: 220 }}
+          >
+            <img
+              src="/logo_conejo.png"
+              alt="Rabbitty"
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                filter: 'drop-shadow(0 0 25px rgba(255, 64, 129, 0.4))'
+              }}
+            />
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}

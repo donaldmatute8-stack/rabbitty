@@ -11,7 +11,10 @@ import FeedCard from '@/components/ui/FeedCard';
 import EmptyState from '@/components/ui/EmptyState';
 import { SkeletonCard } from '@/components/ui/Skeleton';
 import { useWallet } from '@/contexts/WalletContext';
+import { useAuth } from '@/features/auth/AuthProvider';
+import { Globe3D } from '@/components/ui/3d-globe';
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 
 const InteractiveMap = dynamic(() => import('@/features/map/InteractiveMap'), {
   ssr: false,
@@ -36,24 +39,41 @@ interface FeedItem {
   distance?: number;
   reward_percentage: number;
   logo_base64?: string;
+  activeDays?: number[];
+  startTime?: string;
+  endTime?: string;
+  lat?: number;
+  lng?: number;
 }
 
 const TABS = ["bunz'in", 'Stock', 'Freehands'];
 
 export default function FeedPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState("bunz'in");
   const [posts, setPosts] = useState<FeedItem[]>([]);
   const [offers, setOffers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [purchasing, setPurchasing] = useState(false);
+  const [mapMode, setMapMode] = useState<'globe' | 'flat'>('flat');
 
   const { address, balance } = useWallet();
+  const { user } = useAuth();
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
   const [locationLoaded, setLocationLoaded] = useState(false);
 
   const isDark = activeTab === 'Freehands';
+
+  const [greeting, setGreeting] = useState('Buenos días,');
+
+  useEffect(() => {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 12) setGreeting('Buenos días,');
+    else if (hour >= 12 && hour < 19) setGreeting('Buenas tardes,');
+    else setGreeting('Buenas noches,');
+  }, []);
 
   const handleSpend = async (offerId: string, bunzCost: number) => {
     if (parseFloat(balance) < bunzCost) {
@@ -97,6 +117,32 @@ export default function FeedPage() {
         app.setBackgroundColor(isDark ? '#0D0D1A' : '#FAFAFA');
         app.setHeaderColor(isDark ? '#0A0A14' : '#FFFFFF');
       } catch {}
+
+      // --- DEEP LINKING (SEO Public Landing Pages) ---
+      const startParam = app.initDataUnsafe?.start_param;
+      if (startParam && startParam.startsWith('affiliate_')) {
+        const affiliateId = startParam.split('affiliate_')[1];
+        if (affiliateId) {
+          router.push(`/affiliate/${affiliateId}`);
+        }
+      }
+
+      // --- SEAMLESS TELEGRAM AUTH ---
+      if (app.initData) {
+        fetch('/api/auth/telegram', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ initData: app.initData })
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            console.log("🐰 Autenticación Rabbitty Exitosa:", data.user);
+            // Aquí podríamos guardar data.user en un GlobalContext
+          }
+        })
+        .catch(err => console.error("Error en auth:", err));
+      }
     });
   }, [isDark]);
 
@@ -106,19 +152,12 @@ export default function FeedPage() {
       setLoading(true);
       try {
         if (activeTab === "bunz'in" || activeTab === 'Freehands') {
-          // Mocking Kukara and 626 Café
-          setPosts([
-            {
-              id: '1', user: 'Kukara', device: 'Restaurante Bar', time: 'Ahora', label: '1.2km',
-              bunz: 15, reward_percentage: 15, distance: 1.2,
-              imageUrl: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
-            },
-            {
-              id: '2', user: '626 Café', device: 'Cafetería', time: 'Ahora', label: '2.5km',
-              bunz: 10, reward_percentage: 10, distance: 2.5,
-              imageUrl: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
-            }
-          ]);
+          // Fetch Real Businesses from Database
+          const res = await fetch('/api/feed');
+          const data = await res.json();
+          if (data.success) {
+            setPosts(data.data);
+          }
         } else if (activeTab === 'Stock') {
           const res = await fetch('/api/offers');
           const { success, offers: o } = await res.json();
@@ -149,27 +188,32 @@ export default function FeedPage() {
         <div style={{ height: 'var(--safe-top)' }} />
         {/* Nuevo Custom Header (Buenos días, Bunz) */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px 8px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Link href="/profile" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
             <div style={{ width: 44, height: 44, borderRadius: '50%', background: isDark ? '#1A1A2E' : '#F0F0F0', overflow: 'hidden', border: isDark ? '1px solid rgba(255,255,255,0.1)' : 'none' }}>
-              <img src="https://api.dicebear.com/7.x/notionists/svg?seed=Sofia&backgroundColor=E91E63" alt="Sofia" style={{ width: '100%', height: '100%' }} />
+              <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${user?.firstName || 'Rabbitty'}&backgroundColor=E91E63`} alt={user?.firstName || 'User'} style={{ width: '100%', height: '100%' }} />
             </div>
             <div>
-              <p style={{ fontSize: 11, color: isDark ? 'rgba(255,255,255,0.5)' : '#888', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Buenos días,</p>
-              <h1 style={{ fontSize: 19, color: isDark ? '#fff' : '#111', fontWeight: 900, letterSpacing: '-0.5px', margin: 0 }}>Sofía</h1>
+              <p style={{ fontSize: 11, color: isDark ? 'rgba(255,255,255,0.5)' : '#888', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>{greeting}</p>
+              <h1 style={{ fontSize: 19, color: isDark ? '#fff' : '#111', fontWeight: 900, letterSpacing: '-0.5px', margin: 0 }}>{user?.firstName || 'Explorador'}</h1>
             </div>
-          </div>
+          </Link>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ background: isDark ? 'rgba(255,255,255,0.08)' : '#F4F4F4', padding: '6px 12px', borderRadius: 999, display: 'flex', alignItems: 'baseline', gap: 4, border: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid #EBEBEB' }}>
-              <span style={{ fontSize: 15, fontWeight: 900, color: isDark ? '#fff' : '#111' }}>1,250</span>
+              <span style={{ fontSize: 15, fontWeight: 900, color: isDark ? '#fff' : '#111' }}>{(user?.totalBunzEarned || 0).toLocaleString()}</span>
               <span style={{ fontSize: 11, fontWeight: 900, color: '#E91E63' }}>BUNZ</span>
             </div>
-            <div style={{ width: 36, height: 36, background: isDark ? 'rgba(255,255,255,0.05)' : '#fff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', border: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid #F0F0F0' }}>
-              <svg viewBox="0 0 38 48" fill="none" style={{ width: 16, height: 20 }}>
-                <path d="M11 1C11 1 7 4 7 14C7 20 9.5 23 13 23C16.5 23 18 19 18 14C18 6.5 14 1 11 1Z" fill={isDark ? "#FFF" : "#111"}/>
-                <path d="M27 1C27 1 31 4 31 14C31 20 28.5 23 25 23C21.5 23 20 19 20 14C20 6.5 24 1 27 1Z" fill={isDark ? "#FFF" : "#111"}/>
-                <ellipse cx="19" cy="33" rx="14" ry="12" fill={isDark ? "#FFF" : "#111"}/>
-              </svg>
-            </div>
+            <Link href="/scan" style={{ width: 36, height: 36, background: isDark ? 'rgba(255,255,255,0.05)' : '#fff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', border: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid #F0F0F0' }}>
+              <img 
+                src="/logo_conejo.png" 
+                alt="Scan" 
+                style={{ 
+                  width: 16, 
+                  height: 20, 
+                  objectFit: 'contain',
+                  filter: isDark ? 'grayscale(100%) brightness(10)' : 'grayscale(100%) brightness(0)' 
+                }} 
+              />
+            </Link>
           </div>
         </div>
         <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} isDark={isDark} />
@@ -323,26 +367,51 @@ export default function FeedPage() {
               initial={{ opacity: 0 }} animate={{ opacity: 1 }}
               style={{ position: 'fixed', left: 0, right: 0, top: 120, bottom: 0, zIndex: 10, overflow: 'hidden', background: '#000000' }}
             >
-              <InteractiveMap businesses={posts} userLat={userLat} userLng={userLng} />
+              {/* Holographic Toggle */}
+              <div style={{ position: 'absolute', top: 16, right: 16, zIndex: 20, display: 'flex', background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)', borderRadius: 999, border: '1px solid rgba(255,255,255,0.1)', padding: 4 }}>
+                <button
+                  onClick={() => setMapMode('globe')}
+                  style={{ background: mapMode === 'globe' ? 'rgba(233,30,99,0.2)' : 'transparent', color: mapMode === 'globe' ? '#E91E63' : '#888', padding: '6px 16px', borderRadius: 999, fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer', transition: 'all 0.3s' }}
+                >
+                  Globo 3D
+                </button>
+                <button
+                  onClick={() => setMapMode('flat')}
+                  style={{ background: mapMode === 'flat' ? 'rgba(255,255,255,0.1)' : 'transparent', color: mapMode === 'flat' ? '#FFF' : '#888', padding: '6px 16px', borderRadius: 999, fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer', transition: 'all 0.3s' }}
+                >
+                  Local
+                </button>
+              </div>
+
+              {mapMode === 'flat' ? (
+                <div style={{ height: '100%', width: '100%', overflow: 'hidden' }}>
+                  <InteractiveMap businesses={posts} userLat={userLat} userLng={userLng} />
+                </div>
+              ) : (
+                <div style={{ height: '100%', width: '100%', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {loading ? (
+                    <div style={{ width: 40, height: 40, border: '3px solid rgba(233,30,99,0.3)', borderTopColor: '#E91E63', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                  ) : (
+                    <Globe3D 
+                      markers={posts.filter(p => p.lat && p.lng).map(p => ({ 
+                        id: p.id,
+                        lat: p.lat!, 
+                        lng: p.lng!, 
+                        label: p.user, 
+                        src: p.logo_base64 || p.imageUrl 
+                      }))} 
+                      onMarkerClick={(m) => {
+                        console.log("Clicked:", m.label);
+                      }}
+                    />
+                  )}
+                </div>
+              )}
             </motion.div>
           )}
 
         </div>
       </main>
-
-      {/* Floating scan button */}
-      <Link href="/claim" style={{ position: 'fixed', right: 20, bottom: 96, zIndex: 90, textDecoration: 'none' }}>
-        <div style={{
-          background: 'linear-gradient(135deg, #E91E63 0%, #AD1457 100%)',
-          boxShadow: '0 8px 24px rgba(233,30,99,0.45)',
-          color: '#fff', borderRadius: '50%', padding: 16,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          position: 'relative', overflow: 'hidden',
-        }}>
-          <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.15)', borderRadius: '50%', animation: 'pulse 2s infinite' }} />
-          <ScanLine size={22} strokeWidth={2.5} style={{ position: 'relative', zIndex: 1 }} />
-        </div>
-      </Link>
 
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes spin { to { transform: rotate(360deg); } }

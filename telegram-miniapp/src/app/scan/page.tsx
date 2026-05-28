@@ -8,10 +8,14 @@ import BottomNav from '@/components/BottomNav';
 import Button from '@/components/ui/Button';
 import { QRCodeSVG } from 'qrcode.react';
 import { useWallet } from '@/contexts/WalletContext';
+import { useAuth } from '@/features/auth/AuthProvider';
 
 export default function ScanPage() {
   const router = useRouter();
   const { address } = useWallet();
+  const { user } = useAuth();
+  
+  const qrValue = address || user?.id || user?.telegramId;
   const [hasCamera, setHasCamera] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -111,18 +115,18 @@ export default function ScanPage() {
               <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, lineHeight: 1.6, margin: 0 }}>Muestra este código en caja para acumular Bunz por tu consumo.</p>
             </div>
             <div style={{ background: '#fff', padding: 20, borderRadius: 28, boxShadow: '0 0 40px rgba(255,255,255,0.08)' }}>
-              {address ? (
-                <QRCodeSVG value={address} size={180} level="H" style={{ borderRadius: 12, display: 'block' }} />
+              {qrValue ? (
+                <QRCodeSVG value={qrValue} size={180} level="H" style={{ borderRadius: 12, display: 'block' }} />
               ) : (
                 <div style={{ width: 180, height: 180, background: '#F3F4F6', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 12, border: '2px dashed #E5E7EB' }}>
                   <span style={{ color: '#9CA3AF', fontSize: 12, fontWeight: 700 }}>Cargando...</span>
                 </div>
               )}
             </div>
-            {address && (
+            {qrValue && (
               <div style={{ background: 'rgba(255,255,255,0.08)', padding: '8px 16px', borderRadius: 999, border: '1px solid rgba(255,255,255,0.05)' }}>
                 <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 10, fontFamily: 'monospace', letterSpacing: 1, margin: 0 }}>
-                  {address.substring(0, 10)}...{address.substring(address.length - 10)}
+                  {qrValue.substring(0, 10)}...{qrValue.substring(qrValue.length - 10)}
                 </p>
               </div>
             )}

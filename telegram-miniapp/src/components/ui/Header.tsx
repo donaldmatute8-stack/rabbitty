@@ -14,8 +14,9 @@ export default function Header({ onBack, showBack, isScrolled = false, isDark = 
     <header
       className={`relative flex items-center justify-between px-4 transition-all duration-500 ${isDark ? 'bg-transparent text-white' : 'bg-white text-[#111111]'}`}
       style={{
-        height: isScrolled ? '70px' : '100px',
-        transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)'
+        height: isScrolled ? '80px' : '100px',
+        transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+        overflow: 'hidden'
       }}
     >
       {showBack !== false ? (
@@ -41,20 +42,17 @@ export default function Header({ onBack, showBack, isScrolled = false, isDark = 
           transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)'
         }}
       >
-        <svg
-          viewBox="0 0 38 48"
-          fill="none"
-          className="transition-all duration-500"
+        <img
+          src="/logo_conejo.png"
+          alt="Rabbitty Logo"
+          className="transition-all duration-500 object-contain"
           style={{
-            width: isScrolled ? '18px' : '36px',
-            height: isScrolled ? '22px' : '44px',
-            marginTop: isScrolled ? '0px' : '8px',
+            width: isScrolled ? '120px' : '180px',
+            height: isScrolled ? '120px' : '180px',
+            marginRight: '-20px',
+            filter: 'brightness(0) invert(0.9)',
           }}
-        >
-          <path d="M11 1C11 1 7 4 7 14C7 20 9.5 23 13 23C16.5 23 18 19 18 14C18 6.5 14 1 11 1Z" fill={isDark ? "#FFF" : "#111"}/>
-          <path d="M27 1C27 1 31 4 31 14C31 20 28.5 23 25 23C21.5 23 20 19 20 14C20 6.5 24 1 27 1Z" fill={isDark ? "#FFF" : "#111"}/>
-          <ellipse cx="19" cy="33" rx="14" ry="12" fill={isDark ? "#FFF" : "#111"}/>
-        </svg>
+        />
       </div>
 
       <div className="w-10" style={{ opacity: isScrolled ? 0 : 1, transition: 'opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }} />

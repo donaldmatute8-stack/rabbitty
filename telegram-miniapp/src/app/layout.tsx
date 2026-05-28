@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { WalletProvider } from "@/contexts/WalletContext";
 import AuthProvider from "@/features/auth/AuthProvider";
+import { ToastProvider } from "@/contexts/ToastContext";
+import AppOpener from "@/components/AppOpener";
 
 export const metadata: Metadata = {
   title: "Rabbitty — Gana bunz",
@@ -33,11 +35,14 @@ export default function RootLayout({
         />
       </head>
       <body className="antialiased bg-white" suppressHydrationWarning>
-        <AuthProvider>
-          <WalletProvider>
-            {children}
-          </WalletProvider>
-        </AuthProvider>
+        <AppOpener />
+        <ToastProvider>
+          <AuthProvider>
+            <WalletProvider>
+              {children}
+            </WalletProvider>
+          </AuthProvider>
+        </ToastProvider>
       </body>
     </html>
   );

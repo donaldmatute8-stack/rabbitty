@@ -22,11 +22,11 @@ export default function ProfileSubpageLayout({ title, children, showBack = true 
         <div style={{
           position: 'relative',
           display: 'flex',
-          alignItems: 'flex-start',
+          alignItems: 'center',
           justifyContent: 'space-between',
           margin: '0 -16px 24px',
-          padding: '16px 20px 20px',
-          paddingTop: 'calc(max(env(safe-area-inset-top), 16px) + 16px)',
+          height: '100px',
+          padding: '0 20px',
           background: '#fff',
           borderBottom: '1px solid #F0F0F0',
           overflow: 'hidden',
@@ -52,12 +52,8 @@ export default function ProfileSubpageLayout({ title, children, showBack = true 
           </div>
 
           {/* Rabbit watermark */}
-          <div style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', opacity: 0.07, pointerEvents: 'none' }}>
-            <svg width="80" height="96" viewBox="0 0 38 48" fill="none">
-              <path d="M11 1C11 1 7 4 7 14C7 20 9.5 23 13 23C16.5 23 18 19 18 14C18 6.5 14 1 11 1Z" fill="#111"/>
-              <path d="M27 1C27 1 31 4 31 14C31 20 28.5 23 25 23C21.5 23 20 19 20 14C20 6.5 24 1 27 1Z" fill="#111"/>
-              <ellipse cx="19" cy="33" rx="14" ry="12" fill="#111"/>
-            </svg>
+          <div style={{ position: 'absolute', right: -20, top: '50%', transform: 'translateY(-50%)', opacity: 1, pointerEvents: 'none' }}>
+            <img src="/logo_conejo.png" alt="Rabbitty Logo" style={{ width: 'auto', height: 180, objectFit: 'contain', filter: 'brightness(0) invert(0.9)' }} />
           </div>
         </div>
 

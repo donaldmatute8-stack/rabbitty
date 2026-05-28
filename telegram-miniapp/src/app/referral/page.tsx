@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Share2, Copy, CheckCircle2, Trophy } from 'lucide-react';
-import Header from '@/components/ui/Header';
-import BottomNav from '@/components/BottomNav';
+import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import { useWallet } from '@/contexts/WalletContext';
 
 export default function ReferralPage() {
@@ -52,13 +51,8 @@ export default function ReferralPage() {
   };
 
   return (
-    <div className="page-wrap" style={{ background: '#F8F8F8', minHeight: '100vh', paddingBottom: 112 }}>
-      <div style={{ background: '#fff', position: 'sticky', top: 0, zIndex: 50, borderBottom: '1px solid #F0F0F0' }}>
-        <div style={{ height: 'var(--safe-top)' }} />
-        <Header showBack={true} />
-      </div>
-
-      <main style={{ padding: '16px 16px 0', maxWidth: 600, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <ProfileSubpageLayout title="Programa de referidos">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
             <div style={{ width: 32, height: 32, borderRadius: '50%', border: '2px solid rgba(233,30,99,0.3)', borderTopColor: '#E91E63', animation: 'spin 0.8s linear infinite' }} />
@@ -128,22 +122,22 @@ export default function ReferralPage() {
                   background: '#fff', borderRadius: 14, padding: 12,
                   border: '1px solid #F0F0F0', boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
                 }}>
-                  <p style={{ fontSize: 12, fontWeight: 500, color: '#666', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, margin: 0 }}>
-                    {referralLink || (address ? 'Generando...' : 'Conecta tu billetera')}
-                  </p>
-                  <button
-                    onClick={copyToClipboard}
-                    disabled={!referralLink}
-                    style={{
-                      background: referralLink ? '#E91E63' : '#E0E0E0',
-                      color: '#fff', padding: 8, borderRadius: 10,
-                      border: 'none', cursor: referralLink ? 'pointer' : 'not-allowed',
-                      flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}
-                  >
-                    {copied ? <CheckCircle2 size={16} /> : <Copy size={16} />}
-                  </button>
-                </div>
+                  <div>
+                    <span style={{ fontSize: 11, fontWeight: 900, color: '#E91E63', textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 4 }}>TU CÓDIGO</span>
+                    <span style={{ fontSize: 24, fontWeight: 900, color: '#111', fontFamily: 'monospace' }}>{profile?.referral_code || '------'}</span>
+                  </div>
+                <button
+                  onClick={copyToClipboard}
+                  disabled={!referralLink}
+                  style={{
+                    width: 48, height: 48, borderRadius: '50%', background: '#fff',
+                    border: '1px solid #F0F0F0', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: referralLink ? 'pointer' : 'not-allowed', color: copied ? '#4CAF50' : '#111',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+                  }}
+                >
+                  {copied ? <CheckCircle2 size={20} /> : <Copy size={20} />}
+                </button>
               </div>
 
               <button
@@ -162,28 +156,12 @@ export default function ReferralPage() {
                 Compartir en Telegram
               </button>
             </div>
-
-            {/* Medals */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
-              <Trophy size={18} color="#AAA" />
-              <h3 style={{ fontWeight: 900, color: '#111', fontSize: 15, margin: 0 }}>Tus Medallas</h3>
-            </div>
-            <div style={{
-              background: '#fff', borderRadius: 24, padding: 24,
-              border: '1px solid #F0F0F0', textAlign: 'center',
-              boxShadow: '0 2px 12px rgba(0,0,0,0.03)',
-            }}>
-              <span style={{ fontSize: 36, display: 'block', marginBottom: 12 }}>🐇</span>
-              <p style={{ color: '#999', fontSize: 13, lineHeight: 1.5, margin: 0 }}>
-                Realiza consumos en negocios afiliados para empezar a desbloquear insignias y recompensas exclusivas.
-              </p>
             </div>
           </>
         )}
-      </main>
+      </div>
 
       <style dangerouslySetInnerHTML={{__html: `@keyframes spin { to { transform: rotate(360deg); } }`}} />
-      <BottomNav />
-    </div>
+    </ProfileSubpageLayout>
   );
 }

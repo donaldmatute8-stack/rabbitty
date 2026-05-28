@@ -10,12 +10,13 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
-    "@prisma/adapter-pg": "^7.8.0",
-    "@prisma/client": "^7.8.0",
+    "@libsql/client": "^0.17.3",
     "@tonconnect/ui-react": "^2.4.4",
     "@twa-dev/sdk": "^8.0.2",
     "canvas-confetti": "^1.9.4",
     "clsx": "^2.1.1",
+    "cobe": "^2.0.1",
+    "drizzle-orm": "^0.45.2",
     "ethers": "^6.16.0",
     "framer-motion": "^12.40.0",
     "html5-qrcode": "^2.3.8",
@@ -40,10 +41,11 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "dotenv": "^17.4.2",
+    "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
-    "prisma": "^7.8.0",
     "tailwindcss": "^4",
+    "tsx": "^4.22.3",
     "typescript": "^5"
   }
 }
