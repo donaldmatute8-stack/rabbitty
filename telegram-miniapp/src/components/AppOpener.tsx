@@ -38,7 +38,7 @@ export default function AppOpener() {
           document.documentElement.style.setProperty('--tg-safe-top-adjusted', `${finalTop}px`);
         };
 
-        if (typeof tg.requestFullscreen === 'function') {
+        if (tg.isVersionAtLeast && tg.isVersionAtLeast('7.7') && typeof tg.requestFullscreen === 'function') {
           try {
             tg.requestFullscreen();
             console.log("Telegram fullscreen requested successfully");
