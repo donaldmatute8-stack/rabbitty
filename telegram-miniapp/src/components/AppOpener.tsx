@@ -22,6 +22,25 @@ export default function AppOpener() {
     }
   }, []);
 
+  useEffect(() => {
+    // Config and request fullscreen for Telegram WebApp
+    if (typeof window !== 'undefined') {
+      const tg = (window as any).Telegram?.WebApp;
+      if (tg) {
+        tg.ready();
+        tg.expand();
+        if (typeof tg.requestFullscreen === 'function') {
+          try {
+            tg.requestFullscreen();
+            console.log("Telegram fullscreen requested successfully");
+          } catch (e) {
+            console.error("Failed to request Telegram fullscreen:", e);
+          }
+        }
+      }
+    }
+  }, []);
+
   if (!showOpener) return null;
 
   return (
