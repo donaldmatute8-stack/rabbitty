@@ -29,6 +29,15 @@ export default function AppOpener() {
       if (tg) {
         tg.ready();
         tg.expand();
+
+        const updateSafeInsets = () => {
+          const topInset = tg.safeAreaInsets?.top || 0;
+          const isFs = tg.isFullscreen || false;
+          // If fullscreen is active, ensure we have at least 44px of top inset to avoid overlapping the X and three dots
+          const finalTop = isFs ? Math.max(topInset, 44) : topInset;
+          document.documentElement.style.setProperty('--tg-safe-top-adjusted', `${finalTop}px`);
+        };
+
         if (typeof tg.requestFullscreen === 'function') {
           try {
             tg.requestFullscreen();
@@ -37,6 +46,24 @@ export default function AppOpener() {
             console.error("Failed to request Telegram fullscreen:", e);
           }
         }
+
+        // Run immediately and setup event listeners
+        updateSafeInsets();
+        
+        // Small timeouts to let Telegram Webview state propagate
+        setTimeout(updateSafeInsets, 200);
+        setTimeout(updateSafeInsets, 1000);
+
+        tg.onEvent('fullscreenChanged', updateSafeInsets);
+        tg.onEvent('safeAreaChanged', updateSafeInsets);
+        
+        // Fallback interval just in case
+        const interval = setInterval(updateSafeInsets, 1000);
+        return () => {
+          tg.offEvent('fullscreenChanged', updateSafeInsets);
+          tg.offEvent('safeAreaChanged', updateSafeInsets);
+          clearInterval(interval);
+        };
       }
     }
   }, []);
