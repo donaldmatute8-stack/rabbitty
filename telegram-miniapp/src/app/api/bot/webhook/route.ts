@@ -17,14 +17,44 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: "Bot token not configured" }, { status: 500 });
         }
 
-        // Get the app URL, preferring NEXT_PUBLIC_API_URL or stable deployment domain
-        let appUrl = process.env.NEXT_PUBLIC_API_URL || "";
-        if (!appUrl || appUrl.includes("/api")) {
-          // If the URL has /api suffix or is not set, extract the base URL or use stable domain
-          appUrl = "https://telegram-miniapp-donaldmatute8-stacks-projects.vercel.app";
+        // Get the app URL, preferring VERCEL_URL / NEXT_PUBLIC_API_URL or stable deployment domain
+        let appUrl = "https://telegram-miniapp-lyart-gamma.vercel.app";
+        const envUrl = process.env.NEXT_PUBLIC_API_URL || process.env.VERCEL_URL;
+        if (envUrl) {
+          let cleanUrl = envUrl.trim();
+          if (cleanUrl.endsWith("/api")) {
+            cleanUrl = cleanUrl.substring(0, cleanUrl.length - 4);
+          } else if (cleanUrl.endsWith("/api/bot/webhook")) {
+            cleanUrl = cleanUrl.replace("/api/bot/webhook", "");
+          }
+          if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+            cleanUrl = "https://" + cleanUrl;
+          }
+          appUrl = cleanUrl;
         }
 
         console.log(`Responding to /start. ChatID: ${chatId}, WebAppURL: ${appUrl}`);
+
+        // 1. Send a quick message to remove any old custom reply keyboard
+        try {
+          const clearRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: "🐰 Iniciando Rabbitty...",
+              reply_markup: {
+                remove_keyboard: true
+              }
+            })
+          });
+          const clearData = await clearRes.json();
+          console.log("Keyboard clear response:", clearData);
+        } catch (clearErr) {
+          console.error("Error clearing reply keyboard:", clearErr);
+        }
 
         // Update the menu button for this chat to point to the correct URL
         try {
