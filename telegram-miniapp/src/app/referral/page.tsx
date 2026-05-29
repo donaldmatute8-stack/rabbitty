@@ -1,32 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Share2, Copy, CheckCircle2, Trophy } from 'lucide-react';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
-import { useWallet } from '@/contexts/WalletContext';
+import { useAuth } from '@/features/auth/AuthProvider';
 
 export default function ReferralPage() {
-  const [profile, setProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
   const [copied, setCopied] = useState(false);
-  const { address } = useWallet();
 
-  useEffect(() => {
-    if (address) fetchProfile();
-    else setLoading(false);
-  }, [address]);
-
-  const fetchProfile = async () => {
-    try {
-      const res = await fetch(`/api/auth/profile?wallet=${address}`);
-      const data = await res.json();
-      if (data.profile) setProfile(data.profile);
-    } catch (err) {
-      console.error('[Referral] profile fetch error:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const profile = user; // Use auth user profile directly
+  const loading = !user;
 
   const referralLink = profile?.telegramId
     ? `https://t.me/RabbittyBot/app?startapp=ref_${profile.telegramId}`

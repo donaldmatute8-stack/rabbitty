@@ -55,7 +55,7 @@ function WalletProviderInner({ children }: { children: React.ReactNode }) {
   const refreshBalance = async () => {
     if (address) {
       // Mock balance for now. In a real app, you'd fetch Jetton balance via TON API
-      setBalance('100.00');
+      setBalance('10.00');
     }
   };
 

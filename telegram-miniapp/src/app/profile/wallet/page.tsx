@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
-import { TonConnectButton, useTonWallet } from '@tonconnect/ui-react';
-import { ArrowUpRight, ArrowDownLeft, Copy, RefreshCw } from 'lucide-react';
+import { TonConnectButton, useTonWallet, useTonConnectUI } from '@tonconnect/ui-react';
+import { ArrowUpRight, ArrowDownLeft, Copy, RefreshCw, X } from 'lucide-react';
 import { useWallet } from '@/contexts/WalletContext';
 
 interface Transaction {
@@ -18,10 +18,17 @@ interface Transaction {
 
 export default function WalletPage() {
   const wallet = useTonWallet();
+  const [tonConnectUI] = useTonConnectUI();
   const { balance, refreshBalance, address } = useWallet();
   const [history, setHistory] = useState<Transaction[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Modals state
+  const [showReceive, setShowReceive] = useState(false);
+  const [showSend, setShowSend] = useState(false);
+  const [sendAddress, setSendAddress] = useState('');
+  const [sendAmount, setSendAmount] = useState('');
 
   useEffect(() => {
     if (address) fetchHistory();
@@ -57,6 +64,33 @@ export default function WalletPage() {
 
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleDateString('es-MX', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  const handleSend = async () => {
+    if (!sendAddress || !sendAmount) {
+      alert('Ingresa una dirección y cantidad válida.');
+      return;
+    }
+    try {
+      const nanoTon = Math.floor(parseFloat(sendAmount) * 1000000000).toString(); // Convert TON to nanoTON
+      const transaction = {
+        validUntil: Math.floor(Date.now() / 1000) + 360,
+        messages: [
+          {
+            address: sendAddress,
+            amount: nanoTon,
+          }
+        ]
+      };
+      await tonConnectUI.sendTransaction(transaction);
+      alert('Transacción enviada a la red.');
+      setShowSend(false);
+      setSendAddress('');
+      setSendAmount('');
+    } catch (e) {
+      console.error(e);
+      alert('Transacción cancelada o fallida.');
+    }
+  };
 
   return (
     <ProfileSubpageLayout title="Ra Wallet">
@@ -138,28 +172,35 @@ export default function WalletPage() {
 
         {/* Action buttons */}
         <div style={{ display: 'flex', justifyContent: 'center', gap: 24 }}>
-          {[
-            { label: 'Recibir', Icon: ArrowDownLeft, iconBg: '#EFF6FF', iconColor: '#3B82F6' },
-            { label: 'Enviar',  Icon: ArrowUpRight,  iconBg: '#FFF0F5', iconColor: '#E91E63' },
-          ].map(({ label, Icon, iconBg, iconColor }) => (
-            <button
-              key={label}
-              disabled={!wallet}
-              style={{
-                width: 140, height: 140,
-                background: '#fff', border: '1px solid #F0F0F0',
-                borderRadius: 24, padding: 16,
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
-                cursor: wallet ? 'pointer' : 'not-allowed', opacity: wallet ? 1 : 0.5,
-                boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
-              }}
-            >
-              <div style={{ width: 48, height: 48, borderRadius: '50%', background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Icon size={24} color={iconColor} strokeWidth={2.5} />
-              </div>
-              <span style={{ fontWeight: 900, color: '#111', fontSize: 14 }}>{label}</span>
-            </button>
-          ))}
+          <button
+            onClick={() => setShowReceive(true)}
+            disabled={!wallet}
+            style={{
+              width: 140, height: 140, background: '#fff', border: '1px solid #F0F0F0', borderRadius: 24, padding: 16,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
+              cursor: wallet ? 'pointer' : 'not-allowed', opacity: wallet ? 1 : 0.5, boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
+            }}
+          >
+            <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <ArrowDownLeft size={24} color={'#3B82F6'} strokeWidth={2.5} />
+            </div>
+            <span style={{ fontWeight: 900, color: '#111', fontSize: 14 }}>Recibir</span>
+          </button>
+
+          <button
+            onClick={() => setShowSend(true)}
+            disabled={!wallet}
+            style={{
+              width: 140, height: 140, background: '#fff', border: '1px solid #F0F0F0', borderRadius: 24, padding: 16,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
+              cursor: wallet ? 'pointer' : 'not-allowed', opacity: wallet ? 1 : 0.5, boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
+            }}
+          >
+            <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#FFF0F5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <ArrowUpRight size={24} color={'#E91E63'} strokeWidth={2.5} />
+            </div>
+            <span style={{ fontWeight: 900, color: '#111', fontSize: 14 }}>Enviar</span>
+          </button>
         </div>
 
         {/* Transaction history */}
@@ -205,6 +246,59 @@ export default function WalletPage() {
         </div>
 
       </div>
+
+      {/* RECEIVE MODAL */}
+      {showReceive && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(5px)', padding: 20 }}>
+          <div style={{ background: '#fff', borderRadius: 24, width: '100%', maxWidth: 400, padding: 24, position: 'relative' }}>
+            <button onClick={() => setShowReceive(false)} style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', cursor: 'pointer' }}>
+              <X size={24} color="#888" />
+            </button>
+            <h3 style={{ fontSize: 20, fontWeight: 900, margin: '0 0 16px', textAlign: 'center' }}>Recibir (TON / Bunz)</h3>
+            <div style={{ background: '#F8F8F8', borderRadius: 16, padding: 20, textAlign: 'center', marginBottom: 20 }}>
+              <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=ton://transfer/${wallet?.account.address}`} alt="QR" style={{ width: 200, height: 200, borderRadius: 12, margin: '0 auto' }} />
+            </div>
+            <p style={{ fontSize: 11, fontWeight: 800, color: '#AAA', textTransform: 'uppercase', marginBottom: 8, textAlign: 'center' }}>Tu Dirección TON</p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#F0F0F0', padding: 12, borderRadius: 12 }}>
+              <p style={{ fontSize: 12, fontFamily: 'monospace', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{wallet?.account.address}</p>
+              <button onClick={handleCopy} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
+                <Copy size={16} color="#111" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SEND MODAL */}
+      {showSend && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(5px)', padding: 20 }}>
+          <div style={{ background: '#fff', borderRadius: 24, width: '100%', maxWidth: 400, padding: 24, position: 'relative' }}>
+            <button onClick={() => setShowSend(false)} style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', cursor: 'pointer' }}>
+              <X size={24} color="#888" />
+            </button>
+            <h3 style={{ fontSize: 20, fontWeight: 900, margin: '0 0 16px' }}>Enviar TON</h3>
+            <p style={{ fontSize: 13, color: '#666', marginBottom: 20 }}>Ingresa la dirección TON de destino y la cantidad.</p>
+            
+            <input 
+              value={sendAddress} onChange={e => setSendAddress(e.target.value)} 
+              placeholder="Dirección TON del destinatario" 
+              style={{ width: '100%', padding: 14, borderRadius: 12, border: '1px solid #CCC', marginBottom: 12, fontSize: 14 }} 
+            />
+            <input 
+              type="number" value={sendAmount} onChange={e => setSendAmount(e.target.value)} 
+              placeholder="Cantidad (ej: 0.5)" 
+              style={{ width: '100%', padding: 14, borderRadius: 12, border: '1px solid #CCC', marginBottom: 24, fontSize: 14 }} 
+            />
+            
+            <button 
+              onClick={handleSend}
+              style={{ width: '100%', padding: 16, background: '#E91E63', color: '#fff', border: 'none', borderRadius: 14, fontWeight: 900, fontSize: 15, cursor: 'pointer' }}
+            >
+              Confirmar Envío
+            </button>
+          </div>
+        </div>
+      )}
 
       <style dangerouslySetInnerHTML={{__html: `
         .my-ton-btn button { border-radius: 999px !important; height: 36px !important; font-weight: 700 !important; font-size: 12px !important; }

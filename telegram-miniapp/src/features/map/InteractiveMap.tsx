@@ -83,19 +83,33 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
   const [activeCategory, setActiveCategory] = useState<string>('Todos');
   const [activeRarity, setActiveRarity] = useState<string>('ALL');
   const [activeMode, setActiveMode] = useState<string>('Todos');
+  const [showFilters, setShowFilters] = useState<boolean>(false);
   const router = useRouter();
 
   const filteredBusinesses = businesses.filter(b => {
-    const isBunzin = b.givesBunz !== false;
-    const isStock = b.acceptsBunz === true;
-    const modeMatch = activeMode === 'Todos' || 
-                      (activeMode === "bunz'in" && isBunzin) || 
-                      (activeMode === "Stock" && isStock);
+    // Mode Filter
+    let modeMatch = true;
+    if (activeMode === "bunz'in") {
+      modeMatch = (b.givesBunz === true || b.gives_bunz === true);
+    } else if (activeMode === "Stock") {
+      modeMatch = (b.acceptsBunz === true || b.accepts_bunz === true);
+    }
 
-    const categoryMatch = activeCategory === 'Todos' || (b.category && b.category.toLowerCase().includes(activeCategory.toLowerCase()));
-    const rw = b.rewardPercentage || b.reward_percentage || 0;
-    const r = getRarity(rw);
-    const rarityMatch = activeRarity === 'ALL' || r === activeRarity;
+    // Category Filter
+    let categoryMatch = true;
+    if (activeCategory !== 'Todos') {
+      const cat = (b.category || b.device || '').toLowerCase();
+      categoryMatch = cat.includes(activeCategory.toLowerCase());
+    }
+
+    // Rarity Filter
+    let rarityMatch = true;
+    if (activeRarity !== 'ALL') {
+      const rw = b.rewardPercentage || b.reward_percentage || 0;
+      const r = getRarity(rw);
+      rarityMatch = (r === activeRarity);
+    }
+
     return modeMatch && categoryMatch && rarityMatch;
   });
 
@@ -226,89 +240,104 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
 
       <div ref={mapRef} className="absolute inset-0 z-0" />
 
-      {/* Mode Filters (Todos / bunz'in / Stock) */}
-      <div style={{ position: 'absolute', top: 16, left: 16, right: 16, zIndex: 2000, display: 'flex', gap: 8, overflowX: 'auto' }} className="no-scrollbar">
-        {['Todos', "bunz'in", 'Stock'].map(mode => (
-          <button
-            key={mode}
-            onClick={() => setActiveMode(mode)}
-            style={{ 
-              flex: 1, padding: '10px', borderRadius: 16, fontSize: 14, fontWeight: 800, textAlign: 'center',
-              background: activeMode === mode ? '#E91E63' : 'rgba(0,0,0,0.8)',
-              color: '#fff',
-              border: `1px solid ${activeMode === mode ? '#E91E63' : 'rgba(255,255,255,0.1)'}`,
-              boxShadow: activeMode === mode ? '0 4px 12px rgba(233,30,99,0.3)' : 'none',
-              backdropFilter: 'blur(10px)'
-            }}
+      {/* Mode Filters (Todos / bunz'in / Stock) - Moved to bottom */}
+      <div style={{ position: 'absolute', bottom: selected ? 240 : 100, left: 16, right: 16, zIndex: 2000, display: 'flex', flexDirection: 'column', gap: 12, transition: 'bottom 0.3s' }}>
+        
+        {/* Toggle Filters Button */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button 
+            onClick={() => setShowFilters(!showFilters)}
+            style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 999, padding: '6px 12px', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6 }}
           >
-            {mode === 'Stock' ? '🎁 ' : (mode === "bunz'in" ? '💸 ' : '')}{mode}
+            {showFilters ? 'Ocultar Filtros 🔽' : 'Filtros Avanzados ⚙️'}
           </button>
-        ))}
-      </div>
+        </div>
 
-      {/* Top Pill: Bunz en esta zona */}
-      <div style={{ position: 'absolute', top: 76, left: '50%', transform: 'translateX(-50%)', zIndex: 2000, display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
-        {activeMode !== 'Stock' && (
-          <div style={{ background: 'rgba(233,30,99,0.85)', backdropFilter: 'blur(10px)', color: '#fff', padding: '8px 16px', borderRadius: 999, fontWeight: 900, fontSize: 13, border: '1px solid rgba(255,255,255,0.2)', boxShadow: '0 4px 20px rgba(233,30,99,0.4)', letterSpacing: 0.5 }}>
-            🎯 {filteredBusinesses.reduce((sum, b) => sum + (b.rewardPercentage || b.reward_percentage || 0), 0)} bunz en esta zona
+        {/* Collapsible Filters: Rarity & Category */}
+        {showFilters && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, background: 'rgba(0,0,0,0.4)', borderRadius: 16, padding: 12, backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <div style={{ display: 'flex', gap: 8, overflowX: 'auto' }} className="no-scrollbar">
+              {[
+                { id: 'ALL', label: 'TODOS', icon: '' },
+                { id: 'common', label: 'COMÚN', icon: '🔵' },
+                { id: 'rare', label: 'RARO', icon: '🟣' },
+                { id: 'epic', label: 'ÉPICO', icon: '🔴' },
+                { id: 'legendary', label: 'LEGENDARIO', icon: '🟡' },
+              ].map(r => (
+                <button
+                  key={r.id}
+                  onClick={() => setActiveRarity(r.id)}
+                  style={{ flexShrink: 0, padding: '4px 10px', borderRadius: 999, fontSize: 10, fontWeight: 800, border: '1px solid rgba(255,255,255,0.1)', background: activeRarity === r.id ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.6)', color: activeRarity === r.id ? '#fff' : 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', gap: 4 }}
+                >
+                  {r.icon && <span>{r.icon}</span>} {r.label}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 8, overflowX: 'auto' }} className="no-scrollbar">
+              {['Todos', 'Cafetería', 'Restaurante', 'Bar', 'Fitness', 'Tecnología'].map(c => (
+                <button
+                  key={c}
+                  onClick={() => setActiveCategory(c)}
+                  style={{ flexShrink: 0, padding: '4px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, background: activeCategory === c ? '#fff' : 'rgba(0,0,0,0.6)', color: activeCategory === c ? '#111' : '#fff', border: '1px solid rgba(255,255,255,0.1)' }}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
-        {/* Rarity Filters */}
-        <div style={{ display: activeMode === 'Stock' ? 'none' : 'flex', gap: 8, marginTop: 12, overflowX: 'auto', padding: '0 16px', width: '100%', WebkitOverflowScrolling: 'touch' }} className="no-scrollbar">
-          {[
-            { id: 'ALL', label: 'TODOS', icon: '' },
-            { id: 'common', label: 'COMÚN', icon: '🔵' },
-            { id: 'rare', label: 'RARO', icon: '🟣' },
-            { id: 'epic', label: 'ÉPICO', icon: '🔴' },
-            { id: 'legendary', label: 'LEGENDARIO', icon: '🟡' },
-          ].map(r => (
+        <div style={{ display: 'flex', gap: 8, overflowX: 'auto' }} className="no-scrollbar">
+          {['Todos', "bunz'in", 'Stock'].map(mode => (
             <button
-              key={r.id}
-              onClick={() => setActiveRarity(r.id)}
-              style={{ flexShrink: 0, padding: '6px 12px', borderRadius: 999, fontSize: 11, fontWeight: 800, border: '1px solid rgba(255,255,255,0.1)', background: activeRarity === r.id ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.6)', color: activeRarity === r.id ? '#fff' : 'rgba(255,255,255,0.6)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', gap: 4 }}
+              key={mode}
+              onClick={() => setActiveMode(mode)}
+              style={{ 
+                flex: 1, padding: '8px 12px', borderRadius: 12, fontSize: 12, fontWeight: 800, textAlign: 'center',
+                background: activeMode === mode ? '#E91E63' : 'rgba(0,0,0,0.8)',
+                color: '#fff',
+                border: `1px solid ${activeMode === mode ? '#E91E63' : 'rgba(255,255,255,0.1)'}`,
+                boxShadow: activeMode === mode ? '0 4px 12px rgba(233,30,99,0.3)' : 'none',
+                backdropFilter: 'blur(10px)'
+              }}
             >
-              {r.icon && <span>{r.icon}</span>} {r.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Category Filters */}
-        <div style={{ display: 'flex', gap: 8, marginTop: 8, overflowX: 'auto', padding: '0 16px', width: '100%', WebkitOverflowScrolling: 'touch' }} className="no-scrollbar">
-          {['Todos', 'Cafetería', 'Restaurante', 'Bar', 'Fitness', 'Tecnología'].map(c => (
-            <button
-              key={c}
-              onClick={() => setActiveCategory(c)}
-              style={{ flexShrink: 0, padding: '6px 14px', borderRadius: 999, fontSize: 13, fontWeight: 700, background: activeCategory === c ? '#fff' : 'rgba(0,0,0,0.6)', color: activeCategory === c ? '#111' : '#fff', border: '1px solid rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)' }}
-            >
-              {c}
+              {mode === 'Stock' ? '🎁 ' : (mode === "bunz'in" ? '💸 ' : '')}{mode}
             </button>
           ))}
         </div>
       </div>
 
+      {/* Top Pill: Bunz en esta zona */}
+      <div style={{ position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 2000, display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+        {activeMode !== 'Stock' && filteredBusinesses.length > 0 && (
+          <div style={{ background: 'rgba(233,30,99,0.85)', backdropFilter: 'blur(10px)', color: '#fff', padding: '6px 14px', borderRadius: 999, fontWeight: 900, fontSize: 12, border: '1px solid rgba(255,255,255,0.2)', boxShadow: '0 4px 20px rgba(233,30,99,0.4)', letterSpacing: 0.5 }}>
+            🎯 {filteredBusinesses.reduce((sum, b) => sum + (b.rewardPercentage || b.reward_percentage || 0), 0)} bunz en esta zona
+          </div>
+        )}
+      </div>
+
       {/* Bottom Left Pill: Afiliados */}
-      <div style={{ position: 'absolute', bottom: selected ? 220 : 24, left: 16, zIndex: 2000, transition: 'bottom 0.3s' }}>
+      <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 2000 }}>
         <div style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', color: '#fff', padding: '6px 14px', borderRadius: 999, fontSize: 12, fontWeight: 800, border: '1px solid rgba(255,255,255,0.1)' }}>
           🔴 {filteredBusinesses.length} afiliados
         </div>
       </div>
 
-      {/* Bottom Right Locate Me Button */}
+      {/* Locate Me Button - Moved Up */}
       <button 
         onClick={() => {
           if (userLat && userLng && mapInst.current) {
             mapInst.current.panTo([userLat, userLng], { animate: true, duration: 1 });
           }
         }}
-        style={{ position: 'absolute', bottom: selected ? 220 : 24, right: 16, zIndex: 2000, width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', transition: 'bottom 0.3s' }}
+        style={{ position: 'absolute', top: 60, right: 16, zIndex: 2000, width: 40, height: 40, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}
       >
-        <Crosshair size={20} />
+        <Crosshair size={18} />
       </button>
 
       {/* Selected Business Floating Card */}
       {selected && (
-        <div style={{ position: 'absolute', bottom: 100, left: 16, right: 16, zIndex: 2000 }}>
+        <div style={{ position: 'absolute', bottom: 180, left: 16, right: 16, zIndex: 2000 }}>
           <div 
             onClick={() => router.push(`/affiliate/${selected.id}`)}
             style={{ 

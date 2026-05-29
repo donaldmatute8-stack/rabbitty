@@ -207,14 +207,16 @@ export default function ProfilePage() {
           )}
 
           <div style={{ display: 'flex', gap: 10, width: '100%', marginBottom: 10 }}>
-            <Link href="/profile/gamification" style={{ flex: 1, backgroundColor: "#F4F4F4", border: "1.5px solid #EAEAEA", borderRadius: 14, padding: "14px 0", display: "flex", flexDirection: "column", alignItems: "center", cursor: "pointer", gap: 2, textDecoration: 'none' }} className="active:scale-[0.98] transition-transform">
-              <span style={{ fontSize: 14, fontWeight: 700, color: "#111" }}>Logros</span>
-              <span style={{ fontSize: 11, color: "#888" }}>Insignias y Misiones</span>
+            <Link href="/profile/gamification" style={{ flex: 1, background: "linear-gradient(135deg, #2A2D34 0%, #111 100%)", borderRadius: 14, padding: "16px 0", display: "flex", flexDirection: "column", alignItems: "center", cursor: "pointer", gap: 2, textDecoration: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} className="active:scale-[0.98] transition-transform">
+              <span style={{ fontSize: 18, marginBottom: 2 }}>🏆</span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: "#fff" }}>Logros</span>
+              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.6)" }}>Insignias y Misiones</span>
             </Link>
             
-            <Link href="/referral" style={{ flex: 1, backgroundColor: "#FFE8F0", border: "1.5px solid #FFBCD4", borderRadius: 14, padding: "14px 0", display: "flex", flexDirection: "column", alignItems: "center", cursor: "pointer", gap: 2, textDecoration: 'none' }} className="active:scale-[0.98] transition-transform">
-              <span style={{ fontSize: 14, fontWeight: 700, color: "#E91E63" }}>Invitar amigos</span>
-              <span style={{ fontSize: 11, color: "#E91E63", opacity: 0.7 }}>Gana 50 bunz por ref</span>
+            <Link href="/referral" style={{ flex: 1, background: "linear-gradient(135deg, #FF6B9E 0%, #E91E63 100%)", borderRadius: 14, padding: "16px 0", display: "flex", flexDirection: "column", alignItems: "center", cursor: "pointer", gap: 2, textDecoration: 'none', boxShadow: '0 4px 12px rgba(233,30,99,0.2)' }} className="active:scale-[0.98] transition-transform">
+              <span style={{ fontSize: 18, marginBottom: 2 }}>🎁</span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: "#fff" }}>Invitar amigos</span>
+              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.8)" }}>Gana 50 bunz por ref</span>
             </Link>
           </div>
         </motion.div>

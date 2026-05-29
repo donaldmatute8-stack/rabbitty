@@ -75,7 +75,7 @@ TODO en un solo lugar:
 ### 5. **Para Negocios: El "Power-Up Tool" GRATIS**
 Todo incluido, sin costo:
 - ✅ Marketing automation
-- ✅ POS system
+- ✅ POS system (Integración V2 con Open Source)
 - ✅ Administración
 - ✅ Analytics
 - ✅ ROI optimization
@@ -83,6 +83,12 @@ Todo incluido, sin costo:
 - ✅ Charge cards
 
 **"Convenience is king"**
+
+### 6. **Gamificación y Retención Extrema (El Camino del Rabbitter)**
+- **Hops (Saltos):** Puntos de reputación in-gastables. Aumentan el Nivel.
+- **Niveles de Madriguera:** Desde Novato hasta Legendario. Otorgan multiplicadores de Bunz pasivos.
+- **Identidad Dinámica (Dynamic NFT):** El avatar evoluciona visualmente con el rango.
+- **Trucos del Sombrero (Misiones):** Retos semanales y mecánicas dinámicas para dirigir tráfico a nichos específicos (ej. "Semana del Café").
 
 ---
 
