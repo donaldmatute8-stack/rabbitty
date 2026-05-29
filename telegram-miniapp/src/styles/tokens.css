@@ -72,7 +72,7 @@
   --radius-full: 9999px;
   
   /* Safe Areas */
-  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-top: var(--tg-safe-top-adjusted, var(--tg-safe-area-inset-top, env(safe-area-inset-top, 0px)));
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 

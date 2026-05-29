@@ -19,7 +19,7 @@ export default function BottomNav() {
       className="fixed bottom-0 left-0 right-0 bg-white z-[100]"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 20px)' }}
     >
-      <div className="flex items-center justify-between px-6 py-3">
+      <div className="flex items-center justify-center gap-8 px-6 pt-[17px] pb-3">
 
         {/* Home / Feed */}
         <Link href="/" className="flex flex-col items-center justify-center w-16 h-16">
