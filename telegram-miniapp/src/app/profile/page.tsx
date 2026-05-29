@@ -8,6 +8,7 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { useToast } from '@/contexts/ToastContext';
 import BottomNav from '@/components/BottomNav';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
+import AdminPanel from '@/features/admin/AdminPanel';
 
 const MENU_ITEMS = [
   { icon: "💳", label: "Mi Billetera", badge: null, href: '/profile/wallet' },
@@ -23,6 +24,36 @@ export default function ProfilePage() {
   const { user } = useAuth();
   const { showToast } = useToast();
   const [isScrolled, setIsScrolled] = useState(false);
+  const [tapCount, setTapCount] = useState(0);
+  const [showAdmin, setShowAdmin] = useState(false);
+
+  // Dynamic NFT Level Colors
+  const getLevelColor = (levelId?: string | null) => {
+    // We can map levelId to colors. For now, fallback logic based on hops
+    const hops = (user as any)?.hops || 0;
+    if (hops >= 5000) return 'linear-gradient(135deg, #FFD700, #FFA500)'; // Legendary
+    if (hops >= 2000) return 'linear-gradient(135deg, #9C27B0, #E91E63)'; // Epic
+    if (hops >= 500) return 'linear-gradient(135deg, #2196F3, #00BCD4)'; // Rare
+    return '#E91E63'; // Common
+  };
+
+  const handleAvatarTap = () => {
+    // Only allow admin ID 798431743
+    if (user?.telegramId === "798431743") {
+      const newCount = tapCount + 1;
+      setTapCount(newCount);
+      if (newCount === 5) {
+        setShowAdmin(true);
+        setTapCount(0);
+      }
+    } else {
+      // Just a normal tap for non-admins
+      if (tapCount > 5) {
+        // block or ignore
+      }
+      showToast('Identidad NFT (Próximamente)', 'info');
+    }
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -38,28 +69,55 @@ export default function ProfilePage() {
 
   const profileTitle = (
     <div style={{ display: "flex", alignItems: "center", gap: 12, position: 'relative', width: '100%' }}>
-      <div
-        onClick={() => showToast('La edición de avatar estará disponible pronto 🐰', 'info')}
-        style={{ width: 44, height: 44, borderRadius: "50%", backgroundColor: "#E91E63", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, position: 'relative', cursor: 'pointer' }}
+      <motion.div
+        whileTap={{ scale: 0.9 }}
+        onClick={handleAvatarTap}
+        style={{ 
+          width: 50, height: 50, borderRadius: "14px", 
+          background: getLevelColor((user as any)?.levelId), 
+          padding: 2, display: "flex", alignItems: "center", justifyContent: "center", 
+          flexShrink: 0, position: 'relative', cursor: 'pointer',
+          boxShadow: (user as any)?.hops >= 500 ? '0 4px 16px rgba(0,0,0,0.1)' : 'none'
+        }}
       >
-        <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${user?.firstName || 'Rabbitty'}&backgroundColor=E91E63`} alt={user?.firstName || 'User'} style={{ width: '100%', height: '100%', borderRadius: '50%' }} />
-        <div style={{ position: 'absolute', bottom: -2, right: -2, background: '#fff', borderRadius: '50%', padding: 2 }}>
-          <div style={{ background: '#111', borderRadius: '50%', padding: 3, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-          </div>
-        </div>
-      </div>
+        <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${user?.firstName || 'Rabbitty'}&backgroundColor=ffffff`} alt={user?.firstName || 'User'} style={{ width: '100%', height: '100%', borderRadius: '12px' }} />
+        {(user as any)?.hops >= 2000 && (
+          <div style={{ position: 'absolute', top: -6, right: -6, fontSize: 16 }}>👑</div>
+        )}
+      </motion.div>
       <div style={{ flex: 1 }}>
         <p style={{ fontSize: 18, fontWeight: 800, color: "#111", marginBottom: 0, lineHeight: 1.1 }}>{user?.firstName || 'Rabbiter'}</p>
-        <p style={{ fontSize: 13, color: "#AAA", margin: 0 }}>@{user?.username || 'explorador'}</p>
+        <p style={{ fontSize: 13, color: "#AAA", margin: 0 }}>
+          <span style={{ fontWeight: 800, color: '#E91E63', marginRight: 6 }}>Lvl. {(user as any)?.levelId || 1}</span>
+          @{user?.username || 'explorador'}
+        </p>
       </div>
     </div>
   );
 
   return (
-    <ProfileSubpageLayout title={profileTitle} showBack={false}>
+    <>
+      <ProfileSubpageLayout title={profileTitle} showBack={false}>
 
-      <div style={{ paddingBottom: 16 }}>
+        <div style={{ paddingBottom: 16 }}>
+          {/* HOPS PROGRESS BAR */}
+          <div style={{ marginBottom: 20, background: '#FAFAFA', borderRadius: 14, padding: 16, border: '1px solid #F0F0F0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 8 }}>
+              <div>
+                <p style={{ fontSize: 11, fontWeight: 900, color: '#AAA', textTransform: 'uppercase', letterSpacing: 0.5, margin: '0 0 2px' }}>PROGRESO DE MADRIGUERA</p>
+                <p style={{ fontSize: 15, fontWeight: 900, color: '#111', margin: 0 }}>{(user as any)?.hops || 0} <span style={{ color: '#E91E63' }}>Hops</span></p>
+              </div>
+              <p style={{ fontSize: 12, fontWeight: 700, color: '#888', margin: 0 }}>{(user as any)?.hops >= 5000 ? 'MAX' : 'Siguiente: 500 Hops'}</p>
+            </div>
+            <div style={{ height: 8, background: '#EAEAEA', borderRadius: 100, overflow: 'hidden' }}>
+              <motion.div 
+                initial={{ width: 0 }} 
+                animate={{ width: `${Math.min((((user as any)?.hops || 0) / 500) * 100, 100)}%` }} 
+                transition={{ duration: 1, delay: 0.2 }}
+                style={{ height: '100%', background: getLevelColor((user as any)?.levelId), borderRadius: 100 }}
+              />
+            </div>
+          </div>
         <motion.div
           initial={{ opacity: 0, scale: 0.96 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -148,10 +206,17 @@ export default function ProfilePage() {
             </Link>
           )}
 
-          <Link href="/referral" style={{ display: 'flex', width: "100%", backgroundColor: "#FFE8F0", border: "1.5px solid #FFBCD4", borderRadius: 14, padding: "14px 0", flexDirection: "column", alignItems: "center", cursor: "pointer", gap: 2, textDecoration: 'none' }} className="active:scale-[0.98] transition-transform">
-            <span style={{ fontSize: 14, fontWeight: 700, color: "#E91E63" }}>Invitar amigos</span>
-            <span style={{ fontSize: 11, color: "#E91E63", opacity: 0.7 }}>Gana 50 bunz por ref</span>
-          </Link>
+          <div style={{ display: 'flex', gap: 10, width: '100%', marginBottom: 10 }}>
+            <Link href="/profile/gamification" style={{ flex: 1, backgroundColor: "#F4F4F4", border: "1.5px solid #EAEAEA", borderRadius: 14, padding: "14px 0", display: "flex", flexDirection: "column", alignItems: "center", cursor: "pointer", gap: 2, textDecoration: 'none' }} className="active:scale-[0.98] transition-transform">
+              <span style={{ fontSize: 14, fontWeight: 700, color: "#111" }}>Logros</span>
+              <span style={{ fontSize: 11, color: "#888" }}>Insignias y Misiones</span>
+            </Link>
+            
+            <Link href="/referral" style={{ flex: 1, backgroundColor: "#FFE8F0", border: "1.5px solid #FFBCD4", borderRadius: 14, padding: "14px 0", display: "flex", flexDirection: "column", alignItems: "center", cursor: "pointer", gap: 2, textDecoration: 'none' }} className="active:scale-[0.98] transition-transform">
+              <span style={{ fontSize: 14, fontWeight: 700, color: "#E91E63" }}>Invitar amigos</span>
+              <span style={{ fontSize: 11, color: "#E91E63", opacity: 0.7 }}>Gana 50 bunz por ref</span>
+            </Link>
+          </div>
         </motion.div>
       </div>
 
@@ -174,5 +239,10 @@ export default function ProfilePage() {
         ))}
       </div>
     </ProfileSubpageLayout>
+    {/* ADMIN PANEL OVERLAY */}
+    {showAdmin && (
+      <AdminPanel onClose={() => setShowAdmin(false)} />
+    )}
+    </>
   );
 }

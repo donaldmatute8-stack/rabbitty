@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { Crosshair } from 'lucide-react';
 
 interface InteractiveMapProps {
   businesses: any[];
@@ -36,19 +37,23 @@ function getIcon(category: string) {
 }
 
 function markerHTML(a: any, selected: boolean) {
-  const r = RARITY[getRarity(a.reward_percentage)];
+  const rw = a.rewardPercentage || a.reward_percentage || 0;
+  const isStockOnly = (a.acceptsBunz || a.accepts_bunz) && !(a.givesBunz || a.gives_bunz);
+  const r = isStockOnly ? { color: "#E91E63", label: "Stock" } : RARITY[getRarity(rw)];
   const sz = selected ? 54 : 46;
   const glowSize = selected
     ? `0 0 0 3px #0D0D1A, 0 0 18px ${r.color}, 0 0 36px ${r.color}77`
     : `0 0 0 2px #0D0D1A, 0 0 10px ${r.color}99, 0 0 22px ${r.color}44`;
   const scale = selected ? "scale(1.18)" : "scale(1)";
-  const icon = getIcon(a.device);
+  const icon = isStockOnly ? '🎁' : getIcon(a.category || a.device);
   
+  const badgeHtml = isStockOnly 
+    ? `<div style="position:absolute;top:-20px;left:50%;transform:translateX(-50%);background:#E91E63;color:#fff;font-size:9px;font-weight:900;padding:2px 8px;border-radius:100px;white-space:nowrap;letter-spacing:.3px;box-shadow:0 2px 10px rgba(233,30,99,0.5)">STOCK</div>`
+    : `<div style="position:absolute;top:-20px;left:50%;transform:translateX(-50%);background:${r.color};color:${getRarity(rw)==='legendary'?'#111':'#0D0D1A'};font-size:9px;font-weight:900;padding:2px 8px;border-radius:100px;white-space:nowrap;font-family:var(--font-family-base, sans-serif);letter-spacing:.3px;box-shadow:0 2px 10px ${r.color}88">+${rw}%</div>`;
+
   return `
     <div style="position:relative;display:flex;flex-direction:column;align-items:center;transform:${scale};transition:transform 0.25s cubic-bezier(.34,1.56,.64,1)">
-      <div style="position:absolute;top:-20px;left:50%;transform:translateX(-50%);background:${r.color};color:${getRarity(a.reward_percentage)==='legendary'?'#111':'#0D0D1A'};font-size:9px;font-weight:900;padding:2px 8px;border-radius:100px;white-space:nowrap;font-family:var(--font-family-base, sans-serif);letter-spacing:.3px;box-shadow:0 2px 10px ${r.color}88">
-        +${a.reward_percentage}%
-      </div>
+      ${badgeHtml}
       <div style="width:${sz}px;height:${sz}px;border-radius:50%;background:linear-gradient(145deg,#1A1A2E,#0D0D1A);display:flex;align-items:center;justify-content:center;font-size:${selected?22:18}px;box-shadow:${glowSize};border:2px solid ${r.color};transition:all .25s">
         ${icon}
       </div>
@@ -75,7 +80,24 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
   const mapInst = useRef<any>(null);
   const layerGroup = useRef<any>(null);
   const [selected, setSelected] = useState<any>(null);
+  const [activeCategory, setActiveCategory] = useState<string>('Todos');
+  const [activeRarity, setActiveRarity] = useState<string>('ALL');
+  const [activeMode, setActiveMode] = useState<string>('Todos');
   const router = useRouter();
+
+  const filteredBusinesses = businesses.filter(b => {
+    const isBunzin = b.givesBunz !== false;
+    const isStock = b.acceptsBunz === true;
+    const modeMatch = activeMode === 'Todos' || 
+                      (activeMode === "bunz'in" && isBunzin) || 
+                      (activeMode === "Stock" && isStock);
+
+    const categoryMatch = activeCategory === 'Todos' || (b.category && b.category.toLowerCase().includes(activeCategory.toLowerCase()));
+    const rw = b.rewardPercentage || b.reward_percentage || 0;
+    const r = getRarity(rw);
+    const rarityMatch = activeRarity === 'ALL' || r === activeRarity;
+    return modeMatch && categoryMatch && rarityMatch;
+  });
 
   // Radar sweep RAF removed since we use CSS animation now
 
@@ -128,12 +150,14 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
     if (!mapInst.current || !layerGroup.current) return;
     layerGroup.current.clearLayers();
 
-    businesses.forEach(b => {
+    filteredBusinesses.forEach(b => {
       if (!b.lat || !b.lng) return;
       const lat = parseFloat(b.lat);
       const lng = parseFloat(b.lng);
 
-      const r = RARITY[getRarity(b.reward_percentage)];
+      const isStockOnly = (b.acceptsBunz || b.accepts_bunz) && !(b.givesBunz || b.gives_bunz);
+      const rw = b.rewardPercentage || b.reward_percentage || 0;
+      const r = isStockOnly ? { color: "#E91E63", label: "Stock" } : RARITY[getRarity(rw)];
       const isSel = selected?.id === b.id;
       
       // Radius of influence
@@ -202,6 +226,86 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
 
       <div ref={mapRef} className="absolute inset-0 z-0" />
 
+      {/* Mode Filters (Todos / bunz'in / Stock) */}
+      <div style={{ position: 'absolute', top: 16, left: 16, right: 16, zIndex: 2000, display: 'flex', gap: 8, overflowX: 'auto' }} className="no-scrollbar">
+        {['Todos', "bunz'in", 'Stock'].map(mode => (
+          <button
+            key={mode}
+            onClick={() => setActiveMode(mode)}
+            style={{ 
+              flex: 1, padding: '10px', borderRadius: 16, fontSize: 14, fontWeight: 800, textAlign: 'center',
+              background: activeMode === mode ? '#E91E63' : 'rgba(0,0,0,0.8)',
+              color: '#fff',
+              border: `1px solid ${activeMode === mode ? '#E91E63' : 'rgba(255,255,255,0.1)'}`,
+              boxShadow: activeMode === mode ? '0 4px 12px rgba(233,30,99,0.3)' : 'none',
+              backdropFilter: 'blur(10px)'
+            }}
+          >
+            {mode === 'Stock' ? '🎁 ' : (mode === "bunz'in" ? '💸 ' : '')}{mode}
+          </button>
+        ))}
+      </div>
+
+      {/* Top Pill: Bunz en esta zona */}
+      <div style={{ position: 'absolute', top: 76, left: '50%', transform: 'translateX(-50%)', zIndex: 2000, display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+        {activeMode !== 'Stock' && (
+          <div style={{ background: 'rgba(233,30,99,0.85)', backdropFilter: 'blur(10px)', color: '#fff', padding: '8px 16px', borderRadius: 999, fontWeight: 900, fontSize: 13, border: '1px solid rgba(255,255,255,0.2)', boxShadow: '0 4px 20px rgba(233,30,99,0.4)', letterSpacing: 0.5 }}>
+            🎯 {filteredBusinesses.reduce((sum, b) => sum + (b.rewardPercentage || b.reward_percentage || 0), 0)} bunz en esta zona
+          </div>
+        )}
+
+        {/* Rarity Filters */}
+        <div style={{ display: activeMode === 'Stock' ? 'none' : 'flex', gap: 8, marginTop: 12, overflowX: 'auto', padding: '0 16px', width: '100%', WebkitOverflowScrolling: 'touch' }} className="no-scrollbar">
+          {[
+            { id: 'ALL', label: 'TODOS', icon: '' },
+            { id: 'common', label: 'COMÚN', icon: '🔵' },
+            { id: 'rare', label: 'RARO', icon: '🟣' },
+            { id: 'epic', label: 'ÉPICO', icon: '🔴' },
+            { id: 'legendary', label: 'LEGENDARIO', icon: '🟡' },
+          ].map(r => (
+            <button
+              key={r.id}
+              onClick={() => setActiveRarity(r.id)}
+              style={{ flexShrink: 0, padding: '6px 12px', borderRadius: 999, fontSize: 11, fontWeight: 800, border: '1px solid rgba(255,255,255,0.1)', background: activeRarity === r.id ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.6)', color: activeRarity === r.id ? '#fff' : 'rgba(255,255,255,0.6)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', gap: 4 }}
+            >
+              {r.icon && <span>{r.icon}</span>} {r.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Category Filters */}
+        <div style={{ display: 'flex', gap: 8, marginTop: 8, overflowX: 'auto', padding: '0 16px', width: '100%', WebkitOverflowScrolling: 'touch' }} className="no-scrollbar">
+          {['Todos', 'Cafetería', 'Restaurante', 'Bar', 'Fitness', 'Tecnología'].map(c => (
+            <button
+              key={c}
+              onClick={() => setActiveCategory(c)}
+              style={{ flexShrink: 0, padding: '6px 14px', borderRadius: 999, fontSize: 13, fontWeight: 700, background: activeCategory === c ? '#fff' : 'rgba(0,0,0,0.6)', color: activeCategory === c ? '#111' : '#fff', border: '1px solid rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)' }}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Bottom Left Pill: Afiliados */}
+      <div style={{ position: 'absolute', bottom: selected ? 220 : 24, left: 16, zIndex: 2000, transition: 'bottom 0.3s' }}>
+        <div style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', color: '#fff', padding: '6px 14px', borderRadius: 999, fontSize: 12, fontWeight: 800, border: '1px solid rgba(255,255,255,0.1)' }}>
+          🔴 {filteredBusinesses.length} afiliados
+        </div>
+      </div>
+
+      {/* Bottom Right Locate Me Button */}
+      <button 
+        onClick={() => {
+          if (userLat && userLng && mapInst.current) {
+            mapInst.current.panTo([userLat, userLng], { animate: true, duration: 1 });
+          }
+        }}
+        style={{ position: 'absolute', bottom: selected ? 220 : 24, right: 16, zIndex: 2000, width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', transition: 'bottom 0.3s' }}
+      >
+        <Crosshair size={20} />
+      </button>
+
       {/* Selected Business Floating Card */}
       {selected && (
         <div style={{ position: 'absolute', bottom: 100, left: 16, right: 16, zIndex: 2000 }}>
@@ -231,11 +335,19 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
               )}
             </div>
             <div style={{ flex: 1 }}>
-              <h3 style={{ fontSize: 18, fontWeight: 900, color: '#fff', margin: '0 0 4px 0', lineHeight: 1.2 }}>{selected.user}</h3>
-              <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', margin: '0 0 8px 0' }}>{selected.device} • A {selected.distance || '1.2'}km de ti</p>
-              <div style={{ background: 'rgba(233,30,99,0.15)', color: '#E91E63', fontWeight: 800, fontSize: 12, padding: '6px 12px', borderRadius: 8, display: 'inline-block', border: '1px solid rgba(233,30,99,0.3)' }}>
-                Gana +{selected.reward_percentage}% en Bunz
-              </div>
+              <h3 style={{ fontSize: 18, fontWeight: 900, color: '#fff', margin: '0 0 4px 0', lineHeight: 1.2 }}>{selected.name || selected.user}</h3>
+              <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', margin: '0 0 8px 0' }}>{selected.category || selected.device} • A {selected.distance || '1.2'}km de ti</p>
+              
+              {(selected.givesBunz !== false) && (
+                <div style={{ background: 'rgba(233,30,99,0.15)', color: '#E91E63', fontWeight: 800, fontSize: 12, padding: '6px 12px', borderRadius: 8, display: 'inline-block', border: '1px solid rgba(233,30,99,0.3)', marginRight: 8 }}>
+                  Gana +{selected.reward_percentage || selected.rewardPercentage}% en Bunz
+                </div>
+              )}
+              {selected.acceptsBunz === true && (
+                <div style={{ background: 'rgba(76, 175, 80, 0.15)', color: '#4CAF50', fontWeight: 800, fontSize: 12, padding: '6px 12px', borderRadius: 8, display: 'inline-block', border: '1px solid rgba(76, 175, 80, 0.3)' }}>
+                  🎁 Stock Disponible
+                </div>
+              )}
             </div>
           </div>
           <style dangerouslySetInnerHTML={{__html: `

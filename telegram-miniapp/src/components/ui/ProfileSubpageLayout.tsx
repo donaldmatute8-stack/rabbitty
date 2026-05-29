@@ -15,6 +15,7 @@ export default function ProfileSubpageLayout({ title, children, showBack = true 
 
   return (
     <div className="page-wrap" style={{ background: '#F8F8F8', fontFamily: 'var(--font-family-base)', paddingBottom: 100 }}>
+      <div style={{ height: 'var(--safe-top)' }} />
 
       <main style={{ width: '100%', maxWidth: 600, margin: '0 auto', paddingLeft: 16, paddingRight: 16 }}>
 

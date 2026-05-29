@@ -66,6 +66,12 @@ export async function POST(req: Request) {
     const lat = 19.4326 + (Math.random() - 0.5) * 0.05;
     const lng = -99.1332 + (Math.random() - 0.5) * 0.05;
 
+    const parsedReward = parseInt(rewardPercentage);
+    let rarity = "common";
+    if (parsedReward >= 15) rarity = "legendary";
+    else if (parsedReward >= 10) rarity = "epic";
+    else if (parsedReward >= 5) rarity = "rare";
+
     const [business] = await db.insert(ownedBusinesses).values({
       ownerId: owner.id,
       name,
@@ -74,7 +80,8 @@ export async function POST(req: Request) {
       address,
       lat,
       lng,
-      rewardPercentage: parseInt(rewardPercentage),
+      rewardPercentage: parsedReward,
+      rarity,
       activeDays: JSON.stringify(activeDays || [1,2,3,4,5,6,7]),
       startTime: startTime || "00:00",
       endTime: endTime || "23:59",
