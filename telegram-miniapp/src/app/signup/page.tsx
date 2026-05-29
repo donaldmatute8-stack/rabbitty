@@ -8,7 +8,7 @@ import { useToast } from '@/contexts/ToastContext';
 
 export default function SignupPage() {
   const router = useRouter();
-  const { address } = useWallet();
+  const { address, connect } = useWallet();
   const { showToast } = useToast();
 
   const [step, setStep] = useState(1);
@@ -334,7 +334,7 @@ export default function SignupPage() {
                   <>
                     <button
                       disabled={loading}
-                      onClick={() => finalizeRegistration(false)}
+                      onClick={connect}
                       className="w-full text-black font-black active:scale-95 transition-transform shadow-[0_4px_15px_rgba(255,255,255,0.2)]"
                       style={{
                         backgroundColor: "#FFF",

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { ScanLine } from 'lucide-react';
 import Link from 'next/link';
@@ -47,6 +47,19 @@ interface FeedItem {
 }
 
 const TABS = ["bunz'in", 'Stock', 'Freehands'];
+
+function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371; // Radius of the earth in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; // Distance in km
+}
+
 
 export default function FeedPage() {
   const router = useRouter();
@@ -146,8 +159,18 @@ export default function FeedPage() {
     });
   }, [isDark]);
 
+  const postsWithDistance = useMemo(() => {
+    if (!userLat || !userLng) return posts;
+    return posts.map(post => {
+      if (post.lat && post.lng) {
+        const dist = getDistance(userLat, userLng, post.lat, post.lng);
+        return { ...post, distance: parseFloat(dist.toFixed(1)) };
+      }
+      return post;
+    });
+  }, [posts, userLat, userLng]);
+
   useEffect(() => {
-    if (!locationLoaded) return;
     const loadData = async () => {
       setLoading(true);
       try {
@@ -170,7 +193,7 @@ export default function FeedPage() {
       }
     };
     loadData();
-  }, [activeTab, locationLoaded, userLat, userLng]);
+  }, [activeTab]);
 
   return (
     <div
@@ -225,7 +248,7 @@ export default function FeedPage() {
           {/* ── bunz'in tab ── */}
           {activeTab === "bunz'in" && (
             <>
-              {!loading && posts.length > 0 && (
+              {!loading && postsWithDistance.length > 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
                   <div style={{ flex: 1, height: 1, background: '#EBEBEB' }} />
                   <span style={{ fontSize: 11, fontWeight: 900, color: '#CCC', letterSpacing: 0.5 }}>CERCA DE TI</span>
@@ -234,8 +257,8 @@ export default function FeedPage() {
               )}
               {loading ? (
                 <><SkeletonCard /><SkeletonCard /><SkeletonCard /></>
-              ) : posts.length > 0 ? (
-                posts.map((post, i) => (
+              ) : postsWithDistance.length > 0 ? (
+                postsWithDistance.map((post, i) => (
                   <FeedCard
                     key={post.id}
                     id={post.id}
@@ -385,7 +408,7 @@ export default function FeedPage() {
 
               {mapMode === 'flat' ? (
                 <div style={{ height: '100%', width: '100%', overflow: 'hidden' }}>
-                  <InteractiveMap businesses={posts} userLat={userLat} userLng={userLng} />
+                  <InteractiveMap businesses={postsWithDistance} userLat={userLat} userLng={userLng} />
                 </div>
               ) : (
                 <div style={{ height: '100%', width: '100%', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -393,7 +416,7 @@ export default function FeedPage() {
                     <div style={{ width: 40, height: 40, border: '3px solid rgba(233,30,99,0.3)', borderTopColor: '#E91E63', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
                   ) : (
                     <Globe3D 
-                      markers={posts.filter(p => p.lat && p.lng).map(p => ({ 
+                      markers={postsWithDistance.filter(p => p.lat && p.lng).map(p => ({ 
                         id: p.id,
                         lat: p.lat!, 
                         lng: p.lng!, 
