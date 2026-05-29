@@ -15,6 +15,7 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { Globe3D } from '@/components/ui/3d-globe';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
+import { useToast } from '@/contexts/ToastContext';
 
 const InteractiveMap = dynamic(() => import('@/features/map/InteractiveMap'), {
   ssr: false,
@@ -70,6 +71,7 @@ export default function FeedPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [purchasing, setPurchasing] = useState(false);
   const [mapMode, setMapMode] = useState<'globe' | 'flat'>('flat');
+  const { showToast } = useToast();
 
   const { address, balance } = useWallet();
   const { user } = useAuth();
@@ -90,7 +92,7 @@ export default function FeedPage() {
 
   const handleSpend = async (offerId: string, bunzCost: number, businessName: string, offerTitle: string) => {
     if (user && user.totalBunzEarned < bunzCost) {
-      alert('No tienes suficientes Bunz para adquirir esta oferta.');
+      showToast('No tienes suficientes Bunz para adquirir esta oferta.', 'error');
       return;
     }
     setPurchasing(true);
@@ -107,11 +109,11 @@ export default function FeedPage() {
       });
       const data = await res.json();
       if (data.success) {
-        alert('¡Reserva creada exitosamente! Revisa el estatus en tu perfil.');
+        showToast('¡Reserva creada exitosamente! Revisa el estatus en tu perfil.', 'success');
       }
-      else alert(data.error || 'Ocurrió un error al procesar la reserva.');
+      else showToast(data.error || 'Ocurrió un error al procesar la reserva.', 'error');
     } catch {
-      alert('Error de conexión.');
+      showToast('Error de conexión.', 'error');
     } finally {
       setPurchasing(false);
     }

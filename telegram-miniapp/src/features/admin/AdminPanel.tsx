@@ -72,12 +72,11 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
         style={{
           backgroundColor: '#fff',
-          borderTopLeftRadius: 24,
-          borderTopRightRadius: 24,
           padding: '24px',
           paddingBottom: 'max(env(safe-area-inset-bottom), 24px)',
           position: 'relative',
-          maxHeight: '90vh',
+          height: '100vh',
+          width: '100%',
           overflowY: 'auto'
         }}
       >
