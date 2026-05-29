@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { ScanLine } from 'lucide-react';
+import { ScanLine, Bell } from 'lucide-react';
 import Link from 'next/link';
 import BottomNav from '@/components/BottomNav';
 import Header from '@/components/ui/Header';
@@ -88,21 +88,28 @@ export default function FeedPage() {
     else setGreeting('Buenas noches,');
   }, []);
 
-  const handleSpend = async (offerId: string, bunzCost: number) => {
-    if (parseFloat(balance) < bunzCost) {
+  const handleSpend = async (offerId: string, bunzCost: number, businessName: string, offerTitle: string) => {
+    if (user && user.totalBunzEarned < bunzCost) {
       alert('No tienes suficientes Bunz para adquirir esta oferta.');
       return;
     }
     setPurchasing(true);
     try {
-      const res = await fetch('/api/transaction/spend', {
+      const res = await fetch('/api/reservations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ walletAddress: address, offerId }),
+        body: JSON.stringify({ 
+          telegramId: user?.telegramId, 
+          businessName, 
+          offerTitle, 
+          bunzCost 
+        }),
       });
       const data = await res.json();
-      if (data.success) alert('¡Compra exitosa! Revisa tu inventario en el perfil.');
-      else alert(data.error || 'Ocurrió un error al procesar el pago.');
+      if (data.success) {
+        alert('¡Reserva creada exitosamente! Revisa el estatus en tu perfil.');
+      }
+      else alert(data.error || 'Ocurrió un error al procesar la reserva.');
     } catch {
       alert('Error de conexión.');
     } finally {
@@ -145,7 +152,10 @@ export default function FeedPage() {
         fetch('/api/auth/telegram', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ initData: app.initData })
+          body: JSON.stringify({ 
+            initData: app.initData,
+            startParam: app.initDataUnsafe?.start_param
+          })
         })
         .then(res => res.json())
         .then(data => {
@@ -225,6 +235,14 @@ export default function FeedPage() {
               <span style={{ fontSize: 15, fontWeight: 900, color: isDark ? '#fff' : '#111' }}>{(user?.totalBunzEarned || 0).toLocaleString()}</span>
               <span style={{ fontSize: 11, fontWeight: 900, color: '#E91E63' }}>BUNZ</span>
             </div>
+            
+            {/* Notification Bell */}
+            <Link href="/notifications" style={{ position: 'relative', width: 36, height: 36, background: isDark ? 'rgba(255,255,255,0.05)' : '#fff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', border: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid #F0F0F0' }}>
+              <Bell size={18} color={isDark ? '#fff' : '#111'} strokeWidth={2.5} />
+              {/* Unread indicator dot */}
+              <div style={{ position: 'absolute', top: 8, right: 9, width: 6, height: 6, background: '#E91E63', borderRadius: '50%', border: `1.5px solid ${isDark ? '#000' : '#fff'}` }} />
+            </Link>
+
             <Link href="/scan" style={{ width: 36, height: 36, background: isDark ? 'rgba(255,255,255,0.05)' : '#fff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', border: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid #F0F0F0' }}>
               <img 
                 src="/logo_conejo.png" 
@@ -365,7 +383,7 @@ export default function FeedPage() {
                             </div>
                             <button
                               disabled={!o.isAvailable || purchasing}
-                              onClick={() => handleSpend(o.id, o.bunzCost)}
+                              onClick={() => handleSpend(o.id, o.bunzCost, o.businessName, o.title)}
                               style={{
                                 background: o.isAvailable && !purchasing ? '#111' : '#E0E0E0',
                                 color: o.isAvailable && !purchasing ? '#fff' : '#999',
@@ -373,7 +391,7 @@ export default function FeedPage() {
                                 borderRadius: 999, border: 'none', cursor: o.isAvailable && !purchasing ? 'pointer' : 'not-allowed',
                               }}
                             >
-                              {purchasing ? '...' : o.isAvailable ? 'Reservar Visita' : 'Agotado Hoy'}
+                              {purchasing ? '...' : o.isAvailable ? 'Reservar' : 'Agotado Hoy'}
                             </button>
                           </div>
                         </div>
@@ -388,7 +406,7 @@ export default function FeedPage() {
           {activeTab === 'Freehands' && (
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              style={{ position: 'fixed', left: 0, right: 0, top: 120, bottom: 0, zIndex: 10, overflow: 'hidden', background: '#000000' }}
+              style={{ position: 'fixed', left: 0, right: 0, top: 'calc(var(--safe-top, 0px) + 120px)', bottom: 0, zIndex: 10, overflow: 'hidden', background: '#000000' }}
             >
               {/* Holographic Toggle */}
               <div style={{ position: 'absolute', top: 16, right: 16, zIndex: 20, display: 'flex', background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)', borderRadius: 999, border: '1px solid rgba(255,255,255,0.1)', padding: 4 }}>

@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { QrCode } from 'lucide-react';
+import { QrCode, Inbox, Check, X } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
 interface MobileAffiliateDashboardProps {
@@ -15,6 +15,37 @@ const STATS = [
 
 export default function MobileAffiliateDashboard({ business }: MobileAffiliateDashboardProps) {
   const [rewardRate, setRewardRate] = useState(business?.rewardPercentage || 21);
+  const [reservations, setReservations] = useState<any[]>([]);
+  const [loadingRes, setLoadingRes] = useState(true);
+
+  useEffect(() => {
+    if (business?.ownerId) {
+      fetch(`/api/reservations?ownerId=${business.ownerId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) setReservations(data.reservations || []);
+        })
+        .finally(() => setLoadingRes(false));
+    }
+  }, [business?.ownerId]);
+
+  const handleReservationStatus = async (id: string, status: string) => {
+    try {
+      const res = await fetch(`/api/reservations/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setReservations(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+      } else {
+        alert(data.error || 'Error al actualizar reserva');
+      }
+    } catch (e) {
+      alert('Error de conexión');
+    }
+  };
 
   if (business?.status === 'PENDING_VERIFICATION') {
     return (
@@ -125,9 +156,66 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
             }}
           />
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-            <span style={{ fontSize: 11, color: "#CCC" }}>10% Mínimo</span>
-            <span style={{ fontSize: 11, color: "#CCC" }}>100% Máximo</span>
+            <span style={{ fontSize: 11, color: "#CCC" }}>2% Mínimo</span>
+            <span style={{ fontSize: 11, color: "#CCC" }}>50% Máximo</span>
           </div>
+        </motion.div>
+
+        {/* RESERVACIONES */}
+        <motion.div 
+          initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}
+          style={{ border: "1px solid #F0F0F0", borderRadius: 18, padding: "16px 20px", marginBottom: 16, background: '#fff' }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+            <Inbox size={20} color="#E91E63" />
+            <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0, color: '#111' }}>Reservaciones Stock</h3>
+            {reservations.filter(r => r.status === 'PENDING').length > 0 && (
+              <span style={{ background: '#E91E63', color: '#fff', fontSize: 10, fontWeight: 900, padding: '2px 6px', borderRadius: 10 }}>
+                {reservations.filter(r => r.status === 'PENDING').length}
+              </span>
+            )}
+          </div>
+
+          {loadingRes ? (
+            <p style={{ fontSize: 13, color: '#888' }}>Cargando...</p>
+          ) : reservations.length === 0 ? (
+            <p style={{ fontSize: 13, color: '#888', margin: 0 }}>No tienes reservaciones pendientes.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {reservations.map(res => (
+                <div key={res.id} style={{ border: '1px solid #F0F0F0', borderRadius: 12, padding: 12, background: '#FAFAFA' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                    <div>
+                      <p style={{ fontSize: 14, fontWeight: 800, color: '#111', margin: '0 0 4px 0' }}>{res.title}</p>
+                      <p style={{ fontSize: 12, color: '#666', margin: 0 }}>👤 Cliente: {res.user?.firstName || 'Usuario'}</p>
+                    </div>
+                    <span style={{ fontSize: 14, fontWeight: 900, color: '#E91E63' }}>{res.bunzCost} B</span>
+                  </div>
+                  
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ 
+                      fontSize: 10, fontWeight: 800, padding: '4px 8px', borderRadius: 6,
+                      background: res.status === 'PENDING' ? '#FFF3E0' : res.status === 'CONFIRMED' ? '#E8F5E9' : '#FFEBEE',
+                      color: res.status === 'PENDING' ? '#F57C00' : res.status === 'CONFIRMED' ? '#4CAF50' : '#F44336'
+                    }}>
+                      {res.status}
+                    </span>
+                    
+                    {res.status === 'PENDING' && (
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button onClick={() => handleReservationStatus(res.id, 'REJECTED')} style={{ width: 32, height: 32, borderRadius: '50%', background: '#fff', border: '1px solid #F0F0F0', color: '#F44336', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                          <X size={16} />
+                        </button>
+                        <button onClick={() => handleReservationStatus(res.id, 'CONFIRMED')} style={{ width: 32, height: 32, borderRadius: '50%', background: '#4CAF50', border: 'none', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                          <Check size={16} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </motion.div>
 
         {/* QUICK ACTION BUTTONS */}

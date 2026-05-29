@@ -33,8 +33,8 @@ export default function AppOpener() {
         const updateSafeInsets = () => {
           const topInset = tg.safeAreaInsets?.top || 0;
           const isFs = tg.isFullscreen || false;
-          // If fullscreen is active, ensure we have at least 44px of top inset to avoid overlapping the X and three dots
-          const finalTop = isFs ? Math.max(topInset, 44) : topInset;
+          // If fullscreen is active, ensure we have at least 56px of top inset to avoid overlapping the X and three dots
+          const finalTop = isFs ? Math.max(topInset, 56) : topInset;
           document.documentElement.style.setProperty('--tg-safe-top-adjusted', `${finalTop}px`);
         };
 

@@ -28,8 +28,8 @@ export default function ReferralPage() {
     }
   };
 
-  const referralLink = profile?.referral_code
-    ? `https://t.me/RabbittyBot/app?startapp=ref_${profile.referral_code}`
+  const referralLink = profile?.telegramId
+    ? `https://t.me/RabbittyBot/app?startapp=ref_${profile.telegramId}`
     : '';
 
   const copyToClipboard = () => {
@@ -44,10 +44,15 @@ export default function ReferralPage() {
     // @ts-ignore
     if (window.Telegram?.WebApp?.openTelegramLink) {
       const url = encodeURIComponent(referralLink);
-      const text = encodeURIComponent('¡Únete a Rabbitty y gana 50 Bunz gratis para comprar en la ciudad!');
+      const text = encodeURIComponent('¡Únete a Rabbitty y descubre negocios en la ciudad!');
       // @ts-ignore
       window.Telegram.WebApp.openTelegramLink(`https://t.me/share/url?url=${url}&text=${text}`);
     }
+  };
+
+  const shareOnWhatsApp = () => {
+    const text = encodeURIComponent(`¡Únete a Rabbitty y descubre negocios en la ciudad! ${referralLink}`);
+    window.open(`https://wa.me/?text=${text}`, '_blank');
   };
 
   return (
@@ -106,8 +111,8 @@ export default function ReferralPage() {
               <div style={{ width: 64, height: 64, background: '#FFF0F5', borderRadius: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: 28 }}>👥</div>
               <h2 style={{ fontSize: 22, fontWeight: 900, color: '#111', marginBottom: 8, letterSpacing: '-0.5px' }}>Invita y Gana</h2>
               <p style={{ color: '#888', fontSize: 13, lineHeight: 1.6, marginBottom: 24 }}>
-                Obtén <span style={{ fontWeight: 900, color: '#E91E63' }}>50 Bunz Pendientes</span> por cada amigo.
-                Ellos también reciben 50 Bunz de bienvenida.
+                Obtén <span style={{ fontWeight: 900, color: '#E91E63' }}>50 Bunz</span> por cada amigo que invites,
+                una vez que realicen su primer consumo.
               </p>
 
               {/* Link box */}
@@ -124,7 +129,7 @@ export default function ReferralPage() {
                 }}>
                   <div>
                     <span style={{ fontSize: 11, fontWeight: 900, color: '#E91E63', textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 4 }}>TU CÓDIGO</span>
-                    <span style={{ fontSize: 24, fontWeight: 900, color: '#111', fontFamily: 'monospace' }}>{profile?.referral_code || '------'}</span>
+                    <span style={{ fontSize: 24, fontWeight: 900, color: '#111', fontFamily: 'monospace' }}>{profile?.telegramId || '------'}</span>
                   </div>
                 <button
                   onClick={copyToClipboard}
@@ -140,21 +145,40 @@ export default function ReferralPage() {
                 </button>
               </div>
 
-              <button
-                onClick={shareOnTelegram}
-                disabled={!referralLink}
-                style={{
-                  width: '100%', background: referralLink ? '#111' : '#E0E0E0',
-                  color: referralLink ? '#fff' : '#999',
-                  fontWeight: 900, fontSize: 14,
-                  padding: '16px 0', borderRadius: 999,
-                  border: 'none', cursor: referralLink ? 'pointer' : 'not-allowed',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                }}
-              >
-                <Share2 size={16} />
-                Compartir en Telegram
-              </button>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button
+                  onClick={shareOnTelegram}
+                  disabled={!referralLink}
+                  style={{
+                    flex: 1, background: referralLink ? '#2AABEE' : '#E0E0E0',
+                    color: referralLink ? '#fff' : '#999',
+                    fontWeight: 900, fontSize: 13,
+                    padding: '14px 0', borderRadius: 16,
+                    border: 'none', cursor: referralLink ? 'pointer' : 'not-allowed',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    boxShadow: referralLink ? '0 4px 12px rgba(42,171,238,0.3)' : 'none'
+                  }}
+                >
+                  <Share2 size={16} />
+                  Telegram
+                </button>
+                <button
+                  onClick={shareOnWhatsApp}
+                  disabled={!referralLink}
+                  style={{
+                    flex: 1, background: referralLink ? '#25D366' : '#E0E0E0',
+                    color: referralLink ? '#fff' : '#999',
+                    fontWeight: 900, fontSize: 13,
+                    padding: '14px 0', borderRadius: 16,
+                    border: 'none', cursor: referralLink ? 'pointer' : 'not-allowed',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    boxShadow: referralLink ? '0 4px 12px rgba(37,211,102,0.3)' : 'none'
+                  }}
+                >
+                  <Share2 size={16} />
+                  WhatsApp
+                </button>
+              </div>
             </div>
             </div>
           </>

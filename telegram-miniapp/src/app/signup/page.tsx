@@ -126,9 +126,9 @@ export default function SignupPage() {
     <div className="min-h-[100dvh] bg-[#0A0A0A] text-white flex flex-col font-sans relative overflow-hidden">
 
       {/* Top Progress Bar */}
-      <div className="absolute top-0 left-0 h-1.5 bg-[var(--rabbitty-pink)] transition-all duration-500 ease-out z-50" style={{ width: `${(step / totalSteps) * 100}%` }} />
+      <div className="absolute left-0 h-1.5 bg-[var(--rabbitty-pink)] transition-all duration-500 ease-out z-50" style={{ top: 'var(--safe-top, 0px)', width: `${(step / totalSteps) * 100}%` }} />
 
-      <div className="flex justify-between items-center pb-4 z-10" style={{ paddingLeft: 24, paddingRight: 24, marginTop: 40 }}>
+      <div className="flex justify-between items-center pb-4 z-10" style={{ paddingLeft: 24, paddingRight: 24, marginTop: 'calc(var(--safe-top, 0px) + 40px)' }}>
         <button
           onClick={() => step > 1 ? setStep(step - 1) : router.push('/onboarding')}
           className="w-12 h-12 bg-white/5 hover:bg-white/10 rounded-full flex items-center justify-center transition-colors border border-white/10 text-white/70"

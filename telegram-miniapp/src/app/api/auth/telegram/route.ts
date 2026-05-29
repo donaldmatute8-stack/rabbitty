@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import { validateTelegramInitData, parseTelegramUser } from '@/lib/telegramAuth';
 import { db } from '@/db';
-import { users } from '@/db/schema';
+import { users, referrals } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 
 export async function POST(req: Request) {
   try {
-    const { initData } = await req.json();
+    const { initData, startParam } = await req.json();
 
     if (!initData) {
       return NextResponse.json({ error: 'Missing initData' }, { status: 400 });
@@ -45,6 +45,27 @@ export async function POST(req: Request) {
         totalBunzEarned: 0
       }).returning();
       user = newUser;
+
+      // Handle Referral if present
+      if (startParam && startParam.startsWith('ref_')) {
+        const inviterTelegramId = startParam.replace('ref_', '');
+        
+        // Don't refer yourself
+        if (inviterTelegramId !== telegramId) {
+          const inviter = await db.query.users.findFirst({
+            where: eq(users.telegramId, inviterTelegramId)
+          });
+
+          if (inviter) {
+            await db.insert(referrals).values({
+              inviterId: inviter.id,
+              invitedId: user.id,
+              status: "PENDING",
+              rewardAmount: 50
+            });
+          }
+        }
+      }
     }
 
     return NextResponse.json({ 

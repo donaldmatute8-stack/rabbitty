@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { users, ownedBusinesses, transactions } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { users, ownedBusinesses, transactions, levels } from "@/db/schema";
+import { eq, and } from "drizzle-orm";
+import { processReferralAndNotifications } from '@/lib/referralLogic';
+import { awardHops, evaluateHatTricks } from '@/lib/gamificationLogic';
 
 export async function POST(req: NextRequest) {
   try {
@@ -27,11 +29,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "El usuario no existe o no está registrado." }, { status: 404 });
     }
 
-    const bunzReward = Math.floor(fiatAmount * (business.rewardPercentage / 100));
+    // Check multiplier based on user level
+    let multiplier = 1.0;
+    if (customer.levelId) {
+      const level = await db.query.levels.findFirst({ where: eq(levels.id, customer.levelId) });
+      if (level) multiplier = level.bunzMultiplier;
+    }
+
+    const bunzReward = Math.floor(fiatAmount * (business.rewardPercentage / 100) * multiplier);
 
     if (bunzReward <= 0) {
       return NextResponse.json({ error: "El monto es muy bajo para generar una recompensa en Bunz." }, { status: 400 });
     }
+
+    // Determine if it's a new business for the user
+    const previousTransaction = await db.query.transactions.findFirst({
+      where: and(eq(transactions.userId, customer.id), eq(transactions.businessId, business.id))
+    });
+    const isNewBusiness = !previousTransaction;
 
     // Insert transaction record
     await db.insert(transactions).values({
@@ -46,6 +61,13 @@ export async function POST(req: NextRequest) {
     await db.update(users)
       .set({ totalBunzEarned: (customer.totalBunzEarned ?? 0) + bunzReward })
       .where(eq(users.id, customer.id));
+
+    // Trigger referral and notifications (EARN event)
+    await processReferralAndNotifications(customer.id, 'EARN');
+
+    // Gamification Engine
+    await awardHops(customer.id, isNewBusiness);
+    await evaluateHatTricks(customer.id, { type: 'TOTAL_VISITS', value: 1, category: business.category });
 
     return NextResponse.json({
       success: true,

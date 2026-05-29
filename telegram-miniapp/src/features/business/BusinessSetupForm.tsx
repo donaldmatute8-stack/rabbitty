@@ -51,8 +51,8 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
       setError("Por favor completa todos los campos requeridos.");
       return;
     }
-    if (step === 2 && rewardPercentage < 10) {
-      setError("La recompensa mínima es 10%.");
+    if (step === 2 && rewardPercentage < 2) {
+      setError("La recompensa mínima es 2%.");
       return;
     }
     setError('');
@@ -200,8 +200,22 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
                 <p style={{ fontSize: 48, fontWeight: 900, color: THEME_COLOR, margin: '0 0 8px 0', lineHeight: 1 }}>{rewardPercentage}%</p>
                 <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', margin: 0 }}>del consumo regresado en Bunz</p>
                 
+                {(() => {
+                  let rarityLabel = "COMÚN 🔵";
+                  let rarityColor = "#3B82F6"; 
+                  if (rewardPercentage >= 15) { rarityLabel = "LEGENDARIO 🟡"; rarityColor = "#F59E0B"; } 
+                  else if (rewardPercentage >= 10) { rarityLabel = "ÉPICO 🔴"; rarityColor = "#EF4444"; } 
+                  else if (rewardPercentage >= 5) { rarityLabel = "RARO 🟣"; rarityColor = "#8B5CF6"; } 
+
+                  return (
+                    <div style={{ marginTop: 12, display: 'inline-block', padding: '6px 16px', background: `${rarityColor}20`, color: rarityColor, borderRadius: 999, fontSize: 12, fontWeight: 900, border: `1px solid ${rarityColor}40`, letterSpacing: 1 }}>
+                      {rarityLabel}
+                    </div>
+                  );
+                })()}
+                
                 <input 
-                  type="range" min="10" max="50" step="5" value={rewardPercentage} onChange={e => setRewardPercentage(Number(e.target.value))}
+                  type="range" min="2" max="50" step="1" value={rewardPercentage} onChange={e => setRewardPercentage(Number(e.target.value))}
                   style={{ width: '100%', marginTop: 24, accentColor: THEME_COLOR }}
                 />
               </div>
