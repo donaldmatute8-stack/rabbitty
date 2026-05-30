@@ -13,7 +13,7 @@ export default function ReferralPage() {
   const loading = !user;
 
   const referralLink = profile?.telegramId
-    ? `https://t.me/RabbittyBot/app?startapp=ref_${profile.telegramId}`
+    ? `https://t.me/Rabbittyme_bot/app?startapp=ref_${profile.telegramId}`
     : '';
 
   const copyToClipboard = () => {

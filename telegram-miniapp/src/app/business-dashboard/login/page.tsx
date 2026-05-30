@@ -80,7 +80,7 @@ export default function B2BLogin() {
           ) : qrToken ? (
             <div className="p-4 bg-white rounded-2xl shadow-[0_0_40px_rgba(0,0,0,0.05)] border border-gray-100">
               <QRCodeSVG 
-                value={`https://t.me/RabbittyBot/app?startapp=qrlogin_${qrToken}`} 
+                value={`https://t.me/Rabbittyme_bot/app?startapp=qrlogin_${qrToken}`} 
                 size={220}
                 bgColor={"#ffffff"}
                 fgColor={"#0D0D1A"}

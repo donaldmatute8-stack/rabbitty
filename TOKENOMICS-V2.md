@@ -445,7 +445,7 @@ contract BunzTokenV2 is
         _burn(msg.sender, bunzAmount);
         
         // El treasury procesa el pago fuera de cadena
-        // (transferencia bancaria, PayPal, etc.)
+        // (transferencia bancaria, pasarelas de pago, etc.)
         emit UserRedeemed(msg.sender, bunzAmount, 0); // cashAmount calculado off-chain
     }
     

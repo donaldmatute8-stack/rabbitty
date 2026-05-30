@@ -241,13 +241,13 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
       <div ref={mapRef} className="absolute inset-0 z-0" />
 
       {/* Mode Filters (Todos / bunz'in / Stock) - Moved to bottom */}
-      <div style={{ position: 'absolute', bottom: selected ? 240 : 100, left: 16, right: 16, zIndex: 2000, display: 'flex', flexDirection: 'column', gap: 12, transition: 'bottom 0.3s' }}>
+      <div style={{ position: 'absolute', bottom: selected ? 220 : 80, left: 16, right: 16, zIndex: 2000, display: 'flex', flexDirection: 'column', gap: 10, transition: 'bottom 0.3s' }}>
         
         {/* Toggle Filters Button */}
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <button 
             onClick={() => setShowFilters(!showFilters)}
-            style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 999, padding: '6px 12px', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6 }}
+            style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 999, padding: '4px 10px', fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 4 }}
           >
             {showFilters ? 'Ocultar Filtros 🔽' : 'Filtros Avanzados ⚙️'}
           </button>
@@ -267,7 +267,7 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
                 <button
                   key={r.id}
                   onClick={() => setActiveRarity(r.id)}
-                  style={{ flexShrink: 0, padding: '4px 10px', borderRadius: 999, fontSize: 10, fontWeight: 800, border: '1px solid rgba(255,255,255,0.1)', background: activeRarity === r.id ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.6)', color: activeRarity === r.id ? '#fff' : 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', gap: 4 }}
+                  style={{ flexShrink: 0, padding: '2px 8px', borderRadius: 999, fontSize: 9, fontWeight: 800, border: '1px solid rgba(255,255,255,0.1)', background: activeRarity === r.id ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.6)', color: activeRarity === r.id ? '#fff' : 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', gap: 4 }}
                 >
                   {r.icon && <span>{r.icon}</span>} {r.label}
                 </button>
@@ -278,7 +278,7 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
                 <button
                   key={c}
                   onClick={() => setActiveCategory(c)}
-                  style={{ flexShrink: 0, padding: '4px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, background: activeCategory === c ? '#fff' : 'rgba(0,0,0,0.6)', color: activeCategory === c ? '#111' : '#fff', border: '1px solid rgba(255,255,255,0.1)' }}
+                  style={{ flexShrink: 0, padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700, background: activeCategory === c ? '#fff' : 'rgba(0,0,0,0.6)', color: activeCategory === c ? '#111' : '#fff', border: '1px solid rgba(255,255,255,0.1)' }}
                 >
                   {c}
                 </button>
@@ -293,7 +293,7 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
               key={mode}
               onClick={() => setActiveMode(mode)}
               style={{ 
-                flex: 1, padding: '8px 12px', borderRadius: 12, fontSize: 12, fontWeight: 800, textAlign: 'center',
+                flex: 1, padding: '6px 10px', borderRadius: 12, fontSize: 10, fontWeight: 800, textAlign: 'center',
                 background: activeMode === mode ? '#E91E63' : 'rgba(0,0,0,0.8)',
                 color: '#fff',
                 border: `1px solid ${activeMode === mode ? '#E91E63' : 'rgba(255,255,255,0.1)'}`,
@@ -307,20 +307,17 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
         </div>
       </div>
 
-      {/* Top Pill: Bunz en esta zona */}
-      <div style={{ position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 2000, display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+      {/* Top Left Stack: Afiliados and Bunz */}
+      <div style={{ position: 'absolute', top: 'calc(16px + env(safe-area-inset-top))', left: 16, zIndex: 2000, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+        <div style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', color: '#fff', padding: '4px 10px', borderRadius: 999, fontSize: 10, fontWeight: 800, border: '1px solid rgba(255,255,255,0.1)' }}>
+          🔴 {filteredBusinesses.length} afiliados
+        </div>
+
         {activeMode !== 'Stock' && filteredBusinesses.length > 0 && (
-          <div style={{ background: 'rgba(233,30,99,0.85)', backdropFilter: 'blur(10px)', color: '#fff', padding: '6px 14px', borderRadius: 999, fontWeight: 900, fontSize: 12, border: '1px solid rgba(255,255,255,0.2)', boxShadow: '0 4px 20px rgba(233,30,99,0.4)', letterSpacing: 0.5 }}>
+          <div style={{ background: 'rgba(233,30,99,0.85)', backdropFilter: 'blur(10px)', color: '#fff', padding: '4px 10px', borderRadius: 999, fontWeight: 900, fontSize: 10, border: '1px solid rgba(255,255,255,0.2)', boxShadow: '0 4px 20px rgba(233,30,99,0.4)', letterSpacing: 0.5 }}>
             🎯 {filteredBusinesses.reduce((sum, b) => sum + (b.rewardPercentage || b.reward_percentage || 0), 0)} bunz en esta zona
           </div>
         )}
-      </div>
-
-      {/* Bottom Left Pill: Afiliados */}
-      <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 2000 }}>
-        <div style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', color: '#fff', padding: '6px 14px', borderRadius: 999, fontSize: 12, fontWeight: 800, border: '1px solid rgba(255,255,255,0.1)' }}>
-          🔴 {filteredBusinesses.length} afiliados
-        </div>
       </div>
 
       {/* Locate Me Button - Moved Up */}
@@ -330,7 +327,7 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
             mapInst.current.panTo([userLat, userLng], { animate: true, duration: 1 });
           }
         }}
-        style={{ position: 'absolute', top: 60, right: 16, zIndex: 2000, width: 40, height: 40, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}
+        style={{ position: 'absolute', top: 'calc(60px + env(safe-area-inset-top))', right: 16, zIndex: 2000, width: 40, height: 40, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}
       >
         <Crosshair size={18} />
       </button>
