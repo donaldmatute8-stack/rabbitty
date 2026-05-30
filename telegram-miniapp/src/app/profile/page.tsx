@@ -164,7 +164,7 @@ export default function ProfilePage() {
                   const app = mod.default;
                   app.showScanQrPopup({ text: "Escanea el código QR de tu PC" }, (qrText: string) => {
                     (async () => {
-                      // Extract token: https://t.me/RabbittyBot/app?startapp=qrlogin_{TOKEN}
+                      // Extract token: https://t.me/Rabbittyme_bot/app?startapp=qrlogin_{TOKEN}
                       let qrToken = qrText;
                       if (qrText.includes('qrlogin_')) {
                         qrToken = qrText.split('qrlogin_')[1];

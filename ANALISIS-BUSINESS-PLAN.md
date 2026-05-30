@@ -37,7 +37,7 @@ Rabbitty es la **primera de MUCHAS apps** que construyen juntas:
 └─────────────────────────────────────────────────────────┘
 ```
 
-**Meta final:** Competir con PayPal, Airbnb, Uber — pero CONECTADOS.
+**Meta final:** Redefinir la economía digital conectando mercados masivos en un ecosistema unificado.
 
 ---
 
@@ -75,7 +75,7 @@ TODO en un solo lugar:
 ### 5. **Para Negocios: El "Power-Up Tool" GRATIS**
 Todo incluido, sin costo:
 - ✅ Marketing automation
-- ✅ POS system (Integración V2 con Open Source)
+- ✅ POS system (Tecnología V2 Propietaria Integrada)
 - ✅ Administración
 - ✅ Analytics
 - ✅ ROI optimization

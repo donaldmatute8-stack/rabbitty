@@ -51,7 +51,7 @@ export default async function PublicAffiliatePage({ params }: Props) {
 
   const gallery = business.gallery ? JSON.parse(business.gallery) : [];
   const coverImage = gallery.length > 0 ? gallery[0] : 'https://images.unsplash.com/photo-1554118811-1e0d58224f24';
-  const telegramDeepLink = `https://t.me/RabbittyBot/app?startapp=affiliate_${business.id}`;
+  const telegramDeepLink = `https://t.me/Rabbittyme_bot/app?startapp=affiliate_${business.id}`;
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans pb-24">

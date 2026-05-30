@@ -414,13 +414,13 @@ export default function FeedPage() {
               <div style={{ position: 'absolute', top: 16, right: 16, zIndex: 20, display: 'flex', background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)', borderRadius: 999, border: '1px solid rgba(255,255,255,0.1)', padding: 4 }}>
                 <button
                   onClick={() => setMapMode('globe')}
-                  style={{ background: mapMode === 'globe' ? 'rgba(233,30,99,0.2)' : 'transparent', color: mapMode === 'globe' ? '#E91E63' : '#888', padding: '6px 16px', borderRadius: 999, fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer', transition: 'all 0.3s' }}
+                  style={{ background: mapMode === 'globe' ? 'rgba(233,30,99,0.2)' : 'transparent', color: mapMode === 'globe' ? '#E91E63' : '#888', padding: '4px 12px', borderRadius: 999, fontSize: 11, fontWeight: 700, border: 'none', cursor: 'pointer', transition: 'all 0.3s' }}
                 >
                   Globo 3D
                 </button>
                 <button
                   onClick={() => setMapMode('flat')}
-                  style={{ background: mapMode === 'flat' ? 'rgba(255,255,255,0.1)' : 'transparent', color: mapMode === 'flat' ? '#FFF' : '#888', padding: '6px 16px', borderRadius: 999, fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer', transition: 'all 0.3s' }}
+                  style={{ background: mapMode === 'flat' ? 'rgba(255,255,255,0.1)' : 'transparent', color: mapMode === 'flat' ? '#FFF' : '#888', padding: '4px 12px', borderRadius: 999, fontSize: 11, fontWeight: 700, border: 'none', cursor: 'pointer', transition: 'all 0.3s' }}
                 >
                   Local
                 </button>
