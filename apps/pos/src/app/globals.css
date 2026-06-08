@@ -1,0 +1,7 @@
+@import "tailwindcss";
+@import "@rabbitty/design/tokens";
+
+body {
+  font-family: var(--rabbitty-font);
+  -webkit-font-smoothing: antialiased;
+}

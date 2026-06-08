@@ -1,0 +1,8 @@
+@import "tailwindcss";
+@import "@rabbitty/design/tokens";
+
+body {
+  font-family: var(--rabbitty-font);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}

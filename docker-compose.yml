@@ -1,0 +1,21 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: rabbitty
+      POSTGRES_PASSWORD: rabbitty_dev
+      POSTGRES_DB: rabbitty_restaurant
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/init-dbs.sh:/docker-entrypoint-initdb.d/init-dbs.sh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rabbitty"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

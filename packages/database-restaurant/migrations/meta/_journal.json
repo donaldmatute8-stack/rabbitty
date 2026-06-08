@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1780282707209,
+      "tag": "0000_overjoyed_ezekiel",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1780291336007,
+      "tag": "0001_mean_amazoness",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780382085547,
+      "tag": "0002_fresh_payback",
+      "breakpoints": true
+    }
+  ]
+}
