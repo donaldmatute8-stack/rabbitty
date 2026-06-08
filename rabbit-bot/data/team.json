@@ -1,0 +1,22 @@
+{
+  "members": [
+    {
+      "username": null,
+      "userId": 162613929,
+      "name": "Edu",
+      "role": "estrategia"
+    },
+    {
+      "username": null,
+      "userId": 798431743,
+      "name": "Marco",
+      "role": "ceo"
+    },
+    {
+      "username": null,
+      "userId": 7126241142,
+      "name": "Pablo",
+      "role": "soporte"
+    }
+  ]
+}

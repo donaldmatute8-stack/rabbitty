@@ -1,0 +1,20 @@
+[phases.setup]
+nixPkgs = ["...", "php83", "php83Packages.composer", "nodejs", "pnpm"]
+
+[phases.install]
+cmds = ["composer install --no-dev --optimize-autoloader", "pnpm install"]
+
+[phases.build]
+cmds = [
+  "php artisan package:discover --ansi",
+  "php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
+  "php artisan key:generate --ansi --force",
+  "pnpm run prod",
+  "php artisan vendor:publish --all --force",
+  "php artisan igniter:theme-vendor-publish",
+  "php -r \"(new Illuminate\\Filesystem\\Filesystem)->copyDirectory('vendor/tastyigniter/core/public', 'public/vendor/igniter');\"",
+  "php -r \"(new Illuminate\\Filesystem\\Filesystem)->copyDirectory('vendor/tastyigniter/core/public', 'public/vendor/tastyigniter/core');\""
+]
+
+[start]
+cmd = "php artisan serve --host=0.0.0.0 --port=$PORT"

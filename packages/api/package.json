@@ -1,0 +1,37 @@
+{
+  "name": "@rabbitty/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./routers": "./src/routers/index.ts",
+    "./db": "./src/db.ts"
+  },
+  "scripts": {
+    "test": "vitest run --config vitest.config.ts",
+    "test:watch": "vitest --config vitest.config.ts",
+    "test:ui": "vitest --ui --config vitest.config.ts"
+  },
+  "dependencies": {
+    "@rabbitty/bunz": "workspace:*",
+    "@rabbitty/database-core": "workspace:*",
+    "@rabbitty/database-restaurant": "workspace:*",
+    "@rabbitty/events": "workspace:*",
+    "@trpc/server": "^11.17.0",
+    "drizzle-orm": "^0.45.2",
+    "postgres": "^3.4.5",
+    "zod": "^3.25.76"
+  },
+  "peerDependencies": {
+    "next": "^16"
+  },
+  "devDependencies": {
+    "@rabbitty/config": "workspace:*",
+    "typescript": "^5",
+    "vitest": "^3.0.0",
+    "vitest-mock-extended": "^2.0.0"
+  }
+}

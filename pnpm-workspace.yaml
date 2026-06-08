@@ -1,0 +1,14 @@
+packages:
+  - "packages/*"
+  - "apps/*"
+  - "landing-page"
+  - "rabbit-bot"
+  - "telegram-miniapp"
+allowBuilds:
+  esbuild: true
+  sharp: true
+  unrs-resolver: true
+  keccak: true
+  bufferutil: true
+  utf-8-validate: true
+  ethers: true

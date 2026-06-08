@@ -1,0 +1,15 @@
+{
+  "name": "rabbit-bot",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Rabbit Bot (@rabbittybot_bot) - Official AI bot for Rabbitty",
+  "main": "dm-server.js",
+  "scripts": {
+    "start": "node dm-server.js",
+    "dev": "node --watch dm-server.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "pg": "^8.21.0"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "@rabbitty/config",
+  "version": "0.0.0",
+  "private": true,
+  "files": [
+    "tsconfig.base.json",
+    "eslint.base.json"
+  ],
+  "exports": {
+    "./tsconfig.base.json": "./tsconfig.base.json",
+    "./eslint.base.json": "./eslint.base.json"
+  }
+}

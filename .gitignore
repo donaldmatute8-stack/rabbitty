@@ -1,0 +1,65 @@
+# OS-specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Personal scripts/logs
+git-push-all.sh
+*.log
+ROADMAP-V2.md
+
+# Rabbit Bot runtime
+rabbit-bot/.env
+rabbit-bot/data/pending-approvals.json
+rabbit-bot/node_modules/
+
+# Dependencies
+node_modules/
+apps/*/node_modules/
+packages/*/node_modules/
+
+# Build outputs
+.next/
+apps/*/.next/
+packages/*/dist/
+apps/*/dist/
+dist/
+.turbo/
+
+# Env files
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Test coverage
+coverage/
+
+# Misc generated
+*.pem
+.pnpm-debug.log*
+
+# Utility scripts with potential secrets (backed up to _secure-backup/)
+telegram-miniapp/check-*.js
+telegram-miniapp/fix_db*.js
+telegram-miniapp/register-webhook.js
+telegram-miniapp/test-*.ts
+telegram-miniapp/verify-env.js
+
+# Secure backup (envs, secrets)
+_secure-backup/

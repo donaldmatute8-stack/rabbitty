@@ -1,0 +1,13 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <g fill="none" fill-rule="evenodd">
+    <circle cx="100" cy="100" r="85" fill="#FFFFFF"/>
+    <g transform="translate(35,25)">
+      <ellipse cx="35" cy="25" rx="15" ry="35" fill="#FF688B" transform="rotate(-15 35 25)"/>
+      <ellipse cx="85" cy="25" rx="15" ry="35" fill="#FF688B" transform="rotate(15 85 25)"/>
+      <path d="M50 60C50 45 60 35 70 35C80 35 90 45 90 60C90 75 80 85 70 85C60 85 50 75 50 60Z" fill="#FF688B"/>
+      <path d="M60 55C60 52 63 52 65 55L68 52C70 50 73 52 73 55V65C73 68 70 70 68 68L65 70C63 72 60 70 60 68V55Z" fill="#FFFFFF"/>
+      <circle cx="58" cy="65" r="2" fill="#FFFFFF"/>
+      <circle cx="82" cy="65" r="2" fill="#FFFFFF"/>
+    </g>
+  </g>
+</svg>
