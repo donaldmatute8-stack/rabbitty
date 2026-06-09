@@ -51,16 +51,16 @@ function Table<T extends Record<string, unknown>>({
   });
 
   return (
-    <div className={cn("overflow-x-auto rounded-xl border border-gray-200", className)}>
+    <div className={cn("overflow-x-auto rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)]", className)}>
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-gray-200 bg-gray-50">
+          <tr className="border-b border-[var(--border-subtle)] bg-[var(--bg-subtle)]">
             {columns.map((col) => (
               <th
                 key={col.key}
                 className={cn(
-                  "px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500",
-                  col.sortable && "cursor-pointer select-none hover:text-gray-700"
+                  "px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]",
+                  col.sortable && "cursor-pointer select-none hover:text-[var(--text-primary)]"
                 )}
                 onClick={() => col.sortable && handleSort(col.key)}
               >
@@ -74,13 +74,13 @@ function Table<T extends Record<string, unknown>>({
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-[var(--border-subtle)]">
           {loading ? (
             Array.from({ length: 5 }).map((_, i) => (
               <tr key={i}>
                 {columns.map((col) => (
                   <td key={col.key} className="px-4 py-3">
-                    <div className="h-4 w-3/4 animate-pulse rounded bg-gray-200" />
+                    <div className="h-4 w-3/4 animate-pulse rounded bg-[var(--bg-pressed)]" />
                   </td>
                 ))}
               </tr>
@@ -89,7 +89,7 @@ function Table<T extends Record<string, unknown>>({
             <tr>
               <td
                 colSpan={columns.length}
-                className="px-4 py-8 text-center text-gray-400"
+                className="px-4 py-8 text-center text-[var(--text-muted)]"
               >
                 {emptyMessage}
               </td>
@@ -100,12 +100,12 @@ function Table<T extends Record<string, unknown>>({
                 key={(item.id as string) ?? i}
                 className={cn(
                   "transition-colors",
-                  onRowClick && "cursor-pointer hover:bg-gray-50"
+                  onRowClick && "cursor-pointer hover:bg-[var(--bg-subtle)]"
                 )}
                 onClick={() => onRowClick?.(item)}
               >
                 {columns.map((col) => (
-                  <td key={col.key} className="px-4 py-3 text-gray-700">
+                  <td key={col.key} className="px-4 py-3 text-[var(--text-primary)]">
                     {col.render
                       ? col.render(item)
                       : (item[col.key] as ReactNode) ?? "-"}

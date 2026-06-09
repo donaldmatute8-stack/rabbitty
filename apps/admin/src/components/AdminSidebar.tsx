@@ -19,14 +19,14 @@ export function AdminSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="flex h-screen w-64 flex-col border-r border-gray-200 bg-white">
-      <div className="flex items-center gap-3 border-b border-gray-100 px-6 py-5">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-600 text-lg font-black text-white">
+    <aside className="flex h-screen w-64 flex-col border-r border-[var(--border-subtle)] bg-[var(--bg-primary)] text-[var(--text-primary)]">
+      <div className="flex items-center gap-3 border-b border-[var(--border-subtle)] px-6 py-5">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--rabbitty-pink)] text-lg font-black text-white">
           R
         </div>
         <div>
-          <h1 className="text-lg font-bold text-gray-900">Rabbitty</h1>
-          <p className="text-xs text-gray-500">Admin Panel</p>
+          <h1 className="text-lg font-bold text-[var(--text-primary)]">Rabbitty</h1>
+          <p className="text-xs text-[var(--text-muted)]">Admin Panel</p>
         </div>
       </div>
 
@@ -36,10 +36,10 @@ export function AdminSidebar() {
             key={href}
             href={href}
             className={cn(
-              "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors",
+              "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200",
               pathname === href
-                ? "bg-pink-50 text-pink-700"
-                : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                ? "bg-[rgba(233,30,99,0.08)] text-[var(--rabbitty-pink)]"
+                : "text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text-primary)]"
             )}
           >
             <Icon className="h-5 w-5" />
@@ -48,7 +48,7 @@ export function AdminSidebar() {
         ))}
       </nav>
 
-      <div className="border-t border-gray-100 p-3 text-center text-xs text-gray-400">
+      <div className="border-t border-[var(--border-subtle)] p-3 text-center text-xs text-[var(--text-muted)]">
         Rabbitty v1.0
       </div>
     </aside>
