@@ -1,9 +1,0 @@
-.DS_Store
-node_modules
-vendor
-storage/*.key
-.env
-docker/Dockerfile
-tests
-docker-compose*
-.git
