@@ -9,7 +9,7 @@ export default function ReferralPage() {
   const { user } = useAuth();
   const [copied, setCopied] = useState(false);
 
-  const profile = user; // Use auth user profile directly
+  const profile = user;
   const loading = !user;
 
   const referralLink = profile?.telegramId
@@ -41,106 +41,87 @@ export default function ReferralPage() {
 
   return (
     <ProfileSubpageLayout title="Programa de referidos">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div className="flex flex-col gap-6">
         {loading ? (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
-            <div style={{ width: 32, height: 32, borderRadius: '50%', border: '2px solid rgba(233,30,99,0.3)', borderTopColor: '#E91E63', animation: 'spin 0.8s linear infinite' }} />
+          <div className="flex justify-center p-8">
+            <div
+              className="w-8 h-8 rounded-full border-2 border-[rgba(233,30,99,0.3)] border-t-[#E91E63]"
+              style={{ animation: 'spin 0.8s linear infinite' }}
+            />
           </div>
         ) : (
           <>
             {/* Level + Pending Bunz */}
-            <div style={{
-              background: 'linear-gradient(135deg, #1A0540 0%, #2D1060 55%, #3D0F80 100%)',
-              borderRadius: 28, padding: '24px 20px',
-              position: 'relative', overflow: 'hidden',
-              border: '1px solid rgba(255,255,255,0.05)',
-              boxShadow: '0 12px 40px rgba(45,16,96,0.4)',
-            }}>
-              <div style={{ position: 'absolute', right: '-10%', top: '-10%', width: 176, height: 176, background: 'rgba(255,255,255,0.06)', borderRadius: '50%', filter: 'blur(30px)' }} />
+            <div
+              className="rounded-[28px] px-5 py-6 relative overflow-hidden border border-white/[0.05] shadow-[0_12px_40px_rgba(45,16,96,0.4)]"
+              style={{ background: 'linear-gradient(135deg, #1A0540 0%, #2D1060 55%, #3D0F80 100%)' }}
+            >
+              <div className="absolute right-[-10%] top-[-10%] w-44 h-44 bg-white/[0.06] rounded-full blur-[30px]" />
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', position: 'relative', zIndex: 1 }}>
+              <div className="flex justify-between items-start relative z-10">
                 <div>
-                  <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: 900, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8 }}>Tu Nivel</p>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                    <span style={{ fontSize: 52, fontWeight: 900, lineHeight: 1, letterSpacing: -2, color: '#fff' }}>{profile?.level ?? 1}</span>
-                    <span style={{ fontSize: 20, color: '#FCD34D' }}>⭐</span>
+                  <p className="text-white/50 text-[10px] font-black tracking-[1.5px] uppercase mb-2">Tu Nivel</p>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-[52px] font-black leading-none tracking-[-2px] text-white">{profile?.level ?? 1}</span>
+                    <span className="text-xl text-[#FCD34D]">⭐</span>
                   </div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: 900, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8 }}>Bunz Pendientes</p>
-                  <p style={{ fontSize: 42, fontWeight: 900, color: '#E91E63', letterSpacing: -1, lineHeight: 1, margin: 0 }}>
+                <div className="text-right">
+                  <p className="text-white/50 text-[10px] font-black tracking-[1.5px] uppercase mb-2">Bunz Pendientes</p>
+                  <p className="text-[42px] font-black text-[#E91E63] tracking-[-1px] leading-none m-0">
                     {profile?.pending_bunz ?? 0}
                   </p>
                 </div>
               </div>
 
-              <div style={{
-                marginTop: 20, background: 'rgba(0,0,0,0.25)', borderRadius: 16, padding: 14,
-                position: 'relative', zIndex: 1,
-              }}>
-                <p style={{ fontSize: 12, lineHeight: 1.5, color: 'rgba(255,255,255,0.7)', margin: 0 }}>
-                  <span style={{ fontWeight: 700, color: '#FCD34D' }}>💡 </span>
+              <div className="mt-5 bg-black/25 rounded-2xl p-3.5 relative z-10">
+                <p className="text-xs leading-normal text-white/70 m-0">
+                  <span className="font-bold text-[#FCD34D]">💡 </span>
                   Sube de nivel consumiendo en negocios afiliados para desbloquear tus Bunz de referidos.
                 </p>
               </div>
             </div>
 
             {/* Invite card */}
-            <div style={{
-              background: '#fff', borderRadius: 28, padding: 24,
-              border: '1px solid #F0F0F0',
-              boxShadow: '0 2px 16px rgba(0,0,0,0.04)',
-              textAlign: 'center',
-            }}>
-              <div style={{ width: 64, height: 64, background: '#FFF0F5', borderRadius: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: 28 }}>👥</div>
-              <h2 style={{ fontSize: 22, fontWeight: 900, color: '#111', marginBottom: 8, letterSpacing: '-0.5px' }}>Invita y Gana</h2>
-              <p style={{ color: '#888', fontSize: 13, lineHeight: 1.6, marginBottom: 24 }}>
-                Obtén <span style={{ fontWeight: 900, color: '#E91E63' }}>50 Bunz</span> por cada amigo que invites,
+            <div className="bg-white rounded-[28px] p-6 border border-[#F0F0F0] shadow-[0_2px_16px_rgba(0,0,0,0.04)] text-center">
+              <div className="w-16 h-16 bg-[#FFF0F5] rounded-[20px] flex items-center justify-center mx-auto mb-4 text-[28px]">👥</div>
+              <h2 className="text-[22px] font-black text-[#111] mb-2 tracking-[-0.5px]">Invita y Gana</h2>
+              <p className="text-[#888] text-[13px] leading-[1.6] mb-6">
+                Obtén <span className="font-black text-[#E91E63]">50 Bunz</span> por cada amigo que invites,
                 una vez que realicen su primer consumo.
               </p>
 
               {/* Link box */}
-              <div style={{
-                background: '#F8F8F8', border: '2px dashed #E8E8E8',
-                borderRadius: 20, padding: 16,
-                display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16,
-              }}>
-                <p style={{ fontSize: 9, fontWeight: 900, color: '#BBB', letterSpacing: 1.5, textTransform: 'uppercase', margin: 0 }}>Tu Link Único</p>
-                <div style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-                  background: '#fff', borderRadius: 14, padding: 12,
-                  border: '1px solid #F0F0F0', boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-                }}>
+              <div className="bg-[#F8F8F8] border-2 border-dashed border-[#E8E8E8] rounded-[20px] p-4 flex flex-col gap-3 mb-4">
+                <p className="text-[9px] font-black text-[#BBB] tracking-[1.5px] uppercase m-0">Tu Link Único</p>
+                <div className="flex items-center justify-between gap-2 bg-white rounded-[14px] p-3 border border-[#F0F0F0] shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
                   <div>
-                    <span style={{ fontSize: 11, fontWeight: 900, color: '#E91E63', textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 4 }}>TU CÓDIGO</span>
-                    <span style={{ fontSize: 24, fontWeight: 900, color: '#111', fontFamily: 'monospace' }}>{profile?.telegramId || '------'}</span>
+                    <span className="text-[11px] font-black text-[#E91E63] uppercase tracking-[0.5px] block mb-1">TU CÓDIGO</span>
+                    <span className="text-2xl font-black text-[#111] font-mono">{profile?.telegramId || '------'}</span>
                   </div>
                 <button
                   onClick={copyToClipboard}
                   disabled={!referralLink}
+                  className="w-12 h-12 rounded-full bg-white border border-[#F0F0F0] flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.05)]"
                   style={{
-                    width: 48, height: 48, borderRadius: '50%', background: '#fff',
-                    border: '1px solid #F0F0F0', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    cursor: referralLink ? 'pointer' : 'not-allowed', color: copied ? '#4CAF50' : '#111',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+                    cursor: referralLink ? 'pointer' : 'not-allowed',
+                    color: copied ? '#4CAF50' : '#111',
                   }}
                 >
                   {copied ? <CheckCircle2 size={20} /> : <Copy size={20} />}
                 </button>
               </div>
 
-              <div style={{ display: 'flex', gap: 12 }}>
+              <div className="flex gap-3">
                 <button
                   onClick={shareOnTelegram}
                   disabled={!referralLink}
+                  className="flex-1 font-black text-[13px] py-3.5 rounded-[16px] border-0 flex items-center justify-center gap-2"
                   style={{
-                    flex: 1, background: referralLink ? '#2AABEE' : '#E0E0E0',
+                    background: referralLink ? '#2AABEE' : '#E0E0E0',
                     color: referralLink ? '#fff' : '#999',
-                    fontWeight: 900, fontSize: 13,
-                    padding: '14px 0', borderRadius: 16,
-                    border: 'none', cursor: referralLink ? 'pointer' : 'not-allowed',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    boxShadow: referralLink ? '0 4px 12px rgba(42,171,238,0.3)' : 'none'
+                    cursor: referralLink ? 'pointer' : 'not-allowed',
+                    boxShadow: referralLink ? '0 4px 12px rgba(42,171,238,0.3)' : 'none',
                   }}
                 >
                   <Share2 size={16} />
@@ -149,14 +130,12 @@ export default function ReferralPage() {
                 <button
                   onClick={shareOnWhatsApp}
                   disabled={!referralLink}
+                  className="flex-1 font-black text-[13px] py-3.5 rounded-[16px] border-0 flex items-center justify-center gap-2"
                   style={{
-                    flex: 1, background: referralLink ? '#25D366' : '#E0E0E0',
+                    background: referralLink ? '#25D366' : '#E0E0E0',
                     color: referralLink ? '#fff' : '#999',
-                    fontWeight: 900, fontSize: 13,
-                    padding: '14px 0', borderRadius: 16,
-                    border: 'none', cursor: referralLink ? 'pointer' : 'not-allowed',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    boxShadow: referralLink ? '0 4px 12px rgba(37,211,102,0.3)' : 'none'
+                    cursor: referralLink ? 'pointer' : 'not-allowed',
+                    boxShadow: referralLink ? '0 4px 12px rgba(37,211,102,0.3)' : 'none',
                   }}
                 >
                   <Share2 size={16} />

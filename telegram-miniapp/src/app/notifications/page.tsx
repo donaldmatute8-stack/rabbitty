@@ -70,19 +70,12 @@ export default function NotificationsPage() {
         {loading ? (
           <div className="flex justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div></div>
         ) : notifications.length === 0 ? (
-          <div style={{
-            background: '#fff', padding: 32, borderRadius: 24, textAlign: 'center',
-            border: '1px solid #F0F0F0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', marginTop: 16
-          }}>
-            <div style={{
-              width: 64, height: 64, background: '#FFF0F5', borderRadius: 20, 
-              display: 'flex', alignItems: 'center', justifyContent: 'center', 
-              margin: '0 auto 16px', color: '#E91E63'
-            }}>
+          <div className="bg-white p-8 rounded-3xl text-center border border-[#F0F0F0] shadow-[0_4px_20px_rgba(0,0,0,0.03)] mt-4">
+            <div className="w-16 h-16 bg-[#FFF0F5] rounded-[20px] flex items-center justify-center mx-auto mb-4 text-[#E91E63]">
               <Bell size={28} />
             </div>
-            <h3 style={{ fontSize: 18, fontWeight: 900, color: '#111', margin: '0 0 8px 0', letterSpacing: '-0.5px' }}>No tienes notificaciones</h3>
-            <p style={{ fontSize: 13, color: '#888', margin: 0, lineHeight: 1.5 }}>Aquí aparecerán tus alertas y recompensas de Rabbitty.</p>
+            <h3 className="text-[18px] font-black text-[#111] m-0 mb-2 tracking-[-0.5px]">No tienes notificaciones</h3>
+            <p className="text-[13px] text-[#888] m-0 leading-[1.5]">Aquí aparecerán tus alertas y recompensas de Rabbitty.</p>
           </div>
         ) : (
           notifications.map(notif => (

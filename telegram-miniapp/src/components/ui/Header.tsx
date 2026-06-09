@@ -14,8 +14,8 @@ export default function Header({ onBack, showBack, isScrolled = false, isDark = 
     <header
       className={`relative flex items-center justify-between px-4 transition-all duration-500 ${isDark ? 'bg-transparent text-white' : 'bg-white text-[#111111]'}`}
       style={{
-        height: isScrolled ? 'calc(80px + var(--tg-safe-top-adjusted, env(safe-area-inset-top)))' : 'calc(100px + var(--tg-safe-top-adjusted, env(safe-area-inset-top)))',
-        paddingTop: 'var(--tg-safe-top-adjusted, env(safe-area-inset-top))',
+        height: isScrolled ? 'calc(80px + var(--safe-top))' : 'calc(100px + var(--safe-top))',
+        paddingTop: 'var(--safe-top)',
         transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
         overflow: 'hidden'
       }}

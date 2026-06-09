@@ -49,10 +49,10 @@ export async function GET(req: Request) {
   try {
     const db = getDb();
 
-    const [userCount] = await db.execute(sql`SELECT COUNT(*)::int as count FROM users`);
-    const [bizCount] = await db.execute(sql`SELECT COUNT(*)::int as count FROM "ownedBusinesses"`);
-    const [txnCount] = await db.execute(sql`SELECT COUNT(*)::int as count FROM transactions WHERE "createdAt" > NOW() - INTERVAL '30 days'`);
-    const [dbSize] = await db.execute(sql`SELECT pg_database_size(current_database())::int / (1024*1024) as size_mb`);
+    const { rows: [userCount] } = await db.execute(sql`SELECT COUNT(*)::int as count FROM users`);
+    const { rows: [bizCount] } = await db.execute(sql`SELECT COUNT(*)::int as count FROM "ownedBusinesses"`);
+    const { rows: [txnCount] } = await db.execute(sql`SELECT COUNT(*)::int as count FROM transactions WHERE "createdAt" > NOW() - INTERVAL '30 days'`);
+    const { rows: [dbSize] } = await db.execute(sql`SELECT pg_database_size(current_database())::int / (1024*1024) as size_mb`);
 
     let orderCount = { count: 0 };
     try {
@@ -64,7 +64,7 @@ export async function GET(req: Request) {
             ? { rejectUnauthorized: false } : false,
         });
         const restDb = drizzle(restPool);
-        const [res] = await restDb.execute(sql`SELECT COUNT(*)::int as count FROM orders WHERE "createdAt" > NOW() - INTERVAL '30 days'`);
+        const { rows: [res] } = await restDb.execute(sql`SELECT COUNT(*)::int as count FROM orders WHERE "createdAt" > NOW() - INTERVAL '30 days'`);
         orderCount = res as any;
         await restPool.end();
       }

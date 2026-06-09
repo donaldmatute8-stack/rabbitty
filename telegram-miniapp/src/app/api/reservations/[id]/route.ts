@@ -3,10 +3,10 @@ import { db } from '@/db';
 import { users, reservations } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { status } = await req.json();
-    const id = params.id;
+    const { id } = await params;
 
     if (!['CONFIRMED', 'COMPLETED', 'REJECTED', 'CANCELLED'].includes(status)) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });

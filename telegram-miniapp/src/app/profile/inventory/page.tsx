@@ -70,7 +70,7 @@ export default function InventoryPage() {
         <div>
           <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-3">Certificados Comprados</h2>
           {loading ? null : coupons.length === 0 ? (
-            <EmptyState icon={<div style={{ fontSize: 32 }}>🎟️</div>} title="Sin Cupones" description="Aún no has adquirido certificados en el Stock." />
+            <EmptyState icon={<div className="text-[32px]">🎟️</div>} title="Sin Cupones" description="Aún no has adquirido certificados en el Stock." />
           ) : (
             <div className="flex flex-col gap-4">
               {coupons.map(coupon => (

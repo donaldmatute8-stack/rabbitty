@@ -26,34 +26,24 @@ export default function RabbitBotPage() {
 
   return (
     <div
-      className="min-h-[100dvh]"
+      className="min-h-[100dvh] bg-[#F4F4F4] flex flex-col overflow-hidden"
       style={{
         fontFamily: "var(--font-family-base)",
-        backgroundColor: "#F4F4F4",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
       }}
     >
       <div style={{ height: 'var(--safe-top)' }} />
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "24px 24px",
-        marginBottom: 8,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-            <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 1.5 }} style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: "#E91E63" }} />
-            <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 1.5, delay: 0.2 }} style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: "#E91E63", opacity: 0.55 }} />
-            <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 1.5, delay: 0.4 }} style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: "#E91E63", opacity: 0.25 }} />
+      <div className="flex items-center justify-between px-6 py-6 mb-2">
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1 items-center">
+            <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 1.5 }} className="size-2 rounded-full bg-[#E91E63]" />
+            <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 1.5, delay: 0.2 }} className="size-2 rounded-full bg-[#E91E63] opacity-[0.55]" />
+            <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 1.5, delay: 0.4 }} className="size-2 rounded-full bg-[#E91E63] opacity-[0.25]" />
           </div>
-          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text-dark)", marginLeft: 4 }}>RabbitBot</span>
+          <span className="text-[15px] font-bold ml-1" style={{ color: "var(--text-dark)" }}>RabbitBot</span>
         </div>
-        <button 
+        <button
           onClick={() => router.back()}
-          style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}
+          className="bg-transparent border-none cursor-pointer p-1"
         >
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
             <path d="M1 1L17 17M17 1L1 17" stroke="#999" strokeWidth="2" strokeLinecap="round"/>
@@ -61,59 +51,34 @@ export default function RabbitBotPage() {
         </button>
       </div>
 
-      <div style={{ flex: 1, padding: "0 20px", display: "flex", flexDirection: "column", gap: 12, overflowY: "auto" }}>
-        <motion.div 
+      <div className="flex-1 px-5 flex flex-col gap-3 overflow-y-auto">
+        <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
-          style={{
-            backgroundColor: "#fff",
-            borderRadius: "18px 18px 18px 4px",
-            padding: "14px 18px",
-            maxWidth: "84%",
-            fontSize: 15,
-            color: "var(--text-dark)",
-            lineHeight: 1.5,
-            boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
-          }}
+          className="bg-white rounded-[18px] rounded-bl-[4px] px-[18px] py-[14px] max-w-[84%] text-[15px] leading-[1.5] shadow-[0_1px_3px_rgba(0,0,0,0.05)]"
+          style={{ color: "var(--text-dark)" }}
         >
           Hi, Bruce. Let's get started by understanding what you want.
         </motion.div>
 
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.5 }}
-          style={{
-            backgroundColor: "#fff",
-            borderRadius: "18px 18px 18px 4px",
-            padding: "14px 18px",
-            maxWidth: "84%",
-            fontSize: 15,
-            color: "var(--text-dark)",
-            lineHeight: 1.5,
-            boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
-          }}
+          className="bg-white rounded-[18px] rounded-bl-[4px] px-[18px] py-[14px] max-w-[84%] text-[15px] leading-[1.5] shadow-[0_1px_3px_rgba(0,0,0,0.05)]"
+          style={{ color: "var(--text-dark)" }}
         >
-          <p style={{ fontWeight: 600, marginBottom: 4 }}>What are you interested in?</p>
-          <p style={{ fontSize: 13, color: "#AAA" }}>Select all that apply</p>
+          <p className="font-semibold mb-1">What are you interested in?</p>
+          <p className="text-[13px] text-[#AAA]">Select all that apply</p>
         </motion.div>
 
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 1 }}
-          style={{
-            backgroundColor: "#fff",
-            borderRadius: 20,
-            padding: 16,
-            boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
-          }}
+          className="bg-white rounded-[20px] p-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)]"
         >
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
-            gap: 10,
-          }}>
+          <div className="grid grid-cols-4 gap-[10px]">
             {INTERESTS.map((label, i) => {
               const isSelected = selectedInterests.has(label);
               return (
@@ -121,24 +86,17 @@ export default function RabbitBotPage() {
                   key={i}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => toggleInterest(label)}
+                  className="aspect-square rounded-[14px] flex flex-col items-center justify-center cursor-pointer gap-1"
                   style={{
-                    aspectRatio: "1",
                     backgroundColor: isSelected ? "#FFE0EC" : "#F7F7F7",
                     border: isSelected ? "1px solid #E91E63" : "1px solid #EBEBEB",
-                    borderRadius: 14,
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    cursor: "pointer",
-                    gap: 4,
                     transition: "all 0.2s ease"
                   }}
                 >
-                  <div style={{ width: 22, height: 22, borderRadius: "50%", backgroundColor: isSelected ? "#E91E63" : "#E5E5E5", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12 }}>
+                  <div className="size-[22px] rounded-full flex items-center justify-center text-white text-[12px]" style={{ backgroundColor: isSelected ? "#E91E63" : "#E5E5E5" }}>
                     {isSelected && "✓"}
                   </div>
-                  <span style={{ fontSize: 9, color: isSelected ? "#E91E63" : "#AAA", fontWeight: 600 }}>{label}</span>
+                  <span className="text-[9px] font-semibold" style={{ color: isSelected ? "#E91E63" : "#AAA" }}>{label}</span>
                 </motion.div>
               );
             })}
@@ -146,25 +104,18 @@ export default function RabbitBotPage() {
         </motion.div>
       </div>
 
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 1.5 }}
-        style={{ padding: "16px 24px 36px" }}
+        className="px-6 pt-4 pb-9"
       >
-        <button 
+        <button
           onClick={() => router.push('/')}
-          className="active:scale-[0.98] transition-transform"
+          className="w-full text-[16px] font-medium py-[17px] rounded-[100px] border-none cursor-pointer active:scale-[0.98] transition-transform"
           style={{
-            width: "100%",
             backgroundColor: selectedInterests.size > 0 ? "#111" : "var(--background-light)",
             color: selectedInterests.size > 0 ? "#fff" : "#888",
-            fontSize: 16,
-            fontWeight: 500,
-            padding: "17px 0",
-            borderRadius: 100,
-            border: "none",
-            cursor: "pointer",
             fontFamily: "var(--font-family-base)",
             transition: "all 0.3s ease"
           }}

@@ -33,40 +33,50 @@ export default function GamificationPage() {
   return (
     <ProfileSubpageLayout title="Identidad y Logros" showBack={true}>
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '40px 20px', color: '#888' }}>Cargando madriguera...</div>
+        <div className="text-center px-5 py-10 text-[#888]">Cargando madriguera...</div>
       ) : (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
           
           {/* Header Stats */}
-          <div style={{ backgroundColor: '#111', borderRadius: 16, padding: 20, marginBottom: 20, position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', top: -20, right: -20, fontSize: 100, opacity: 0.1 }}>🐰</div>
+          <div className="bg-[#111] rounded-2xl p-5 mb-5 relative overflow-hidden">
+            <div className="absolute -top-5 -right-5 text-[100px] opacity-10">🐰</div>
             
-            <p style={{ color: '#E91E63', fontWeight: 900, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, margin: '0 0 4px' }}>Rango Actual</p>
-            <h2 style={{ color: '#fff', fontSize: 24, fontWeight: 900, margin: '0 0 16px' }}>{data?.level?.name || 'Rabbitter Novato'}</h2>
+            <p className="text-[#E91E63] font-black text-xs uppercase tracking-[1px] m-0 mb-1">Rango Actual</p>
+            <h2 className="text-white text-[24px] font-black m-0 mb-4">{data?.level?.name || 'Rabbitter Novato'}</h2>
             
-            <div style={{ display: 'flex', gap: 12 }}>
-              <div style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.1)', padding: 12, borderRadius: 12 }}>
-                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, margin: '0 0 4px' }}>Saltos (Hops)</p>
-                <p style={{ color: '#fff', fontSize: 18, fontWeight: 800, margin: 0 }}>{data?.hops || 0}</p>
+            <div className="flex gap-3">
+              <div className="flex-1 bg-white/10 p-3 rounded-xl">
+                <p className="text-white/60 text-[11px] m-0 mb-1">Saltos (Hops)</p>
+                <p className="text-white text-lg font-extrabold m-0">{data?.hops || 0}</p>
               </div>
-              <div style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.1)', padding: 12, borderRadius: 12 }}>
-                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, margin: '0 0 4px' }}>Bonus de Bunz</p>
-                <p style={{ color: '#E91E63', fontSize: 18, fontWeight: 800, margin: 0 }}>x{data?.level?.bunzMultiplier || '1.0'}</p>
+              <div className="flex-1 bg-white/10 p-3 rounded-xl">
+                <p className="text-white/60 text-[11px] m-0 mb-1">Bonus de Bunz</p>
+                <p className="text-[#E91E63] text-lg font-extrabold m-0">x{data?.level?.bunzMultiplier || '1.0'}</p>
               </div>
             </div>
           </div>
 
           {/* Tabs */}
-          <div style={{ display: 'flex', backgroundColor: '#F4F4F4', borderRadius: 12, padding: 4, marginBottom: 20 }}>
+          <div className="flex bg-[#F4F4F4] rounded-xl p-1 mb-5">
             <button 
               onClick={() => setActiveTab('MISSIONS')}
-              style={{ flex: 1, padding: '10px 0', border: 'none', borderRadius: 10, backgroundColor: activeTab === 'MISSIONS' ? '#fff' : 'transparent', color: activeTab === 'MISSIONS' ? '#111' : '#888', fontWeight: 800, fontSize: 13, cursor: 'pointer', boxShadow: activeTab === 'MISSIONS' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none' }}
+              className="flex-1 py-[10px] border-none rounded-[10px] text-[13px] font-extrabold cursor-pointer"
+              style={{
+                backgroundColor: activeTab === 'MISSIONS' ? '#fff' : 'transparent',
+                color: activeTab === 'MISSIONS' ? '#111' : '#888',
+                boxShadow: activeTab === 'MISSIONS' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
+              }}
             >
               Misiones
             </button>
             <button 
               onClick={() => setActiveTab('BADGES')}
-              style={{ flex: 1, padding: '10px 0', border: 'none', borderRadius: 10, backgroundColor: activeTab === 'BADGES' ? '#fff' : 'transparent', color: activeTab === 'BADGES' ? '#111' : '#888', fontWeight: 800, fontSize: 13, cursor: 'pointer', boxShadow: activeTab === 'BADGES' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none' }}
+              className="flex-1 py-[10px] border-none rounded-[10px] text-[13px] font-extrabold cursor-pointer"
+              style={{
+                backgroundColor: activeTab === 'BADGES' ? '#fff' : 'transparent',
+                color: activeTab === 'BADGES' ? '#111' : '#888',
+                boxShadow: activeTab === 'BADGES' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
+              }}
             >
               Insignias
             </button>
@@ -74,29 +84,29 @@ export default function GamificationPage() {
 
           {/* MISSIONS TAB */}
           {activeTab === 'MISSIONS' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 20 }}>
+            <div className="flex flex-col gap-3 pb-5">
               {data?.missions?.map((m: any) => (
-                <div key={m.id} style={{ backgroundColor: '#fff', border: '1px solid #EAEAEA', borderRadius: 14, padding: 16, opacity: m.isCompleted ? 0.6 : 1 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                <div key={m.id} className="bg-white border border-[#EAEAEA] rounded-[14px] p-4" style={{ opacity: m.isCompleted ? 0.6 : 1 }}>
+                  <div className="flex justify-between items-start mb-2">
                     <div>
-                      <h3 style={{ fontSize: 15, fontWeight: 800, color: '#111', margin: '0 0 4px' }}>{m.title}</h3>
-                      <p style={{ fontSize: 12, color: '#888', margin: 0, lineHeight: 1.4 }}>{m.description}</p>
+                      <h3 className="text-[15px] font-extrabold text-[#111] m-0 mb-1">{m.title}</h3>
+                      <p className="text-xs text-[#888] m-0 leading-[1.4]">{m.description}</p>
                     </div>
                     {m.isCompleted ? (
-                      <div style={{ backgroundColor: '#4CAF50', color: '#fff', fontSize: 10, fontWeight: 800, padding: '4px 8px', borderRadius: 6 }}>COMPLETADA</div>
+                      <div className="bg-[#4CAF50] text-white text-[10px] font-extrabold px-2 py-1 rounded-[6px]">COMPLETADA</div>
                     ) : (
-                      <div style={{ backgroundColor: '#FFE8F0', color: '#E91E63', fontSize: 10, fontWeight: 800, padding: '4px 8px', borderRadius: 6 }}>+{m.rewardHops} HOPS</div>
+                      <div className="bg-[#FFE8F0] text-[#E91E63] text-[10px] font-extrabold px-2 py-1 rounded-[6px]">+{m.rewardHops} HOPS</div>
                     )}
                   </div>
                   
                   {!m.isCompleted && (
-                    <div style={{ marginTop: 12 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 700, color: '#AAA', marginBottom: 4 }}>
+                    <div className="mt-3">
+                      <div className="flex justify-between text-[11px] font-bold text-[#AAA] mb-1">
                         <span>Progreso</span>
                         <span>{m.progressValue} / {m.conditionTarget}</span>
                       </div>
-                      <div style={{ height: 6, backgroundColor: '#F0F0F0', borderRadius: 100, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', backgroundColor: '#E91E63', borderRadius: 100, width: `${Math.min((m.progressValue / m.conditionTarget) * 100, 100)}%` }} />
+                      <div className="h-[6px] bg-[#F0F0F0] rounded-full overflow-hidden">
+                        <div className="h-full bg-[#E91E63] rounded-full" style={{ width: `${Math.min((m.progressValue / m.conditionTarget) * 100, 100)}%` }} />
                       </div>
                     </div>
                   )}
@@ -107,11 +117,11 @@ export default function GamificationPage() {
 
           {/* BADGES TAB */}
           {activeTab === 'BADGES' && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, paddingBottom: 20 }}>
+            <div className="grid grid-cols-3 gap-3 pb-5">
               {data?.achievements?.map((ach: any) => (
-                <div key={ach.id} style={{ backgroundColor: '#fff', border: '1px solid #EAEAEA', borderRadius: 14, padding: '16px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', filter: ach.unlocked ? 'none' : 'grayscale(100%)', opacity: ach.unlocked ? 1 : 0.4 }}>
-                  <div style={{ fontSize: 32, marginBottom: 8 }}>{ach.iconUrl}</div>
-                  <h4 style={{ fontSize: 11, fontWeight: 800, color: '#111', margin: '0 0 4px', lineHeight: 1.1 }}>{ach.name}</h4>
+                <div key={ach.id} className="bg-white border border-[#EAEAEA] rounded-[14px] px-2 py-4 flex flex-col items-center text-center" style={{ filter: ach.unlocked ? 'none' : 'grayscale(100%)', opacity: ach.unlocked ? 1 : 0.4 }}>
+                  <div className="text-[32px] mb-2">{ach.iconUrl}</div>
+                  <h4 className="text-[11px] font-extrabold text-[#111] m-0 mb-1 leading-[1.1]">{ach.name}</h4>
                 </div>
               ))}
             </div>

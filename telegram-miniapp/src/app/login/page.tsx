@@ -65,12 +65,8 @@ export default function LoginPage() {
       });
 
       const smartWalletAddress = connectedWallet?.getAccount()?.address ?? '';
-      // In v5, inAppWallet configured with smartAccount returns the Smart Account via getAccount().
-      // To get the personal wallet address if needed, you typically rely on the backend via the smart wallet address.
-      // For now we will use the smartWalletAddress for both fields, or leave signer_wallet empty/same as smart_wallet if inaccessible directly.
       const signerAddress = smartWalletAddress;
 
-      // Upsert profile — also re-creates if this is a new device
       await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -81,7 +77,6 @@ export default function LoginPage() {
         }),
       });
 
-      // Check role to decide where to send the user
       const profileRes = await fetch(`/api/auth/profile?wallet=${smartWalletAddress}`);
       const { profile } = await profileRes.json();
 
@@ -100,34 +95,26 @@ export default function LoginPage() {
 
   const handleNext = () => step === 1 ? handleSendCode() : handleVerify();
 
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    backgroundColor: "transparent",
-    border: "none",
+  const inputBaseClassName = "w-full bg-transparent border-none py-3 text-[17px] outline-none";
+  const inputBaseStyle: React.CSSProperties = {
     borderBottom: "1px solid var(--border-default)",
-    padding: "12px 0",
-    fontSize: 17,
     color: "var(--text-primary)",
-    outline: "none",
     fontFamily: "var(--font-family-base)",
   };
 
   return (
     <div
-      className="min-h-[100dvh]"
+      className="min-h-[100dvh] flex flex-col pt-14 px-7 pb-10"
       style={{
         fontFamily: "var(--font-family-base)",
         backgroundColor: "var(--bg-primary)",
-        display: "flex",
-        flexDirection: "column",
-        padding: "56px 28px 40px",
       }}
     >
       {/* Back */}
-      <div style={{ marginBottom: 28 }}>
+      <div className="mb-7">
         <button
           onClick={() => step === 2 ? setStep(1) : router.push('/onboarding')}
-          style={{ padding: 4, background: "none", border: "none", cursor: "pointer" }}
+          className="p-1 bg-none border-none cursor-pointer"
         >
           <svg width="10" height="18" viewBox="0 0 10 18" fill="none">
             <path d="M9 1L1 9L9 17" stroke="var(--text-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -138,14 +125,8 @@ export default function LoginPage() {
       <motion.h1
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
-        style={{
-          fontSize: 36,
-          fontWeight: 800,
-          color: "var(--text-primary)",
-          letterSpacing: "-0.5px",
-          lineHeight: 1.15,
-          marginBottom: 52,
-        }}
+        className="text-[36px] font-extrabold tracking-[-0.5px] leading-[1.15] mb-13"
+        style={{ color: "var(--text-primary)" }}
       >
         {step === 1 ? "Welcome back" : "Check your inbox"}
       </motion.h1>
@@ -154,7 +135,7 @@ export default function LoginPage() {
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        style={{ flex: 1 }}
+        className="flex-1"
       >
         {step === 1 ? (
           <>
@@ -164,10 +145,11 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleNext()}
-              style={inputStyle}
+              className={inputBaseClassName}
+              style={inputBaseStyle}
               autoFocus
             />
-            <p style={{ marginTop: 16, fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5 }}>
+            <p className="mt-4 text-[13px] leading-[1.5]" style={{ color: "var(--text-muted)" }}>
               We'll send a quick verification code to your email.
             </p>
           </>
@@ -180,17 +162,18 @@ export default function LoginPage() {
               value={verificationCode}
               onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
               onKeyDown={(e) => e.key === 'Enter' && handleNext()}
-              style={{ ...inputStyle, letterSpacing: 6, fontSize: 22 }}
+              className={`${inputBaseClassName} tracking-[6px] text-[22px]`}
+              style={inputBaseStyle}
               autoFocus
             />
-            <p style={{ marginTop: 16, fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5 }}>
+            <p className="mt-4 text-[13px] leading-[1.5]" style={{ color: "var(--text-muted)" }}>
               Sent to <strong style={{ color: "var(--text-primary)" }}>{email}</strong>
             </p>
           </>
         )}
 
         {error && (
-          <p style={{ marginTop: 16, fontSize: 13, color: "var(--rabbitty-pink)", fontWeight: 500 }}>
+          <p className="mt-4 text-[13px] font-medium" style={{ color: "var(--rabbitty-pink)" }}>
             {error}
           </p>
         )}
@@ -200,42 +183,31 @@ export default function LoginPage() {
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
-        style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}
+        className="flex flex-col items-center gap-5"
       >
         <button
           onClick={handleNext}
           disabled={loading}
-          className="active:scale-[0.98] transition-transform"
+          className="w-full text-base font-semibold py-[17px] rounded-full border-none transition-all duration-200 active:scale-[0.98]"
           style={{
-            width: "100%",
             backgroundColor: loading ? "var(--bg-subtle)" : "var(--text-primary)",
             color: loading ? "var(--text-muted)" : "var(--bg-primary)",
-            fontSize: 16,
-            fontWeight: 600,
-            padding: "17px 0",
-            borderRadius: 100,
-            border: "none",
             cursor: loading ? "not-allowed" : "pointer",
             fontFamily: "var(--font-family-base)",
-            transition: "all 0.2s",
           }}
         >
-          {loading ? "Please wait…" : step === 1 ? "Send Code" : "Login"}
+          {loading ? "Please wait\u2026" : step === 1 ? "Send Code" : "Login"}
         </button>
 
         <button
+          className="bg-none border-none text-sm font-medium cursor-pointer"
           style={{
-            background: "none",
-            border: "none",
             color: "var(--text-muted)",
-            fontSize: 14,
-            fontWeight: 500,
-            cursor: "pointer",
             fontFamily: "var(--font-family-base)",
           }}
           onClick={() => router.push('/signup')}
         >
-          Don't have an account? <span style={{ color: "var(--rabbitty-pink)", fontWeight: 600 }}>Sign up</span>
+          Don't have an account? <span className="font-semibold" style={{ color: "var(--rabbitty-pink)" }}>Sign up</span>
         </button>
       </motion.div>
     </div>

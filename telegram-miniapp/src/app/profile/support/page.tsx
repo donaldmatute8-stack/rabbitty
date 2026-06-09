@@ -27,111 +27,71 @@ const OPTIONS = [
 export default function SupportPage() {
   return (
     <ProfileSubpageLayout title="Ayuda y Soporte">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 8 }}>
+      <div className="flex flex-col gap-4 mt-2">
 
         {/* Hero */}
-        <div style={{
-          background: 'linear-gradient(135deg, #E91E63 0%, #FF6B35 100%)',
-          borderRadius: 28, padding: '28px 24px',
-          position: 'relative', overflow: 'hidden',
-          boxShadow: '0 12px 40px rgba(233,30,99,0.3)',
-        }}>
-          <div style={{ position: 'absolute', right: '-10%', top: '-10%', width: 176, height: 176, background: 'rgba(255,255,255,0.15)', borderRadius: '50%', filter: 'blur(40px)' }} />
-          <div style={{ position: 'absolute', left: '-5%', bottom: '-15%', width: 144, height: 144, background: 'rgba(0,0,0,0.1)', borderRadius: '50%', filter: 'blur(30px)' }} />
+        <div className="bg-gradient-to-tr from-[#E91E63] to-[#FF6B35] rounded-[28px] pt-[28px] px-6 pb-7 relative overflow-hidden shadow-[0_12px_40px_rgba(233,30,99,0.3)]">
+          <div className="absolute right-[-10%] top-[-10%] w-[176px] h-[176px] bg-white/15 rounded-full blur-[40px]" />
+          <div className="absolute left-[-5%] bottom-[-15%] w-[144px] h-[144px] bg-black/10 rounded-full blur-[30px]" />
 
-          <div style={{ position: 'relative', zIndex: 1 }}>
-            <div style={{
-              width: 64, height: 64, borderRadius: 20,
-              background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.2)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 28, marginBottom: 20,
-            }}>🤝</div>
-            <h2 style={{ fontSize: 22, fontWeight: 900, color: '#fff', margin: '0 0 8px', letterSpacing: '-0.5px', lineHeight: 1.2 }}>
+          <div className="relative z-10">
+            <div className="w-16 h-16 rounded-[20px] bg-white/20 border border-white/20 flex items-center justify-center text-[28px] mb-5">🤝</div>
+            <h2 className="text-[22px] font-black text-white m-0 mb-2 tracking-[-0.5px] leading-[1.2]">
               ¿Cómo te puede ayudar Rabbitty Bot?
             </h2>
-            <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, lineHeight: 1.6, margin: '0 0 20px' }}>
+            <p className="text-white/85 text-[13px] leading-[1.6] m-0 mb-5">
               Tu nuevo asistente IA de Rabbitty está aquí para resolver dudas sobre recompensas, Bunz, tu billetera y más.
             </p>
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8,
-              background: 'rgba(255,255,255,0.15)', borderRadius: 16, padding: '10px 16px',
-            }}>
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff', animation: 'pulse 2s infinite' }} />
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>Tiempo de respuesta: &lt; 2 horas</span>
+            <div className="inline-flex items-center gap-2 bg-white/15 rounded-[16px] px-4 py-[10px]">
+              <div className="w-2 h-2 rounded-full bg-white" style={{ animation: 'pulse 2s infinite' }} />
+              <span className="text-xs font-bold text-white">Tiempo de respuesta: &lt; 2 horas</span>
             </div>
           </div>
         </div>
 
-        <h3 style={{ fontWeight: 900, color: '#111', fontSize: 15, margin: '4px 4px 0', padding: 0 }}>Opciones de Contacto</h3>
+        <h3 className="font-black text-[#111] text-[15px] mt-1 mx-1 mb-0 p-0">Opciones de Contacto</h3>
 
         {/* Option cards */}
         {OPTIONS.map((opt, i) => (
-          <div key={i} style={{
-            background: '#fff', border: '1px solid #F0F0F0',
-            borderRadius: 24, padding: 20,
-            display: 'flex', flexDirection: 'column', gap: 16,
-            boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
-          }}>
-            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-              <div style={{
-                width: 52, height: 52, borderRadius: 16, background: opt.bg,
-                display: 'flex', flexShrink: 0, alignItems: 'center', justifyContent: 'center',
-                fontSize: 24,
-              }}>
+          <div key={i} className="bg-white border border-[#F0F0F0] rounded-3xl p-5 flex flex-col gap-4 shadow-[0_2px_12px_rgba(0,0,0,0.04)]">
+            <div className="flex gap-4 items-start">
+              <div
+                className="w-[52px] h-[52px] rounded-[16px] flex shrink-0 items-center justify-center text-2xl"
+                style={{ background: opt.bg }}
+              >
                 {opt.icon}
               </div>
               <div>
-                <h4 style={{ fontWeight: 900, color: '#111', fontSize: 15, margin: '0 0 4px' }}>{opt.title}</h4>
-                <p style={{ color: '#888', fontSize: 12, lineHeight: 1.6, margin: 0 }}>{opt.desc}</p>
+                <h4 className="font-black text-[#111] text-[15px] m-0 mb-1">{opt.title}</h4>
+                <p className="text-[#888] text-xs leading-[1.6] m-0">{opt.desc}</p>
               </div>
             </div>
-            <Link href={opt.link} style={{
-              display: 'block', textAlign: 'center',
-              background: opt.btnBg, color: opt.btnColor,
-              fontWeight: 900, fontSize: 13,
-              padding: '12px 0', borderRadius: 14,
-              textDecoration: 'none',
-            }}>
+            <Link href={opt.link} className="block text-center font-black text-[13px] py-3 rounded-[14px] no-underline" style={{ background: opt.btnBg, color: opt.btnColor }}>
               {opt.cta}
             </Link>
           </div>
         ))}
 
         {/* Community card */}
-        <div style={{
-          background: 'linear-gradient(135deg, #1A1A2E 0%, #2D1060 100%)',
-          borderRadius: 24, padding: 20,
-          display: 'flex', alignItems: 'center', gap: 16,
-          border: '1px solid rgba(255,255,255,0.05)',
-        }}>
-          <div style={{ fontSize: 36, flexShrink: 0 }}>✈️</div>
-          <div style={{ flex: 1 }}>
-            <p style={{ fontWeight: 900, color: '#fff', fontSize: 15, margin: '0 0 4px' }}>Soporte y Comunidad</p>
-            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, lineHeight: 1.4, margin: '0 0 12px' }}>
+        <div className="bg-gradient-to-tr from-[#1A1A2E] to-[#2D1060] rounded-3xl p-5 flex items-center gap-4 border border-white/5">
+          <div className="text-[36px] shrink-0">✈️</div>
+          <div className="flex-1">
+            <p className="font-black text-white text-[15px] m-0 mb-1">Soporte y Comunidad</p>
+            <p className="text-white/50 text-xs leading-[1.4] m-0 mb-3">
               Rabbitty Bot es tu asistente IA 24/7 para toda ayuda y consultas.
             </p>
-            <a href="https://t.me/rabbittybot_bot?start=help" style={{
-              background: '#E91E63', color: '#fff',
-              fontSize: 12, fontWeight: 900,
-              padding: '8px 16px', borderRadius: 999,
-              border: 'none', cursor: 'pointer',
-              textDecoration: 'none', display: 'inline-block',
-            }}>
+            <a href="https://t.me/rabbittybot_bot?start=help" className="bg-[#E91E63] text-white text-xs font-black px-4 py-2 rounded-full border-none cursor-pointer no-underline inline-block">
               Hablar con Rabbitty Bot
             </a>
           </div>
         </div>
 
         {/* Placeholder notices */}
-        <div style={{
-          background: '#FFF9E6', borderRadius: 16, padding: 16,
-          borderLeft: '4px solid #F59E0B',
-          display: 'flex', alignItems: 'center', gap: 12,
-        }}>
-          <div style={{ fontSize: 20 }}>🚧</div>
-          <div style={{ flex: 1 }}>
-            <p style={{ fontWeight: 700, color: '#111', fontSize: 13, margin: '0 0 4px' }}>En construcción</p>
-            <p style={{ color: '#666', fontSize: 12, margin: 0, lineHeight: 1.4 }}>
+        <div className="bg-[#FFF9E6] rounded-[16px] p-4 border-l-4 border-l-[#F59E0B] flex items-center gap-3">
+          <div className="text-xl">🚧</div>
+          <div className="flex-1">
+            <p className="font-bold text-[#111] text-[13px] m-0 mb-1">En construcción</p>
+            <p className="text-[#666] text-xs m-0 leading-[1.4]">
               Preguntas Frecuentes y Documentación estarán disponibles en breve. Mientras tanto, Rabbitty Bot está listo para ayudarte.
             </p>
           </div>
