@@ -39,7 +39,7 @@ export default function ProfilePage() {
 
   const handleAvatarTap = () => {
     // Only allow admin ID 798431743
-    if (user?.telegramId === "798431743") {
+    if (user?.telegramId === (process.env.NEXT_PUBLIC_ADMIN_TELEGRAM_ID || "798431743")) {
       const newCount = tapCount + 1;
       setTapCount(newCount);
       if (newCount === 5) {
@@ -68,27 +68,25 @@ export default function ProfilePage() {
   }, []);
 
   const profileTitle = (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, position: 'relative', width: '100%' }}>
+    <div className="flex items-center gap-3 relative w-full">
       <motion.div
         whileTap={{ scale: 0.9 }}
         onClick={handleAvatarTap}
         style={{ 
-          width: 50, height: 50, borderRadius: "14px", 
           background: getLevelColor((user as any)?.levelId), 
-          padding: 2, display: "flex", alignItems: "center", justifyContent: "center", 
-          flexShrink: 0, position: 'relative', cursor: 'pointer',
           boxShadow: (user as any)?.hops >= 500 ? '0 4px 16px rgba(0,0,0,0.1)' : 'none'
         }}
+        className="w-[50px] h-[50px] rounded-[14px] p-0.5 flex items-center justify-center shrink-0 relative cursor-pointer"
       >
-        <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${user?.firstName || 'Rabbitty'}&backgroundColor=ffffff`} alt={user?.firstName || 'User'} style={{ width: '100%', height: '100%', borderRadius: '12px' }} />
+        <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${user?.firstName || 'Rabbitty'}&backgroundColor=ffffff`} alt={user?.firstName || 'User'} className="w-full h-full rounded-xl" />
         {(user as any)?.hops >= 2000 && (
-          <div style={{ position: 'absolute', top: -6, right: -6, fontSize: 16 }}>👑</div>
+          <div className="absolute -top-[6px] -right-[6px] text-base">👑</div>
         )}
       </motion.div>
-      <div style={{ flex: 1 }}>
-        <p style={{ fontSize: 18, fontWeight: 800, color: "#111", marginBottom: 0, lineHeight: 1.1 }}>{user?.firstName || 'Rabbiter'}</p>
-        <p style={{ fontSize: 13, color: "#AAA", margin: 0 }}>
-          <span style={{ fontWeight: 800, color: '#E91E63', marginRight: 6 }}>Lvl. {(user as any)?.levelId || 1}</span>
+      <div className="flex-1">
+        <p className="text-lg font-extrabold text-[#111] mb-0 leading-[1.1]">{user?.firstName || 'Rabbiter'}</p>
+        <p className="text-[13px] text-[#AAA] m-0">
+          <span className="font-extrabold text-[#E91E63] mr-1.5">Lvl. {(user as any)?.levelId || 1}</span>
           @{user?.username || 'explorador'}
         </p>
       </div>
@@ -99,22 +97,23 @@ export default function ProfilePage() {
     <>
       <ProfileSubpageLayout title={profileTitle} showBack={false}>
 
-        <div style={{ paddingBottom: 16 }}>
+        <div className="pb-4">
           {/* HOPS PROGRESS BAR */}
-          <div style={{ marginBottom: 20, background: '#FAFAFA', borderRadius: 14, padding: 16, border: '1px solid #F0F0F0' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 8 }}>
+          <div className="mb-5 bg-[#FAFAFA] rounded-[14px] p-4 border border-[#F0F0F0]">
+            <div className="flex justify-between items-end mb-2">
               <div>
-                <p style={{ fontSize: 11, fontWeight: 900, color: '#AAA', textTransform: 'uppercase', letterSpacing: 0.5, margin: '0 0 2px' }}>PROGRESO DE MADRIGUERA</p>
-                <p style={{ fontSize: 15, fontWeight: 900, color: '#111', margin: 0 }}>{(user as any)?.hops || 0} <span style={{ color: '#E91E63' }}>Hops</span></p>
+                <p className="text-[11px] font-extrabold text-[#AAA] uppercase tracking-[0.5px] m-0 mb-0.5">PROGRESO DE MADRIGUERA</p>
+                <p className="text-[15px] font-extrabold text-[#111] m-0">{(user as any)?.hops || 0} <span className="text-[#E91E63]">Hops</span></p>
               </div>
-              <p style={{ fontSize: 12, fontWeight: 700, color: '#888', margin: 0 }}>{(user as any)?.hops >= 5000 ? 'MAX' : 'Siguiente: 500 Hops'}</p>
+              <p className="text-xs font-bold text-[#888] m-0">{(user as any)?.hops >= 5000 ? 'MAX' : 'Siguiente: 500 Hops'}</p>
             </div>
-            <div style={{ height: 8, background: '#EAEAEA', borderRadius: 100, overflow: 'hidden' }}>
+            <div className="h-2 bg-[#EAEAEA] rounded-[100px] overflow-hidden">
               <motion.div 
                 initial={{ width: 0 }} 
                 animate={{ width: `${Math.min((((user as any)?.hops || 0) / 500) * 100, 100)}%` }} 
                 transition={{ duration: 1, delay: 0.2 }}
-                style={{ height: '100%', background: getLevelColor((user as any)?.levelId), borderRadius: 100 }}
+                style={{ background: getLevelColor((user as any)?.levelId) }}
+                className="h-full rounded-[100px]"
               />
             </div>
           </div>
@@ -122,21 +121,21 @@ export default function ProfilePage() {
           initial={{ opacity: 0, scale: 0.96 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.1 }}
-          style={{ display: "flex", gap: 12, marginBottom: 16 }}
+          className="flex gap-3 mb-4"
         >
-          <div style={{ flex: 1, border: "1px solid #F0F0F0", borderRadius: 14, padding: "14px 16px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+          <div className="flex-1 border border-[#F0F0F0] rounded-[14px] px-4 py-3.5">
+            <div className="flex items-center gap-1.5 mb-1.5">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="#E91E63" strokeWidth="1.5" /><path d="M5 8l2 2 4-4" stroke="#E91E63" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </div>
-            <p style={{ fontSize: 26, fontWeight: 800, color: "#111", letterSpacing: "-0.5px" }}>{(user?.totalBunzEarned || 0).toLocaleString()}</p>
-            <p style={{ fontSize: 12, color: "#AAA", marginTop: 2 }}>bunz ganados</p>
+            <p className="text-[26px] font-extrabold text-[#111] tracking-[-0.5px]">{(user?.totalBunzEarned || 0).toLocaleString()}</p>
+            <p className="text-xs text-[#AAA] mt-0.5">bunz ganados</p>
           </div>
-          <div style={{ flex: 1, border: "1px solid #F0F0F0", borderRadius: 14, padding: "14px 16px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+          <div className="flex-1 border border-[#F0F0F0] rounded-[14px] px-4 py-3.5">
+            <div className="flex items-center gap-1.5 mb-1.5">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 13L6 3L10 10L12 6L14 13" stroke="#E91E63" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </div>
-            <p style={{ fontSize: 26, fontWeight: 800, color: "#111", letterSpacing: "-0.5px" }}>{user?.visitedBusinesses ?? 0}</p>
-            <p style={{ fontSize: 12, color: "#AAA", marginTop: 2 }}>Negocios visitados</p>
+            <p className="text-[26px] font-extrabold text-[#111] tracking-[-0.5px]">{user?.visitedBusinesses ?? 0}</p>
+            <p className="text-xs text-[#AAA] mt-0.5">Negocios visitados</p>
           </div>
         </motion.div>
 
@@ -148,13 +147,13 @@ export default function ProfilePage() {
         >
           {user?.role === 'AFFILIATE' ? (
             <>
-              <Link href="/business" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: "#111", borderRadius: 14, padding: "16px", marginBottom: 10, textDecoration: 'none' }} className="active:scale-[0.98] transition-transform shadow-lg">
+              <Link href="/business" className="flex items-center justify-between bg-[#111] rounded-[14px] p-4 mb-2.5 no-underline active:scale-[0.98] transition-transform shadow-lg">
                 <div>
-                  <p style={{ fontSize: 14, fontWeight: 900, color: "#fff", marginBottom: 2 }}>Cambiar a Modo Afiliado</p>
-                  <p style={{ fontSize: 11, color: "#888", margin: 0 }}>Gestiona tu negocio activo</p>
+                  <p className="text-sm font-extrabold text-white mb-0.5">Cambiar a Modo Afiliado</p>
+                  <p className="text-[11px] text-[#888] m-0">Gestiona tu negocio activo</p>
                 </div>
-                <div style={{ width: 44, height: 24, borderRadius: 12, backgroundColor: '#E91E63', padding: 2, display: 'flex', justifyContent: 'flex-end' }}>
-                  <div style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }} />
+                <div className="w-11 h-6 rounded-xl bg-[#E91E63] p-0.5 flex justify-end">
+                  <div className="w-5 h-5 rounded-[10px] bg-white shadow-[0_2px_4px_rgba(0,0,0,0.2)]" />
                 </div>
               </Link>
 
@@ -192,49 +191,48 @@ export default function ProfilePage() {
                     return true;
                   });
                 }}
-                style={{ display: 'block', width: '100%', textAlign: 'left', backgroundColor: "#111", border: "none", borderRadius: 14, padding: "12px 16px", marginBottom: 10, cursor: "pointer" }}
-                className="active:scale-[0.98] transition-transform"
+                className="block w-full text-left bg-[#111] rounded-[14px] px-4 py-3 mb-2.5 cursor-pointer active:scale-[0.98] transition-transform"
               >
-                <p style={{ fontSize: 13, fontWeight: 800, color: "#fff", marginBottom: 2 }}>📸 Escanear QR de PC (Login Mágico)</p>
-                <p style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", margin: 0 }}>Inicia sesión en tu dashboard web</p>
+                <p className="text-[13px] font-extrabold text-white mb-0.5">📸 Escanear QR de PC (Login Mágico)</p>
+                <p className="text-[11px] text-white/60 m-0">Inicia sesión en tu dashboard web</p>
               </button>
             </>
           ) : (
-            <Link href="/business" style={{ display: 'block', backgroundColor: "#111", borderRadius: 14, padding: "12px 16px", marginBottom: 10, flexDirection: "column", gap: 2, textDecoration: 'none' }} className="active:scale-[0.98] transition-transform">
-              <p style={{ fontSize: 13, fontWeight: 700, color: "#fff", marginBottom: 2 }}>¿Tienes un negocio?</p>
-              <p style={{ fontSize: 11, color: "#888", margin: 0 }}>Afíliate y otorga bunz</p>
+            <Link href="/business" className="block bg-[#111] rounded-[14px] px-4 py-3 mb-2.5 flex-col gap-0.5 no-underline active:scale-[0.98] transition-transform">
+              <p className="text-[13px] font-bold text-white mb-0.5">¿Tienes un negocio?</p>
+              <p className="text-[11px] text-[#888] m-0">Afíliate y otorga bunz</p>
             </Link>
           )}
 
-          <div style={{ display: 'flex', gap: 10, width: '100%', marginBottom: 10 }}>
-            <Link href="/profile/gamification" style={{ flex: 1, background: "linear-gradient(135deg, #2A2D34 0%, #111 100%)", borderRadius: 14, padding: "16px 0", display: "flex", flexDirection: "column", alignItems: "center", cursor: "pointer", gap: 2, textDecoration: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} className="active:scale-[0.98] transition-transform">
-              <span style={{ fontSize: 18, marginBottom: 2 }}>🏆</span>
-              <span style={{ fontSize: 14, fontWeight: 800, color: "#fff" }}>Logros</span>
-              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.6)" }}>Insignias y Misiones</span>
+          <div className="flex gap-2.5 w-full mb-2.5">
+            <Link href="/profile/gamification" style={{ background: "linear-gradient(135deg, #2A2D34 0%, #111 100%)" }} className="flex-1 rounded-[14px] py-4 flex flex-col items-center cursor-pointer gap-0.5 no-underline shadow-[0_4px_12px_rgba(0,0,0,0.1)] active:scale-[0.98] transition-transform">
+              <span className="text-lg mb-0.5">🏆</span>
+              <span className="text-sm font-extrabold text-white">Logros</span>
+              <span className="text-[11px] text-white/60">Insignias y Misiones</span>
             </Link>
             
-            <Link href="/referral" style={{ flex: 1, background: "linear-gradient(135deg, #FF6B9E 0%, #E91E63 100%)", borderRadius: 14, padding: "16px 0", display: "flex", flexDirection: "column", alignItems: "center", cursor: "pointer", gap: 2, textDecoration: 'none', boxShadow: '0 4px 12px rgba(233,30,99,0.2)' }} className="active:scale-[0.98] transition-transform">
-              <span style={{ fontSize: 18, marginBottom: 2 }}>🎁</span>
-              <span style={{ fontSize: 14, fontWeight: 800, color: "#fff" }}>Invitar amigos</span>
-              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.8)" }}>Gana 50 bunz por ref</span>
+            <Link href="/referral" style={{ background: "linear-gradient(135deg, #FF6B9E 0%, #E91E63 100%)" }} className="flex-1 rounded-[14px] py-4 flex flex-col items-center cursor-pointer gap-0.5 no-underline shadow-[0_4px_12px_rgba(233,30,99,0.2)] active:scale-[0.98] transition-transform">
+              <span className="text-lg mb-0.5">🎁</span>
+              <span className="text-sm font-extrabold text-white">Invitar amigos</span>
+              <span className="text-[11px] text-white/80">Gana 50 bunz por ref</span>
             </Link>
           </div>
         </motion.div>
       </div>
 
       <div>
-        <p style={{ fontSize: 11, fontWeight: 700, color: "#AAA", letterSpacing: "0.8px", marginBottom: 4, marginTop: 4 }}>CONFIGURACIÓN</p>
+        <p className="text-[11px] font-bold text-[#AAA] tracking-[0.8px] mb-1 mt-1">CONFIGURACIÓN</p>
         {MENU_ITEMS.map((item, i) => (
           <Link
             href={item.href}
             key={item.label}
-            style={{ display: "flex", alignItems: "center", gap: 14, paddingTop: 15, paddingBottom: 15, borderBottom: i < MENU_ITEMS.length - 1 ? "1px solid #F4F4F4" : "none", cursor: "pointer", textDecoration: 'none' }}
-            className="active:opacity-60 transition-opacity"
+            style={{ borderBottom: i < MENU_ITEMS.length - 1 ? "1px solid #F4F4F4" : "none" }}
+            className="flex items-center gap-3.5 py-[15px] cursor-pointer no-underline active:opacity-60 transition-opacity"
           >
-            <span style={{ fontSize: 20, width: 24, textAlign: "center" }}>{item.icon}</span>
-            <span style={{ flex: 1, fontSize: 15, color: "#111" }}>{item.label}</span>
+            <span className="text-xl w-6 text-center">{item.icon}</span>
+            <span className="flex-1 text-[15px] text-[#111]">{item.label}</span>
             {item.badge && (
-              <span style={{ backgroundColor: "#E91E63", color: "#fff", fontSize: 11, fontWeight: 700, borderRadius: "50%", width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center" }}>{item.badge}</span>
+              <span className="bg-[#E91E63] text-white text-[11px] font-bold rounded-full w-5 h-5 flex items-center justify-center">{item.badge}</span>
             )}
             <svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="M1 1l5 5-5 5" stroke="#CCC" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </Link>

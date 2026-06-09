@@ -71,7 +71,7 @@ export default function WalletPage() {
       return;
     }
     try {
-      const nanoTon = Math.floor(parseFloat(sendAmount) * 1000000000).toString(); // Convert TON to nanoTON
+      const nanoTon = Math.floor(parseFloat(sendAmount) * 1000000000).toString();
       const transaction = {
         validUntil: Math.floor(Date.now() / 1000) + 360,
         messages: [
@@ -94,46 +94,41 @@ export default function WalletPage() {
 
   return (
     <ProfileSubpageLayout title="Ra Wallet">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div className="flex flex-col gap-5">
 
         {/* Main balance card */}
         <div style={{
           background: 'linear-gradient(135deg, #0F0F1A 0%, #1A1025 50%, #2A0845 100%)',
-          borderRadius: 32, padding: '28px 24px',
-          position: 'relative', overflow: 'hidden',
-          border: '1px solid rgba(255,255,255,0.08)',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
-          color: '#fff',
-        }}>
-          <div style={{ position: 'absolute', right: '-20%', top: '-20%', width: 256, height: 256, background: 'rgba(233,30,99,0.2)', borderRadius: '50%', filter: 'blur(80px)' }} />
-          <div style={{ position: 'absolute', left: '-10%', bottom: '-10%', width: 160, height: 160, background: 'rgba(59,130,246,0.15)', borderRadius: '50%', filter: 'blur(60px)' }} />
+        }} className="rounded-[32px] px-6 py-7 relative overflow-hidden border border-[rgba(255,255,255,0.08)] shadow-[0_20px_60px_rgba(0,0,0,0.4)] text-white">
+          <div className="absolute right-[-20%] top-[-20%] w-[256px] h-[256px] bg-[rgba(233,30,99,0.2)] rounded-full" style={{ filter: 'blur(80px)' }} />
+          <div className="absolute left-[-10%] bottom-[-10%] w-[160px] h-[160px] bg-[rgba(59,130,246,0.15)] rounded-full" style={{ filter: 'blur(60px)' }} />
 
           {/* Top row */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32, position: 'relative', zIndex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(255,255,255,0.05)' }}>
+          <div className="flex justify-between items-center mb-8 relative z-[1]">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-[rgba(255,255,255,0.08)] flex items-center justify-center border border-[rgba(255,255,255,0.05)]">
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                   <path d="M3 5h14M3 10h14M3 15h8" stroke="#E91E63" strokeWidth="1.8" strokeLinecap="round"/>
                 </svg>
               </div>
-              <span style={{ fontWeight: 900, fontSize: 11, letterSpacing: 2, color: 'rgba(255,255,255,0.85)' }}>RA WALLET</span>
+              <span className="font-extrabold text-[11px] tracking-widest text-[rgba(255,255,255,0.85)]">RA WALLET</span>
             </div>
-            <div style={{ transform: 'scale(0.9)', transformOrigin: 'right center' }}>
+            <div className="scale-90 origin-[right_center]">
               <TonConnectButton className="my-ton-btn" />
             </div>
           </div>
 
           {/* Balance */}
-          <div style={{ position: 'relative', zIndex: 1, marginBottom: 28 }}>
-            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 8 }}>Balance Disponible</p>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-              <h1 style={{ fontSize: 52, fontWeight: 900, letterSpacing: -2, lineHeight: 1, margin: 0, color: '#fff' }}>{balance}</h1>
-              <span style={{ color: '#E91E63', fontWeight: 900, fontSize: 20, letterSpacing: 1 }}>BUNZ</span>
+          <div className="relative z-[1] mb-7">
+            <p className="text-[rgba(255,255,255,0.5)] text-[11px] font-semibold tracking-widest uppercase mb-2">Balance Disponible</p>
+            <div className="flex items-baseline gap-2">
+              <h1 className="text-[52px] font-extrabold tracking-tighter leading-none m-0 text-white">{balance}</h1>
+              <span className="text-[#E91E63] font-extrabold text-xl tracking-wide">BUNZ</span>
             </div>
             <button
               onClick={handleRefresh}
               disabled={refreshing}
-              style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.3)', fontSize: 11, fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+              className="mt-2 flex items-center gap-1.5 text-[rgba(255,255,255,0.3)] text-[11px] font-medium bg-transparent border-0 cursor-pointer p-0"
             >
               <RefreshCw size={12} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
               {refreshing ? 'Actualizando...' : 'Actualizar saldo'}
@@ -142,101 +137,82 @@ export default function WalletPage() {
 
           {/* Address */}
           {wallet ? (
-            <div style={{
-              position: 'relative', zIndex: 1,
-              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.06)',
-              borderRadius: 20, padding: 16,
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            }}>
-              <div style={{ overflow: 'hidden', paddingRight: 16 }}>
-                <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, fontWeight: 900, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 6 }}>Billetera Conectada (TON)</p>
-                <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, fontFamily: 'monospace', letterSpacing: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <div className="relative z-[1] bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.06)] rounded-[20px] p-4 flex items-center justify-between">
+              <div className="overflow-hidden pr-4">
+                <p className="text-[rgba(255,255,255,0.4)] text-[9px] font-extrabold tracking-widest uppercase mb-1.5">Billetera Conectada (TON)</p>
+                <p className="text-[rgba(255,255,255,0.85)] text-[13px] font-mono tracking-wide truncate">
                   {wallet.account.address.substring(0, 8)}...{wallet.account.address.substring(wallet.account.address.length - 8)}
                 </p>
               </div>
-              <button onClick={handleCopy} style={{ padding: 12, background: 'rgba(255,255,255,0.08)', borderRadius: 14, border: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer', flexShrink: 0 }}>
+              <button onClick={handleCopy} className="p-3 bg-[rgba(255,255,255,0.08)] rounded-[14px] border border-[rgba(255,255,255,0.05)] cursor-pointer shrink-0">
                 <Copy size={16} color="rgba(255,255,255,0.7)" />
               </button>
             </div>
           ) : (
-            <div style={{
-              position: 'relative', zIndex: 1,
-              background: 'rgba(233,30,99,0.1)', border: '1px solid rgba(233,30,99,0.2)',
-              borderRadius: 20, padding: 16,
-              color: '#F48FB1', fontSize: 12, lineHeight: 1.6, textAlign: 'center', fontWeight: 500,
-            }}>
+            <div className="relative z-[1] bg-[rgba(233,30,99,0.1)] border border-[rgba(233,30,99,0.2)] rounded-[20px] p-4 text-[#F48FB1] text-xs leading-relaxed text-center font-medium">
               Conecta tu billetera (Tonkeeper) arriba para transferir Bunz libremente por la red TON.
             </div>
           )}
         </div>
 
         {/* Action buttons */}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 24 }}>
+        <div className="flex justify-center gap-6">
           <button
             onClick={() => setShowReceive(true)}
             disabled={!wallet}
-            style={{
-              width: 140, height: 140, background: '#fff', border: '1px solid #F0F0F0', borderRadius: 24, padding: 16,
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
-              cursor: wallet ? 'pointer' : 'not-allowed', opacity: wallet ? 1 : 0.5, boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
-            }}
+            className="w-[140px] h-[140px] bg-white border border-[#F0F0F0] rounded-2xl p-4 flex flex-col items-center justify-center gap-4 shadow-[0_2px_12px_rgba(0,0,0,0.04)]"
+            style={{ cursor: wallet ? 'pointer' : 'not-allowed', opacity: wallet ? 1 : 0.5 }}
           >
-            <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div className="w-12 h-12 rounded-full bg-[#EFF6FF] flex items-center justify-center">
               <ArrowDownLeft size={24} color={'#3B82F6'} strokeWidth={2.5} />
             </div>
-            <span style={{ fontWeight: 900, color: '#111', fontSize: 14 }}>Recibir</span>
+            <span className="font-extrabold text-[#111] text-sm">Recibir</span>
           </button>
 
           <button
             onClick={() => setShowSend(true)}
             disabled={!wallet}
-            style={{
-              width: 140, height: 140, background: '#fff', border: '1px solid #F0F0F0', borderRadius: 24, padding: 16,
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
-              cursor: wallet ? 'pointer' : 'not-allowed', opacity: wallet ? 1 : 0.5, boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
-            }}
+            className="w-[140px] h-[140px] bg-white border border-[#F0F0F0] rounded-2xl p-4 flex flex-col items-center justify-center gap-4 shadow-[0_2px_12px_rgba(0,0,0,0.04)]"
+            style={{ cursor: wallet ? 'pointer' : 'not-allowed', opacity: wallet ? 1 : 0.5 }}
           >
-            <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#FFF0F5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div className="w-12 h-12 rounded-full bg-[#FFF0F5] flex items-center justify-center">
               <ArrowUpRight size={24} color={'#E91E63'} strokeWidth={2.5} />
             </div>
-            <span style={{ fontWeight: 900, color: '#111', fontSize: 14 }}>Enviar</span>
+            <span className="font-extrabold text-[#111] text-sm">Enviar</span>
           </button>
         </div>
 
         {/* Transaction history */}
-        <div style={{ background: '#fff', borderRadius: 24, border: '1px solid #F0F0F0', padding: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.03)' }}>
-          <p style={{ fontWeight: 900, color: '#111', fontSize: 15, marginBottom: 16 }}>Últimas transacciones</p>
+        <div className="bg-white rounded-2xl border border-[#F0F0F0] p-5 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
+          <p className="font-extrabold text-[#111] text-[15px] mb-4">Últimas transacciones</p>
 
           {!address ? (
-            <p style={{ textAlign: 'center', color: '#CCC', fontSize: 13, padding: '16px 0' }}>Conecta tu billetera para ver el historial</p>
+            <p className="text-center text-[#CCC] text-[13px] py-4">Conecta tu billetera para ver el historial</p>
           ) : historyLoading ? (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 0' }}>
-              <div style={{ width: 24, height: 24, borderRadius: '50%', border: '2px solid rgba(233,30,99,0.3)', borderTopColor: '#E91E63', animation: 'spin 0.8s linear infinite' }} />
+            <div className="flex justify-center py-6">
+              <div className="w-6 h-6 rounded-full border-2 border-[rgba(233,30,99,0.3)] border-t-[#E91E63]" style={{ animation: 'spin 0.8s linear infinite' }} />
             </div>
           ) : history.length === 0 ? (
-            <p style={{ textAlign: 'center', color: '#CCC', fontSize: 13, padding: '16px 0' }}>Aún no tienes transacciones</p>
+            <p className="text-center text-[#CCC] text-[13px] py-4">Aún no tienes transacciones</p>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <div className="flex flex-col">
               {history.map((tx, i) => (
-                <div key={tx.id} style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                <div key={tx.id} className="flex items-center justify-between" style={{
                   paddingTop: i === 0 ? 0 : 12, paddingBottom: i === history.length - 1 ? 0 : 12,
                   borderBottom: i === history.length - 1 ? 'none' : '1px solid #F4F4F4',
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{
-                      width: 40, height: 40, borderRadius: 14, fontSize: 18,
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-[14px] text-lg flex items-center justify-center" style={{
                       background: tx.type === 'earned' ? '#F0FDF4' : '#FFF0F5',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
                       {tx.icon}
                     </div>
                     <div>
-                      <p style={{ fontWeight: 700, color: '#111', fontSize: 14, margin: '0 0 2px' }}>{tx.name}</p>
-                      <p style={{ color: '#AAA', fontSize: 11, margin: 0 }}>{formatDate(tx.date)}</p>
+                      <p className="font-bold text-[#111] text-sm m-0 mb-0.5">{tx.name}</p>
+                      <p className="text-[#AAA] text-[11px] m-0">{formatDate(tx.date)}</p>
                     </div>
                   </div>
-                  <span style={{ fontWeight: 900, fontSize: 15, color: tx.type === 'earned' ? '#10B981' : '#E91E63' }}>
+                  <span className="font-extrabold text-[15px]" style={{ color: tx.type === 'earned' ? '#10B981' : '#E91E63' }}>
                     {tx.amount} bunz
                   </span>
                 </div>
@@ -249,19 +225,19 @@ export default function WalletPage() {
 
       {/* RECEIVE MODAL */}
       {showReceive && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(5px)', padding: 20 }}>
-          <div style={{ background: '#fff', borderRadius: 24, width: '100%', maxWidth: 400, padding: 24, position: 'relative' }}>
-            <button onClick={() => setShowReceive(false)} style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', cursor: 'pointer' }}>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[rgba(0,0,0,0.6)] backdrop-blur-[5px] p-5">
+          <div className="bg-white rounded-2xl w-full max-w-[400px] p-6 relative">
+            <button onClick={() => setShowReceive(false)} className="absolute top-4 right-4 bg-transparent border-0 cursor-pointer">
               <X size={24} color="#888" />
             </button>
-            <h3 style={{ fontSize: 20, fontWeight: 900, margin: '0 0 16px', textAlign: 'center' }}>Recibir (TON / Bunz)</h3>
-            <div style={{ background: '#F8F8F8', borderRadius: 16, padding: 20, textAlign: 'center', marginBottom: 20 }}>
-              <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=ton://transfer/${wallet?.account.address}`} alt="QR" style={{ width: 200, height: 200, borderRadius: 12, margin: '0 auto' }} />
+            <h3 className="text-xl font-extrabold m-0 mb-4 text-center">Recibir (TON / Bunz)</h3>
+            <div className="bg-[#F8F8F8] rounded-2xl p-5 text-center mb-5">
+              <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=ton://transfer/${wallet?.account.address}`} alt="QR" className="w-[200px] h-[200px] rounded-xl mx-auto" />
             </div>
-            <p style={{ fontSize: 11, fontWeight: 800, color: '#AAA', textTransform: 'uppercase', marginBottom: 8, textAlign: 'center' }}>Tu Dirección TON</p>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#F0F0F0', padding: 12, borderRadius: 12 }}>
-              <p style={{ fontSize: 12, fontFamily: 'monospace', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{wallet?.account.address}</p>
-              <button onClick={handleCopy} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
+            <p className="text-[11px] font-extrabold text-[#AAA] uppercase mb-2 text-center">Tu Dirección TON</p>
+            <div className="flex items-center justify-between bg-[#F0F0F0] p-3 rounded-xl">
+              <p className="text-xs font-mono m-0 truncate">{wallet?.account.address}</p>
+              <button onClick={handleCopy} className="bg-transparent border-0 cursor-pointer p-1">
                 <Copy size={16} color="#111" />
               </button>
             </div>
@@ -271,28 +247,28 @@ export default function WalletPage() {
 
       {/* SEND MODAL */}
       {showSend && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(5px)', padding: 20 }}>
-          <div style={{ background: '#fff', borderRadius: 24, width: '100%', maxWidth: 400, padding: 24, position: 'relative' }}>
-            <button onClick={() => setShowSend(false)} style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', cursor: 'pointer' }}>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[rgba(0,0,0,0.6)] backdrop-blur-[5px] p-5">
+          <div className="bg-white rounded-2xl w-full max-w-[400px] p-6 relative">
+            <button onClick={() => setShowSend(false)} className="absolute top-4 right-4 bg-transparent border-0 cursor-pointer">
               <X size={24} color="#888" />
             </button>
-            <h3 style={{ fontSize: 20, fontWeight: 900, margin: '0 0 16px' }}>Enviar TON</h3>
-            <p style={{ fontSize: 13, color: '#666', marginBottom: 20 }}>Ingresa la dirección TON de destino y la cantidad.</p>
+            <h3 className="text-xl font-extrabold m-0 mb-4">Enviar TON</h3>
+            <p className="text-[13px] text-[#666] mb-5">Ingresa la dirección TON de destino y la cantidad.</p>
             
             <input 
               value={sendAddress} onChange={e => setSendAddress(e.target.value)} 
               placeholder="Dirección TON del destinatario" 
-              style={{ width: '100%', padding: 14, borderRadius: 12, border: '1px solid #CCC', marginBottom: 12, fontSize: 14 }} 
+              className="w-full p-3.5 rounded-xl border border-[#CCC] mb-3 text-sm"
             />
             <input 
               type="number" value={sendAmount} onChange={e => setSendAmount(e.target.value)} 
               placeholder="Cantidad (ej: 0.5)" 
-              style={{ width: '100%', padding: 14, borderRadius: 12, border: '1px solid #CCC', marginBottom: 24, fontSize: 14 }} 
+              className="w-full p-3.5 rounded-xl border border-[#CCC] mb-6 text-sm"
             />
             
             <button 
               onClick={handleSend}
-              style={{ width: '100%', padding: 16, background: '#E91E63', color: '#fff', border: 'none', borderRadius: 14, fontWeight: 900, fontSize: 15, cursor: 'pointer' }}
+              className="w-full p-4 bg-[#E91E63] text-white border-0 rounded-[14px] font-extrabold text-[15px] cursor-pointer"
             >
               Confirmar Envío
             </button>

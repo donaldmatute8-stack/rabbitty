@@ -15,75 +15,62 @@ export default function ChatInboxPage() {
   const { data, error, isLoading } = useSWR(
     user?.id ? `/api/chat?userId=${user.id}` : null,
     fetcher,
-    { refreshInterval: 5000 } // Poll every 5s for new messages/chats
+    { refreshInterval: 5000 }
   );
 
   return (
     <ProfileSubpageLayout title="Mensajes">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div className="flex flex-col gap-4">
         
-        {/* Siempre mostrar Rabbit Bot como destacado si no hay otras interacciones, pero si ya hay conversaciones que vengan de la base de datos, lo mostramos ahí. */}
         {isLoading && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="flex flex-col gap-4">
              <BusinessCardSkeleton />
              <BusinessCardSkeleton />
           </div>
         )}
 
         {!isLoading && data?.conversations?.length === 0 && (
-          <div style={{ padding: 40, textAlign: 'center', color: '#AAA' }}>
+          <div className="p-10 text-center text-[#AAA]">
             No tienes conversaciones activas. <br/>Explora negocios para chatear.
           </div>
         )}
 
         {!isLoading && data?.conversations?.map((conv: any) => (
-          <Link key={conv.id} href={`/chat/${conv.targetId}`} style={{ textDecoration: 'none' }}>
+          <Link key={conv.id} href={`/chat/${conv.targetId}`} className="no-underline">
             <motion.div 
               whileHover={{ scale: 0.98 }}
               whileTap={{ scale: 0.95 }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 16,
-                padding: 16, background: '#fff', borderRadius: 24,
-                border: '1px solid #F0F0F0', boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
-              }}
+              className="flex items-center gap-4 p-4 bg-white rounded-3xl border border-[#F0F0F0] shadow-[0_4px_12px_rgba(0,0,0,0.03)]"
             >
               {conv.isBot ? (
-                <div style={{
-                  width: 56, height: 56, borderRadius: '50%', background: '#E91E63',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 24, boxShadow: '0 0 16px rgba(233,30,99,0.3)', flexShrink: 0
-                }}>🐰</div>
+                <div className="size-14 rounded-full bg-[#E91E63] flex items-center justify-center text-2xl shadow-[0_0_16px_rgba(233,30,99,0.3)] shrink-0">🐰</div>
               ) : (
-                <div style={{
-                  width: 56, height: 56, borderRadius: '50%', background: '#F5F5F5',
-                  overflow: 'hidden', flexShrink: 0,
-                  border: '1px solid #EBEBEB'
-                }}>
+                <div className="size-14 rounded-full bg-[#F5F5F5] overflow-hidden shrink-0 border border-[#EBEBEB]">
                   {conv.targetAvatar ? (
-                    <img src={conv.targetAvatar} alt={conv.targetName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img src={conv.targetAvatar} alt={conv.targetName} className="w-full h-full object-cover" />
                   ) : (
-                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>💬</div>
+                    <div className="w-full h-full flex items-center justify-center text-2xl">💬</div>
                   )}
                 </div>
               )}
               
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <h3 style={{ margin: 0, fontWeight: 900, fontSize: 16, color: '#111', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <div className="flex-1 min-w-0">
+                <div className="flex justify-between items-center mb-1">
+                  <h3 className="m-0 font-black text-base text-[#111] truncate">
                     {conv.targetName}
                   </h3>
                   {conv.isBot && (
-                    <span style={{ fontSize: 10, fontWeight: 900, color: '#E91E63', background: 'rgba(233,30,99,0.1)', padding: '2px 8px', borderRadius: 999, textTransform: 'uppercase' }}>
+                    <span className="text-[10px] font-black text-[#E91E63] bg-[rgba(233,30,99,0.1)] px-2 py-0.5 rounded-full uppercase">
                       Oficial
                     </span>
                   )}
                   {!conv.isBot && conv.lastMessageTime && (
-                    <span style={{ fontSize: 11, color: '#AAA', fontWeight: 600 }}>
+                    <span className="text-[11px] text-[#AAA] font-semibold">
                       {new Date(conv.lastMessageTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   )}
                 </div>
-                <p style={{ margin: 0, fontSize: 13, color: '#888', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <p className="m-0 text-[13px] text-[#888] truncate">
                   {conv.lastMessage || 'Sin mensajes aún'}
                 </p>
               </div>

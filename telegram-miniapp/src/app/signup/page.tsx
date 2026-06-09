@@ -128,7 +128,7 @@ export default function SignupPage() {
       {/* Top Progress Bar */}
       <div className="absolute left-0 h-1.5 bg-[var(--rabbitty-pink)] transition-all duration-500 ease-out z-50" style={{ top: 'var(--safe-top, 0px)', width: `${(step / totalSteps) * 100}%` }} />
 
-      <div className="flex justify-between items-center pb-4 z-10" style={{ paddingLeft: 24, paddingRight: 24, marginTop: 'calc(var(--safe-top, 0px) + 40px)' }}>
+      <div className="flex justify-between items-center pb-4 z-10 px-6" style={{ marginTop: 'calc(var(--safe-top, 0px) + 40px)' }}>
         <button
           onClick={() => step > 1 ? setStep(step - 1) : router.push('/onboarding')}
           className="w-12 h-12 bg-white/5 hover:bg-white/10 rounded-full flex items-center justify-center transition-colors border border-white/10 text-white/70"
@@ -138,7 +138,7 @@ export default function SignupPage() {
         <span className="text-white/30 font-mono text-sm tracking-widest">{step} / {totalSteps}</span>
       </div>
 
-      <div className="flex-1 flex flex-col justify-center pb-20 relative z-10" style={{ paddingLeft: 24, paddingRight: 24 }}>
+      <div className="flex-1 flex flex-col justify-center pb-20 relative z-10 px-6">
         <AnimatePresence mode="wait">
           {/* STEP 1: FIRST NAME */}
           {step === 1 && (
@@ -159,21 +159,11 @@ export default function SignupPage() {
                 style={{ borderColor: firstName ? "var(--rabbitty-pink)" : "rgba(255,255,255,0.2)" }}
               />
 
-              <div style={{ marginTop: 60 }}>
+              <div className="mt-[60px]">
                 <button
                   onClick={() => setStep(2)}
                   disabled={!firstName.trim()}
-                  className="w-full text-black font-black flex items-center justify-center gap-3 transition-transform disabled:opacity-30 disabled:scale-100"
-                  style={{
-                    backgroundColor: "#FFF",
-                    fontSize: 16,
-                    padding: "17px 0",
-                    borderRadius: 100,
-                    border: "none",
-                    cursor: "pointer",
-                    boxShadow: "0 4px 15px rgba(255,255,255,0.1)",
-                    fontFamily: "var(--font-family-base)",
-                  }}
+                  className="w-full text-black font-black flex items-center justify-center gap-3 transition-transform disabled:opacity-30 disabled:scale-100 bg-white text-base py-[17px] rounded-full border-none cursor-pointer shadow-[0_4px_15px_rgba(255,255,255,0.1)] font-[var(--font-family-base)]"
                 >
                   Continuar <span className="text-xl">→</span>
                 </button>
@@ -200,20 +190,10 @@ export default function SignupPage() {
                 style={{ borderColor: lastName ? "var(--rabbitty-pink)" : "rgba(255,255,255,0.2)" }}
               />
 
-              <div style={{ marginTop: 60 }}>
+              <div className="mt-[60px]">
                 <button
                   onClick={() => setStep(3)}
-                  className="w-full text-black font-black flex items-center justify-center gap-3 active:scale-95 transition-transform"
-                  style={{
-                    backgroundColor: "#FFF",
-                    fontSize: 16,
-                    padding: "17px 0",
-                    borderRadius: 100,
-                    border: "none",
-                    cursor: "pointer",
-                    boxShadow: "0 4px 15px rgba(255,255,255,0.1)",
-                    fontFamily: "var(--font-family-base)",
-                  }}
+                  className="w-full text-black font-black flex items-center justify-center gap-3 active:scale-95 transition-transform bg-white text-base py-[17px] rounded-full border-none cursor-pointer shadow-[0_4px_15px_rgba(255,255,255,0.1)] font-[var(--font-family-base)]"
                 >
                   Confirmar Identidad <span className="text-xl">✓</span>
                 </button>
@@ -224,9 +204,7 @@ export default function SignupPage() {
           {/* STEP 3: BIOMETRICS */}
           {step === 3 && (
             <motion.div key="s3" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -30 }} transition={{ duration: 0.4, ease: "easeOut" }} className="flex flex-col">
-              <div className="w-20 h-20 bg-blue-500/20 text-blue-400 rounded-3xl flex items-center justify-center mb-8 text-4xl border border-blue-500/30"
-                style={{ margin: '0 auto' }}
-              >
+              <div className="w-20 h-20 bg-blue-500/20 text-blue-400 rounded-3xl flex items-center justify-center mb-8 text-4xl border border-blue-500/30 mx-auto">
                 🛡️
               </div>
               <h1 className="text-4xl md:text-5xl font-black text-white mb-6 tracking-tight leading-tight text-center">
@@ -240,39 +218,20 @@ export default function SignupPage() {
                 {biometricsSupported ? (
                   <button
                     onClick={handleRequestBiometrics}
-                    className="w-full text-white font-black active:scale-95 transition-transform shadow-[0_4px_15px_rgba(59,130,246,0.3)]"
-                    style={{
-                      backgroundColor: "#3B82F6",
-                      fontSize: 16,
-                      padding: "17px 0",
-                      borderRadius: 100,
-                      border: "none",
-                      cursor: "pointer",
-                      fontFamily: "var(--font-family-base)",
-                    }}
+                    className="w-full text-white font-black active:scale-95 transition-transform shadow-[0_4px_15px_rgba(59,130,246,0.3)] bg-[#3B82F6] text-base py-[17px] rounded-full border-none cursor-pointer font-[var(--font-family-base)]"
                   >
                     Activar Face ID
                   </button>
                 ) : (
                   <div
-                    className="bg-orange-500/10 rounded-2xl border border-orange-500/30 text-orange-400 text-xs font-medium mb-2 text-center"
-                    style={{ margin: '10px 0', padding: '14px 10px', lineHeight: '1.6' }}
+                    className="bg-orange-500/10 rounded-2xl border border-orange-500/30 text-orange-400 text-xs font-medium mb-2 text-center my-[10px] px-[10px] py-[14px] leading-[1.6]"
                   >
                     Tu dispositivo actual no soporta biométricos o no diste permisos a Telegram.
                   </div>
                 )}
                 <button
                   onClick={() => setStep(4)}
-                  className="w-full text-white/60 font-bold active:scale-95 transition-transform"
-                  style={{
-                    backgroundColor: "rgba(255,255,255,0.05)",
-                    fontSize: 16,
-                    padding: "17px 0",
-                    borderRadius: 100,
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    cursor: "pointer",
-                    fontFamily: "var(--font-family-base)",
-                  }}
+                  className="w-full text-white/60 font-bold active:scale-95 transition-transform bg-[rgba(255,255,255,0.05)] text-base py-[17px] rounded-full border border-white/10 cursor-pointer font-[var(--font-family-base)]"
                 >
                   Saltar por ahora
                 </button>
@@ -283,9 +242,7 @@ export default function SignupPage() {
           {/* STEP 4: WALLET */}
           {step === 4 && (
             <motion.div key="s4" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -30 }} transition={{ duration: 0.4, ease: "easeOut" }} className="flex flex-col">
-              <div className="w-20 h-20 bg-pink-500/20 text-pink-400 rounded-3xl flex items-center justify-center mb-8 text-4xl border border-pink-500/30 shadow-[0_0_40px_rgba(233,30,99,0.2)]"
-                style={{ margin: '0 auto' }}
-              >
+              <div className="w-20 h-20 bg-pink-500/20 text-pink-400 rounded-3xl flex items-center justify-center mb-8 text-4xl border border-pink-500/30 shadow-[0_0_40px_rgba(233,30,99,0.2)] mx-auto">
                 💎
               </div>
               <h1 className="text-4xl md:text-5xl font-black text-white mb-6 tracking-tight leading-tight flex items-center justify-center gap-3 text-center">
@@ -294,9 +251,7 @@ export default function SignupPage() {
                   ?
                 </button>
               </h1>
-              <p className="text-white/60 text-lg mb-12 leading-relaxed text-center"
-                style={{ marginBottom: '20px' }}
-              >
+              <p className="text-white/60 text-lg leading-relaxed text-center mb-[20px]">
                 Para intercambiar tus bunz por premios reales, necesitas una billetera.
               </p>
 
@@ -317,16 +272,7 @@ export default function SignupPage() {
                   <button
                     disabled={loading}
                     onClick={() => finalizeRegistration(false)}
-                    className="w-full text-white font-black active:scale-95 transition-transform disabled:opacity-50 shadow-[0_4px_15px_rgba(233,30,99,0.3)]"
-                    style={{
-                      background: 'linear-gradient(135deg, var(--rabbitty-pink) 0%, #E91E63 100%)',
-                      fontSize: 16,
-                      padding: "17px 0",
-                      borderRadius: 100,
-                      border: "none",
-                      cursor: "pointer",
-                      fontFamily: "var(--font-family-base)",
-                    }}
+                    className="w-full text-white font-black active:scale-95 transition-transform disabled:opacity-50 shadow-[0_4px_15px_rgba(233,30,99,0.3)] bg-[linear-gradient(135deg,var(--rabbitty-pink)_0%,#E91E63_100%)] text-base py-[17px] rounded-full border-none cursor-pointer font-[var(--font-family-base)]"
                   >
                     {loading ? 'Preparando...' : 'Comenzar a ganar'}
                   </button>
@@ -335,32 +281,14 @@ export default function SignupPage() {
                     <button
                       disabled={loading}
                       onClick={connect}
-                      className="w-full text-black font-black active:scale-95 transition-transform shadow-[0_4px_15px_rgba(255,255,255,0.2)]"
-                      style={{
-                        backgroundColor: "#FFF",
-                        fontSize: 16,
-                        padding: "17px 0",
-                        borderRadius: 100,
-                        border: "none",
-                        cursor: "pointer",
-                        fontFamily: "var(--font-family-base)",
-                      }}
+                      className="w-full text-black font-black active:scale-95 transition-transform shadow-[0_4px_15px_rgba(255,255,255,0.2)] bg-white text-base py-[17px] rounded-full border-none cursor-pointer font-[var(--font-family-base)]"
                     >
                       {loading ? 'Cargando...' : 'Conectar o Crear Billetera'}
                     </button>
                     <button
                       disabled={loading}
                       onClick={() => finalizeRegistration(true)}
-                      className="w-full text-white/60 font-bold active:scale-95 transition-transform"
-                      style={{
-                        backgroundColor: "rgba(255,255,255,0.05)",
-                        fontSize: 16,
-                        padding: "17px 0",
-                        borderRadius: 100,
-                        border: "1px solid rgba(255,255,255,0.1)",
-                        cursor: "pointer",
-                        fontFamily: "var(--font-family-base)",
-                      }}
+                      className="w-full text-white/60 font-bold active:scale-95 transition-transform bg-[rgba(255,255,255,0.05)] text-base py-[17px] rounded-full border border-white/10 cursor-pointer font-[var(--font-family-base)]"
                     >
                       {loading ? 'Preparando...' : 'Saltar por ahora'}
                     </button>
@@ -387,33 +315,19 @@ export default function SignupPage() {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="w-full bg-[#1A1A1A] rounded-t-3xl"
-              style={{ padding: "40px 24px 30px" }}
+              className="w-full bg-[#1A1A1A] rounded-t-3xl p-[40px_24px_30px]"
               onClick={e => e.stopPropagation()}
             >
-              <h3 className="text-2xl font-black text-white mb-4"
-                style={{ paddingBottom: '20px' }}
-              >¿Por qué conectar una billetera?</h3>
+              <h3 className="text-2xl font-black text-white pb-5">¿Por qué conectar una billetera?</h3>
               <p className="text-white/70 mb-4 leading-relaxed">
                 Tus <strong style={{ color: "var(--rabbitty-pink)" }}>bunz</strong> son tokens que se almacenan de forma segura en la economía de Rabbitty.
               </p>
-              <p className="text-white/70 mb-8 leading-relaxed"
-                style={{ paddingBottom: '20px' }}
-              >
+              <p className="text-white/70 mb-8 leading-relaxed pb-5">
                 Al conectar una billetera, te conviertes en el único dueño real de tus recompensas. Esto te permitirá en el futuro canjear tus bunz por dinero real, transferirlos o enviarlos a tus amigos sin que nosotros podamos impedirlo.
               </p>
               <button
                 onClick={() => setShowInfo(false)}
-                className="w-full text-black font-black active:scale-95 transition-transform"
-                style={{
-                  backgroundColor: "#FFF",
-                  fontSize: 16,
-                  padding: "17px 0",
-                  borderRadius: 100,
-                  border: "none",
-                  cursor: "pointer",
-                  fontFamily: "var(--font-family-base)",
-                }}
+                className="w-full text-black font-black active:scale-95 transition-transform bg-white text-base py-[17px] rounded-full border-none cursor-pointer font-[var(--font-family-base)]"
               >
                 Entendido
               </button>

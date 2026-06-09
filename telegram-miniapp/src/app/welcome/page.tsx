@@ -28,7 +28,6 @@ export default function WelcomePage() {
       }
     } catch (e) {
       console.error(e);
-      // Navigate anyway even if the DB call fails; role can be set later
       router.push(role === "AFFILIATE" ? '/business' : '/');
     } finally {
       setLoading(null);
@@ -37,21 +36,18 @@ export default function WelcomePage() {
 
   return (
     <div
-      className="min-h-[100dvh]"
+      className="min-h-[100dvh] flex flex-col overflow-hidden"
       style={{
         fontFamily: "var(--font-family-base)",
         backgroundColor: "var(--bg-subtle)",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
       }}
     >
       {/* Logo */}
-      <div style={{ paddingTop: 56, paddingLeft: 24, paddingRight: 24, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div className="flex items-center justify-center pt-14 px-6">
         <img
           src="/Ra.png"
           alt="Rabbitty"
-          style={{ width: 160, height: 160, objectFit: 'contain' }}
+          className="w-[160px] h-[160px] object-contain"
         />
       </div>
 
@@ -59,19 +55,25 @@ export default function WelcomePage() {
       <motion.div
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
-        style={{ marginTop: 24, paddingLeft: 24, paddingRight: 24, textAlign: "center" }}
+        className="mt-6 px-6 text-center"
       >
-        <h1 style={{ fontSize: 38, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.5px", lineHeight: 1.15 }}>
+        <h1
+          className="text-[38px] font-extrabold tracking-[-0.5px] leading-[1.15]"
+          style={{ color: "var(--text-primary)" }}
+        >
           Welcome to Rabbitty.
         </h1>
-        <p style={{ marginTop: 16, fontSize: 15, color: "var(--text-muted)", lineHeight: 1.55, paddingLeft: 16, paddingRight: 16 }}>
+        <p
+          className="mt-4 text-[15px] leading-[1.55] px-4"
+          style={{ color: "var(--text-muted)" }}
+        >
           Share experiences, earn bunz, live better.<br />
           First, tell us how you want to participate.
         </p>
       </motion.div>
 
       {/* Role Cards */}
-      <div style={{ marginTop: 32, paddingLeft: 24, paddingRight: 24, display: "flex", flexDirection: "column", gap: 16 }}>
+      <div className="mt-8 px-6 flex flex-col gap-4">
 
         {/* Rabbitter */}
         <motion.div
@@ -79,26 +81,23 @@ export default function WelcomePage() {
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.2 }}
           onClick={() => !loading && handleChooseRole("RABBITTER")}
-          className="active:scale-[0.98] transition-transform"
+          className="active:scale-[0.98] transition-transform transition-opacity duration-200 rounded-[14px] px-6 pt-6 pb-5"
           style={{
             backgroundColor: "var(--bg-elevated)",
-            borderRadius: 14,
             border: "1px solid var(--border-default)",
-            padding: "24px 24px 20px",
             cursor: loading ? "not-allowed" : "pointer",
             opacity: loading && loading !== "RABBITTER" ? 0.5 : 1,
-            transition: "opacity 0.2s",
           }}
         >
-          <p style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)", margin: 0, marginBottom: 4 }}>
+          <p className="text-[15px] font-bold m-0 mb-1" style={{ color: "var(--text-primary)" }}>
             Become a member.
           </p>
-          <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, marginBottom: 14 }}>
+          <p className="text-xs m-0 mb-[14px]" style={{ color: "var(--text-muted)" }}>
             Enter the Rabbitty experience — visit places, earn bunz, enjoy rewards.
           </p>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ color: "var(--rabbitty-pink)", fontSize: 16, fontWeight: 600 }}>→</span>
-            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--rabbitty-pink)" }}>
+          <div className="flex items-center gap-1.5">
+            <span className="text-base font-semibold" style={{ color: "var(--rabbitty-pink)" }}>→</span>
+            <span className="text-[13px] font-semibold" style={{ color: "var(--rabbitty-pink)" }}>
               {loading === "RABBITTER" ? "Setting up…" : "Start as Rabbitter"}
             </span>
           </div>
@@ -110,26 +109,23 @@ export default function WelcomePage() {
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.3 }}
           onClick={() => !loading && handleChooseRole("AFFILIATE")}
-          className="active:scale-[0.98] transition-transform"
+          className="active:scale-[0.98] transition-transform transition-opacity duration-200 rounded-[14px] px-6 pt-6 pb-5"
           style={{
             backgroundColor: "var(--bg-elevated)",
-            borderRadius: 14,
             border: "1px solid var(--border-default)",
-            padding: "24px 24px 20px",
             cursor: loading ? "not-allowed" : "pointer",
             opacity: loading && loading !== "AFFILIATE" ? 0.5 : 1,
-            transition: "opacity 0.2s",
           }}
         >
-          <p style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)", margin: 0, marginBottom: 4 }}>
+          <p className="text-[15px] font-bold m-0 mb-1" style={{ color: "var(--text-primary)" }}>
             Own a Business? Affiliate now.
           </p>
-          <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, marginBottom: 14 }}>
+          <p className="text-xs m-0 mb-[14px]" style={{ color: "var(--text-muted)" }}>
             List your business, configure rewards, and attract Rabbitters near you.
           </p>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ color: "var(--rabbitty-pink)", fontSize: 16, fontWeight: 600 }}>→</span>
-            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--rabbitty-pink)" }}>
+          <div className="flex items-center gap-1.5">
+            <span className="text-base font-semibold" style={{ color: "var(--rabbitty-pink)" }}>→</span>
+            <span className="text-[13px] font-semibold" style={{ color: "var(--rabbitty-pink)" }}>
               {loading === "AFFILIATE" ? "Setting up…" : "Start as Affiliate"}
             </span>
           </div>
@@ -141,10 +137,11 @@ export default function WelcomePage() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.4 }}
-        style={{ marginTop: 40, textAlign: "center" }}
+        className="mt-10 text-center"
       >
         <p
-          style={{ fontSize: 14, fontWeight: 600, color: "var(--text-muted)", cursor: "pointer" }}
+          className="text-sm font-semibold cursor-pointer"
+          style={{ color: "var(--text-muted)" }}
           onClick={() => router.push('/login')}
         >
           Already have an account?{" "}
@@ -152,8 +149,8 @@ export default function WelcomePage() {
         </p>
       </motion.div>
 
-      <div style={{ marginTop: "auto", paddingBottom: 32, textAlign: "center" }}>
-        <p style={{ fontSize: 12, color: "var(--text-muted)" }}>© Rabbitty</p>
+      <div className="mt-auto pb-8 text-center">
+        <p className="text-xs" style={{ color: "var(--text-muted)" }}>© Rabbitty</p>
       </div>
     </div>
   );

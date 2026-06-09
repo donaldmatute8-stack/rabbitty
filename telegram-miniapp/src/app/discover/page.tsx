@@ -79,9 +79,9 @@ export default function MessagesPage() {
       {/* Messages Header */}
       <div className={`sticky top-0 z-[60] bg-white transition-shadow duration-300 ${isScrolled ? 'shadow-[0_2px_8px_rgba(0,0,0,0.04)]' : ''}`}>
         <div style={{ height: 'var(--safe-top)' }} />
-        <div style={{ padding: "16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <h1 style={{ fontSize: 28, fontWeight: 800, color: "#111", letterSpacing: "-0.5px", margin: 0 }}>Mensajes</h1>
-          <button style={{ width: 40, height: 40, borderRadius: "50%", backgroundColor: "#F4F4F4", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+        <div className="p-4 flex items-center justify-between">
+          <h1 className="text-[28px] font-[800] text-[#111] tracking-[-0.5px] m-0">Mensajes</h1>
+          <button className="w-10 h-10 rounded-full bg-[#F4F4F4] border-0 flex items-center justify-center cursor-pointer">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
               <path d="M9 17A8 8 0 109 1a8 8 0 000 16zM18 18l-4.35-4.35" stroke="#111" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
@@ -89,9 +89,9 @@ export default function MessagesPage() {
         </div>
       </div>
 
-      <main className="flex-1 w-full max-w-[600px] mx-auto" style={{ backgroundColor: '#FFFFFF', paddingLeft: 16, paddingRight: 16 }}>
+      <main className="flex-1 w-full max-w-[600px] mx-auto bg-white pl-4 pr-4">
         
-        <div style={{ display: "flex", flexDirection: "column" }}>
+        <div className="flex flex-col">
           {CHATS.map((chat, i) => (
             <motion.a 
               href={chat.href}
@@ -100,45 +100,38 @@ export default function MessagesPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05 }}
               style={{ 
-                display: "flex", 
-                alignItems: "center", 
-                gap: 14, 
-                paddingTop: 16, 
-                paddingBottom: 16, 
                 borderBottom: i < CHATS.length - 1 ? "1px solid #F4F4F4" : "none",
-                textDecoration: "none",
-                cursor: "pointer",
                 backgroundColor: chat.pinned ? "#FFF0F5" : "transparent",
                 marginLeft: chat.pinned ? -16 : 0,
                 marginRight: chat.pinned ? -16 : 0,
                 paddingLeft: chat.pinned ? 16 : 0,
                 paddingRight: chat.pinned ? 16 : 0,
               }}
-              className="active:opacity-70 transition-opacity"
+              className="flex items-center gap-3.5 pt-4 pb-4 no-underline cursor-pointer active:opacity-70 transition-opacity"
             >
               {/* Avatar */}
-              <div style={{ width: 56, height: 56, borderRadius: "50%", backgroundColor: chat.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, flexShrink: 0, position: "relative" }}>
+              <div className="w-14 h-14 rounded-full flex items-center justify-center text-[28px] shrink-0 relative" style={{ backgroundColor: chat.color }}>
                 {chat.avatar}
                 {chat.pinned && (
-                  <div style={{ position: "absolute", bottom: -2, right: -2, width: 20, height: 20, backgroundColor: "#fff", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 bg-white rounded-full flex items-center justify-center">
                     <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1L8 5L12 6L9 9L10 13L6 11L2 13L3 9L0 6L4 5L6 1Z" fill="#C8A830"/></svg>
                   </div>
                 )}
               </div>
               
               {/* Message Content */}
-              <div style={{ flex: 1, overflow: "hidden" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                  <p style={{ fontSize: 16, fontWeight: 800, color: "#111", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{chat.name}</p>
-                  <p style={{ fontSize: 12, fontWeight: chat.unread > 0 ? 700 : 500, color: chat.unread > 0 ? "#E91E63" : "#AAA", margin: 0, flexShrink: 0 }}>{chat.time}</p>
+              <div className="flex-1 overflow-hidden">
+                <div className="flex justify-between items-center mb-1">
+                  <p className="text-base font-[800] text-[#111] m-0 whitespace-nowrap overflow-hidden text-ellipsis">{chat.name}</p>
+                  <p className="m-0 shrink-0 text-[12px]" style={{ fontWeight: chat.unread > 0 ? 700 : 500, color: chat.unread > 0 ? "#E91E63" : "#AAA" }}>{chat.time}</p>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                  <p style={{ fontSize: 14, color: chat.unread > 0 ? "#111" : "#888", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontWeight: chat.unread > 0 ? 500 : 400 }}>
+                <div className="flex justify-between items-center gap-2">
+                  <p className="text-sm m-0 whitespace-nowrap overflow-hidden text-ellipsis" style={{ color: chat.unread > 0 ? "#111" : "#888", fontWeight: chat.unread > 0 ? 500 : 400 }}>
                     {chat.message}
                   </p>
                   {chat.unread > 0 && (
-                    <div style={{ width: 22, height: 22, borderRadius: "50%", backgroundColor: "#E91E63", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>{chat.unread}</span>
+                    <div className="w-[22px] h-[22px] rounded-full bg-[#E91E63] flex items-center justify-center shrink-0">
+                      <span className="text-[11px] font-[700] text-white">{chat.unread}</span>
                     </div>
                   )}
                 </div>

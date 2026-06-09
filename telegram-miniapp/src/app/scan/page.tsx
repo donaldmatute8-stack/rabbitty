@@ -56,40 +56,35 @@ export default function ScanPage() {
   }, [activeTab, hasCamera, showManualInput]);
 
   return (
-    <div className="page-wrap" style={{ background: '#111111', color: '#fff', position: 'relative', overflow: 'hidden' }}>
+    <div className="page-wrap bg-[#111111] text-white relative overflow-hidden">
       {/* Background glow */}
-      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0, background: 'radial-gradient(ellipse at 50% 40%, rgba(233,30,99,0.06) 0%, transparent 65%)' }} />
+      <div className="absolute inset-0 pointer-events-none z-0 bg-[radial-gradient(ellipse_at_50%_40%,rgba(233,30,99,0.06)_0%,transparent_65%)]" />
 
       {/* Header */}
-      <div style={{ position: 'absolute', left: 0, right: 0, zIndex: 50, padding: '0 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, top: 'calc(var(--safe-top, 16px) + 16px)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+      <div className="absolute inset-x-0 z-50 px-4 flex flex-col items-center gap-4" style={{ top: 'calc(var(--safe-top) + 16px)' }}>
+        <div className="flex items-center justify-between w-full">
           <button
             onClick={() => router.back()}
-            style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+            className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center cursor-pointer"
           >
             <ArrowLeft size={20} color="#fff" />
           </button>
-          <span style={{ fontSize: 12, fontWeight: 900, letterSpacing: 2, color: 'rgba(255,255,255,0.75)', textTransform: 'uppercase' }}>Escanear QR</span>
+          <span className="text-xs font-extrabold tracking-[2px] text-white/75 uppercase">Escanear QR</span>
           <button
             onClick={() => setShowManualInput(!showManualInput)}
-            style={{ width: 40, height: 40, borderRadius: '50%', background: showManualInput ? '#E91E63' : 'rgba(255,255,255,0.1)', border: showManualInput ? 'none' : '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+            className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer ${showManualInput ? 'bg-[#E91E63] border-0' : 'bg-white/10 border border-white/10'}`}
           >
             <Keyboard size={18} color="#fff" />
           </button>
         </div>
 
         {/* Tabs */}
-        <div style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)', padding: 4, borderRadius: 999, display: 'flex', width: 240 }}>
+        <div className="bg-black/40 backdrop-blur-2xl border border-white/10 p-1 rounded-full flex w-[240px]">
           {(['scan', 'my-code'] as const).map((t, i) => (
             <button
               key={t}
               onClick={() => setActiveTab(t)}
-              style={{
-                flex: 1, padding: '8px 0', fontSize: 11, fontWeight: 900, borderRadius: 999, border: 'none', cursor: 'pointer',
-                background: activeTab === t ? '#fff' : 'transparent',
-                color: activeTab === t ? '#111' : 'rgba(255,255,255,0.5)',
-                transition: 'background 0.2s, color 0.2s',
-              }}
+              className={`flex-1 py-2 text-[11px] font-extrabold rounded-full border-0 cursor-pointer transition-colors duration-200 ${activeTab === t ? 'bg-white text-[#111]' : 'bg-transparent text-white/50'}`}
             >
               {i === 0 ? 'Cámara' : 'Mi Código'}
             </button>
@@ -97,35 +92,30 @@ export default function ScanPage() {
         </div>
       </div>
 
-      <div style={{ position: 'relative', flex: 1, width: '100%', height: '100%', paddingTop: 140, paddingBottom: 96, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+      <div className="relative flex-1 w-full h-full pt-[140px] pb-24 flex flex-col items-center justify-center z-10">
 
         {/* My Code tab */}
         {activeTab === 'my-code' && (
-          <div style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20,
-            padding: 32, background: 'rgba(255,255,255,0.05)', borderRadius: 40,
-            border: '1px solid rgba(255,255,255,0.1)', margin: '0 24px',
-            backdropFilter: 'blur(12px)', width: 'calc(100% - 48px)', maxWidth: 340,
-          }}>
-            <div style={{ width: 64, height: 64, background: 'rgba(233,30,99,0.15)', borderRadius: 20, border: '1px solid rgba(233,30,99,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="flex flex-col items-center gap-5 p-8 bg-white/5 rounded-[40px] border border-white/10 mx-6 backdrop-blur-md w-[calc(100%-48px)] max-w-[340px]">
+            <div className="w-16 h-16 bg-[rgba(233,30,99,0.15)] rounded-[20px] border border-[rgba(233,30,99,0.25)] flex items-center justify-center">
               <QrCode size={32} color="#E91E63" />
             </div>
-            <div style={{ textAlign: 'center' }}>
-              <h2 style={{ fontSize: 20, fontWeight: 900, color: '#fff', margin: '0 0 8px' }}>Tu Código Rabbitter</h2>
-              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, lineHeight: 1.6, margin: 0 }}>Muestra este código en caja para acumular Bunz por tu consumo.</p>
+            <div className="text-center">
+              <h2 className="text-xl font-extrabold text-white m-0 mb-2">Tu Código Rabbitter</h2>
+              <p className="text-white/50 text-xs leading-[1.6] m-0">Muestra este código en caja para acumular Bunz por tu consumo.</p>
             </div>
-            <div style={{ background: '#fff', padding: 20, borderRadius: 28, boxShadow: '0 0 40px rgba(255,255,255,0.08)' }}>
+            <div className="bg-white p-5 rounded-[28px] shadow-[0_0_40px_rgba(255,255,255,0.08)]">
               {qrValue ? (
-                <QRCodeSVG value={qrValue} size={180} level="H" style={{ borderRadius: 12, display: 'block' }} />
+                <QRCodeSVG value={qrValue} size={180} level="H" className="rounded-xl block" />
               ) : (
-                <div style={{ width: 180, height: 180, background: '#F3F4F6', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 12, border: '2px dashed #E5E7EB' }}>
-                  <span style={{ color: '#9CA3AF', fontSize: 12, fontWeight: 700 }}>Cargando...</span>
+                <div className="w-[180px] h-[180px] bg-[#F3F4F6] flex items-center justify-center rounded-xl border-2 border-dashed border-[#E5E7EB]">
+                  <span className="text-[#9CA3AF] text-xs font-bold">Cargando...</span>
                 </div>
               )}
             </div>
             {qrValue && (
-              <div style={{ background: 'rgba(255,255,255,0.08)', padding: '8px 16px', borderRadius: 999, border: '1px solid rgba(255,255,255,0.05)' }}>
-                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 10, fontFamily: 'monospace', letterSpacing: 1, margin: 0 }}>
+              <div className="bg-white/[0.08] px-4 py-2 rounded-full border border-white/[0.05]">
+                <p className="text-white/60 text-[10px] font-mono tracking-[1px] m-0">
                   {qrValue.substring(0, 10)}...{qrValue.substring(qrValue.length - 10)}
                 </p>
               </div>
@@ -136,12 +126,12 @@ export default function ScanPage() {
         {/* Camera scan tab */}
         {activeTab === 'scan' && hasCamera && !showManualInput && (
           <>
-            <video ref={videoRef} autoPlay playsInline muted style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
-            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 0 }} />
+            <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-black/45 z-0" />
 
             {/* QR Frame */}
-            <div style={{ position: 'relative', zIndex: 10, width: 240, height: 240 }}>
-              <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} style={{ width: '100%', height: '100%', position: 'relative' }}>
+            <div className="relative z-10 w-[240px] h-[240px]">
+              <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="w-full h-full relative">
                 {[['top','left'],['top','right'],['bottom','left'],['bottom','right']].map(([v,h]) => (
                   <div key={`${v}${h}`} style={{
                     position: 'absolute', [v]: 0, [h]: 0, width: 32, height: 32,
@@ -156,12 +146,12 @@ export default function ScanPage() {
                 <motion.div
                   animate={{ top: ['2%', '96%', '2%'] }}
                   transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
-                  style={{ position: 'absolute', left: 4, right: 4, height: 2, background: '#E91E63', boxShadow: '0 0 14px #E91E63' }}
+                  className="absolute left-1 right-1 h-0.5 bg-[#E91E63] shadow-[0_0_14px_#E91E63]"
                 />
               </motion.div>
             </div>
 
-            <p style={{ position: 'absolute', bottom: 160, textAlign: 'center', fontSize: 13, color: 'rgba(255,255,255,0.5)', zIndex: 10, width: '100%', padding: '0 32px', pointerEvents: 'none' }}>
+            <p className="absolute bottom-[160px] text-center text-[13px] text-white/50 z-10 w-full px-8 pointer-events-none">
               Alinea el código QR dentro del recuadro
             </p>
 
@@ -169,14 +159,14 @@ export default function ScanPage() {
               {result && (
                 <motion.div
                   initial={{ opacity: 0, y: 80 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 80 }}
-                  style={{ position: 'absolute', bottom: 128, left: 16, right: 16, background: '#fff', borderRadius: 28, padding: 24, zIndex: 20, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', border: '1px solid #F0F0F0' }}
+                  className="absolute bottom-32 left-4 right-4 bg-white rounded-[28px] p-6 z-20 shadow-[0_20px_60px_rgba(0,0,0,0.3)] border border-[#F0F0F0]"
                 >
-                  <p style={{ color: '#111', fontWeight: 900, fontSize: 18, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#10B981', display: 'inline-block' }} />
+                  <p className="text-[#111] font-extrabold text-lg mb-[6px] flex items-center gap-2">
+                    <span className="w-[10px] h-[10px] rounded-full bg-[#10B981] inline-block" />
                     ¡Código detectado!
                   </p>
-                  <p style={{ color: '#888', fontSize: 13, marginBottom: 20 }}>{result}</p>
-                  <Button variant="primary" fullWidth style={{ background: '#111', color: '#fff', borderRadius: 999, border: 'none', fontWeight: 900 }}>
+                  <p className="text-[#888] text-[13px] mb-5">{result}</p>
+                  <Button variant="primary" fullWidth className="rounded-full border-0 font-extrabold">
                     Confirmar recompensa
                   </Button>
                 </motion.div>
@@ -188,33 +178,23 @@ export default function ScanPage() {
         {/* Manual code tab */}
         {activeTab === 'scan' && (!hasCamera || showManualInput) && (
           <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
-            style={{ textAlign: 'center', padding: '0 24px', width: '100%', maxWidth: 360, zIndex: 10 }}>
-            <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+            className="text-center px-6 w-full max-w-[360px] z-10">
+            <div className="w-20 h-20 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mx-auto mb-6">
               <QrCode size={40} color="rgba(255,255,255,0.6)" strokeWidth={1.5} />
             </div>
-            <p style={{ fontSize: 20, fontWeight: 900, color: '#fff', marginBottom: 8 }}>Ingresar código</p>
-            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginBottom: 24, lineHeight: 1.6 }}>
+            <p className="text-xl font-extrabold text-white mb-2">Ingresar código</p>
+            <p className="text-[13px] text-white/45 mb-6 leading-[1.6]">
               Introduce el código de 8 dígitos del ticket o proporcionado por el comercio.
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div className="flex flex-col gap-3">
               <input
                 type="text"
                 placeholder="Escribe el código aquí..."
                 value={manualCode}
                 onChange={e => setManualCode(e.target.value.toUpperCase())}
-                style={{
-                  width: '100%', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: 20, padding: '16px 20px', color: '#fff', textAlign: 'center',
-                  fontWeight: 900, fontSize: 18, letterSpacing: 4, outline: 'none',
-                  boxSizing: 'border-box',
-                }}
+                className="w-full bg-white/[0.08] border border-white/10 rounded-[20px] px-5 py-4 text-white text-center font-extrabold text-lg tracking-[4px] outline-none box-border"
               />
-              <button style={{
-                width: '100%', background: '#E91E63', color: '#fff',
-                fontWeight: 900, fontSize: 15, padding: '16px 0', borderRadius: 999,
-                border: 'none', cursor: 'pointer',
-                boxShadow: '0 6px 20px rgba(233,30,99,0.4)',
-              }}>
+              <button className="w-full bg-[#E91E63] text-white font-extrabold text-[15px] py-4 rounded-full border-0 cursor-pointer shadow-[0_6px_20px_rgba(233,30,99,0.4)]">
                 Verificar código
               </button>
             </div>
