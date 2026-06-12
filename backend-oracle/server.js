@@ -22,6 +22,8 @@ const redis = process.env.REDIS_URL
     });
 
 // Web3 setup
+// SECURITY: In production, use a remote signer (KMS, Web3Auth) instead of loading PRIVATE_KEY in memory.
+// Consider: AWS KMS, GCP Cloud KMS, or Fireblocks for production key management.
 const provider = new ethers.JsonRpcProvider(RPC_URL);
 const oracleWallet = PRIVATE_KEY ? new ethers.Wallet(PRIVATE_KEY, provider) : null;
 
@@ -89,7 +91,7 @@ app.post('/generate-qr', async (req, res) => {
     });
   } catch (error) {
     console.error('Error generating QR:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -162,7 +164,7 @@ app.post('/process-consumption', async (req, res) => {
     
   } catch (error) {
     console.error('Error processing consumption:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -188,7 +190,7 @@ app.get('/transaction/:receiptHash', async (req, res) => {
       processedAt: parsed.processedAt
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -205,7 +207,7 @@ app.get('/business/:address/credit', async (req, res) => {
       creditRemaining: ethers.formatEther(credit.remaining)
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

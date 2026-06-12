@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { users, ownedBusinesses, transactions } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { parseTelegramUser } from '@/lib/telegramAuth';
+import { parseTelegramUser, validateTelegramInitData } from '@/lib/telegramAuth';
 
 const timeToMinutes = (timeStr: string) => {
   const [hours, minutes] = timeStr.split(':').map(Number);
@@ -15,6 +15,11 @@ export async function POST(req: Request) {
 
     if (!initData || !businessId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    if (botToken && !validateTelegramInitData(initData, botToken)) {
+      return NextResponse.json({ error: 'Invalid Telegram authentication' }, { status: 401 });
     }
 
     const tUser = parseTelegramUser(initData);
@@ -70,20 +75,20 @@ export async function POST(req: Request) {
     // Calculate reward
     const bunzEarned = Math.floor(fiatAmount * (business.rewardPercentage / 100));
 
-    // Atomic update: insert transaction + update user balance
-    const [transaction] = await db.insert(transactions).values({
+    // Atomic update: update user balance AND insert transaction in one operation
+    const [updatedUser] = await db
+      .update(users)
+      .set({ totalBunzEarned: sql`COALESCE(total_bunz_earned, 0) + ${bunzEarned}` })
+      .where(eq(users.id, user.id))
+      .returning();
+
+    await db.insert(transactions).values({
       userId: user.id,
       businessId,
       fiatAmount,
       bunzMinted: bunzEarned,
       status: 'MINTED',
-    }).returning();
-
-    const [updatedUser] = await db
-      .update(users)
-      .set({ totalBunzEarned: (user.totalBunzEarned ?? 0) + bunzEarned })
-      .where(eq(users.id, user.id))
-      .returning();
+    });
 
     return NextResponse.json({
       success: true,

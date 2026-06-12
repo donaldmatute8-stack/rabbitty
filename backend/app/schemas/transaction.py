@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional, Literal
 
@@ -32,12 +32,12 @@ class TransactionResponse(TransactionBase):
 
 class QRScanRequest(BaseModel):
     business_id: int
-    qr_data: str
-    purchase_amount: float
+    qr_data: str = Field(..., max_length=2000)
+    purchase_amount: float = Field(..., gt=0, le=1_000_000)
 
 class PayRequest(BaseModel):
     business_id: int
-    amount: int
+    amount: int = Field(..., gt=0, le=1_000_000)
 
 class TransactionStats(BaseModel):
     total_earned: int

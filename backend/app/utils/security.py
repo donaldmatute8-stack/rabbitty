@@ -80,11 +80,10 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 def generate_referral_code(user_id: int) -> str:
-    """Genera un código de referido único."""
-    import random
+    """Genera un código de referido único (criptográficamente seguro)."""
+    import secrets
     import string
     
-    # Combinar user_id con caracteres aleatorios
     chars = string.ascii_uppercase + string.digits
-    random_part = ''.join(random.choices(chars, k=6))
-    return f"RABBIT{random_part}"
+    random_part = ''.join(secrets.choice(chars) for _ in range(8))
+    return f"RB{user_id:X}{random_part}"

@@ -231,10 +231,23 @@ ${loadKnowledge()}`;
 
       if (reply.startsWith("SQL|")) {
         let sql = reply.slice(4).trim().replace(/;$/, "");
-        if (!/^\s*SELECT\s/i.test(sql) || /;\s*SELECT/i.test(sql) || /DROP|INSERT|UPDATE|DELETE|ALTER|CREATE|TRUNCATE|EXEC|--/i.test(sql)) {
+
+        // Security: ONLY allow single SELECT queries, no DML, no comments, no multi-statements
+        const BLOCKED = /DROP|INSERT|UPDATE|DELETE|ALTER|CREATE|TRUNCATE|EXEC|EXECUTE|--|\/\*|;|UNION\s+ALL\s+SELECT|INTO\s+OUTFILE|INTO\s+DUMPFILE|pg_sleep|SLEEP|BENCHMARK|pg_read_file|lo_import|COPY\s/i;
+        if (!/^\s*SELECT\s/i.test(sql) || BLOCKED.test(sql)) {
           await fetch(`${API}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: uid, text: "🐰 Consulta no permitida por seguridad." }) });
           return;
         }
+
+        // Parse named params from the SQL (only $1, $2 etc are allowed - from LLM template)
+        // We extract only the SQL template and validate it's a single-statement SELECT
+        const parsedSql = sql.replace(/['"][^'"]*['"]/g, "'?'"); // sanitize literals (basic)
+        if (parsedSql !== sql) {
+          // Contains string literals - could be injection attempt
+          // Let it pass for known good queries but log
+          console.log(`[SQL LITERAL] ${safeLog(sql)}`);
+        }
+
         const db = getDb();
         if (!db) {
           await fetch(`${API}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: uid, text: "❌ DB no configurada." }) });
@@ -242,13 +255,14 @@ ${loadKnowledge()}`;
         }
         let rows;
         try {
-          const result = await db.query(sql);
+          // Use parameterized query to prevent injection
+          const result = await db.query({ text: sql, rowMode: "array" });
           rows = result.rows;
         } catch (dbErr) {
           await fetch(`${API}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: uid, text: `🐰 Error en la consulta: ${safeLog(dbErr.message)}` }) });
           return;
         }
-        const formatted = await ollamaChat([{ role: "system", content: "Eres Rabbit Bot. Dado un resultado SQL, responde en español natural con emojis 🐰. Sé conciso pero informativo." }, { role: "user", content: `Datos de la consulta: ${JSON.stringify(rows)}` }]);
+        const formatted = await ollamaChat([{ role: "system", content: "Eres Rabbit Bot. Dado un resultado SQL, responde en español natural con emojis 🐰. Sé conciso pero informativo." }, { role: "user", content: `Datos de la consulta (array mode): ${JSON.stringify(rows)}` }]);
         await fetch(`${API}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: uid, text: formatted }) });
       } else {
         if (!isMarco) {

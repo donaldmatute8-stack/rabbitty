@@ -13,10 +13,10 @@ class UserCreate(UserBase):
     pass
 
 class UserUpdate(BaseModel):
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    photo_url: Optional[str] = None
-    wallet_address: Optional[str] = None
+    first_name: Optional[str] = Field(None, max_length=100, min_length=1)
+    last_name: Optional[str] = Field(None, max_length=100, min_length=1)
+    photo_url: Optional[str] = Field(None, max_length=2000)
+    wallet_address: Optional[str] = Field(None, max_length=42, pattern=r"^0x[a-fA-F0-9]{40}$|^$")
 
 class UserResponse(UserBase):
     id: int
@@ -41,4 +41,4 @@ class UserStats(BaseModel):
     current_balance: int
 
 class UserLogin(BaseModel):
-    init_data: str
+    init_data: str = Field(..., max_length=4096)

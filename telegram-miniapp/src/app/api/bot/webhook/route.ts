@@ -17,20 +17,25 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: "Bot token not configured" }, { status: 500 });
         }
 
-        // Get the app URL, preferring VERCEL_URL / NEXT_PUBLIC_API_URL or stable deployment domain
-        let appUrl = "https://telegram-miniapp-lyart-gamma.vercel.app";
-        const envUrl = process.env.NEXT_PUBLIC_API_URL || process.env.VERCEL_URL;
-        if (envUrl) {
-          let cleanUrl = envUrl.trim();
-          if (cleanUrl.endsWith("/api")) {
-            cleanUrl = cleanUrl.substring(0, cleanUrl.length - 4);
-          } else if (cleanUrl.endsWith("/api/bot/webhook")) {
-            cleanUrl = cleanUrl.replace("/api/bot/webhook", "");
+        let appUrl = process.env.RABBITTY_APP_URL;
+        if (!appUrl) {
+          const envUrl = process.env.NEXT_PUBLIC_API_URL || process.env.VERCEL_URL;
+          if (envUrl) {
+            let cleanUrl = envUrl.trim();
+            if (cleanUrl.endsWith("/api")) {
+              cleanUrl = cleanUrl.substring(0, cleanUrl.length - 4);
+            } else if (cleanUrl.endsWith("/api/bot/webhook")) {
+              cleanUrl = cleanUrl.replace("/api/bot/webhook", "");
+            }
+            if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+              cleanUrl = "https://" + cleanUrl;
+            }
+            appUrl = cleanUrl;
           }
-          if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
-            cleanUrl = "https://" + cleanUrl;
-          }
-          appUrl = cleanUrl;
+        }
+        if (!appUrl) {
+          console.error("RABBITTY_APP_URL is not defined and could not be inferred from environment.");
+          return NextResponse.json({ error: "App URL not configured" }, { status: 500 });
         }
 
         console.log(`Responding to /start. ChatID: ${chatId}, WebAppURL: ${appUrl}`);

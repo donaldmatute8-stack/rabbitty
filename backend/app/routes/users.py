@@ -9,6 +9,7 @@ from app.schemas.user import UserResponse, UserUpdate, UserStats
 from app.models.user import User
 from app.models.transaction import Transaction
 from app.models.business import Business
+from app.services.auth import rate_limit
 
 router = APIRouter()
 
@@ -34,7 +35,7 @@ def get_current_user(token: str, db: Session) -> User:
     return user
 
 @router.get("/me")
-async def get_me(token: str, db: Session = Depends(get_db)):
+async def get_me(token: str, db: Session = Depends(get_db), _=Depends(rate_limit)):
     """Obtiene el perfil del usuario actual."""
     user = get_current_user(token, db)
     return UserResponse.from_orm(user)
@@ -43,7 +44,8 @@ async def get_me(token: str, db: Session = Depends(get_db)):
 async def update_me(
     user_update: UserUpdate,
     token: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _=Depends(rate_limit)
 ):
     """Actualiza el perfil del usuario."""
     user = get_current_user(token, db)
