@@ -90,4 +90,26 @@ export const inventoryRouter = router({
     );
     return items;
   }),
+
+  getRecipe: protectedProcedure
+    .input(z.object({ menuItemId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const ingredients = await ctx.restaurantDb
+        .select()
+        .from(dbSchema.menuItemIngredients)
+        .where(eq(dbSchema.menuItemIngredients.menuItemId, input.menuItemId));
+      return ingredients;
+    }),
+
+  addRecipeIngredient: protectedProcedure
+    .input(z.object({
+      menuItemId: z.string(),
+      inventoryItemId: z.string(),
+      quantityRequired: z.number(),
+      unit: z.string(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const [ing] = await ctx.restaurantDb.insert(dbSchema.menuItemIngredients).values(input).returning();
+      return ing;
+    }),
 });

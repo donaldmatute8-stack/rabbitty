@@ -19,11 +19,19 @@ export default function SettingsPage() {
   });
 
   const [editing, setEditing] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", taxRate: 0, defaultRewardRate: 0.05, acceptsBunz: true });
+  const [form, setForm] = useState({ name: "", taxRate: 0, defaultRewardRate: 0.05, acceptsBunz: true, happyHourStart: "", happyHourEnd: "", happyHourRewardRate: 0.1 });
 
   const startEdit = (section: string) => {
     if (!r) return;
-    setForm({ name: r.name, taxRate: r.taxRate, defaultRewardRate: r.defaultRewardRate ?? 0.05, acceptsBunz: r.acceptsBunz ?? true });
+    setForm({ 
+      name: r.name, 
+      taxRate: r.taxRate, 
+      defaultRewardRate: r.defaultRewardRate ?? 0.05, 
+      acceptsBunz: r.acceptsBunz ?? true,
+      happyHourStart: r.happyHourStart ?? "",
+      happyHourEnd: r.happyHourEnd ?? "",
+      happyHourRewardRate: r.happyHourRewardRate ?? 0.1
+    });
     setEditing(section);
   };
 
@@ -191,6 +199,32 @@ export default function SettingsPage() {
                 />
                 Acepta Bunz
               </label>
+
+              <div className="mt-4 rounded-xl bg-pink-50/50 p-4 border border-pink-100">
+                <h4 className="mb-3 text-sm font-semibold text-pink-900">Happy Hours (Promociones Bunz)</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    label="Hora Inicio (ej. 14:00)"
+                    type="time"
+                    value={form.happyHourStart || ""}
+                    onChange={(e) => setForm((f) => ({ ...f, happyHourStart: e.target.value }))}
+                  />
+                  <Input
+                    label="Hora Fin (ej. 18:00)"
+                    type="time"
+                    value={form.happyHourEnd || ""}
+                    onChange={(e) => setForm((f) => ({ ...f, happyHourEnd: e.target.value }))}
+                  />
+                  <div className="col-span-2">
+                    <Input
+                      label="Tasa de recompensa en Happy Hour (%)"
+                      type="number"
+                      value={(form.happyHourRewardRate || 0) * 100}
+                      onChange={(e) => setForm((f) => ({ ...f, happyHourRewardRate: Number(e.target.value) / 100 }))}
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="space-y-3 text-sm">
@@ -206,6 +240,22 @@ export default function SettingsPage() {
                   {r.acceptsBunz ? "Sí" : "No"}
                 </Badge>
               </div>
+              
+              {r.happyHourStart && r.happyHourEnd && (
+                <div className="mt-3 rounded-lg bg-pink-50 p-3">
+                  <p className="text-xs font-semibold text-pink-800 mb-2">Happy Hour Configurado</p>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-pink-600/80">Horario</span>
+                    <span className="font-semibold text-pink-900">{r.happyHourStart} - {r.happyHourEnd}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-pink-600/80">Recompensa Happy Hour</span>
+                    <span className="font-semibold text-pink-900">
+                      {r.happyHourRewardRate != null ? `${(r.happyHourRewardRate * 100).toFixed(0)}%` : "N/A"}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </Card>

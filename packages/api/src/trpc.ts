@@ -3,7 +3,7 @@ import type { getRestaurantDb, getCoreDb } from "./db";
 import { rateLimit } from "./middleware/rateLimit";
 import { logAudit } from "./middleware/auditLog";
 
-interface Context {
+export interface Context {
   userId?: string | null;
   user?: { id?: string | null; name?: string | null; email?: string | null; image?: string | null } | null;
   restaurantDb: ReturnType<typeof getRestaurantDb>;

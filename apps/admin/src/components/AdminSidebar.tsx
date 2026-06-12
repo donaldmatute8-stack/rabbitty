@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@rabbitty/ui";
-import { LayoutDashboard, Store, Users, Settings, ChefHat, ClipboardList, Package } from "lucide-react";
+import { LayoutDashboard, Store, Users, Settings, ChefHat, ClipboardList, Package, Printer } from "lucide-react";
 
 const links = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -12,6 +12,7 @@ const links = [
   { href: "/staff", label: "Personal", icon: Users },
   { href: "/kitchen", label: "Cocina", icon: ChefHat },
   { href: "/inventory", label: "Inventario", icon: Package },
+  { href: "/hardware", label: "Hardware y Guías", icon: Printer },
   { href: "/settings", label: "Configuración", icon: Settings },
 ];
 

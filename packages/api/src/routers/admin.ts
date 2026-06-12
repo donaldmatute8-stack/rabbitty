@@ -25,6 +25,9 @@ export const adminRouter = router({
         timezone: z.string().optional(),
         defaultRewardRate: z.number().optional(),
         acceptsBunz: z.boolean().optional(),
+        happyHourStart: z.string().optional().nullable(),
+        happyHourEnd: z.string().optional().nullable(),
+        happyHourRewardRate: z.number().optional().nullable(),
       })
     )
     .mutation(async ({ ctx, input }) => {

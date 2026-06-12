@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   transpilePackages: ["@rabbitty/database-core", "@rabbitty/ui"],
   turbopack: {
-    root: process.cwd(),
+    root: "/Users/bullslab/.openclaw/agents/sofia-workspace/projects/Rabbitty",
   },
   typescript: {
     ignoreBuildErrors: true,

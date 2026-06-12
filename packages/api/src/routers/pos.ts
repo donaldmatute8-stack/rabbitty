@@ -3,7 +3,7 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
-import { tables as tablesTable, menuCategories, menuItems, orders, orderItems, payments, menuItemModifiers } from "@rabbitty/database-restaurant/schema";
+import { tables as tablesTable, menuCategories, menuItems, orders, orderItems, payments, menuItemModifiers, restaurants } from "@rabbitty/database-restaurant/schema";
 import { users as coreUsers } from "@rabbitty/database-core/schema";
 import { miniappClient } from "../services/miniapp-client";
 
@@ -91,6 +91,7 @@ export const posRouter = router({
          tip: 0,
          total: 0,
        }).returning();
+       if (!order) throw new Error("Error al crear la orden");
        bus.emit(EventTypes.ORDER_CREATED, { orderId: order.id, tableId: input.tableId });
        return order;
      }),
@@ -173,10 +174,109 @@ export const posRouter = router({
         amount: input.amount,
         reference: input.reference ?? null,
       }).returning();
-      await ctx.restaurantDb.update(orders).set({ status: "COMPLETED" }).where(eq(orders.id, input.orderId));
+      
+      const existingPayments = await ctx.restaurantDb.select().from(payments).where(eq(payments.orderId, input.orderId));
+      const totalPaid = existingPayments.reduce((sum, p) => sum + p.amount, 0);
+      
+      if (input.method === "BUNZ") {
+        await ctx.restaurantDb.update(orders)
+          .set({ bunzPaid: (orderRow.bunzPaid || 0) + input.amount })
+          .where(eq(orders.id, input.orderId));
+      }
 
-      // Sync with miniapp
+      if (totalPaid >= orderRow.total) {
+        await ctx.restaurantDb.update(orders).set({ status: "COMPLETED" }).where(eq(orders.id, input.orderId));
+
+        // INVENTORY DEDUCTION LOGIC
+        const items = await ctx.restaurantDb.select().from(orderItems).where(eq(orderItems.orderId, input.orderId));
+        for (const item of items) {
+          const ingredients = await ctx.restaurantDb.select()
+            .from(dbSchema.menuItemIngredients)
+            .where(eq(dbSchema.menuItemIngredients.menuItemId, item.menuItemId));
+          
+          for (const ing of ingredients) {
+            const deductionAmount = ing.quantityRequired * item.quantity;
+            
+            // Insert movement
+            await ctx.restaurantDb.insert(dbSchema.inventoryMovements).values({
+              itemId: ing.inventoryItemId,
+              branchId: ctx.branchId,
+              type: "SALE_DEDUCTION",
+              quantity: deductionAmount,
+              reference: input.orderId,
+              notes: `Order ${input.orderId} completed`,
+            });
+
+            // Update stock
+            await ctx.restaurantDb.execute(sql`
+              UPDATE inventory_items 
+              SET stock = stock - ${deductionAmount} 
+              WHERE id = ${ing.inventoryItemId}
+            `);
+          }
+        }
+      } else {
+        await ctx.restaurantDb.update(orders).set({ status: "PARTIAL_PAID" }).where(eq(orders.id, input.orderId));
+      }
+
+      const branchesTable = dbSchema.branches;
+      const [branch] = await ctx.restaurantDb.select().from(branchesTable).where(eq(branchesTable.id, ctx.branchId));
+      if (!branch) throw new Error("Sucursal no encontrada");
+      
+      const [restaurant] = await ctx.restaurantDb.select().from(restaurants).where(eq(restaurants.id, branch.restaurantId));
+      if (!restaurant) throw new Error("Restaurante no encontrado");
+      
+      let rewardRate = restaurant.defaultRewardRate ?? 0.05;
+      
+      if (restaurant.happyHourStart && restaurant.happyHourEnd) {
+        const now = new Date();
+        const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+        if (timeString >= restaurant.happyHourStart && timeString <= restaurant.happyHourEnd) {
+          rewardRate = restaurant.happyHourRewardRate ?? rewardRate;
+        }
+      }
+
+      // Sync with miniapp & CRM
       if (orderRow.customerPhone) {
+        // CRM Auto-segmentation
+        const [existingCustomer] = await ctx.restaurantDb.select().from(dbSchema.customers).where(
+          and(
+            eq(dbSchema.customers.restaurantId, restaurant.id),
+            eq(dbSchema.customers.phone, orderRow.customerPhone)
+          )
+        );
+
+        let newVisits = 1;
+        let newSpent = input.amount;
+        
+        if (existingCustomer) {
+          newVisits = existingCustomer.totalVisits + 1;
+          newSpent = existingCustomer.totalSpent + input.amount;
+          
+          let newSegment = "NEW";
+          if (newVisits >= 5) newSegment = "VIP";
+          else if (newVisits > 1) newSegment = "RECURRENT";
+
+          await ctx.restaurantDb.update(dbSchema.customers).set({
+            totalVisits: newVisits,
+            totalSpent: newSpent,
+            lastVisitAt: new Date(),
+            segment: newSegment,
+            name: orderRow.customerName ?? existingCustomer.name
+          }).where(eq(dbSchema.customers.id, existingCustomer.id));
+        } else {
+          await ctx.restaurantDb.insert(dbSchema.customers).values({
+            restaurantId: restaurant.id,
+            phone: orderRow.customerPhone,
+            name: orderRow.customerName,
+            totalVisits: 1,
+            totalSpent: input.amount,
+            lastVisitAt: new Date(),
+            segment: "NEW"
+          });
+        }
+
+        const calculatedReward = Math.floor(input.amount * rewardRate);
         if (input.method === "BUNZ") {
           try {
             const result = await miniappClient.chargeBunz(orderRow.customerPhone, input.amount, input.orderId, ctx.branchId);
@@ -204,7 +304,7 @@ export const posRouter = router({
             // Non-critical
           }
         }
-        bus.emit(EventTypes.BUNZ_REWARD, { customerId: orderRow.customerPhone, rewardPoints: Math.floor(input.amount * 0.2) });
+        bus.emit(EventTypes.BUNZ_REWARD, { customerId: orderRow.customerPhone, rewardPoints: calculatedReward });
       }
 
       bus.emit(EventTypes.ORDER_PAID, { orderId: input.orderId });

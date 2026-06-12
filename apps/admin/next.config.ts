@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   turbopack: {
-    root: process.cwd(),
+    root: "/Users/bullslab/.openclaw/agents/sofia-workspace/projects/Rabbitty",
   },
   async headers() {
     return [

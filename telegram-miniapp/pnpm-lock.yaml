@@ -14,6 +14,9 @@ importers:
       '@rabbitty/database-core':
         specifier: file:../packages/database-core
         version: file:../packages/database-core(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@5.0.10))(@types/pg@8.20.0)
+      '@rabbitty/ui':
+        specifier: file:../packages/ui
+        version: file:../packages/ui(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@tonconnect/ui-react':
         specifier: ^2.4.4
         version: 2.4.4(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -1352,6 +1355,12 @@ packages:
 
   '@rabbitty/database-core@file:../packages/database-core':
     resolution: {directory: ../packages/database-core, type: directory}
+
+  '@rabbitty/ui@file:../packages/ui':
+    resolution: {directory: ../packages/ui, type: directory}
+    peerDependencies:
+      react: ^19
+      react-dom: ^19
 
   '@radix-ui/primitive@1.1.2':
     resolution: {integrity: sha512-XnbHrrprsNqZKQhStrSwgRUQzoCI1glLzdw79xiZPoofhGICeZRSQ3dIxAKH1gb3OHfNf4d6f+vAv3kil2eggA==}
@@ -4590,7 +4599,7 @@ packages:
         optional: true
 
   ox@https://pkg.pr.new/ox@386a3439fe1ce76d237930f8c6e6bb493746069a:
-    resolution: {integrity: sha512-OHHm9re1yVjiMN66GZ2JSGuqmvJPrk40zh3PIS/3I6prZLbt6U/zKlgW18eIIkO0Y/ZyySKr6D/4mUXjBmky1g==, tarball: https://pkg.pr.new/ox@386a3439fe1ce76d237930f8c6e6bb493746069a}
+    resolution: {tarball: https://pkg.pr.new/ox@386a3439fe1ce76d237930f8c6e6bb493746069a}
     version: 0.14.26-386a343.0
     peerDependencies:
       typescript: '>=5.4.0'
@@ -7026,6 +7035,18 @@ snapshots:
       - prisma
       - sql.js
       - sqlite3
+
+  '@rabbitty/ui@file:../packages/ui(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+    dependencies:
+      clsx: 2.1.1
+      framer-motion: 12.40.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      lucide-react: 1.16.0(react@19.2.4)
+      react: 19.2.4
+      react-dom: 19.2.4(react@19.2.4)
+      sonner: 2.0.7(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      tailwind-merge: 3.6.0
+    transitivePeerDependencies:
+      - '@emotion/is-prop-valid'
 
   '@radix-ui/primitive@1.1.2': {}
 

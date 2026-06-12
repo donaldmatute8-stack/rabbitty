@@ -25,6 +25,9 @@ export const restaurants = pgTable("restaurants", {
   timezone: text("timezone").default("America/Mexico_City").notNull(),
   defaultRewardRate: integer("defaultRewardRate").default(20).notNull(),
   acceptsBunz: boolean("acceptsBunz").default(true).notNull(),
+  happyHourStart: text("happyHourStart"), // e.g. "14:00"
+  happyHourEnd: text("happyHourEnd"), // e.g. "18:00"
+  happyHourRewardRate: integer("happyHourRewardRate"), // e.g. 40 for 2X if default is 20
   printerType: text("printerType"),
   printerConfig: jsonb("printerConfig"),
   isActive: boolean("isActive").default(true).notNull(),
@@ -49,6 +52,7 @@ export const menuCategories = pgTable("menu_categories", {
   name: text("name").notNull(),
   description: text("description"),
   sortOrder: integer("sortOrder").default(0).notNull(),
+  printerZone: text("printerZone").default("MAIN").notNull(),
   isActive: boolean("isActive").default(true).notNull(),
   ...timestamps,
 });
@@ -143,6 +147,8 @@ export const orders = pgTable("orders", {
   bunzPaid: integer("bunzPaid").default(0),
   notes: text("notes"),
   voidReason: text("voidReason"),
+  cfdiStatus: text("cfdiStatus").default("NONE").notNull(),
+  cfdiUrl: text("cfdiUrl"),
   ...timestamps,
 });
 
@@ -178,6 +184,16 @@ export const inventoryItems = pgTable("inventory_items", {
   stock: real("stock").default(0).notNull(),
   minStock: real("minStock").default(0).notNull(),
   costPerUnit: real("costPerUnit").default(0).notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  ...timestamps,
+});
+
+export const menuItemIngredients = pgTable("menu_item_ingredients", {
+  id: id(),
+  menuItemId: fkId("menuItemId").references(() => menuItems.id),
+  inventoryItemId: fkId("inventoryItemId").references(() => inventoryItems.id),
+  quantityRequired: real("quantityRequired").notNull(),
+  unit: text("unit").default("pz").notNull(), // Allows custom units like 'pizca', 'gramos'
   isActive: boolean("isActive").default(true).notNull(),
   ...timestamps,
 });
@@ -222,5 +238,29 @@ export const webhooks = pgTable("webhooks", {
   url: text("url").notNull(),
   events: text("events").array().notNull(),
   isActive: boolean("isActive").default(true).notNull(),
+  ...timestamps,
+});
+
+export const customers = pgTable("customers", {
+  id: id(),
+  restaurantId: fkId("restaurantId").references(() => restaurants.id),
+  phone: text("phone").notNull(),
+  name: text("name"),
+  totalVisits: integer("totalVisits").default(0).notNull(),
+  totalSpent: real("totalSpent").default(0).notNull(),
+  lastVisitAt: timestamp("lastVisitAt"),
+  segment: text("segment").default("NEW").notNull(), // VIP, RECURRENT, NEW, CHURN_RISK
+  marketingConsent: boolean("marketingConsent").default(true).notNull(),
+  ...timestamps,
+});
+
+export const campaigns = pgTable("campaigns", {
+  id: id(),
+  branchId: fkId("branchId").references(() => branches.id),
+  name: text("name").notNull(),
+  targetSegment: text("targetSegment").notNull(), // VIP, RECURRENT, NEW, ALL, CHURN_RISK
+  message: text("message").notNull(),
+  status: text("status").default("DRAFT").notNull(), // DRAFT, SENT
+  sentAt: timestamp("sentAt"),
   ...timestamps,
 });

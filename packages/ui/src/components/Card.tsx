@@ -13,10 +13,10 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
       <div
         ref={ref}
         className={cn(
-          "rounded-2xl transition-all duration-300",
-          variant === "default" && "bg-[var(--bg-elevated)] shadow-sm border border-[var(--border-subtle)]",
-          variant === "bordered" && "bg-[var(--bg-elevated)] border-2 border-[var(--border-subtle)]",
-          variant === "ghost" && "bg-[var(--bg-subtle)]",
+          "rounded-3xl transition-all duration-300",
+          variant === "default" && "bg-white/70 dark:bg-neutral-900/70 backdrop-blur-xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/20 dark:border-white/10",
+          variant === "bordered" && "bg-white/80 dark:bg-neutral-900/80 backdrop-blur-lg border-2 border-pink-500/20 shadow-[0_0_20px_rgba(236,72,153,0.1)]",
+          variant === "ghost" && "bg-neutral-50/50 dark:bg-neutral-800/50 backdrop-blur-sm",
           className
         )}
         {...props}

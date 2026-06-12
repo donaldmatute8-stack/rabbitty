@@ -21,7 +21,9 @@
     "@rabbitty/database-restaurant": "workspace:*",
     "@rabbitty/events": "workspace:*",
     "@trpc/server": "^11.17.0",
+    "bullmq": "^5.78.0",
     "drizzle-orm": "^0.45.2",
+    "ioredis": "^5.11.1",
     "postgres": "^3.4.5",
     "zod": "^3.25.76"
   },

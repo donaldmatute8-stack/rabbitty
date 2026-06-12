@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { users, ownedBusinesses, transactions } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { parseTelegramUser, validateTelegramInitData } from '@/lib/telegramAuth';
 
 const timeToMinutes = (timeStr: string) => {
@@ -78,23 +78,23 @@ export async function POST(req: Request) {
     // Atomic update: update user balance AND insert transaction in one operation
     const [updatedUser] = await db
       .update(users)
-      .set({ totalBunzEarned: sql`COALESCE(total_bunz_earned, 0) + ${bunzEarned}` })
+      .set({ totalBunzEarned: sql`COALESCE(${users.totalBunzEarned}, 0) + ${bunzEarned}` })
       .where(eq(users.id, user.id))
       .returning();
 
-    await db.insert(transactions).values({
+    const [tx] = await db.insert(transactions).values({
       userId: user.id,
       businessId,
       fiatAmount,
       bunzMinted: bunzEarned,
       status: 'MINTED',
-    });
+    }).returning();
 
     return NextResponse.json({
       success: true,
       bunzEarned,
       newBalance: updatedUser.totalBunzEarned,
-      transactionId: transaction.id
+      transactionId: tx.id
     });
 
   } catch (error) {

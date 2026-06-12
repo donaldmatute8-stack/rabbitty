@@ -9,7 +9,7 @@ const withSerwist = withSerwistInit({
 
 const nextConfig: NextConfig = {
   turbopack: {
-    root: process.cwd(),
+    root: "/Users/bullslab/.openclaw/agents/sofia-workspace/projects/Rabbitty",
   },
 };
 
