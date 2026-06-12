@@ -110,9 +110,14 @@ export default function LandingPage() {
           <a href="#affiliates" className="hover:text-white transition-colors">Negocios</a>
           <a href="#bunz" className="hover:text-white transition-colors">Economía</a>
         </nav>
-        <a href="https://t.me/Rabbittyme_bot/app" target="_blank" className="bg-white text-black px-5 py-2.5 rounded-full font-bold text-sm hover:scale-105 transition-transform">
-          Abrir App
-        </a>
+        <div className="flex items-center gap-4">
+          <a href={process.env.NEXT_PUBLIC_ADMIN_URL || "https://admin.rabbitty.me"} target="_blank" className="hidden md:block text-sm font-bold text-blue-400 hover:text-blue-300 transition-colors">
+            Portal de Negocios
+          </a>
+          <a href="https://t.me/Rabbittyme_bot/app" target="_blank" className="bg-white text-black px-5 py-2.5 rounded-full font-bold text-sm hover:scale-105 transition-transform">
+            Abrir App
+          </a>
+        </div>
       </header>
 
       {/* HERO SECTION */}
@@ -246,9 +251,14 @@ export default function LandingPage() {
                 </div>
               ))}
             </div>
-            <a href="https://t.me/rabbittyhub/10" target="_blank" className="inline-block px-8 py-4 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-lg transition-all shadow-[0_0_20px_rgba(37,99,235,0.4)]">
-              Reservar Deploy Demo
-            </a>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <a href="https://t.me/rabbittyhub/10" target="_blank" className="inline-block px-8 py-4 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-lg text-center transition-all shadow-[0_0_20px_rgba(37,99,235,0.4)]">
+                Reservar Deploy Demo
+              </a>
+              <a href={process.env.NEXT_PUBLIC_ADMIN_URL || "https://admin.rabbitty.me"} target="_blank" className="inline-block px-8 py-4 rounded-full border border-blue-500/30 hover:bg-blue-500/10 text-blue-400 font-bold text-lg text-center transition-all">
+                Ingresar al Portal
+              </a>
+            </div>
           </div>
           
           <div className="relative">
