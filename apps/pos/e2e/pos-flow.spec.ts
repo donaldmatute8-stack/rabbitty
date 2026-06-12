@@ -80,7 +80,10 @@ async function handleTrpc(route: Route) {
   }
   let body: Record<string, any> = {};
   try {
-    body = await route.request().json();
+    const postData = route.request().postDataJSON();
+    if (postData) {
+      body = postData;
+    }
   } catch {}
   const procedures = proceduresStr.split(",");
   const results = procedures.map((proc, i) => mockProcedure(proc.trim(), body[i]?.json));

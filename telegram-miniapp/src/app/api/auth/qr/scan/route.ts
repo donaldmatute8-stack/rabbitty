@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { webSessions } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+import crypto from 'crypto';
 
 export async function POST(req: Request) {
   try {
@@ -11,9 +12,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
     }
 
+    const tokenHash = crypto.createHash('sha256').update(qrToken).digest('hex');
+
     // Buscar la sesión válida
     const session = await db.query.webSessions.findFirst({
-      where: eq(webSessions.jwtToken, qrToken)
+      where: eq(webSessions.jwtToken, tokenHash)
     });
 
     if (!session) {

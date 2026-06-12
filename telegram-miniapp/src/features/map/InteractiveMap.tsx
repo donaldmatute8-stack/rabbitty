@@ -192,7 +192,7 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
           mapInst.current?.panTo([lat - 0.0018, lng], { animate:true, duration:0.5 });
         });
     });
-  }, [businesses, selected]);
+  }, [filteredBusinesses, selected]); // FIx: Add filteredBusinesses instead of just businesses
 
   return (
     <div className="w-full h-full relative bg-[#0D0D1A]">
@@ -241,7 +241,7 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
       <div ref={mapRef} className="absolute inset-0 z-0" />
 
       {/* Mode Filters (Todos / bunz'in / Stock) - Moved to bottom */}
-      <div style={{ position: 'absolute', bottom: selected ? 220 : 80, left: 16, right: 16, zIndex: 2000, display: 'flex', flexDirection: 'column', gap: 10, transition: 'bottom 0.3s' }}>
+      <div style={{ position: 'absolute', bottom: selected ? 260 : 120, left: 16, right: 16, zIndex: 2000, display: 'flex', flexDirection: 'column', gap: 10, transition: 'bottom 0.3s' }}>
         
         {/* Toggle Filters Button */}
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -293,12 +293,15 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
               key={mode}
               onClick={() => setActiveMode(mode)}
               style={{ 
-                flex: 1, padding: '6px 10px', borderRadius: 12, fontSize: 10, fontWeight: 800, textAlign: 'center',
-                background: activeMode === mode ? '#E91E63' : 'rgba(0,0,0,0.8)',
-                color: '#fff',
-                border: `1px solid ${activeMode === mode ? '#E91E63' : 'rgba(255,255,255,0.1)'}`,
-                boxShadow: activeMode === mode ? '0 4px 12px rgba(233,30,99,0.3)' : 'none',
-                backdropFilter: 'blur(10px)'
+                flex: 1, padding: '8px 10px', borderRadius: 14, fontSize: 11, fontWeight: 800, textAlign: 'center',
+                background: activeMode === mode ? 'linear-gradient(135deg, #E91E63 0%, #FF4D8D 100%)' : 'rgba(13, 13, 26, 0.85)',
+                color: activeMode === mode ? '#fff' : '#aaa',
+                border: `1px solid ${activeMode === mode ? 'transparent' : 'rgba(255,255,255,0.08)'}`,
+                boxShadow: activeMode === mode ? '0 4px 16px rgba(233,30,99,0.4), inset 0 1px 1px rgba(255,255,255,0.3)' : 'none',
+                backdropFilter: 'blur(12px)',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                textTransform: 'uppercase',
+                letterSpacing: 0.5
               }}
             >
               {mode === 'Stock' ? '🎁 ' : (mode === "bunz'in" ? '💸 ' : '')}{mode}

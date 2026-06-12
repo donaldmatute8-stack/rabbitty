@@ -6,18 +6,19 @@ import crypto from 'crypto';
 export async function POST() {
   try {
     // Generate a secure random token for the QR code
-    const jwtToken = crypto.randomBytes(32).toString('hex');
+    const qrToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(qrToken).digest('hex');
     
     // Create a new web session valid for 5 minutes
     const [session] = await db.insert(webSessions).values({
-      jwtToken,
+      jwtToken: tokenHash,
       expiresAt: new Date(Date.now() + 5 * 60 * 1000)
     }).returning();
 
     return NextResponse.json({ 
       success: true, 
       sessionId: session.id,
-      qrToken: jwtToken,
+      qrToken: qrToken,
       expiresAt: session.expiresAt
     });
   } catch (error) {

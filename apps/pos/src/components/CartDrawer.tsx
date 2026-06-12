@@ -3,7 +3,8 @@
 import { trpc } from "../lib/trpc-client";
 import { Button, cn, toast } from "@rabbitty/ui";
 import { useState } from "react";
-import { X, Plus, Minus, ShoppingCart, ChevronLeft, Trash2 } from "lucide-react";
+import { X, Plus, Minus, ShoppingCart, ChevronLeft, Trash2, CreditCard } from "lucide-react";
+import { CheckoutModal } from "./CheckoutModal";
 
 interface CartDrawerProps {
   tableId?: string | null;
@@ -22,6 +23,7 @@ export function CartDrawer({ tableId, onClose }: CartDrawerProps) {
   const [orderId, setOrderId] = useState<string | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [addingId, setAddingId] = useState<string | null>(null);
+  const [showCheckout, setShowCheckout] = useState(false);
 
   const { data: categories } = trpc.pos.getCategories.useQuery();
   const { data: menuItems } = trpc.pos.getMenuItems.useQuery(selectedCategory ? { categoryId: selectedCategory } : {});
@@ -238,10 +240,30 @@ export function CartDrawer({ tableId, onClose }: CartDrawerProps) {
       )}
 
       <div className="border-t border-gray-100 p-4">
-        <Button onClick={onClose} className="w-full" size="lg">
-          {itemCount > 0 ? "Orden guardada" : "Cerrar"}
-        </Button>
+        {itemCount > 0 && orderId ? (
+          <Button onClick={() => setShowCheckout(true)} className="w-full bg-pink-600 shadow-lg hover:bg-pink-700" size="lg">
+            <CreditCard className="mr-2 h-5 w-5" />
+            Cobrar ${total.toFixed(2)}
+          </Button>
+        ) : (
+          <Button onClick={onClose} className="w-full" size="lg" variant="secondary">
+            Cerrar
+          </Button>
+        )}
       </div>
+
+      {showCheckout && orderId && (
+        <CheckoutModal
+          orderId={orderId}
+          total={total}
+          onClose={() => setShowCheckout(false)}
+          onSuccess={() => {
+            setShowCheckout(false);
+            utils.pos.getOrders.invalidate();
+            onClose();
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -48,7 +48,7 @@ async function fetchApi<T>(
   return res.json();
 }
 
-interface RewardResult {
+export interface RewardResult {
   success: boolean;
   message: string;
   bunz: number;
@@ -56,13 +56,13 @@ interface RewardResult {
   userId?: string;
 }
 
-interface ChargeResult {
+export interface ChargeResult {
   success: boolean;
   message: string;
   balance_remaining: number;
 }
 
-interface Transaction {
+export interface Transaction {
   id: string;
   fiatAmount: number;
   bunzMinted: number;
@@ -73,7 +73,7 @@ interface Transaction {
   businessCategory?: string;
 }
 
-interface Business {
+export interface Business {
   id: string;
   ownerId: string;
   name: string;
@@ -89,7 +89,7 @@ interface Business {
   status: string;
 }
 
-interface Gamification {
+export interface Gamification {
   hops: number;
   level: { id: string; name: string; requiredHops: number; bunzMultiplier: number } | null;
   achievements: Array<{
@@ -102,7 +102,7 @@ interface Gamification {
   }>;
 }
 
-interface FeedItem {
+export interface FeedItem {
   id: string;
   user: string;
   category: string;
@@ -113,17 +113,17 @@ interface FeedItem {
   lng: number;
 }
 
-interface MintResult {
+export interface MintResult {
   success: boolean;
   bunzRewarded: number;
 }
 
-interface ReservationResult {
+export interface ReservationResult {
   success: boolean;
   reservation?: { id: string; status: string };
 }
 
-interface NotificationResult {
+export interface NotificationResult {
   success: boolean;
   notification?: { id: string };
 }
