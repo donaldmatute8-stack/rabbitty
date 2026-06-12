@@ -9,6 +9,7 @@ from app.utils.security import decode_token
 from app.schemas.business import BusinessCreate, BusinessUpdate, BusinessResponse, BusinessNearbyRequest
 from app.models.business import Business
 from app.models.user import User
+from app.services.auth import rate_limit
 
 router = APIRouter()
 
@@ -32,7 +33,8 @@ async def list_businesses(
     skip: int = 0,
     limit: int = 100,
     category: str = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _=Depends(rate_limit)
 ):
     """Lista todos los negocios."""
     get_current_user(token, db)

@@ -8,11 +8,12 @@ from app.utils.security import verify_telegram_webapp_data, create_access_token,
 from app.schemas.user import UserLogin, UserResponse, UserCreate
 from app.models.user import User, UserSession
 from app.config import settings
+from app.services.auth import rate_limit
 
 router = APIRouter()
 
 @router.post("/telegram")
-async def login_with_telegram(login_data: UserLogin, db: Session = Depends(get_db)):
+async def login_with_telegram(login_data: UserLogin, db: Session = Depends(get_db), _=Depends(rate_limit)):
     """Autentica un usuario con datos de Telegram WebApp."""
     
     # Verificar firma de Telegram
@@ -84,7 +85,7 @@ async def login_with_telegram(login_data: UserLogin, db: Session = Depends(get_d
     }
 
 @router.post("/refresh")
-async def refresh_token(refresh_token: str, db: Session = Depends(get_db)):
+async def refresh_token(refresh_token: str, db: Session = Depends(get_db), _=Depends(rate_limit)):
     """Refresca un token de acceso."""
     
     payload = decode_token(refresh_token)
@@ -123,7 +124,7 @@ async def refresh_token(refresh_token: str, db: Session = Depends(get_db)):
     return {"token": new_access_token, "refresh_token": new_refresh_token}
 
 @router.post("/logout")
-async def logout(token: str, db: Session = Depends(get_db)):
+async def logout(token: str, db: Session = Depends(get_db), _=Depends(rate_limit)):
     """Cierra la sesión del usuario."""
     
     session = db.query(UserSession).filter(UserSession.token == token).first()

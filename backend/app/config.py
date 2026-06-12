@@ -12,9 +12,9 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     
     # Security
-    SECRET_KEY: str = "your-secret-key-change-in-production"
+    SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 horas
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60  # 1 hora
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
     # Telegram
@@ -34,6 +34,17 @@ class Settings(BaseSettings):
     
     class Config:
         env_file = ".env"
+        extra = "ignore"
+
+    @classmethod
+    def validate_secret_key(cls, v: str) -> str:
+        if not v or len(v) < 32:
+            import warnings
+            warnings.warn(
+                "SECRET_KEY no está configurada o es muy corta. "
+                "Genera una con: openssl rand -base64 32"
+            )
+        return v
 
 @lru_cache()
 def get_settings() -> Settings:

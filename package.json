@@ -10,7 +10,11 @@
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "test": "turbo run test",
-    "clean": "turbo run clean"
+    "clean": "turbo run clean",
+    "security:audit": "pnpm audit --audit-level=high",
+    "security:audit:all": "pnpm audit",
+    "security:check": "npx --yes snyk test 2>/dev/null || echo 'Snyk no instalado. Ejecuta: npm install -g snyk && snyk auth'",
+    "security:deps": "pnpm audit --audit-level=moderate && pnpm outdated"
   },
   "keywords": [
     "web3",
@@ -25,5 +29,8 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/donaldmatute8-stack/rabbitty.git"
+  },
+  "devDependencies": {
+    "turbo": "^2.9.18"
   }
 }

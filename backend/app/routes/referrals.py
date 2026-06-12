@@ -8,6 +8,7 @@ from app.utils.security import decode_token, generate_referral_code
 from app.schemas.referral import ReferralResponse, ReferralStats, ReferralCreate
 from app.models.referral import Referral, ReferralTier, ReferralTierConfig
 from app.models.user import User
+from app.services.auth import rate_limit
 
 router = APIRouter()
 

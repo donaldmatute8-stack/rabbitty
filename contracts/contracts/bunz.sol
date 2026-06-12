@@ -323,5 +323,13 @@ contract bunz is
         super._beforeTokenTransfer(from, to, amount);
     }
 
+    function _afterTokenTransfer(address from, address to, uint256 amount)
+        internal
+        override
+        whenNotPaused
+    {
+        super._afterTokenTransfer(from, to, amount);
+    }
+
     function _authorizeUpgrade(address newImplementation) internal override onlyRole(UPGRADER_ROLE) {}
 }

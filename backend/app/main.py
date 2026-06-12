@@ -28,12 +28,21 @@ app = FastAPI(
 )
 
 # CORS
+ALLOWED_ORIGINS = [
+    "https://rabbitty.me",
+    "https://admin.rabbitty.me",
+    "https://pos.rabbitty.me",
+    "https://telegram-miniapp-lyart-gamma.vercel.app",
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:3002",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En producción, especificar dominios
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # Include routers

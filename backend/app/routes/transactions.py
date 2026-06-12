@@ -9,6 +9,7 @@ from app.schemas.transaction import TransactionCreate, TransactionResponse, QRSc
 from app.models.transaction import Transaction, TransactionType, TransactionStatus
 from app.models.business import Business
 from app.models.user import User
+from app.services.auth import rate_limit
 
 router = APIRouter()
 
@@ -30,7 +31,8 @@ def get_current_user(token: str, db: Session) -> User:
 async def scan_qr(
     scan_data: QRScanRequest,
     token: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _=Depends(rate_limit)
 ):
     """Registra un escaneo QR y otorga recompensa."""
     user = get_current_user(token, db)
@@ -98,7 +100,8 @@ async def scan_qr(
 async def pay_with_bunz(
     pay_data: PayRequest,
     token: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _=Depends(rate_limit)
 ):
     """Paga con bunz en un negocio."""
     user = get_current_user(token, db)

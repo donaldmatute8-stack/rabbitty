@@ -192,8 +192,12 @@ class RateLimiter:
 rate_limiter = RateLimiter()
 
 def rate_limit(request: Request):
-    """Rate limit dependency."""
-    client_ip = request.client.host if request.client else "unknown"
+    """Rate limit dependency. Respects X-Forwarded-For behind reverse proxy."""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        client_ip = forwarded.split(",")[0].strip()
+    else:
+        client_ip = request.client.host if request.client else "unknown"
     if not rate_limiter.is_allowed(client_ip):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,

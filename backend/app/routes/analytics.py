@@ -8,6 +8,7 @@ from app.utils.security import decode_token
 from app.models.user import User
 from app.models.transaction import Transaction, TransactionType
 from app.models.business import Business
+from app.services.auth import rate_limit
 
 router = APIRouter()
 

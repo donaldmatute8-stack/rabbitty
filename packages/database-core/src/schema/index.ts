@@ -20,6 +20,7 @@ export const users = pgTable("users", {
   tonWalletAddress: text("tonWalletAddress").unique(),
   totalBunzEarned: integer("totalBunzEarned").default(0).notNull(),
   totalBunzSpent: integer("totalBunzSpent").default(0).notNull(),
+  pendingDebtBunz: integer("pendingDebtBunz").default(0).notNull(), // Offline debt
   visitedBusinesses: integer("visitedBusinesses").default(0).notNull(),
   role: text("role").default("USER").notNull(),
   hasMadeFirstTransaction: boolean("hasMadeFirstTransaction").default(false).notNull(),
@@ -34,6 +35,17 @@ export const webSessions = pgTable("webSessions", {
   jwtToken: text("jwtToken").notNull().unique(),
   userId: fkIdOpt("userId").references(() => users.id),
   expiresAt: timestamp("expiresAt").notNull(),
+  createdAt: timestamp("createdAt").defaultNow(),
+});
+
+export const auditEntries = pgTable("auditEntries", {
+  id: id(),
+  userId: text("userId"),
+  action: text("action").notNull(),
+  resource: text("resource").notNull(),
+  resourceId: text("resourceId"),
+  details: text("details"),
+  ipAddress: text("ipAddress"),
   createdAt: timestamp("createdAt").defaultNow(),
 });
 
@@ -52,6 +64,7 @@ export const ownedBusinesses = pgTable("ownedBusinesses", {
   rarity: text("rarity").default("common").notNull(),
   givesBunz: boolean("givesBunz").default(true).notNull(),
   acceptsBunz: boolean("acceptsBunz").default(false).notNull(),
+  bunzBalance: integer("bunzBalance").default(0).notNull(), // Inventario de Bunz del restaurante
   status: text("status").default("PENDING_VERIFICATION").notNull(),
   verificationMethod: text("verificationMethod"),
   verificationData: text("verificationData"),
@@ -185,4 +198,17 @@ export const reservations = pgTable("reservations", {
   status: text("status").default("PENDING").notNull(),
   date: timestamp("date").defaultNow(),
   createdAt: timestamp("createdAt").defaultNow(),
+});
+
+export const billingProfiles = pgTable("billingProfiles", {
+  id: id(),
+  userId: fkId("userId").references(() => users.id),
+  rfc: text("rfc").notNull(),
+  legalName: text("legalName").notNull(),
+  taxRegime: text("taxRegime").notNull(), // Régimen Fiscal (ej. 601)
+  zipCode: text("zipCode").notNull(),
+  cfdiUse: text("cfdiUse").default("G03").notNull(), // Uso CFDI
+  email: text("email").notNull(),
+  isDefault: boolean("isDefault").default(false).notNull(),
+  ...timestamps,
 });
