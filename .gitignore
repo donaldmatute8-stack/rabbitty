@@ -37,6 +37,9 @@ dist/
 .env.development
 .env.production
 
+# Force-track .env.example
+!.env.example
+
 # IDE
 .idea/
 .vscode/
