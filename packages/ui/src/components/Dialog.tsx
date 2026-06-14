@@ -48,7 +48,7 @@ function Dialog({ open, onClose, title, children, className }: DialogProps) {
       />
       <div
         className={cn(
-          "relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-xl",
+          "relative z-10 w-full max-w-md rounded-2xl bg-white dark:bg-neutral-900 dark:border dark:border-white/10 p-6 shadow-xl",
           "transition-all duration-200",
           open ? "scale-100 opacity-100" : "scale-95 opacity-0",
           className
@@ -56,10 +56,10 @@ function Dialog({ open, onClose, title, children, className }: DialogProps) {
       >
         {title && (
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h2>
             <button
               onClick={onClose}
-              className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+              className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-600 dark:hover:text-white transition-colors"
               aria-label="Close"
             >
               <svg

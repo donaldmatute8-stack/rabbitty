@@ -52,64 +52,71 @@ export default function StaffPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Personal</h1>
-          <p className="text-sm text-gray-500">Gestiona los empleados y sus roles</p>
+    <div className="space-y-8 pb-10">
+      <div className="relative overflow-hidden rounded-3xl border border-white/5 bg-gradient-to-br from-gray-900/60 to-black/80 p-8 shadow-2xl backdrop-blur-xl">
+        <div className="absolute top-0 right-0 h-48 w-48 rounded-full bg-pink-500/10 blur-3xl pointer-events-none" />
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-4xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-500">
+              Personal
+            </h1>
+            <p className="text-gray-400 mt-2 text-sm font-medium">Gestiona los empleados, credenciales y sus roles</p>
+          </div>
+          <Button onClick={() => { setForm(defaultForm); setDialog({ mode: "create" }); }}>
+            <Plus className="h-5 w-5" />
+            Agregar Personal
+          </Button>
         </div>
-        <Button onClick={() => { setForm(defaultForm); setDialog({ mode: "create" }); }}>
-          <Plus className="h-4 w-4" />
-          Agregar Personal
-        </Button>
       </div>
 
-      <Card className="overflow-hidden">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-gray-100 bg-gray-50">
-            <tr>
-              <th className="px-5 py-3 font-medium text-gray-500">Nombre</th>
-              <th className="px-5 py-3 font-medium text-gray-500">Email</th>
-              <th className="px-5 py-3 font-medium text-gray-500">Rol</th>
-              <th className="px-5 py-3 font-medium text-gray-500">Estado</th>
-              <th className="px-5 py-3 font-medium text-gray-500">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {staff?.map((member) => (
-              <tr key={member.id} className="hover:bg-gray-50">
-                <td className="px-5 py-4 font-medium text-gray-900">{member.name}</td>
-                <td className="px-5 py-4 text-gray-500">{member.email}</td>
-                <td className="px-5 py-4">
-                  <Badge variant={roleColors[member.role] ?? "default"}>
-                    {roleLabels[member.role] ?? member.role}
-                  </Badge>
-                </td>
-                <td className="px-5 py-4">
-                  <Badge variant={member.isActive ? "success" : "danger"}>
-                    {member.isActive ? "Activo" : "Inactivo"}
-                  </Badge>
-                </td>
-                <td className="px-5 py-4">
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => openEdit(member)}
-                      className="rounded-lg border border-gray-200 p-1.5 text-gray-400 hover:bg-gray-50 hover:text-gray-600"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      onClick={() => setDelete({ id: member.id, name: member.name })}
-                      className="rounded-lg border border-gray-200 p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </td>
+      <Card className="border border-white/5 bg-white/5 backdrop-blur-md overflow-hidden rounded-3xl">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="border-b border-white/5 bg-white/5">
+              <tr>
+                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-gray-400">Nombre</th>
+                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-gray-400">Email</th>
+                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-gray-400">Rol</th>
+                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-gray-400">Estado</th>
+                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-gray-400">Acciones</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {staff?.map((member) => (
+                <tr key={member.id} className="hover:bg-white/[0.02] transition-colors">
+                  <td className="px-6 py-4 font-bold text-white text-base">{member.name}</td>
+                  <td className="px-6 py-4 text-gray-400 font-mono text-xs">{member.email}</td>
+                  <td className="px-6 py-4">
+                    <Badge variant={roleColors[member.role] ?? "default"}>
+                      {roleLabels[member.role] ?? member.role}
+                    </Badge>
+                  </td>
+                  <td className="px-6 py-4">
+                    <Badge variant={member.isActive ? "success" : "danger"}>
+                      {member.isActive ? "Activo" : "Inactivo"}
+                    </Badge>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => openEdit(member)}
+                        className="rounded-xl border border-white/5 bg-white/5 p-2 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20 transition-all duration-300"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => setDelete({ id: member.id, name: member.name })}
+                        className="rounded-xl border border-red-500/10 bg-red-500/5 p-2 text-red-400 hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/30 transition-all duration-300"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
       <Dialog

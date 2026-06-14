@@ -1,17 +1,17 @@
-"use client";
-
 import React from "react";
-import { AdminSidebar } from "../../components/AdminSidebar";
+import { redirect } from "next/navigation";
+import { auth } from "@rabbitty/auth";
+import { DashboardClientWrapper } from "../../components/DashboardClientWrapper";
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const session = await auth();
+  if (!session) {
+    redirect("/login");
+  }
+
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[var(--bg-subtle)] text-[var(--text-primary)]">
-      <AdminSidebar />
-      <main className="flex-1 overflow-y-auto p-8">
-        <div className="mx-auto max-w-7xl">
-          {children}
-        </div>
-      </main>
-    </div>
+    <DashboardClientWrapper>
+      {children}
+    </DashboardClientWrapper>
   );
 }
