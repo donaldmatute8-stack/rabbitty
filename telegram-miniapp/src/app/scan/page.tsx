@@ -6,9 +6,9 @@ import { ArrowLeft, Keyboard, QrCode } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import BottomNav from '@/components/BottomNav';
 import Button from '@/components/ui/Button';
-import { QRCodeSVG } from 'qrcode.react';
 import { useWallet } from '@/contexts/WalletContext';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { RabbittyAnimatedBadge } from '@/components/RabbittyAnimatedBadge';
 
 export default function ScanPage() {
   const router = useRouter();
@@ -104,22 +104,15 @@ export default function ScanPage() {
               <h2 className="text-xl font-extrabold text-white m-0 mb-2">Tu Código Rabbitter</h2>
               <p className="text-white/50 text-xs leading-[1.6] m-0">Muestra este código en caja para acumular Bunz por tu consumo.</p>
             </div>
-            <div className="bg-white p-5 rounded-[28px] shadow-[0_0_40px_rgba(255,255,255,0.08)]">
+            <div className="flex items-center justify-center min-h-[300px] w-full">
               {qrValue ? (
-                <QRCodeSVG value={qrValue} size={180} level="H" className="rounded-xl block" />
+                <RabbittyAnimatedBadge value={qrValue} size={220} />
               ) : (
-                <div className="w-[180px] h-[180px] bg-[#F3F4F6] flex items-center justify-center rounded-xl border-2 border-dashed border-[#E5E7EB]">
-                  <span className="text-[#9CA3AF] text-xs font-bold">Cargando...</span>
+                <div className="w-[180px] h-[180px] bg-white/[0.03] flex items-center justify-center rounded-xl border-2 border-dashed border-white/10">
+                  <span className="text-white/40 text-xs font-bold">Cargando...</span>
                 </div>
               )}
             </div>
-            {qrValue && (
-              <div className="bg-white/[0.08] px-4 py-2 rounded-full border border-white/[0.05]">
-                <p className="text-white/60 text-[10px] font-mono tracking-[1px] m-0">
-                  {qrValue.substring(0, 10)}...{qrValue.substring(qrValue.length - 10)}
-                </p>
-              </div>
-            )}
           </div>
         )}
 
