@@ -21,6 +21,10 @@ const redis = process.env.REDIS_URL
       port: process.env.REDIS_PORT || 6379
     });
 
+redis.on('error', (err) => {
+  console.error('Redis connection error:', err.message);
+});
+
 // Web3 setup
 // SECURITY: In production, use a remote signer (KMS, Web3Auth) instead of loading PRIVATE_KEY in memory.
 // Consider: AWS KMS, GCP Cloud KMS, or Fireblocks for production key management.

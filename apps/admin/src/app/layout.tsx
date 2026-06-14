@@ -1,7 +1,13 @@
 import type { Metadata } from "next";
+import { Outfit } from "next/font/google";
 import "./globals.css";
 import { TRPCProvider } from "../lib/providers";
 import { ErrorBoundary } from "@rabbitty/ui";
+
+const outfit = Outfit({
+  subsets: ["latin"],
+  variable: "--font-outfit",
+});
 
 export const metadata: Metadata = {
   title: "Rabbitty Admin",
@@ -14,8 +20,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className="antialiased">
-      <body className="min-h-screen" style={{ fontFamily: "var(--rabbitty-font)", background: "var(--bg-primary)", color: "var(--text-primary)" }}>
+    <html lang="es" className={`${outfit.variable} antialiased dark`}>
+      <body className="min-h-screen" style={{ background: "var(--bg-primary)", color: "var(--text-primary)" }}>
         <ErrorBoundary>
           <TRPCProvider>{children}</TRPCProvider>
         </ErrorBoundary>

@@ -38,47 +38,52 @@ export default function InventoryPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Inventario</h1>
-          <p className="text-sm text-gray-500">Control de stock y suministros</p>
+    <div className="space-y-8 pb-10">
+      <div className="relative overflow-hidden rounded-3xl border border-white/5 bg-gradient-to-br from-gray-900/60 to-black/80 p-8 shadow-2xl backdrop-blur-xl">
+        <div className="absolute top-0 right-0 h-48 w-48 rounded-full bg-pink-500/10 blur-3xl pointer-events-none" />
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-4xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-500">
+              Inventario
+            </h1>
+            <p className="text-gray-400 mt-2 text-sm font-medium">Control de stock y suministros</p>
+          </div>
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="h-5 w-5" />
+            Agregar Item
+          </Button>
         </div>
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="h-4 w-4" />
-          Agregar Item
-        </Button>
       </div>
 
       {lowStockItems.length > 0 && (
-        <Card className="border-red-200 bg-red-50 p-4">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-red-600" />
-            <span className="text-sm font-medium text-red-800">
-              {lowStockItems.length} producto(s) con stock bajo
-            </span>
-          </div>
+        <Card className="border-red-500/20 bg-red-500/10 p-5 rounded-2xl flex items-center gap-3">
+          <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />
+          <span className="text-sm font-bold text-red-400">
+            {lowStockItems.length} producto(s) con stock crítico / bajo
+          </span>
         </Card>
       )}
 
-      <div className="grid gap-3">
+      <div className="grid gap-4">
         {items?.map((item) => {
           const isLow = item.stock <= item.minStock;
 
           return (
-            <Card key={item.id} className="flex items-center justify-between p-4">
+            <Card key={item.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-6 border border-white/5 bg-white/5 backdrop-blur-md hover:border-white/10 hover:bg-white/10 transition-all duration-300 gap-4">
               <div className="flex items-center gap-4">
                 <div
-                  className={`flex h-10 w-10 items-center justify-center rounded-xl ${
-                    isLow ? "bg-red-100" : "bg-blue-100"
+                  className={`flex h-12 w-12 items-center justify-center rounded-2xl border shrink-0 ${
+                    isLow 
+                      ? "bg-red-500/10 border-red-500/20 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.15)]" 
+                      : "bg-blue-500/10 border-blue-500/20 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.15)]"
                   }`}
                 >
-                  <Package className={`h-5 w-5 ${isLow ? "text-red-600" : "text-blue-600"}`} />
+                  <Package className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="font-medium text-gray-900">{item.name}</h3>
-                  <div className="mt-0.5 flex items-center gap-2 text-xs text-gray-500">
-                    <span>SKU: {item.sku}</span>
+                  <h3 className="font-bold text-lg text-white">{item.name}</h3>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-400">
+                    <span className="font-mono bg-white/5 px-1.5 py-0.5 rounded border border-white/5">SKU: {item.sku}</span>
                     <span>•</span>
                     <span>Unidad: {item.unit}</span>
                     <span>•</span>
@@ -87,18 +92,18 @@ export default function InventoryPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-6">
-                <div className="text-right">
-                  <div className={`text-lg font-bold ${isLow ? "text-red-600" : "text-gray-900"}`}>
+              <div className="flex flex-wrap items-center gap-6 justify-between sm:justify-end">
+                <div className="text-left sm:text-right">
+                  <div className={`text-2xl font-black ${isLow ? "text-red-400" : "text-white"}`}>
                     {item.stock}
-                    <span className="ml-0.5 text-sm font-normal text-gray-400">{item.unit}</span>
+                    <span className="ml-1 text-sm font-normal text-gray-400">{item.unit}</span>
                   </div>
-                  <div className="text-xs text-gray-400">
+                  <div className="text-xs text-gray-400 font-semibold mt-0.5">
                     Mín: {item.minStock} {item.unit}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5 bg-white/5 border border-white/5 p-1.5 rounded-2xl">
                   <input
                     type="number"
                     placeholder="0"
@@ -106,17 +111,17 @@ export default function InventoryPage() {
                     onChange={(e) =>
                       setAdjustments((prev) => ({ ...prev, [item.id]: Number(e.target.value) }))
                     }
-                    className="w-20 rounded-lg border border-gray-300 px-2 py-1.5 text-center text-sm focus:border-pink-500 focus:outline-none focus:ring-2 focus:ring-pink-500/20"
+                    className="w-16 rounded-xl border-0 bg-transparent px-2 py-1 text-center text-sm font-bold text-white focus:outline-none focus:ring-0 placeholder:text-gray-600"
                   />
                   <button
                     onClick={() => handleAdjust(item.id)}
                     disabled={updateStock.isPending}
-                    className="rounded-lg bg-pink-600 p-1.5 text-white hover:bg-pink-700 disabled:opacity-50"
+                    className="rounded-xl bg-pink-500 hover:bg-pink-600 p-2.5 text-white hover:scale-105 active:scale-95 shadow-[0_4px_14px_rgba(236,72,153,0.3)] transition-all duration-350 disabled:opacity-50"
                   >
                     {(adjustments[item.id] ?? 0) > 0 ? (
-                      <TrendingUp className="h-4 w-4" />
+                      <TrendingUp className="h-4.5 w-4.5" />
                     ) : (
-                      <TrendingDown className="h-4 w-4" />
+                      <TrendingDown className="h-4.5 w-4.5" />
                     )}
                   </button>
                 </div>

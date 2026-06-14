@@ -10,16 +10,18 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ className, label, error, ...props }, ref) => (
     <div className="space-y-1">
       {label && (
-        <label className="text-sm font-medium text-gray-700">{label}</label>
+        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
       )}
       <input
         ref={ref}
         className={cn(
           "w-full rounded-2xl border border-gray-200/60 bg-white/50 backdrop-blur-md px-4 py-3 text-sm font-medium transition-all duration-300",
-          "placeholder:text-gray-400 shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]",
-          "hover:bg-white/80 hover:border-gray-300",
+          "dark:border-white/10 dark:bg-neutral-900/50 dark:text-white",
+          "placeholder:text-gray-400 dark:placeholder:text-gray-500 shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]",
+          "hover:bg-white/80 hover:border-gray-300 dark:hover:bg-neutral-900/80 dark:hover:border-white/20",
           "focus:bg-white focus:border-pink-500 focus:outline-none focus:ring-4 focus:ring-pink-500/10 focus:shadow-[0_4px_14px_rgba(236,72,153,0.1)]",
-          "disabled:cursor-not-allowed disabled:bg-gray-50/50 disabled:text-gray-400",
+          "dark:focus:bg-neutral-950 dark:focus:ring-pink-500/20",
+          "disabled:cursor-not-allowed disabled:bg-gray-50/50 disabled:text-gray-400 dark:disabled:bg-neutral-900/30",
           error && "border-red-500 focus:border-red-500 focus:ring-red-500/20",
           className
         )}

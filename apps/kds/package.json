@@ -12,6 +12,7 @@
   "dependencies": {
     "@rabbitty/api": "workspace:*",
     "@rabbitty/auth": "workspace:*",
+    "@rabbitty/design": "workspace:*",
     "@rabbitty/events": "workspace:*",
     "@rabbitty/ui": "workspace:*",
     "@tanstack/react-query": "^5.100.14",

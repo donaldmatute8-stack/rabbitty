@@ -16,6 +16,7 @@
     "@rabbitty/bunz": "workspace:*",
     "@rabbitty/database-core": "workspace:*",
     "@rabbitty/database-restaurant": "workspace:*",
+    "@rabbitty/design": "workspace:*",
     "@rabbitty/events": "workspace:*",
     "@rabbitty/ui": "workspace:*",
     "@serwist/next": "^9.5.11",
