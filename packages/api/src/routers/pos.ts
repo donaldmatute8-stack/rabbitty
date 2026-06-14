@@ -311,6 +311,33 @@ export const posRouter = router({
       return { success: true };
     }),
 
+  linkCustomerToOrder: protectedProcedure
+    .input(
+      z.object({
+        orderId: z.string(),
+        customerPhone: z.string(),
+        customerName: z.string().optional(),
+        customerId: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const [order] = await ctx.restaurantDb.update(orders)
+        .set({
+          customerPhone: input.customerPhone,
+          customerName: input.customerName ?? null,
+          customerId: input.customerId ?? null,
+        })
+        .where(
+          and(
+            eq(orders.id, input.orderId),
+            eq(orders.branchId, ctx.branchId)
+          )
+        )
+        .returning();
+      if (!order) throw new Error("Orden no encontrada");
+      return order;
+    }),
+
   voidOrder: protectedProcedure
     .input(z.object({ orderId: z.string(), reason: z.string() }))
     .mutation(async ({ ctx, input }) => {

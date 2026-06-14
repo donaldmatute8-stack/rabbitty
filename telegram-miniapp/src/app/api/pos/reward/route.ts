@@ -1,24 +1,24 @@
-import { NextResponse } from 'next/server';
-import { db } from '@/db';
-import { users, pendingVaults, transactions, ownedBusinesses } from '@/db/schema';
-import { eq, and, gte, sql } from 'drizzle-orm';
-import crypto from 'crypto';
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/db";
+import { users, pendingVaults, transactions, ownedBusinesses } from "@/db/schema";
+import { eq, and, gte, sql, or } from "drizzle-orm";
+import crypto from "crypto";
 
 export async function POST(request: Request) {
   try {
     // 1. Validate API Secret
-    const authHeader = request.headers.get('authorization');
+    const authHeader = request.headers.get("authorization");
     const expectedSecret = process.env.RABBITTY_API_SECRET;
     
     if (!expectedSecret || authHeader !== `Bearer ${expectedSecret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = await request.json();
     const { phone, amount_usd, order_id, business_id } = body;
 
     if (!phone || !amount_usd) {
-      return NextResponse.json({ error: 'Missing phone or amount_usd' }, { status: 400 });
+      return NextResponse.json({ error: "Missing phone or amount_usd" }, { status: 400 });
     }
 
     let rewardRate = 0.20;
@@ -34,12 +34,12 @@ export async function POST(request: Request) {
     const bunzToMint = Math.floor(amount_usd * rewardRate);
 
     if (bunzToMint <= 0) {
-      return NextResponse.json({ message: 'Amount too low to generate Bunz' }, { status: 200 });
+      return NextResponse.json({ message: "Amount too low to generate Bunz" }, { status: 200 });
     }
 
     // 2. Fetch Business Inventory (atomic update)
     let hasEnoughInventory = true;
-    let businessId = business_id || 'unknown';
+    let businessId = business_id || "unknown";
     if (business_id) {
       const result = await db.update(ownedBusinesses)
         .set({ bunzBalance: sql`bunz_balance - ${bunzToMint}` })
@@ -57,7 +57,15 @@ export async function POST(request: Request) {
     expirationDate.setMonth(expirationDate.getMonth() + 3);
 
     // 3. Find User
-    const existingUserArray = await db.select().from(users).where(eq(users.phoneNumber, phone)).limit(1);
+    const conditions = [
+      eq(users.phoneNumber, phone),
+      eq(users.telegramId, phone)
+    ];
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(phone)) {
+      conditions.push(eq(users.id, phone));
+    }
+
+    const existingUserArray = await db.select().from(users).where(or(...conditions)).limit(1);
     const existingUser = existingUserArray[0];
 
     if (!hasEnoughInventory) {

@@ -1,17 +1,33 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useActiveWallet } from "thirdweb/react";
 import QRScanner from '@/features/transactions/QRScanner';
 import { toast } from 'sonner';
+import { useAuth } from '@/features/auth/AuthProvider';
 
 export default function BusinessScanPage() {
   const wallet = useActiveWallet();
+  const { user } = useAuth();
+  const [business, setBusiness] = useState<any>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [showMintModal, setShowMintModal] = useState(false);
   const [scannedAddress, setScannedAddress] = useState('');
   const [fiatAmount, setFiatAmount] = useState('');
   const [processing, setProcessing] = useState(false);
+
+  useEffect(() => {
+    if (user?.telegramId) {
+      fetch(`/api/business?telegramId=${user.telegramId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.business) {
+            setBusiness(data.business);
+          }
+        })
+        .catch(err => console.error("Error loading business info:", err));
+    }
+  }, [user]);
 
   const handleScan = async (decodedText: string) => {
     setIsScanning(false);
@@ -20,15 +36,13 @@ export default function BusinessScanPage() {
     if (decodedText.length === 32 && /^[0-9a-fA-F]+$/.test(decodedText)) {
       await processRedeem(decodedText);
     } else {
-      // Treat as Wallet Address for general consumption
+      // Treat as Wallet Address / Telegram ID for general consumption
       setScannedAddress(decodedText);
       setShowMintModal(true);
     }
   };
 
   const processRedeem = async (qrCodeData: string) => {
-    if (!wallet) return toast.error("Wallet no conectada");
-    
     setProcessing(true);
     const toastId = toast.loading("Verificando certificado...");
     
@@ -37,7 +51,7 @@ export default function BusinessScanPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          businessWallet: wallet.getAccount()?.address,
+          businessWallet: wallet?.getAccount()?.address || 'unknown',
           qrCodeData
         })
       });
@@ -47,7 +61,7 @@ export default function BusinessScanPage() {
       if (data.success) {
         toast.success(`¡Canje exitoso! Entrega: ${data.offerTitle}`, { id: toastId, duration: 5000 });
       } else {
-        toast.error(data.error, { id: toastId, duration: 5000 });
+        toast.error(data.error || "No disponible", { id: toastId, duration: 5000 });
       }
     } catch (err) {
       console.error(err);
@@ -59,8 +73,8 @@ export default function BusinessScanPage() {
 
   const handleMintSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!wallet) return toast.error("Wallet no conectada");
     if (!fiatAmount || Number(fiatAmount) <= 0) return toast.error("Ingresa un monto válido");
+    if (!business) return toast.error("No se cargó el perfil del negocio administrador");
     
     setProcessing(true);
     const toastId = toast.loading("Procesando recompensa...");
@@ -70,8 +84,8 @@ export default function BusinessScanPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          businessWallet: wallet.getAccount()?.address,
-          customerAddress: scannedAddress,
+          telegramId: scannedAddress, // The customer's scanned ID/telegramId/wallet
+          businessId: business.id,     // The merchant's business ID
           fiatAmount: Number(fiatAmount)
         })
       });
@@ -84,7 +98,7 @@ export default function BusinessScanPage() {
         setFiatAmount('');
         setScannedAddress('');
       } else {
-        toast.error(data.error, { id: toastId, duration: 5000 });
+        toast.error(data.error || "Error al otorgar Bunz", { id: toastId, duration: 5000 });
       }
     } catch (err) {
       console.error(err);

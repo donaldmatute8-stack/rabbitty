@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { users, ownedBusinesses, transactions, levels } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, or } from "drizzle-orm";
 import { processReferralAndNotifications } from '@/lib/referralLogic';
 import { awardHops, evaluateHatTricks } from '@/lib/gamificationLogic';
 import { sendToOracle } from '@/lib/oracle-client';
@@ -23,8 +23,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Negocio no encontrado o no autorizado." }, { status: 403 });
     }
 
+    const conditions = [
+      eq(users.telegramId, telegramId),
+      eq(users.tonWalletAddress, telegramId)
+    ];
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(telegramId)) {
+      conditions.push(eq(users.id, telegramId));
+    }
+
     const customer = await db.query.users.findFirst({
-      where: eq(users.telegramId, telegramId)
+      where: or(...conditions)
     });
 
     if (!customer) {
