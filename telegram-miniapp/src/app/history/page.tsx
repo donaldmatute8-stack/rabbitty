@@ -6,6 +6,7 @@ import BottomNav from '@/components/BottomNav';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import EmptyState from '@/components/ui/EmptyState';
 import { useWallet } from '@/contexts/WalletContext';
+import { useAuth } from '@/features/auth/AuthProvider';
 
 const FILTERS = ["Todos", "Ganado", "Gastado", "Comida", "Fitness", "Tecnología"];
 
@@ -25,18 +26,20 @@ export default function HistoryPage() {
   const [transactions, setTransactions] = useState<TxHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const { address } = useWallet();
+  const { user } = useAuth();
 
   useEffect(() => {
-    if (address) {
+    if (user?.telegramId) {
       fetchHistory();
     } else {
       setLoading(false);
     }
-  }, [address]);
+  }, [user]);
 
   const fetchHistory = async () => {
+    if (!user?.telegramId) return;
     try {
-      const res = await fetch(`/api/history?wallet=${address}`);
+      const res = await fetch(`/api/history?telegramId=${encodeURIComponent(user.telegramId)}`);
       const data = await res.json();
       if (data.success) {
         setTransactions(data.history);
