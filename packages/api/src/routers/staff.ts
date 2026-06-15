@@ -1,9 +1,10 @@
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
-import { router, protectedProcedure } from "../trpc";
+import { router, protectedProcedure, publicProcedure } from "../trpc";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
 import { staff as staffTable, staffShifts } from "@rabbitty/database-restaurant/schema";
+import { hashPin, verifyPin } from "../services/crypto";
 
 
 
@@ -15,7 +16,7 @@ export const staffRouter = router({
         ? eq(staffTable.branchId, input.branchId)
         : eq(staffTable.branchId, ctx.branchId);
       const staff = await ctx.restaurantDb.select().from(staffTable).where(where);
-      return staff;
+      return staff.map((s) => ({ ...s, pinCode: undefined }));
     }),
 
   createStaff: protectedProcedure
@@ -25,7 +26,7 @@ export const staffRouter = router({
         name: z.string(),
         email: z.string(),
         role: z.enum(["WAITER", "CASHIER", "MANAGER", "ADMIN"]).default("WAITER"),
-        pinCode: z.string().optional(),
+        pinCode: z.string().length(4).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -35,9 +36,9 @@ export const staffRouter = router({
         name: input.name,
         email: input.email,
         role: input.role,
-        pinCode: input.pinCode ?? null,
+        pinCode: input.pinCode ? hashPin(input.pinCode) : null,
       }).returning();
-      return result;
+      return { ...result, pinCode: undefined };
     }),
 
   updateStaff: protectedProcedure
@@ -47,11 +48,16 @@ export const staffRouter = router({
         name: z.string().optional(),
         email: z.string().optional(),
         role: z.enum(["WAITER", "CASHIER", "MANAGER", "ADMIN"]).optional(),
-        pinCode: z.string().optional(),
+        pinCode: z.string().length(4).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      await ctx.restaurantDb.update(staffTable).set(input).where(eq(staffTable.id, input.id));
+      const data: Record<string, unknown> = {};
+      if (input.name) data.name = input.name;
+      if (input.email) data.email = input.email;
+      if (input.role) data.role = input.role;
+      if (input.pinCode !== undefined) data.pinCode = input.pinCode ? hashPin(input.pinCode) : null;
+      await ctx.restaurantDb.update(staffTable).set(data).where(eq(staffTable.id, input.id));
       return { success: true };
     }),
 
@@ -62,6 +68,24 @@ export const staffRouter = router({
       return { success: true };
     }),
 
+  verifyPin: publicProcedure
+    .input(z.object({
+      pin: z.string().length(4),
+      branchId: z.string(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const staffList = await ctx.restaurantDb.select()
+        .from(staffTable)
+        .where(eq(staffTable.branchId, input.branchId));
+
+      for (const s of staffList) {
+        if (s.pinCode && verifyPin(input.pin, s.pinCode)) {
+          return { verified: true, staffId: s.id, name: s.name, role: s.role };
+        }
+      }
+      return { verified: false };
+    }),
+
   clockIn: protectedProcedure
     .input(z.object({ staffId: z.string(), branchId: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -70,6 +94,9 @@ export const staffRouter = router({
         branchId: input.branchId,
         status: "ACTIVE",
       }).returning();
+      if (!shift) {
+        throw new Error("Error al registrar entrada");
+      }
       bus.emit(EventTypes.STAFF_SHIFT_START, { shiftId: shift.id, staffId: input.staffId });
       return shift;
     }),
@@ -104,7 +131,7 @@ export const staffRouter = router({
     const shiftsWithStaff = [];
     for (const shift of shifts) {
       const staff = await ctx.restaurantDb.select().from(staffTable).where(eq(staffTable.id, shift.staffId));
-      shiftsWithStaff.push({ ...shift, staff });
+      shiftsWithStaff.push({ ...shift, staff: staff.map((s) => ({ ...s, pinCode: undefined })) });
     }
     return shiftsWithStaff;
   }),

@@ -29,10 +29,10 @@ describe("POS Router — Integration", () => {
     it("returns a single table by id", async () => {
       const tables = await caller.getTables();
       expect(tables.length).toBeGreaterThan(0);
-      const first = tables[0];
+      const first = tables[0]!;
       const result = await caller.getTable({ id: first.id });
-      expect(result[0].id).toBe(first.id);
-      expect(result[0].number).toBe(first.number);
+      expect(result[0]!.id).toBe(first.id);
+      expect(result[0]!.number).toBe(first.number);
     });
   });
 

@@ -67,5 +67,9 @@ telegram-miniapp/verify-env.js
 # Secure backup (envs, secrets)
 _secure-backup/
 
+# Secure backups (may contain real secrets)
+secure/
+_secure-backup/
+
 # Local documentation
 DOCS/

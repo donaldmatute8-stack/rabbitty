@@ -214,8 +214,7 @@ export default function OrdersPage() {
           orderId={discount.orderId}
           currentTotal={discount.total}
           onApplyDiscount={(orderId, discountPercent, reason) => {
-            const discountedTotal = discount.total * (1 - discountPercent / 100);
-             payOrder.mutate({ orderId, method: "CASH", amount: discountedTotal });
+             payOrder.mutate({ orderId, method: "CASH", amount: discount.total * (1 - discountPercent / 100), discountPercent });
             toast.success(`Descuento de ${discountPercent}% aplicado`);
           }}
           onVoid={handleVoid}

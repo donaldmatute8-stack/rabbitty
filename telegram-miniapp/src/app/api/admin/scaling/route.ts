@@ -20,7 +20,7 @@ function getDb() {
   const pool = new Pool({
     connectionString: url,
     ssl: url.includes("neon.tech") || process.env.NODE_ENV === "production"
-      ? { rejectUnauthorized: false } : false,
+      ? true : false,
   });
   return drizzle(pool, { schema: coreSchema });
 }
@@ -41,8 +41,9 @@ async function sendTelegramAlert(metrics: { label: string; pct: number }[]) {
 }
 
 export async function GET(req: Request) {
-  const telegramId = req.headers.get("X-Telegram-Id");
-  if (telegramId !== "798431743") {
+  const auth = req.headers.get("authorization");
+  const secret = process.env.ADMIN_API_SECRET;
+  if (!secret || auth !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 

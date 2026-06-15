@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import Resend from "next-auth/providers/resend";
 import Credentials from "next-auth/providers/credentials";
+import crypto from "crypto";
 
 const tokens = new Map<string, { token: string; expires: Date }>();
 const users = new Map<string, { id: string; email: string; emailVerified: Date | null }>();
@@ -18,7 +19,7 @@ const customAdapter: any = {
     return null;
   },
   getUserByEmail: async (email: string) => {
-    return users.get(email) || { id: email, email, emailVerified: new Date() };
+    return users.get(email) ?? null;
   },
   getUserByAccount: async () => null,
   createVerificationToken: async (verificationToken: any) => {
@@ -45,7 +46,7 @@ const authResult = NextAuth({
     Resend({
       from: process.env.AUTH_RESEND_FROM!,
     }),
-    ...(process.env.E2E_TEST || process.env.NODE_ENV === "development" ? [
+    ...(process.env.E2E_TEST === "true" ? [
       Credentials({
         id: "test-e2e",
         name: "E2E Test",
@@ -74,6 +75,27 @@ const authResult = NextAuth({
       },
       async authorize(credentials) {
         if (!credentials?.id || !credentials?.hash) return null;
+
+        const botToken = process.env.AUTH_TELEGRAM_BOT_TOKEN;
+        if (!botToken) return null;
+
+        const dataCheckString = [
+          `auth_date=${credentials.authDate ?? ""}`,
+          `first_name=${credentials.firstName ?? ""}`,
+          `id=${credentials.id}`,
+          ...(credentials.lastName ? [`last_name=${credentials.lastName}`] : []),
+          ...(credentials.photoUrl ? [`photo_url=${credentials.photoUrl}`] : []),
+          `username=${credentials.username ?? ""}`,
+        ].join("\n");
+
+        const secretKey = crypto.createHash("sha256").update(botToken).digest();
+        const computedHash = crypto.createHmac("sha256", secretKey).update(dataCheckString).digest("hex");
+
+        if (computedHash !== credentials.hash) return null;
+
+        const authDate = parseInt(credentials.authDate as string, 10);
+        if (Number.isNaN(authDate) || Date.now() / 1000 - authDate > 86400) return null;
+
         return {
           id: credentials.id as string,
           name: [credentials.firstName, credentials.lastName].filter(Boolean).join(" "),

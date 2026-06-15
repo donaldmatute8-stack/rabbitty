@@ -22,26 +22,15 @@ interface WebAppInitData {
 }
 
 // Validar initData de Telegram
+// NOTA: La validación real SIEMPRE debe hacerse server-side.
+// Esta función client-side es solo una cortesía — NO confiar en ella para seguridad.
 export function validateTelegramWebAppData(initData: string): boolean {
   try {
     const params = new URLSearchParams(initData);
     const hash = params.get('hash');
-    
     if (!hash) return false;
-    
-    // Crear string de verificación
-    params.delete('hash');
-    
-    const dataCheckString = Array.from(params.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, value]) => `${key}=${value}`)
-      .join('\n');
-    
-    // Verificar hash (en producción, usar crypto.subtle en browser)
-    // Esta es una versión simplificada - en producción debe hacerse en backend
     return true;
-  } catch (error) {
-    console.error('Error validating initData:', error);
+  } catch {
     return false;
   }
 }

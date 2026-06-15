@@ -1,5 +1,6 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
+import { scryptSync, randomBytes } from "crypto";
 import {
   restaurants,
   branches,
@@ -11,6 +12,12 @@ import {
   orderItems,
   payments,
 } from "./schema";
+
+function hashPin(pin: string): string {
+  const salt = randomBytes(16).toString("hex");
+  const hash = scryptSync(pin, salt, 64).toString("hex");
+  return `${salt}:${hash}`;
+}
 
 const connectionString = process.env.RESTAURANT_DATABASE_URL;
 if (!connectionString) throw new Error("RESTAURANT_DATABASE_URL not set");
@@ -63,9 +70,9 @@ export async function seed() {
   ]).onConflictDoNothing();
 
   await db.insert(staff).values([
-    { id: "s1", userId: "u1", branchId: "b1", name: "María García", email: "maria@rabbitty.me", role: "admin", pinCode: "1234", isActive: true },
-    { id: "s2", userId: "u2", branchId: "b1", name: "Juan Pérez", email: "juan@rabbitty.me", role: "cook", pinCode: "5678", isActive: true },
-    { id: "s3", userId: "u3", branchId: "b1", name: "Ana López", email: "ana@rabbitty.me", role: "waiter", pinCode: "9012", isActive: true },
+    { id: "s1", userId: "u1", branchId: "b1", name: "María García", email: "maria@rabbitty.me", role: "admin", pinCode: hashPin("1234"), isActive: true },
+    { id: "s2", userId: "u2", branchId: "b1", name: "Juan Pérez", email: "juan@rabbitty.me", role: "cook", pinCode: hashPin("5678"), isActive: true },
+    { id: "s3", userId: "u3", branchId: "b1", name: "Ana López", email: "ana@rabbitty.me", role: "waiter", pinCode: hashPin("9012"), isActive: true },
   ]).onConflictDoNothing();
 
   await db.insert(tables).values([

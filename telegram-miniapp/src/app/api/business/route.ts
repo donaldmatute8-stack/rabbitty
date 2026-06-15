@@ -44,7 +44,8 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { 
       name, description, category, address, 
-      rewardPercentage, gallery, activeDays, startTime, endTime, telegramId
+      rewardPercentage, gallery, activeDays, startTime, endTime, telegramId,
+      googleClaimed
     } = body;
 
     let owner = null;
@@ -72,6 +73,8 @@ export async function POST(req: Request) {
     else if (parsedReward >= 10) rarity = "epic";
     else if (parsedReward >= 5) rarity = "rare";
 
+    const isGoogleVerified = googleClaimed === true;
+
     const [business] = await db.insert(ownedBusinesses).values({
       ownerId: owner.id,
       name,
@@ -86,7 +89,10 @@ export async function POST(req: Request) {
       startTime: startTime || "00:00",
       endTime: endTime || "23:59",
       gallery: JSON.stringify(gallery || []),
-      logoUrl: gallery && gallery.length > 0 ? gallery[0] : null
+      logoUrl: gallery && gallery.length > 0 ? gallery[0] : null,
+      status: isGoogleVerified ? "APPROVED" : "PENDING",
+      verificationMethod: isGoogleVerified ? "google" : null,
+      verificationData: isGoogleVerified ? JSON.stringify({ verified: true, claimedAt: new Date().toISOString() }) : null
     }).returning();
 
     return NextResponse.json({ success: true, business });

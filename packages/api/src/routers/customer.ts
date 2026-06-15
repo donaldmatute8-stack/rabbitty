@@ -4,6 +4,7 @@ import { router, protectedProcedure } from "../trpc";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { orders } from "@rabbitty/database-restaurant/schema";
 import { billingProfiles } from "@rabbitty/database-core/schema";
+import { encryptText, decryptText } from "../services/crypto";
 
 export const customerRouter = router({
   lookupCustomer: protectedProcedure
@@ -28,7 +29,12 @@ export const customerRouter = router({
 
   getBillingProfiles: protectedProcedure.query(async ({ ctx }) => {
     if (!ctx.userId) return [];
-    return await ctx.coreDb.select().from(billingProfiles).where(eq(billingProfiles.userId, ctx.userId));
+    const profiles = await ctx.coreDb.select().from(billingProfiles).where(eq(billingProfiles.userId, ctx.userId));
+    return profiles.map(profile => ({
+      ...profile,
+      rfc: decryptText(profile.rfc),
+      legalName: decryptText(profile.legalName),
+    }));
   }),
 
   createBillingProfile: protectedProcedure
@@ -49,10 +55,20 @@ export const customerRouter = router({
       const [profile] = await ctx.coreDb.insert(billingProfiles).values({
         userId: ctx.userId,
         ...input,
+        rfc: encryptText(input.rfc),
+        legalName: encryptText(input.legalName),
         isDefault,
       }).returning();
       
-      return profile;
+      if (!profile) {
+        throw new Error("Error al crear el perfil de facturación");
+      }
+      
+      return {
+        ...profile,
+        rfc: decryptText(profile.rfc),
+        legalName: decryptText(profile.legalName),
+      };
     }),
 
   requestInvoice: protectedProcedure
@@ -64,6 +80,12 @@ export const customerRouter = router({
       // Verificar perfil
       const [profile] = await ctx.coreDb.select().from(billingProfiles).where(eq(billingProfiles.id, input.billingProfileId));
       if (!profile) throw new Error("Perfil de facturación no encontrado");
+
+      const decryptedProfile = {
+        ...profile,
+        rfc: decryptText(profile.rfc),
+        legalName: decryptText(profile.legalName),
+      };
 
       // Verificar orden
       const [order] = await ctx.restaurantDb.select().from(orders).where(eq(orders.id, input.orderId));
@@ -78,7 +100,7 @@ export const customerRouter = router({
         throw new Error("El monto facturable debe ser mayor a 0. Las órdenes pagadas al 100% con Bunz no generan CFDI.");
       }
 
-      // Simulación de emisión de CFDI con un PAC externo usando 'billableAmount'
+      // Simulación de emisión de CFDI con un PAC externo usando 'billableAmount' y el perfil descifrado
       const mockPdfUrl = `https://rabbitty.mx/invoices/${input.orderId}.pdf`;
 
       // Guardar status
@@ -86,6 +108,6 @@ export const customerRouter = router({
         .set({ cfdiStatus: "INVOICED", cfdiUrl: mockPdfUrl })
         .where(eq(orders.id, input.orderId));
 
-      return { success: true, url: mockPdfUrl, billableAmount };
+      return { success: true, url: mockPdfUrl, billableAmount, rfc: decryptedProfile.rfc };
     }),
 });

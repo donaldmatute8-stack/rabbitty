@@ -15,8 +15,8 @@ export const t = initTRPC.context<Context>().create();
 export const router = t.router;
 export const publicProcedure = t.procedure;
 
-const rateLimitMiddleware = t.middleware(({ ctx, next }) => {
-  rateLimit(ctx.userId);
+const rateLimitMiddleware = t.middleware(async ({ ctx, next }) => {
+  await rateLimit(ctx.userId);
   return next();
 });
 

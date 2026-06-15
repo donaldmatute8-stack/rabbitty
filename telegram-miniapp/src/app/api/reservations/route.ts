@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { users, ownedBusinesses, reservations } from '@/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { processReferralAndNotifications } from '@/lib/referralLogic';
 import { awardHops, evaluateHatTricks } from '@/lib/gamificationLogic';
 
@@ -33,14 +33,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Business not found' }, { status: 404 });
     }
 
-    if (user.totalBunzEarned < bunzCost) {
+    // Deduct Bunz atómicamente (race-condition safe)
+    const [deducted] = await db.update(users)
+      .set({ totalBunzEarned: sql`${users.totalBunzEarned} - ${bunzCost}` })
+      .where(and(eq(users.id, user.id), sql`${users.totalBunzEarned} >= ${bunzCost}`))
+      .returning();
+    if (!deducted) {
       return NextResponse.json({ error: 'Insufficient Bunz' }, { status: 400 });
     }
-
-    // Deduct Bunz from user
-    await db.update(users)
-      .set({ totalBunzEarned: user.totalBunzEarned - bunzCost })
-      .where(eq(users.id, user.id));
 
     // Create reservation
     const [reservation] = await db.insert(reservations).values({

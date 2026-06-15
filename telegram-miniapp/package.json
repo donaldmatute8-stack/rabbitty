@@ -11,10 +11,10 @@
   },
   "dependencies": {
     "@libsql/client": "^0.17.3",
-    "@tonconnect/ui-react": "^2.4.4",
-    "@twa-dev/sdk": "^8.0.2",
     "@rabbitty/database-core": "file:../packages/database-core",
     "@rabbitty/ui": "file:../packages/ui",
+    "@tonconnect/ui-react": "^2.4.4",
+    "@twa-dev/sdk": "^8.0.2",
     "canvas-confetti": "^1.9.4",
     "clsx": "^2.1.1",
     "cobe": "^2.0.1",
@@ -33,7 +33,8 @@
     "sonner": "^2.0.7",
     "swr": "^2.4.1",
     "tailwind-merge": "^3.6.0",
-    "thirdweb": "^5.120.0"
+    "thirdweb": "^5.120.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

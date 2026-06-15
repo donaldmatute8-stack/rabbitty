@@ -3,36 +3,32 @@
 import { useState, useRef } from "react";
 import { Dialog } from "@rabbitty/ui";
 import { KeyRound } from "lucide-react";
+import { trpc } from "../lib/trpc-client";
 
 interface StaffPinModalProps {
   open: boolean;
+  branchId: string;
   onClose: () => void;
-  onAuthenticated: (staffName: string) => void;
+  onAuthenticated: (staffName: string, role: string) => void;
 }
 
-export function StaffPinModal({ open, onClose, onAuthenticated }: StaffPinModalProps) {
+export function StaffPinModal({ open, branchId, onClose, onAuthenticated }: StaffPinModalProps) {
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const verifyPin = trpc.staff.verifyPin.useMutation();
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (pin.length !== 4) {
       setError("El PIN debe tener 4 dígitos");
       return;
     }
-    if (pin === "1234") {
-      onAuthenticated("Admin");
-      setPin("");
-      setError("");
-      onClose();
-    } else if (pin === "5678") {
-      onAuthenticated("Cocina");
-      setPin("");
-      setError("");
-      onClose();
-    } else if (pin === "9012") {
-      onAuthenticated("Mesero");
+
+    const result = await verifyPin.mutateAsync({ pin, branchId });
+    if (result.verified && "name" in result && result.name && "role" in result && result.role) {
+      onAuthenticated(result.name, result.role);
       setPin("");
       setError("");
       onClose();

@@ -28,6 +28,11 @@ export const paymentsRouter = router({
          amount: input.amount,
          reference: input.reference ?? null,
        }).returning();
+       
+       if (!payment) {
+         throw new Error("Error al procesar el pago");
+       }
+       
        bus.emit(EventTypes.PAYMENT_PROCESSED, { paymentId: payment.id, orderId: input.orderId });
        return payment;
     }),

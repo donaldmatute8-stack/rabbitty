@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
+  const secretToken = process.env.TELEGRAM_WEBHOOK_SECRET_TOKEN;
+  if (secretToken && req.headers.get("X-Telegram-Bot-Api-Secret-Token") !== secretToken) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const update = await req.json();
     console.log("Telegram webhook update received:", JSON.stringify(update));

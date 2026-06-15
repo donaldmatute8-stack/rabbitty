@@ -8,7 +8,7 @@ export async function GET(request: Request) {
   try {
     // Seguridad básica para evitar que cualquiera ejecute el Cron
     const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET || process.env.RABBITTY_API_SECRET;
+    const cronSecret = process.env.CRON_SECRET;
     
     if (authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json({ error: 'Unauthorized cron access' }, { status: 401 });

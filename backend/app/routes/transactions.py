@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, update as sa_update
 from typing import List
 
 from app.database import get_db
-from app.utils.security import decode_token
+from app.utils.security import get_current_user
 from app.schemas.transaction import TransactionCreate, TransactionResponse, QRScanRequest, PayRequest, TransactionStats
 from app.models.transaction import Transaction, TransactionType, TransactionStatus
 from app.models.business import Business
@@ -13,30 +13,14 @@ from app.services.auth import rate_limit
 
 router = APIRouter()
 
-def get_current_user(token: str, db: Session) -> User:
-    """Obtiene el usuario actual del token JWT."""
-    payload = decode_token(token)
-    if not payload:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-    
-    user_id = int(payload.get('sub'))
-    user = db.query(User).filter(User.id == user_id).first()
-    
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    
-    return user
-
 @router.post("/scan")
 async def scan_qr(
     scan_data: QRScanRequest,
-    token: str,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     _=Depends(rate_limit)
 ):
     """Registra un escaneo QR y otorga recompensa."""
-    user = get_current_user(token, db)
-    
     # Verificar negocio
     business = db.query(Business).filter(Business.id == scan_data.business_id).first()
     if not business:
@@ -48,19 +32,36 @@ async def scan_qr(
     # Calcular recompensa
     reward_amount = int(scan_data.purchase_amount * (business.reward_rate / 100))
     
-    # Verificar crédito disponible
-    if business.credit_used + reward_amount > business.credit_limit:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Business credit limit exceeded")
-    
     # Generar hash de recibo
     import hashlib
     receipt_hash = hashlib.sha256(
-        f"{user.id}:{business.id}:{scan_data.purchase_amount}:{scan_data.qr_data}".encode()
+        f"{current_user.id}:{business.id}:{scan_data.purchase_amount}:{scan_data.qr_data}".encode()
     ).hexdigest()
+    
+    # Actualizar crédito del negocio atómicamente (race-condition safe)
+    result = db.execute(
+        sa_update(Business)
+        .where(Business.id == scan_data.business_id)
+        .where(Business.credit_used + reward_amount <= Business.credit_limit)
+        .values(
+            credit_used=Business.credit_used + reward_amount,
+            total_bunz_given=Business.total_bunz_given + reward_amount,
+            total_transactions=Business.total_transactions + 1,
+        )
+    )
+    if result.rowcount == 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Business credit limit exceeded")
+    
+    # Actualizar user atómicamente
+    db.execute(
+        sa_update(User)
+        .where(User.id == current_user.id)
+        .values(total_bunz_earned=User.total_bunz_earned + reward_amount)
+    )
     
     # Crear transacción
     transaction = Transaction(
-        user_id=user.id,
+        user_id=current_user.id,
         business_id=business.id,
         type=TransactionType.EARNED,
         amount=reward_amount,
@@ -73,44 +74,23 @@ async def scan_qr(
     )
     
     db.add(transaction)
-    
-    # Actualizar stats
-    business.credit_used += reward_amount
-    business.total_bunz_given += reward_amount
-    business.total_transactions += 1
-    
-    if not db.query(Transaction).filter(
-        Transaction.user_id == user.id,
-        Transaction.business_id == business.id
-    ).first():
-        business.total_customers += 1
-    
-    user.total_bunz_earned += reward_amount
-    
     db.commit()
     db.refresh(transaction)
     
     return {
         "transaction": TransactionResponse.from_orm(transaction),
         "reward_amount": reward_amount,
-        "new_balance": user.total_bunz_earned - user.total_bunz_spent,
+        "new_balance": (current_user.total_bunz_earned + reward_amount) - current_user.total_bunz_spent,
     }
 
 @router.post("/pay")
 async def pay_with_bunz(
     pay_data: PayRequest,
-    token: str,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     _=Depends(rate_limit)
 ):
     """Paga con bunz en un negocio."""
-    user = get_current_user(token, db)
-    
-    # Verificar saldo
-    balance = user.total_bunz_earned - user.total_bunz_spent
-    if balance < pay_data.amount:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Insufficient bunz balance")
-    
     # Verificar negocio
     business = db.query(Business).filter(Business.id == pay_data.business_id).first()
     if not business:
@@ -124,12 +104,22 @@ async def pay_with_bunz(
     # Generar hash
     import hashlib
     receipt_hash = hashlib.sha256(
-        f"{user.id}:{business.id}:{pay_data.amount}:{func.now()}".encode()
+        f"{current_user.id}:{business.id}:{pay_data.amount}:{func.now()}".encode()
     ).hexdigest()
+    
+    # Actualizar saldo atómicamente (race-condition safe)
+    result = db.execute(
+        sa_update(User)
+        .where(User.id == current_user.id)
+        .where(User.total_bunz_earned - User.total_bunz_spent >= pay_data.amount)
+        .values(total_bunz_spent=User.total_bunz_spent + pay_data.amount)
+    )
+    if result.rowcount == 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Insufficient bunz balance")
     
     # Crear transacción
     transaction = Transaction(
-        user_id=user.id,
+        user_id=current_user.id,
         business_id=business.id,
         type=TransactionType.SPENT,
         amount=pay_data.amount,
@@ -141,9 +131,6 @@ async def pay_with_bunz(
     )
     
     db.add(transaction)
-    
-    # Actualizar stats
-    user.total_bunz_spent += pay_data.amount
     db.commit()
     db.refresh(transaction)
     
@@ -152,37 +139,38 @@ async def pay_with_bunz(
         "net_amount": net_amount,
         "protocol_fee": protocol_fee,
         "affiliate_fee": affiliate_fee,
-        "new_balance": balance - pay_data.amount,
+        "new_balance": (current_user.total_bunz_earned - current_user.total_bunz_spent) - pay_data.amount,
     }
 
 @router.get("/stats")
-async def get_transaction_stats(token: str, db: Session = Depends(get_db)):
+async def get_transaction_stats(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Obtiene estadísticas de transacciones del usuario."""
-    user = get_current_user(token, db)
-    
     from datetime import datetime, timedelta
     
     # Totales
     total_earned = db.query(func.sum(Transaction.amount)).filter(
-        Transaction.user_id == user.id,
+        Transaction.user_id == current_user.id,
         Transaction.type == TransactionType.EARNED
     ).scalar() or 0
     
     total_spent = db.query(func.sum(Transaction.amount)).filter(
-        Transaction.user_id == user.id,
+        Transaction.user_id == current_user.id,
         Transaction.type == TransactionType.SPENT
     ).scalar() or 0
     
     # Este mes
     first_day = datetime.now().replace(day=1)
     this_month_earned = db.query(func.sum(Transaction.amount)).filter(
-        Transaction.user_id == user.id,
+        Transaction.user_id == current_user.id,
         Transaction.type == TransactionType.EARNED,
         Transaction.created_at >= first_day
     ).scalar() or 0
     
     this_month_spent = db.query(func.sum(Transaction.amount)).filter(
-        Transaction.user_id == user.id,
+        Transaction.user_id == current_user.id,
         Transaction.type == TransactionType.SPENT,
         Transaction.created_at >= first_day
     ).scalar() or 0
@@ -190,7 +178,7 @@ async def get_transaction_stats(token: str, db: Session = Depends(get_db)):
     return TransactionStats(
         total_earned=total_earned,
         total_spent=total_spent,
-        total_transactions=db.query(Transaction).filter(Transaction.user_id == user.id).count(),
+        total_transactions=db.query(Transaction).filter(Transaction.user_id == current_user.id).count(),
         this_month_earned=this_month_earned,
         this_month_spent=this_month_spent,
     )

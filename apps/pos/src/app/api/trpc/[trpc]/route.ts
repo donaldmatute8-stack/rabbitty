@@ -10,7 +10,7 @@ const handler = async (req: Request) => {
     req,
     router: appRouter,
     createContext: () => ({
-      userId: process.env.LOAD_TEST_USER_ID ?? session?.user?.id ?? null,
+      userId: (process.env.NODE_ENV === "test" && process.env.LOAD_TEST_USER_ID) ? process.env.LOAD_TEST_USER_ID : session?.user?.id ?? null,
       user: session?.user ?? null,
       restaurantDb: getRestaurantDb(),
       coreDb: getCoreDb(),

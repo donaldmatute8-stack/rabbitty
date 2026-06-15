@@ -1,6 +1,12 @@
 const { ethers, upgrades } = require("hardhat");
 
 async function main() {
+  const { network } = require("hardhat");
+  const allowedNetworks = ["sepolia", "hardhat", "localhost"];
+  if (!allowedNetworks.includes(network.name)) {
+    throw new Error(`Network "${network.name}" not allowed. Use one of: ${allowedNetworks.join(", ")}`);
+  }
+
   const [deployer] = await ethers.getSigners();
   console.log("🚀 Deploying bunz to Sepolia...");
   console.log("Account:", deployer.address);

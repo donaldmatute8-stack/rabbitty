@@ -3,45 +3,29 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app.database import get_db
-from app.utils.security import decode_token
+from app.utils.security import get_current_user
 from app.models.business import Business, BusinessCategory
 from app.models.user import User
 
 router = APIRouter()
 
-def get_current_user(token: str, db: Session) -> User:
-    """Obtiene el usuario actual del token JWT."""
-    payload = decode_token(token)
-    if not payload:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-    
-    user_id = int(payload.get('sub'))
-    user = db.query(User).filter(User.id == user_id).first()
-    
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    
-    return user
-
 @router.get("/categories")
-async def get_categories(token: str, db: Session = Depends(get_db)):
+async def get_categories(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Obtiene todas las categorías de negocios."""
-    get_current_user(token, db)
-    
     categories = db.query(BusinessCategory).all()
     
     return {"items": categories}
 
 @router.get("/trending")
 async def get_trending(
-    token: str,
+    current_user: User = Depends(get_current_user),
     limit: int = 10,
     db: Session = Depends(get_db)
 ):
     """Obtiene los negocios en tendencia."""
-    get_current_user(token, db)
-    
-    # Negocios con más transacciones recientes
     trending = db.query(Business).filter(
         Business.is_active == True
     ).order_by(Business.total_transactions.desc()).limit(limit).all()
@@ -50,16 +34,14 @@ async def get_trending(
 
 @router.get("/nearby")
 async def get_nearby_discover(
-    token: str,
-    lat: float,
-    lng: float,
+    current_user: User = Depends(get_current_user),
+    lat: float = None,
+    lng: float = None,
     radius: int = 5000,
     category: str = None,
     db: Session = Depends(get_db)
 ):
     """Descubre negocios cercanos con filtros."""
-    get_current_user(token, db)
-    
     query = db.query(Business).filter(
         Business.is_active == True,
         Business.latitude.isnot(None),
@@ -69,7 +51,6 @@ async def get_nearby_discover(
     if category:
         query = query.filter(Business.type == category)
     
-    # Calcular distancia (simplificado)
     import math
     businesses = query.all()
     
@@ -96,13 +77,11 @@ async def get_nearby_discover(
 
 @router.get("/search")
 async def search(
-    token: str,
-    q: str,
+    current_user: User = Depends(get_current_user),
+    q: str = None,
     db: Session = Depends(get_db)
 ):
     """Busca negocios por nombre o tipo."""
-    get_current_user(token, db)
-    
     results = db.query(Business).filter(
         Business.is_active == True,
         Business.name.ilike(f"%{q}%") | Business.type.ilike(f"%{q}%")

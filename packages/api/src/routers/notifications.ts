@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
 import { events } from "@rabbitty/database-restaurant/schema";
 
@@ -25,7 +25,7 @@ export const notificationsRouter = router({
     }),
 
   markAllRead: protectedProcedure.mutation(async ({ ctx }) => {
-    await ctx.restaurantDb.update(events).set({ read: true });
+    await ctx.restaurantDb.update(events).set({ read: true }).where(eq(events.branchId, ctx.branchId));
     return { success: true };
   }),
 

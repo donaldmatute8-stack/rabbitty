@@ -4,7 +4,8 @@ import { sql } from "drizzle-orm";
 
 export async function POST(req: Request) {
   const auth = req.headers.get("authorization");
-  if (auth !== `Bearer ${process.env.RABBITTY_API_SECRET}`) {
+  const secret = process.env.ADMIN_API_SECRET;
+  if (!secret || auth !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

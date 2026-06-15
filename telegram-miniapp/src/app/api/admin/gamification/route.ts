@@ -4,15 +4,12 @@ import { levels, hatTricks, users } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import crypto from 'crypto';
 
-// Verify Admin Middleware logic (reusable)
+// Verify Admin Middleware — usa ADMIN_API_SECRET (Bearer token) en vez de header spoofeable
 async function verifyAdmin(req: NextRequest) {
-  // We expect user id or telegram id in headers, but since we are calling from client,
-  // let's just pass telegramId in headers for this simple admin panel.
-  const telegramId = req.headers.get('X-Telegram-Id');
-  if (telegramId !== "798431743") {
-    return false;
-  }
-  return true;
+  const auth = req.headers.get('authorization');
+  const secret = process.env.ADMIN_API_SECRET;
+  if (!secret) return false;
+  return auth === `Bearer ${secret}`;
 }
 
 export async function GET(req: NextRequest) {

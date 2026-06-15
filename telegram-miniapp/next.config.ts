@@ -2,11 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@rabbitty/database-core", "@rabbitty/ui"],
-  turbopack: {
-    root: "/Users/bullslab/.openclaw/agents/sofia-workspace/projects/Rabbitty",
-  },
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   images: {
     unoptimized: true,
@@ -16,7 +13,6 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_BUNZ_CONTRACT_ADDRESS: process.env.NEXT_PUBLIC_BUNZ_CONTRACT_ADDRESS || '',
     NEXT_PUBLIC_RPC_URL: process.env.NEXT_PUBLIC_RPC_URL || 'https://rpc.sepolia.org',
     NEXT_PUBLIC_CHAIN_ID: process.env.NEXT_PUBLIC_CHAIN_ID || '11155111',
-    NEXT_PUBLIC_ADMIN_TELEGRAM_ID: process.env.ADMIN_TELEGRAM_ID || '798431743',
   },
   async headers() {
     return [

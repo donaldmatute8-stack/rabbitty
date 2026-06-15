@@ -16,8 +16,8 @@ class BusinessBase(BaseModel):
 
 class BusinessCreate(BusinessBase):
     owner_id: int
-    credit_limit: int = 100000
-    reward_rate: int = 20
+    credit_limit: int = Field(default=100000, ge=1000, le=10000000)
+    reward_rate: int = Field(default=20, ge=1, le=100)
 
 class BusinessUpdate(BaseModel):
     name: Optional[str] = None

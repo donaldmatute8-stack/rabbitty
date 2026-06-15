@@ -156,15 +156,14 @@ def validate_telegram_init_data(init_data: str) -> Dict[str, Any]:
             detail=f"Invalid Telegram auth data: {str(e)}"
         )
 
-def generate_referral_code(telegram_id: int, length: int = 8) -> str:
+def generate_referral_code(telegram_id: int = 0, length: int = 8) -> str:
     """Generate a unique referral code."""
     import secrets
     import string
     
-    # Combine telegram_id with random chars for uniqueness
     alphabet = string.ascii_uppercase + string.digits
     random_part = ''.join(secrets.choice(alphabet) for _ in range(length))
-    return f"RB{telegram_id}{random_part}"
+    return f"RB{random_part}"
 
 class RateLimiter:
     """Simple in-memory rate limiter."""

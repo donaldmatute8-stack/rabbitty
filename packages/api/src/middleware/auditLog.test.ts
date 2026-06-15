@@ -17,8 +17,8 @@ describe("auditLog middleware", () => {
 
     const logs = getAuditLog();
     expect(logs.length).toBe(1);
-    expect(logs[0].userId).toBe("user1");
-    expect(logs[0].action).toBe("create_order");
+    expect(logs[0]!.userId).toBe("user1");
+    expect(logs[0]!.action).toBe("create_order");
   });
 
   it("generates unique IDs", () => {
@@ -26,7 +26,7 @@ describe("auditLog middleware", () => {
     logAudit({ userId: null, action: "test2", resource: "test", resourceId: null, details: null });
 
     const logs = getAuditLog();
-    expect(logs[0].id).not.toBe(logs[1].id);
+    expect(logs[0]!.id).not.toBe(logs[1]!.id);
   });
 
   it("filters by action", () => {
@@ -53,9 +53,9 @@ describe("auditLog middleware", () => {
     logAudit({ userId: "user1", action: "third", resource: "test", resourceId: null, details: null });
 
     const logs = getAuditLog();
-    expect(logs[0].action).toBe("third");
-    expect(logs[1].action).toBe("second");
-    expect(logs[2].action).toBe("first");
+    expect(logs[0]!.action).toBe("third");
+    expect(logs[1]!.action).toBe("second");
+    expect(logs[2]!.action).toBe("first");
   });
 
   it("handles null userId", () => {
@@ -63,6 +63,6 @@ describe("auditLog middleware", () => {
 
     const logs = getAuditLog();
     expect(logs.length).toBe(1);
-    expect(logs[0].userId).toBeNull();
+    expect(logs[0]!.userId).toBeNull();
   });
 });
