@@ -8,6 +8,7 @@ import { toast } from "@rabbitty/ui";
 export default function RestaurantSyncPage() {
   const { data: restaurants } = trpc.admin.getRestaurants.useQuery();
   const { mutateAsync: syncRestaurant } = trpc.fastapi.syncRestaurant.useMutation();
+  const { mutateAsync: importUberEats } = trpc.admin.importUberEatsMenu.useMutation();
 
   const [syncing, setSyncing] = useState(false);
 
@@ -82,22 +83,64 @@ export default function RestaurantSyncPage() {
                 {restaurants?.map((restaurant) => (
                   <div
                     key={restaurant.id}
-                    className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-4 py-3"
+                    className="flex flex-col gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3"
                   >
-                    <div>
-                      <p className="font-semibold text-gray-900">{restaurant.name}</p>
-                      <p className="text-xs text-gray-500">
-                        ID: {restaurant.id.slice(0, 8)}...
-                      </p>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold text-gray-900">{restaurant.name}</p>
+                        <p className="text-xs text-gray-500">
+                          ID: {restaurant.id.slice(0, 8)}...
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleSyncRestaurant(restaurant.id)}
+                        disabled={syncing}
+                        className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        <RefreshCw className="h-3 w-3" />
+                        Sincronizar FastAPI
+                      </button>
                     </div>
-                    <button
-                      onClick={() => handleSyncRestaurant(restaurant.id)}
-                      disabled={syncing}
-                      className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      <RefreshCw className="h-3 w-3" />
-                      Sincronizar
-                    </button>
+                    
+                    {/* Magic Onboarding Section */}
+                    <div className="mt-2 border-t border-gray-200 pt-3">
+                      <form 
+                        onSubmit={async (e) => {
+                          e.preventDefault();
+                          const formData = new FormData(e.currentTarget);
+                          const url = formData.get("ubereats_url") as string;
+                          if (!url) return;
+                          
+                          try {
+                            setSyncing(true);
+                            const result = await importUberEats({ branchId: restaurant.id, url });
+                            toast.success(result.message);
+                            (e.target as HTMLFormElement).reset();
+                          } catch (err: any) {
+                            toast.error(err.message || "Error al importar menú de UberEats");
+                          } finally {
+                            setSyncing(false);
+                          }
+                        }}
+                        className="flex items-center gap-2"
+                      >
+                        <input 
+                          type="url" 
+                          name="ubereats_url"
+                          placeholder="https://www.ubereats.com/store/..." 
+                          className="flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm outline-none focus:border-pink-500"
+                          required
+                        />
+                        <button
+                          type="submit"
+                          disabled={syncing}
+                          className="rounded-md bg-green-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                        >
+                          Importar Menú Mágico
+                        </button>
+                      </form>
+                      <p className="mt-1 text-[10px] text-gray-400">Pega el enlace de UberEats para clonar platillos, categorías y precios instantáneamente.</p>
+                    </div>
                   </div>
                 ))}
               </div>

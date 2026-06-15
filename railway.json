@@ -2,7 +2,7 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "sh -c 'APP=${RAILWAY_SERVICE_NAME#rabbitty-} && pnpm install --frozen-lockfile && node_modules/.bin/turbo run build --filter=@rabbitty/$APP'",
+    "buildCommand": "sh -c 'APP=${RAILWAY_SERVICE_NAME#rabbitty-} && pnpm install --no-frozen-lockfile && node_modules/.bin/turbo run build --filter=@rabbitty/$APP'",
     "watchPatterns": ["*", "apps/**", "packages/**"]
   },
   "deploy": {
