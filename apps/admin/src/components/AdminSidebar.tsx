@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@rabbitty/ui";
-import { LayoutDashboard, Store, Users, Settings, ChefHat, ClipboardList, Package, Printer, ChevronLeft, ChevronRight } from "lucide-react";
+import { LayoutDashboard, Store, Users, Settings, ChefHat, ClipboardList, Package, Printer, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { useSidebar } from "./DashboardClientWrapper";
 
 const links = [
@@ -13,7 +13,8 @@ const links = [
   { href: "/staff", label: "Personal", icon: Users },
   { href: "/kitchen", label: "Cocina", icon: ChefHat },
   { href: "/inventory", label: "Inventario", icon: Package },
-  { href: "/hardware", label: "Hardware y Guías", icon: Printer },
+  { href: "/academy", label: "Rabbitty Academy", icon: Sparkles },
+  { href: "/hardware", label: "Hardware", icon: Printer },
   { href: "/settings", label: "Configuración", icon: Settings },
 ];
 
