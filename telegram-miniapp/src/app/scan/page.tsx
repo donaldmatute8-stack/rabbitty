@@ -61,7 +61,7 @@ export default function ScanPage() {
       <div className="absolute inset-0 pointer-events-none z-0 bg-[radial-gradient(ellipse_at_50%_40%,rgba(233,30,99,0.06)_0%,transparent_65%)]" />
 
       {/* Header */}
-      <div className="absolute inset-x-0 z-50 px-4 flex flex-col items-center gap-4" style={{ top: 'calc(var(--safe-top) + 16px)' }}>
+      <div className="absolute inset-x-0 z-50 px-4 flex flex-col items-center gap-4" style={{ top: 'calc(max(var(--safe-top, 0px), 50px) + 16px)' }}>
         <div className="flex items-center justify-between w-full">
           <button
             onClick={() => router.back()}
@@ -92,7 +92,7 @@ export default function ScanPage() {
         </div>
       </div>
 
-      <div className="relative flex-1 w-full h-full pt-[140px] pb-24 flex flex-col items-center justify-center z-10">
+      <div className="relative flex-1 w-full h-full pb-24 flex flex-col items-center justify-center z-10" style={{ paddingTop: 'calc(max(var(--safe-top, 0px), 50px) + 90px)' }}>
 
         {/* My Code tab */}
         {activeTab === 'my-code' && (

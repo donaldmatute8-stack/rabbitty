@@ -67,7 +67,7 @@ export default function AffiliateProfilePage() {
         backdropFilter: isScrolled ? 'blur(20px)' : 'none',
         borderBottom: isScrolled ? '1px solid #F0F0F0' : 'none',
         transition: 'all 0.3s ease',
-        paddingTop: 'env(safe-area-inset-top, 40px)',
+        paddingTop: 'calc(max(var(--safe-top, 0px), 50px) + 12px)',
         paddingBottom: 16,
         paddingLeft: 16,
         paddingRight: 16,
