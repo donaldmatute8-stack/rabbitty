@@ -73,23 +73,7 @@ export class ErrorBoundary extends Component<Props, State> {
               </div>
             </div>
 
-            <div className="mb-6 rounded-xl bg-danger-50 p-4">
-              <h3 className="mb-2 text-sm font-semibold text-danger-700">
-                Error:
-              </h3>
-              <p className="text-sm text-danger-600">
-                {this.state.error?.message}
-              </p>
-               <p className="mt-1 text-xs text-neutral-400">
-                 {this.state.error?.stack
-                   ?.split("\n")
-                   .slice(1, 4)
-                   .map((line) => line.trim())
-                   .join(" | ")}
-               </p>
-            </div>
-
-             <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3">
                <Button
                  onClick={this.handleReset}
                  className="flex items-center justify-center gap-2"
@@ -104,15 +88,6 @@ export class ErrorBoundary extends Component<Props, State> {
                  Recargar página
                </Button>
              </div>
-
-            <details className="mt-6 text-xs text-neutral-400">
-              <summary className="cursor-pointer hover:text-neutral-600">
-                Ver detalles técnicos
-              </summary>
-              <div className="mt-2 overflow-x-auto whitespace-pre-wrap rounded-lg bg-neutral-100 p-4 font-mono">
-                {this.state.error?.stack}
-              </div>
-            </details>
           </div>
         </div>
       );

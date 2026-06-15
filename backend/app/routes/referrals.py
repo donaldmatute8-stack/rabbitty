@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, update as sa_update
 from typing import List
 
 from app.database import get_db
-from app.utils.security import decode_token, generate_referral_code
+from app.utils.security import decode_token, generate_referral_code, get_current_user
 from app.schemas.referral import ReferralResponse, ReferralStats, ReferralCreate
 from app.models.referral import Referral, ReferralTier, ReferralTierConfig
 from app.models.user import User
@@ -12,40 +12,24 @@ from app.services.auth import rate_limit
 
 router = APIRouter()
 
-def get_current_user(token: str, db: Session) -> User:
-    """Obtiene el usuario actual del token JWT."""
-    payload = decode_token(token)
-    if not payload:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-    
-    user_id = int(payload.get('sub'))
-    user = db.query(User).filter(User.id == user_id).first()
-    
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    
-    return user
-
 @router.post("/")
 async def create_referral(
     referral_data: ReferralCreate,
-    token: str,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Registra un nuevo referido usando un código."""
-    user = get_current_user(token, db)
-    
     # Buscar al referrer
     referrer = db.query(User).filter(User.referral_code == referral_data.referral_code).first()
     
     if not referrer:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid referral code")
     
-    if referrer.id == user.id:
+    if referrer.id == current_user.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot refer yourself")
     
     # Verificar si ya fue referido
-    existing = db.query(Referral).filter(Referral.referred_id == user.id).first()
+    existing = db.query(Referral).filter(Referral.referred_id == current_user.id).first()
     if existing:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Already referred")
     
@@ -67,7 +51,7 @@ async def create_referral(
     # Crear referido
     referral = Referral(
         referrer_id=referrer.id,
-        referred_id=user.id,
+        referred_id=current_user.id,
         referral_code=referral_data.referral_code,
         bonus_amount=bonus,
         tier=tier,
@@ -75,28 +59,33 @@ async def create_referral(
     
     db.add(referral)
     
-    # Actualizar contador
-    referrer.total_referrals += 1
+    # Actualizar contador atómicamente
+    db.execute(
+        sa_update(User)
+        .where(User.id == referrer.id)
+        .values(total_referrals=User.total_referrals + 1)
+    )
     db.commit()
     db.refresh(referral)
     
     return ReferralResponse.from_orm(referral)
 
 @router.get("/me")
-async def get_my_referrals(token: str, db: Session = Depends(get_db)):
+async def get_my_referrals(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Obtiene los referidos del usuario actual."""
-    user = get_current_user(token, db)
-    
-    referrals = db.query(Referral).filter(Referral.referrer_id == user.id).all()
+    referrals = db.query(Referral).filter(Referral.referrer_id == current_user.id).all()
     
     # Calcular stats
     total_earned = db.query(func.sum(Referral.bonus_amount)).filter(
-        Referral.referrer_id == user.id,
+        Referral.referrer_id == current_user.id,
         Referral.is_claimed == True
     ).scalar() or 0
     
     pending = db.query(Referral).filter(
-        Referral.referrer_id == user.id,
+        Referral.referrer_id == current_user.id,
         Referral.is_claimed == False
     ).count()
     
@@ -129,21 +118,19 @@ async def get_my_referrals(token: str, db: Session = Depends(get_db)):
             next_tier=next_tier.value if next_tier else None,
             referrals_to_next_tier=referrals_to_next,
         ),
-        "referral_code": user.referral_code,
+        "referral_code": current_user.referral_code,
     }
 
 @router.post("/{referral_id}/claim")
 async def claim_referral_bonus(
     referral_id: int,
-    token: str,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Reclama el bonus de un referido."""
-    user = get_current_user(token, db)
-    
     referral = db.query(Referral).filter(
         Referral.id == referral_id,
-        Referral.referrer_id == user.id
+        Referral.referrer_id == current_user.id
     ).first()
     
     if not referral:

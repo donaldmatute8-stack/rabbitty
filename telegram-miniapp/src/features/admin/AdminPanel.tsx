@@ -73,6 +73,7 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
         style={{
           backgroundColor: '#fff',
           padding: '24px',
+          paddingTop: 'calc(var(--safe-top, 0px) + 24px)',
           paddingBottom: 'max(env(safe-area-inset-bottom), 24px)',
           position: 'relative',
           height: '100vh',
@@ -284,6 +285,17 @@ function ScalingGuide() {
               "Separar DB en VPS dedicado (CX22 solo para DB)",
               "Balanceador de carga si hay +500 usuarios concurrentes",
               "CDN para assets estaticos (Cloudflare free)",
+            ]}
+          />
+          <GuideItem
+            icon="🛡️"
+            title="Seguridad Sistémica (Próxima Escala)"
+            desc="Reforzamientos recomendados antes de alcanzar el 80-90% de escala para mitigar vectores de ataque avanzados:"
+            bullets={[
+              "BFF Pattern: Migrar JWT de localStorage a cookies HTTP-Only seguras (protección contra XSS).",
+              "Protección CSRF: Implementar tokens anti-CSRF en endpoints de mutación sensibles.",
+              "CSP Estricta: Configurar Content-Security-Policy estricta sin unsafe-eval/inline en producción.",
+              "Smart Contracts (Bunz): Realizar auditoría y deploy formal en blockchain (con límites de emisión y control de pausa).",
             ]}
           />
           <div style={{ backgroundColor: '#F3E8FF', border: '1px solid #D8B4FE', borderRadius: 10, padding: 12, marginTop: 4 }}>

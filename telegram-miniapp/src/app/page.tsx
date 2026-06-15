@@ -397,7 +397,7 @@ export default function FeedPage() {
               style={{ top: 'calc(var(--safe-top, 0px) + 120px)' }}
             >
               {/* Holographic Toggle */}
-              <div className="absolute top-4 right-4 z-20 flex bg-white/5 backdrop-blur-[10px] rounded-full border border-white/10 p-1">
+              <div className="absolute z-[2000] flex bg-white/5 backdrop-blur-[10px] rounded-full border border-white/10 p-1" style={{ top: 24, right: 72 }}>
                 <button
                   onClick={() => setMapMode('globe')}
                   className="px-3 py-[4px] rounded-full text-[11px] font-bold border-none cursor-pointer"

@@ -37,9 +37,14 @@ export default function ProfilePage() {
     return '#E91E63'; // Common
   };
 
-  const handleAvatarTap = () => {
-    // Only allow admin ID 798431743
-    if (user?.telegramId === (process.env.NEXT_PUBLIC_ADMIN_TELEGRAM_ID || "798431743")) {
+  const handleAvatarTap = async () => {
+    if (!user?.telegramId) {
+      showToast('Identidad NFT (Próximamente)', 'info');
+      return;
+    }
+    const res = await fetch(`/api/auth/is-admin?telegramId=${user.telegramId}`);
+    const { isAdmin } = await res.json();
+    if (isAdmin) {
       const newCount = tapCount + 1;
       setTapCount(newCount);
       if (newCount === 5) {
@@ -47,10 +52,6 @@ export default function ProfilePage() {
         setTapCount(0);
       }
     } else {
-      // Just a normal tap for non-admins
-      if (tapCount > 5) {
-        // block or ignore
-      }
       showToast('Identidad NFT (Próximamente)', 'info');
     }
   };

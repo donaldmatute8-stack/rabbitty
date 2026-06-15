@@ -1,3 +1,4 @@
+import logging
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer
@@ -7,18 +8,21 @@ from app.routes import auth, users, businesses, transactions, referrals, feed, d
 from app.database import engine, Base
 from app.config import settings
 
-# Create tables
-Base.metadata.create_all(bind=engine)
+logger = logging.getLogger(__name__)
+
+# Create tables (DEV only — en producción usar Alembic: alembic upgrade head)
+if settings.DATABASE_URL and settings.DATABASE_URL.startswith("sqlite"):
+    Base.metadata.create_all(bind=engine)
 
 security = HTTPBearer()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    print("🚀 Rabbitty API starting...")
+    logger.info("Rabbitty API starting...")
     yield
     # Shutdown
-    print("👋 Rabbitty API shutting down...")
+    logger.info("Rabbitty API shutting down...")
 
 app = FastAPI(
     title="Rabbitty API",

@@ -1,4 +1,5 @@
 import { bus, EventTypes } from "@rabbitty/events";
+import { auth } from "@rabbitty/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,10 @@ const ALL_EVENTS = [
 ] as const;
 
 export async function GET(req: Request) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return new Response("Unauthorized", { status: 401 });
+  }
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     start(controller) {

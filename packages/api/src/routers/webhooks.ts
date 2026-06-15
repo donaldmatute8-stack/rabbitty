@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
 import { webhooks } from "@rabbitty/database-restaurant/schema";
 
@@ -31,14 +31,19 @@ export const webhooksRouter = router({
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.restaurantDb.delete(webhooks).where(eq(webhooks.id, input.id));
+      const [webhook] = await ctx.restaurantDb.delete(webhooks).where(
+        and(eq(webhooks.id, input.id), eq(webhooks.branchId, ctx.branchId))
+      ).returning();
+      if (!webhook) throw new Error("Webhook no encontrado");
       return { success: true };
     }),
 
   toggle: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const [webhook] = await ctx.restaurantDb.select().from(webhooks).where(eq(webhooks.id, input.id));
+      const [webhook] = await ctx.restaurantDb.select().from(webhooks).where(
+        and(eq(webhooks.id, input.id), eq(webhooks.branchId, ctx.branchId))
+      );
       if (!webhook) throw new Error("Webhook no encontrado");
       const [updated] = await ctx.restaurantDb
         .update(webhooks)

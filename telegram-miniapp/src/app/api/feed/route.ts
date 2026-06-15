@@ -1,6 +1,15 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 
+const parseSafeJson = (str: string | null | undefined, fallback: any = []) => {
+  if (!str) return fallback;
+  try {
+    return JSON.parse(str);
+  } catch {
+    return fallback;
+  }
+};
+
 export async function GET() {
   try {
     const businesses = await db.query.ownedBusinesses.findMany({
@@ -9,6 +18,10 @@ export async function GET() {
     });
 
     const feedItems = businesses.map((b) => {
+      const parsedGallery = parseSafeJson(b.gallery);
+      const imageUrl = parsedGallery.length > 0 ? parsedGallery[0] : 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=800&q=80';
+      const activeDays = parseSafeJson(b.activeDays, [1, 2, 3, 4, 5, 6, 7]);
+
       return {
         id: b.id,
         user: b.name,
@@ -21,11 +34,11 @@ export async function GET() {
         givesBunz: b.givesBunz,
         acceptsBunz: b.acceptsBunz,
         distance: 0,
-        imageUrl: b.gallery.length > 0 ? JSON.parse(b.gallery)[0] : 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=800&q=80',
+        imageUrl,
         logo_base64: b.logoUrl,
         lat: b.lat,
         lng: b.lng,
-        activeDays: JSON.parse(b.activeDays),
+        activeDays,
         startTime: b.startTime,
         endTime: b.endTime
       };

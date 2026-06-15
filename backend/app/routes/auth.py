@@ -1,10 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List
 
 from app.database import get_db
-from app.utils.security import verify_telegram_webapp_data, create_access_token, create_refresh_token, decode_token
+from app.utils.security import (
+    verify_telegram_webapp_data, create_access_token, create_refresh_token,
+    decode_token, get_current_user, security_scheme,
+)
 from app.schemas.user import UserLogin, UserResponse, UserCreate
 from app.models.user import User, UserSession
 from app.config import settings
@@ -124,9 +127,13 @@ async def refresh_token(refresh_token: str, db: Session = Depends(get_db), _=Dep
     return {"token": new_access_token, "refresh_token": new_refresh_token}
 
 @router.post("/logout")
-async def logout(token: str, db: Session = Depends(get_db), _=Depends(rate_limit)):
+async def logout(
+    credentials = Depends(security_scheme),
+    db: Session = Depends(get_db),
+    _=Depends(rate_limit)
+):
     """Cierra la sesión del usuario."""
-    
+    token = credentials.credentials
     session = db.query(UserSession).filter(UserSession.token == token).first()
     
     if session:

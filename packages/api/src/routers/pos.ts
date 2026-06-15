@@ -160,6 +160,7 @@ export const posRouter = router({
         orderId: z.string(),
         method: z.enum(["CASH", "CREDIT_CARD", "DEBIT_CARD", "BUNZ"]),
         amount: z.number(),
+        discountPercent: z.number().min(0).max(100).optional(),
         reference: z.string().optional(),
       })
     )
@@ -168,10 +169,24 @@ export const posRouter = router({
       if (!orderRow) {
         throw new Error("Orden no encontrada");
       }
+
+      // Server-side discount calculation (trust the server, not the client)
+      let finalAmount = input.amount;
+      if (input.discountPercent && input.discountPercent > 0) {
+        const serverCalculated = orderRow.total * (1 - input.discountPercent / 100);
+        if (Math.abs(serverCalculated - input.amount) > 1) {
+          throw new Error("Monto de descuento inválido");
+        }
+        finalAmount = serverCalculated;
+        await ctx.restaurantDb.update(orders)
+          .set({ discount: input.discountPercent / 100 * orderRow.total })
+          .where(eq(orders.id, input.orderId));
+      }
+
       const [payment] = await ctx.restaurantDb.insert(payments).values({
         orderId: input.orderId,
         method: input.method,
-        amount: input.amount,
+        amount: finalAmount,
         reference: input.reference ?? null,
       }).returning();
       
@@ -180,7 +195,7 @@ export const posRouter = router({
       
       if (input.method === "BUNZ") {
         await ctx.restaurantDb.update(orders)
-          .set({ bunzPaid: (orderRow.bunzPaid || 0) + input.amount })
+          .set({ bunzPaid: (orderRow.bunzPaid || 0) + finalAmount })
           .where(eq(orders.id, input.orderId));
       }
 

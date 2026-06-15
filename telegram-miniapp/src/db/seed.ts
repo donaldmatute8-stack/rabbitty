@@ -26,38 +26,6 @@ async function seed() {
   await db.insert(ownedBusinesses).values([
     {
       ownerId: mockOwnerId,
-      name: "Kukara",
-      category: "Restaurante",
-      description: "Restaurante y Bar",
-      address: "Bucerías, Bahía de Banderas, Nayarit",
-      lat: 20.756226,
-      lng: -105.341038,
-      rewardPercentage: 15,
-      rarity: "legendary",
-      givesBunz: true,
-      acceptsBunz: true,
-      gallery: JSON.stringify(["https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80"]),
-      logoUrl: "",
-      status: "APPROVED"
-    },
-    {
-      ownerId: mockOwnerId,
-      name: "626 Cafe",
-      category: "Cafetería",
-      description: "Cafetería de especialidad",
-      address: "Bucerías, Bahía de Banderas, Nayarit",
-      lat: 20.753218,
-      lng: -105.335402,
-      rewardPercentage: 10,
-      rarity: "epic",
-      givesBunz: true,
-      acceptsBunz: true,
-      gallery: JSON.stringify(["https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=800&q=80"]),
-      logoUrl: "",
-      status: "APPROVED"
-    },
-    {
-      ownerId: mockOwnerId,
       name: "Pizza Napoli",
       category: "Restaurante",
       description: "La mejor pizza de la bahía",

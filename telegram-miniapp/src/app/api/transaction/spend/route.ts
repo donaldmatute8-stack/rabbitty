@@ -3,6 +3,13 @@ import { db } from '@/db';
 import { users, ownedBusinesses, transactions } from '@/db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { parseTelegramUser, validateTelegramInitData } from '@/lib/telegramAuth';
+import { z } from 'zod';
+
+const spendSchema = z.object({
+  initData: z.string(),
+  businessId: z.string().uuid(),
+  fiatAmount: z.number().positive().optional().default(100),
+});
 
 const timeToMinutes = (timeStr: string) => {
   const [hours, minutes] = timeStr.split(':').map(Number);
@@ -11,11 +18,14 @@ const timeToMinutes = (timeStr: string) => {
 
 export async function POST(req: Request) {
   try {
-    const { initData, businessId, fiatAmount = 100 } = await req.json();
-
-    if (!initData || !businessId) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    const body = await req.json();
+    const result = spendSchema.safeParse(body);
+    
+    if (!result.success) {
+      return NextResponse.json({ error: 'Invalid input fields', details: result.error.format() }, { status: 400 });
     }
+    
+    const { initData, businessId, fiatAmount } = result.data;
 
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     if (botToken && !validateTelegramInitData(initData, botToken)) {

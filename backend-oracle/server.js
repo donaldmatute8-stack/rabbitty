@@ -4,7 +4,10 @@ const { ethers } = require('ethers');
 const Redis = require('ioredis');
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: process.env.CORS_ORIGIN?.split(',') ?? ['http://localhost:3000', 'https://rabbitty.me', 'https://admin.rabbitty.me'],
+  credentials: true,
+}));
 app.use(express.json());
 
 // Config
@@ -45,12 +48,7 @@ const bunzContract = oracleWallet ? new ethers.Contract(BUNZ_CONTRACT, BUNZ_ABI,
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    oracle: oracleWallet ? oracleWallet.address : 'not configured',
-    contract: BUNZ_CONTRACT,
-    network: 'sepolia'
-  });
+  res.json({ status: 'ok' });
 });
 
 // Generar QR para transacción
@@ -218,9 +216,6 @@ app.get('/business/:address/credit', async (req, res) => {
 // Start server
 app.listen(PORT, () => {
   console.log(`🚀 Oracle Backend running on port ${PORT}`);
-  console.log(`📡 Connected to: ${RPC_URL}`);
-  console.log(`📝 Bunz Contract: ${BUNZ_CONTRACT}`);
-  console.log(`🔑 Oracle: ${oracleWallet ? oracleWallet.address : 'NOT CONFIGURED'}`);
 });
 
 module.exports = app;

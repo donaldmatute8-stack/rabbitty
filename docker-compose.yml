@@ -6,7 +6,7 @@ services:
       - "5432:5432"
     environment:
       POSTGRES_USER: rabbitty
-      POSTGRES_PASSWORD: rabbitty_dev
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rabbitty_dev_local}
       POSTGRES_DB: rabbitty_restaurant
     volumes:
       - pgdata:/var/lib/postgresql/data

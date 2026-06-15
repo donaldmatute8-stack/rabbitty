@@ -1,19 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { users, ownedBusinesses, transactions, levels } from "@/db/schema";
-import { eq, and, or } from "drizzle-orm";
+import { eq, and, or, sql } from "drizzle-orm";
 import { processReferralAndNotifications } from '@/lib/referralLogic';
 import { awardHops, evaluateHatTricks } from '@/lib/gamificationLogic';
 import { sendToOracle } from '@/lib/oracle-client';
 import crypto from 'crypto';
+import { z } from 'zod';
+
+const mintSchema = z.object({
+  telegramId: z.string().min(1),
+  businessId: z.string().uuid(),
+  fiatAmount: z.number().positive(),
+});
 
 export async function POST(req: NextRequest) {
   try {
-    const { telegramId, businessId, fiatAmount } = await req.json();
-
-    if (!telegramId || !businessId || !fiatAmount || fiatAmount <= 0) {
-      return NextResponse.json({ error: "Faltan parámetros requeridos o monto inválido." }, { status: 400 });
+    const body = await req.json();
+    const result = mintSchema.safeParse(body);
+    
+    if (!result.success) {
+      return NextResponse.json({ error: "Datos de entrada inválidos.", details: result.error.format() }, { status: 400 });
     }
+    
+    const { telegramId, businessId, fiatAmount } = result.data;
 
     const business = await db.query.ownedBusinesses.findFirst({
       where: eq(ownedBusinesses.id, businessId)
@@ -67,9 +77,9 @@ export async function POST(req: NextRequest) {
       status: "MINTED",
     });
 
-    // Update customer balance
+    // Update customer balance atómicamente
     await db.update(users)
-      .set({ totalBunzEarned: (customer.totalBunzEarned ?? 0) + bunzReward })
+      .set({ totalBunzEarned: sql`COALESCE(${users.totalBunzEarned}, 0) + ${bunzReward}` })
       .where(eq(users.id, customer.id));
 
     // Trigger referral and notifications (EARN event)

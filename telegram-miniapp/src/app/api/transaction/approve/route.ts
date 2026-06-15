@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { users, transactions } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 export async function POST(req: NextRequest) {
   try {
@@ -30,13 +30,10 @@ export async function POST(req: NextRequest) {
       .where(eq(transactions.id, transactionId))
       .returning();
 
-    // Update user balance
-    const user = await db.query.users.findFirst({ where: eq(users.id, transaction.userId) });
-    if (user) {
-      await db.update(users)
-        .set({ totalBunzEarned: (user.totalBunzEarned ?? 0) + finalBunz })
-        .where(eq(users.id, user.id));
-    }
+    // Update user balance atómicamente
+    await db.update(users)
+      .set({ totalBunzEarned: sql`COALESCE(${users.totalBunzEarned}, 0) + ${finalBunz}` })
+      .where(eq(users.id, transaction.userId));
 
     return NextResponse.json({ success: true, transaction: updatedTx });
   } catch (error) {
