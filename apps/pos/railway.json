@@ -2,10 +2,7 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "cd /app && pnpm install --frozen-lockfile && pnpm turbo run build --filter=@rabbitty/pos",
-    "nixpacksConfig": {
-      "pkgInstallConfig": ["openssl"]
-    }
+    "buildCommand": "cd /app && pnpm install --frozen-lockfile && pnpm turbo run build --filter=@rabbitty/pos"
   },
   "deploy": {
     "startCommand": "cd /app && pnpm turbo run start --filter=@rabbitty/pos",
