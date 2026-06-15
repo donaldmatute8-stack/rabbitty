@@ -1,0 +1,5 @@
+[phases.setup]
+nixPkgs = ["...", "openssl", "pnpm"]
+
+[phases.install]
+cmds = ["cd /app && pnpm install --frozen-lockfile"]
