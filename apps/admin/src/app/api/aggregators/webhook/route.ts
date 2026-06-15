@@ -2,9 +2,27 @@ import { NextResponse } from "next/server";
 import { getRestaurantDb } from "../../../../../../../packages/api/src/db";
 import { orders, orderItems } from "@rabbitty/database-restaurant/schema";
 import { bus, EventTypes } from "@rabbitty/events";
+import { z } from "zod";
+
+const webhookSchema = z.object({
+  id: z.string(),
+  subtotal: z.number(),
+  total: z.number(),
+  items: z.array(z.object({
+    mappedId: z.string().optional(),
+    name: z.string().optional(),
+    quantity: z.number().int().positive(),
+    price: z.number().nonnegative()
+  }))
+});
 
 export async function POST(req: Request) {
   try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ") || authHeader.split(" ")[1] !== process.env.AGGREGATOR_WEBHOOK_SECRET) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const payload = await req.json();
     const branchId = new URL(req.url).searchParams.get("branchId");
 
@@ -12,31 +30,34 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing branchId" }, { status: 400 });
     }
 
-    // Mocking the restaurant DB connection injection (En un entorno real usaríamos el pool correcto)
-    const db = await getRestaurantDb(); // Mock function call for architecture
-    
-    // 1. Mapear la orden de UberEats al esquema Rabbitty
-    const uberOrder = payload; // Ej: { id: "UE-123", items: [...], total: 200, ... }
+    const validationResult = webhookSchema.safeParse(payload);
+    if (!validationResult.success) {
+      return NextResponse.json({ error: "Invalid payload format", details: validationResult.error.format() }, { status: 400 });
+    }
+    const uberOrder = validationResult.data;
+
+    const db = await getRestaurantDb();
     
     // 2. Insertar en Rabbitty DB
     const [newOrder] = await db.insert(orders).values({
       branchId,
-      orderType: "DELIVERY", // O TAKE_OUT
+      orderType: "DELIVERY",
       status: "PENDING",
-      subtotal: uberOrder.subtotal || 0,
-      total: uberOrder.total || 0,
-      notes: `UberEats Order #${uberOrder.id}`,
+      subtotal: uberOrder.subtotal,
+      total: uberOrder.total,
+      notes: `Aggregator Order #${uberOrder.id}`,
     }).returning();
 
     // 3. Insertar Items
-    if (uberOrder.items && Array.isArray(uberOrder.items)) {
+    if (uberOrder.items.length > 0) {
+      // Find default unmapped item or map correctly
       await db.insert(orderItems).values(
-        uberOrder.items.map((item: any) => ({
+        uberOrder.items.map((item) => ({
           orderId: newOrder.id,
-          menuItemId: item.mappedId || "unknown", // Idealmente mapeado al ID de rabbitty
-          quantity: item.quantity || 1,
-          unitPrice: item.price || 0,
-          totalPrice: (item.price || 0) * (item.quantity || 1),
+          menuItemId: item.mappedId || "00000000-0000-0000-0000-000000000000", // Fallback ID o genérico
+          quantity: item.quantity,
+          unitPrice: item.price,
+          totalPrice: item.price * item.quantity,
         }))
       );
     }

@@ -1,5 +1,6 @@
+/// <reference lib="webworker" />
 import { defaultCache } from "@serwist/next/worker";
-import { type PrecacheEntry, Serwist } from "serwist";
+import { type PrecacheEntry, Serwist, NetworkOnly } from "serwist";
 import { BackgroundSyncPlugin } from "serwist";
 
 declare global {
@@ -23,10 +24,9 @@ const serwist = new Serwist({
       // Interceptar llamadas TRPC/API de mutaciones importantes (ej. crear orden, actualizar mesa)
       matcher: ({ url, request }) => 
         url.pathname.includes('/api/trpc') && request.method === 'POST',
-      handler: "NetworkOnly",
-      options: {
+      handler: new NetworkOnly({
         plugins: [bgSyncPlugin],
-      },
+      }),
     }
   ],
   skipWaiting: true,

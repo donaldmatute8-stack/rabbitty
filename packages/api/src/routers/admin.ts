@@ -229,38 +229,75 @@ export const adminRouter = router({
              // Es demasiado grande para parsear fácilmente, usaremos un mock inteligente de las categorías que sí pudimos scrapear por tags HTML
           }
           
-          // Extracción por clases CSS básicas si todo falla
-          const categories: string[] = [];
-          $('h2').each((i, el) => {
-            const text = $(el).text().trim();
-            if (text && text.length < 40 && !text.includes("Uber")) {
-              categories.push(text);
+          // Extracción por clases CSS/DOM real si no hay JSON-LD
+          const categories: { name: string; items: any[] }[] = [];
+          
+          // UberEats normalmente envuelve las categorías en listas o divs con headers
+          $('ul, [data-testid="rich-text"]').each((i, el) => {
+            const heading = $(el).prev('h2').text().trim() || $(el).find('h2').first().text().trim();
+            if (heading && heading.length < 40 && !heading.includes("Uber")) {
+              const items: any[] = [];
+              
+              // Buscar elementos que parezcan productos (li o divs con rol listitem)
+              $(el).find('li, [role="listitem"]').each((j, itemEl) => {
+                const textContent = $(itemEl).text();
+                // Buscar precios con regex
+                const priceMatch = textContent.match(/\$?\s*(\d+[.,]\d{2})/);
+                const price = priceMatch && priceMatch[1] ? parseFloat(priceMatch[1].replace(',', '.')) : 0;
+                
+                // Buscar nombres (generalmente están en un span o div prominente al inicio)
+                const possibleNames = $(itemEl).find('span, div').filter((k, e) => {
+                  const t = $(e).text().trim();
+                  return t.length > 2 && t.length < 60 && !t.match(/\$?\s*(\d+[.,]\d{2})/);
+                }).first().text().trim();
+                
+                if (possibleNames && price > 0) {
+                  items.push({
+                    name: possibleNames,
+                    price,
+                    description: textContent.replace(possibleNames, '').replace(priceMatch && priceMatch[0] ? priceMatch[0] : '', '').substring(0, 255).trim()
+                  });
+                }
+              });
+
+              if (items.length > 0) {
+                categories.push({ name: heading, items });
+              }
             }
           });
-          
+
           if (categories.length === 0) {
             throw new Error("No pudimos extraer el menú automáticamente debido a las protecciones de UberEats. Intenta copiar y pegar los platillos.");
           }
 
-          // Mocking items para demostrar el "Magic Onboarding"
-          // Creamos la primera categoría encontrada con 3 items demo extraídos del contexto
-          const [cat] = await ctx.restaurantDb.insert(dbSchema.menuCategories).values({
-            branchId: input.branchId,
-            name: categories[0] || "Favoritos",
-            sortOrder: 1,
-          }).returning();
+          let sortOrder = 0;
+          let itemsCount = 0;
 
-          if (!cat) {
-            throw new Error("Failed to create category");
+          for (const category of categories) {
+            const [cat] = await ctx.restaurantDb.insert(dbSchema.menuCategories).values({
+              branchId: input.branchId,
+              name: category.name,
+              sortOrder: sortOrder++,
+            }).returning();
+
+            if (!cat) throw new Error("Failed to create category");
+
+            if (category.items.length > 0) {
+              const itemsToInsert = category.items.map((item, index) => ({
+                categoryId: cat.id,
+                branchId: input.branchId,
+                name: item.name,
+                price: item.price,
+                description: item.description || null,
+                sortOrder: index,
+              }));
+              
+              await ctx.restaurantDb.insert(dbSchema.menuItems).values(itemsToInsert);
+              itemsCount += category.items.length;
+            }
           }
-
-          await ctx.restaurantDb.insert(dbSchema.menuItems).values([
-            { categoryId: cat.id, branchId: input.branchId, name: "Hamburguesa Clásica", price: 150, description: "Deliciosa hamburguesa importada de UberEats" },
-            { categoryId: cat.id, branchId: input.branchId, name: "Papas Fritas", price: 60, description: "Papas crujientes" },
-            { categoryId: cat.id, branchId: input.branchId, name: "Refresco", price: 40, description: "Bebida fría" }
-          ]);
           
-          return { success: true, message: `Scraping parcial exitoso: Creada categoría '${cat.name}' con 3 platillos demo (Uber bloqueó la lectura completa).` };
+          return { success: true, message: `Scraping por DOM exitoso: ${categories.length} categorías y ${itemsCount} platillos creados.` };
         }
 
         // Si tenemos JSON-LD (ideal)
