@@ -18,24 +18,54 @@ export function RabbittyAnimatedBadge({
   const height = 320;
   
   const cx = 120;
-  const cy = 185;
+  const cy = 220; // Centro de la zona del QR y ondas concéntricas
 
-  // Facetas del conejo low-poly (coordenadas de triángulos del modelo 4A)
-  const facets = [
-    "78,10 66,50 90,68",      // Oreja Izquierda Exterior
-    "78,10 90,68 102,55",     // Oreja Izquierda Interior
-    "162,10 174,50 150,68",   // Oreja Derecha Exterior
-    "162,10 150,68 138,55",   // Oreja Derecha Interior
-    "102,55 120,55 120,75",   // Frente Central Izquierda
-    "138,55 120,55 120,75",   // Frente Central Derecha
-    "102,55 90,68 120,75",    // Frente Lateral Izquierda
-    "138,55 150,68 120,75",   // Frente Lateral Derecha
-    "90,68 72,90 120,95",     // Mejilla Izquierda
-    "150,68 168,90 120,95",    // Mejilla Derecha
-    "90,68 120,75 120,95",    // Centro Izquierda
-    "150,68 120,75 120,95",   // Centro Derecha
-    "72,90 120,115 120,95",   // Hocico Izquierda
-    "168,90 120,115 120,95"    // Hocico Derecha
+  // Facetas detalladas del conejo low-poly (coordenadas de triángulos 4A-3)
+  const detailedFacets = [
+    // --- OREJA IZQUIERDA ---
+    { points: "75,5 55,45 85,45", fill: "rgba(233,30,99,0.06)", stroke: "rgba(233,30,99,0.25)" },
+    { points: "75,5 85,45 95,70", fill: "rgba(139,92,246,0.12)", stroke: "rgba(139,92,246,0.3)" },
+    { points: "55,45 75,75 85,45", fill: "rgba(233,30,99,0.08)", stroke: "rgba(233,30,99,0.25)" },
+    { points: "85,45 75,75 95,70", fill: "rgba(139,92,246,0.15)", stroke: "rgba(139,92,246,0.3)" },
+
+    // --- OREJA DERECHA ---
+    { points: "165,5 185,45 155,45", fill: "rgba(233,30,99,0.06)", stroke: "rgba(233,30,99,0.25)" },
+    { points: "165,5 155,45 145,70", fill: "rgba(139,92,246,0.12)", stroke: "rgba(139,92,246,0.3)" },
+    { points: "185,45 165,75 155,45", fill: "rgba(233,30,99,0.08)", stroke: "rgba(233,30,99,0.25)" },
+    { points: "155,45 165,75 145,70", fill: "rgba(139,92,246,0.15)", stroke: "rgba(139,92,246,0.3)" },
+
+    // --- FRENTE ---
+    { points: "95,70 145,70 120,75", fill: "rgba(56,189,248,0.08)", stroke: "rgba(56,189,248,0.25)" },
+    { points: "95,70 120,60 145,70", fill: "rgba(139,92,246,0.15)", stroke: "rgba(139,92,246,0.25)" },
+    { points: "75,75 95,70 120,75", fill: "rgba(233,30,99,0.05)", stroke: "rgba(233,30,99,0.2)" },
+    { points: "165,75 145,70 120,75", fill: "rgba(233,30,99,0.05)", stroke: "rgba(233,30,99,0.2)" },
+
+    // --- ÁREA DE OJOS ---
+    { points: "75,75 120,75 95,90", fill: "rgba(139,92,246,0.08)", stroke: "rgba(139,92,246,0.2)" },
+    { points: "165,75 120,75 145,90", fill: "rgba(139,92,246,0.08)", stroke: "rgba(139,92,246,0.2)" },
+    { points: "95,90 145,90 120,75", fill: "rgba(56,189,248,0.12)", stroke: "rgba(56,189,248,0.3)" },
+
+    // --- MEJILLAS SUPERIORES ---
+    { points: "75,75 65,95 95,90", fill: "rgba(233,30,99,0.06)", stroke: "rgba(233,30,99,0.2)" },
+    { points: "165,75 175,95 145,90", fill: "rgba(233,30,99,0.06)", stroke: "rgba(233,30,99,0.2)" },
+
+    // --- NARIZ SUPERIOR ---
+    { points: "95,90 120,75 120,100", fill: "rgba(139,92,246,0.1)", stroke: "rgba(139,92,246,0.2)" },
+    { points: "145,90 120,75 120,100", fill: "rgba(139,92,246,0.1)", stroke: "rgba(139,92,246,0.2)" },
+
+    // --- MEJILLAS INFERIORES Y MANDÍBULA ---
+    { points: "65,95 80,115 100,105", fill: "rgba(233,30,99,0.08)", stroke: "rgba(233,30,99,0.2)" },
+    { points: "175,95 160,115 140,105", fill: "rgba(233,30,99,0.08)", stroke: "rgba(233,30,99,0.2)" },
+    { points: "95,90 100,105 120,100", fill: "rgba(56,189,248,0.06)", stroke: "rgba(56,189,248,0.2)" },
+    { points: "145,90 140,105 120,100", fill: "rgba(56,189,248,0.06)", stroke: "rgba(56,189,248,0.2)" },
+    { points: "65,95 100,105 95,90", fill: "rgba(139,92,246,0.05)", stroke: "rgba(139,92,246,0.15)" },
+    { points: "175,95 140,105 145,90", fill: "rgba(139,92,246,0.05)", stroke: "rgba(139,92,246,0.15)" },
+
+    // --- HOCICO Y MENTÓN ---
+    { points: "100,105 120,120 120,100", fill: "rgba(233,30,99,0.1)", stroke: "rgba(233,30,99,0.25)" },
+    { points: "140,105 120,120 120,100", fill: "rgba(233,30,99,0.1)", stroke: "rgba(233,30,99,0.25)" },
+    { points: "80,115 120,120 100,105", fill: "rgba(139,92,246,0.12)", stroke: "rgba(139,92,246,0.25)" },
+    { points: "160,115 120,120 140,105", fill: "rgba(139,92,246,0.12)", stroke: "rgba(139,92,246,0.25)" }
   ];
 
   // Espectro de barras de sonido del ecualizador
@@ -63,8 +93,15 @@ export function RabbittyAnimatedBadge({
         <defs>
           {/* Degradado Neón Rabbitty */}
           <linearGradient id="badge-neon-glow" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#E91E63" /> {/* Pink */}
-            <stop offset="100%" stopColor="#8B5CF6" /> {/* Purple */}
+            <stop offset="0%" stopColor="#E91E63" />
+            <stop offset="100%" stopColor="#8B5CF6" />
+          </linearGradient>
+
+          {/* Degradado de Ripples Concéntricos (Soundwave) */}
+          <linearGradient id="ripple-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#38BDF8" /> {/* Cyan/Light Blue */}
+            <stop offset="50%" stopColor="#8B5CF6" /> {/* Purple */}
+            <stop offset="100%" stopColor="#E91E63" /> {/* Pink */}
           </linearGradient>
 
           {/* Degradado de fondo para la tarjeta de cristal */}
@@ -98,73 +135,125 @@ export function RabbittyAnimatedBadge({
           className="shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)]"
         />
 
-        {/* Líneas decorativas internas de alta tecnología (cuadrícula cyberpunk sutil) */}
-        <path
-          d="M 35 110 L 205 110 M 35 250 L 205 250"
-          stroke="rgba(255, 255, 255, 0.03)"
+        {/* 2. CROWN: CABEZA DE CONEJO GEOMÉTRICA EN LA PARTE SUPERIOR (OVERLAP) */}
+        <g>
+          {/* Facetas de cristal semitransparentes */}
+          <g>
+            {detailedFacets.map((facet, i) => (
+              <polygon
+                key={i}
+                points={facet.points}
+                fill={facet.fill}
+                stroke={facet.stroke}
+                strokeWidth={0.8}
+              />
+            ))}
+          </g>
+
+          {/* Bordes/Silueta de Neón de la corona */}
+          <motion.path
+            d="M 120 120 L 80 115 L 65 95 L 75 75 L 55 45 L 75 5 L 85 45 L 95 70 L 120 60 L 145 70 L 155 45 L 165 5 L 185 45 L 165 75 L 175 95 L 160 115 Z"
+            fill="none"
+            stroke="url(#badge-neon-glow)"
+            strokeWidth={2}
+            strokeLinejoin="round"
+            filter="url(#neon-glow-effect)"
+            animate={{ strokeWidth: [2.0, 3.2, 2.0] }}
+            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+          />
+
+          {/* Líneas de conexión internas adicionales para efecto 3D */}
+          <path
+            d="M 95 70 L 145 70 M 120 75 L 120 100 M 95 90 L 145 90 M 100 105 L 140 105"
+            stroke="rgba(255, 255, 255, 0.12)"
+            strokeWidth={1}
+            fill="none"
+          />
+        </g>
+
+        {/* 3. LOGO Y TEXTO DE BRANDING SUPERIOR DE LA TARJETA */}
+        <g transform="translate(120, 142)">
+          {/* Conejo miniatura */}
+          <path 
+            d="M -30,-5 L -33,-1 L -32,2 L -28,3 L -24,2 L -23,-1 L -26,-5 L -27,-2 L -29,-2 Z" 
+            fill="#E91E63" 
+          />
+          <text 
+            textAnchor="middle" 
+            fill="rgba(255,255,255,0.9)" 
+            fontSize="9" 
+            fontWeight="900" 
+            letterSpacing="5"
+            className="font-sans select-none"
+          >
+            RABBITTY
+          </text>
+        </g>
+
+        {/* 4. CONTENEDOR DEL DETALLE DEL CÓDIGO (Línea de corte decorativa) */}
+        <rect
+          x="32"
+          y="155"
+          width="176"
+          height="130"
+          rx="16"
+          fill="#07070b"
+          stroke="rgba(255,255,255,0.03)"
           strokeWidth="1.5"
         />
 
-        {/* 2. RIPPLES DE ONDAS CONCÉNTRICAS (ANIMACIÓN RADAR DE FUEGO) */}
-        {/* Ripples fijos transparentes */}
-        <circle cx={cx} cy={cy} r={44} fill="none" stroke="rgba(233,30,99,0.06)" strokeWidth={1} />
-        <circle cx={cx} cy={cy} r={64} fill="none" stroke="rgba(139,92,246,0.04)" strokeWidth={1} />
-        <circle cx={cx} cy={cy} r={84} fill="none" stroke="rgba(255,255,255,0.02)" strokeWidth={1} />
+        {/* 5. RIPPLES DE ONDAS CONCÉNTRICAS ANIMADAS (SOUNDWAVE RIPPLE 4A-3) */}
+        {/* Ripples concéntricos estáticos */}
+        <circle cx={cx} cy={cy} r={28} fill="none" stroke="rgba(56, 189, 248, 0.08)" strokeWidth={1} />
+        <circle cx={cx} cy={cy} r={46} fill="none" stroke="rgba(139, 92, 246, 0.06)" strokeWidth={1.5} />
+        <circle cx={cx} cy={cy} r={64} fill="none" stroke="rgba(233, 30, 99, 0.04)" strokeWidth={1.5} />
+        <circle cx={cx} cy={cy} r={80} fill="none" stroke="rgba(255, 255, 255, 0.02)" strokeWidth={1} />
 
-        {/* Ripples animados expansivos */}
+        {/* Ripples concéntricos animados de onda dual (cyan/pink) */}
         {[0, 1, 2].map((i) => (
           <motion.circle
             key={i}
             cx={cx}
             cy={cy}
-            r={24}
+            r={18}
             fill="none"
-            stroke="url(#badge-neon-glow)"
+            stroke="url(#ripple-gradient)"
             strokeWidth={1.5}
             animate={{
-              r: [24, 94],
-              opacity: [0.5, 0]
+              r: [18, 75],
+              opacity: [0.65, 0]
             }}
             transition={{
-              duration: 3,
+              duration: 3.5,
               repeat: Infinity,
-              delay: i * 1.0,
+              delay: i * 1.15,
               ease: "easeOut"
             }}
           />
         ))}
 
-        {/* 3. CORCHETES DE ENCUADRE DE ALTA TECNOLOGÍA (FINDER BRACKETS) */}
-        <g stroke="url(#badge-neon-glow)" strokeWidth="1.5" fill="none" strokeLinecap="round" opacity="0.6">
-          {/* Top Left */}
-          <path d="M 88 153 L 80 153 L 80 161" />
-          {/* Top Right */}
-          <path d="M 152 153 L 160 153 L 160 161" />
-          {/* Bottom Left */}
-          <path d="M 88 217 L 80 217 L 80 209" />
-          {/* Bottom Right */}
-          <path d="M 152 217 L 160 217 L 160 209" />
+        {/* 6. PATRONES DE ESCANEO DE ESQUINA DE ALTA TECNOLOGÍA (QR FINDER PATTERNS) */}
+        {/* Superior Izquierda */}
+        <g transform="translate(46, 169)">
+          <rect x="-8" y="-8" width="16" height="16" rx="4" fill="none" stroke="#E91E63" strokeWidth="1.8" />
+          <rect x="-4" y="-4" width="8" height="8" rx="2" fill="#E91E63" />
+        </g>
+        {/* Superior Derecha */}
+        <g transform="translate(194, 169)">
+          <rect x="-8" y="-8" width="16" height="16" rx="4" fill="none" stroke="#E91E63" strokeWidth="1.8" />
+          <rect x="-4" y="-4" width="8" height="8" rx="2" fill="#E91E63" />
+        </g>
+        {/* Inferior Izquierda */}
+        <g transform="translate(46, 271)">
+          <rect x="-8" y="-8" width="16" height="16" rx="4" fill="none" stroke="#E91E63" strokeWidth="1.8" />
+          <rect x="-4" y="-4" width="8" height="8" rx="2" fill="#E91E63" />
         </g>
 
-        {/* Texto de Identidad de Marca dentro de la tarjeta */}
-        <text 
-          x={cx} 
-          y={134} 
-          textAnchor="middle" 
-          fill="rgba(255,255,255,0.4)" 
-          fontSize="7" 
-          fontWeight="900" 
-          letterSpacing="4"
-          className="font-sans select-none"
-        >
-          RABBITTY CODE
-        </text>
-
-        {/* 4. ECUALIZADOR DE ONDAS DE SONIDO (SOUNDWAVE EQ) */}
-        <g fill="url(#badge-neon-glow)">
+        {/* 7. ECUALIZADOR DE ONDAS DE SONIDO EN LA BASE DE LA SECCIÓN */}
+        <g fill="url(#ripple-gradient)">
           {barHeights.map((maxH, idx) => {
             const x = xStart + idx * (barWidth + gap);
-            const baselineY = 270;
+            const baselineY = 285;
             return (
               <motion.rect
                 key={idx}
@@ -174,8 +263,8 @@ export function RabbittyAnimatedBadge({
                 height={maxH}
                 rx={2.5}
                 animate={{
-                  height: [maxH * 0.2, maxH, maxH * 0.2],
-                  y: [baselineY - maxH * 0.2, baselineY - maxH, baselineY - maxH * 0.2]
+                  height: [maxH * 0.15, maxH, maxH * 0.15],
+                  y: [baselineY - maxH * 0.15, baselineY - maxH, baselineY - maxH * 0.15]
                 }}
                 transition={{
                   duration: 1.1 + (idx % 3) * 0.25,
@@ -188,48 +277,12 @@ export function RabbittyAnimatedBadge({
           })}
         </g>
 
-        {/* 5. CROWN: CABEZA DE CONEJO GEOMÉTRICA EN LA PARTE SUPERIOR (OVERLAP) */}
-        <g>
-          {/* Facetas de cristal semitransparentes */}
-          <g>
-            {facets.map((f, i) => (
-              <polygon
-                key={i}
-                points={f}
-                fill={i % 2 === 0 ? "rgba(233,30,99,0.08)" : "rgba(139,92,246,0.08)"}
-                stroke="rgba(255, 255, 255, 0.06)"
-                strokeWidth={0.8}
-              />
-            ))}
-          </g>
-
-          {/* Bordes/Silueta de Neón de la corona */}
-          <motion.path
-            d="M 78 10 L 66 50 L 72 90 L 120 115 L 168 90 L 174 50 L 162 10 L 138 55 L 120 55 L 102 55 Z"
-            fill="none"
-            stroke="url(#badge-neon-glow)"
-            strokeWidth={2}
-            strokeLinejoin="round"
-            filter="url(#neon-glow-effect)"
-            animate={{ strokeWidth: [2.0, 3.2, 2.0] }}
-            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-          />
-
-          {/* Facetas decorativas que conectan la frente para lucir cristal */}
-          <path
-            d="M 120 55 L 120 75 M 102 55 L 120 75 M 138 55 L 120 75 M 90 68 L 120 75 M 150 68 L 120 75 M 120 75 L 120 95 M 90 68 L 120 95 M 150 68 L 120 95"
-            stroke="rgba(255, 255, 255, 0.12)"
-            strokeWidth={1}
-            fill="none"
-          />
-        </g>
-
-        {/* 6. ESCUDO CENTRAL CON MICRO-QR LEÍBLE POR CÁMARAS */}
+        {/* 8. ESCUDO CENTRAL Y MICRO-QR REAL FUNCIONAL */}
         <g transform={`translate(${cx}, ${cy})`}>
-          {/* Círculo central negro con borde neón */}
-          <circle r={22} fill="#0b0b0d" stroke="url(#badge-neon-glow)" strokeWidth={1.5} />
+          {/* Escudo redondo negro con borde neón */}
+          <circle r={22} fill="#050508" stroke="url(#badge-neon-glow)" strokeWidth={1.8} />
           
-          {/* Micro-QR estático centrado */}
+          {/* Micro-QR estático centrado leíble */}
           <g transform="translate(-13, -13)">
             <QRCodeSVG
               value={value}
@@ -242,7 +295,7 @@ export function RabbittyAnimatedBadge({
         </g>
       </svg>
       
-      {/* 7. TEXTO DE RESPALDO ALFANUMÉRICO */}
+      {/* 9. TEXTO DE RESPALDO ALFANUMÉRICO */}
       <div className="mt-4 bg-white/[0.03] border border-white/5 rounded-full px-4 py-1.5 text-center shadow-[0_0_20px_rgba(0,0,0,0.4)]">
         <span className="text-[10px] text-white/50 uppercase tracking-[3px] font-mono select-all">
           {value.substring(0, 12).toUpperCase()}

@@ -351,7 +351,7 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
       )}
 
       {/* Top Left Stack: Afiliados and Bunz */}
-      <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 2000, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+      <div style={{ position: 'absolute', top: 70, left: 16, zIndex: 2000, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
         <div style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', color: '#fff', padding: '4px 10px', borderRadius: 999, fontSize: 10, fontWeight: 800, border: '1px solid rgba(255,255,255,0.1)' }}>
           🔴 {filteredBusinesses.length} afiliados
         </div>
@@ -370,7 +370,7 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
             mapInst.current.panTo([userLat, userLng], { animate: true, duration: 1 });
           }
         }}
-        style={{ position: 'absolute', top: 20, right: 16, zIndex: 2000, width: 40, height: 40, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', cursor: 'pointer' }}
+        style={{ position: 'absolute', top: 70, right: 16, zIndex: 2000, width: 40, height: 40, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', cursor: 'pointer' }}
       >
         <Crosshair size={18} />
       </button>
