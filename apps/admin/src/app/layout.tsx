@@ -13,8 +13,8 @@ export const metadata: Metadata = {
   title: "Rabbitty Admin",
   description: "Panel de administración Rabbitty",
   icons: {
-    icon: '/favicon.svg',
-    apple: '/favicon.svg',
+    icon: '/favicon.ico',
+    apple: '/favicon.ico',
   },
 };
 
