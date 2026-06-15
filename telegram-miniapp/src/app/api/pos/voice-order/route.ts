@@ -4,11 +4,10 @@ import { restaurantDb } from "../../../../db/restaurant";
 import { tables, menuItems } from "@rabbitty/database-restaurant/schema";
 import { eq } from "drizzle-orm";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 export async function POST(req: Request) {
+  const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY || "dummy_key_for_build",
+  });
   try {
     const formData = await req.formData();
     const audioFile = formData.get("audio") as Blob;
