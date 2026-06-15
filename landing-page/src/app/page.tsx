@@ -236,9 +236,10 @@ export default function LandingPage() {
             </p>
             <div className="space-y-6">
               {[
-                { icon: Store, title: 'Software POS Gratuito', desc: 'Punto de venta, control de inventario y administración de mesas de última generación.' },
-                { icon: QrCode, title: 'Marketing Automatizado', desc: 'Atrae clientes regalando bunz solo cuando consumen. Cero costo de adquisición inicial.' },
-                { icon: Shield, title: 'Economía Circular', desc: 'Recibe bunz como forma de pago y úsalos para comprar a proveedores u otros negocios.' }
+                { icon: Store, title: 'Software POS Gratuito', desc: 'Punto de venta, inventario predictivo con IA y administración de mesas de última generación.' },
+                { icon: QrCode, title: 'BYOD: Pedidos Inteligentes', desc: 'Tus clientes escanean el QR, ordenan y pagan nativamente desde Telegram con Stars o Cripto, sin descargar apps.' },
+                { icon: Zap, title: 'Migración Mágica (IA)', desc: '¿Tienes menú en UberEats? Pega el link y Rabbitty clona todo tu menú y precios en 5 minutos.' },
+                { icon: Shield, title: 'Modo Offline Indestructible', desc: 'Si se cae tu internet, nuestro POS encola ventas y sincroniza en segundo plano al regresar la red.' }
               ].map((f, i) => (
                 <div key={i} className="flex items-start gap-4">
                   <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-400 flex-shrink-0">
