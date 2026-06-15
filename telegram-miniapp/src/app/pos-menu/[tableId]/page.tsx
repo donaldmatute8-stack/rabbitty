@@ -7,7 +7,8 @@ import { toast } from "@rabbitty/ui";
 // Aquí iría un dummy o implementación inicial para Telegram Stars.
 import { useWallet } from "../../../contexts/WalletContext"; // Asumiendo que existe
 import { Button } from "@rabbitty/ui";
-import { ShoppingCart, Star, Coins } from "lucide-react";
+import { ShoppingCart, Star, Coins, Mic } from "lucide-react";
+import { useRef } from "react";
 
 declare global {
   interface Window {
@@ -19,8 +20,14 @@ export default function PosMenuPage() {
   const { tableId } = useParams();
   const router = useRouter();
   const [menuItems, setMenuItems] = useState<any[]>([]);
-  const [cart, setCart] = useState<{item: any, quantity: number}[]>([]);
+  const [cart, setCart] = useState<{item: any, quantity: number, notes?: string}[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Voice AI States
+  const [isRecording, setIsRecording] = useState(false);
+  const [isProcessingVoice, setIsProcessingVoice] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   // Load menu items
   useEffect(() => {
@@ -94,7 +101,7 @@ export default function PosMenuPage() {
       const res = await fetch('/api/pos/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tableId, items: cart.map(i => ({...i.item, quantity: i.quantity})), paymentMethod: 'BUNZ' })
+        body: JSON.stringify({ tableId, items: cart.map(i => ({...i.item, quantity: i.quantity, notes: i.notes})), paymentMethod: 'BUNZ' })
       });
       const data = await res.json();
       if (data.success) {
@@ -105,6 +112,92 @@ export default function PosMenuPage() {
       }
     } catch (err) {
       toast.error("Error de conexión");
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        await processVoiceOrder(audioBlob);
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error("Mic error:", err);
+      toast.error("No se pudo acceder al micrófono.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      // Detener todas las pistas (Tracks) del micrófono
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+    }
+  };
+
+  const processVoiceOrder = async (audioBlob: Blob) => {
+    setIsProcessingVoice(true);
+    try {
+      const formData = new FormData();
+      formData.append("audio", audioBlob);
+      if (typeof tableId === 'string') {
+        formData.append("tableId", tableId);
+      } else if (Array.isArray(tableId)) {
+        formData.append("tableId", tableId[0]);
+      }
+
+      const res = await fetch('/api/pos/voice-order', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        toast.success(`Escuchamos: "${data.transcription}"`);
+        if (data.items && data.items.length > 0) {
+          const newItemsAdded: string[] = [];
+          data.items.forEach((aiItem: any) => {
+            const menuItem = menuItems.find(m => m.id === aiItem.itemId);
+            if (menuItem) {
+              newItemsAdded.push(`${aiItem.quantity}x ${menuItem.name}`);
+              setCart(prev => {
+                const existing = prev.find(i => i.item.id === menuItem.id && i.notes === aiItem.notes);
+                if (existing) {
+                  return prev.map(i => i.item.id === menuItem.id && i.notes === aiItem.notes 
+                    ? { ...i, quantity: i.quantity + aiItem.quantity } 
+                    : i);
+                }
+                return [...prev, { item: menuItem, quantity: aiItem.quantity, notes: aiItem.notes }];
+              });
+            }
+          });
+          toast.success("Agregado:\n" + newItemsAdded.join("\n"));
+        } else {
+          toast.error("No logramos identificar ningún platillo del menú en tu nota de voz.");
+        }
+      } else {
+        toast.error(data.error || "Error al procesar el audio");
+      }
+    } catch (err) {
+      console.error("Process voice error:", err);
+      toast.error("Error de conexión con la IA");
+    } finally {
+      setIsProcessingVoice(false);
     }
   };
 
@@ -143,6 +236,31 @@ export default function PosMenuPage() {
           ))
         )}
       </div>
+
+      {/* Voice Order Button */}
+      {!loading && (
+        <div className="fixed bottom-[100px] right-4 z-40">
+          <Button 
+            onPointerDown={startRecording}
+            onPointerUp={stopRecording}
+            onPointerLeave={stopRecording}
+            className={`rounded-full w-14 h-14 flex items-center justify-center shadow-lg transition-all ${
+              isRecording 
+                ? 'bg-red-500 hover:bg-red-600 scale-110 shadow-red-500/50 animate-pulse' 
+                : 'bg-gradient-to-r from-pink-500 to-purple-600 hover:scale-105'
+            }`}
+          >
+            <Mic className="w-6 h-6 text-white" />
+          </Button>
+        </div>
+      )}
+
+      {isProcessingVoice && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex flex-col items-center justify-center text-white">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-pink-500 border-t-transparent mb-4"></div>
+          <p className="font-semibold text-lg animate-pulse">La IA está procesando tu orden...</p>
+        </div>
+      )}
 
       {cart.length > 0 && (
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-50">
