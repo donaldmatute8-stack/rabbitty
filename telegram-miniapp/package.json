@@ -12,6 +12,7 @@
   "dependencies": {
     "@libsql/client": "^0.17.3",
     "@rabbitty/database-core": "file:../packages/database-core",
+    "@rabbitty/database-restaurant": "workspace:*",
     "@rabbitty/ui": "file:../packages/ui",
     "@tonconnect/ui-react": "^2.4.4",
     "@twa-dev/sdk": "^8.0.2",

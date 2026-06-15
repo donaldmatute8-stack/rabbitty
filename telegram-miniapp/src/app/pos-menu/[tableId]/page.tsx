@@ -9,6 +9,12 @@ import { useWallet } from "../../../contexts/WalletContext"; // Asumiendo que ex
 import { Button } from "@rabbitty/ui";
 import { ShoppingCart, Star, Coins } from "lucide-react";
 
+declare global {
+  interface Window {
+    Telegram?: any;
+  }
+}
+
 export default function PosMenuPage() {
   const { tableId } = useParams();
   const router = useRouter();
@@ -18,14 +24,22 @@ export default function PosMenuPage() {
 
   // Load menu items
   useEffect(() => {
-    // Aquí cargaríamos los items usando TRPC o fetch
-    // Mock for now to show the UI
-    setMenuItems([
-      { id: "1", name: "Hamburguesa Clásica", price: 150, description: "Carne de res, queso, lechuga, tomate." },
-      { id: "2", name: "Papas a la Francesa", price: 60, description: "Papas fritas con sal de mar." },
-      { id: "3", name: "Refresco", price: 40, description: "Bebida fría." }
-    ]);
-    setLoading(false);
+    const fetchMenu = async () => {
+      try {
+        const res = await fetch(`/api/pos/menu?tableId=${tableId}`);
+        const data = await res.json();
+        if (data.success) {
+          setMenuItems(data.items || []);
+        } else {
+          toast.error(data.error || "Error al cargar el menú");
+        }
+      } catch (err) {
+        toast.error("Error de conexión");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchMenu();
   }, [tableId]);
 
   const addToCart = (item: any) => {
@@ -41,11 +55,57 @@ export default function PosMenuPage() {
 
   const total = cart.reduce((sum, i) => sum + (i.item.price * i.quantity), 0);
 
-  const handlePay = async () => {
-    // 1. Crear orden en DB
-    // 2. Usar WebApp de Telegram para pagar con Telegram Stars (Invoice API)
-    // window.Telegram.WebApp.openInvoice(invoiceUrl)
-    toast.success("Abriendo pasarela de pago (Telegram Stars)...");
+  const handlePayStars = async () => {
+    toast.success("Generando pago con Telegram Stars...");
+    try {
+      const res = await fetch('/api/pos/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tableId, items: cart.map(i => ({...i.item, quantity: i.quantity})), paymentMethod: 'STARS' })
+      });
+      const data = await res.json();
+      if (data.success && data.invoiceLink) {
+        // Use TWA SDK to open the invoice
+        if (window.Telegram?.WebApp) {
+          window.Telegram.WebApp.openInvoice(data.invoiceLink, (status: string) => {
+            if (status === 'paid') {
+              toast.success("¡Pago exitoso!");
+              setCart([]);
+            } else if (status === 'cancelled') {
+              toast.error("Pago cancelado");
+            } else {
+              toast.error("Error en el pago: " + status);
+            }
+          });
+        } else {
+          toast.error("Telegram WebApp no disponible");
+        }
+      } else {
+        toast.error(data.error || "Error al crear invoice");
+      }
+    } catch (err) {
+      toast.error("Error de conexión");
+    }
+  };
+
+  const handlePayBunz = async () => {
+    toast.success("Procesando pago con Bunz...");
+    try {
+      const res = await fetch('/api/pos/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tableId, items: cart.map(i => ({...i.item, quantity: i.quantity})), paymentMethod: 'BUNZ' })
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("¡Pago con Bunz exitoso!");
+        setCart([]);
+      } else {
+        toast.error(data.error || "Fondos insuficientes o error");
+      }
+    } catch (err) {
+      toast.error("Error de conexión");
+    }
   };
 
   return (
@@ -91,11 +151,11 @@ export default function PosMenuPage() {
             <span className="text-xl font-bold">${total}</span>
           </div>
           <div className="flex gap-2">
-            <Button onClick={handlePay} className="flex-1 flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600">
+            <Button onClick={handlePayStars} className="flex-1 flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600">
               <Star className="w-4 h-4 fill-white" />
               Pagar con Stars
             </Button>
-            <Button onClick={() => toast.success("Pagando con Bunz...")} className="flex-1 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700">
+            <Button onClick={handlePayBunz} className="flex-1 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700">
               <Coins className="w-4 h-4 fill-white" />
               Usar Bunz
             </Button>

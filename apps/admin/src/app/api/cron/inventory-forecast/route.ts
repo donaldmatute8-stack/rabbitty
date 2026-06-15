@@ -11,14 +11,31 @@ export async function GET(req: Request) {
     // 1. Obtener items con bajo inventario o proyectados a agotarse
     const items = await db.select().from(inventoryItems).where(eq(inventoryItems.isActive, true));
 
+    // 2. Calcular consumo promedio de los últimos 30 días con SQL real
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const movements = await db.select({
+      itemId: inventoryMovements.itemId,
+      totalUsage: sql<number>`SUM(ABS(${inventoryMovements.quantity}))`
+    })
+    .from(inventoryMovements)
+    .where(
+      sql`${inventoryMovements.type} = 'OUT' AND ${inventoryMovements.createdAt} >= ${thirtyDaysAgo.toISOString()}`
+    )
+    .groupBy(inventoryMovements.itemId);
+
+    const usageMap = new Map(movements.map(m => [m.itemId, Number(m.totalUsage)]));
+
     const recommendations = [];
 
     for (const item of items) {
-      // Mock AI/Predictive logic: 
-      // En un entorno real, calcularíamos la media de ventas por día cruzando `orders` -> `orderItems` -> `menuItemIngredients`
-      // y cruzaríamos con el clima (API externa).
-      const dailyAverageConsumption = Math.random() * 5; // Dummy: Consume entre 0 y 5 unidades por día
-      const daysUntilEmpty = item.stock / (dailyAverageConsumption || 1);
+      const totalUsage30d = usageMap.get(item.id) || 0;
+      // Real Math: daily average
+      const dailyAverageConsumption = totalUsage30d / 30; 
+      
+      const safeDailyAverage = dailyAverageConsumption > 0 ? dailyAverageConsumption : 0.1; // fallback to avoid infinity
+      const daysUntilEmpty = item.stock / safeDailyAverage;
 
       if (daysUntilEmpty < 3) {
         recommendations.push({
@@ -26,7 +43,7 @@ export async function GET(req: Request) {
           name: item.name,
           currentStock: item.stock,
           projectedDaysLeft: Math.round(daysUntilEmpty),
-          recommendation: `El stock actual durará menos de 3 días (${Math.round(daysUntilEmpty)} días). Sugerimos pedir ${Math.round(dailyAverageConsumption * 7)} ${item.unit} para cubrir la semana.`
+          recommendation: `El stock actual durará menos de 3 días (${Math.round(daysUntilEmpty)} días). Sugerimos pedir ${Math.round(safeDailyAverage * 7)} ${item.unit} para cubrir la próxima semana.`
         });
       }
     }
