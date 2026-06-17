@@ -3,7 +3,8 @@ import { and, eq, sql } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
-import { restaurants, orders, tables } from "@rabbitty/database-restaurant/schema";
+import { restaurants, branches, orders, tables } from "@rabbitty/database-restaurant/schema";
+import { referrals } from "@rabbitty/database-core";
 import { miniappClient } from "../services/miniapp-client";
 
 
@@ -337,6 +338,58 @@ export const adminRouter = router({
         throw new Error("No pudimos extraer el menú automáticamente debido a protecciones contra bots.");
       }
     }),
+
+  getBranches: protectedProcedure.query(async ({ ctx }) => {
+    return await ctx.restaurantDb.select().from(branches);
+  }),
+
+  getCrossStoreKpis: protectedProcedure.query(async ({ ctx }) => {
+    const allBranches = await ctx.restaurantDb.select().from(branches);
+
+    const branchKpis = await Promise.all(
+      allBranches.map(async (branch) => {
+        const [ordersResult, revenueResult] = await Promise.all([
+          ctx.restaurantDb.select().from(orders).where(eq(orders.branchId, branch.id)),
+          ctx.restaurantDb.select({ sum: orders.total }).from(orders).where(eq(orders.branchId, branch.id)),
+        ]);
+        return {
+          branchId: branch.id,
+          branchName: branch.name,
+          totalOrders: ordersResult.length,
+          totalRevenue: Number(revenueResult[0]?.sum ?? 0),
+          totalCustomers: new Set(ordersResult.map((o) => o.customerPhone).filter(Boolean)).size,
+          lastOrderAt: ordersResult.length > 0
+            ? ordersResult.reduce((latest, o) =>
+                o.createdAt && (!latest || o.createdAt > latest) ? o.createdAt : latest,
+                null as Date | null
+              )
+            : null,
+        };
+      })
+    );
+
+    const totals = branchKpis.reduce(
+      (acc, b) => ({
+        totalOrders: acc.totalOrders + b.totalOrders,
+        totalRevenue: acc.totalRevenue + b.totalRevenue,
+        totalCustomers: acc.totalCustomers + b.totalCustomers,
+      }),
+      { totalOrders: 0, totalRevenue: 0, totalCustomers: 0 }
+    );
+
+    return {
+      totals,
+      branches: branchKpis,
+      branchCount: allBranches.length,
+    };
+  }),
+
+  getReferralAnalytics: protectedProcedure.query(async ({ ctx }) => {
+    const allReferrals = await ctx.coreDb.select().from(referrals);
+    const totalInviters = new Set(allReferrals.map((r) => r.inviterId)).size;
+    const totalInvited = new Set(allReferrals.map((r) => r.invitedId)).size;
+    return { referrals: allReferrals, totalInviters, totalInvited };
+  }),
 
   getDashboardStats: protectedProcedure.query(async ({ ctx }) => {
     const [totalOrdersResult, totalRevenueResult, activeTablesResult] = await Promise.all([

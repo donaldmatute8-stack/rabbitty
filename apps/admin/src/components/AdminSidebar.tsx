@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@rabbitty/ui";
-import { LayoutDashboard, Store, Users, Settings, ChefHat, ClipboardList, Package, Printer, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
+import { LayoutDashboard, Store, Users, Settings, ChefHat, ClipboardList, Package, Printer, ChevronLeft, ChevronRight, Sparkles, Clock, Salad, Truck, Receipt, CalendarCheck, DollarSign, Monitor, FileText, Gift } from "lucide-react";
 import { useSidebar } from "./DashboardClientWrapper";
 
 const links = [
@@ -11,9 +11,18 @@ const links = [
   { href: "/restaurants", label: "Restaurantes", icon: Store },
   { href: "/menu", label: "Menú", icon: ClipboardList },
   { href: "/staff", label: "Personal", icon: Users },
+  { href: "/staff/shifts", label: "Turnos", icon: Clock },
   { href: "/kitchen", label: "Cocina", icon: ChefHat },
   { href: "/inventory", label: "Inventario", icon: Package },
-  { href: "/academy", label: "Rabbitty Academy", icon: Sparkles },
+  { href: "/recipes", label: "Recetas", icon: Salad },
+  { href: "/suppliers", label: "Proveedores", icon: Truck },
+  { href: "/expenses", label: "Gastos", icon: Receipt },
+  { href: "/invoices", label: "Facturación", icon: FileText },
+  { href: "/catering", label: "Eventos", icon: CalendarCheck },
+  { href: "/pricing", label: "Precios Dinámicos", icon: DollarSign },
+  { href: "/menu-boards", label: "Menú Digital", icon: Monitor },
+  { href: "/loyalty", label: "Lealtad", icon: Gift },
+  { href: "/academy", label: "Academy", icon: Sparkles },
   { href: "/hardware", label: "Hardware", icon: Printer },
   { href: "/settings", label: "Configuración", icon: Settings },
 ];

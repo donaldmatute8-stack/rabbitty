@@ -14,6 +14,10 @@ export const EventTypes = {
   INVENTORY_ADJUSTMENT: "inventory.adjustment",
   BUNZ_REWARD: "bunz.reward",
   BUNZ_PAYMENT: "bunz.payment",
+  WAITLIST_ADDED: "waitlist.added",
+  WAITLIST_CALLED: "waitlist.called",
+  WAITLIST_SEATED: "waitlist.seated",
+  WAITLIST_CANCELLED: "waitlist.cancelled",
 } as const;
 
 export type EventType = (typeof EventTypes)[keyof typeof EventTypes];

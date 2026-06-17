@@ -248,6 +248,7 @@ export const customers = pgTable("customers", {
   totalVisits: integer("totalVisits").default(0).notNull(),
   totalSpent: real("totalSpent").default(0).notNull(),
   lastVisitAt: timestamp("lastVisitAt"),
+  birthDate: timestamp("birthDate"),
   segment: text("segment").default("NEW").notNull(), // VIP, RECURRENT, NEW, CHURN_RISK
   marketingConsent: boolean("marketingConsent").default(true).notNull(),
   ...timestamps,
@@ -261,5 +262,122 @@ export const campaigns = pgTable("campaigns", {
   message: text("message").notNull(),
   status: text("status").default("DRAFT").notNull(), // DRAFT, SENT
   sentAt: timestamp("sentAt"),
+  ...timestamps,
+});
+
+export const suppliers = pgTable("suppliers", {
+  id: id(),
+  branchId: fkId("branchId").references(() => branches.id),
+  name: text("name").notNull(),
+  contactName: text("contactName"),
+  phone: text("phone"),
+  email: text("email"),
+  address: text("address"),
+  notes: text("notes"),
+  isActive: boolean("isActive").default(true).notNull(),
+  ...timestamps,
+});
+
+export const purchaseOrders = pgTable("purchase_orders", {
+  id: id(),
+  branchId: fkId("branchId").references(() => branches.id),
+  supplierId: fkId("supplierId").references(() => suppliers.id),
+  status: text("status").default("PENDING").notNull(), // PENDING, APPROVED, RECEIVED, CANCELLED
+  total: real("total").default(0).notNull(),
+  notes: text("notes"),
+  orderedAt: timestamp("orderedAt").defaultNow(),
+  receivedAt: timestamp("receivedAt"),
+  ...timestamps,
+});
+
+export const purchaseOrderItems = pgTable("purchase_order_items", {
+  id: id(),
+  purchaseOrderId: fkId("purchaseOrderId").references(() => purchaseOrders.id),
+  inventoryItemId: fkId("inventoryItemId").references(() => inventoryItems.id),
+  quantity: real("quantity").notNull(),
+  unitCost: real("unitCost").default(0).notNull(),
+  totalCost: real("totalCost").default(0).notNull(),
+});
+
+export const dynamicPricingRules = pgTable("dynamic_pricing_rules", {
+  id: id(),
+  branchId: fkId("branchId").references(() => branches.id),
+  menuItemId: fkIdOpt("menuItemId").references(() => menuItems.id),
+  name: text("name").notNull(),
+  priority: integer("priority").default(0).notNull(),
+  dayOfWeek: integer("dayOfWeek"), // 0=Sun, 1=Mon ... 6=Sat, null=all
+  startTime: text("startTime"), // "HH:mm"
+  endTime: text("endTime"),
+  adjustmentType: text("adjustmentType").default("PERCENTAGE").notNull(), // PERCENTAGE, FIXED
+  adjustmentValue: real("adjustmentValue").default(0).notNull(),
+  minPrice: real("minPrice"),
+  maxPrice: real("maxPrice"),
+  isActive: boolean("isActive").default(true).notNull(),
+  ...timestamps,
+});
+
+export const cateringEvents = pgTable("catering_events", {
+  id: id(),
+  branchId: fkId("branchId").references(() => branches.id),
+  eventName: text("eventName").notNull(),
+  eventDate: timestamp("eventDate").notNull(),
+  partySize: integer("partySize").default(1).notNull(),
+  customerName: text("customerName").notNull(),
+  customerPhone: text("customerPhone"),
+  customerEmail: text("customerEmail"),
+  menuDetails: jsonb("menuDetails"),
+  deposit: real("deposit").default(0).notNull(),
+  totalAmount: real("totalAmount").default(0).notNull(),
+  status: text("status").default("PENDING").notNull(),
+  notes: text("notes"),
+  ...timestamps,
+});
+
+export const expenses = pgTable("expenses", {
+  id: id(),
+  branchId: fkId("branchId").references(() => branches.id),
+  category: text("category").notNull(), // RENT, PAYROLL, UTILITIES, SUPPLIES, MAINTENANCE, MARKETING, OTHER
+  description: text("description").notNull(),
+  amount: real("amount").notNull(),
+  expenseDate: timestamp("expenseDate").defaultNow().notNull(),
+  reference: text("reference"), // invoice number, receipt, etc.
+  paidTo: text("paidTo"),
+  notes: text("notes"),
+  ...timestamps,
+});
+
+export const invoices = pgTable("invoices", {
+  id: id(),
+  branchId: fkId("branchId").references(() => branches.id),
+  orderId: fkId("orderId").references(() => orders.id),
+  billingProfileId: text("billingProfileId").notNull(),
+  rfc: text("rfc").notNull(),
+  legalName: text("legalName").notNull(),
+  taxRegime: text("taxRegime").notNull(),
+  cfdiUse: text("cfdiUse").notNull(),
+  zipCode: text("zipCode").notNull(),
+  billableAmount: real("billableAmount").notNull(),
+  tax: real("tax").default(0).notNull(),
+  total: real("total").notNull(),
+  status: text("status").default("INVOICED").notNull(),
+  uuid: text("uuid"),
+  pdfUrl: text("pdfUrl"),
+  xmlUrl: text("xmlUrl"),
+  cancelledAt: timestamp("cancelledAt"),
+  ...timestamps,
+});
+
+export const waitlistEntries = pgTable("waitlist_entries", {
+  id: id(),
+  branchId: fkId("branchId").references(() => branches.id),
+  customerName: text("customerName").notNull(),
+  customerPhone: text("customerPhone").notNull(),
+  partySize: integer("partySize").default(1).notNull(),
+  status: text("status").default("WAITING").notNull(), // WAITING, CALLED, SEATED, CANCELLED
+  notes: text("notes"),
+  estimatedWaitMinutes: integer("estimatedWaitMinutes"),
+  notifiedViaTelegram: boolean("notifiedViaTelegram").default(false),
+  notifiedAt: timestamp("notifiedAt"),
+  tableId: fkIdOpt("tableId").references(() => tables.id),
   ...timestamps,
 });

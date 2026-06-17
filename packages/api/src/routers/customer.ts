@@ -1,8 +1,7 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
-import * as dbSchema from "@rabbitty/database-restaurant";
-import { orders } from "@rabbitty/database-restaurant/schema";
+import { orders, invoices, branches } from "@rabbitty/database-restaurant";
 import { billingProfiles } from "@rabbitty/database-core/schema";
 import { encryptText, decryptText } from "../services/crypto";
 
@@ -82,32 +81,66 @@ export const customerRouter = router({
       if (!profile) throw new Error("Perfil de facturación no encontrado");
 
       const decryptedProfile = {
-        ...profile,
         rfc: decryptText(profile.rfc),
         legalName: decryptText(profile.legalName),
+        taxRegime: profile.taxRegime,
+        cfdiUse: profile.cfdiUse,
+        zipCode: profile.zipCode,
       };
 
       // Verificar orden
-      const [order] = await ctx.restaurantDb.select().from(orders).where(eq(orders.id, input.orderId));
+      const [order] = await ctx.restaurantDb.select({
+        id: orders.id,
+        branchId: orders.branchId,
+        subtotal: orders.subtotal,
+        tax: orders.tax,
+        total: orders.total,
+        bunzPaid: orders.bunzPaid,
+        cfdiStatus: orders.cfdiStatus,
+      }).from(orders).where(eq(orders.id, input.orderId));
+
       if (!order) throw new Error("Orden no encontrada");
       if (order.cfdiStatus === "INVOICED") throw new Error("Esta orden ya fue facturada");
 
       // Validar monto facturable (Dinero real, no Bunz)
       const bunzPaid = order.bunzPaid || 0;
       const billableAmount = order.total - bunzPaid;
+      const taxAmount = order.tax || 0;
       
       if (billableAmount <= 0) {
         throw new Error("El monto facturable debe ser mayor a 0. Las órdenes pagadas al 100% con Bunz no generan CFDI.");
       }
 
-      // Simulación de emisión de CFDI con un PAC externo usando 'billableAmount' y el perfil descifrado
-      const mockPdfUrl = `https://rabbitty.mx/invoices/${input.orderId}.pdf`;
+      // Crear registro de factura en la tabla invoices
+      const [invoice] = await ctx.restaurantDb.insert(invoices).values({
+        branchId: order.branchId || "",
+        orderId: order.id,
+        billingProfileId: input.billingProfileId,
+        rfc: decryptedProfile.rfc,
+        legalName: decryptedProfile.legalName,
+        taxRegime: decryptedProfile.taxRegime,
+        cfdiUse: decryptedProfile.cfdiUse,
+        zipCode: decryptedProfile.zipCode,
+        billableAmount,
+        tax: taxAmount,
+        total: billableAmount + taxAmount,
+        status: "INVOICED",
+        pdfUrl: `https://rabbitty.mx/invoices/${order.id}.pdf`,
+      }).returning();
 
-      // Guardar status
+      // Actualizar status en la orden
       await ctx.restaurantDb.update(orders)
-        .set({ cfdiStatus: "INVOICED", cfdiUrl: mockPdfUrl })
+        .set({ cfdiStatus: "INVOICED", cfdiUrl: `https://rabbitty.mx/invoices/${order.id}.pdf` })
         .where(eq(orders.id, input.orderId));
 
-      return { success: true, url: mockPdfUrl, billableAmount, rfc: decryptedProfile.rfc };
+      return {
+        success: true,
+        invoiceId: invoice?.id,
+        url: invoice?.pdfUrl,
+        billableAmount,
+        tax: taxAmount,
+        total: billableAmount + taxAmount,
+        rfc: decryptedProfile.rfc,
+      };
     }),
 });
