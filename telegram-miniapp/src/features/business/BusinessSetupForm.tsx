@@ -80,7 +80,7 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
       
       {/* Dynamic Header for steps > 0 */}
       {step > 0 && (
-        <div style={{ padding: 'calc(max(var(--safe-top, 0px), 50px) + 20px) 20px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 10 }}>
+        <div style={{ padding: 'calc(max(var(--safe-top, 0px), 50px) + 56px) 20px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 10 }}>
           <button onClick={() => setStep(s => s - 1)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', width: 40, height: 40, borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <ChevronLeft size={20} />
           </button>
@@ -100,7 +100,7 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
             <motion.div key="step0" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} style={{ textAlign: 'center', position: 'relative', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               <button 
                 onClick={() => router.back()} 
-                style={{ position: 'absolute', top: 'calc(max(var(--safe-top, 0px), 50px) + 10px)', left: 0, background: 'rgba(255,255,255,0.1)', border: 'none', width: 40, height: 40, borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                style={{ position: 'absolute', top: 'calc(max(var(--safe-top, 0px), 50px) + 48px)', left: 0, background: 'rgba(255,255,255,0.1)', border: 'none', width: 40, height: 40, borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
               >
                 <ChevronLeft size={20} />
               </button>

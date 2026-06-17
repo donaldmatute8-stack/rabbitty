@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, Variants } from 'framer-motion';
-import { ArrowRight, Store, UserCircle2, Zap, Shield, Smartphone, QrCode, X } from 'lucide-react';
+import { ArrowRight, Store, UserCircle2, Zap, Shield, Smartphone, QrCode, X, Clock, Salad, Truck, Receipt, Bell } from 'lucide-react';
 
 export default function LandingPage() {
   const [showSmartContractModal, setShowSmartContractModal] = useState(false);
@@ -239,6 +239,11 @@ export default function LandingPage() {
                 { icon: Store, title: 'Software POS Gratuito', desc: 'Punto de venta, inventario predictivo con IA y administración de mesas de última generación.' },
                 { icon: QrCode, title: 'BYOD: Pedidos Inteligentes', desc: 'Tus clientes escanean el QR, ordenan y pagan nativamente desde Telegram con Stars o Cripto, sin descargar apps.' },
                 { icon: Zap, title: 'Migración Mágica (IA)', desc: '¿Tienes menú en UberEats? Pega el link y Rabbitty clona todo tu menú y precios en 5 minutos.' },
+                { icon: Salad, title: 'Recetas y Costeo', desc: 'Calcula el costo real de cada platillo vinculando ingredientes del inventario. Margen de ganancia en tiempo real.' },
+                { icon: Bell, title: 'Lista de Espera Inteligente', desc: 'Notifica a tus clientes vía Telegram cuando su mesa esté lista. Tiempo estimado de espera automático.' },
+                { icon: Truck, title: 'Proveedores y Compras', desc: 'Crea órdenes de compra y al recibirlas el inventario se actualiza solo con los nuevos costos.' },
+                { icon: Receipt, title: 'Gastos y Rentabilidad (P&L)', desc: 'Estado de resultados completo: ingresos, gastos por categoría, utilidad neta y margen en tiempo real.' },
+                { icon: Clock, title: 'Control de Turnos', desc: 'Reloj checador digital. Registra entrada/salida del personal y visualiza turnos activos al instante.' },
                 { icon: Shield, title: 'Modo Offline Indestructible', desc: 'Si se cae tu internet, nuestro POS encola ventas y sincroniza en segundo plano al regresar la red.' }
               ].map((f, i) => (
                 <div key={i} className="flex items-start gap-4">

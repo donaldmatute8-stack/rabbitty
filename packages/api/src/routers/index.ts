@@ -13,6 +13,13 @@ import { webhooksRouter } from "./webhooks";
 import { fastapiBridgeRouter } from "./fastapi-bridge";
 import { crmRouter } from "./crm";
 import { analyticsRouter } from "./analytics";
+import { waitlistRouter } from "./waitlist";
+import { suppliersRouter } from "./suppliers";
+import { expensesRouter } from "./expenses";
+import { invoicesRouter } from "./invoices";
+import { cateringRouter } from "./catering";
+import { pricingRouter } from "./pricing";
+import { loyaltyRouter } from "./loyalty";
 
 // Inicializa el Worker de BullMQ para Marketing Masivo (Fase 11)
 // En un futuro MVP esto debería moverse a un microservicio independiente.
@@ -33,6 +40,13 @@ export const appRouter = router({
   fastapi: fastapiBridgeRouter,
   crm: crmRouter,
   analytics: analyticsRouter,
+  waitlist: waitlistRouter,
+  suppliers: suppliersRouter,
+  expenses: expensesRouter,
+  invoices: invoicesRouter,
+  catering: cateringRouter,
+  pricing: pricingRouter,
+  loyalty: loyaltyRouter,
 });
 
 export type AppRouter = typeof appRouter;

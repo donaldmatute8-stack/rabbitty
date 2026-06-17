@@ -2,8 +2,10 @@
 
 import { trpc } from "../../lib/trpc-client";
 import { Card, cn } from "@rabbitty/ui";
-import { TrendingUp, DollarSign, ShoppingCart, UtensilsCrossed, ArrowUpRight, Activity } from "lucide-react";
+import { TrendingUp, DollarSign, ShoppingCart, UtensilsCrossed, ArrowUpRight, Activity, Building2 } from "lucide-react";
 import { motion, type Variants } from "framer-motion";
+import { useBranch } from "../../components/DashboardClientWrapper";
+import { BranchSelector } from "../../components/BranchSelector";
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
@@ -16,8 +18,10 @@ const itemVariants: Variants = {
 };
 
 export default function AdminPage() {
+  const { branchId } = useBranch();
   const { data: orders } = trpc.pos.getOrders.useQuery({});
   const { data: tables } = trpc.pos.getTables.useQuery();
+  const { data: crossStore } = trpc.admin.getCrossStoreKpis.useQuery();
 
   const openOrders = orders?.filter((o) => o.status === "PENDING" || o.status === "OPEN") ?? [];
   const paidOrders = orders?.filter((o) => o.status === "PAID" || o.status === "COMPLETED") ?? [];
@@ -79,11 +83,14 @@ export default function AdminPage() {
               Dashboard ejecutivo para la sucursal de {new Date().toLocaleDateString("es-MX", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
             </p>
           </div>
-          <div className="rounded-2xl border border-white/5 bg-white/5 px-5 py-3 backdrop-blur-md">
-            <span className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Estado del Servidor</span>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-xs font-bold text-gray-200">Sincronizado</span>
+          <div className="flex items-center gap-4">
+            <BranchSelector />
+            <div className="rounded-2xl border border-white/5 bg-white/5 px-5 py-3 backdrop-blur-md">
+              <span className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Estado del Servidor</span>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-xs font-bold text-gray-200">Sincronizado</span>
+              </div>
             </div>
           </div>
         </div>
@@ -119,6 +126,49 @@ export default function AdminPage() {
           );
         })}
       </motion.div>
+
+      {/* Multi-Store Section */}
+      {crossStore && crossStore.branchCount > 1 && (
+        <motion.div variants={containerVariants} initial="hidden" animate="show">
+          <Card className="p-6 border border-white/5 bg-white/5 backdrop-blur-md hover:border-white/10 transition-all duration-300">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
+                <Building2 className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-white text-base">Multi-Sucursal</h3>
+                <p className="text-xs text-gray-400">{crossStore.branchCount} sucursales activas</p>
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3 mb-6">
+              <div className="rounded-xl border border-white/5 bg-white/5 p-4 text-center">
+                <p className="text-2xl font-black text-white">{crossStore.totals.totalOrders}</p>
+                <p className="text-xs text-gray-400 mt-1">Órdenes totales</p>
+              </div>
+              <div className="rounded-xl border border-white/5 bg-white/5 p-4 text-center">
+                <p className="text-2xl font-black text-emerald-400">${crossStore.totals.totalRevenue.toFixed(2)}</p>
+                <p className="text-xs text-gray-400 mt-1">Ingresos totales</p>
+              </div>
+              <div className="rounded-xl border border-white/5 bg-white/5 p-4 text-center">
+                <p className="text-2xl font-black text-blue-400">{crossStore.totals.totalCustomers}</p>
+                <p className="text-xs text-gray-400 mt-1">Clientes únicos</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {crossStore.branches.map((b) => (
+                <div key={b.branchId} className="flex items-center justify-between rounded-xl border border-white/5 bg-white/5 p-3 hover:border-white/10 transition-all">
+                  <p className="text-sm font-bold text-white">{b.branchName}</p>
+                  <div className="flex items-center gap-4 text-xs text-gray-400">
+                    <span>{b.totalOrders} órdenes</span>
+                    <span className="text-emerald-400 font-bold">${b.totalRevenue.toFixed(2)}</span>
+                    <span>{b.totalCustomers} clientes</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </motion.div>
+      )}
 
       {/* Bottom Grid */}
       <motion.div

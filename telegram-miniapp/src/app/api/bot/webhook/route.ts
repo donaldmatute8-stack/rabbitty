@@ -124,6 +124,79 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    if (update.pre_checkout_query) {
+      const queryId = update.pre_checkout_query.id;
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      if (botToken) {
+        // Aceptamos todos los pagos de Stars en este punto
+        await fetch(`https://api.telegram.org/bot${botToken}/answerPreCheckoutQuery`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            pre_checkout_query_id: queryId,
+            ok: true
+          })
+        });
+      }
+    }
+
+    if (message && message.successful_payment) {
+      const payment = message.successful_payment;
+      const payloadStr = payment.invoice_payload; // "order_123_amount_100_tip_10"
+      
+      let orderId = "";
+      let amountPaid = payment.total_amount;
+      
+      if (payloadStr.startsWith("order_")) {
+        const parts = payloadStr.split("_");
+        orderId = parts[1];
+      }
+
+      if (orderId) {
+        // En una app real de Next.js, deberías llamar a una función interna o servicio para registrar el pago en la DB
+        // Como estamos en un route handler, podemos importar la DB directo
+        try {
+          const { restaurantDb } = await import('@/db/restaurant');
+          const { orders, payments } = await import('@rabbitty/database-restaurant/schema');
+          const { eq } = await import('drizzle-orm');
+
+          await restaurantDb.insert(payments).values({
+            orderId,
+            method: "STARS",
+            amount: amountPaid,
+            reference: payment.provider_payment_charge_id,
+            status: "COMPLETED"
+          });
+
+          const [orderAfter] = await restaurantDb.select().from(orders).where(eq(orders.id, orderId));
+          const allPayments = await restaurantDb.select().from(payments).where(eq(payments.orderId, orderId));
+          const sumPayments = allPayments.reduce((s: number, p: any) => s + p.amount, 0);
+
+          if (sumPayments >= orderAfter.total) {
+            await restaurantDb.update(orders).set({ status: 'PAID' }).where(eq(orders.id, orderId));
+          }
+
+          // Enviar Recibo Digital por Telegram
+          const botToken = process.env.TELEGRAM_BOT_TOKEN;
+          if (botToken && message.chat) {
+            const receiptText = `🧾 *Recibo Digital - Rabbitty*\n\nOrden #${orderId.slice(0, 8).toUpperCase()}\nMonto Pagado: ${amountPaid} Stars ⭐️\n\n_¡Gracias por tu visita! Te esperamos pronto._`;
+            await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: message.chat.id,
+                text: receiptText,
+                parse_mode: "Markdown"
+              })
+            });
+          }
+
+        } catch (dbErr) {
+          console.error("Error processing successful payment:", dbErr);
+        }
+      }
+    }
+
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (error) {
     console.error("Webhook route error:", error);

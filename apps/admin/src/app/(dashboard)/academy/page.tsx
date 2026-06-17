@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, QrCode, Link as LinkIcon, BrainCircuit, ChevronRight, X, Play } from 'lucide-react';
+import { Sparkles, QrCode, Link as LinkIcon, BrainCircuit, ChevronRight, X, Play, Clock, Bell, Truck, Receipt, Salad, FileText } from 'lucide-react';
 import { Button } from '@rabbitty/ui';
 
 const FEATURES = [
@@ -45,6 +45,116 @@ const FEATURES = [
     description: "Nuestro algoritmo analiza matemáticamente los últimos 30 días de consumo y cruza esa información con tu inventario actual. Si detecta que te quedarás sin insumos en menos de 3 días, te alertará automáticamente con sugerencias exactas de compra.",
     action: "Ver Predicciones",
     actionHref: "/inventory"
+  },
+  {
+    id: "recetas",
+    title: "Recetas y Costeo",
+    subtitle: "Calcula el costo real de cada platillo.",
+    icon: <Salad className="w-8 h-8 text-emerald-500" />,
+    color: "from-emerald-500 to-green-500",
+    description: "Vincula ingredientes de inventario a cada platillo del menú. El sistema calcula automáticamente el costo por porción, el margen de ganancia y te muestra en tiempo real qué platillos están generando más utilidad.",
+    action: "Ver Recetas",
+    actionHref: "/recipes"
+  },
+  {
+    id: "turnos",
+    title: "Control de Turnos",
+    subtitle: "Reloj checador inteligente para tu personal.",
+    icon: <Clock className="w-8 h-8 text-blue-500" />,
+    color: "from-blue-500 to-indigo-500",
+    description: "Registra entrada y salida de tu personal con un solo clic. Visualiza turnos activos, horas trabajadas y quién está en servicio en tiempo real desde el panel de administración.",
+    action: "Ver Turnos",
+    actionHref: "/staff/shifts"
+  },
+  {
+    id: "waitlist",
+    title: "Lista de Espera Inteligente",
+    subtitle: "Notifica a tus clientes cuando su mesa esté lista.",
+    icon: <Bell className="w-8 h-8 text-amber-500" />,
+    color: "from-amber-500 to-orange-500",
+    description: "Gestiona la lista de espera con estimación de tiempo. Cuando una mesa se libera, llama o notifica automáticamente al cliente vía Telegram. Asigna la mesa ideal según el tamaño del grupo.",
+    action: "Ir a Lista de Espera",
+    actionHref: "/waitlist"
+  },
+  {
+    id: "proveedores",
+    title: "Proveedores y Compras",
+    subtitle: "Gestiona órdenes de compra y recibe inventario.",
+    icon: <Truck className="w-8 h-8 text-purple-500" />,
+    color: "from-purple-500 to-violet-500",
+    description: "Administra tus proveedores, crea órdenes de compra y al recibirlas el sistema actualiza automáticamente el inventario y los costos unitarios. Nunca más pierdas el control de tus insumos.",
+    action: "Ver Proveedores",
+    actionHref: "/suppliers"
+  },
+  {
+    id: "gastos",
+    title: "Gastos y Rentabilidad",
+    subtitle: "Estado de resultados completo en tiempo real.",
+    icon: <Receipt className="w-8 h-8 text-red-500" />,
+    color: "from-red-500 to-rose-500",
+    description: "Registra todos tus gastos operativos (renta, nómina, servicios, insumos) y obtén un estado de resultados (P&L) automatizado. Visualiza ingresos vs gastos, margen de utilidad y desglose por categoría.",
+    action: "Ver Gastos",
+    actionHref: "/expenses"
+  },
+  {
+    id: "facturacion",
+    title: "Facturación CFDI",
+    subtitle: "Emite facturas con todos los requisitos fiscales.",
+    icon: <FileText className="w-8 h-8 text-blue-500" />,
+    color: "from-blue-500 to-indigo-500",
+    description: "Genera facturas electrónicas (CFDI) vinculadas a cada orden. Almacena RFC, régimen fiscal, uso de CFDI y montos facturables. El sistema excluye automáticamente pagos con Bunz (no generan CFDI) y mantiene un historial completo de facturas emitidas con estatus vigente/cancelado.",
+    action: "Ver Facturación",
+    actionHref: "/invoices"
+  },
+  {
+    id: "catering",
+    title: "Catering y Eventos",
+    subtitle: "Gestión de banquetes y cotizaciones.",
+    icon: <Receipt className="w-8 h-8 text-amber-500" />,
+    color: "from-amber-500 to-yellow-500",
+    description: "Crea eventos de catering, arma menús personalizados, calcula presupuestos y gestiona el cobro de anticipos. Mantén un seguimiento de todos los eventos programados en un solo lugar.",
+    action: "Ver Eventos",
+    actionHref: "/catering"
+  },
+  {
+    id: "pricing",
+    title: "Precios Dinámicos IA",
+    subtitle: "Maximiza tus ingresos con tarifas inteligentes.",
+    icon: <BrainCircuit className="w-8 h-8 text-purple-500" />,
+    color: "from-purple-500 to-fuchsia-500",
+    description: "Configura reglas automáticas de precios según el día y la hora (ej. Happy Hour). El sistema ajusta automáticamente el precio en el Kiosko, la MiniApp y el Menú Digital para aumentar la rentabilidad en horas pico y el tráfico en horas muertas.",
+    action: "Ver Precios Dinámicos",
+    actionHref: "/pricing"
+  },
+  {
+    id: "menuboard",
+    title: "Menú Digital TV",
+    subtitle: "Pantallas dinámicas sin hardware costoso.",
+    icon: <Sparkles className="w-8 h-8 text-cyan-500" />,
+    color: "from-cyan-500 to-blue-500",
+    description: "Convierte cualquier Smart TV en una pantalla de Menú Digital sincronizada en tiempo real. Si un producto se agota o cambias el precio, la pantalla se actualiza en menos de 1 segundo sin necesidad de recargarla.",
+    action: "Configurar Pantallas",
+    actionHref: "/menu-boards"
+  },
+  {
+    id: "multistore",
+    title: "Dashboard Multi-Sucursal",
+    subtitle: "Control centralizado de todas tus sucursales.",
+    icon: <LinkIcon className="w-8 h-8 text-indigo-500" />,
+    color: "from-indigo-500 to-violet-500",
+    description: "Visualiza KPIs y datos agregados de todos tus restaurantes en tiempo real. Alterna rápidamente entre sucursales usando el menú superior sin necesidad de iniciar sesión nuevamente.",
+    action: "Ir al Dashboard",
+    actionHref: "/"
+  },
+  {
+    id: "loyalty",
+    title: "Programa de Lealtad",
+    subtitle: "Retén a tus clientes y envíales promociones.",
+    icon: <Sparkles className="w-8 h-8 text-pink-500" />,
+    color: "from-pink-500 to-rose-500",
+    description: "Segmenta a tus clientes automáticamente (Nuevos, VIP, Riesgo de Fuga). Captura sus cumpleaños para regalos automáticos y usa nuestro creador de campañas para enviarles mensajes directamente a su Telegram.",
+    action: "Ver Lealtad",
+    actionHref: "/loyalty"
   }
 ];
 

@@ -17,6 +17,14 @@ import {
   events,
   reservations,
   webhooks,
+  waitlistEntries,
+  invoices,
+  cateringEvents,
+  dynamicPricingRules,
+  suppliers,
+  purchaseOrders,
+  purchaseOrderItems,
+  expenses,
 } from "./index";
 
 export const restaurantsRelations = relations(restaurants, ({ many }) => ({
@@ -35,6 +43,13 @@ export const branchesRelations = relations(branches, ({ one, many }) => ({
   inventoryItems: many(inventoryItems),
   inventoryMovements: many(inventoryMovements),
   events: many(events),
+  waitlistEntries: many(waitlistEntries),
+  suppliers: many(suppliers),
+  purchaseOrders: many(purchaseOrders),
+  invoices: many(invoices),
+  cateringEvents: many(cateringEvents),
+  dynamicPricingRules: many(dynamicPricingRules),
+  expenses: many(expenses),
 }));
 
 export const menuCategoriesRelations = relations(menuCategories, ({ one, many }) => ({
@@ -117,4 +132,43 @@ export const reservationsRelations = relations(reservations, ({ one }) => ({
 
 export const webhooksRelations = relations(webhooks, ({ one }) => ({
   branch: one(branches, { fields: [webhooks.branchId], references: [branches.id] }),
+}));
+
+export const dynamicPricingRulesRelations = relations(dynamicPricingRules, ({ one }) => ({
+  branch: one(branches, { fields: [dynamicPricingRules.branchId], references: [branches.id] }),
+  menuItem: one(menuItems, { fields: [dynamicPricingRules.menuItemId], references: [menuItems.id] }),
+}));
+
+export const cateringEventsRelations = relations(cateringEvents, ({ one }) => ({
+  branch: one(branches, { fields: [cateringEvents.branchId], references: [branches.id] }),
+}));
+
+export const invoicesRelations = relations(invoices, ({ one }) => ({
+  branch: one(branches, { fields: [invoices.branchId], references: [branches.id] }),
+  order: one(orders, { fields: [invoices.orderId], references: [orders.id] }),
+}));
+
+export const waitlistEntriesRelations = relations(waitlistEntries, ({ one }) => ({
+  branch: one(branches, { fields: [waitlistEntries.branchId], references: [branches.id] }),
+  table: one(tables, { fields: [waitlistEntries.tableId], references: [tables.id] }),
+}));
+
+export const suppliersRelations = relations(suppliers, ({ one, many }) => ({
+  branch: one(branches, { fields: [suppliers.branchId], references: [branches.id] }),
+  purchaseOrders: many(purchaseOrders),
+}));
+
+export const purchaseOrdersRelations = relations(purchaseOrders, ({ one, many }) => ({
+  branch: one(branches, { fields: [purchaseOrders.branchId], references: [branches.id] }),
+  supplier: one(suppliers, { fields: [purchaseOrders.supplierId], references: [suppliers.id] }),
+  items: many(purchaseOrderItems),
+}));
+
+export const purchaseOrderItemsRelations = relations(purchaseOrderItems, ({ one }) => ({
+  purchaseOrder: one(purchaseOrders, { fields: [purchaseOrderItems.purchaseOrderId], references: [purchaseOrders.id] }),
+  inventoryItem: one(inventoryItems, { fields: [purchaseOrderItems.inventoryItemId], references: [inventoryItems.id] }),
+}));
+
+export const expensesRelations = relations(expenses, ({ one }) => ({
+  branch: one(branches, { fields: [expenses.branchId], references: [branches.id] }),
 }));
