@@ -17,7 +17,7 @@ export const pricingRouter = router({
         .orderBy(desc(dynamicPricingRules.priority));
 
       return conditions.length > 0
-        ? await query.where(conditions.reduce((a, b) => and(a, b)))
+        ? await query.where(and(...conditions))
         : await query;
     }),
 
