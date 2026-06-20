@@ -11,5 +11,8 @@
   "devDependencies": {
     "@rabbitty/config": "workspace:*",
     "typescript": "^5"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
   }
 }

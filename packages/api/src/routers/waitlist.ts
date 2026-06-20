@@ -50,6 +50,7 @@ export const waitlistRouter = router({
         notes: input.notes ?? null,
         estimatedWaitMinutes: estimatedWait,
       }).returning();
+      if (!entry) throw new Error("Error al crear entrada en lista de espera");
 
       bus.emit(EventTypes.WAITLIST_ADDED, {
         waitlistId: entry.id,

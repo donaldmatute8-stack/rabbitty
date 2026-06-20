@@ -11,14 +11,16 @@ export const pricingRouter = router({
       if (input.branchId) conditions.push(eq(dynamicPricingRules.branchId, input.branchId));
       if (input.isActive !== undefined) conditions.push(eq(dynamicPricingRules.isActive, input.isActive));
 
-      const query = ctx.restaurantDb
-        .select()
-        .from(dynamicPricingRules)
-        .orderBy(desc(dynamicPricingRules.priority));
-
       return conditions.length > 0
-        ? await query.where(and(...conditions))
-        : await query;
+        ? await ctx.restaurantDb
+            .select()
+            .from(dynamicPricingRules)
+            .where(and(...conditions))
+            .orderBy(desc(dynamicPricingRules.priority))
+        : await ctx.restaurantDb
+            .select()
+            .from(dynamicPricingRules)
+            .orderBy(desc(dynamicPricingRules.priority));
     }),
 
   create: protectedProcedure

@@ -16,6 +16,8 @@ import {
   messages,
   qrSessions,
   reservations,
+  passkeys,
+  trustedSessions,
 } from "./index";
 
 export const usersRelations = relations(users, ({ many, one }) => ({
@@ -29,6 +31,8 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   notifications: many(notifications),
   qrSessions: many(qrSessions),
   reservations: many(reservations),
+  passkeys: many(passkeys),
+  trustedSessions: many(trustedSessions),
   level: one(levels, { fields: [users.levelId], references: [levels.id] }),
 }));
 
@@ -98,4 +102,12 @@ export const qrSessionsRelations = relations(qrSessions, ({ one }) => ({
 export const reservationsRelations = relations(reservations, ({ one }) => ({
   user: one(users, { fields: [reservations.userId], references: [users.id] }),
   business: one(ownedBusinesses, { fields: [reservations.businessId], references: [ownedBusinesses.id] }),
+}));
+
+export const passkeysRelations = relations(passkeys, ({ one }) => ({
+  user: one(users, { fields: [passkeys.userId], references: [users.id] }),
+}));
+
+export const trustedSessionsRelations = relations(trustedSessions, ({ one }) => ({
+  user: one(users, { fields: [trustedSessions.userId], references: [users.id] }),
 }));

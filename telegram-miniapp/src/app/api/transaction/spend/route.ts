@@ -3,6 +3,8 @@ import { db } from '@/db';
 import { users, ownedBusinesses, transactions } from '@/db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { parseTelegramUser, validateTelegramInitData } from '@/lib/telegramAuth';
+import { processReferralAndNotifications } from '@/lib/referralLogic';
+import { awardHops, evaluateHatTricks } from '@/lib/gamificationLogic';
 import { z } from 'zod';
 
 const spendSchema = z.object({
@@ -99,6 +101,11 @@ export async function POST(req: Request) {
       bunzMinted: bunzEarned,
       status: 'MINTED',
     }).returning();
+
+    // Fire-and-forget referral + gamification triggers
+    processReferralAndNotifications(user.id, 'EARN').catch(() => {});
+    awardHops(user.id, false).catch(() => {});
+    evaluateHatTricks(user.id, { type: 'TOTAL_VISITS', value: 1 }).catch(() => {});
 
     return NextResponse.json({
       success: true,

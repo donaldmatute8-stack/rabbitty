@@ -3,10 +3,10 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     # Database
-    DATABASE_URL: str = "sqlite:///./rabbitty.db"
+    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/rabbitty"
     
-    # PostgreSQL (producción)
-    # DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/rabbitty"
+    # SQLite (dev local)
+    # DATABASE_URL: str = "sqlite:///./rabbitty.db"
     
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -20,10 +20,10 @@ class Settings(BaseSettings):
     # Telegram
     BOT_TOKEN: str = ""
     
-    # Blockchain
+    # Blockchain — Sepolia testnet (cambiar a Polygon mainnet para producción)
     BUNZ_CONTRACT_ADDRESS: str = ""
-    RPC_URL: str = "https://polygon-rpc.com"
-    CHAIN_ID: int = 137
+    RPC_URL: str = "https://ethereum-sepolia-rpc.publicnode.com"
+    CHAIN_ID: int = 11155111
     
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 100

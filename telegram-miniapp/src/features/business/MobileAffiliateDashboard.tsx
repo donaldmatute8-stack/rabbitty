@@ -7,16 +7,13 @@ interface MobileAffiliateDashboardProps {
   business: any;
 }
 
-const STATS = [
-  { value: "156", label: "TRANSACCIONES", delta: "↑ +12%", color: "#E91E63" },
-  { value: "89", label: "CLIENTES", delta: "↑ +5%", color: "#E91E63" },
-  { value: "2,340", label: "BUNZ DADOS", delta: "↑ +8%", color: "#E91E63" },
-];
-
 export default function MobileAffiliateDashboard({ business }: MobileAffiliateDashboardProps) {
   const [rewardRate, setRewardRate] = useState(business?.rewardPercentage || 21);
   const [reservations, setReservations] = useState<any[]>([]);
   const [loadingRes, setLoadingRes] = useState(true);
+  const [txCount, setTxCount] = useState(0);
+  const [totalBunz, setTotalBunz] = useState(0);
+  const [clientCount, setClientCount] = useState(0);
 
   useEffect(() => {
     if (business?.ownerId) {
@@ -28,6 +25,23 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
         .finally(() => setLoadingRes(false));
     }
   }, [business?.ownerId]);
+
+  useEffect(() => {
+    if (business?.id) {
+      fetch(`/api/business/transactions?businessId=${business.id}`)
+        .then(r => r.json())
+        .then((data: any) => {
+          if (data.success) {
+            setTxCount(data.transactions?.length || 0);
+            const uniqueClients = new Set(data.transactions?.map((t: any) => t.userId));
+            setClientCount(uniqueClients.size);
+            const total = data.transactions?.reduce((sum: number, t: any) => sum + (t.bunzMinted || 0), 0) || 0;
+            setTotalBunz(total);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [business?.id]);
 
   const handleReservationStatus = async (id: string, status: string) => {
     try {
@@ -63,32 +77,39 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
 
   return (
     <div style={{ paddingBottom: 120 }}>
-      {/* Dynamic Header */}
       <div style={{ padding: '24px 20px 16px' }}>
         <h1 style={{ fontSize: 28, fontWeight: 900, color: '#111', margin: '0 0 4px 0', letterSpacing: '-1px' }}>{business?.name || 'Café Cultura'}</h1>
         <p style={{ margin: 0, fontSize: 14, color: '#888', fontWeight: 600 }}>{business?.category || 'Restaurante y Café'}</p>
       </div>
 
       <div style={{ padding: '0 20px' }}>
-        {/* STATS */}
         <motion.div 
           initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
           style={{ display: "flex", gap: 8, marginBottom: 16 }}
         >
-          {STATS.map((s, i) => (
-            <motion.div 
-              key={s.label} 
-              initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.05 }}
-              style={{ flex: 1, border: "1px solid #F0F0F0", borderRadius: 14, padding: "12px 8px", textAlign: "center", background: '#fff' }}
-            >
-              <p style={{ fontSize: 20, fontWeight: 800, color: "#111", letterSpacing: "-0.5px", margin: 0 }}>{s.value}</p>
-              <p style={{ fontSize: 9, fontWeight: 700, color: "#AAA", letterSpacing: "0.5px", margin: "4px 0" }}>{s.label}</p>
-              <p style={{ fontSize: 11, color: s.color, fontWeight: 600, margin: 0 }}>{s.delta}</p>
-            </motion.div>
-          ))}
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0 }}
+            style={{ flex: 1, border: "1px solid #F0F0F0", borderRadius: 14, padding: "12px 8px", textAlign: "center", background: '#fff' }}
+          >
+            <p style={{ fontSize: 20, fontWeight: 800, color: "#111", letterSpacing: "-0.5px", margin: 0 }}>{txCount}</p>
+            <p style={{ fontSize: 9, fontWeight: 700, color: "#AAA", letterSpacing: "0.5px", margin: "4px 0" }}>TRANSACCIONES</p>
+          </motion.div>
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.05 }}
+            style={{ flex: 1, border: "1px solid #F0F0F0", borderRadius: 14, padding: "12px 8px", textAlign: "center", background: '#fff' }}
+          >
+            <p style={{ fontSize: 20, fontWeight: 800, color: "#111", letterSpacing: "-0.5px", margin: 0 }}>{clientCount}</p>
+            <p style={{ fontSize: 9, fontWeight: 700, color: "#AAA", letterSpacing: "0.5px", margin: "4px 0" }}>CLIENTES</p>
+          </motion.div>
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.1 }}
+            style={{ flex: 1, border: "1px solid #F0F0F0", borderRadius: 14, padding: "12px 8px", textAlign: "center", background: '#fff' }}
+          >
+            <p style={{ fontSize: 20, fontWeight: 800, color: "#111", letterSpacing: "-0.5px", margin: 0 }}>{totalBunz.toLocaleString()}</p>
+            <p style={{ fontSize: 9, fontWeight: 700, color: "#AAA", letterSpacing: "0.5px", margin: "4px 0" }}>BUNZ DADOS</p>
+          </motion.div>
         </motion.div>
 
-        {/* QR CODE GENERATOR */}
         <motion.div 
           initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
           style={{ backgroundColor: "#111", borderRadius: 18, padding: "16px 20px", marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}
@@ -109,7 +130,6 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
           </div>
         </motion.div>
 
-        {/* LINEA DE CREDITO */}
         <motion.div 
           initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
           style={{ border: "1px solid #F0F0F0", borderRadius: 18, padding: "16px 20px", marginBottom: 16, background: '#fff' }}
@@ -130,7 +150,6 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
           <p style={{ fontSize: 11, color: "#AAA", marginTop: 6, marginBottom: 0 }}>25% usado</p>
         </motion.div>
 
-        {/* TASA DE RECOMPENSA */}
         <motion.div 
           initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
           style={{ border: "1px solid #F0F0F0", borderRadius: 18, padding: "16px 20px", marginBottom: 16, background: '#fff' }}
@@ -161,7 +180,6 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
           </div>
         </motion.div>
 
-        {/* RESERVACIONES */}
         <motion.div 
           initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}
           style={{ border: "1px solid #F0F0F0", borderRadius: 18, padding: "16px 20px", marginBottom: 16, background: '#fff' }}
@@ -218,7 +236,6 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
           )}
         </motion.div>
 
-        {/* QUICK ACTION BUTTONS */}
         <motion.div 
           initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
           style={{ display: "flex", gap: 10, marginBottom: 16 }}
@@ -238,7 +255,6 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
             </button>
           ))}
         </motion.div>
-
       </div>
     </div>
   );

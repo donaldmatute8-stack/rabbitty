@@ -27,6 +27,10 @@ export const users = pgTable("users", {
   hasEarnedFirstBunz: boolean("hasEarnedFirstBunz").default(false).notNull(),
   hops: integer("hops").default(0).notNull(),
   levelId: text("levelId"),
+  supportWhatsApp: text("supportWhatsApp"),
+  totpSecret: text("totpSecret"),
+  totpEnabled: boolean("totpEnabled").default(false).notNull(),
+  requireTotpForLogin: boolean("requireTotpForLogin").default(false).notNull(),
   ...timestamps,
 });
 
@@ -205,10 +209,32 @@ export const billingProfiles = pgTable("billingProfiles", {
   userId: fkId("userId").references(() => users.id),
   rfc: text("rfc").notNull(),
   legalName: text("legalName").notNull(),
-  taxRegime: text("taxRegime").notNull(), // Régimen Fiscal (ej. 601)
+  taxRegime: text("taxRegime").notNull(),
   zipCode: text("zipCode").notNull(),
-  cfdiUse: text("cfdiUse").default("G03").notNull(), // Uso CFDI
+  cfdiUse: text("cfdiUse").default("G03").notNull(),
   email: text("email").notNull(),
   isDefault: boolean("isDefault").default(false).notNull(),
   ...timestamps,
+});
+
+export const passkeys = pgTable("passkeys", {
+  id: id(),
+  userId: text("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  credentialId: text("credentialId").notNull().unique(),
+  publicKey: text("publicKey").notNull(),
+  counter: integer("counter").default(0).notNull(),
+  transports: text("transports").default("[]").notNull(),
+  deviceName: text("deviceName"),
+  createdAt: timestamp("createdAt").defaultNow(),
+});
+
+export const trustedSessions = pgTable("trustedSessions", {
+  id: id(),
+  userId: text("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  token: text("token").notNull().unique(),
+  deviceName: text("deviceName"),
+  userAgent: text("userAgent"),
+  ipAddress: text("ipAddress"),
+  expiresAt: timestamp("expiresAt").notNull(),
+  createdAt: timestamp("createdAt").defaultNow(),
 });

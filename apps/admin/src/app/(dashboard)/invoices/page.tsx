@@ -20,7 +20,7 @@ export default function InvoicesPage() {
     search: search || undefined,
     status: statusFilter || undefined,
   });
-  const { data: stats } = trpc.invoices.stats.useQuery();
+  const { data: stats } = trpc.invoices.stats.useQuery({});
   const cancelInvoice = trpc.invoices.cancel.useMutation({
     onSuccess: () => {
       utils.invoices.list.invalidate();

@@ -8,24 +8,29 @@
   "exports": {
     ".": "./src/index.ts",
     "./routers": "./src/routers/index.ts",
-    "./db": "./src/db.ts"
+    "./db": "./src/db.ts",
+    "./services/*": "./src/services/*.ts"
   },
   "scripts": {
     "test": "vitest run --config vitest.config.ts",
     "test:watch": "vitest --config vitest.config.ts",
-    "test:ui": "vitest --ui --config vitest.config.ts"
+    "test:ui": "vitest --ui --config vitest.config.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@rabbitty/bunz": "workspace:*",
     "@rabbitty/database-core": "workspace:*",
     "@rabbitty/database-restaurant": "workspace:*",
     "@rabbitty/events": "workspace:*",
+    "@simplewebauthn/server": "^13.3.1",
     "@trpc/server": "^11.17.0",
     "bullmq": "^5.78.0",
     "cheerio": "^1.2.0",
     "drizzle-orm": "^0.45.2",
     "ioredis": "^5.11.1",
+    "otplib": "^13.4.1",
     "postgres": "^3.4.5",
+    "qrcode": "^1.5.4",
     "zod": "^3.25.76"
   },
   "peerDependencies": {

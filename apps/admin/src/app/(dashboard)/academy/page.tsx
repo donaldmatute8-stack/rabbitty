@@ -1,293 +1,266 @@
 "use client";
 
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, QrCode, Link as LinkIcon, BrainCircuit, ChevronRight, X, Play, Clock, Bell, Truck, Receipt, Salad, FileText } from 'lucide-react';
-import { Button } from '@rabbitty/ui';
+import { useState } from "react";
+import { Card } from "@rabbitty/ui";
+import { BookOpen, ChevronRight, Building2, DollarSign, Monitor, Store, Award, Megaphone, Cake, QrCode, Gift, Store as StoreIcon, Salad, Truck, Receipt as ReceiptIcon, Clock, Users } from "lucide-react";
 
-const FEATURES = [
+type GuideRole = "all" | "admin" | "pos" | "marketing";
+
+interface Guide {
+  id: string;
+  icon: any;
+  label: string;
+  desc: string;
+  role: GuideRole;
+  content: string;
+}
+
+const guides: Guide[] = [
   {
-    id: "migracion",
-    title: "Migración Mágica",
-    subtitle: "Importa tu menú completo desde UberEats en 1 clic.",
-    icon: <Sparkles className="w-8 h-8 text-pink-500" />,
-    color: "from-pink-500 to-rose-500",
-    description: "Nuestra IA escanea el enlace público de tu restaurante en UberEats o Rappi y extrae cada categoría, producto, precio y descripción de manera automática. Tu menú estará listo en segundos sin tener que teclear nada.",
-    action: "Ir a Sincronización",
-    actionHref: "/restaurant-sync"
+    id: "catering",
+    icon: Building2,
+    label: "Eventos & Catering",
+    desc: "Gestión de eventos, menús personalizados y contratos de catering",
+    role: "admin",
+    content: `## Gestión de Eventos y Catering\n\nLa página de Eventos & Catering permite gestionar eventos especiales con menús personalizados.\n\n### Funcionalidades:\n- **Crear evento**: Define nombre, fecha, número de personas y detalles del menú\n- **Menú personalizado**: Campo menuDetails (JSON) para personalizar el menú por evento\n- **Depósitos**: Tracking de depósitos y montos totales\n- **Estados**: PENDING → CONFIRMED → DEPOSIT_PAID → COMPLETED → CANCELLED\n\n### Ubicación:\nMenú lateral → Eventos`,
   },
   {
-    id: "byod",
-    title: "Pedidos en Mesa (BYOD)",
-    subtitle: "Tus clientes ordenan y pagan desde su celular.",
-    icon: <QrCode className="w-8 h-8 text-violet-500" />,
-    color: "from-violet-500 to-purple-600",
-    description: "Coloca nuestros códigos QR estéticos en cada mesa. Cuando el cliente escanea, se abre automáticamente la Mini App en Telegram. Pueden ver tu menú interactivo, armar su pedido y pagar directamente con Apple Pay, Google Pay o Telegram Stars. La orden llega directo a tu cocina.",
-    action: "Generar Códigos QR",
-    actionHref: "/qr-generator"
+    id: "dynamic-pricing",
+    icon: DollarSign,
+    label: "Precios Dinámicos",
+    desc: "Configura reglas de precios inteligentes por hora, día y demanda",
+    role: "admin",
+    content: `## Precios Dinámicos IA\n\nEl sistema de precios dinámicos permite ajustar automáticamente los precios según reglas configurables.\n\n### Tipos de Reglas:\n- **Porcentaje**: Ajusta el precio un X% arriba o abajo\n- **Monto fijo**: Suma o resta un monto específico\n\n### Configuración:\n- Día de la semana (opcional)\n- Rango de horas\n- Prioridad (las reglas con mayor prioridad se aplican primero)\n- Precios mínimos y máximos como caps de seguridad\n\n### Ubicación:\nMenú lateral → Precios Dinámicos`,
   },
   {
-    id: "webhook",
-    title: "Integración Universal",
-    subtitle: "Un solo punto de entrada para todas las plataformas.",
-    icon: <LinkIcon className="w-8 h-8 text-blue-500" />,
-    color: "from-blue-500 to-cyan-500",
-    description: "Rabbitty actúa como tu cerebro central. Activa nuestro Webhook y todas las órdenes que entren por Rappi, DidiFood o UberEats caerán automáticamente en nuestro KDS (Kitchen Display System), reduciendo los errores de transcripción a cero.",
-    action: "Ver Configuración",
-    actionHref: "/settings"
+    id: "menu-boards",
+    icon: Monitor,
+    label: "Menú Digital TV",
+    desc: "Configura pantallas digitales con el menú actualizado en tiempo real",
+    role: "admin",
+    content: `## Menú Digital TV\n\nConvierte cualquier pantalla HDMI en un menú digital actualizado en tiempo real.\n\n### Cómo funciona:\n1. El menú se actualiza automáticamente cuando editas platillos\n2. La pantalla TV se conecta a una URL exclusiva por sucursal\n3. Sin caché — los cambios se reflejan al instante\n\n### URLs:\n- Vista TV: \`/menu-board/[branchId]\`\n- API JSON: \`/api/menu-board/[branchId]\`\n\n### Ubicación:\nMenú lateral → Menú Digital`,
+  },
+  {
+    id: "multi-store",
+    icon: Store,
+    label: "Dashboard Multi-Sucursal",
+    desc: "Gestiona todas tus sucursales desde un solo panel",
+    role: "admin",
+    content: `## Dashboard Multi-Sucursal\n\nEl dashboard unificado muestra KPIs de todas las sucursales en una sola vista.\n\n### Características:\n- Selector de sucursal en el header del admin\n- KPIs agregados: órdenes totales, ingresos totales, clientes únicos\n- Desglose por sucursal con métricas individuales\n- Contexto global (BranchContext) disponible en todas las páginas\n\n### Cómo usar:\n1. Usa el selector en la esquina superior derecha\n2. Selecciona "Todas las sucursales" para ver datos consolidados\n3. Selecciona una sucursal específica para ver sus datos`,
+  },
+  {
+    id: "pos-basics",
+    icon: StoreIcon,
+    label: "POS Básico",
+    desc: "Guía rápida del punto de venta: mesas, órdenes y cobro",
+    role: "pos",
+    content: `## POS Básico\n\nEl punto de venta es el corazón operativo de Rabbitty.\n\n### Funciones principales:\n- **Seleccionar mesa**: Toca una mesa en el mapa para iniciar orden\n- **Agregar platillos**: Navega por categorías y selecciona productos\n- **Modificadores**: Tamaños, ingredientes extras, instrucciones especiales\n- **Cobrar**: Efectivo, tarjeta o Bunz\n\n### Atajos:\n- Barra espaciadora para buscar platillos\n- Click derecho en mesa para ver detalle\n- Doble click en producto para agregar rápido`,
   },
   {
     id: "inventory",
-    title: "Inventario Predictivo IA",
-    subtitle: "Nunca más te quedes sin ingredientes clave.",
-    icon: <BrainCircuit className="w-8 h-8 text-emerald-500" />,
-    color: "from-emerald-500 to-teal-500",
-    description: "Nuestro algoritmo analiza matemáticamente los últimos 30 días de consumo y cruza esa información con tu inventario actual. Si detecta que te quedarás sin insumos en menos de 3 días, te alertará automáticamente con sugerencias exactas de compra.",
-    action: "Ver Predicciones",
-    actionHref: "/inventory"
+    icon: Salad,
+    label: "Inventario y Recetas",
+    desc: "Gestiona ingredientes, recetas y calcula costos reales",
+    role: "admin",
+    content: `## Inventario y Recetas\n\nControla tu inventario y calcula el costo real de cada platillo.\n\n### Gestión de Inventario:\n- Crea ingredientes con unidad de medida y precio unitario\n- Recibe alertas de stock bajo automáticamente\n- Historial de movimientos (entradas/salidas)\n\n### Recetas:\n- Vincula ingredientes a platillos con cantidad requerida\n- Costeo automático: el sistema calcula el margen de ganancia\n- Actualización de costos al recibir compras`,
   },
   {
-    id: "recetas",
-    title: "Recetas y Costeo",
-    subtitle: "Calcula el costo real de cada platillo.",
-    icon: <Salad className="w-8 h-8 text-emerald-500" />,
-    color: "from-emerald-500 to-green-500",
-    description: "Vincula ingredientes de inventario a cada platillo del menú. El sistema calcula automáticamente el costo por porción, el margen de ganancia y te muestra en tiempo real qué platillos están generando más utilidad.",
-    action: "Ver Recetas",
-    actionHref: "/recipes"
+    id: "suppliers",
+    icon: Truck,
+    label: "Proveedores y Compras",
+    desc: "Gestiona proveedores y crea órdenes de compra",
+    role: "admin",
+    content: `## Proveedores y Compras\n\nAdministra tus proveedores y automatiza las órdenes de compra.\n\n### Proveedores:\n- Registra nombre, contacto, teléfono y email\n- Historial de órdenes por proveedor\n\n### Órdenes de Compra:\n- Crea órdenes seleccionando ítems del inventario\n- Al recibir, el inventario se actualiza automáticamente\n- Estados: PENDING → ORDERED → RECEIVED`,
   },
   {
-    id: "turnos",
-    title: "Control de Turnos",
-    subtitle: "Reloj checador inteligente para tu personal.",
-    icon: <Clock className="w-8 h-8 text-blue-500" />,
-    color: "from-blue-500 to-indigo-500",
-    description: "Registra entrada y salida de tu personal con un solo clic. Visualiza turnos activos, horas trabajadas y quién está en servicio en tiempo real desde el panel de administración.",
-    action: "Ver Turnos",
-    actionHref: "/staff/shifts"
+    id: "expenses",
+    icon: ReceiptIcon,
+    label: "Gastos y P&L",
+    desc: "Registra gastos y visualiza el estado de resultados",
+    role: "admin",
+    content: `## Gastos y Rentabilidad\n\nLleva el control financiero de tu negocio.\n\n### Gestión de Gastos:\n- Categorías: renta, nómina, insumos, servicios, marketing\n- Registro con descripción, monto, fecha y comprobante\n\n### P&L (Estado de Resultados):\n- Ingresos totales del período\n- Gastos por categoría\n- Utilidad neta y margen de ganancia\n- Filtro por rango de fechas`,
   },
   {
-    id: "waitlist",
-    title: "Lista de Espera Inteligente",
-    subtitle: "Notifica a tus clientes cuando su mesa esté lista.",
-    icon: <Bell className="w-8 h-8 text-amber-500" />,
-    color: "from-amber-500 to-orange-500",
-    description: "Gestiona la lista de espera con estimación de tiempo. Cuando una mesa se libera, llama o notifica automáticamente al cliente vía Telegram. Asigna la mesa ideal según el tamaño del grupo.",
-    action: "Ir a Lista de Espera",
-    actionHref: "/waitlist"
+    id: "staff-shifts",
+    icon: Clock,
+    label: "Control de Turnos",
+    desc: "Registra entrada/salida del personal",
+    role: "pos",
+    content: `## Control de Turnos\n\nReloj checador digital integrado al POS.\n\n### Cómo funciona:\n1. El staff hace clock-in al iniciar su turno\n2. Clock-out automático al cerrar\n3. Vista de turnos activos en tiempo real\n\n### Reportes:\n- Horas trabajadas por empleado\n- Historial de turnos con filtro por fecha`,
   },
   {
-    id: "proveedores",
-    title: "Proveedores y Compras",
-    subtitle: "Gestiona órdenes de compra y recibe inventario.",
-    icon: <Truck className="w-8 h-8 text-purple-500" />,
-    color: "from-purple-500 to-violet-500",
-    description: "Administra tus proveedores, crea órdenes de compra y al recibirlas el sistema actualiza automáticamente el inventario y los costos unitarios. Nunca más pierdas el control de tus insumos.",
-    action: "Ver Proveedores",
-    actionHref: "/suppliers"
-  },
-  {
-    id: "gastos",
-    title: "Gastos y Rentabilidad",
-    subtitle: "Estado de resultados completo en tiempo real.",
-    icon: <Receipt className="w-8 h-8 text-red-500" />,
-    color: "from-red-500 to-rose-500",
-    description: "Registra todos tus gastos operativos (renta, nómina, servicios, insumos) y obtén un estado de resultados (P&L) automatizado. Visualiza ingresos vs gastos, margen de utilidad y desglose por categoría.",
-    action: "Ver Gastos",
-    actionHref: "/expenses"
-  },
-  {
-    id: "facturacion",
-    title: "Facturación CFDI",
-    subtitle: "Emite facturas con todos los requisitos fiscales.",
-    icon: <FileText className="w-8 h-8 text-blue-500" />,
-    color: "from-blue-500 to-indigo-500",
-    description: "Genera facturas electrónicas (CFDI) vinculadas a cada orden. Almacena RFC, régimen fiscal, uso de CFDI y montos facturables. El sistema excluye automáticamente pagos con Bunz (no generan CFDI) y mantiene un historial completo de facturas emitidas con estatus vigente/cancelado.",
-    action: "Ver Facturación",
-    actionHref: "/invoices"
-  },
-  {
-    id: "catering",
-    title: "Catering y Eventos",
-    subtitle: "Gestión de banquetes y cotizaciones.",
-    icon: <Receipt className="w-8 h-8 text-amber-500" />,
-    color: "from-amber-500 to-yellow-500",
-    description: "Crea eventos de catering, arma menús personalizados, calcula presupuestos y gestiona el cobro de anticipos. Mantén un seguimiento de todos los eventos programados en un solo lugar.",
-    action: "Ver Eventos",
-    actionHref: "/catering"
-  },
-  {
-    id: "pricing",
-    title: "Precios Dinámicos IA",
-    subtitle: "Maximiza tus ingresos con tarifas inteligentes.",
-    icon: <BrainCircuit className="w-8 h-8 text-purple-500" />,
-    color: "from-purple-500 to-fuchsia-500",
-    description: "Configura reglas automáticas de precios según el día y la hora (ej. Happy Hour). El sistema ajusta automáticamente el precio en el Kiosko, la MiniApp y el Menú Digital para aumentar la rentabilidad en horas pico y el tráfico en horas muertas.",
-    action: "Ver Precios Dinámicos",
-    actionHref: "/pricing"
-  },
-  {
-    id: "menuboard",
-    title: "Menú Digital TV",
-    subtitle: "Pantallas dinámicas sin hardware costoso.",
-    icon: <Sparkles className="w-8 h-8 text-cyan-500" />,
-    color: "from-cyan-500 to-blue-500",
-    description: "Convierte cualquier Smart TV en una pantalla de Menú Digital sincronizada en tiempo real. Si un producto se agota o cambias el precio, la pantalla se actualiza en menos de 1 segundo sin necesidad de recargarla.",
-    action: "Configurar Pantallas",
-    actionHref: "/menu-boards"
-  },
-  {
-    id: "multistore",
-    title: "Dashboard Multi-Sucursal",
-    subtitle: "Control centralizado de todas tus sucursales.",
-    icon: <LinkIcon className="w-8 h-8 text-indigo-500" />,
-    color: "from-indigo-500 to-violet-500",
-    description: "Visualiza KPIs y datos agregados de todos tus restaurantes en tiempo real. Alterna rápidamente entre sucursales usando el menú superior sin necesidad de iniciar sesión nuevamente.",
-    action: "Ir al Dashboard",
-    actionHref: "/"
+    id: "qr-payments",
+    icon: QrCode,
+    label: "Pagos QR",
+    desc: "Configura el pago en mesa, split de cuenta y propinas digitales",
+    role: "pos",
+    content: `## Pagos QR\n\nPermite a los clientes pagar desde su mesa escaneando un código QR.\n\n### Opciones de pago:\n- **Pagar todo**: Pago completo con tarjeta o efectivo\n- **Dividir cuenta**: Divide el total entre N personas\n- **Propina**: Agrega propina (10%, 15%, 20% o monto personalizado)\n- **Recibo digital**: El recibo se envía al Telegram del cliente\n\n### Flujo:\n1. Cliente escanea QR de la mesa\n2. Ve el resumen de su cuenta\n3. Elige pagar, dividir o agregar propina\n4. Recibe confirmación y recibo digital`,
   },
   {
     id: "loyalty",
-    title: "Programa de Lealtad",
-    subtitle: "Retén a tus clientes y envíales promociones.",
-    icon: <Sparkles className="w-8 h-8 text-pink-500" />,
-    color: "from-pink-500 to-rose-500",
-    description: "Segmenta a tus clientes automáticamente (Nuevos, VIP, Riesgo de Fuga). Captura sus cumpleaños para regalos automáticos y usa nuestro creador de campañas para enviarles mensajes directamente a su Telegram.",
-    action: "Ver Lealtad",
-    actionHref: "/loyalty"
-  }
+    icon: Award,
+    label: "Programa de Lealtad",
+    desc: "Configura el sistema de recompensas y niveles para tus clientes",
+    role: "marketing",
+    content: `## Programa de Lealtad\n\nEl programa de lealtad recompensa a los clientes con Bunz por cada compra.\n\n### KPIs disponibles:\n- Usuarios registrados\n- Bunz ganados totales\n- Bunz gastados totales\n- Hops acumulados (experiencia)\n\n### Niveles:\n- Cada nivel requiere cierta cantidad de Hops\n- Los niveles tienen multiplicadores de Bunz\n- Top 10 usuarios por Hops visible en la página\n\n### Ubicación:\nMenú lateral → Lealtad`,
+  },
+  {
+    id: "campaigns",
+    icon: Megaphone,
+    label: "Campañas de Marketing",
+    desc: "Crea y envía campañas segmentadas a tus clientes",
+    role: "marketing",
+    content: `## Campañas de Marketing\n\nCrea campañas de mensajes masivos segmentados por tipo de cliente.\n\n### Segmentos disponibles:\n- **ALL**: Todos los clientes\n- **VIP**: Clientes frecuentes (5+ visitas)\n- **RECURRENT**: Clientes regulares (2-4 visitas)\n- **NEW**: Clientes nuevos (1 visita)\n- **CHURN_RISK**: Clientes en riesgo de abandono\n\n### Cómo crear una campaña:\n1. Haz clic en "Nueva Campaña"\n2. Define nombre, segmento objetivo y mensaje\n3. La campaña se crea como borrador\n4. Haz clic en "Enviar Ahora" para enviarla\n\n### Analytics:\n- Tasas de entrega visibles en cada campaña enviada\n- Seguimiento de entregados vs fallidos`,
+  },
+  {
+    id: "birthdays",
+    icon: Cake,
+    label: "Cumpleaños",
+    desc: "Automatiza recompensas de cumpleaños para tus clientes",
+    role: "marketing",
+    content: `## Cumpleaños\n\nAutomatiza recompensas para clientes en su cumpleaños.\n\n### Configuración:\n- **Bunz de regalo**: Cantidad de Bunz a regalar (default: 100)\n- **Mensaje personalizado**: Usa variables como {name} y {bonus}\n\n### Vista de próximos cumpleaños:\n- Clientes ordenados por días hasta su cumpleaños\n- Los que cumplen en 7 días o menos se marcan en rosa\n- Los que cumplen en 30 días o menos se marcan en amarillo\n\n### Automatización:\nEl cron \`/api/cron/birthdays\` revisa diariamente quién cumple años y acredita Bunz automáticamente`,
+  },
+  {
+    id: "referrals",
+    icon: Gift,
+    label: "Programa de Referidos",
+    desc: "Gestiona el programa de referidos y analiza su rendimiento",
+    role: "marketing",
+    content: `## Programa de Referidos\n\nLos clientes pueden invitar a amigos y ganar recompensas.\n\n### KPIs disponibles:\n- Invitadores únicos\n- Invitados registrados\n- Total de referidos\n- Bunz en recompensas\n\n### Historial:\n- Lista completa de referidos\n- Estado: PENDING / COMPLETED / CANCELLED\n- Recompensa en Bunz por cada referido\n\n### Ubicación:\nMenú lateral → Referidos`,
+  },
+  {
+    id: "customers",
+    icon: Users,
+    label: "Gestión de Clientes",
+    desc: "Administra tus clientes, su segmentación e historial",
+    role: "marketing",
+    content: `## Gestión de Clientes\n\nVisualiza y administra la base de clientes del restaurante.\n\n### Información disponible:\n- Nombre, teléfono, cumpleaños\n- Total de visitas y gasto acumulado\n- Última visita\n- Segmento automático (VIP, RECURRENT, NEW, CHURN_RISK)\n- Consentimiento de marketing`,
+  },
 ];
 
+const ROLES: { key: GuideRole; label: string }[] = [
+  { key: "all", label: "Todas" },
+  { key: "admin", label: "Administración" },
+  { key: "pos", label: "POS / Operación" },
+  { key: "marketing", label: "Marketing" },
+];
+
+const ROLE_BADGES: Record<string, { label: string; color: string }> = {
+  admin: { label: "Admin", color: "text-blue-400 bg-blue-500/10 border-blue-500/20" },
+  pos: { label: "POS", color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" },
+  marketing: { label: "Marketing", color: "text-purple-400 bg-purple-500/10 border-purple-500/20" },
+};
+
 export default function AcademyPage() {
-  const [selectedFeature, setSelectedFeature] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [roleFilter, setRoleFilter] = useState<GuideRole>("all");
+
+  const filtered = roleFilter === "all" ? guides : guides.filter((g) => g.role === roleFilter);
+  const guide = filtered.find((g) => g.id === selected);
+
+  if (guide) {
+    const Icon = guide.icon;
+    const badge = ROLE_BADGES[guide.role];
+    return (
+      <div className="space-y-6">
+        <button onClick={() => setSelected(null)} className="text-sm text-pink-400 hover:text-pink-300 flex items-center gap-1">
+          <ChevronRight className="h-4 w-4 rotate-180" /> Volver a guías
+        </button>
+        <Card className="border border-white/5 bg-white/5 p-8 backdrop-blur-md">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-pink-500/10 text-pink-400">
+              <Icon className="h-7 w-7" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-black text-white">{guide.label}</h1>
+                {badge && <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${badge.color}`}>{badge.label}</span>}
+              </div>
+              <p className="text-sm text-gray-400 mt-1">{guide.desc}</p>
+            </div>
+          </div>
+          <div className="prose prose-invert max-w-none">
+            {guide.content.split("\n").map((line, i) => {
+              if (line.startsWith("## ")) return <h2 key={i} className="text-lg font-bold text-white mt-6 mb-3">{line.slice(3)}</h2>;
+              if (line.startsWith("### ")) return <h3 key={i} className="text-base font-bold text-pink-400 mt-4 mb-2">{line.slice(4)}</h3>;
+              if (line.startsWith("- **")) {
+                const parts = line.split("**:");
+                return <li key={i} className="text-sm text-gray-300 ml-4 mb-1"><strong className="text-white">{parts[0].slice(3)}</strong>{parts[1]}</li>;
+              }
+              if (line.startsWith("- ")) return <li key={i} className="text-sm text-gray-300 ml-4 mb-1">{line.slice(2)}</li>;
+              if (line.trim() === "") return null;
+              return <p key={i} className="text-sm text-gray-300 mb-2">{line}</p>;
+            })}
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-8 max-w-7xl mx-auto">
-      <div className="mb-12">
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-pink-100 text-pink-700 text-sm font-semibold mb-4"
-        >
-          <Sparkles className="w-4 h-4" />
-          Nuevas Funcionalidades
-        </motion.div>
-        <motion.h1 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="text-4xl font-black text-gray-900 tracking-tight mb-4"
-        >
-          Rabbitty <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-violet-600">Academy</span>
-        </motion.h1>
-        <motion.p 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="text-lg text-gray-500 max-w-2xl"
-        >
-          Descubre el poder de las herramientas de última generación que hemos diseñado para automatizar tu restaurante, multiplicar tus ventas y optimizar tu tiempo.
-        </motion.p>
+    <div className="space-y-6">
+      <div className="relative overflow-hidden rounded-3xl border border-white/5 bg-gradient-to-br from-gray-900/60 to-black/80 p-8 shadow-2xl backdrop-blur-xl">
+        <div className="absolute top-0 right-0 h-48 w-48 rounded-full bg-pink-500/10 blur-3xl" />
+        <div className="relative z-10">
+          <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-pink-500">
+            <BookOpen className="h-3.5 w-3.5" /> Centro de Aprendizaje
+          </span>
+          <h1 className="text-4xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-500 mt-2">
+            Academy
+          </h1>
+          <p className="text-gray-400 mt-2 text-sm font-medium">
+            {filtered.length} guías interactivas para todas las funcionalidades de Rabbitty
+          </p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {FEATURES.map((feature, idx) => (
-          <motion.div
-            key={feature.id}
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.3 + (idx * 0.1) }}
-            onClick={() => setSelectedFeature(feature.id)}
-            className="group relative bg-white rounded-3xl p-8 border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_40px_rgb(0,0,0,0.08)] transition-all cursor-pointer overflow-hidden"
+      <div className="flex flex-wrap gap-2">
+        {ROLES.map((r) => (
+          <button
+            key={r.key}
+            onClick={() => { setSelected(null); setRoleFilter(r.key); }}
+            className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${
+              roleFilter === r.key
+                ? "bg-pink-500/20 text-pink-400 border border-pink-500/30"
+                : "bg-white/5 text-gray-400 border border-white/10 hover:border-white/20"
+            }`}
           >
-            <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${feature.color} opacity-0 group-hover:opacity-100 transition-opacity`} />
-            
-            <div className="flex items-start justify-between mb-6">
-              <div className={`p-4 rounded-2xl bg-gradient-to-br ${feature.color} bg-opacity-10`}>
-                <div className="bg-white rounded-xl p-2 shadow-sm">
-                  {feature.icon}
-                </div>
-              </div>
-              <Button variant="ghost" className="opacity-0 group-hover:opacity-100 transition-opacity">
-                Aprender más <ChevronRight className="w-4 h-4 ml-1" />
-              </Button>
-            </div>
-            
-            <h3 className="text-2xl font-bold text-gray-900 mb-2 group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-gray-900 group-hover:to-gray-600 transition-all">
-              {feature.title}
-            </h3>
-            <p className="text-gray-500 font-medium">
-              {feature.subtitle}
-            </p>
-          </motion.div>
+            {r.label}
+          </button>
         ))}
       </div>
 
-      {/* Modal */}
-      <AnimatePresence>
-        {selectedFeature && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setSelectedFeature(null)}
-              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-            />
-            
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative bg-white rounded-[32px] p-8 max-w-2xl w-full shadow-2xl overflow-hidden"
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {filtered.map(({ id, icon: Icon, label, desc, role }) => {
+          const badge = ROLE_BADGES[role];
+          return (
+            <button
+              key={id}
+              onClick={() => setSelected(id)}
+              className="group text-left"
             >
-              {(() => {
-                const feature = FEATURES.find(f => f.id === selectedFeature)!;
-                return (
-                  <>
-                    <div className={`absolute top-0 left-0 w-full h-32 bg-gradient-to-br ${feature.color} opacity-10`} />
-                    
-                    <button 
-                      onClick={() => setSelectedFeature(null)}
-                      className="absolute top-6 right-6 p-2 bg-white rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors z-10 shadow-sm"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
+              <Card className="border border-white/5 bg-white/5 p-5 backdrop-blur-md hover:border-pink-500/30 hover:bg-white/10 transition-all h-full w-full">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-500/10 text-pink-400">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <h3 className="font-bold text-white text-sm flex-1">{label}</h3>
+                  <ChevronRight className="h-4 w-4 text-gray-500 group-hover:text-pink-400 transition-all group-hover:translate-x-1" />
+                </div>
+                <p className="text-xs text-gray-400 mb-2">{desc}</p>
+                {badge && <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${badge.color}`}>{badge.label}</span>}
+              </Card>
+            </button>
+          );
+        })}
+      </div>
 
-                    <div className="relative z-10">
-                      <div className="inline-flex items-center justify-center p-4 rounded-2xl bg-white shadow-md border border-gray-100 mb-6">
-                        {feature.icon}
-                      </div>
-                      
-                      <h2 className="text-3xl font-black text-gray-900 mb-3">{feature.title}</h2>
-                      <p className="text-xl text-gray-600 font-medium mb-6">{feature.subtitle}</p>
-                      
-                      <div className="bg-gray-50 rounded-2xl p-6 mb-8 border border-gray-100">
-                        <p className="text-gray-700 leading-relaxed text-lg">
-                          {feature.description}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center gap-4">
-                        <Button 
-                          onClick={() => window.location.href = feature.actionHref}
-                          className={`bg-gradient-to-r ${feature.color} hover:opacity-90 text-white shadow-lg py-6 px-8 text-lg rounded-xl font-bold`}
-                        >
-                          {feature.action}
-                        </Button>
-                        <Button variant="secondary" className="py-6 px-8 text-lg rounded-xl font-bold text-gray-700">
-                          <Play className="w-5 h-5 mr-2" />
-                          Ver Video Tutorial
-                        </Button>
-                      </div>
-                    </div>
-                  </>
-                );
-              })()}
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {filtered.length === 0 && (
+        <div className="text-center py-12 text-gray-500">
+          <BookOpen className="h-12 w-12 mx-auto mb-3 opacity-30" />
+          <p>Sin guías para este rol.</p>
+        </div>
+      )}
     </div>
   );
 }

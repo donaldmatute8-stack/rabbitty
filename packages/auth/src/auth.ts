@@ -2,6 +2,9 @@ import NextAuth from "next-auth";
 import Resend from "next-auth/providers/resend";
 import Credentials from "next-auth/providers/credentials";
 import crypto from "crypto";
+import { createHash } from "crypto";
+import pg from "pg";
+const { Pool } = pg;
 
 const tokens = new Map<string, { token: string; expires: Date }>();
 const users = new Map<string, { id: string; email: string; emailVerified: Date | null }>();
@@ -102,6 +105,47 @@ const authResult = NextAuth({
           email: `${credentials.id}@telegram.rabbitty`,
           image: (credentials.photoUrl as string) ?? undefined,
         };
+      },
+    }),
+    Credentials({
+      id: "magic-link",
+      name: "Magic Link",
+      credentials: {
+        token: { label: "Token", type: "text" },
+        sid: { label: "Session ID", type: "text" },
+      },
+      async authorize(credentials) {
+        if (!credentials?.token || !credentials?.sid) return null;
+
+        const coreDbUrl = process.env.CORE_DATABASE_URL;
+        if (!coreDbUrl) return null;
+
+        try {
+          const pool = new Pool({ connectionString: coreDbUrl });
+          const jwtToken = createHash("sha256").update(credentials.token as string).digest("hex");
+
+          const result = await pool.query(
+            `SELECT ws."userId", u."telegramId", u."firstName", u."lastName", u."username"
+             FROM "webSessions" ws
+             JOIN "users" u ON u."id" = ws."userId"
+             WHERE ws."id" = $1 AND ws."jwtToken" = $2 AND ws."expiresAt" > NOW()
+             LIMIT 1`,
+            [credentials.sid, jwtToken]
+          );
+
+          await pool.end();
+
+          if (result.rows.length === 0) return null;
+
+          const user = result.rows[0];
+          return {
+            id: user.telegramId,
+            name: [user.firstName, user.lastName].filter(Boolean).join(" "),
+            email: `${user.telegramId}@telegram.rabbitty`,
+          };
+        } catch {
+          return null;
+        }
       },
     }),
   ],

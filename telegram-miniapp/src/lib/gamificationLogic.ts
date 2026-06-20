@@ -1,6 +1,6 @@
 import { db } from '@/db';
 import { users, levels, hatTricks, userHatTricks, achievements, userAchievements } from '@/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 
 /**
  * Otorgar Hops a un usuario y verificar si subió de nivel.
@@ -28,10 +28,13 @@ export async function awardHops(userId: string, isNewBusiness: boolean) {
     }
 
     await db.update(users)
-      .set({ hops: newTotalHops, levelId: newLevelId })
+      .set({
+        hops: sql`${users.hops} + ${hopsToAward}`,
+        levelId: newLevelId,
+      })
       .where(eq(users.id, userId));
 
-    return { awardedHops: hopsToAward, newTotalHops, newLevelId, leveledUp: newLevelId !== user.levelId };
+    return { awardedHops: hopsToAward, newTotalHops: newTotalHops, newLevelId, leveledUp: newLevelId !== user.levelId };
   } catch (error) {
     console.error('Error awarding Hops:', error);
   }
@@ -84,15 +87,12 @@ export async function evaluateHatTricks(userId: string, actionContext: { type: s
 
       // Si lo completó, dar recompensas
       if (isNowCompleted) {
-        const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
-        if (user) {
-          await db.update(users)
-            .set({ 
-              hops: user.hops + trick.rewardHops,
-              totalBunzEarned: user.totalBunzEarned + trick.rewardBunz
-            })
-            .where(eq(users.id, userId));
-        }
+        await db.update(users)
+          .set({
+            hops: sql`${users.hops} + ${trick.rewardHops}`,
+            totalBunzEarned: sql`COALESCE(${users.totalBunzEarned}, 0) + ${trick.rewardBunz}`,
+          })
+          .where(eq(users.id, userId));
       }
     }
   } catch (error) {

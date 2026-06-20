@@ -54,7 +54,7 @@ export const invoicesRouter = router({
 
       const result = where ? await query.where(where) : await query;
 
-      const [{ count }] = await ctx.restaurantDb
+      const [countResult] = await ctx.restaurantDb
         .select({ count: sql<number>`count(*)` })
         .from(invoices);
 
@@ -64,7 +64,7 @@ export const invoicesRouter = router({
           order: r.order || undefined,
           branch: r.branch?.name || undefined,
         })),
-        total: Number(count),
+        total: Number(countResult?.count ?? 0),
       };
     }),
 

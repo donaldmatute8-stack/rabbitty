@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { users, ownedBusinesses } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+import { parseTelegramUser, validateTelegramInitData } from '@/lib/telegramAuth';
 
 export async function GET(req: Request) {
   try {
@@ -44,28 +45,37 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { 
       name, description, category, address, 
-      rewardPercentage, gallery, activeDays, startTime, endTime, telegramId,
-      googleClaimed
+      rewardPercentage, gallery, activeDays, startTime, endTime, initData,
+      googleClaimed,
+      lat: manualLat,
+      lng: manualLng,
     } = body;
 
-    let owner = null;
-    if (telegramId) {
-      owner = await db.query.users.findFirst({
-        where: eq(users.telegramId, telegramId)
-      });
+    // Validate initData
+    if (!initData) {
+      return NextResponse.json({ error: 'Missing authentication' }, { status: 401 });
     }
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    if (botToken && !validateTelegramInitData(initData, botToken)) {
+      return NextResponse.json({ error: 'Invalid authentication' }, { status: 401 });
+    }
+
+    const tUser = parseTelegramUser(initData);
+    if (!tUser || !tUser.id) {
+      return NextResponse.json({ error: 'Invalid user data' }, { status: 401 });
+    }
+
+    // Only allow real users as owners
+    const owner = await db.query.users.findFirst({
+      where: eq(users.telegramId, tUser.id.toString())
+    });
 
     if (!owner) {
-      // Create a mock owner if none provided/found
-      const [newOwner] = await db.insert(users).values({
-        telegramId: "SYSTEM_OWNER_" + Date.now(),
-        totalBunzEarned: 0
-      }).returning();
-      owner = newOwner;
+      return NextResponse.json({ error: 'User not registered. Please start the bot first.' }, { status: 400 });
     }
 
-    const lat = 19.4326 + (Math.random() - 0.5) * 0.05;
-    const lng = -99.1332 + (Math.random() - 0.5) * 0.05;
+    const lat = manualLat ?? (19.4326 + (Math.random() - 0.5) * 0.05);
+    const lng = manualLng ?? (-99.1332 + (Math.random() - 0.5) * 0.05);
 
     const parsedReward = parseInt(rewardPercentage);
     let rarity = "common";

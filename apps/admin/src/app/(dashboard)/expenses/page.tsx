@@ -218,7 +218,7 @@ export default function ExpensesPage() {
           />
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={() => setDialog(false)}>Cancelar</Button>
-            <Button onClick={() => createExpense.mutate(form)} disabled={createExpense.isPending || !form.description || !form.amount}>
+            <Button onClick={() => createExpense.mutate(form as any)} disabled={createExpense.isPending || !form.description || !form.amount}>
               Registrar
             </Button>
           </div>

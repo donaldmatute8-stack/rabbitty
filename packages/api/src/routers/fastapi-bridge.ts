@@ -1,7 +1,9 @@
 import { z } from "zod";
+import { eq, sql } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
 import { bus, EventTypes } from "@rabbitty/events";
 import { miniappClient, configureMiniapp, getMiniappConfig } from "../services/miniapp-client";
+import { ownedBusinesses } from "@rabbitty/database-core";
 import { TRPCError } from "@trpc/server";
 
 export const fastapiBridgeRouter = router({
@@ -147,6 +149,22 @@ export const fastapiBridgeRouter = router({
       } catch (e: any) {
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Error al mintear Bunz: ${e.message}` });
       }
+    }),
+
+  rechargeBusinessBunz: protectedProcedure
+    .input(z.object({
+      businessId: z.string(),
+      amount: z.number().int().positive(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const [business] = await ctx.coreDb.select().from(ownedBusinesses).where(eq(ownedBusinesses.id, input.businessId));
+      if (!business) throw new TRPCError({ code: "NOT_FOUND", message: "Negocio no encontrado" });
+
+      await ctx.coreDb.update(ownedBusinesses)
+        .set({ bunzBalance: sql`${ownedBusinesses.bunzBalance} + ${input.amount}` })
+        .where(eq(ownedBusinesses.id, input.businessId));
+
+      return { success: true, bunzBalance: business.bunzBalance + input.amount };
     }),
 
   onEvent: protectedProcedure

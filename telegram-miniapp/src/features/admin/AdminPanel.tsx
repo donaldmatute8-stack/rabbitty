@@ -97,6 +97,12 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
           </p>
         </div>
 
+        {/* SECTION: BUSINESS APPROVALS */}
+        <div style={{ backgroundColor: '#FAFAFA', borderRadius: 14, padding: 16, border: '1px solid #EAEAEA', marginBottom: 16 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 800, color: '#111', margin: '0 0 12px 0' }}>🏪 Aprobación de Negocios</h3>
+          <BusinessApprovals />
+        </div>
+
         {/* SECTION: GAMIFICATION */}
         <div style={{ backgroundColor: '#FAFAFA', borderRadius: 14, padding: 16, border: '1px solid #EAEAEA', marginBottom: 16 }}>
           <h3 style={{ fontSize: 15, fontWeight: 800, color: '#111', margin: '0 0 12px 0' }}>🪄 Trucos del Sombrero ({tricks.length})</h3>
@@ -320,6 +326,112 @@ function GuideItem({ icon, title, desc, bullets }: { icon: string; title: string
         <ul style={{ margin: '6px 0 0', paddingLeft: 16, fontSize: 12, color: '#555', lineHeight: 1.6 }}>
           {bullets.map((b, i) => <li key={i}>{b}</li>)}
         </ul>
+      )}
+    </div>
+  );
+}
+
+function BusinessApprovals() {
+  const [businesses, setBusinesses] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<string>('PENDING');
+  const { user } = useAuth();
+  const { showToast } = useToast();
+
+  const fetchBusinesses = () => {
+    setLoading(true);
+    fetch('/api/admin/business', {
+      headers: { 'X-Telegram-Id': user?.telegramId || '' }
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) setBusinesses(data.businesses || []);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { fetchBusinesses(); }, [user]);
+
+  const handleAction = async (businessId: string, status: string) => {
+    try {
+      const res = await fetch('/api/admin/business', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Telegram-Id': user?.telegramId || '' },
+        body: JSON.stringify({ businessId, status })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBusinesses(prev => prev.map(b => b.id === businessId ? { ...b, status } : b));
+        showToast(`Negocio ${status === 'APPROVED' ? 'aprobado' : 'rechazado'}`, 'success');
+      } else {
+        showToast('Error: ' + (data.error || 'desconocido'), 'error');
+      }
+    } catch (e) {
+      showToast('Error de conexión', 'error');
+    }
+  };
+
+  const filtered = businesses.filter(b => filter === 'ALL' || b.status === filter);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+        {['PENDING', 'APPROVED', 'REJECTED', 'ALL'].map(f => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            style={{
+              padding: '4px 12px', borderRadius: 999, border: 'none', fontSize: 11, fontWeight: 800, cursor: 'pointer',
+              backgroundColor: filter === f ? '#111' : '#E0E0E0', color: filter === f ? '#fff' : '#666'
+            }}
+          >
+            {f === 'ALL' ? 'Todos' : f}
+          </button>
+        ))}
+      </div>
+
+      {loading && <p style={{ fontSize: 13, color: '#888' }}>Cargando...</p>}
+
+      {!loading && filtered.length === 0 && (
+        <p style={{ fontSize: 13, color: '#888' }}>No hay negocios {filter !== 'ALL' ? filter.toLowerCase() : ''}.</p>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 300, overflowY: 'auto' }}>
+        {filtered.slice(0, 20).map((b: any) => (
+          <div key={b.id} style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, border: '1px solid #EEE' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+              <div>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 800 }}>{b.name}</p>
+                <p style={{ margin: '2px 0', fontSize: 11, color: '#888' }}>{b.category} · {b.address?.slice(0, 40)}</p>
+                {b.owner && (
+                  <p style={{ margin: '2px 0', fontSize: 11, color: '#555' }}>
+                    👤 {b.owner.firstName || ''} {b.owner.lastName || ''}
+                    {b.owner.phoneNumber ? ` · 📞 ${b.owner.phoneNumber}` : ''}
+                    {b.owner.telegramId ? ` · 📱 @${b.owner.username || b.owner.telegramId?.slice(0, 8)}` : ''}
+                  </p>
+                )}
+              </div>
+              <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 6, backgroundColor: b.status === 'PENDING' ? '#FFF3E0' : b.status === 'APPROVED' ? '#E8F5E9' : '#FFEBEE', color: b.status === 'PENDING' ? '#F57C00' : b.status === 'APPROVED' ? '#4CAF50' : '#F44336' }}>
+                {b.status}
+              </span>
+            </div>
+            {b.status === 'PENDING' && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button onClick={() => handleAction(b.id, 'REJECTED')} style={{ flex: 1, backgroundColor: '#FFEBEE', color: '#F44336', border: 'none', padding: '6px', borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                  Rechazar
+                </button>
+                <button onClick={() => handleAction(b.id, 'APPROVED')} style={{ flex: 1, backgroundColor: '#E8F5E9', color: '#4CAF50', border: 'none', padding: '6px', borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                  Aprobar
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {businesses.length > 20 && (
+        <p style={{ fontSize: 11, textAlign: 'center', color: '#AAA', marginTop: 8 }}>Mostrando 20 de {businesses.length}</p>
       )}
     </div>
   );

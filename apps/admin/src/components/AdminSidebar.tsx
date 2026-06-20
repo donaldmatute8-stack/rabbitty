@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@rabbitty/ui";
-import { LayoutDashboard, Store, Users, Settings, ChefHat, ClipboardList, Package, Printer, ChevronLeft, ChevronRight, Sparkles, Clock, Salad, Truck, Receipt, CalendarCheck, DollarSign, Monitor, FileText, Gift } from "lucide-react";
+import { LayoutDashboard, Store, Users, Settings, ChefHat, ClipboardList, Package, Printer, ChevronLeft, ChevronRight, Sparkles, Clock, Salad, Truck, Receipt, CalendarCheck, DollarSign, Monitor, FileText, Gift, Award, Megaphone, Cake, Repeat, QrCode, BookUser, Table2, Webhook, UserRound } from "lucide-react";
 import { useSidebar } from "./DashboardClientWrapper";
 
 const links = [
@@ -21,7 +21,17 @@ const links = [
   { href: "/catering", label: "Eventos", icon: CalendarCheck },
   { href: "/pricing", label: "Precios Dinámicos", icon: DollarSign },
   { href: "/menu-boards", label: "Menú Digital", icon: Monitor },
-  { href: "/loyalty", label: "Lealtad", icon: Gift },
+  { href: "/loyalty", label: "Lealtad", icon: Award },
+  { href: "/referrals", label: "Referidos", icon: Gift },
+  { href: "/campaigns", label: "Campañas", icon: Megaphone },
+  { href: "/birthdays", label: "Cumpleaños", icon: Cake },
+  { href: "/refunds", label: "Reembolsos", icon: Repeat },
+  { href: "/customers", label: "Clientes", icon: UserRound },
+  { href: "/reservations", label: "Reservaciones", icon: BookUser },
+  { href: "/table-layout", label: "Distribución", icon: Table2 },
+  { href: "/qr-generator", label: "Códigos QR", icon: QrCode },
+  { href: "/restaurant-sync", label: "Sincronizar", icon: Webhook },
+  { href: "/fastapi-settings", label: "FastAPI Bridge", icon: Webhook },
   { href: "/academy", label: "Academy", icon: Sparkles },
   { href: "/hardware", label: "Hardware", icon: Printer },
   { href: "/settings", label: "Configuración", icon: Settings },

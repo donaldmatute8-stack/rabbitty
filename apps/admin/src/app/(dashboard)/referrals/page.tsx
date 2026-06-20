@@ -84,7 +84,7 @@ export default function ReferralsPage() {
           {analytics.referrals.length === 0 && (
             <p className="p-5 text-sm text-gray-500">Sin referidos registrados</p>
           )}
-          {analytics.referrals.map((ref) => (
+          {analytics.referrals.map((ref: { id: string; invitedId?: string; inviterId?: string; status: string; rewardAmount?: number }) => (
             <div key={ref.id} className="flex items-center justify-between p-4">
               <div>
                 <p className="text-sm font-bold text-white">
