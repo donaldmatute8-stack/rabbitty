@@ -19,10 +19,14 @@ import { expensesRouter } from "./expenses";
 import { invoicesRouter } from "./invoices";
 import { cateringRouter } from "./catering";
 import { pricingRouter } from "./pricing";
+import { campaignsRouter } from "./campaigns";
 import { loyaltyRouter } from "./loyalty";
+import { tableLayoutRouter } from "./tableLayout";
+import { settingsRouter } from "./settings";
+import { totpRouter } from "./totp";
+import { passkeysRouter } from "./passkeys";
+import { trustedSessionsRouter } from "./trustedSessions";
 
-// Inicializa el Worker de BullMQ para Marketing Masivo (Fase 11)
-// En un futuro MVP esto debería moverse a un microservicio independiente.
 import "../services/queue";
 
 export const appRouter = router({
@@ -46,7 +50,13 @@ export const appRouter = router({
   invoices: invoicesRouter,
   catering: cateringRouter,
   pricing: pricingRouter,
+  campaigns: campaignsRouter,
   loyalty: loyaltyRouter,
+  tableLayout: tableLayoutRouter,
+  settings: settingsRouter,
+  totp: totpRouter,
+  passkeys: passkeysRouter,
+  trustedSessions: trustedSessionsRouter,
 });
 
 export type AppRouter = typeof appRouter;

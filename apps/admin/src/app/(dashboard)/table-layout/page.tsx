@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { Map as MapIcon, Plus, Trash2, Save } from "lucide-react";
-import { toast } from "@rabbitty/ui";
+import { useState, useEffect, useCallback } from "react";
+import { trpc } from "../../../lib/trpc-client";
+import { Map as MapIcon, Plus, Trash2, Save, GripHorizontal } from "lucide-react";
+import { Card, toast } from "@rabbitty/ui";
 
 interface TableLayout {
   id: string;
@@ -11,111 +12,121 @@ interface TableLayout {
   width: number;
   height: number;
   capacity: number;
- number: number;
+  number: number;
 }
 
 export default function TableLayoutEditorPage() {
-  const [tables, setTables] = useState<TableLayout[]>([
-    { id: "t1", x: 10, y: 10, width: 80, height: 60, capacity: 4, number: 1 },
-    { id: "t2", x: 120, y: 10, width: 80, height: 60, capacity: 4, number: 2 },
-    { id: "t3", x: 230, y: 10, width: 80, height: 60, capacity: 6, number: 3 },
-    { id: "t4", x: 10, y: 90, width: 80, height: 60, capacity: 2, number: 4 },
-    { id: "t5", x: 120, y: 90, width: 80, height: 60, capacity: 8, number: 5 },
-  ]);
+  const { data: dbTables, isLoading, refetch } = trpc.tableLayout.getLayout.useQuery();
+  const { mutate: saveLayout } = trpc.tableLayout.saveLayout.useMutation({
+    onSuccess: () => { toast.success("Diseño guardado"); refetch(); },
+    onError: (err) => toast.error(err.message),
+  });
 
+  const [tables, setTables] = useState<TableLayout[]>([]);
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [editingTable, setEditingTable] = useState<string | null>(null);
+  const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null);
 
-  const handleAddTable = () => {
+  useEffect(() => {
+    if (dbTables) {
+      setTables(dbTables.map(t => {
+        let coords = { x: 50, y: 50, width: 80, height: 60 };
+        if (t.location) {
+          try { coords = { ...coords, ...JSON.parse(t.location) }; } catch {}
+        }
+        return { id: t.id, ...coords, capacity: t.capacity, number: t.number ?? 0 };
+      }));
+    }
+  }, [dbTables]);
+
+  const handleAddTable = useCallback(() => {
     const newTable: TableLayout = {
-      id: `t${Date.now()}`,
+      id: `new_${Date.now()}`,
       x: 50 + Math.random() * 100,
       y: 50 + Math.random() * 100,
-      width: 60,
-      height: 40,
+      width: 80,
+      height: 60,
       capacity: 4,
       number: tables.length + 1,
     };
-    setTables([...tables, newTable]);
-    toast.success("Mesa agregada");
-  };
+    setTables(prev => [...prev, newTable]);
+    toast.success("Mesa agregada (guardar para persistir)");
+  }, [tables.length]);
 
-  const handleUpdateTable = (id: string, updates: Partial<TableLayout>) => {
-    setTables((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, ...updates } : t))
+  const handleUpdateTable = useCallback((id: string, updates: Partial<TableLayout>) => {
+    setTables(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+  }, []);
+
+  const handleDeleteTable = useCallback((id: string) => {
+    setTables(prev => prev.filter(t => t.id !== id));
+    setSelectedTable(prev => prev === id ? null : prev);
+    setEditingTable(prev => prev === id ? null : prev);
+    toast.success("Mesa eliminada (guardar para persistir)");
+  }, []);
+
+  const handleSave = useCallback(() => {
+    const existing = tables.filter(t => !t.id.startsWith("new_"));
+    saveLayout(existing.map(t => ({
+      id: t.id, x: t.x, y: t.y, width: t.width, height: t.height, capacity: t.capacity,
+    })));
+  }, [tables, saveLayout]);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent, id: string) => {
+    const table = tables.find(t => t.id === id);
+    if (!table) return;
+    const rect = (e.currentTarget as HTMLElement).parentElement!.getBoundingClientRect();
+    setDragOffset({ x: e.clientX - rect.left - table.x, y: e.clientY - rect.top - table.y });
+    setSelectedTable(id);
+  }, [tables]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!dragOffset || !selectedTable) return;
+    const canvas = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    handleUpdateTable(selectedTable, {
+      x: Math.max(0, e.clientX - canvas.left - dragOffset.x),
+      y: Math.max(0, e.clientY - canvas.top - dragOffset.y),
+    });
+  }, [dragOffset, selectedTable, handleUpdateTable]);
+
+  const handleMouseUp = useCallback(() => {
+    setDragOffset(null);
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gradient-to-br from-black via-zinc-950 to-black">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-pink-500 border-t-transparent" />
+      </div>
     );
-  };
-
-  const handleDeleteTable = (id: string) => {
-    setTables((prev) => prev.filter((t) => t.id !== id));
-    if (selectedTable === id) setSelectedTable(null);
-    if (editingTable === id) setEditingTable(null);
-    toast.success("Mesa eliminada");
-  };
-
-  const handleSaveLayout = () => {
-    toast.success("Diseño de mesas guardado");
-  };
-
-  const handleSelectTable = (id: string) => {
-    setSelectedTable(id === selectedTable ? null : id);
-  };
+  }
 
   return (
-    <div className="flex h-screen flex-col">
-      <div className="border-b border-gray-200 bg-white px-6 py-4">
+    <div className="flex h-screen flex-col bg-gradient-to-br from-black via-zinc-950 to-black">
+      <div className="border-b border-white/10 bg-white/5 px-6 py-4 backdrop-blur-md">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">Editor de Diseño de Mesas</h2>
-            <p className="text-sm text-gray-500">
-              Arrastra y configura la distribución de tu restaurante
-            </p>
+            <h2 className="text-xl font-black text-white">Editor de Mesas</h2>
+            <p className="text-sm text-gray-400">Arrastra las mesas para diseñar tu restaurante</p>
           </div>
           <div className="flex gap-2">
-            <button
-              onClick={handleAddTable}
-              className="flex items-center gap-2 rounded-lg bg-pink-600 px-4 py-2 text-sm font-semibold text-white hover:bg-pink-700"
-            >
-              <Plus className="h-4 w-4" />
-              Agregar Mesa
+            <button onClick={handleAddTable} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10 transition-all">
+              <Plus className="h-4 w-4" /> Agregar Mesa
             </button>
-            <button
-              onClick={handleSaveLayout}
-              className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
-            >
-              <Save className="h-4 w-4" />
-              Guardar Diseño
+            <button onClick={handleSave} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-pink-600 to-pink-700 px-4 py-2 text-sm font-semibold text-white hover:from-pink-500 hover:to-pink-600 transition-all">
+              <Save className="h-4 w-4" /> Guardar
             </button>
           </div>
         </div>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Canvas */}
-        <div className="flex-1 bg-gray-100 p-6 overflow-auto relative">
-          <div className="relative mx-auto max-w-4xl bg-white p-8 shadow-lg">
-            {/* Room labels */}
-            <div className="absolute top-4 left-4 text-sm font-semibold text-gray-400">
-              Restaurante
-            </div>
-
+        <div className="flex-1 p-6 overflow-auto relative" onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
+          <div className="relative mx-auto h-full min-h-[500px] w-full max-w-5xl rounded-2xl border border-white/10 bg-white/5 p-8">
+            <div className="absolute left-4 top-4 text-xs font-semibold text-gray-500">Restaurante</div>
             {tables.map((table) => (
               <div
                 key={table.id}
-                onClick={() => handleSelectTable(table.id)}
-                onDragStart={(e) => {
-                  e.dataTransfer.setData("tableId", table.id);
-                  e.stopPropagation();
-                }}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  const tableId = e.dataTransfer.getData("tableId");
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const x = e.clientX - rect.left;
-                  const y = e.clientY - rect.top;
-                  handleUpdateTable(tableId, { x, y });
-                }}
+                onMouseDown={(e) => handleMouseDown(e, table.id)}
                 style={{
                   position: "absolute",
                   left: `${table.x}px`,
@@ -123,117 +134,55 @@ export default function TableLayoutEditorPage() {
                   width: `${table.width}px`,
                   height: `${table.height}px`,
                 }}
-                className={`cursor-grab rounded-xl border-2 transition-all hover:shadow-lg ${
+                className={`group cursor-grab rounded-xl border-2 transition-all hover:shadow-lg hover:shadow-pink-500/10 ${
                   selectedTable === table.id
-                    ? "border-pink-500 bg-pink-50/50"
-                    : "border-gray-300 bg-white"
-                }`}
+                    ? "border-pink-500 bg-pink-500/10 shadow-lg"
+                    : "border-white/10 bg-white/5 hover:border-white/20"
+                } ${dragOffset ? "cursor-grabbing" : ""}`}
               >
-                <div className="flex h-full flex-col items-center justify-center text-center">
-                  <span className="text-3xl font-bold text-gray-900">
-                    {table.number}
-                  </span>
-                  <span className="text-xs font-semibold text-gray-500">
-                    {table.capacity} personas
-                  </span>
+                <div className="flex h-full flex-col items-center justify-center">
+                  <GripHorizontal className="mb-1 h-3 w-3 text-gray-600" />
+                  <span className="text-2xl font-black text-white">{table.number}</span>
+                  <span className="text-xs font-semibold text-gray-400">{table.capacity} pers.</span>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Sidebar */}
-        <div className="w-80 border-l border-gray-200 bg-gray-50 p-6">
+        <div className="w-80 border-l border-white/10 bg-white/5 p-6 backdrop-blur-md">
           {editingTable ? (
             <div className="space-y-4">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-gray-900">
-                  Editar Mesa
-                </h3>
-                <button
-                  onClick={() => setEditingTable(null)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold text-white">Editar Mesa</h3>
+                <button onClick={() => setEditingTable(null)} className="text-gray-400 hover:text-white transition-colors">
+                  ✕
                 </button>
               </div>
-
               {(() => {
-                const table = tables.find((t) => t.id === editingTable);
+                const table = tables.find(t => t.id === editingTable);
                 if (!table) return null;
                 return (
                   <>
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-1">
-                        Número de Mesa
-                      </label>
-                      <input
-                        type="number"
-                        value={table.number}
-                        onChange={(e) =>
-                          handleUpdateTable(table.id, {
-                            number: parseInt(e.target.value) || 1,
-                          })
-                        }
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-pink-500 focus:outline-none"
-                      />
+                      <label className="block text-sm font-semibold text-gray-400 mb-1">Número</label>
+                      <input type="number" value={table.number} onChange={(e) => handleUpdateTable(table.id, { number: parseInt(e.target.value) || 1 })}
+                        className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-pink-500 focus:outline-none" />
                     </div>
-
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-1">
-                        Capacidad
-                      </label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={20}
-                        value={table.capacity}
-                        onChange={(e) =>
-                          handleUpdateTable(table.id, {
-                            capacity: parseInt(e.target.value) || 4,
-                          })
-                        }
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-pink-500 focus:outline-none"
-                      />
+                      <label className="block text-sm font-semibold text-gray-400 mb-1">Capacidad</label>
+                      <input type="number" min={1} max={20} value={table.capacity} onChange={(e) => handleUpdateTable(table.id, { capacity: parseInt(e.target.value) || 4 })}
+                        className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-pink-500 focus:outline-none" />
                     </div>
-
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-1">
-                        Coordenada X
-                      </label>
-                      <input
-                        type="number"
-                        value={table.x}
-                        onChange={(e) =>
-                          handleUpdateTable(table.id, {
-                            x: parseInt(e.target.value) || 0,
-                          })
-                        }
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-pink-500 focus:outline-none"
-                      />
+                      <label className="block text-sm font-semibold text-gray-400 mb-1">X</label>
+                      <input type="number" value={table.x} onChange={(e) => handleUpdateTable(table.id, { x: parseInt(e.target.value) || 0 })}
+                        className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-pink-500 focus:outline-none" />
                     </div>
-
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-1">
-                        Coordenada Y
-                      </label>
-                      <input
-                        type="number"
-                        value={table.y}
-                        onChange={(e) =>
-                          handleUpdateTable(table.id, {
-                            y: parseInt(e.target.value) || 0,
-                          })
-                        }
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-pink-500 focus:outline-none"
-                      />
+                      <label className="block text-sm font-semibold text-gray-400 mb-1">Y</label>
+                      <input type="number" value={table.y} onChange={(e) => handleUpdateTable(table.id, { y: parseInt(e.target.value) || 0 })}
+                        className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-pink-500 focus:outline-none" />
                     </div>
                   </>
                 );
@@ -243,38 +192,21 @@ export default function TableLayoutEditorPage() {
             <div>
               <div className="mb-6 flex items-center gap-3">
                 <MapIcon className="h-6 w-6 text-gray-400" />
-                <span className="text-sm font-semibold text-gray-500">
-                  {tables.length} mesas configuradas
-                </span>
+                <span className="text-sm font-semibold text-gray-400">{tables.length} mesas</span>
               </div>
-
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {tables.length === 0 ? (
-                  <p className="text-center text-sm text-gray-400">
-                    No hay mesas. Agrega una para comenzar.
-                  </p>
+                  <p className="text-center text-sm text-gray-500">No hay mesas. Agrega una.</p>
                 ) : (
                   tables.map((table) => (
-                    <div
-                      key={table.id}
-                      onClick={() => setEditingTable(table.id)}
-                      className="flex items-center justify-between rounded-xl bg-white p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-                    >
+                    <div key={table.id} onClick={() => setEditingTable(table.id)}
+                      className="flex items-center justify-between rounded-xl border border-white/5 bg-white/5 p-3 hover:bg-white/10 transition-all cursor-pointer">
                       <div>
-                        <div className="text-sm font-bold text-gray-900">
-                          Mesa {table.number}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {table.capacity} personas
-                        </div>
+                        <div className="text-sm font-bold text-white">Mesa {table.number}</div>
+                        <div className="text-xs text-gray-500">{table.capacity} pers. · ({table.x},{table.y})</div>
                       </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteTable(table.id);
-                        }}
-                        className="rounded-lg p-2 text-gray-300 hover:bg-red-50 hover:text-red-500"
-                      >
+                      <button onClick={(e) => { e.stopPropagation(); handleDeleteTable(table.id); }}
+                        className="rounded-lg p-1.5 text-gray-500 hover:bg-red-500/20 hover:text-red-400 transition-all">
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>

@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import BusinessSetupForm from '@/features/business/BusinessSetupForm';
 import MobileAffiliateDashboard from '@/features/business/MobileAffiliateDashboard';
 import { useAuth } from '@/features/auth/AuthProvider';
 
 export default function BusinessPage() {
   const { user } = useAuth();
+  const initDataRef = useRef('');
   const [business, setBusiness] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -14,9 +15,10 @@ export default function BusinessPage() {
   useEffect(() => {
     if (user) {
       fetchBusiness();
-    } else {
-      setLoading(false);
     }
+    import('@twa-dev/sdk').then(mod => {
+      initDataRef.current = mod.default.initData || '';
+    });
   }, [user]);
 
   const fetchBusiness = async () => {
@@ -41,7 +43,7 @@ export default function BusinessPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          telegramId: user.telegramId,
+          initData: initDataRef.current,
           ...formData
         })
       });

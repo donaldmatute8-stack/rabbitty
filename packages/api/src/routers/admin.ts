@@ -1,10 +1,12 @@
 import { z } from "zod";
 import { and, eq, sql } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
+import { TRPCError } from "@trpc/server";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
 import { restaurants, branches, orders, tables } from "@rabbitty/database-restaurant/schema";
-import { referrals } from "@rabbitty/database-core";
+import { referrals, users, levels } from "@rabbitty/database-core";
+import { customers } from "@rabbitty/database-restaurant/schema";
 import { miniappClient } from "../services/miniapp-client";
 
 
@@ -389,6 +391,67 @@ export const adminRouter = router({
     const totalInviters = new Set(allReferrals.map((r) => r.inviterId)).size;
     const totalInvited = new Set(allReferrals.map((r) => r.invitedId)).size;
     return { referrals: allReferrals, totalInviters, totalInvited };
+  }),
+
+  getLoyaltyStats: protectedProcedure.query(async ({ ctx }) => {
+    const allUsers = await ctx.coreDb.select().from(users);
+    const allLevels = await ctx.coreDb.select().from(levels);
+    const totalBunzEarned = allUsers.reduce((s, u) => s + (u.totalBunzEarned ?? 0), 0);
+    const totalSpent = allUsers.reduce((s, u) => s + (u.totalBunzSpent ?? 0), 0);
+    const totalHops = allUsers.reduce((s, u) => s + (u.hops ?? 0), 0);
+    const topUsers = allUsers.sort((a, b) => (b.hops ?? 0) - (a.hops ?? 0)).slice(0, 10);
+    const levelsWithCount = allLevels.map((l) => ({
+      ...l,
+      userCount: allUsers.filter((u) => u.levelId === l.id).length,
+    }));
+    return {
+      totalUsers: allUsers.length,
+      totalBunzEarned,
+      totalSpent,
+      totalHops,
+      levels: levelsWithCount,
+      topUsers,
+    };
+  }),
+
+  getBirthdaySettings: protectedProcedure.query(async ({ ctx }) => {
+    const [restaurant] = await ctx.restaurantDb.select().from(restaurants).limit(1);
+    return {
+      birthdayBonusBunz: (restaurant as any)?.birthdayBonusBunz ?? 100,
+      birthdayMessageTemplate: "¡Feliz cumpleaños {name}! 🎂 Como regalo, te hemos acreditado {bonus} Bunz. ¡Disfruta tu día!",
+      isActive: true,
+    };
+  }),
+
+  updateBirthdaySettings: protectedProcedure
+    .input(z.object({
+      birthdayBonusBunz: z.number().min(0).default(100),
+      birthdayMessageTemplate: z.string().default("¡Feliz cumpleaños {name}! 🎂 Como regalo, te hemos acreditado {bonus} Bunz. ¡Disfruta tu día!"),
+      isActive: z.boolean().default(true),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const [restaurant] = await ctx.restaurantDb.select().from(restaurants).limit(1);
+      if (!restaurant) throw new TRPCError({ code: "NOT_FOUND", message: "No restaurant found" });
+      await ctx.restaurantDb.update(restaurants).set(input as any).where(eq(restaurants.id, restaurant.id));
+      return { success: true };
+    }),
+
+  getUpcomingBirthdays: protectedProcedure.query(async ({ ctx }) => {
+    const [restaurant] = await ctx.restaurantDb.select().from(restaurants).limit(1);
+    if (!restaurant) return [];
+    const allCustomers = await ctx.restaurantDb
+      .select()
+      .from(customers)
+      .where(sql`${customers.birthDate} IS NOT NULL`)
+      .orderBy(customers.birthDate)
+      .limit(50);
+    const today = new Date();
+    return allCustomers.map((c) => ({
+      ...c,
+      daysUntilBirthday: c.birthDate
+        ? (new Date(today.getFullYear(), c.birthDate.getMonth(), c.birthDate.getDate()).getTime() - today.getTime()) / 86400000
+        : null,
+    })).sort((a, b) => (a.daysUntilBirthday ?? 999) - (b.daysUntilBirthday ?? 999));
   }),
 
   getDashboardStats: protectedProcedure.query(async ({ ctx }) => {

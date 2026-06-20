@@ -262,6 +262,8 @@ export const campaigns = pgTable("campaigns", {
   message: text("message").notNull(),
   status: text("status").default("DRAFT").notNull(), // DRAFT, SENT
   sentAt: timestamp("sentAt"),
+  deliveredCount: integer("deliveredCount").default(0).notNull(),
+  failedCount: integer("failedCount").default(0).notNull(),
   ...timestamps,
 });
 

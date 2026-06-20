@@ -19,6 +19,15 @@ const MENU_ITEMS = [
   { icon: "❓", label: "Ayuda y Soporte", badge: null, href: '/support' },
 ];
 
+const LEVEL_GRADIENTS: Record<string, string> = {
+  'Diamante': 'linear-gradient(135deg, #FFD700, #FFA500)',
+  'Rubí': 'linear-gradient(135deg, #9C27B0, #E91E63)',
+  'Oro': 'linear-gradient(135deg, #2196F3, #00BCD4)',
+  'Plata': 'linear-gradient(135deg, #607D8B, #90A4AE)',
+  'Bronce': 'linear-gradient(135deg, #795548, #A1887F)',
+};
+const DEFAULT_GRADIENT = '#E91E63';
+
 export default function ProfilePage() {
   const { address } = useWallet();
   const { user } = useAuth();
@@ -26,16 +35,9 @@ export default function ProfilePage() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [tapCount, setTapCount] = useState(0);
   const [showAdmin, setShowAdmin] = useState(false);
-
-  // Dynamic NFT Level Colors
-  const getLevelColor = (levelId?: string | null) => {
-    // We can map levelId to colors. For now, fallback logic based on hops
-    const hops = (user as any)?.hops || 0;
-    if (hops >= 5000) return 'linear-gradient(135deg, #FFD700, #FFA500)'; // Legendary
-    if (hops >= 2000) return 'linear-gradient(135deg, #9C27B0, #E91E63)'; // Epic
-    if (hops >= 500) return 'linear-gradient(135deg, #2196F3, #00BCD4)'; // Rare
-    return '#E91E63'; // Common
-  };
+  const [nextLevelHops, setNextLevelHops] = useState(500);
+  const [levelGradient, setLevelGradient] = useState(DEFAULT_GRADIENT);
+  const [levelName, setLevelName] = useState('1');
 
   const handleAvatarTap = async () => {
     if (!user?.telegramId) {
@@ -68,13 +70,31 @@ export default function ProfilePage() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  useEffect(() => {
+    if (user?.id) {
+      fetch(`/api/gamification?userId=${user.id}`)
+        .then(r => r.json())
+        .then((data: any) => {
+          if (data.level?.requiredHops) {
+            setNextLevelHops(data.level.requiredHops);
+          }
+          const name = data.level?.name;
+          if (name) {
+            setLevelName(name);
+            setLevelGradient(LEVEL_GRADIENTS[name] || DEFAULT_GRADIENT);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [user?.id]);
+
   const profileTitle = (
     <div className="flex items-center gap-3 relative w-full">
       <motion.div
         whileTap={{ scale: 0.9 }}
         onClick={handleAvatarTap}
         style={{ 
-          background: getLevelColor((user as any)?.levelId), 
+          background: levelGradient,
           boxShadow: (user as any)?.hops >= 500 ? '0 4px 16px rgba(0,0,0,0.1)' : 'none'
         }}
         className="w-[50px] h-[50px] rounded-[14px] p-0.5 flex items-center justify-center shrink-0 relative cursor-pointer"
@@ -87,7 +107,7 @@ export default function ProfilePage() {
       <div className="flex-1">
         <p className="text-lg font-extrabold text-[#111] mb-0 leading-[1.1]">{user?.firstName || 'Rabbiter'}</p>
         <p className="text-[13px] text-[#AAA] m-0">
-          <span className="font-extrabold text-[#E91E63] mr-1.5">Lvl. {(user as any)?.levelId || 1}</span>
+          <span className="font-extrabold text-[#E91E63] mr-1.5">Lvl. {levelName}</span>
           @{user?.username || 'explorador'}
         </p>
       </div>
@@ -106,14 +126,14 @@ export default function ProfilePage() {
                 <p className="text-[11px] font-extrabold text-[#AAA] uppercase tracking-[0.5px] m-0 mb-0.5">PROGRESO DE MADRIGUERA</p>
                 <p className="text-[15px] font-extrabold text-[#111] m-0">{(user as any)?.hops || 0} <span className="text-[#E91E63]">Hops</span></p>
               </div>
-              <p className="text-xs font-bold text-[#888] m-0">{(user as any)?.hops >= 5000 ? 'MAX' : 'Siguiente: 500 Hops'}</p>
+              <p className="text-xs font-bold text-[#888] m-0">{(user as any)?.hops >= 5000 ? 'MAX' : `Siguiente: ${nextLevelHops} Hops`}</p>
             </div>
             <div className="h-2 bg-[#EAEAEA] rounded-[100px] overflow-hidden">
               <motion.div 
                 initial={{ width: 0 }} 
-                animate={{ width: `${Math.min((((user as any)?.hops || 0) / 500) * 100, 100)}%` }} 
+                animate={{ width: `${Math.min((((user as any)?.hops || 0) / nextLevelHops) * 100, 100)}%` }} 
                 transition={{ duration: 1, delay: 0.2 }}
-                style={{ background: getLevelColor((user as any)?.levelId) }}
+                style={{ background: levelGradient }}
                 className="h-full rounded-[100px]"
               />
             </div>

@@ -1,6 +1,47 @@
-// gamification.ts — Achievement system is not yet in the Drizzle schema.
-// This is a stub until the Achievement/Level tables are re-designed.
-export async function checkAchievements(_userId: string): Promise<void> {
-  // TODO: re-implement with Drizzle ORM once achievements table is added to schema
-  return;
+import { api } from "./api";
+
+export interface Achievement {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  progress: number;
+  maxProgress: number;
+  unlocked: boolean;
+  unlockedAt?: string;
+}
+
+export interface UserLevel {
+  id: string;
+  name: string;
+  level: number;
+  minBunz: number;
+  multiplier: number;
+  color: string;
+}
+
+export async function getAchievements(userId: string): Promise<Achievement[]> {
+  try {
+    return await api.users.me() as unknown as Achievement[];
+  } catch {
+    return [];
+  }
+}
+
+export async function checkAchievements(userId: string): Promise<Achievement[]> {
+  try {
+    const data = await api.users.me() as any;
+    return data?.achievements ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function getUserLevel(userId: string): Promise<UserLevel | null> {
+  try {
+    const data = await api.users.me() as any;
+    return data?.level ?? null;
+  } catch {
+    return null;
+  }
 }

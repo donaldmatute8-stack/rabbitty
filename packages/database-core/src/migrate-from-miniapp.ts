@@ -109,6 +109,7 @@ const TABLE_CONFIG: Record<string, { select: any; insert: (row: any) => any }> =
 async function migrate() {
   for (const tableName of TABLE_ORDER) {
     const cfg = TABLE_CONFIG[tableName];
+    if (!cfg) { console.log(`  No config for ${tableName}, skipping`); continue; }
     console.log(`Migrating ${tableName}...`);
 
     const rows = await mini.select().from(cfg.select);

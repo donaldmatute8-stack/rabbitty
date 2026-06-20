@@ -49,10 +49,10 @@ export default function PricingPage() {
       const payload: any = { id: editing };
       for (const [k, v] of Object.entries(data)) {
         if (k === "branchId") continue;
-        if (k === "dayOfWeek") { payload[k] = v === "" ? undefined : parseInt(v); }
-        else if (k === "minPrice" || k === "maxPrice") { payload[k] = v === "" ? undefined : parseFloat(v); }
-        else if (k === "priority") { payload[k] = parseInt(v); }
-        else if (k === "adjustmentValue") { payload[k] = parseFloat(v); }
+        if (k === "dayOfWeek") { payload[k] = v === "" ? undefined : parseInt(v as string); }
+        else if (k === "minPrice" || k === "maxPrice") { payload[k] = v === "" ? undefined : parseFloat(v as string); }
+        else if (k === "priority") { payload[k] = parseInt(v as string); }
+        else if (k === "adjustmentValue") { payload[k] = parseFloat(v as string); }
         else { payload[k] = v; }
       }
       updateRule.mutate(payload);
@@ -165,23 +165,23 @@ export default function PricingPage() {
 
       <Dialog open={dialog} onClose={() => setDialog(false)} title={editing ? "Editar Regla" : "Nueva Regla de Precio"}>
         <div className="space-y-4">
-          <Input label="Nombre" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+          <Input label="Nombre" value={form.name} onChange={(e: any) => setForm((f: any) => ({ ...f, name: e.target.value }))} />
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Tipo</label>
-              <select value={form.adjustmentType} onChange={(e) => setForm((f) => ({ ...f, adjustmentType: e.target.value }))}
+              <select value={form.adjustmentType} onChange={(e: any) => setForm((f: any) => ({ ...f, adjustmentType: e.target.value }))}
                 className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white focus:border-pink-500 focus:outline-none">
                 <option value="PERCENTAGE" className="bg-gray-900">Porcentaje (%)</option>
                 <option value="FIXED" className="bg-gray-900">Monto Fijo ($)</option>
               </select>
             </div>
-            <Input label={form.adjustmentType === "PERCENTAGE" ? "Valor (%)" : "Valor ($)"} type="number" step="0.01" value={form.adjustmentValue} onChange={(e) => setForm((f) => ({ ...f, adjustmentValue: e.target.value }))} />
+            <Input label={form.adjustmentType === "PERCENTAGE" ? "Valor (%)" : "Valor ($)"} type="number" step="0.01" value={form.adjustmentValue} onChange={(e: any) => setForm((f: any) => ({ ...f, adjustmentValue: e.target.value }))} />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Prioridad" type="number" value={form.priority} onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))} />
+            <Input label="Prioridad" type="number" value={form.priority} onChange={(e: any) => setForm((f: any) => ({ ...f, priority: e.target.value }))} />
             <div className="space-y-1">
               <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Día</label>
-              <select value={form.dayOfWeek} onChange={(e) => setForm((f) => ({ ...f, dayOfWeek: e.target.value }))}
+              <select value={form.dayOfWeek} onChange={(e: any) => setForm((f: any) => ({ ...f, dayOfWeek: e.target.value }))}
                 className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white focus:border-pink-500 focus:outline-none">
                 <option value="" className="bg-gray-900">Todos los días</option>
                 {DAYS.map((d, i) => (
@@ -191,12 +191,12 @@ export default function PricingPage() {
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Hora inicio" type="time" value={form.startTime} onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))} />
-            <Input label="Hora fin" type="time" value={form.endTime} onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))} />
+            <Input label="Hora inicio" type="time" value={form.startTime} onChange={(e: any) => setForm((f: any) => ({ ...f, startTime: e.target.value }))} />
+            <Input label="Hora fin" type="time" value={form.endTime} onChange={(e: any) => setForm((f: any) => ({ ...f, endTime: e.target.value }))} />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Precio mínimo" type="number" step="0.01" value={form.minPrice} onChange={(e) => setForm((f) => ({ ...f, minPrice: e.target.value }))} />
-            <Input label="Precio máximo" type="number" step="0.01" value={form.maxPrice} onChange={(e) => setForm((f) => ({ ...f, maxPrice: e.target.value }))} />
+            <Input label="Precio mínimo" type="number" step="0.01" value={form.minPrice} onChange={(e: any) => setForm((f: any) => ({ ...f, minPrice: e.target.value }))} />
+            <Input label="Precio máximo" type="number" step="0.01" value={form.maxPrice} onChange={(e: any) => setForm((f: any) => ({ ...f, maxPrice: e.target.value }))} />
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={() => setDialog(false)}>Cancelar</Button>

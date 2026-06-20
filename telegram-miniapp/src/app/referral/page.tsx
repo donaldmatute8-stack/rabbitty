@@ -1,15 +1,31 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Share2, Copy, CheckCircle2, Trophy } from 'lucide-react';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import { useAuth } from '@/features/auth/AuthProvider';
 
+const LEVEL_NAMES: Record<string, string> = {
+  '1': 'Bronce', '2': 'Plata', '3': 'Oro', '4': 'Rubí', '5': 'Diamante',
+};
+
 export default function ReferralPage() {
   const { user } = useAuth();
   const [copied, setCopied] = useState(false);
+  const [levelName, setLevelName] = useState('Bronce');
 
-  const profile = user;
+  useEffect(() => {
+    if (user?.id) {
+      fetch(`/api/gamification?userId=${user.id}`)
+        .then(r => r.json())
+        .then((data: any) => {
+          if (data?.level?.name) setLevelName(data.level.name);
+        })
+        .catch(() => {});
+    }
+  }, [user?.id]);
+
+  const profile = user as any;
   const loading = !user;
 
   const referralLink = profile?.telegramId
@@ -62,14 +78,14 @@ export default function ReferralPage() {
                 <div>
                   <p className="text-white/50 text-[10px] font-black tracking-[1.5px] uppercase mb-2">Tu Nivel</p>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-[52px] font-black leading-none tracking-[-2px] text-white">{profile?.level ?? 1}</span>
+                    <span className="text-[52px] font-black leading-none tracking-[-2px] text-white">{levelName}</span>
                     <span className="text-xl text-[#FCD34D]">⭐</span>
                   </div>
                 </div>
                 <div className="text-right">
                   <p className="text-white/50 text-[10px] font-black tracking-[1.5px] uppercase mb-2">Bunz Pendientes</p>
                   <p className="text-[42px] font-black text-[#E91E63] tracking-[-1px] leading-none m-0">
-                    {profile?.pending_bunz ?? 0}
+                    {profile?.pendingBunz ?? 0}
                   </p>
                 </div>
               </div>

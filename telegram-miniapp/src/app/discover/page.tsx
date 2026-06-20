@@ -2,57 +2,22 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
+import { Search, Store, MapPin, Percent } from 'lucide-react';
 import BottomNav from '@/components/BottomNav';
 
-const CHATS = [
-  { 
-    id: '1', 
-    name: 'RabbitBot', 
-    message: '¡Hola! Soy tu asistente. ¿En qué te ayudo?', 
-    time: 'Ahora', 
-    unread: 2, 
-    pinned: true,
-    avatar: '🐰',
-    color: '#E91E63',
-    href: '/bot'
-  },
-  { 
-    id: '2', 
-    name: 'Café Cultura', 
-    message: 'Tu reserva para hoy a las 5:00 PM está confirmada.', 
-    time: '12:30', 
-    unread: 0, 
-    pinned: false,
-    avatar: '☕',
-    color: '#111111',
-    href: '#'
-  },
-  { 
-    id: '3', 
-    name: 'Soporte Rabbitty', 
-    message: 'Hemos resuelto tu duda sobre los bunz.', 
-    time: 'Ayer', 
-    unread: 0, 
-    pinned: false,
-    avatar: '🎧',
-    color: '#2196F3',
-    href: '#'
-  },
-  { 
-    id: '4', 
-    name: 'Gimnasio Power', 
-    message: 'No olvides tu clase de funcional mañana.', 
-    time: 'Lun', 
-    unread: 0, 
-    pinned: false,
-    avatar: '💪',
-    color: '#4CAF50',
-    href: '#'
-  }
-];
+type Business = {
+  id: string;
+  name: string;
+  category: string;
+  logoUrl: string | null;
+  rewardPercentage: number;
+  address: string;
+};
 
-export default function MessagesPage() {
-  const [isScrolled, setIsScrolled] = useState(false);
+export default function DiscoverPage() {
+  const [query, setQuery] = useState('');
+  const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     import('@twa-dev/sdk').then((mod) => {
@@ -63,85 +28,84 @@ export default function MessagesPage() {
   }, []);
 
   useEffect(() => {
-    const handleScroll = () => {
-      if (window.scrollY > 10) {
-        setIsScrolled(true);
-      } else {
-        setIsScrolled(false);
-      }
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+    if (!query.trim()) {
+      setBusinesses([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      setLoading(true);
+      fetch(`/api/business/search?q=${encodeURIComponent(query)}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) setBusinesses(data.businesses || []);
+        })
+        .catch(() => {})
+        .finally(() => setLoading(false));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [query]);
 
   return (
     <div className="page-wrap pb-28 bg-white" style={{ fontFamily: "var(--font-family-base)" }}>
-      {/* Messages Header */}
-      <div className={`sticky top-0 z-[60] bg-white transition-shadow duration-300 ${isScrolled ? 'shadow-[0_2px_8px_rgba(0,0,0,0.04)]' : ''}`}>
-        <div style={{ height: 'var(--safe-top)' }} />
-        <div className="p-4 flex items-center justify-between">
-          <h1 className="text-[28px] font-[800] text-[#111] tracking-[-0.5px] m-0">Mensajes</h1>
-          <button className="w-10 h-10 rounded-full bg-[#F4F4F4] border-0 flex items-center justify-center cursor-pointer">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <path d="M9 17A8 8 0 109 1a8 8 0 000 16zM18 18l-4.35-4.35" stroke="#111" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
-        </div>
-      </div>
+      <div style={{ height: 'var(--safe-top)' }} />
+      <div className="p-4">
+        <h1 className="text-[28px] font-[800] text-[#111] tracking-[-0.5px] m-0 mb-4">Descubrir</h1>
 
-      <main className="flex-1 w-full max-w-[600px] mx-auto bg-white pl-4 pr-4">
-        
-        <div className="flex flex-col">
-          {CHATS.map((chat, i) => (
-            <motion.a 
-              href={chat.href}
-              key={chat.id} 
+        <div className="relative mb-4">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#8A8A8A]" strokeWidth={1.5} />
+          <input
+            type="text"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Buscar negocios..."
+            className="w-full bg-[#F5F5F5] rounded-xl pl-12 pr-4 py-3 text-[15px] text-[#111] placeholder-[#8A8A8A] focus:outline-none focus:ring-2 focus:ring-[#E91E63]/20"
+          />
+        </div>
+
+        {loading && <p className="text-sm text-[#8A8A8A] text-center py-8">Buscando...</p>}
+
+        {!loading && businesses.length === 0 && query && (
+          <p className="text-sm text-[#8A8A8A] text-center py-8">No se encontraron negocios.</p>
+        )}
+
+        {!loading && !query && (
+          <div className="text-center py-16">
+            <div className="w-20 h-20 bg-[#F5F5F5] rounded-full flex items-center justify-center mx-auto mb-4">
+              <Store size={32} className="text-[#8A8A8A]" />
+            </div>
+            <p className="text-[#8A8A8A] text-sm">Busca negocios afiliados a Rabbitty</p>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-3">
+          {businesses.map((biz, i) => (
+            <motion.a
+              key={biz.id}
+              href={`/affiliate/${biz.id}`}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05 }}
-              style={{ 
-                borderBottom: i < CHATS.length - 1 ? "1px solid #F4F4F4" : "none",
-                backgroundColor: chat.pinned ? "#FFF0F5" : "transparent",
-                marginLeft: chat.pinned ? -16 : 0,
-                marginRight: chat.pinned ? -16 : 0,
-                paddingLeft: chat.pinned ? 16 : 0,
-                paddingRight: chat.pinned ? 16 : 0,
-              }}
-              className="flex items-center gap-3.5 pt-4 pb-4 no-underline cursor-pointer active:opacity-70 transition-opacity"
+              className="flex items-center gap-4 p-4 bg-[#F5F5F5] rounded-xl no-underline active:scale-[0.98] transition-transform"
             >
-              {/* Avatar */}
-              <div className="w-14 h-14 rounded-full flex items-center justify-center text-[28px] shrink-0 relative" style={{ backgroundColor: chat.color }}>
-                {chat.avatar}
-                {chat.pinned && (
-                  <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 bg-white rounded-full flex items-center justify-center">
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1L8 5L12 6L9 9L10 13L6 11L2 13L3 9L0 6L4 5L6 1Z" fill="#C8A830"/></svg>
-                  </div>
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#E91E63] to-[#C2185B] flex items-center justify-center text-white text-lg font-bold shrink-0">
+                {biz.logoUrl ? (
+                  <img src={biz.logoUrl} alt={biz.name} className="w-full h-full rounded-full object-cover" />
+                ) : (
+                  biz.name[0]
                 )}
               </div>
-              
-              {/* Message Content */}
-              <div className="flex-1 overflow-hidden">
-                <div className="flex justify-between items-center mb-1">
-                  <p className="text-base font-[800] text-[#111] m-0 whitespace-nowrap overflow-hidden text-ellipsis">{chat.name}</p>
-                  <p className="m-0 shrink-0 text-[12px]" style={{ fontWeight: chat.unread > 0 ? 700 : 500, color: chat.unread > 0 ? "#E91E63" : "#AAA" }}>{chat.time}</p>
-                </div>
-                <div className="flex justify-between items-center gap-2">
-                  <p className="text-sm m-0 whitespace-nowrap overflow-hidden text-ellipsis" style={{ color: chat.unread > 0 ? "#111" : "#888", fontWeight: chat.unread > 0 ? 500 : 400 }}>
-                    {chat.message}
-                  </p>
-                  {chat.unread > 0 && (
-                    <div className="w-[22px] h-[22px] rounded-full bg-[#E91E63] flex items-center justify-center shrink-0">
-                      <span className="text-[11px] font-[700] text-white">{chat.unread}</span>
-                    </div>
-                  )}
-                </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-[15px] text-[#111] truncate">{biz.name}</p>
+                <p className="text-[13px] text-[#8A8A8A]">{biz.category}</p>
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                <span className="text-xs font-bold text-[#E91E63]">+{biz.rewardPercentage}%</span>
+                <span className="text-[11px] text-[#8A8A8A]">bunz</span>
               </div>
             </motion.a>
           ))}
         </div>
-
-      </main>
-
+      </div>
       <BottomNav />
     </div>
   );

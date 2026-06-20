@@ -2,8 +2,10 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "@rabbitty/api";
 import { auth } from "@rabbitty/auth";
 import { getRestaurantDb, getCoreDb } from "@rabbitty/api/db";
+import { getEnv } from "@/env";
 
 const handler = async (req: Request) => {
+  const env = getEnv();
   const session = await auth();
   return fetchRequestHandler({
     endpoint: "/api/trpc",
@@ -14,7 +16,7 @@ const handler = async (req: Request) => {
       user: session?.user ?? null,
       restaurantDb: getRestaurantDb(),
       coreDb: getCoreDb(),
-      branchId: (() => { if (!process.env.BRANCH_ID) throw new Error("BRANCH_ID env var is required"); return process.env.BRANCH_ID; })(),
+      branchId: env.BRANCH_ID,
     }),
   });
 };

@@ -1,6 +1,6 @@
 import { db } from '@/db';
 import { users, referrals, notifications } from '@/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 
 /**
  * Triggers the referral reward for the inviter if this is the invited user's first consumption/earn.
@@ -68,7 +68,7 @@ export async function processReferralAndNotifications(userId: string, type: 'EAR
 
         if (inviter) {
           await db.update(users)
-            .set({ totalBunzEarned: inviter.totalBunzEarned + referral.rewardAmount })
+            .set({ totalBunzEarned: sql`COALESCE(${users.totalBunzEarned}, 0) + ${referral.rewardAmount}` })
             .where(eq(users.id, inviter.id));
 
           // Notify inviter

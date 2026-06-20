@@ -81,7 +81,7 @@ export default function CateringPage() {
             </h1>
             <p className="text-gray-400 mt-2 text-sm font-medium">Gestión de eventos, menús personalizados y contratos</p>
           </div>
-          <Button onClick={() => { setEditing(null); setForm({ branchId: "b1", eventName: "", eventDate: "", partySize: 1, customerName: "", customerPhone: "", customerEmail: "", deposit: 0, totalAmount: 0, notes: "" }); setDialog(true); }}>
+          <Button onClick={() => { setEditing(null); setForm({ branchId: "b1", eventName: "", eventDate: "", partySize: 1, customerName: "", customerPhone: "", customerEmail: "", deposit: 0, totalAmount: 0, notes: "", status: "PENDING" }); setDialog(true); }}>
             <Plus className="h-4 w-4" />
             Nuevo Evento
           </Button>

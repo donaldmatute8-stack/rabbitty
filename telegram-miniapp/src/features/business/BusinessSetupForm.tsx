@@ -29,7 +29,33 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
 
   // Step 1 additions
   const [isVirtual, setIsVirtual] = useState(false);
-  const [googleClaimed, setGoogleClaimed] = useState(false);
+  const [locating, setLocating] = useState(false);
+
+  const handleUseLocation = () => {
+    if (!navigator.geolocation) {
+      setAddress('Avenida Principal 123, Monterrey');
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json`
+          );
+          const data = await res.json();
+          setAddress(data.display_name || `${pos.coords.latitude}, ${pos.coords.longitude}`);
+        } catch {
+          setAddress(`${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`);
+        }
+        setLocating(false);
+      },
+      () => {
+        setAddress('Avenida Principal 123, Monterrey');
+        setLocating(false);
+      }
+    );
+  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -65,8 +91,6 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
       category,
       address: isVirtual ? 'Negocio Virtual' : address,
       rewardPercentage,
-      isVirtual,
-      googleClaimed,
       gallery: logoBase64 ? [logoBase64] : [],
       description: "Negocio afiliado de Rabbitty.",
       activeDays: [1,2,3,4,5,6,7],
@@ -159,8 +183,8 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
                   <div>
                     <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: 1 }}>Dirección Física</span>
-                      <button onClick={() => setAddress('Avenida Principal 123, Monterrey')} style={{ background: 'none', border: 'none', color: THEME_COLOR, fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
-                        <MapPin size={12} /> Usar mi ubicación
+                      <button onClick={handleUseLocation} style={{ background: 'none', border: 'none', color: THEME_COLOR, fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                        <MapPin size={12} /> {locating ? 'Obteniendo ubicación...' : 'Usar mi ubicación'}
                       </button>
                     </label>
                     <div style={{ position: 'relative' }}>
@@ -170,14 +194,13 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
                   </div>
                 )}
 
-                {/* Claim Google Business Mock */}
                 <div style={{ padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: 16, border: '1px dashed rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div>
                     <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#fff' }}>Vincular Google Business</p>
-                    <p style={{ margin: '4px 0 0', fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Verifica tu negocio al instante</p>
+                    <p style={{ margin: '4px 0 0', fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Verifica tu negocio al instante (próximamente)</p>
                   </div>
-                  <button onClick={() => setGoogleClaimed(true)} disabled={googleClaimed} style={{ background: googleClaimed ? 'rgba(16,185,129,0.2)' : '#fff', color: googleClaimed ? '#10B981' : '#111', border: 'none', padding: '8px 16px', borderRadius: 999, fontSize: 12, fontWeight: 900, cursor: googleClaimed ? 'default' : 'pointer' }}>
-                    {googleClaimed ? 'Vinculado ✓' : 'Conectar'}
+                  <button disabled style={{ background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.3)', border: 'none', padding: '8px 16px', borderRadius: 999, fontSize: 12, fontWeight: 900 }}>
+                    Próximamente
                   </button>
                 </div>
               </div>
@@ -250,7 +273,7 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
               </div>
               <h2 style={{ fontSize: 28, fontWeight: 900, marginBottom: 12 }}>¡Todo Listo!</h2>
               <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 15, lineHeight: 1.5, marginBottom: 40, padding: '0 20px' }}>
-                Al enviar tu solicitud, tu negocio entrará en fase de verificación. Podrás acceder al Panel de Afiliado inmediatamente.
+                Al enviar tu solicitud, tu negocio entrará en fase de verificación. Te notificaremos cuando sea aprobado.
               </p>
 
               <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 24, padding: 20, textAlign: 'left', marginBottom: 40 }}>

@@ -94,6 +94,7 @@ export const suppliersRouter = router({
         total,
         notes: input.notes ?? null,
       }).returning();
+      if (!order) throw new Error("Error al crear orden de compra");
 
       for (const item of input.items) {
         await ctx.restaurantDb.insert(purchaseOrderItems).values({

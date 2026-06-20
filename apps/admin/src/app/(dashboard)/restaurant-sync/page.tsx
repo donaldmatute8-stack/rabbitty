@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { trpc } from "../../../lib/trpc-client";
-import { Store, RefreshCw } from "lucide-react";
+import { Store, RefreshCw, Coins } from "lucide-react";
 import { toast } from "@rabbitty/ui";
 
 export default function RestaurantSyncPage() {
@@ -11,6 +11,11 @@ export default function RestaurantSyncPage() {
   const { mutateAsync: importUberEats } = trpc.admin.importUberEatsMenu.useMutation();
 
   const [syncing, setSyncing] = useState(false);
+  const rechargeBunz = trpc.fastapi.rechargeBusinessBunz.useMutation({
+    onSuccess: (data) => toast.success(`Bunz recargados. Nuevo balance: ${data.bunzBalance}`),
+    onError: (e) => toast.error(e.message),
+  });
+  const [rechargeAmount, setRechargeAmount] = useState<Record<string, string>>({});
 
   const handleSyncRestaurant = async (restaurantId: string) => {
     try {
@@ -140,6 +145,36 @@ export default function RestaurantSyncPage() {
                         </button>
                       </form>
                       <p className="mt-1 text-[10px] text-gray-400">Pega el enlace de UberEats para clonar platillos, categorías y precios instantáneamente.</p>
+                    </div>
+
+                    {/* Bunz Recharge Section */}
+                    <div className="mt-2 border-t border-gray-200 pt-3">
+                      <label className="text-xs font-semibold text-gray-600 flex items-center gap-1.5 mb-2">
+                        <Coins className="h-3.5 w-3.5 text-amber-500" />
+                        Recargar Inventario de Bunz
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min="1"
+                          placeholder="Cantidad de Bunz"
+                          value={rechargeAmount[restaurant.id] ?? ""}
+                          onChange={(e) => setRechargeAmount(prev => ({ ...prev, [restaurant.id]: e.target.value }))}
+                          className="w-36 rounded-md border border-gray-300 px-3 py-1.5 text-sm outline-none focus:border-amber-500"
+                        />
+                        <button
+                          onClick={() => {
+                            const amount = parseInt(rechargeAmount[restaurant.id]);
+                            if (!amount || amount < 1) { toast.error("Ingresa una cantidad válida"); return; }
+                            rechargeBunz.mutate({ businessId: restaurant.id, amount });
+                            setRechargeAmount(prev => ({ ...prev, [restaurant.id]: "" }));
+                          }}
+                          disabled={rechargeBunz.isPending || !rechargeAmount[restaurant.id]}
+                          className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+                        >
+                          Recargar
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}

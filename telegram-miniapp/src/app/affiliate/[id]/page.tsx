@@ -247,7 +247,7 @@ export default function AffiliateProfilePage() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
-                      initData: app.initData || "mock_init_data", 
+                      initData: app.initData, 
                       businessId: affiliate.id,
                       fiatAmount
                     })
@@ -269,14 +269,24 @@ export default function AffiliateProfilePage() {
 
               try {
                 app.showScanQrPopup({ text: "Escanea tu ticket de compra" }, (qrText: string) => {
-                  processScan(500); // Demo amount
+                  const parsed = parseInt(qrText, 10);
+                  if (!isNaN(parsed) && parsed > 0) {
+                    processScan(parsed);
+                  } else {
+                    showToast('Código QR inválido. Escanea el ticket de compra.', 'error');
+                  }
                   return true;
                 });
               } catch (e) {
                 console.warn("QR Scanner not supported, falling back to mock input");
-                const mockAmount = window.prompt(`Escáner no soportado. Ingresa el monto simulado de tu consumo en ${affiliate.name} (ej. 500):`, "500");
+                const mockAmount = window.prompt(`Escáner no soportado. Ingresa el monto de tu consumo en ${affiliate.name}:`);
                 if (mockAmount) {
-                  processScan(Number(mockAmount));
+                  const parsed = parseInt(mockAmount, 10);
+                  if (!isNaN(parsed) && parsed > 0) {
+                    processScan(parsed);
+                  } else {
+                    showToast('Monto inválido.', 'error');
+                  }
                 }
               }
             } catch (err) {

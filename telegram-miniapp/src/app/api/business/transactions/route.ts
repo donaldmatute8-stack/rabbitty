@@ -19,6 +19,7 @@ export async function GET(req: Request) {
       rows = await db
         .select({
           id: transactions.id,
+          userId: transactions.userId,
           fiatAmount: transactions.fiatAmount,
           bunzMinted: transactions.bunzMinted,
           status: transactions.status,
@@ -44,6 +45,7 @@ export async function GET(req: Request) {
       rows = await db
         .select({
           id: transactions.id,
+          userId: transactions.userId,
           fiatAmount: transactions.fiatAmount,
           bunzMinted: transactions.bunzMinted,
           status: transactions.status,

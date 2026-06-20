@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, Variants } from 'framer-motion';
-import { ArrowRight, Store, UserCircle2, Zap, Shield, Smartphone, QrCode, X, Clock, Salad, Truck, Receipt, Bell } from 'lucide-react';
+import { ArrowRight, Store, UserCircle2, Zap, Shield, Smartphone, QrCode, X, Clock, Salad, Truck, Receipt, Bell, Building2, DollarSign, Monitor, Gift, Award, Megaphone, Cake, BookOpen } from 'lucide-react';
 
 export default function LandingPage() {
   const [showSmartContractModal, setShowSmartContractModal] = useState(false);
@@ -300,6 +300,76 @@ export default function LandingPage() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* PHASE 11-12: POWER FEATURES */}
+      <section className="relative z-10 py-32 px-6 bg-gradient-to-b from-transparent via-blue-950/10 to-transparent">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <div className="text-primary font-bold tracking-widest text-sm uppercase mb-3">V2.0 Power Features</div>
+            <h2 className="text-4xl md:text-5xl font-black tracking-tight leading-tight">
+              Tu negocio, <span className="text-gradient">potenciado.</span>
+            </h2>
+            <p className="text-white/60 text-lg mt-4 max-w-2xl mx-auto">
+              Herramientas que transforman la forma de administrar y hacer crecer tu negocio.
+            </p>
+          </div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              { icon: Building2, title: 'Eventos & Catering', desc: 'Gestiona eventos con menús personalizados, depósitos y seguimiento de estado.', color: 'text-pink-400' },
+              { icon: DollarSign, title: 'Precios Dinámicos IA', desc: 'Reglas automáticas de precio por hora, día y demanda. Sin perder el control.', color: 'text-amber-400' },
+              { icon: Monitor, title: 'Menú Digital TV', desc: 'Convierte cualquier pantalla HDMI en un menú digital actualizado en tiempo real.', color: 'text-emerald-400' },
+              { icon: Store, title: 'Dashboard Multi-Sucursal', desc: 'Todas tus sucursales, un solo panel. KPIs consolidados en tiempo real.', color: 'text-blue-400' },
+              { icon: Award, title: 'Programa de Lealtad', desc: 'Niveles, Bunz y gamificación. Tus clientes vuelven porque les encanta.', color: 'text-purple-400' },
+              { icon: Gift, title: 'Referidos Inteligentes', desc: 'Tus clientes traen más clientes. Tracking completo y recompensas automáticas.', color: 'text-rose-400' },
+              { icon: Megaphone, title: 'Campañas Segmentadas', desc: 'Segmenta por comportamiento (VIP, recurrente, riesgo de fuga) y envía notificaciones.', color: 'text-orange-400' },
+              { icon: Cake, title: 'Cumpleaños Automáticos', desc: 'Recompensas de cumpleaños automáticas. Tus clientes se sienten especiales.', color: 'text-pink-400' },
+              { icon: QrCode, title: 'Pagos QR en Mesa', desc: 'Paga, divide cuenta y agrega propina desde el celular. Sin apps ni fichas.', color: 'text-cyan-400' },
+              { icon: BookOpen, title: 'Academy Integrada', desc: 'Centro de aprendizaje con guías interactivas para cada funcionalidad del sistema.', color: 'text-indigo-400' },
+            ].map((f, i) => (
+              <div key={i} className="group rounded-3xl border border-white/5 bg-white/[0.03] p-6 backdrop-blur-sm hover:border-white/10 hover:bg-white/[0.06] transition-all duration-500">
+                <div className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 ${f.color} mb-4 group-hover:scale-110 transition-transform`}>
+                  <f.icon size={24} />
+                </div>
+                <h3 className="text-lg font-bold text-white mb-2">{f.title}</h3>
+                <p className="text-sm text-white/50 leading-relaxed">{f.desc}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="text-center mt-12">
+            <a href={process.env.NEXT_PUBLIC_ADMIN_URL || "https://admin.rabbitty.me"} target="_blank" className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-gradient-to-r from-pink-600 to-blue-600 hover:from-pink-500 hover:to-blue-500 text-white font-bold text-lg transition-all shadow-[0_0_30px_rgba(233,30,99,0.2)]">
+              Explorar Funcionalidades <ArrowRight size={20} />
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* NAV SECTION: BUNZ ECONOMY */}
+      <section id="bunz" className="relative z-10 py-32 px-6">
+        <div className="max-w-5xl mx-auto text-center">
+          <div className="text-yellow-400 font-bold tracking-widest text-sm uppercase mb-3">Bunz Economy</div>
+          <h2 className="text-4xl md:text-5xl font-black tracking-tight leading-tight mb-6">
+            La moneda que <span className="text-gradient">une</span> tu comunidad.
+          </h2>
+          <p className="text-xl text-white/60 max-w-3xl mx-auto mb-12 leading-relaxed">
+            Cada bunz es una recompensa. Cada recompensa es un cliente feliz que vuelve. 
+            Un ecosistema completo donde consumidores ganan, negocios crecen y la economía local se fortalece.
+          </p>
+          <div className="grid sm:grid-cols-3 gap-8 max-w-3xl mx-auto">
+            {[
+              { value: '10%', label: 'Recompensa en Bunz por compra' },
+              { value: 'x3', label: 'Multiplicador máximo por nivel' },
+              { value: '$0.01', label: 'Valor fijo por Bunz (MXN)' },
+            ].map((s, i) => (
+              <div key={i} className="p-6 rounded-2xl bg-white/5 border border-white/5">
+                <p className="text-3xl font-black text-yellow-400 mb-1">{s.value}</p>
+                <p className="text-sm text-white/50">{s.label}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
