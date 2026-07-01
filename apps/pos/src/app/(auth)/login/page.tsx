@@ -1,6 +1,6 @@
 "use client";
 
-import { signIn } from "@rabbitty/auth";
+import { signIn } from "@rabbitty/auth/client";
 import { useState } from "react";
 import { Mail } from "lucide-react";
 

@@ -3,9 +3,9 @@ import { getRestaurantDb } from "@rabbitty/api/db";
 import { branches, menuCategories, menuItems } from "@rabbitty/database-restaurant";
 import { eq, and } from "drizzle-orm";
 
-export async function GET(request: NextRequest, { params }: { params: { branchId: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ branchId: string }> }) {
   try {
-    const branchId = params.branchId;
+    const { branchId } = await params;
     const db = getRestaurantDb();
 
     const [branch] = await db.select().from(branches).where(eq(branches.id, branchId));

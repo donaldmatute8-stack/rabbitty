@@ -2,11 +2,11 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "sh -c 'APP=${RAILWAY_SERVICE_NAME#rabbitty-} && pnpm install --no-frozen-lockfile && node_modules/.bin/turbo run build --filter=@rabbitty/$APP'",
-    "watchPatterns": ["*", "apps/**", "packages/**"]
+    "buildCommand": "sh -c 'APP=${RAILWAY_SERVICE_NAME#rabbitty-} && case \"$APP\" in bot) cd rabbit-bot && npm install ;; oracle) cd backend-oracle && npm install ;; *) pnpm install --no-frozen-lockfile && node_modules/.bin/turbo run build --filter=@rabbitty/$APP ;; esac'",
+    "watchPatterns": ["*", "apps/**", "packages/**", "rabbit-bot/**", "backend-oracle/**"]
   },
   "deploy": {
-    "startCommand": "sh -c 'APP=${RAILWAY_SERVICE_NAME#rabbitty-} && cd apps/$APP && npx next start'",
+    "startCommand": "sh -c 'APP=${RAILWAY_SERVICE_NAME#rabbitty-} && case \"$APP\" in bot) node rabbit-bot/dm-server.js ;; oracle) node backend-oracle/server.js ;; *) cd apps/$APP && npx next start ;; esac'",
     "restartPolicyType": "ON_FAILURE"
   }
 }

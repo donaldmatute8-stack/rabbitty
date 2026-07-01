@@ -3,8 +3,6 @@ import Resend from "next-auth/providers/resend";
 import Credentials from "next-auth/providers/credentials";
 import crypto from "crypto";
 import { createHash } from "crypto";
-import pg from "pg";
-const { Pool } = pg;
 
 const tokens = new Map<string, { token: string; expires: Date }>();
 const users = new Map<string, { id: string; email: string; emailVerified: Date | null }>();
@@ -121,6 +119,8 @@ const authResult = NextAuth({
         if (!coreDbUrl) return null;
 
         try {
+          const { default: pg } = await import("pg");
+          const { Pool } = pg;
           const pool = new Pool({ connectionString: coreDbUrl });
           const jwtToken = createHash("sha256").update(credentials.token as string).digest("hex");
 

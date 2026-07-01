@@ -7,6 +7,34 @@ import { ArrowRight, Store, UserCircle2, Zap, Shield, Smartphone, QrCode, X, Clo
 export default function LandingPage() {
   const [showSmartContractModal, setShowSmartContractModal] = useState(false);
   const [showWhitepaperModal, setShowWhitepaperModal] = useState(false);
+  const [showApplyForm, setShowApplyForm] = useState(false);
+  const [formStep, setFormStep] = useState(0);
+  const [formData, setFormData] = useState({
+    negocio: '', tipo: '', nombre: '', telefono: '', email: '', ubicacion: '', como_supo: '', mensaje: ''
+  });
+  const [formSubmitted, setFormSubmitted] = useState(false);
+
+  const handleFormChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleFormSubmit = async () => {
+    try {
+      await fetch('/api/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+    } catch {}
+    setFormSubmitted(true);
+  };
+
+  const resetForm = () => {
+    setFormStep(0);
+    setFormData({ negocio: '', tipo: '', nombre: '', telefono: '', email: '', ubicacion: '', como_supo: '', mensaje: '' });
+    setFormSubmitted(false);
+    setShowApplyForm(false);
+  };
 
   // Typewriter effect state
   const businessTypes = ['restaurante', 'cafetería', 'barbería', 'gimnasio', 'tienda'];
@@ -111,7 +139,7 @@ export default function LandingPage() {
           <a href="#bunz" className="hover:text-white transition-colors">Economía</a>
         </nav>
         <div className="flex items-center gap-4">
-          <a href={process.env.NEXT_PUBLIC_ADMIN_URL || "https://admin.rabbitty.me"} target="_blank" className="hidden md:block text-sm font-bold text-blue-400 hover:text-blue-300 transition-colors">
+          <a href="https://admin.rabbitty.me/login" target="_blank" className="hidden md:block text-sm font-bold text-blue-400 hover:text-blue-300 transition-colors">
             Portal de Negocios
           </a>
           <a href="https://t.me/Rabbittyme_bot/app" target="_blank" className="bg-white text-black px-5 py-2.5 rounded-full font-bold text-sm hover:scale-105 transition-transform">
@@ -261,9 +289,6 @@ export default function LandingPage() {
               <a href="https://t.me/rabbittyhub/10" target="_blank" className="inline-block px-8 py-4 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-lg text-center transition-all shadow-[0_0_20px_rgba(37,99,235,0.4)]">
                 Reservar Deploy Demo
               </a>
-              <a href={process.env.NEXT_PUBLIC_ADMIN_URL || "https://admin.rabbitty.me"} target="_blank" className="inline-block px-8 py-4 rounded-full border border-blue-500/30 hover:bg-blue-500/10 text-blue-400 font-bold text-lg text-center transition-all">
-                Ingresar al Portal
-              </a>
             </div>
           </div>
           
@@ -341,9 +366,9 @@ export default function LandingPage() {
           </div>
 
           <div className="text-center mt-12">
-            <a href={process.env.NEXT_PUBLIC_ADMIN_URL || "https://admin.rabbitty.me"} target="_blank" className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-gradient-to-r from-pink-600 to-blue-600 hover:from-pink-500 hover:to-blue-500 text-white font-bold text-lg transition-all shadow-[0_0_30px_rgba(233,30,99,0.2)]">
-              Explorar Funcionalidades <ArrowRight size={20} />
-            </a>
+            <button onClick={() => { setShowApplyForm(true); setFormStep(0); }} className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-gradient-to-r from-pink-600 to-blue-600 hover:from-pink-500 hover:to-blue-500 text-white font-bold text-lg transition-all shadow-[0_0_30px_rgba(233,30,99,0.2)] cursor-pointer">
+              Solicitar Acceso <ArrowRight size={20} />
+            </button>
           </div>
         </div>
       </section>
@@ -398,6 +423,129 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+
+      {/* APPLY FORM MODAL (Typeform-style) */}
+      {showApplyForm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-md p-4" onClick={(e) => { if (e.target === e.currentTarget) resetForm(); }}>
+          <div className="bg-[#0D0D1A] border border-white/10 rounded-3xl w-full max-w-lg relative overflow-hidden shadow-[0_0_60px_rgba(233,30,99,0.15)]">
+            {/* Progress bar */}
+            <div className="h-1 bg-white/5">
+              <div className="h-full bg-gradient-to-r from-pink-600 to-blue-600 transition-all duration-500" style={{ width: `${((formStep + 1) / 5) * 100}%` }} />
+            </div>
+            <button onClick={resetForm} className="absolute top-4 right-4 text-white/50 hover:text-white z-10">
+              <X size={24} />
+            </button>
+
+            {!formSubmitted ? (
+              <div className="p-8">
+                {/* Step indicator */}
+                <div className="text-xs font-bold text-white/30 mb-2 tracking-widest uppercase">Paso {formStep + 1} de 5</div>
+
+                {/* Step 1: Business name */}
+                {formStep === 0 && (
+                  <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
+                    <h3 className="text-2xl font-black">¿Cómo se llama tu negocio?</h3>
+                    <p className="text-white/50">Cuéntanos el nombre de tu establecimiento para empezar.</p>
+                    <input
+                      type="text" placeholder="Ej: Taquería El Compa"
+                      value={formData.negocio} onChange={(e) => handleFormChange('negocio', e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-lg font-medium text-white placeholder:text-white/20 focus:outline-none focus:border-pink-500/50 focus:bg-white/[0.07] transition-all"
+                      autoFocus onKeyDown={(e) => e.key === 'Enter' && formData.negocio && setFormStep(1)} />
+                    <div className="flex justify-end">
+                      <button onClick={() => formData.negocio && setFormStep(1)} disabled={!formData.negocio}
+                        className="px-8 py-3 rounded-full bg-gradient-to-r from-pink-600 to-blue-600 text-white font-bold disabled:opacity-30 transition-all cursor-pointer">
+                        Siguiente <ArrowRight size={18} className="inline ml-1" />
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Step 2: Business type */}
+                {formStep === 1 && (
+                  <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
+                    <h3 className="text-2xl font-black">¿Qué tipo de negocio eres?</h3>
+                    <p className="text-white/50">Selecciona la categoría que mejor describa tu negocio.</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {['Restaurante', 'Cafetería', 'Barbería', 'Gimnasio', 'Tienda', 'Bar/Club', 'Salón de Belleza', 'Otro'].map((t) => (
+                        <button key={t} onClick={() => { handleFormChange('tipo', t); setFormStep(2); }}
+                          className={`p-4 rounded-2xl border text-left font-bold transition-all cursor-pointer ${formData.tipo === t ? 'border-pink-500 bg-pink-500/10 text-pink-400' : 'border-white/10 bg-white/5 text-white/70 hover:bg-white/[0.08]'}`}>
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Step 3: Contact info */}
+                {formStep === 2 && (
+                  <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5">
+                    <h3 className="text-2xl font-black">Tus datos de contacto</h3>
+                    <p className="text-white/50">Para que podamos comunicarnos contigo.</p>
+                    <input type="text" placeholder="Tu nombre completo" value={formData.nombre} onChange={(e) => handleFormChange('nombre', e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-lg font-medium text-white placeholder:text-white/20 focus:outline-none focus:border-pink-500/50 transition-all" />
+                    <input type="tel" placeholder="WhatsApp / Teléfono" value={formData.telefono} onChange={(e) => handleFormChange('telefono', e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-lg font-medium text-white placeholder:text-white/20 focus:outline-none focus:border-pink-500/50 transition-all" />
+                    <input type="email" placeholder="Correo electrónico" value={formData.email} onChange={(e) => handleFormChange('email', e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-lg font-medium text-white placeholder:text-white/20 focus:outline-none focus:border-pink-500/50 transition-all" />
+                    <div className="flex justify-between">
+                      <button onClick={() => setFormStep(1)} className="text-white/50 hover:text-white font-bold transition-all cursor-pointer">← Atrás</button>
+                      <button onClick={() => (formData.nombre || formData.telefono) && setFormStep(3)} disabled={!formData.nombre && !formData.telefono}
+                        className="px-8 py-3 rounded-full bg-gradient-to-r from-pink-600 to-blue-600 text-white font-bold disabled:opacity-30 transition-all cursor-pointer">
+                        Siguiente <ArrowRight size={18} className="inline ml-1" />
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Step 4: Location */}
+                {formStep === 3 && (
+                  <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
+                    <h3 className="text-2xl font-black">¿Dónde estás ubicado?</h3>
+                    <p className="text-white/50">Ciudad, estado o colonia donde operas.</p>
+                    <input type="text" placeholder="Ej: Guadalajara, Jalisco" value={formData.ubicacion} onChange={(e) => handleFormChange('ubicacion', e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-lg font-medium text-white placeholder:text-white/20 focus:outline-none focus:border-pink-500/50 transition-all"
+                      autoFocus onKeyDown={(e) => e.key === 'Enter' && setFormStep(4)} />
+                    <div className="flex justify-between">
+                      <button onClick={() => setFormStep(2)} className="text-white/50 hover:text-white font-bold transition-all cursor-pointer">← Atrás</button>
+                      <button onClick={() => setFormStep(4)} className="px-8 py-3 rounded-full bg-gradient-to-r from-pink-600 to-blue-600 text-white font-bold transition-all cursor-pointer">
+                        Siguiente <ArrowRight size={18} className="inline ml-1" />
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Step 5: Final details */}
+                {formStep === 4 && (
+                  <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5">
+                    <h3 className="text-2xl font-black">Casi listo 🎉</h3>
+                    <p className="text-white/50">¿Cómo te enteraste de Rabbitty? ¿Algo más que quieras agregar?</p>
+                    <input type="text" placeholder="¿Cómo nos conociste?" value={formData.como_supo} onChange={(e) => handleFormChange('como_supo', e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-lg font-medium text-white placeholder:text-white/20 focus:outline-none focus:border-pink-500/50 transition-all" />
+                    <textarea placeholder="Mensaje o comentario adicional..." value={formData.mensaje} onChange={(e) => handleFormChange('mensaje', e.target.value)} rows={3}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-lg font-medium text-white placeholder:text-white/20 focus:outline-none focus:border-pink-500/50 transition-all resize-none" />
+                    <div className="flex justify-between">
+                      <button onClick={() => setFormStep(3)} className="text-white/50 hover:text-white font-bold transition-all cursor-pointer">← Atrás</button>
+                      <button onClick={handleFormSubmit} disabled={!formData.negocio}
+                        className="px-8 py-3 rounded-full bg-gradient-to-r from-green-500 to-blue-600 text-white font-bold hover:scale-105 transition-all cursor-pointer disabled:opacity-30">
+                        Enviar Solicitud 🚀
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            ) : (
+              <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="p-8 text-center space-y-6">
+                <div className="text-6xl">🎉</div>
+                <h3 className="text-3xl font-black">¡Solicitud Enviada!</h3>
+                <p className="text-white/50 text-lg">Gracias por tu interés en Rabbitty. Nuestro equipo se pondrá en contacto contigo pronto para coordinar los siguientes pasos.</p>
+                <button onClick={resetForm} className="px-8 py-3 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold transition-all cursor-pointer">
+                  Cerrar
+                </button>
+              </motion.div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* MODALS */}
       {showSmartContractModal && (
