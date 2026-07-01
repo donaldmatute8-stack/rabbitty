@@ -6,8 +6,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 export default async function WhitepaperPage() {
-  const tokenomicsPath = path.join(process.cwd(), '../TOKENOMICS-PUBLIC.md');
-  const businessPlanPath = path.join(process.cwd(), '../WHITEPAPER-PUBLIC.md');
+  const tokenomicsPath = path.join(process.cwd(), '../DOCS/TOKENOMICS-PUBLIC.md');
+  const businessPlanPath = path.join(process.cwd(), '../DOCS/WHITEPAPER-PUBLIC.md');
   
   let tokenomicsContent = '';
   let businessPlanContent = '';
