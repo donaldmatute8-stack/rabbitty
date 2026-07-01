@@ -3,12 +3,14 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import { HelpCircle } from 'lucide-react';
 import { useWallet } from '@/contexts/WalletContext';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useToast } from '@/contexts/ToastContext';
 import BottomNav from '@/components/BottomNav';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import AdminPanel from '@/features/admin/AdminPanel';
+import BunzGuide from '@/features/business/BunzGuide';
 
 const MENU_ITEMS = [
   { icon: "💳", label: "Mi Billetera", badge: null, href: '/profile/wallet' },
@@ -35,6 +37,7 @@ export default function ProfilePage() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [tapCount, setTapCount] = useState(0);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showBunzGuide, setShowBunzGuide] = useState(false);
   const [nextLevelHops, setNextLevelHops] = useState(500);
   const [levelGradient, setLevelGradient] = useState(DEFAULT_GRADIENT);
   const [levelName, setLevelName] = useState('1');
@@ -224,6 +227,15 @@ export default function ProfilePage() {
               <p className="text-[11px] text-[#888] m-0">Afíliate y otorga bunz</p>
             </Link>
           )}
+          <button onClick={() => setShowBunzGuide(true)} className="w-full flex items-center gap-2 bg-[#111] rounded-[14px] px-4 py-3 mb-2.5 cursor-pointer active:scale-[0.98] transition-transform border-none text-left">
+            <HelpCircle size={16} color="rgba(255,255,255,0.4)" />
+            <div>
+              <p className="text-[13px] font-bold text-white mb-0.5">¿Cómo funciona la economía Bunz?</p>
+              <p className="text-[11px] text-[#888] m-0">Guía para negocios afiliados</p>
+            </div>
+          </button>
+
+          {showBunzGuide && <BunzGuide onClose={() => setShowBunzGuide(false)} />}
 
           <div className="flex gap-2.5 w-full mb-2.5">
             <Link href="/profile/gamification" style={{ background: "linear-gradient(135deg, #2A2D34 0%, #111 100%)" }} className="flex-1 rounded-[14px] py-4 flex flex-col items-center cursor-pointer gap-0.5 no-underline shadow-[0_4px_12px_rgba(0,0,0,0.1)] active:scale-[0.98] transition-transform">

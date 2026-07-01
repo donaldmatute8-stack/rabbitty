@@ -5,15 +5,30 @@ import { QRCodeSVG } from 'qrcode.react';
 
 interface MobileAffiliateDashboardProps {
   business: any;
+  telegramId?: string;
 }
 
-export default function MobileAffiliateDashboard({ business }: MobileAffiliateDashboardProps) {
+export default function MobileAffiliateDashboard({ business, telegramId }: MobileAffiliateDashboardProps) {
   const [rewardRate, setRewardRate] = useState(business?.rewardPercentage || 21);
+  const [savingRate, setSavingRate] = useState(false);
   const [reservations, setReservations] = useState<any[]>([]);
   const [loadingRes, setLoadingRes] = useState(true);
   const [txCount, setTxCount] = useState(0);
   const [totalBunz, setTotalBunz] = useState(0);
   const [clientCount, setClientCount] = useState(0);
+
+  const saveRewardRate = async () => {
+    if (!telegramId) return;
+    setSavingRate(true);
+    try {
+      await fetch('/api/business', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telegramId, rewardPercentage: rewardRate }),
+      });
+    } catch {}
+    setSavingRate(false);
+  };
 
   useEffect(() => {
     if (business?.ownerId) {
@@ -136,18 +151,39 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
             <div>
-              <p style={{ fontSize: 15, fontWeight: 700, color: "#111", marginBottom: 2, marginTop: 0 }}>Línea de crédito</p>
-              <p style={{ fontSize: 13, color: "#AAA", margin: 0 }}>$75,000 disponible</p>
+              <p style={{ fontSize: 15, fontWeight: 700, color: "#111", marginBottom: 2, marginTop: 0 }}>
+                {business?.package ? `${business.package}` : 'Crédito de Minting'}
+              </p>
+              <p style={{ fontSize: 13, color: "#AAA", margin: 0 }}>
+                {(business?.creditLimit || 0) > 0 
+                  ? `${((business.creditLimit - business.creditUsed) || 0).toLocaleString()} Bunz disponibles`
+                  : 'Sin límite configurado'}
+              </p>
             </div>
-            <p style={{ fontSize: 18, fontWeight: 800, color: "#111", margin: 0 }}>$100,000</p>
+            <div style={{ textAlign: 'right' }}>
+              <p style={{ fontSize: 18, fontWeight: 800, color: "#E91E63", margin: 0 }}>
+                {(business?.creditLimit || 0) > 0 
+                  ? `${((business.creditLimit - business.creditUsed) || 0).toLocaleString()} B`
+                  : '∞'}
+              </p>
+              {(business?.creditLimit || 0) > 0 && (
+                <p style={{ fontSize: 10, color: "#AAA", margin: 0 }}>de {business.creditLimit.toLocaleString()} B</p>
+              )}
+            </div>
           </div>
-          <div style={{ height: 6, backgroundColor: "#F0F0F0", borderRadius: 100, overflow: "hidden" }}>
-            <motion.div 
-              initial={{ width: 0 }} animate={{ width: "25%" }} transition={{ duration: 1, delay: 0.3 }}
-              style={{ height: "100%", backgroundColor: "#E91E63", borderRadius: 100 }} 
-            />
-          </div>
-          <p style={{ fontSize: 11, color: "#AAA", marginTop: 6, marginBottom: 0 }}>25% usado</p>
+          {(business?.creditLimit || 0) > 0 && (
+            <>
+              <div style={{ height: 6, backgroundColor: "#F0F0F0", borderRadius: 100, overflow: "hidden" }}>
+                <motion.div 
+                  initial={{ width: 0 }} animate={{ width: `${Math.min(100, ((business.creditUsed || 0) / business.creditLimit) * 100)}%` }} transition={{ duration: 1, delay: 0.3 }}
+                  style={{ height: "100%", backgroundColor: "#E91E63", borderRadius: 100 }} 
+                />
+              </div>
+              <p style={{ fontSize: 11, color: "#AAA", marginTop: 6, marginBottom: 0 }}>
+                {Math.round((business.creditUsed / business.creditLimit) * 100)}% usado
+              </p>
+            </>
+          )}
         </motion.div>
 
         <motion.div 
@@ -169,7 +205,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
           </div>
           
           <input
-            type="range" min="10" max="100" value={rewardRate} onChange={(e) => setRewardRate(Number(e.target.value))}
+            type="range" min="2" max="50" value={rewardRate} onChange={(e) => setRewardRate(Number(e.target.value))}
             style={{
               width: '100%', marginTop: 16, appearance: 'none', background: '#F0F0F0', height: 2, borderRadius: 1, outline: 'none'
             }}
@@ -178,6 +214,17 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
             <span style={{ fontSize: 11, color: "#CCC" }}>2% Mínimo</span>
             <span style={{ fontSize: 11, color: "#CCC" }}>50% Máximo</span>
           </div>
+          <button
+            onClick={saveRewardRate}
+            disabled={savingRate}
+            style={{
+              marginTop: 12, width: '100%', padding: '10px', borderRadius: 10,
+              backgroundColor: savingRate ? '#CCC' : '#E91E63', color: '#fff',
+              border: 'none', fontWeight: 700, cursor: savingRate ? 'default' : 'pointer', fontSize: 13
+            }}
+          >
+            {savingRate ? 'Guardando...' : 'Guardar tasa'}
+          </button>
         </motion.div>
 
         <motion.div 

@@ -72,5 +72,5 @@ export default function BusinessPage() {
   }
 
   // Flow 2: Active Business Dashboard (Airbnb-Style Mobile View)
-  return <MobileAffiliateDashboard business={business} />;
+  return <MobileAffiliateDashboard business={business} telegramId={user?.telegramId || ''} />;
 }

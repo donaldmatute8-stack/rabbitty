@@ -62,6 +62,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "El monto es muy bajo para generar una recompensa en Bunz." }, { status: 400 });
     }
 
+    // Check credit limit
+    if (business.creditLimit > 0 && (business.creditUsed + bunzReward) > business.creditLimit) {
+      return NextResponse.json({
+        error: `El negocio ha alcanzado su límite de crédito de minting (${business.creditLimit.toLocaleString()} Bunz). Contacta a soporte para aumentarlo.`
+      }, { status: 400 });
+    }
+
     // Determine if it's a new business for the user
     const previousTransaction = await db.query.transactions.findFirst({
       where: and(eq(transactions.userId, customer.id), eq(transactions.businessId, business.id))
@@ -81,6 +88,13 @@ export async function POST(req: NextRequest) {
     await db.update(users)
       .set({ totalBunzEarned: sql`COALESCE(${users.totalBunzEarned}, 0) + ${bunzReward}` })
       .where(eq(users.id, customer.id));
+
+    // Deduct from business credit limit
+    if (business.creditLimit > 0) {
+      await db.update(ownedBusinesses)
+        .set({ creditUsed: sql`${ownedBusinesses.creditUsed} + ${bunzReward}` })
+        .where(eq(ownedBusinesses.id, business.id));
+    }
 
     // Trigger referral and notifications (EARN event)
     await processReferralAndNotifications(customer.id, 'EARN');

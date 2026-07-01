@@ -2,17 +2,25 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Store, MapPin, Percent, UploadCloud, ChevronRight, CheckCircle, ChevronLeft } from 'lucide-react';
+import { Store, MapPin, Percent, UploadCloud, ChevronRight, CheckCircle, ChevronLeft, HelpCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import BunzGuide from './BunzGuide';
 
 interface BusinessSetupFormProps {
   onSubmit: (data: any) => void;
   isLoading?: boolean;
 }
 
+const PACKAGES = [
+  { id: 'Starter', credit: 10000, label: 'Starter', price: '$10,000', desc: 'Para negocios pequeños y cafés', icon: '☕', color: '#3B82F6' },
+  { id: 'Growth', credit: 20000, label: 'Growth', price: '$20,000', desc: 'Para restaurantes medianos', icon: '🍽️', color: '#8B5CF6' },
+  { id: 'Pro', credit: 50000, label: 'Pro', price: '$50,000', desc: 'Para cadenas y gimnasios', icon: '🏪', color: '#F59E0B' },
+  { id: 'Enterprise', credit: 100000, label: 'Enterprise', price: '$100,000', desc: 'Para grandes retailers', icon: '🏢', color: '#E91E63' },
+];
+
 export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetupFormProps) {
   const router = useRouter();
-  const [step, setStep] = useState(0); // 0 = Welcome, 1 = Basic Info, 2 = Rewards & Gallery, 3 = Confirm
+  const [step, setStep] = useState(0); // 0 = Welcome, 1 = Basic Info, 2 = Rewards, 3 = Package, 4 = Confirm
   const [error, setError] = useState('');
 
   // Step 1
@@ -24,7 +32,12 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
   const [rewardPercentage, setRewardPercentage] = useState(15);
   const [logoBase64, setLogoBase64] = useState('');
 
-  const THEME_COLOR = "#E91E63"; // Pink for brand identity
+  // Step 3
+  const [selectedPackage, setSelectedPackage] = useState('');
+
+  const [showBunzGuide, setShowBunzGuide] = useState(false);
+
+  const THEME_COLOR = "#E91E63";
   const THEME_GRADIENT = "linear-gradient(135deg, #E91E63 0%, #D81B60 100%)";
 
   // Step 1 additions
@@ -81,11 +94,15 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
       setError("La recompensa mínima es 2%.");
       return;
     }
+    if (step === 3) {
+      // Package is optional, no validation needed
+    }
     setError('');
     setStep(s => s + 1);
   };
 
   const handleSubmit = () => {
+    const pkg = PACKAGES.find(p => p.id === selectedPackage);
     onSubmit({
       name,
       category,
@@ -95,7 +112,9 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
       description: "Negocio afiliado de Rabbitty.",
       activeDays: [1,2,3,4,5,6,7],
       startTime: "09:00",
-      endTime: "21:00"
+      endTime: "21:00",
+      package: selectedPackage || null,
+      creditLimit: pkg?.credit || 0,
     });
   };
 
@@ -109,7 +128,7 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
             <ChevronLeft size={20} />
           </button>
           <div style={{ display: 'flex', gap: 6 }}>
-            {[1, 2, 3].map(i => (
+            {[1, 2, 3, 4].map(i => (
               <div key={i} style={{ width: i === step ? 20 : 8, height: 8, borderRadius: 4, background: i === step ? THEME_COLOR : 'rgba(255,255,255,0.2)', transition: 'all 0.3s' }} />
             ))}
           </div>
@@ -127,6 +146,13 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
                 style={{ position: 'absolute', top: 'calc(max(var(--safe-top, 0px), 50px) + 48px)', left: 0, background: 'rgba(255,255,255,0.1)', border: 'none', width: 40, height: 40, borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
               >
                 <ChevronLeft size={20} />
+              </button>
+
+              <button
+                onClick={() => setShowBunzGuide(true)}
+                style={{ position: 'absolute', top: 'calc(max(var(--safe-top, 0px), 50px) + 48px)', right: 0, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', padding: '6px 14px', borderRadius: 999, color: 'rgba(255,255,255,0.6)', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
+              >
+                <HelpCircle size={14} /> ¿Cómo funciona?
               </button>
               
               <div style={{ width: 100, height: 100, background: 'rgba(233,30,99,0.1)', borderRadius: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 32px', border: '1px solid rgba(233,30,99,0.3)' }}>
@@ -267,7 +293,77 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
           )}
 
           {step === 3 && (
-            <motion.div key="step3" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} style={{ textAlign: 'center', paddingTop: 40 }}>
+            <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+              <h2 style={{ fontSize: 28, fontWeight: 900, marginBottom: 8 }}>Elige tu Paquete</h2>
+              <p style={{ color: 'rgba(255,255,255,0.5)', marginBottom: 32 }}>Define el crédito de minting para tu negocio.</p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <button
+                  onClick={() => setSelectedPackage('')}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 16,
+                    padding: '16px 20px', borderRadius: 16, cursor: 'pointer',
+                    background: !selectedPackage ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)',
+                    border: !selectedPackage ? '2px solid rgba(255,255,255,0.3)' : '1px solid rgba(255,255,255,0.08)',
+                    transition: 'all 0.2s', textAlign: 'left', opacity: !selectedPackage ? 1 : 0.5,
+                  }}
+                >
+                  <span style={{ fontSize: 28, opacity: 0.6 }}>🚫</span>
+                  <div style={{ flex: 1 }}>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: !selectedPackage ? '#fff' : 'rgba(255,255,255,0.5)' }}>
+                      Sin paquete (Recomendado)
+                    </span>
+                    <p style={{ margin: '2px 0 0', fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
+                      Crédito de minting sin límite
+                    </p>
+                  </div>
+                </button>
+
+                {PACKAGES.map(pkg => {
+                  const selected = selectedPackage === pkg.id;
+                  return (
+                    <button
+                      key={pkg.id}
+                      onClick={() => setSelectedPackage(pkg.id)}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: 16,
+                        padding: '16px 20px', borderRadius: 16, cursor: 'pointer',
+                        background: selected ? `${pkg.color}20` : 'rgba(255,255,255,0.05)',
+                        border: selected ? `2px solid ${pkg.color}` : '1px solid rgba(255,255,255,0.1)',
+                        transition: 'all 0.2s', textAlign: 'left',
+                      }}
+                    >
+                      <span style={{ fontSize: 32 }}>{pkg.icon}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>{pkg.label}</span>
+                          <span style={{ fontSize: 18, fontWeight: 900, color: pkg.color }}>{pkg.price}</span>
+                        </div>
+                        <p style={{ margin: '4px 0 0', fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>{pkg.desc}</p>
+                        <p style={{ margin: '2px 0 0', fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>Crédito: {pkg.credit.toLocaleString()} Bunz</p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div style={{ marginTop: 20, padding: '14px 18px', background: 'rgba(233,30,99,0.08)', borderRadius: 12, border: '1px solid rgba(233,30,99,0.15)' }}>
+                <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.6)', lineHeight: 1.5 }}>
+                  💡 El crédito de minting define el límite de Bunz que puedes regalar a tus clientes. 
+                  A mayor paquete, más recompensas puedes ofrecer sin costo adicional.
+                </p>
+              </div>
+
+              {error && <p style={{ color: '#ef4444', fontSize: 14, marginTop: 16 }}>{error}</p>}
+
+              <button onClick={nextStep} style={{ width: '100%', padding: '16px', background: selectedPackage ? THEME_GRADIENT : 'rgba(255,255,255,0.1)', color: selectedPackage ? '#fff' : 'rgba(255,255,255,0.3)', border: 'none', borderRadius: 999, fontSize: 16, fontWeight: 900, marginTop: 24 }}>
+                Continuar
+              </button>
+            </motion.div>
+          )}
+
+          {step === 4 && (
+            <motion.div key="step4" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} style={{ textAlign: 'center', paddingTop: 40 }}>
               <div style={{ width: 80, height: 80, background: 'rgba(16,185,129,0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
                 <CheckCircle size={40} color="#10B981" />
               </div>
@@ -278,7 +374,8 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
 
               <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 24, padding: 20, textAlign: 'left', marginBottom: 40 }}>
                 <p style={{ margin: '0 0 8px 0', fontSize: 18, fontWeight: 800, color: '#fff' }}>{name}</p>
-                <p style={{ margin: '0 0 16px 0', fontSize: 14, color: THEME_COLOR, fontWeight: 700 }}>{category}</p>
+                <p style={{ margin: '0 0 4px 0', fontSize: 14, color: THEME_COLOR, fontWeight: 700 }}>{category}</p>
+                <p style={{ margin: '0 0 16px 0', fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>Paquete: <strong style={{ color: '#fff' }}>{selectedPackage}</strong></p>
                 <div style={{ display: 'flex', gap: 12, marginBottom: 8 }}>
                   <MapPin size={16} color="rgba(255,255,255,0.4)" />
                   <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>{address}</span>
@@ -299,6 +396,8 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
           )}
         </AnimatePresence>
       </div>
+
+      {showBunzGuide && <BunzGuide onClose={() => setShowBunzGuide(false)} />}
     </div>
   );
 }

@@ -27,6 +27,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Business not found' }, { status: 404 });
     }
 
+    // Check credit limit
+    if (business.creditLimit > 0 && (business.creditUsed + bunzAmount) > business.creditLimit) {
+      return NextResponse.json({
+        error: `El negocio ha alcanzado su límite de crédito de minting (${business.creditLimit.toLocaleString()} Bunz). Contacta a soporte para aumentarlo.`
+      }, { status: 400 });
+    }
+
+    // Deduct from credit
+    await db.update(ownedBusinesses)
+      .set({ creditUsed: sql`${ownedBusinesses.creditUsed} + ${bunzAmount}` })
+      .where(eq(ownedBusinesses.id, business.id));
+
     // Add to pending debt + award Bunz immediately (credit flow)
     const [updatedUser] = await db
       .update(users)
