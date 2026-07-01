@@ -66,6 +66,9 @@ export const ownedBusinesses = pgTable("ownedBusinesses", {
   gallery: text("gallery").default("[]").notNull(),
   rewardPercentage: integer("rewardPercentage").default(10).notNull(),
   rarity: text("rarity").default("common").notNull(),
+  package: text("package"), // Starter, Growth, Pro, Enterprise
+  creditLimit: integer("creditLimit").default(0).notNull(), // Máximo de Bunz que puede mintear
+  creditUsed: integer("creditUsed").default(0).notNull(),   // Bunz ya minteados
   givesBunz: boolean("givesBunz").default(true).notNull(),
   acceptsBunz: boolean("acceptsBunz").default(false).notNull(),
   bunzBalance: integer("bunzBalance").default(0).notNull(), // Inventario de Bunz del restaurante
@@ -225,6 +228,22 @@ export const passkeys = pgTable("passkeys", {
   counter: integer("counter").default(0).notNull(),
   transports: text("transports").default("[]").notNull(),
   deviceName: text("deviceName"),
+  createdAt: timestamp("createdAt").defaultNow(),
+});
+
+export const systemSettings = pgTable("systemSettings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow(),
+});
+
+export const treasury = pgTable("treasury", {
+  id: id(),
+  concept: text("concept").notNull(),
+  amount: integer("amount").notNull(),
+  type: text("type").notNull(), // 'fee', 'package_sale', 'transfer', etc.
+  referenceId: text("referenceId"), // business ID, transaction ID
+  notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow(),
 });
 

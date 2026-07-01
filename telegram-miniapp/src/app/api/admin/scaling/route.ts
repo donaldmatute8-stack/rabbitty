@@ -4,6 +4,7 @@ import { Pool } from "pg";
 import { sql } from "drizzle-orm";
 import * as coreSchema from "@rabbitty/database-core";
 
+const ADMIN_TELEGRAM_IDS = (process.env.ADMIN_TELEGRAM_IDS || '798431743').split(',');
 const TELEGRAM_ALERT_CHAT = process.env.SCALING_ALERT_CHAT_ID || "@mardelbull";
 
 const THRESHOLDS = {
@@ -41,9 +42,8 @@ async function sendTelegramAlert(metrics: { label: string; pct: number }[]) {
 }
 
 export async function GET(req: Request) {
-  const auth = req.headers.get("authorization");
-  const secret = process.env.ADMIN_API_SECRET;
-  if (!secret || auth !== `Bearer ${secret}`) {
+  const telegramId = req.headers.get('X-Telegram-Id');
+  if (!telegramId || !ADMIN_TELEGRAM_IDS.includes(telegramId)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 

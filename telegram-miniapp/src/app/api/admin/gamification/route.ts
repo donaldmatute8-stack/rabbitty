@@ -4,16 +4,13 @@ import { levels, hatTricks, users } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import crypto from 'crypto';
 
-// Verify Admin Middleware — usa ADMIN_API_SECRET (Bearer token) en vez de header spoofeable
-async function verifyAdmin(req: NextRequest) {
-  const auth = req.headers.get('authorization');
-  const secret = process.env.ADMIN_API_SECRET;
-  if (!secret) return false;
-  return auth === `Bearer ${secret}`;
-}
+const ADMIN_TELEGRAM_IDS = (process.env.ADMIN_TELEGRAM_IDS || '798431743').split(',');
 
 export async function GET(req: NextRequest) {
-  if (!(await verifyAdmin(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const telegramId = req.headers.get('X-Telegram-Id');
+  if (!telegramId || !ADMIN_TELEGRAM_IDS.includes(telegramId)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  }
 
   try {
     const allLevels = await db.query.levels.findMany({ orderBy: (levels, { asc }) => [asc(levels.requiredHops)] });
@@ -26,7 +23,10 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await verifyAdmin(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const telegramId = req.headers.get('X-Telegram-Id');
+  if (!telegramId || !ADMIN_TELEGRAM_IDS.includes(telegramId)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  }
 
   try {
     const body = await req.json();

@@ -15,6 +15,11 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
   const [showNewTrickForm, setShowNewTrickForm] = useState(false);
   const [newTrick, setNewTrick] = useState({ title: '', description: '', rewardHops: '100', rewardBunz: '50', conditionType: 'TOTAL_VISITS', conditionTarget: '1' });
 
+  // Settings state
+  const [freeRegistration, setFreeRegistration] = useState(true);
+  const [registrationFee, setRegistrationFee] = useState(5000);
+  const [loadingSettings, setLoadingSettings] = useState(true);
+
   useEffect(() => {
     fetch('/api/admin/gamification', {
       headers: { 'X-Telegram-Id': user?.telegramId || '' }
@@ -29,6 +34,21 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
       console.error(err);
       setLoading(false);
     });
+  }, [user]);
+
+  useEffect(() => {
+    fetch('/api/admin/settings', {
+      headers: { 'X-Telegram-Id': user?.telegramId || '' }
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.settings) {
+        setFreeRegistration(data.settings.free_registration !== 'false');
+        setRegistrationFee(parseInt(data.settings.registration_fee) || 5000);
+      }
+      setLoadingSettings(false);
+    })
+    .catch(() => setLoadingSettings(false));
   }, [user]);
 
   const handleCreateTrick = async () => {
@@ -101,6 +121,73 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
         <div style={{ backgroundColor: '#FAFAFA', borderRadius: 14, padding: 16, border: '1px solid #EAEAEA', marginBottom: 16 }}>
           <h3 style={{ fontSize: 15, fontWeight: 800, color: '#111', margin: '0 0 12px 0' }}>🏪 Aprobación de Negocios</h3>
           <BusinessApprovals />
+        </div>
+
+        {/* SECTION: SYSTEM SETTINGS */}
+        <div style={{ backgroundColor: '#FAFAFA', borderRadius: 14, padding: 16, border: '1px solid #EAEAEA', marginBottom: 16 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 800, color: '#111', margin: '0 0 12px 0' }}>⚙️ Configuración del Sistema</h3>
+          {loadingSettings ? (
+            <p style={{ fontSize: 12, color: '#888' }}>Cargando...</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 2px', color: '#333' }}>Registro gratuito</p>
+                  <p style={{ fontSize: 11, color: '#888', margin: 0 }}>
+                    {freeRegistration ? 'Negocios entran sin costo' : 'Se cobra cuota en Bunz'}
+                  </p>
+                </div>
+                <button
+                  onClick={async () => {
+                    const newVal = !freeRegistration;
+                    await fetch('/api/admin/settings', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', 'X-Telegram-Id': user?.telegramId || '' },
+                      body: JSON.stringify({ key: 'free_registration', value: String(newVal) }),
+                    });
+                    setFreeRegistration(newVal);
+                    showToast(`Registro ${newVal ? 'gratuito' : 'con cuota'} activado`, 'success');
+                  }}
+                  style={{
+                    padding: '6px 14px', borderRadius: 20, border: 'none', cursor: 'pointer',
+                    background: freeRegistration ? '#22C55E' : '#EF4444', color: '#fff',
+                    fontSize: 12, fontWeight: 800,
+                  }}
+                >
+                  {freeRegistration ? 'GRATIS' : 'CON CUOTA'}
+                </button>
+              </div>
+
+              {!freeRegistration && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 2px', color: '#333' }}>Cuota (Bunz)</p>
+                    <p style={{ fontSize: 11, color: '#888', margin: 0 }}>Valor actual: {registrationFee.toLocaleString()} Bunz</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input
+                      type="number" value={registrationFee}
+                      onChange={e => setRegistrationFee(Number(e.target.value))}
+                      style={{ width: 80, padding: '6px 8px', borderRadius: 6, border: '1px solid #CCC', fontSize: 12, textAlign: 'center' }}
+                    />
+                    <button
+                      onClick={async () => {
+                        await fetch('/api/admin/settings', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json', 'X-Telegram-Id': user?.telegramId || '' },
+                          body: JSON.stringify({ key: 'registration_fee', value: String(registrationFee) }),
+                        });
+                        showToast(`Cuota actualizada a ${registrationFee.toLocaleString()} Bunz`, 'success');
+                      }}
+                      style={{ padding: '6px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: '#111', color: '#fff', fontSize: 11, fontWeight: 700 }}
+                    >
+                      Guardar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* SECTION: GAMIFICATION */}

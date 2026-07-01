@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { motion, Variants } from 'framer-motion';
-import { ArrowRight, Store, UserCircle2, Zap, Shield, Smartphone, QrCode, X, Clock, Salad, Truck, Receipt, Bell, Building2, DollarSign, Monitor, Gift, Award, Megaphone, Cake, BookOpen } from 'lucide-react';
+import { ArrowRight, Store, UserCircle2, Zap, Shield, Smartphone, QrCode, X, Clock, Salad, Truck, Receipt, Bell, Building2, DollarSign, Monitor, Gift, Award, Megaphone, Cake, BookOpen, HelpCircle } from 'lucide-react';
+import BunzGuide from '@/components/BunzGuide';
 
 export default function LandingPage() {
   const [showSmartContractModal, setShowSmartContractModal] = useState(false);
   const [showWhitepaperModal, setShowWhitepaperModal] = useState(false);
+  const [showBunzGuide, setShowBunzGuide] = useState(false);
   const [showApplyForm, setShowApplyForm] = useState(false);
   const [formStep, setFormStep] = useState(0);
   const [formData, setFormData] = useState({
@@ -369,6 +371,11 @@ export default function LandingPage() {
             <button onClick={() => { setShowApplyForm(true); setFormStep(0); }} className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-gradient-to-r from-pink-600 to-blue-600 hover:from-pink-500 hover:to-blue-500 text-white font-bold text-lg transition-all shadow-[0_0_30px_rgba(233,30,99,0.2)] cursor-pointer">
               Solicitar Acceso <ArrowRight size={20} />
             </button>
+            <div className="mt-4">
+              <button onClick={() => setShowBunzGuide(true)} className="text-white/40 hover:text-white/70 text-sm transition-all cursor-pointer inline-flex items-center gap-1.5">
+                <HelpCircle size={14} /> ¿Cómo funciona la economía Bunz?
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -395,6 +402,11 @@ export default function LandingPage() {
                 <p className="text-sm text-white/50">{s.label}</p>
               </div>
             ))}
+          </div>
+          <div className="mt-8">
+            <button onClick={() => setShowBunzGuide(true)} className="text-yellow-400/50 hover:text-yellow-400 text-sm transition-all cursor-pointer inline-flex items-center gap-1.5">
+              <HelpCircle size={14} /> Explicación detallada de la economía Bunz
+            </button>
           </div>
         </div>
       </section>
@@ -548,6 +560,7 @@ export default function LandingPage() {
       )}
 
       {/* MODALS */}
+      {showBunzGuide && <BunzGuide onClose={() => setShowBunzGuide(false)} />}
       {showSmartContractModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
           <div className="bg-[#111] border border-white/10 rounded-3xl p-8 max-w-md w-full relative">
