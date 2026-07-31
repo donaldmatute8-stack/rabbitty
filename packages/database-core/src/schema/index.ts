@@ -222,7 +222,7 @@ export const billingProfiles = pgTable("billingProfiles", {
 
 export const passkeys = pgTable("passkeys", {
   id: id(),
-  userId: text("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: fkId("userId").references(() => users.id, { onDelete: "cascade" }),
   credentialId: text("credentialId").notNull().unique(),
   publicKey: text("publicKey").notNull(),
   counter: integer("counter").default(0).notNull(),
@@ -249,7 +249,7 @@ export const treasury = pgTable("treasury", {
 
 export const trustedSessions = pgTable("trustedSessions", {
   id: id(),
-  userId: text("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: fkId("userId").references(() => users.id, { onDelete: "cascade" }),
   token: text("token").notNull().unique(),
   deviceName: text("deviceName"),
   userAgent: text("userAgent"),
