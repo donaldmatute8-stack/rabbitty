@@ -8,6 +8,16 @@ import { Plus, Settings, MapPin } from "lucide-react";
 export default function RestaurantsPage() {
   const utils = trpc.useUtils();
   const { data: restaurants } = trpc.admin.getRestaurants.useQuery();
+  const { data: pendingBusinesses } = trpc.admin.getPendingBusinesses.useQuery();
+  
+  const approveBusiness = trpc.admin.approveOwnedBusiness.useMutation({
+    onSuccess: () => {
+      utils.admin.getPendingBusinesses.invalidate();
+      toast.success("Estado de negocio actualizado");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   const updateRestaurant = trpc.admin.updateRestaurant.useMutation({
     onSuccess: () => {
       utils.admin.getRestaurants.invalidate();
@@ -17,6 +27,7 @@ export default function RestaurantsPage() {
     onError: (err) => toast.error(err.message),
   });
 
+  const [activeTab, setActiveTab] = useState<"restaurants" | "applications">("applications");
   const [editDialog, setEditDialog] = useState<Record<string, any> | null>(null);
   const [form, setForm] = useState({ name: "", taxRate: 0, defaultRewardRate: 0, acceptsBunz: false });
 
@@ -30,6 +41,8 @@ export default function RestaurantsPage() {
     updateRestaurant.mutate({ id: editDialog.id, ...form });
   };
 
+  const pendingList = pendingBusinesses?.filter((b) => b.status === "PENDING" || b.status === "PENDING_VERIFICATION") ?? [];
+
   return (
     <div className="space-y-8 pb-10">
       <div className="relative overflow-hidden rounded-3xl border border-white/5 bg-gradient-to-br from-gray-900/60 to-black/80 p-8 shadow-2xl backdrop-blur-xl">
@@ -37,53 +50,140 @@ export default function RestaurantsPage() {
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-4xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-500">
-              Restaurantes
+              Restaurantes y Afiliados
             </h1>
-            <p className="text-gray-400 mt-2 text-sm font-medium">Gestiona tus restaurantes y sucursales</p>
+            <p className="text-gray-400 mt-2 text-sm font-medium">Gestiona solicitudes de afiliados y restaurantes en la red</p>
           </div>
-          <Button onClick={() => toast.info("Funcionalidad de agregar próximamente")}>
-            <Plus className="h-5 w-5" />
-            Agregar Restaurante
-          </Button>
+          <div className="flex items-center gap-3">
+            <div className="flex rounded-2xl bg-white/5 p-1 border border-white/10">
+              <button
+                onClick={() => setActiveTab("applications")}
+                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${
+                  activeTab === "applications" ? "bg-pink-500 text-white shadow-lg shadow-pink-500/25" : "text-gray-400 hover:text-white"
+                }`}
+              >
+                Solicitudes ({pendingList.length})
+              </button>
+              <button
+                onClick={() => setActiveTab("restaurants")}
+                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${
+                  activeTab === "restaurants" ? "bg-pink-500 text-white shadow-lg shadow-pink-500/25" : "text-gray-400 hover:text-white"
+                }`}
+              >
+                Restaurantes POS ({restaurants?.length ?? 0})
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="grid gap-4">
-        {restaurants?.map((r) => (
-          <Card key={r.id} className="flex items-center justify-between p-6 border border-white/5 bg-white/5 backdrop-blur-md hover:border-white/10 hover:bg-white/10 transition-all duration-300">
-            <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-pink-500/10 border border-pink-500/20 text-xl font-black text-pink-400 shadow-[0_0_15px_rgba(236,72,153,0.15)]">
-                {r.name.charAt(0)}
-              </div>
-              <div>
-                <h3 className="font-bold text-lg text-white">{r.name}</h3>
-                <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-gray-400">
-                  <span className="font-mono bg-white/5 px-2 py-0.5 rounded border border-white/5">{r.slug}</span>
-                  <span>•</span>
-                  <Badge variant={r.isActive ? "success" : "danger"}>
-                    {r.isActive ? "Activo" : "Inactivo"}
-                  </Badge>
-                  <span>•</span>
-                  <span className="uppercase text-gray-300 font-semibold">{r.currency}</span>
-                  <span>•</span>
-                  <span className="text-gray-300 font-semibold">{(r.taxRate * 100).toFixed(0)}% IVA</span>
+      {activeTab === "applications" ? (
+        <div className="space-y-4">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <span>Solicitudes de Afiliación Nuevas</span>
+            {pendingList.length > 0 && (
+              <span className="text-xs bg-pink-500/20 text-pink-400 border border-pink-500/30 px-2 py-0.5 rounded-full">
+                {pendingList.length} Pendiente{pendingList.length > 1 ? "s" : ""}
+              </span>
+            )}
+          </h2>
+          {pendingBusinesses?.length === 0 ? (
+            <Card className="p-8 text-center text-gray-400 border border-white/5 bg-white/5">
+              No hay solicitudes registradas aún.
+            </Card>
+          ) : (
+            <div className="grid gap-4">
+              {pendingBusinesses?.map((b) => (
+                <Card key={b.id} className="flex flex-col md:flex-row md:items-center justify-between p-6 border border-white/5 bg-white/5 backdrop-blur-md hover:border-white/10 transition-all gap-4">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-pink-500/20 to-orange-500/20 border border-pink-500/30 text-xl font-black text-pink-400">
+                      {b.name.charAt(0)}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-lg text-white">{b.name}</h3>
+                        <Badge variant={b.status === "APPROVED" || b.status === "VERIFIED" ? "success" : b.status === "REJECTED" ? "danger" : "warning"}>
+                          {b.status}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-1">{b.category} • {b.address}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-gray-300">
+                        <span>Reward: <strong>{b.rewardPercentage}%</strong></span>
+                        {b.package && <span>Paquete: <strong>{b.package}</strong></span>}
+                        {b.creditLimit ? <span>Crédito: <strong>{b.creditLimit.toLocaleString()} Bunz</strong></span> : null}
+                        <span>Dueño: <strong>{b.ownerName || "Sin Nombre"}</strong> ({b.ownerTelegramId ? `@${b.ownerUsername || b.ownerTelegramId}` : "Sin Telegram"})</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 self-end md:self-center">
+                    {(b.status === "PENDING" || b.status === "PENDING_VERIFICATION") && (
+                      <>
+                        <Button
+                          variant="secondary"
+                          className="bg-red-500/10 text-red-400 hover:bg-red-500/20 border-red-500/20"
+                          disabled={approveBusiness.isPending}
+                          onClick={() => approveBusiness.mutate({ id: b.id, status: "REJECTED" })}
+                        >
+                          Rechazar
+                        </Button>
+                        <Button
+                          className="bg-emerald-500 text-black hover:bg-emerald-400 font-bold"
+                          disabled={approveBusiness.isPending}
+                          onClick={() => approveBusiness.mutate({ id: b.id, status: "APPROVED" })}
+                        >
+                          Aprobar Negocio
+                        </Button>
+                      </>
+                    )}
+                    {b.status === "APPROVED" && (
+                      <span className="text-xs text-emerald-400 font-bold bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20">
+                        ✓ Aprobado
+                      </span>
+                    )}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="grid gap-4">
+          {restaurants?.map((r) => (
+            <Card key={r.id} className="flex items-center justify-between p-6 border border-white/5 bg-white/5 backdrop-blur-md hover:border-white/10 hover:bg-white/10 transition-all duration-300">
+              <div className="flex items-center gap-4">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-pink-500/10 border border-pink-500/20 text-xl font-black text-pink-400 shadow-[0_0_15px_rgba(236,72,153,0.15)]">
+                  {r.name.charAt(0)}
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-white">{r.name}</h3>
+                  <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-gray-400">
+                    <span className="font-mono bg-white/5 px-2 py-0.5 rounded border border-white/5">{r.slug}</span>
+                    <span>•</span>
+                    <Badge variant={r.isActive ? "success" : "danger"}>
+                      {r.isActive ? "Activo" : "Inactivo"}
+                    </Badge>
+                    <span>•</span>
+                    <span className="uppercase text-gray-300 font-semibold">{r.currency}</span>
+                    <span>•</span>
+                    <span className="text-gray-300 font-semibold">{(r.taxRate * 100).toFixed(0)}% IVA</span>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button className="rounded-xl border border-white/5 bg-white/5 p-3 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20 transition-all duration-300">
-                <MapPin className="h-5 w-5" />
-              </button>
-              <button
-                onClick={() => openEdit(r)}
-                className="rounded-xl border border-white/5 bg-white/5 p-3 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20 transition-all duration-300"
-              >
-                <Settings className="h-5 w-5" />
-              </button>
-            </div>
-          </Card>
-        ))}
-      </div>
+              <div className="flex items-center gap-2">
+                <button className="rounded-xl border border-white/5 bg-white/5 p-3 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20 transition-all duration-300">
+                  <MapPin className="h-5 w-5" />
+                </button>
+                <button
+                  onClick={() => openEdit(r)}
+                  className="rounded-xl border border-white/5 bg-white/5 p-3 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20 transition-all duration-300"
+                >
+                  <Settings className="h-5 w-5" />
+                </button>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
 
       <Dialog
         open={!!editDialog}

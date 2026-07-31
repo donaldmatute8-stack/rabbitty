@@ -76,7 +76,7 @@ export default function MobileAffiliateDashboard({ business, telegramId }: Mobil
     }
   };
 
-  if (business?.status === 'PENDING_VERIFICATION') {
+  if (business?.status === 'PENDING_VERIFICATION' || business?.status === 'PENDING') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '64px 32px', textAlign: 'center' }}>
         <div style={{ width: 80, height: 80, background: '#FFF5F0', color: '#F97316', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}>
