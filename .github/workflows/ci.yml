@@ -82,17 +82,17 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
       - name: Deploy rabbitty-pos
-        run: railway up --service rabbitty-pos
+        run: railway up --service rabbitty-pos --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         working-directory: apps/pos
       - name: Deploy rabbitty-kds
-        run: railway up --service rabbitty-kds
+        run: railway up --service rabbitty-kds --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         working-directory: apps/kds
       - name: Deploy rabbitty-admin
-        run: railway up --service rabbitty-admin
+        run: railway up --service rabbitty-admin --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         working-directory: apps/admin
