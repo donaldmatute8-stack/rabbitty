@@ -5,15 +5,75 @@ import { TRPCError } from "@trpc/server";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
 import { restaurants, branches, orders, tables } from "@rabbitty/database-restaurant/schema";
-import { referrals, users, levels } from "@rabbitty/database-core";
+import { referrals, users, levels, ownedBusinesses } from "@rabbitty/database-core";
 import { customers } from "@rabbitty/database-restaurant/schema";
 import { miniappClient } from "../services/miniapp-client";
-
-
-
 import * as cheerio from "cheerio";
 
 export const adminRouter = router({
+  getPendingBusinesses: protectedProcedure.query(async ({ ctx }) => {
+    const list = await ctx.coreDb
+      .select({
+        id: ownedBusinesses.id,
+        ownerId: ownedBusinesses.ownerId,
+        name: ownedBusinesses.name,
+        category: ownedBusinesses.category,
+        description: ownedBusinesses.description,
+        address: ownedBusinesses.address,
+        rewardPercentage: ownedBusinesses.rewardPercentage,
+        package: ownedBusinesses.package,
+        creditLimit: ownedBusinesses.creditLimit,
+        status: ownedBusinesses.status,
+        createdAt: ownedBusinesses.createdAt,
+        ownerName: users.firstName,
+        ownerUsername: users.username,
+        ownerPhone: users.phoneNumber,
+        ownerEmail: users.email,
+        ownerTelegramId: users.telegramId,
+      })
+      .from(ownedBusinesses)
+      .leftJoin(users, eq(ownedBusinesses.ownerId, users.id));
+    return list;
+  }),
+
+  approveOwnedBusiness: protectedProcedure
+    .input(z.object({ id: z.string(), status: z.enum(["APPROVED", "VERIFIED", "REJECTED"]) }))
+    .mutation(async ({ ctx, input }) => {
+      const [updated] = await ctx.coreDb
+        .update(ownedBusinesses)
+        .set({ status: input.status, updatedAt: new Date() })
+        .where(eq(ownedBusinesses.id, input.id))
+        .returning();
+
+      if (updated && (input.status === "APPROVED" || input.status === "VERIFIED")) {
+        try {
+          const [owner] = await ctx.coreDb.select().from(users).where(eq(users.id, updated.ownerId));
+          const botToken = process.env.TELEGRAM_BOT_TOKEN || process.env.AUTH_TELEGRAM_BOT_TOKEN;
+          if (owner?.telegramId && botToken) {
+            const message =
+              `🎉 *¡Felicidades! Tu negocio ${updated.name} ha sido aprobado.*\n\n` +
+              `Ya estás listo para operar en Rabbitty. Tus clientes ya pueden escanear y ganar Bunz en tu establecimiento.\n\n` +
+              `🐰 — Rabbitty Team`;
+
+            await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: owner.telegramId,
+                text: message,
+                parse_mode: "Markdown",
+                disable_web_page_preview: true,
+              }),
+            });
+          }
+        } catch (e) {
+          console.error("Error sending owner approval notification:", e);
+        }
+      }
+
+      return { success: true };
+    }),
+
   getRestaurants: protectedProcedure.query(async ({ ctx }) => {
     const result = await ctx.restaurantDb.select().from(restaurants);
     return result;
@@ -236,20 +296,20 @@ export const adminRouter = router({
           const categories: { name: string; items: any[] }[] = [];
           
           // UberEats normalmente envuelve las categorías en listas o divs con headers
-          $('ul, [data-testid="rich-text"]').each((i, el) => {
+          $('ul, [data-testid="rich-text"]').each((i: number, el: any) => {
             const heading = $(el).prev('h2').text().trim() || $(el).find('h2').first().text().trim();
             if (heading && heading.length < 40 && !heading.includes("Uber")) {
               const items: any[] = [];
               
               // Buscar elementos que parezcan productos (li o divs con rol listitem)
-              $(el).find('li, [role="listitem"]').each((j, itemEl) => {
+              $(el).find('li, [role="listitem"]').each((j: number, itemEl: any) => {
                 const textContent = $(itemEl).text();
                 // Buscar precios con regex
                 const priceMatch = textContent.match(/\$?\s*(\d+[.,]\d{2})/);
                 const price = priceMatch && priceMatch[1] ? parseFloat(priceMatch[1].replace(',', '.')) : 0;
                 
                 // Buscar nombres (generalmente están en un span o div prominente al inicio)
-                const possibleNames = $(itemEl).find('span, div').filter((k, e) => {
+                const possibleNames = $(itemEl).find('span, div').filter((k: number, e: any) => {
                   const t = $(e).text().trim();
                   return t.length > 2 && t.length < 60 && !t.match(/\$?\s*(\d+[.,]\d{2})/);
                 }).first().text().trim();

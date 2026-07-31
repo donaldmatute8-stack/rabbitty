@@ -43,6 +43,7 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
   // Step 1 additions
   const [isVirtual, setIsVirtual] = useState(false);
   const [locating, setLocating] = useState(false);
+  const [googleClaimed, setGoogleClaimed] = useState(false);
 
   const handleUseLocation = () => {
     if (!navigator.geolocation) {
@@ -115,6 +116,7 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
       endTime: "21:00",
       package: selectedPackage || null,
       creditLimit: pkg?.credit || 0,
+      googleClaimed,
     });
   };
 
@@ -220,13 +222,29 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
                   </div>
                 )}
 
-                <div style={{ padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: 16, border: '1px dashed rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ padding: '16px', background: googleClaimed ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.02)', borderRadius: 16, border: googleClaimed ? '1px solid rgba(34,197,94,0.3)' : '1px dashed rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'all 0.3s' }}>
                   <div>
                     <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#fff' }}>Vincular Google Business</p>
-                    <p style={{ margin: '4px 0 0', fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Verifica tu negocio al instante (próximamente)</p>
+                    <p style={{ margin: '4px 0 0', fontSize: 11, color: googleClaimed ? '#4ade80' : 'rgba(255,255,255,0.5)' }}>
+                      {googleClaimed ? '✓ Verificación instantánea activada' : 'Verifica tu negocio al instante con Google'}
+                    </p>
                   </div>
-                  <button disabled style={{ background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.3)', border: 'none', padding: '8px 16px', borderRadius: 999, fontSize: 12, fontWeight: 900 }}>
-                    Próximamente
+                  <button 
+                    onClick={() => setGoogleClaimed(!googleClaimed)} 
+                    type="button"
+                    style={{ 
+                      background: googleClaimed ? '#22c55e' : 'rgba(255,255,255,0.1)', 
+                      color: googleClaimed ? '#000' : '#fff', 
+                      border: 'none', 
+                      padding: '8px 16px', 
+                      borderRadius: 999, 
+                      fontSize: 12, 
+                      fontWeight: 900,
+                      cursor: 'pointer',
+                      transition: 'all 0.3s'
+                    }}
+                  >
+                    {googleClaimed ? '✓ Verificado' : 'Vincular'}
                   </button>
                 </div>
               </div>
