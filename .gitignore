@@ -75,3 +75,9 @@ _secure-backup/
 DOCS/
 MB-REFERENCE.md
 \!LEEME.md
+
+# Utility/seed scripts (pueden contener credenciales reales)
+scripts/seed-*.js
+scripts/seed-*.ts
+scripts/fix-*.js
+scripts/drop-*.js
