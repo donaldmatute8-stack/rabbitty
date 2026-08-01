@@ -8,6 +8,10 @@ function timeToMinutes(timeStr: string) {
   return hours * 60 + minutes;
 }
 
+/**
+ * API: /api/business/scan/redeem
+ * Propósito: Utilizado desde el Escáner de Caja del Comercio para canjear Cupones/Vales de Promoción de Happy Hour y otorgar la recompensa fija al cliente.
+ */
 export async function POST(req: NextRequest) {
   try {
     const { telegramId, businessId, couponCode } = await req.json();
