@@ -45,8 +45,8 @@ export async function GET() {
     });
 
     return NextResponse.json({ success: true, data: feedItems });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Feed API Error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error', message: error?.message || String(error) }, { status: 500 });
   }
 }
