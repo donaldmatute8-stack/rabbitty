@@ -3,7 +3,15 @@ import { db } from '@/db';
 import { users, ownedBusinesses, levels, achievements, hatTricks } from '@/db/schema';
 import crypto from 'crypto';
 
+export async function GET(req: Request) {
+  return handleSeed(req);
+}
+
 export async function POST(req: Request) {
+  return handleSeed(req);
+}
+
+async function handleSeed(req: Request) {
   try {
     const { secret } = await req.json().catch(() => ({}));
     if (secret !== process.env.RABBITTY_API_SECRET && process.env.NODE_ENV === 'production') {
