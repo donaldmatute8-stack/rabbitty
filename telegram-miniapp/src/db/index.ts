@@ -7,7 +7,7 @@ const dbUrl = process.env.CORE_DATABASE_URL || process.env.DATABASE_URL;
 const pool = new Pool({
   connectionString: dbUrl,
   ssl: dbUrl && (dbUrl.includes('neon.tech') || process.env.NODE_ENV === 'production')
-    ? { rejectUnauthorized: true }
+    ? { rejectUnauthorized: false }
     : false,
 });
 
