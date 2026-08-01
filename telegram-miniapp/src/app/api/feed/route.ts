@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 
+import { ownedBusinesses } from '@/db/schema';
+import { desc } from 'drizzle-orm';
+
 const parseSafeJson = (str: string | null | undefined, fallback: any = []) => {
   if (!str) return fallback;
   try {
@@ -12,10 +15,7 @@ const parseSafeJson = (str: string | null | undefined, fallback: any = []) => {
 
 export async function GET() {
   try {
-    const businesses = await db.query.ownedBusinesses.findMany({
-      orderBy: (businesses, { desc }) => [desc(businesses.createdAt)],
-      limit: 20
-    });
+    const businesses = await db.select().from(ownedBusinesses).orderBy(desc(ownedBusinesses.createdAt)).limit(20);
 
     const feedItems = businesses.map((b) => {
       const parsedGallery = parseSafeJson(b.gallery);
