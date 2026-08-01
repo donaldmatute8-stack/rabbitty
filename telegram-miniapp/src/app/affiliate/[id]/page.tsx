@@ -243,7 +243,7 @@ export default function AffiliateProfilePage() {
               
               const processScan = async (fiatAmount: number) => {
                 try {
-                  const res = await fetch('/api/transaction/spend', {
+                  const res = await fetch('/api/transaction/spend', { // Registra ticket de consumo y mint de Bunz
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 

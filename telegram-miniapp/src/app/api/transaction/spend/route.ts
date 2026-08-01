@@ -7,6 +7,10 @@ import { processReferralAndNotifications } from '@/lib/referralLogic';
 import { awardHops, evaluateHatTricks } from '@/lib/gamificationLogic';
 import { z } from 'zod';
 
+/**
+ * API: /api/transaction/spend
+ * Propósito: Permite al cliente escanear su ticket de consumo en un comercio afiliado para OTORGAR/ACUMULAR Bunz (Minting por consumo).
+ */
 const spendSchema = z.object({
   initData: z.string(),
   businessId: z.string().uuid(),
