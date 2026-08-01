@@ -31,11 +31,15 @@ async function handleSeed(req: Request) {
       await db.insert(levels).values(lvl).onConflictDoNothing();
     }
 
+    const u1Id = crypto.randomUUID();
+    const u2Id = crypto.randomUUID();
+    const u3Id = crypto.randomUUID();
+
     // 2. Usuarios de Prueba
     const sampleUsers = [
-      { id: 'u1', telegramId: '798431743', username: 'admin_rabbitty', firstName: 'Marco', lastName: 'Admin', role: 'ADMIN', levelId: 'l2', totalBunzEarned: 1500, totalBunzSpent: 200, visitedBusinesses: 5, hops: 60 },
-      { id: 'u2', telegramId: '100002', username: 'alice_rabbitter', firstName: 'Alice', lastName: 'García', role: 'USER', levelId: 'l1', totalBunzEarned: 500, totalBunzSpent: 100, visitedBusinesses: 2, hops: 15 },
-      { id: 'u3', telegramId: '100003', username: 'bob_restaurant', firstName: 'Bob', lastName: 'Chef', role: 'USER', levelId: 'l1', totalBunzEarned: 100, totalBunzSpent: 0, visitedBusinesses: 1, hops: 5 },
+      { id: u1Id, telegramId: '798431743', username: 'admin_rabbitty', firstName: 'Marco', lastName: 'Admin', role: 'ADMIN', levelId: 'l2', totalBunzEarned: 1500, totalBunzSpent: 200, visitedBusinesses: 5, hops: 60 },
+      { id: u2Id, telegramId: '100002', username: 'alice_rabbitter', firstName: 'Alice', lastName: 'García', role: 'USER', levelId: 'l1', totalBunzEarned: 500, totalBunzSpent: 100, visitedBusinesses: 2, hops: 15 },
+      { id: u3Id, telegramId: '100003', username: 'bob_restaurant', firstName: 'Bob', lastName: 'Chef', role: 'USER', levelId: 'l1', totalBunzEarned: 100, totalBunzSpent: 0, visitedBusinesses: 1, hops: 5 },
     ];
     for (const u of sampleUsers) {
       await db.insert(users).values(u).onConflictDoNothing();
@@ -44,8 +48,8 @@ async function handleSeed(req: Request) {
     // 3. Negocios Mock para el Mapa y Feed
     const sampleBusinesses = [
       {
-        id: 'b1',
-        ownerId: 'u1',
+        id: crypto.randomUUID(),
+        ownerId: u1Id,
         name: 'Café Rabbitty Centro',
         category: 'Cafetería',
         description: 'El mejor café de especialidad y postres artesanales con recompensas en Bunz.',
@@ -68,8 +72,8 @@ async function handleSeed(req: Request) {
         timezone: 'America/Mexico_City'
       },
       {
-        id: 'b2',
-        ownerId: 'u3',
+        id: crypto.randomUUID(),
+        ownerId: u3Id,
         name: 'Tacos El Conejo Dorado',
         category: 'Restaurante',
         description: 'Tacos al pastor tradicionales y salsas artesanales en el corazón de la ciudad.',
@@ -92,8 +96,8 @@ async function handleSeed(req: Request) {
         timezone: 'America/Mexico_City'
       },
       {
-        id: 'b3',
-        ownerId: 'u1',
+        id: crypto.randomUUID(),
+        ownerId: u1Id,
         name: 'Bunz Store Condesa',
         category: 'Tienda',
         description: 'Concept store urbana con ropa local, sneakers y gadgets aceptando Bunz.',
@@ -116,8 +120,8 @@ async function handleSeed(req: Request) {
         timezone: 'America/Mexico_City'
       },
       {
-        id: 'b4',
-        ownerId: 'u2',
+        id: crypto.randomUUID(),
+        ownerId: u2Id,
         name: 'Madriguera Cocktail Bar',
         category: 'Bar',
         description: 'Coctelería de autor, música en vivo y descuentos exclusivos de Happy Hour.',
