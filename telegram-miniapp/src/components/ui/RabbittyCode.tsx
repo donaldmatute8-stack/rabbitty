@@ -55,7 +55,7 @@ export default function RabbittyCode({ data, size = 260, showCardFrame = true, c
               <polygon points="35,10 46,60 22,48" stroke="#F43F5E" strokeWidth="2.8" strokeLinejoin="round" fill="rgba(244,63,94,0.12)" />
               <polygon points="35,10 42,42 28,34" stroke="#FB7185" strokeWidth="1.5" strokeLinejoin="round" />
               <line x1="35" y1="10" x2="38" y2="48" stroke="#E91E63" strokeWidth="1.5" />
-              
+
               {/* Right Polygon Ear */}
               <polygon points="65,10 78,48 54,60" stroke="#F43F5E" strokeWidth="2.8" strokeLinejoin="round" fill="rgba(244,63,94,0.12)" />
               <polygon points="65,10 72,34 58,42" stroke="#FB7185" strokeWidth="1.5" strokeLinejoin="round" />
@@ -64,7 +64,7 @@ export default function RabbittyCode({ data, size = 260, showCardFrame = true, c
               {/* Head Crown Diamond & Facets */}
               <polygon points="50,38 78,48 50,110 22,48" stroke="#F43F5E" strokeWidth="3" strokeLinejoin="round" fill="rgba(233,30,99,0.15)" />
               <polygon points="50,38 64,60 50,82 36,60" stroke="#C084FC" strokeWidth="2" strokeLinejoin="round" fill="rgba(192,132,252,0.15)" />
-              
+
               {/* Center Nose & Chin Triangles */}
               <polygon points="50,82 78,48 50,110" stroke="#EC4899" strokeWidth="2" strokeLinejoin="round" />
               <polygon points="50,82 22,48 50,110" stroke="#EC4899" strokeWidth="2" strokeLinejoin="round" />
@@ -83,12 +83,11 @@ export default function RabbittyCode({ data, size = 260, showCardFrame = true, c
       )}
 
       {/* Main Glass Card Frame */}
-      <div 
-        className={`relative w-full h-full rounded-[38px] overflow-hidden flex items-center justify-center p-5 transition-all duration-300 ${
-          showCardFrame 
-            ? 'bg-gradient-to-b from-[#19092B]/95 via-[#110520]/95 to-[#07020D]/98 border-2 border-pink-500/40 shadow-[0_0_60px_rgba(233,30,99,0.3)] backdrop-blur-2xl' 
+      <div
+        className={`relative w-full h-full rounded-[38px] overflow-hidden flex items-center justify-center p-5 transition-all duration-300 ${showCardFrame
+            ? 'bg-gradient-to-b from-[#19092B]/95 via-[#110520]/95 to-[#07020D]/98 border-2 border-pink-500/40 shadow-[0_0_60px_rgba(233,30,99,0.3)] backdrop-blur-2xl'
             : 'bg-[#0B0416] border border-pink-500/30 rounded-[32px]'
-        }`}
+          }`}
       >
         {/* Glowing Background Radial Aura */}
         <div className="absolute inset-0 bg-radial from-pink-500/20 via-purple-600/10 to-transparent pointer-events-none" />
