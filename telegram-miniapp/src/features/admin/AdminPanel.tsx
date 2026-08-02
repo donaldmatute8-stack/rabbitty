@@ -93,7 +93,7 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
         style={{
           backgroundColor: '#fff',
           padding: '24px',
-          paddingTop: 'calc(max(var(--safe-top, 0px), 50px) + 24px)',
+          paddingTop: 'calc(max(var(--safe-top, 0px), 64px) + 24px)',
           paddingBottom: 'max(env(safe-area-inset-bottom), 24px)',
           position: 'relative',
           height: '100vh',
