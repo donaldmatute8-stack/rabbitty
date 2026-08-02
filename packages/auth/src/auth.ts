@@ -45,7 +45,7 @@ const authResult = NextAuth({
   adapter: customAdapter,
   providers: [
     Resend({
-      from: process.env.AUTH_RESEND_FROM!,
+      from: process.env.AUTH_RESEND_FROM || "Rabbitty Team <hola@rabbitty.me>",
     }),
     ...(process.env.E2E_TEST === "true" ? [
       Credentials({

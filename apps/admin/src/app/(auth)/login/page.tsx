@@ -13,7 +13,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     // Generar sesión QR para login
-    fetch("https://rabbitty.me/api/auth/qr/generate", { method: "POST" })
+    fetch("/api/auth/qr/generate", { method: "POST" })
       .then((res) => res.json())
       .then((data) => {
         if (data.success && data.qrToken) {
@@ -27,7 +27,7 @@ export default function LoginPage() {
   useEffect(() => {
     if (!sessionId) return;
     const interval = setInterval(() => {
-      fetch(`https://rabbitty.me/api/auth/qr/poll?sessionId=${sessionId}`)
+      fetch(`/api/auth/qr/poll?sessionId=${sessionId}`)
         .then((r) => r.json())
         .then((data) => {
           if (data.authenticated && data.user) {
