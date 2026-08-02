@@ -17,10 +17,14 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
-  const rows = await db.select().from(systemSettings);
   const settings: Record<string, string> = { ...DEFAULT_SETTINGS };
-  for (const row of rows) {
-    settings[row.key] = row.value;
+  try {
+    const rows = await db.select().from(systemSettings);
+    for (const row of rows) {
+      settings[row.key] = row.value;
+    }
+  } catch (e) {
+    console.warn('[Admin Settings] systemSettings table query warning:', e);
   }
 
   return NextResponse.json({ success: true, settings });
