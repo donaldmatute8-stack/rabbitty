@@ -115,7 +115,7 @@ const authResult = NextAuth({
       async authorize(credentials) {
         if (!credentials?.token || !credentials?.sid) return null;
 
-        const coreDbUrl = process.env.CORE_DATABASE_URL;
+        const coreDbUrl = process.env.CORE_DATABASE_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL;
         if (!coreDbUrl) return null;
 
         try {
