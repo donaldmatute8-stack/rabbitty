@@ -122,7 +122,7 @@ export default function ChatRoomPage() {
         zIndex: 50,
         display: 'flex',
         alignItems: 'center',
-        padding: 'calc(max(env(safe-area-inset-top), 16px) + 16px) 20px 20px',
+        padding: 'calc(max(env(safe-area-inset-top), 84px) + 8px) 20px 16px',
         background: '#fff',
         borderBottom: '1px solid #F0F0F0',
         gap: '16px'

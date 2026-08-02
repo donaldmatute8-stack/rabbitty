@@ -8,7 +8,7 @@ import BottomNav from '@/components/BottomNav';
 import Button from '@/components/ui/Button';
 import { useWallet } from '@/contexts/WalletContext';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { RabbittyAnimatedBadge } from '@/components/RabbittyAnimatedBadge';
+import RabbittyCode from '@/components/ui/RabbittyCode';
 
 export default function ScanPage() {
   const router = useRouter();
@@ -104,9 +104,9 @@ export default function ScanPage() {
               <h2 className="text-xl font-extrabold text-white m-0 mb-2">Tu Código Rabbitter</h2>
               <p className="text-white/50 text-xs leading-[1.6] m-0">Muestra este código en caja para acumular Bunz por tu consumo.</p>
             </div>
-            <div className="flex items-center justify-center min-h-[300px] w-full">
+            <div className="flex items-center justify-center min-h-[360px] w-full py-4">
               {qrValue ? (
-                <RabbittyAnimatedBadge value={qrValue} size={220} />
+                <RabbittyCode data={qrValue} size={200} showCardFrame={true} />
               ) : (
                 <div className="w-[180px] h-[180px] bg-white/[0.03] flex items-center justify-center rounded-xl border-2 border-dashed border-white/10">
                   <span className="text-white/40 text-xs font-bold">Cargando...</span>
