@@ -57,6 +57,7 @@ export async function POST(req: Request) {
       const tokenHash = crypto.createHash('sha256').update(qrToken).digest('hex');
 
       const [session] = await db.insert(webSessions).values({
+        id: crypto.randomUUID(),
         jwtToken: tokenHash,
         userId: owner.id,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
