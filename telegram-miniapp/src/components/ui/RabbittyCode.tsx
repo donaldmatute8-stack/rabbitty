@@ -48,35 +48,19 @@ export default function RabbittyCode({ data, size = 260, showCardFrame = true, c
     <div className={`relative inline-flex flex-col items-center justify-center ${className}`} style={{ width: size, height: showCardFrame ? size * 1.8 : size }}>
       {showCardFrame && (
         <>
-          {/* Top Neon Bunny Geometry - Exact Silhouette matching user sample */}
-          <div className="absolute -top-14 z-30 pointer-events-none drop-shadow-[0_0_15px_rgba(244,63,94,0.9)]">
-            <svg width="110" height="130" viewBox="0 0 100 120" fill="none">
-              {/* Left Polygon Ear */}
-              <polygon points="35,10 46,60 22,48" stroke="#F43F5E" strokeWidth="2.8" strokeLinejoin="round" fill="rgba(244,63,94,0.12)" />
-              <polygon points="35,10 42,42 28,34" stroke="#FB7185" strokeWidth="1.5" strokeLinejoin="round" />
-              <line x1="35" y1="10" x2="38" y2="48" stroke="#E91E63" strokeWidth="1.5" />
-
-              {/* Right Polygon Ear */}
-              <polygon points="65,10 78,48 54,60" stroke="#F43F5E" strokeWidth="2.8" strokeLinejoin="round" fill="rgba(244,63,94,0.12)" />
-              <polygon points="65,10 72,34 58,42" stroke="#FB7185" strokeWidth="1.5" strokeLinejoin="round" />
-              <line x1="65" y1="10" x2="62" y2="48" stroke="#E91E63" strokeWidth="1.5" />
-
-              {/* Head Crown Diamond & Facets */}
-              <polygon points="50,38 78,48 50,110 22,48" stroke="#F43F5E" strokeWidth="3" strokeLinejoin="round" fill="rgba(233,30,99,0.15)" />
-              <polygon points="50,38 64,60 50,82 36,60" stroke="#C084FC" strokeWidth="2" strokeLinejoin="round" fill="rgba(192,132,252,0.15)" />
-
-              {/* Center Nose & Chin Triangles */}
-              <polygon points="50,82 78,48 50,110" stroke="#EC4899" strokeWidth="2" strokeLinejoin="round" />
-              <polygon points="50,82 22,48 50,110" stroke="#EC4899" strokeWidth="2" strokeLinejoin="round" />
-              <line x1="36" y1="60" x2="64" y2="60" stroke="#F43F5E" strokeWidth="1.8" />
-              <line x1="50" y1="82" x2="50" y2="110" stroke="#F43F5E" strokeWidth="2.5" />
-            </svg>
+          {/* Top Neon Bunny Geometry - Exact Vector Image match Rabbitty_vector.png */}
+          <div className="absolute -top-16 z-30 pointer-events-none drop-shadow-[0_0_20px_rgba(244,63,94,0.95)]">
+            <img 
+              src="/Rabbitty_vector.png" 
+              alt="Rabbitty Vector" 
+              className="w-[110px] h-[130px] object-contain filter drop-shadow-[0_0_12px_#F43F5E]" 
+            />
           </div>
 
           {/* Rabbitty Branding Label */}
           <div className="absolute top-[82px] z-20 flex items-center gap-1.5 opacity-90">
             <span className="text-[10px] tracking-[0.28em] font-black text-white uppercase flex items-center gap-1.5 drop-shadow-[0_0_8px_rgba(244,63,94,0.6)]">
-              <span className="text-pink-500 text-xs">🐰</span> RABBITTY
+              <img src="/logo_conejo.png" alt="Rabbitty Logo" className="w-4 h-4 object-contain inline-block" /> RABBITTY
             </span>
           </div>
         </>

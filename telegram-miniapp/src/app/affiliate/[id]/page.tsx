@@ -53,10 +53,17 @@ export default function AffiliateProfilePage() {
     );
   }
 
+  // Dynamic Modals State
+  const [showMapSelector, setShowMapSelector] = useState(false);
+  const [showInAppBrowser, setShowInAppBrowser] = useState(false);
+
   // Parse gallery safely
   let parsedGallery = [];
   try { parsedGallery = affiliate.gallery ? JSON.parse(affiliate.gallery) : []; } catch(e){}
   const coverImage = parsedGallery.length > 0 ? parsedGallery[0] : 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=800&q=80';
+
+  const targetWebsite = affiliate.website || affiliate.webUrl || 'https://rabbitty.me';
+  const formattedWebUrl = targetWebsite.startsWith('http') ? targetWebsite : `https://${targetWebsite}`;
 
   return (
     <div style={{ background: '#FAFAFA', minHeight: '100vh', paddingBottom: 180, position: 'relative' }}>
@@ -67,7 +74,7 @@ export default function AffiliateProfilePage() {
         backdropFilter: isScrolled ? 'blur(20px)' : 'none',
         borderBottom: isScrolled ? '1px solid #F0F0F0' : 'none',
         transition: 'all 0.3s ease',
-        paddingTop: 'calc(max(var(--safe-top, 0px), 50px) + 12px)',
+        paddingTop: 'calc(max(env(safe-area-inset-top), 84px) + 8px)',
         paddingBottom: 16,
         paddingLeft: 16,
         paddingRight: 16,
@@ -142,24 +149,45 @@ export default function AffiliateProfilePage() {
 
         {/* Action Quick Links */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 32 }}>
-          <div style={{ background: '#fff', borderRadius: 20, padding: '12px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, border: '1px solid #F0F0F0', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+          <motion.div
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowMapSelector(true)}
+            style={{ background: '#fff', borderRadius: 20, padding: '12px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, border: '1px solid #F0F0F0', boxShadow: '0 2px 8px rgba(0,0,0,0.02)', cursor: 'pointer' }}
+          >
             <div style={{ background: '#FFF0F5', padding: 10, borderRadius: 16, color: '#E91E63' }}><Navigation size={20} /></div>
             <span style={{ fontSize: 11, fontWeight: 700, color: '#111', textAlign: 'center' }}>Llegar</span>
-          </div>
+          </motion.div>
+
           <Link href={`/chat/${affiliate.id}`} style={{ textDecoration: 'none' }}>
             <motion.div whileTap={{ scale: 0.95 }} style={{ background: '#fff', borderRadius: 20, padding: '12px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, border: '1px solid #F0F0F0', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
               <div style={{ background: '#FFF5F0', padding: 10, borderRadius: 16, color: '#F97316' }}><MessageCircle size={20} /></div>
               <span style={{ fontSize: 11, fontWeight: 700, color: '#111', textAlign: 'center' }}>Mensaje</span>
             </motion.div>
           </Link>
-          <div style={{ background: '#fff', borderRadius: 20, padding: '12px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, border: '1px solid #F0F0F0', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+
+          <motion.div
+            whileTap={{ scale: 0.95 }}
+            onClick={() => {
+              if (affiliate.phone || affiliate.owner?.phoneNumber) {
+                window.location.href = `tel:${affiliate.phone || affiliate.owner.phoneNumber}`;
+              } else {
+                showToast('Número telefónico no disponible', 'info');
+              }
+            }}
+            style={{ background: '#fff', borderRadius: 20, padding: '12px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, border: '1px solid #F0F0F0', boxShadow: '0 2px 8px rgba(0,0,0,0.02)', cursor: 'pointer' }}
+          >
             <div style={{ background: '#F0F4FF', padding: 10, borderRadius: 16, color: '#3B82F6' }}><Phone size={20} /></div>
             <span style={{ fontSize: 11, fontWeight: 700, color: '#111', textAlign: 'center' }}>Llamar</span>
-          </div>
-          <div style={{ background: '#fff', borderRadius: 20, padding: '12px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, border: '1px solid #F0F0F0', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+          </motion.div>
+
+          <motion.div
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowInAppBrowser(true)}
+            style={{ background: '#fff', borderRadius: 20, padding: '12px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, border: '1px solid #F0F0F0', boxShadow: '0 2px 8px rgba(0,0,0,0.02)', cursor: 'pointer' }}
+          >
             <div style={{ background: '#F0FFF4', padding: 10, borderRadius: 16, color: '#10B981' }}><Globe size={20} /></div>
             <span style={{ fontSize: 11, fontWeight: 700, color: '#111', textAlign: 'center' }}>Web</span>
-          </div>
+          </motion.div>
         </div>
 
         {/* Info Grid */}
@@ -308,6 +336,97 @@ export default function AffiliateProfilePage() {
           Escanear ticket y ganar +{affiliate.rewardPercentage}%
         </button>
       </div>
+
+      {/* MODAL: Selector de Aplicación de Mapa */}
+      {showMapSelector && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'flex-end' }}>
+          <motion.div
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            style={{ width: '100%', background: '#111', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, borderTop: '1px solid rgba(255,255,255,0.1)' }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h3 style={{ margin: 0, color: '#fff', fontSize: 18, fontWeight: 900 }}>🗺️ ¿Cómo quieres llegar?</h3>
+              <button onClick={() => setShowMapSelector(false)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: '50%', cursor: 'pointer', fontWeight: 800 }}>✕</button>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <button
+                onClick={() => {
+                  const query = encodeURIComponent(`${affiliate.name} ${affiliate.address || ''}`);
+                  window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
+                  setShowMapSelector(false);
+                }}
+                style={{ background: '#1E1E24', color: '#fff', padding: '16px', borderRadius: 18, border: '1px solid rgba(255,255,255,0.08)', fontWeight: 800, fontSize: 15, display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}
+              >
+                🗺️ Abrir en Google Maps
+              </button>
+
+              <button
+                onClick={() => {
+                  const query = encodeURIComponent(`${affiliate.name} ${affiliate.address || ''}`);
+                  window.open(`https://waze.com/ul?q=${query}&navigate=yes`, '_blank');
+                  setShowMapSelector(false);
+                }}
+                style={{ background: '#1E1E24', color: '#fff', padding: '16px', borderRadius: 18, border: '1px solid rgba(255,255,255,0.08)', fontWeight: 800, fontSize: 15, display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}
+              >
+                🚗 Abrir en Waze
+              </button>
+
+              <button
+                onClick={() => {
+                  const query = encodeURIComponent(`${affiliate.name} ${affiliate.address || ''}`);
+                  window.open(`http://maps.apple.com/?q=${query}`, '_blank');
+                  setShowMapSelector(false);
+                }}
+                style={{ background: '#1E1E24', color: '#fff', padding: '16px', borderRadius: 18, border: '1px solid rgba(255,255,255,0.08)', fontWeight: 800, fontSize: 15, display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}
+              >
+                🍎 Abrir en Apple Maps
+              </button>
+
+              <button
+                onClick={() => {
+                  router.push(`/map?lat=${affiliate.lat || 19.4326}&lng=${affiliate.lng || -99.1332}`);
+                  setShowMapSelector(false);
+                }}
+                style={{ background: 'linear-gradient(135deg, #E91E63, #8B5CF6)', color: '#fff', padding: '16px', borderRadius: 18, border: 'none', fontWeight: 900, fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, cursor: 'pointer', marginTop: 4 }}
+              >
+                🚀 Ver en Mapa Neón Rabbitty
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* MODAL: Visor Web In-App (Estilo Instagram) */}
+      {showInAppBrowser && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#05020A', display: 'flex', flexDirection: 'column' }}>
+          {/* Header del Visor In-App */}
+          <div style={{ paddingTop: 'calc(max(env(safe-area-inset-top), 50px) + 8px)', paddingBottom: 12, paddingLeft: 16, paddingRight: 16, background: '#110720', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button onClick={() => setShowInAppBrowser(false)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', width: 36, height: 36, borderRadius: '50%', cursor: 'pointer', fontWeight: 800 }}>✕</button>
+              <div>
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#fff' }}>{affiliate.name}</p>
+                <p style={{ margin: 0, fontSize: 11, color: '#A855F7', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>{formattedWebUrl}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => window.open(formattedWebUrl, '_blank')}
+              style={{ background: '#E91E63', color: '#fff', padding: '6px 14px', borderRadius: 12, border: 'none', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}
+            >
+              Abrir en Safari/Chrome
+            </button>
+          </div>
+
+          {/* Iframe Contenido Web */}
+          <iframe
+            src={formattedWebUrl}
+            style={{ width: '100%', flex: 1, border: 'none', background: '#fff' }}
+            title={`Web de ${affiliate.name}`}
+          />
+        </div>
+      )}
 
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.2); } }

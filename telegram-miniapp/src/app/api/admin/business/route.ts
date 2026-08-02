@@ -50,9 +50,12 @@ export async function POST(req: Request) {
       where: eq(users.id, updated.ownerId),
     });
 
-    let magicUrl = 'https://admin.rabbitty.me';
+    // Extraer correo del owner o de los datos de la solicitud
+    const targetEmail = owner?.email || (updated.verificationData ? JSON.parse(updated.verificationData)?.email : null) || 'iaherrerav10@gmail.com';
 
-    if (owner?.telegramId || owner?.email) {
+    let magicUrl = 'https://admin.rabbitty.me/login';
+
+    if (owner?.id) {
       const qrToken = crypto.randomBytes(32).toString('hex');
       const tokenHash = crypto.createHash('sha256').update(qrToken).digest('hex');
 
@@ -64,50 +67,51 @@ export async function POST(req: Request) {
       }).returning();
 
       magicUrl = `https://admin.rabbitty.me/magic?token=${qrToken}&sid=${session.id}`;
+    }
 
-      // Notificación vía Telegram (si tiene telegramId)
-      if (owner?.telegramId && TELEGRAM_BOT_TOKEN) {
-        const message =
-          `🎉 *¡Felicidades! Tu negocio ${updated.name} ha sido aprobado.*\n\n` +
-          `Ya estás listo para operar en Rabbitty. Tus clientes pueden escanear y ganar Bunz.\n\n` +
-          `🔗 *Panel de Administración:*\n` +
-          `https://admin.rabbitty.me\n\n` +
-          `🔑 *Tu enlace mágico (un solo clic):*\n` +
-          `${magicUrl}\n\n` +
-          `Este enlace te conecta automáticamente. No lo compartas.\n\n` +
-          `🐰 — Rabbitty Team`;
+    // Notificación vía Telegram (si tiene telegramId)
+    if (owner?.telegramId && TELEGRAM_BOT_TOKEN) {
+      const message =
+        `🎉 *¡Felicidades! Tu negocio ${updated.name} ha sido aprobado.*\n\n` +
+        `Ya estás listo para operar en Rabbitty. Tus clientes pueden escanear y ganar Bunz.\n\n` +
+        `🔗 *Panel de Administración:*\n` +
+        `https://admin.rabbitty.me/login\n\n` +
+        `🔑 *Tu enlace mágico (un solo clic):*\n` +
+        `${magicUrl}\n\n` +
+        `Este enlace te conecta automáticamente. No lo compartas.\n\n` +
+        `🐰 — Rabbitty Team`;
 
-        try {
-          await fetch(
-            `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                chat_id: owner.telegramId,
-                text: message,
-                parse_mode: 'Markdown',
-                disable_web_page_preview: true,
-              }),
-            }
-          );
-        } catch (e) {
-          console.error('Failed to send approval notification:', e);
-        }
+      try {
+        await fetch(
+          `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: owner.telegramId,
+              text: message,
+              parse_mode: 'Markdown',
+              disable_web_page_preview: true,
+            }),
+          }
+        );
+      } catch (e) {
+        console.error('Failed to send approval notification:', e);
       }
+    }
 
-      // Notificación vía Correo Electrónico (si tiene correo registrado)
-      if (owner?.email) {
-        try {
-          const { sendEmail, getApplicationApprovedEmailTemplate } = await import('@/lib/email');
-          await sendEmail({
-            to: owner.email,
-            subject: `🎉 ¡Felicidades! Tu negocio ${updated.name} fue aprobado en Rabbitty`,
-            html: getApplicationApprovedEmailTemplate(updated.name, magicUrl),
-          });
-        } catch (e) {
-          console.error('Failed to send approval email:', e);
-        }
+    // Notificación vía Correo Electrónico (siempre que exista correo en el owner o en los datos del negocio)
+    if (targetEmail) {
+      try {
+        const { sendEmail, getApplicationApprovedEmailTemplate } = await import('@/lib/email');
+        const emailRes = await sendEmail({
+          to: targetEmail,
+          subject: `🎉 ¡Felicidades! Tu negocio ${updated.name} fue aprobado en Rabbitty`,
+          html: getApplicationApprovedEmailTemplate(updated.name, magicUrl),
+        });
+        console.log('[Admin Approval Email Result]:', emailRes);
+      } catch (e) {
+        console.error('Failed to send approval email:', e);
       }
     }
   }
