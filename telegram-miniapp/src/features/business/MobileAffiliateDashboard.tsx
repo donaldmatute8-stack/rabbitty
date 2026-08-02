@@ -10,6 +10,7 @@ interface MobileAffiliateDashboardProps {
 
 export default function MobileAffiliateDashboard({ business, telegramId }: MobileAffiliateDashboardProps) {
   const [showCodeModal, setShowCodeModal] = useState(false);
+  const [activeSubTab, setActiveSubTab] = useState<'analytics' | 'clients' | 'settings' | null>(null);
   const [rewardRate, setRewardRate] = useState(business?.rewardPercentage || 21);
   const [savingRate, setSavingRate] = useState(false);
   const [reservations, setReservations] = useState<any[]>([]);
@@ -17,6 +18,7 @@ export default function MobileAffiliateDashboard({ business, telegramId }: Mobil
   const [txCount, setTxCount] = useState(0);
   const [totalBunz, setTotalBunz] = useState(0);
   const [clientCount, setClientCount] = useState(0);
+  const [clientList, setClientList] = useState<any[]>([]);
 
   const saveRewardRate = async () => {
     if (!telegramId) return;
@@ -92,7 +94,7 @@ export default function MobileAffiliateDashboard({ business, telegramId }: Mobil
   }
 
   return (
-    <div style={{ paddingBottom: 120, paddingTop: 'calc(max(env(safe-area-inset-top), 64px) + 8px)' }}>
+    <div style={{ paddingBottom: 120, paddingTop: 'calc(max(env(safe-area-inset-top), 84px) + 12px)' }}>
       <div style={{ padding: '8px 20px 16px' }}>
         <h1 style={{ fontSize: 28, fontWeight: 900, color: '#111', margin: '0 0 4px 0', letterSpacing: '-1px' }}>{business?.name || 'Café Cultura'}</h1>
         <p style={{ margin: 0, fontSize: 14, color: '#888', fontWeight: 600 }}>{business?.category || 'Restaurante y Café'}</p>
@@ -291,21 +293,98 @@ export default function MobileAffiliateDashboard({ business, telegramId }: Mobil
           initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
           style={{ display: "flex", gap: 10, marginBottom: 16 }}
         >
-          {[
-            { icon: "📊", label: "Analíticas" },
-            { icon: "👥", label: "Clientes" },
-            { icon: "⚙️", label: "Ajustes" },
-          ].map((item) => (
-            <button key={item.label} style={{ 
-              flex: 1, border: "1px solid #F0F0F0", borderRadius: 14, padding: "14px 8px", 
+          <button 
+            onClick={() => setActiveSubTab(activeSubTab === 'analytics' ? null : 'analytics')}
+            style={{ 
+              flex: 1, border: activeSubTab === 'analytics' ? '1px solid #E91E63' : "1px solid #F0F0F0", borderRadius: 14, padding: "14px 8px", 
               display: "flex", flexDirection: "column", alignItems: "center", gap: 6, 
-              background: "#fff", cursor: "pointer", outline: 'none'
-            }}>
-              <span style={{ fontSize: 22 }}>{item.icon}</span>
-              <span style={{ fontSize: 12, fontWeight: 600, color: "#666" }}>{item.label}</span>
-            </button>
-          ))}
+              background: activeSubTab === 'analytics' ? '#FFF5F8' : "#fff", cursor: "pointer", outline: 'none'
+            }}
+          >
+            <span style={{ fontSize: 22 }}>📊</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: activeSubTab === 'analytics' ? '#E91E63' : "#666" }}>Analíticas</span>
+          </button>
+
+          <button 
+            onClick={() => setActiveSubTab(activeSubTab === 'clients' ? null : 'clients')}
+            style={{ 
+              flex: 1, border: activeSubTab === 'clients' ? '1px solid #E91E63' : "1px solid #F0F0F0", borderRadius: 14, padding: "14px 8px", 
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 6, 
+              background: activeSubTab === 'clients' ? '#FFF5F8' : "#fff", cursor: "pointer", outline: 'none'
+            }}
+          >
+            <span style={{ fontSize: 22 }}>👥</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: activeSubTab === 'clients' ? '#E91E63' : "#666" }}>Clientes</span>
+          </button>
+
+          <button 
+            onClick={() => setActiveSubTab(activeSubTab === 'settings' ? null : 'settings')}
+            style={{ 
+              flex: 1, border: activeSubTab === 'settings' ? '1px solid #E91E63' : "1px solid #F0F0F0", borderRadius: 14, padding: "14px 8px", 
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 6, 
+              background: activeSubTab === 'settings' ? '#FFF5F8' : "#fff", cursor: "pointer", outline: 'none'
+            }}
+          >
+            <span style={{ fontSize: 22 }}>⚙️</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: activeSubTab === 'settings' ? '#E91E63' : "#666" }}>Ajustes</span>
+          </button>
         </motion.div>
+
+        {/* SUBTAB: ANALYTICS */}
+        {activeSubTab === 'analytics' && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="bg-[#FAFAFA] border border-[#EAEAEA] rounded-2xl p-4 mb-4">
+            <h4 className="text-sm font-extrabold text-[#111] mb-2 m-0">📊 Analíticas del Negocio</h4>
+            <div className="flex flex-col gap-2 text-xs text-[#555]">
+              <div className="flex justify-between bg-white p-2.5 rounded-xl border border-[#F0F0F0]">
+                <span>Promedio por consumo:</span>
+                <span className="font-bold text-[#111]">${txCount > 0 ? (totalBunz / txCount * 10).toFixed(0) : 0} MXN</span>
+              </div>
+              <div className="flex justify-between bg-white p-2.5 rounded-xl border border-[#F0F0F0]">
+                <span>Tasa de retorno de clientes:</span>
+                <span className="font-bold text-[#111]">{clientCount > 0 ? (txCount / clientCount).toFixed(1) : 0}x visitas/cliente</span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* SUBTAB: CLIENTS */}
+        {activeSubTab === 'clients' && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="bg-[#FAFAFA] border border-[#EAEAEA] rounded-2xl p-4 mb-4">
+            <h4 className="text-sm font-extrabold text-[#111] mb-2 m-0">👥 Clientes Frecuentes ({clientCount})</h4>
+            {clientList.length === 0 ? (
+              <p className="text-xs text-[#888] m-0">Aún no hay registros de clientes.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {clientList.map((c, i) => (
+                  <div key={i} className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-[#F0F0F0] text-xs">
+                    <div>
+                      <p className="font-bold text-[#111] m-0">{c.user?.firstName || 'Rabbitter'} (@{c.user?.username || 'user'})</p>
+                      <p className="text-[10px] text-[#AAA] m-0">{c.txs} visita(s)</p>
+                    </div>
+                    <span className="font-extrabold text-[#E91E63]">{c.bunz} Bunz</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {/* SUBTAB: SETTINGS */}
+        {activeSubTab === 'settings' && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="bg-[#FAFAFA] border border-[#EAEAEA] rounded-2xl p-4 mb-4">
+            <h4 className="text-sm font-extrabold text-[#111] mb-2 m-0">⚙️ Ajustes del Comercio</h4>
+            <div className="flex flex-col gap-2 text-xs">
+              <div className="bg-white p-3 rounded-xl border border-[#F0F0F0]">
+                <p className="font-bold text-[#111] m-0 mb-1">Horario Happy Hour</p>
+                <p className="text-[#666] m-0">{business?.startTime || '00:00'} - {business?.endTime || '23:59'}</p>
+              </div>
+              <div className="bg-white p-3 rounded-xl border border-[#F0F0F0]">
+                <p className="font-bold text-[#111] m-0 mb-1">Dirección Registrada</p>
+                <p className="text-[#666] m-0">{business?.address}</p>
+              </div>
+            </div>
+          </motion.div>
+        )}
       </div>
 
       {/* Modal Rabbitty Code Ampliado para Escaneo */}
