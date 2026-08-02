@@ -1,3 +1,5 @@
+import { Resend } from 'resend';
+
 export interface EmailPayload {
   to: string;
   subject: string;
@@ -8,30 +10,32 @@ export async function sendEmail({ to, subject, html }: EmailPayload) {
   const apiKey = process.env.RESEND_API_KEY;
 
   if (!apiKey) {
-    console.warn('[Email Service] RESEND_API_KEY not found. Skipping email delivery to:', to);
+    console.warn('[Email Service] RESEND_API_KEY no encontrada. Omitiendo envío de correo a:', to);
     return { ok: false, error: 'RESEND_API_KEY missing' };
   }
 
   try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: 'Rabbitty Team <hola@rabbitty.me>',
-        to: [to],
-        subject,
-        html,
-      }),
+    const resend = new Resend(apiKey);
+    
+    // Remitente predeterminado: si el dominio no está verificado en Resend aún, se usa el de pruebas oficial onboarding@resend.dev
+    const fromAddress = process.env.RESEND_FROM_EMAIL || 'Rabbitty <onboarding@resend.dev>';
+
+    const { data, error } = await resend.emails.send({
+      from: fromAddress,
+      to: [to],
+      subject,
+      html,
     });
 
-    const data = await res.json();
-    console.log('[Email Service] Resend response for', to, ':', data);
-    return { ok: res.ok, data };
+    if (error) {
+      console.error('[Email Service] Error al enviar con Resend:', error);
+      return { ok: false, error };
+    }
+
+    console.log('[Email Service] Correo enviado exitosamente a:', to, 'ID:', data?.id);
+    return { ok: true, data };
   } catch (error) {
-    console.error('[Email Service] Error sending email:', error);
+    console.error('[Email Service] Excepción al enviar correo:', error);
     return { ok: false, error };
   }
 }
@@ -152,3 +156,28 @@ export function getApplicationRejectedEmailTemplate(businessName: string, reason
   `;
   return wrapInRabbittyEmailLayout(`Actualización de Solicitud`, businessName, content);
 }
+
+// Plantilla Drip para Rabbitters (Usuarios Finales) - Día 3: Multiplicadores y Trucos
+export function getRabbitterLevelUpEmailTemplate(userName: string, levelName: string, multiplier: number) {
+  const content = `
+    <div style="background: rgba(168,85,247,0.08); border-radius: 18px; padding: 22px; margin-bottom: 24px; border: 1px solid rgba(168,85,247,0.3);">
+      <p style="font-size: 15px; line-height: 1.6; color: #E2E8F0; margin: 0 0 12px 0;">
+        Hola <strong>${userName || 'Rabbitter'}</strong>,
+      </p>
+      <p style="font-size: 14px; line-height: 1.6; color: #CBD5E1; margin: 0 0 12px 0;">
+        ¿Sabías que cada vez que visitas un negocio afiliado y escaneas tu <strong>Rabbitty Code Neón</strong> acumulas Hops (XP) para subir de nivel?
+      </p>
+      <p style="font-size: 14px; line-height: 1.6; color: #CBD5E1; margin: 0;">
+        Tu nivel actual es <strong>${levelName}</strong> y ganas un multiplicador de <strong>x${multiplier} en Bunz</strong> en cada consumo.
+      </p>
+    </div>
+
+    <div style="text-align: center; margin-bottom: 28px;">
+      <a href="https://t.me/Rabbittyme_bot/app" style="display: inline-block; background: linear-gradient(135deg, #EC4899, #8B5CF6); color: #FFF; font-weight: 900; font-size: 15px; padding: 16px 32px; border-radius: 14px; text-decoration: none; box-shadow: 0 0 25px rgba(236,72,153,0.4);">
+        🎩 Ver Mis Trucos y Misiones
+      </a>
+    </div>
+  `;
+  return wrapInRabbittyEmailLayout(`Multiplica tus Bunz x${multiplier} ⚡`, userName, content);
+}
+

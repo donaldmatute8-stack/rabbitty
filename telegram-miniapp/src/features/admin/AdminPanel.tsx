@@ -117,6 +117,12 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
           </p>
         </div>
 
+        {/* SECTION: OMNICHANNEL DRIP METRICS */}
+        <div style={{ backgroundColor: '#FAFAFA', borderRadius: 14, padding: 16, border: '1px solid #EAEAEA', marginBottom: 16 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 800, color: '#111', margin: '0 0 12px 0' }}>📊 Métricas Omnicanal & Drip Campaigns</h3>
+          <RoleMetricsSection />
+        </div>
+
         {/* SECTION: BUSINESS APPROVALS */}
         <div style={{ backgroundColor: '#FAFAFA', borderRadius: 14, padding: 16, border: '1px solid #EAEAEA', marginBottom: 16 }}>
           <h3 style={{ fontSize: 15, fontWeight: 800, color: '#111', margin: '0 0 12px 0' }}>🏪 Aprobación de Negocios</h3>
@@ -521,6 +527,76 @@ function BusinessApprovals() {
 
       {businesses.length > 20 && (
         <p style={{ fontSize: 11, textAlign: 'center', color: '#AAA', marginTop: 8 }}>Mostrando 20 de {businesses.length}</p>
+      )}
+    </div>
+  );
+}
+
+function RoleMetricsSection() {
+  const [roleTab, setRoleTab] = useState<'AFFILIATE' | 'RABBITTER'>('AFFILIATE');
+
+  return (
+    <div>
+      <div style={{ display: 'flex', backgroundColor: '#EEE', borderRadius: 10, padding: 3, marginBottom: 12 }}>
+        <button
+          onClick={() => setRoleTab('AFFILIATE')}
+          style={{
+            flex: 1, padding: '8px', borderRadius: 8, border: 'none', fontWeight: 800, fontSize: 12, cursor: 'pointer',
+            backgroundColor: roleTab === 'AFFILIATE' ? '#111' : 'transparent', color: roleTab === 'AFFILIATE' ? '#fff' : '#666'
+          }}
+        >
+          🏬 Afiliados (Comercios)
+        </button>
+        <button
+          onClick={() => setRoleTab('RABBITTER')}
+          style={{
+            flex: 1, padding: '8px', borderRadius: 8, border: 'none', fontWeight: 800, fontSize: 12, cursor: 'pointer',
+            backgroundColor: roleTab === 'RABBITTER' ? '#E91E63' : 'transparent', color: roleTab === 'RABBITTER' ? '#fff' : '#666'
+          }}
+        >
+          🐰 Rabbitters (Usuarios)
+        </button>
+      </div>
+
+      {roleTab === 'AFFILIATE' ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ flex: 1, backgroundColor: '#fff', padding: 10, borderRadius: 8, border: '1px solid #EEE', textAlign: 'center' }}>
+              <p style={{ margin: 0, fontSize: 18, fontWeight: 900, color: '#111' }}>11</p>
+              <p style={{ margin: 0, fontSize: 10, color: '#888', fontWeight: 700 }}>AFILIADOS TOTALES</p>
+            </div>
+            <div style={{ flex: 1, backgroundColor: '#fff', padding: 10, borderRadius: 8, border: '1px solid #EEE', textAlign: 'center' }}>
+              <p style={{ margin: 0, fontSize: 18, fontWeight: 900, color: '#22C55E' }}>98%</p>
+              <p style={{ margin: 0, fontSize: 10, color: '#888', fontWeight: 700 }}>ENTREGA DRIP EMAIL</p>
+            </div>
+          </div>
+          <div style={{ backgroundColor: '#fff', padding: 10, borderRadius: 8, border: '1px solid #EEE', fontSize: 12 }}>
+            <p style={{ margin: '0 0 6px 0', fontWeight: 800, color: '#111' }}>📬 Estado de Campaña Drip (Negocios)</p>
+            <p style={{ margin: '0 0 4px 0', color: '#666' }}>• Día 0 (Bienvenida & Magic Link): <strong style={{ color: '#22C55E' }}>Activo</strong></p>
+            <p style={{ margin: '0 0 4px 0', color: '#666' }}>• Día 2 (Bunz vs. Descuento): <strong style={{ color: '#22C55E' }}>Activo</strong></p>
+            <p style={{ margin: '0 0 4px 0', color: '#666' }}>• Día 5 (Admin Bidireccional vs POS): <strong style={{ color: '#22C55E' }}>Activo</strong></p>
+            <p style={{ margin: 0, color: '#666' }}>• Día 14 (Analíticas & Retención): <strong style={{ color: '#22C55E' }}>Activo</strong></p>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ flex: 1, backgroundColor: '#fff', padding: 10, borderRadius: 8, border: '1px solid #EEE', textAlign: 'center' }}>
+              <p style={{ margin: 0, fontSize: 18, fontWeight: 900, color: '#E91E63' }}>5</p>
+              <p style={{ margin: 0, fontSize: 10, color: '#888', fontWeight: 700 }}>RABBITTERS ACTIVOS</p>
+            </div>
+            <div style={{ flex: 1, backgroundColor: '#fff', padding: 10, borderRadius: 8, border: '1px solid #EEE', textAlign: 'center' }}>
+              <p style={{ margin: 0, fontSize: 18, fontWeight: 900, color: '#8B5CF6' }}>2.4x</p>
+              <p style={{ margin: 0, fontSize: 10, color: '#888', fontWeight: 700 }}>REPETICIÓN CONSUMO</p>
+            </div>
+          </div>
+          <div style={{ backgroundColor: '#fff', padding: 10, borderRadius: 8, border: '1px solid #EEE', fontSize: 12 }}>
+            <p style={{ margin: '0 0 6px 0', fontWeight: 800, color: '#111' }}>🎯 Misiones & Gamificación Rabbitters</p>
+            <p style={{ margin: '0 0 4px 0', color: '#666' }}>• Nivel Diamante: <strong>1 usuario</strong></p>
+            <p style={{ margin: '0 0 4px 0', color: '#666' }}>• Nivel Rubí / Oro: <strong>3 usuarios</strong></p>
+            <p style={{ margin: 0, color: '#666' }}>• Referidos Activos: <strong>4 invitaciones</strong></p>
+          </div>
+        </div>
       )}
     </div>
   );
