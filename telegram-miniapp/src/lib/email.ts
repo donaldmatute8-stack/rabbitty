@@ -17,8 +17,8 @@ export async function sendEmail({ to, subject, html }: EmailPayload) {
   try {
     const resend = new Resend(apiKey);
     
-    // Remitente predeterminado: si el dominio no está verificado en Resend aún, se usa el de pruebas oficial onboarding@resend.dev
-    const fromAddress = process.env.RESEND_FROM_EMAIL || 'Rabbitty <onboarding@resend.dev>';
+    // Remitente verificado en Resend con dominio de producción rabbitty.me
+    const fromAddress = process.env.RESEND_FROM_EMAIL || 'Rabbitty Team <hola@rabbitty.me>';
 
     const { data, error } = await resend.emails.send({
       from: fromAddress,
@@ -52,10 +52,10 @@ function wrapInRabbittyEmailLayout(title: string, subtitle: string, bodyContent:
       <body style="margin: 0; padding: 20px; background-color: #05020A; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #FFFFFF;">
         <div style="max-width: 580px; margin: 0 auto; background: linear-gradient(180deg, #130725 0%, #0A0314 100%); border-radius: 28px; border: 1px solid rgba(244, 63, 94, 0.35); overflow: hidden; box-shadow: 0 0 50px rgba(233, 30, 99, 0.25);">
           
-          <!-- HEADER CON ISOTIPO Y LOGO -->
+          <!-- HEADER CON LOGO OFICIAL CONEJO NEÓN -->
           <div style="background: linear-gradient(135deg, rgba(244, 63, 94, 0.15), rgba(168, 85, 247, 0.15)); padding: 32px 24px; text-align: center; border-bottom: 1px solid rgba(255, 255, 255, 0.08);">
-            <div style="display: inline-block; width: 64px; height: 64px; background: rgba(244, 63, 94, 0.1); border-radius: 20px; border: 1.5px solid #F43F5E; line-height: 64px; text-align: center; margin-bottom: 12px; box-shadow: 0 0 20px rgba(244, 63, 94, 0.4);">
-              <span style="font-size: 32px;">🐰</span>
+            <div style="display: inline-block; width: 68px; height: 68px; background: #0A0314; border-radius: 22px; border: 1.5px solid #F43F5E; text-align: center; margin-bottom: 12px; box-shadow: 0 0 25px rgba(244, 63, 94, 0.45); overflow: hidden; padding: 6px;">
+              <img src="https://rabbitty.me/logo_conejo.png" alt="Rabbitty Conejo Logo" style="width: 100%; height: 100%; object-fit: contain; display: block;" />
             </div>
             <h2 style="margin: 0; font-size: 13px; font-weight: 900; letter-spacing: 0.35em; color: #FFFFFF; text-transform: uppercase;">RABBITTY PROTOCOL</h2>
             <h1 style="margin: 8px 0 0 0; font-size: 22px; font-weight: 800; color: #F43F5E;">${title}</h1>
@@ -74,9 +74,9 @@ function wrapInRabbittyEmailLayout(title: string, subtitle: string, bodyContent:
             <div style="margin-bottom: 12px;">
               <a href="https://rabbitty.me" style="color: #F43F5E; text-decoration: none; margin: 0 10px; font-weight: 700;">Sitio Web</a> ·
               <a href="https://t.me/Rabbittyme_bot/app" style="color: #F43F5E; text-decoration: none; margin: 0 10px; font-weight: 700;">MiniApp Telegram</a> ·
-              <a href="https://admin.rabbitty.me" style="color: #F43F5E; text-decoration: none; margin: 0 10px; font-weight: 700;">Portal Comercio</a>
+              <a href="https://admin.rabbitty.me/login" style="color: #F43F5E; text-decoration: none; margin: 0 10px; font-weight: 700;">Portal Comercio</a>
             </div>
-            <p style="margin: 0; color: #475569; font-size: 10px;">Este mensaje fue enviado automáticamente a socios afiliados de Rabbitty.</p>
+            <p style="margin: 0; color: #475569; font-size: 10px;">Recibiste este mensaje transaccional como comercio/usuario registrado en Rabbitty.</p>
           </div>
 
         </div>
