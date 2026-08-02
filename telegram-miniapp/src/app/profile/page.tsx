@@ -41,6 +41,20 @@ export default function ProfilePage() {
   const [nextLevelHops, setNextLevelHops] = useState(500);
   const [levelGradient, setLevelGradient] = useState(DEFAULT_GRADIENT);
   const [levelName, setLevelName] = useState('1');
+  const [hasBusiness, setHasBusiness] = useState(false);
+
+  useEffect(() => {
+    if (user?.telegramId) {
+      fetch(`/api/business?telegramId=${user.telegramId}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.success && d.business) {
+            setHasBusiness(true);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [user]);
 
   const handleAvatarTap = async () => {
     if (!user?.telegramId) {
@@ -169,12 +183,12 @@ export default function ProfilePage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
         >
-          {user?.role === 'AFFILIATE' ? (
+          {(user?.role === 'AFFILIATE' || hasBusiness) ? (
             <>
               <Link href="/business" className="flex items-center justify-between bg-[#111] rounded-[14px] p-4 mb-2.5 no-underline active:scale-[0.98] transition-transform shadow-lg">
                 <div>
-                  <p className="text-sm font-extrabold text-white mb-0.5">Cambiar a Modo Afiliado</p>
-                  <p className="text-[11px] text-[#888] m-0">Gestiona tu negocio activo</p>
+                  <p className="text-sm font-extrabold text-white mb-0.5">Portal de Negocio Afiliado</p>
+                  <p className="text-[11px] text-[#888] m-0">Gestiona tu negocio y tasa de Bunz</p>
                 </div>
                 <div className="w-11 h-6 rounded-xl bg-[#E91E63] p-0.5 flex justify-end">
                   <div className="w-5 h-5 rounded-[10px] bg-white shadow-[0_2px_4px_rgba(0,0,0,0.2)]" />

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { QrCode, Inbox, Check, X } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
+import RabbittyCode from '@/components/ui/RabbittyCode';
 
 interface MobileAffiliateDashboardProps {
   business: any;
@@ -9,6 +9,7 @@ interface MobileAffiliateDashboardProps {
 }
 
 export default function MobileAffiliateDashboard({ business, telegramId }: MobileAffiliateDashboardProps) {
+  const [showCodeModal, setShowCodeModal] = useState(false);
   const [rewardRate, setRewardRate] = useState(business?.rewardPercentage || 21);
   const [savingRate, setSavingRate] = useState(false);
   const [reservations, setReservations] = useState<any[]>([]);
@@ -78,7 +79,7 @@ export default function MobileAffiliateDashboard({ business, telegramId }: Mobil
 
   if (business?.status === 'PENDING_VERIFICATION' || business?.status === 'PENDING') {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '64px 32px', textAlign: 'center' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '64px 32px', paddingTop: 'calc(max(env(safe-area-inset-top), 64px) + 32px)', textAlign: 'center' }}>
         <div style={{ width: 80, height: 80, background: '#FFF5F0', color: '#F97316', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}>
           <span style={{ fontSize: 32 }}>⏱️</span>
         </div>
@@ -91,8 +92,8 @@ export default function MobileAffiliateDashboard({ business, telegramId }: Mobil
   }
 
   return (
-    <div style={{ paddingBottom: 120 }}>
-      <div style={{ padding: '24px 20px 16px' }}>
+    <div style={{ paddingBottom: 120, paddingTop: 'calc(max(env(safe-area-inset-top), 64px) + 8px)' }}>
+      <div style={{ padding: '8px 20px 16px' }}>
         <h1 style={{ fontSize: 28, fontWeight: 900, color: '#111', margin: '0 0 4px 0', letterSpacing: '-1px' }}>{business?.name || 'Café Cultura'}</h1>
         <p style={{ margin: 0, fontSize: 14, color: '#888', fontWeight: 600 }}>{business?.category || 'Restaurante y Café'}</p>
       </div>
@@ -140,8 +141,11 @@ export default function MobileAffiliateDashboard({ business, telegramId }: Mobil
               </div>
             </div>
           </div>
-          <div style={{ backgroundColor: "#fff", borderRadius: 12, padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <QRCodeSVG value={`business_${business?.id}`} size={40} level="L" />
+          <div 
+            onClick={() => setShowCodeModal(true)}
+            style={{ backgroundColor: "#180B28", border: '1px solid rgba(233,30,99,0.3)', borderRadius: 12, padding: '6px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+          >
+            <RabbittyCode data={`business_${business?.id}`} size={38} showCardFrame={false} />
           </div>
         </motion.div>
 
@@ -303,6 +307,22 @@ export default function MobileAffiliateDashboard({ business, telegramId }: Mobil
           ))}
         </motion.div>
       </div>
+
+      {/* Modal Rabbitty Code Ampliado para Escaneo */}
+      {showCodeModal && (
+        <div 
+          onClick={() => setShowCodeModal(false)}
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div className="flex flex-col items-center animate-in fade-in zoom-in duration-200">
+            <RabbittyCode data={`business_${business?.id}`} size={240} showCardFrame={true} />
+            <p className="text-white/80 font-bold text-sm mt-6 bg-white/10 backdrop-blur-md px-6 py-2 rounded-full border border-white/10">
+              Escanea para registrar consumo
+            </p>
+            <p className="text-white/40 text-xs mt-2">Toca en cualquier lugar para cerrar</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

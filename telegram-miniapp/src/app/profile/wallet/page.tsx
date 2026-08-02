@@ -5,6 +5,7 @@ import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import { TonConnectButton, useTonWallet, useTonConnectUI } from '@tonconnect/ui-react';
 import { ArrowUpRight, ArrowDownLeft, Copy, RefreshCw, X } from 'lucide-react';
 import { useWallet } from '@/contexts/WalletContext';
+import RabbittyCode from '@/components/ui/RabbittyCode';
 
 interface Transaction {
   id: string;
@@ -231,8 +232,8 @@ export default function WalletPage() {
               <X size={24} color="#888" />
             </button>
             <h3 className="text-xl font-extrabold m-0 mb-4 text-center">Recibir (TON / Bunz)</h3>
-            <div className="bg-[#F8F8F8] rounded-2xl p-5 text-center mb-5">
-              <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=ton://transfer/${wallet?.account.address}`} alt="QR" className="w-[200px] h-[200px] rounded-xl mx-auto" />
+            <div className="rounded-3xl p-4 text-center mb-5 flex justify-center bg-[#0C0618] border border-pink-500/30">
+              <RabbittyCode data={wallet?.account.address || address || 'rabbitty'} size={180} showCardFrame={false} />
             </div>
             <p className="text-[11px] font-extrabold text-[#AAA] uppercase mb-2 text-center">Tu Dirección TON</p>
             <div className="flex items-center justify-between bg-[#F0F0F0] p-3 rounded-xl">
