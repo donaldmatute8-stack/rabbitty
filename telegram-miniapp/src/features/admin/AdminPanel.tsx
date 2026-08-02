@@ -503,16 +503,18 @@ function BusinessApprovals() {
                 {b.status}
               </span>
             </div>
-            {b.status === 'PENDING' && (
-              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              {b.status !== 'REJECTED' && (
                 <button onClick={() => handleAction(b.id, 'REJECTED')} style={{ flex: 1, backgroundColor: '#FFEBEE', color: '#F44336', border: 'none', padding: '6px', borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
                   Rechazar
                 </button>
+              )}
+              {b.status !== 'APPROVED' && (
                 <button onClick={() => handleAction(b.id, 'APPROVED')} style={{ flex: 1, backgroundColor: '#E8F5E9', color: '#4CAF50', border: 'none', padding: '6px', borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
                   Aprobar
                 </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         ))}
       </div>
