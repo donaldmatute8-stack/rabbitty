@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useToast } from '@/contexts/ToastContext';
 
@@ -472,71 +472,169 @@ function BusinessApprovals() {
     (filter === 'PENDING' && b.status === 'PENDING_VERIFICATION')
   );
 
+  const filters = [
+    { id: 'PENDING', label: 'Pendientes' },
+    { id: 'UNDER_REVIEW', label: 'En Revisión' },
+    { id: 'APPROVED', label: 'Aprobados' },
+    { id: 'REJECTED', label: 'Rechazados' },
+    { id: 'ALL', label: 'Todos' }
+  ];
+
   return (
     <div>
-      <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
-        {['PENDING', 'UNDER_REVIEW', 'APPROVED', 'REJECTED', 'ALL'].map(f => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            style={{
-              padding: '4px 12px', borderRadius: 999, border: 'none', fontSize: 11, fontWeight: 800, cursor: 'pointer',
-              backgroundColor: filter === f ? '#111' : '#E0E0E0', color: filter === f ? '#fff' : '#666'
-            }}
-          >
-            {f === 'PENDING' ? 'Pendientes' : f === 'UNDER_REVIEW' ? 'En Revisión' : f === 'APPROVED' ? 'Aprobados' : f === 'REJECTED' ? 'Rechazados' : 'Todos'}
-          </button>
-        ))}
+      {/* Filtros Animados Segmentados */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'none' }}>
+        {filters.map(f => {
+          const isActive = filter === f.id;
+          return (
+            <button
+              key={f.id}
+              onClick={() => setFilter(f.id)}
+              style={{
+                position: 'relative',
+                padding: '6px 14px',
+                borderRadius: 999,
+                border: 'none',
+                background: 'transparent',
+                color: isActive ? '#fff' : '#666',
+                fontSize: 12,
+                fontWeight: 800,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                transition: 'color 0.2s ease',
+                zIndex: 1
+              }}
+            >
+              {isActive && (
+                <motion.div
+                  layoutId="activeFilter"
+                  style={{
+                    position: 'absolute',
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: '#111',
+                    borderRadius: 999,
+                    zIndex: -1
+                  }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                />
+              )}
+              {f.label}
+            </button>
+          );
+        })}
       </div>
 
-      {loading && <p style={{ fontSize: 13, color: '#888' }}>Cargando...</p>}
-
-      {!loading && filtered.length === 0 && (
-        <p style={{ fontSize: 13, color: '#888' }}>No hay negocios {filter !== 'ALL' ? filter.toLowerCase() : ''}.</p>
+      {loading && (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '20px 0' }}>
+          <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }} style={{ width: 24, height: 24, border: '3px solid #EEE', borderTopColor: '#E91E63', borderRadius: '50%' }} />
+        </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 300, overflowY: 'auto' }}>
-        {filtered.slice(0, 20).map((b: any) => (
-          <div key={b.id} style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, border: '1px solid #EEE' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-              <div>
-                <p style={{ margin: 0, fontSize: 13, fontWeight: 800 }}>{b.name}</p>
-                <p style={{ margin: '2px 0', fontSize: 11, color: '#888' }}>{b.category} · {b.address?.slice(0, 40)}</p>
-                {b.owner && (
-                  <p style={{ margin: '2px 0', fontSize: 11, color: '#555' }}>
-                    👤 {b.owner.firstName || ''} {b.owner.lastName || ''}
-                    {b.owner.phoneNumber ? ` · 📞 ${b.owner.phoneNumber}` : ''}
-                    {b.owner.telegramId ? ` · 📱 @${b.owner.username || b.owner.telegramId?.slice(0, 8)}` : ''}
-                  </p>
-                )}
-              </div>
-              <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 6, backgroundColor: b.status === 'PENDING' ? '#FFF3E0' : b.status === 'UNDER_REVIEW' ? '#FEF9C3' : b.status === 'APPROVED' ? '#E8F5E9' : '#FFEBEE', color: b.status === 'PENDING' ? '#F57C00' : b.status === 'UNDER_REVIEW' ? '#CA8A04' : b.status === 'APPROVED' ? '#4CAF50' : '#F44336' }}>
-                {b.status === 'UNDER_REVIEW' ? 'EN REVISIÓN' : b.status}
-              </span>
-            </div>
-            <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-              {b.status !== 'UNDER_REVIEW' && (
-                <button onClick={() => handleAction(b.id, 'UNDER_REVIEW')} style={{ flex: 1, backgroundColor: '#FEF9C3', color: '#CA8A04', border: 'none', padding: '6px', borderRadius: 6, fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>
-                  En Revisión
-                </button>
-              )}
-              {b.status !== 'REJECTED' && (
-                <button onClick={() => handleAction(b.id, 'REJECTED')} style={{ flex: 1, backgroundColor: '#FFEBEE', color: '#F44336', border: 'none', padding: '6px', borderRadius: 6, fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>
-                  Rechazar
-                </button>
-              )}
-              {b.status !== 'APPROVED' && (
-                <button onClick={() => handleAction(b.id, 'APPROVED')} style={{ flex: 1, backgroundColor: '#E8F5E9', color: '#4CAF50', border: 'none', padding: '6px', borderRadius: 6, fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>
-                  Aprobar
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
+      {!loading && filtered.length === 0 && (
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+          style={{ padding: '32px 16px', textAlign: 'center', backgroundColor: '#fff', borderRadius: 16, border: '1px dashed #DDD' }}
+        >
+          <span style={{ fontSize: 32, display: 'block', marginBottom: 8 }}>📭</span>
+          <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#444' }}>Todo en orden</p>
+          <p style={{ margin: '4px 0 0', fontSize: 12, color: '#888' }}>No se encontraron negocios para este filtro.</p>
+        </motion.div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 400, overflowY: 'auto', paddingRight: 4, scrollbarWidth: 'thin' }}>
+        <AnimatePresence>
+          {filtered.slice(0, 20).map((b: any) => {
+            const isPending = b.status === 'PENDING' || b.status === 'PENDING_VERIFICATION';
+            const isReview = b.status === 'UNDER_REVIEW';
+            const isApproved = b.status === 'APPROVED';
+            
+            return (
+              <motion.div 
+                key={b.id} 
+                layout
+                initial={{ opacity: 0, y: 15, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
+                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                style={{ 
+                  backgroundColor: '#fff', 
+                  borderRadius: 16, 
+                  padding: 16, 
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
+                  border: '1px solid #F0F0F0',
+                  position: 'relative',
+                  overflow: 'hidden'
+                }}
+              >
+                {/* Accent line based on status */}
+                <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, backgroundColor: isPending ? '#F57C00' : isReview ? '#CA8A04' : isApproved ? '#4CAF50' : '#F44336' }} />
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, paddingLeft: 4 }}>
+                  <div style={{ flex: 1, paddingRight: 12 }}>
+                    <p style={{ margin: 0, fontSize: 16, fontWeight: 900, color: '#111', lineHeight: 1.2 }}>{b.name || 'Sin nombre'}</p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#666', backgroundColor: '#F5F5F5', padding: '2px 8px', borderRadius: 6 }}>{b.category}</span>
+                      <span style={{ fontSize: 11, color: '#888', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 150 }}>📍 {b.address?.split(',')[0]}</span>
+                    </div>
+                  </div>
+                  
+                  {/* Glowing Badge */}
+                  <div style={{ 
+                    padding: '4px 10px', borderRadius: 8, fontSize: 10, fontWeight: 800, whiteSpace: 'nowrap',
+                    backgroundColor: isPending ? 'rgba(245, 124, 0, 0.1)' : isReview ? 'rgba(202, 138, 4, 0.1)' : isApproved ? 'rgba(76, 175, 80, 0.1)' : 'rgba(244, 67, 54, 0.1)', 
+                    color: isPending ? '#F57C00' : isReview ? '#CA8A04' : isApproved ? '#4CAF50' : '#F44336',
+                    border: `1px solid ${isPending ? 'rgba(245, 124, 0, 0.2)' : isReview ? 'rgba(202, 138, 4, 0.2)' : isApproved ? 'rgba(76, 175, 80, 0.2)' : 'rgba(244, 67, 54, 0.2)'}`
+                  }}>
+                    {isReview ? 'EN REVISIÓN' : b.status === 'PENDING_VERIFICATION' ? 'PENDING' : b.status}
+                  </div>
+                </div>
+
+                <div style={{ backgroundColor: '#FAFAFA', borderRadius: 10, padding: 10, marginBottom: 12, marginLeft: 4 }}>
+                  <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 800, color: '#444' }}>Solicitante</p>
+                  {b.owner ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <p style={{ margin: 0, fontSize: 12, color: '#111', fontWeight: 600 }}>
+                        👤 {b.owner.firstName || ''} {b.owner.lastName || ''}
+                      </p>
+                      {(b.owner.phoneNumber || b.owner.username || b.owner.telegramId) && (
+                        <p style={{ margin: 0, fontSize: 11, color: '#666', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          {b.owner.phoneNumber && <span>📞 {b.owner.phoneNumber}</span>}
+                          {b.owner.telegramId && <span>📱 @{b.owner.username || b.owner.telegramId?.slice(0, 8)}</span>}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <p style={{ margin: 0, fontSize: 12, color: '#888', fontStyle: 'italic' }}>Sin asignar</p>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, marginLeft: 4 }}>
+                  {b.status !== 'UNDER_REVIEW' && (
+                    <button onClick={() => handleAction(b.id, 'UNDER_REVIEW')} style={{ flex: 1, backgroundColor: '#FEF9C3', color: '#A16207', border: 'none', padding: '10px 0', borderRadius: 8, fontWeight: 800, fontSize: 12, cursor: 'pointer', transition: 'background 0.2s' }}>
+                      Pausar a Revisión
+                    </button>
+                  )}
+                  {b.status !== 'REJECTED' && (
+                    <button onClick={() => handleAction(b.id, 'REJECTED')} style={{ width: 44, backgroundColor: '#FEF2F2', color: '#EF4444', border: 'none', borderRadius: 8, fontWeight: 800, fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      ×
+                    </button>
+                  )}
+                  {b.status !== 'APPROVED' && (
+                    <button onClick={() => handleAction(b.id, 'APPROVED')} style={{ flex: 2, backgroundColor: '#111', color: '#FFF', border: 'none', padding: '10px 0', borderRadius: 8, fontWeight: 800, fontSize: 12, cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+                      Aprobar Negocio
+                    </button>
+                  )}
+                </div>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
       </div>
 
       {businesses.length > 20 && (
-        <p style={{ fontSize: 11, textAlign: 'center', color: '#AAA', marginTop: 8 }}>Mostrando 20 de {businesses.length}</p>
+        <p style={{ fontSize: 11, textAlign: 'center', color: '#AAA', marginTop: 12, fontWeight: 700 }}>
+          Mostrando 20 de {businesses.length} registros
+        </p>
       )}
     </div>
   );

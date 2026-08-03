@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { ownedBusinesses } from "@/db/schema";
-import { ilike, or } from "drizzle-orm";
+import { ilike, or, eq, and } from "drizzle-orm";
 
 export async function GET(req: Request) {
   try {
@@ -18,12 +18,15 @@ export async function GET(req: Request) {
       })
       .from(ownedBusinesses)
       .where(
-        query
-          ? or(
-              ilike(ownedBusinesses.name, `%${query}%`),
-              ilike(ownedBusinesses.category, `%${query}%`)
-            )
-          : undefined
+        and(
+          eq(ownedBusinesses.status, 'APPROVED'),
+          query
+            ? or(
+                ilike(ownedBusinesses.name, `%${query}%`),
+                ilike(ownedBusinesses.category, `%${query}%`)
+              )
+            : undefined
+        )
       )
       .limit(10);
 
