@@ -433,8 +433,9 @@ function BusinessApprovals() {
 
   const fetchBusinesses = () => {
     setLoading(true);
-    fetch('/api/admin/business', {
-      headers: { 'X-Telegram-Id': user?.telegramId || '' }
+    fetch(`/api/admin/business?t=${Date.now()}`, {
+      headers: { 'X-Telegram-Id': user?.telegramId || '' },
+      cache: 'no-store'
     })
       .then(r => r.json())
       .then(data => {
