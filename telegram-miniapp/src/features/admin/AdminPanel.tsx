@@ -457,7 +457,7 @@ function BusinessApprovals() {
       const data = await res.json();
       if (data.success) {
         setBusinesses(prev => prev.map(b => b.id === businessId ? { ...b, status } : b));
-        showToast(`Negocio ${status === 'APPROVED' ? 'aprobado' : 'rechazado'}`, 'success');
+        showToast(`Negocio ${status === 'APPROVED' ? 'aprobado' : status === 'REJECTED' ? 'rechazado' : 'en revisión'}`, 'success');
       } else {
         showToast('Error: ' + (data.error || 'desconocido'), 'error');
       }
@@ -611,7 +611,7 @@ function BusinessApprovals() {
                 <div style={{ display: 'flex', gap: 8, marginLeft: 4 }}>
                   {b.status !== 'UNDER_REVIEW' && (
                     <button onClick={() => handleAction(b.id, 'UNDER_REVIEW')} style={{ flex: 1, backgroundColor: '#FEF9C3', color: '#A16207', border: 'none', padding: '10px 0', borderRadius: 8, fontWeight: 800, fontSize: 12, cursor: 'pointer', transition: 'background 0.2s' }}>
-                      Pausar a Revisión
+                      Pasar a Revisión
                     </button>
                   )}
                   {b.status !== 'REJECTED' && (
