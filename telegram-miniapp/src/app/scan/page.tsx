@@ -97,13 +97,13 @@ export default function ScanPage() {
         {/* My Code tab */}
         {activeTab === 'my-code' && (
           <div className="flex flex-col items-center justify-center w-full px-4 py-2">
-            <div className="text-center mb-2">
+            <div className="text-center mb-10">
               <h2 className="text-xl font-extrabold text-white m-0 mb-1">Tu Código Rabbitter</h2>
               <p className="text-white/60 text-xs leading-relaxed m-0">Muestra este código en caja para acumular Bunz por tu consumo.</p>
             </div>
-            <div className="flex items-center justify-center w-full max-h-[70vh] py-2">
+            <div className="flex items-center justify-center w-full pt-8 pb-4">
               {qrValue ? (
-                <RabbittyCode data={qrValue} size={190} showCardFrame={true} />
+                <RabbittyCode data={qrValue} size={180} showCardFrame={true} />
               ) : (
                 <div className="w-[180px] h-[180px] bg-white/[0.03] flex items-center justify-center rounded-xl border-2 border-dashed border-white/10">
                   <span className="text-white/40 text-xs font-bold">Cargando...</span>

@@ -4,9 +4,19 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Search, MapPin, Crosshair } from 'lucide-react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import BottomNav from '@/components/BottomNav';
 import Header from '@/components/ui/Header';
 import EmptyState from '@/components/ui/EmptyState';
+
+const InteractiveMap = dynamic(() => import('@/features/map/InteractiveMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-full w-full bg-[#0D0D1A] flex items-center justify-center">
+      <div className="w-8 h-8 rounded-full border-2 border-pink-500/30 border-t-pink-500 animate-spin" />
+    </div>
+  ),
+});
 
 type Biz = {
   id: string;
@@ -57,23 +67,8 @@ export default function MapPage() {
       <Header />
 
       <main className="flex-1 relative">
-        <div className="h-[50vh] bg-[#F5F5F5] relative">
-          <div className="absolute inset-0 flex items-center justify-center">
-            <EmptyState
-              icon={<MapPin className="w-12 h-12 text-[#8A8A8A]" />}
-              title="Mapa en desarrollo"
-              description="Integración con Google Maps próximamente."
-            />
-          </div>
-
-          <div className="absolute top-4 right-4 flex flex-col gap-2">
-            <button className="w-10 h-10 bg-white rounded-full shadow-md flex items-center justify-center active:scale-95 transition-transform">
-              <Crosshair className="w-5 h-5 text-[#111]" />
-            </button>
-            <button onClick={() => setShowList(!showList)} className="w-10 h-10 bg-white rounded-full shadow-md flex items-center justify-center active:scale-95 transition-transform">
-              <MapPin className="w-5 h-5 text-[#111]" />
-            </button>
-          </div>
+        <div className="h-[50vh] bg-[#0D0D1A] relative overflow-hidden">
+          <InteractiveMap businesses={businesses} />
         </div>
 
         <motion.div
