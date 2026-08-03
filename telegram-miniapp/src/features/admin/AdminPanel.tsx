@@ -465,7 +465,11 @@ function BusinessApprovals() {
     }
   };
 
-  const filtered = businesses.filter(b => filter === 'ALL' || b.status === filter);
+  const filtered = businesses.filter(b => 
+    filter === 'ALL' || 
+    b.status === filter || 
+    (filter === 'PENDING' && b.status === 'PENDING_VERIFICATION')
+  );
 
   return (
     <div>
