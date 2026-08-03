@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+export const dynamic = 'force-dynamic';
 import { db } from '@/db';
 import { users, ownedBusinesses, webSessions } from '@/db/schema';
 import { eq } from 'drizzle-orm';
