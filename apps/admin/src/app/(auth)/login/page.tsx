@@ -3,7 +3,7 @@
 import { signIn } from "next-auth/react";
 import { useState, useEffect } from "react";
 import { Mail, QrCode, Sparkles } from "lucide-react";
-import { QRCodeSVG } from "qrcode.react";
+import RabbittyCode from "@/components/ui/RabbittyCode";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -90,14 +90,13 @@ export default function LoginPage() {
 
           <div className="p-4 bg-white/5 border border-pink-500/30 rounded-2xl shadow-[0_0_30px_rgba(236,72,153,0.15)] relative">
             {qrToken ? (
-              <QRCodeSVG
-                value={`rabbitty://auth?token=${qrToken}&sid=${sessionId}`}
-                size={160}
-                bgColor="transparent"
-                fgColor="#FFFFFF"
+              <RabbittyCode
+                data={JSON.stringify({ type: 'auth', token: qrToken, sid: sessionId })}
+                size={180}
+                showCardFrame={false}
               />
             ) : (
-              <div className="w-[160px] h-[160px] flex items-center justify-center text-xs text-gray-500 animate-pulse">
+              <div className="w-[180px] h-[180px] flex items-center justify-center text-xs text-gray-500 animate-pulse">
                 Generando QR...
               </div>
             )}
