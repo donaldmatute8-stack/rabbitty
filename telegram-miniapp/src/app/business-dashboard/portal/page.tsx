@@ -7,6 +7,7 @@ import { useAuth } from '@/features/auth/AuthProvider';
 
 export default function BusinessPortal() {
   const { user } = useAuth();
+  const [businessState, setBusinessState] = useState<any>(null);
   const [stats, setStats] = useState({ clients: 0, tickets: 0, bunz: 0, visits: 0 });
   const [loading, setLoading] = useState(true);
 
@@ -18,6 +19,8 @@ export default function BusinessPortal() {
     .then(([bizData]) => {
       if (bizData.success && bizData.business) {
         const biz = bizData.business;
+        // Guardamos el negocio en el estado local para poder leer el status
+        setBusinessState(biz);
         fetch(`/api/business/transactions?businessId=${biz.id}`)
           .then(r => r.json())
           .then((txData: any) => {
@@ -57,6 +60,18 @@ export default function BusinessPortal() {
       </div>
 
       <div className="p-6 max-w-5xl mx-auto">
+        {businessState && businessState.status !== 'APPROVED' && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-amber-800 font-bold flex items-center gap-2">
+                ⏳ Negocio en Revisión
+              </h3>
+              <p className="text-amber-700 text-sm mt-1">
+                Tu solicitud está siendo analizada por nuestro equipo. Mientras tanto, puedes configurar tus recompensas y fotos, pero tu perfil no será visible para los clientes.
+              </p>
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
             <div className="flex items-center gap-2 mb-2 text-gray-500 text-sm font-semibold">
