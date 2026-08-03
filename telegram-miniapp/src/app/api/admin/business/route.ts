@@ -28,7 +28,7 @@ export async function POST(req: Request) {
   }
 
   const { businessId, status } = await req.json();
-  if (!businessId || !['APPROVED', 'REJECTED'].includes(status)) {
+  if (!businessId || !['APPROVED', 'REJECTED', 'UNDER_REVIEW'].includes(status)) {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   }
 
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     .set({
       status,
       verificationMethod: 'admin',
-      verificationData: JSON.stringify({ approvedAt: new Date().toISOString(), approvedBy: telegramId }),
+      verificationData: JSON.stringify({ updatedAt: new Date().toISOString(), updatedBy: telegramId }),
     })
     .where(eq(ownedBusinesses.id, businessId))
     .returning();
@@ -45,14 +45,67 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Business not found' }, { status: 404 });
   }
 
+  const owner = await db.query.users.findFirst({
+    where: eq(users.id, updated.ownerId),
+  });
+
+  const targetEmail = owner?.email || (updated.verificationData ? JSON.parse(updated.verificationData)?.email : null) || 'iaherrerav10@gmail.com';
+
+  if (status === 'UNDER_REVIEW') {
+    // Notificación Telegram si aplica
+    if (owner?.telegramId && TELEGRAM_BOT_TOKEN) {
+      const message =
+        `🔍 *Tu negocio ${updated.name} está en Proceso de Revisión*\n\n` +
+        `Nuestro equipo está validando los detalles de tu comercio para dejar todo listo antes del lanzamiento oficial.\n\n` +
+        `Nos pondremos en contacto contigo en breve si requerimos algún dato adicional.\n\n` +
+        `🐰 — Rabbitty Team`;
+      try {
+        await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: owner.telegramId, text: message, parse_mode: 'Markdown' }),
+        });
+      } catch (e) {
+        console.error('Failed to send under review Telegram msg:', e);
+      }
+    }
+
+    // Correo Transaccional Neón "En Revisión"
+    if (targetEmail) {
+      try {
+        const { sendEmail, wrapInRabbittyEmailLayout } = await import('@/lib/email');
+        const content = `
+          <div style="background: rgba(234,179,8,0.06); border-radius: 18px; padding: 22px; margin-bottom: 24px; border: 1px solid rgba(234,179,8,0.3);">
+            <p style="font-size: 15px; line-height: 1.6; color: #E2E8F0; margin: 0 0 12px 0;">
+              Hola <strong>${updated.name}</strong>,
+            </p>
+            <p style="font-size: 14px; line-height: 1.6; color: #CBD5E1; margin: 0 0 12px 0;">
+              Tu solicitud de registro ha pasado a nuestro estado prioritario <strong>"En Revisión"</strong>.
+            </p>
+            <p style="font-size: 14px; line-height: 1.6; color: #CBD5E1; margin: 0;">
+              🕵️‍♂️ Un especialista de Rabbitty revisará los datos de tu menú/servicios y ubicación. En caso de requerir algún ajuste, nos comunicaremos directamente por Telegram o respuesta a este correo.
+            </p>
+          </div>
+
+          <div style="background: linear-gradient(135deg, rgba(234,179,8,0.12), rgba(244,63,94,0.12)); border-radius: 18px; padding: 20px; text-align: center; margin-bottom: 24px; border: 1px solid rgba(234,179,8,0.25);">
+            <h3 style="margin: 0 0 8px 0; color: #FFF; font-size: 15px; font-weight: 800;">💬 ¿Necesitas agilizar tu verificación?</h3>
+            <p style="margin: 0 0 16px 0; color: #E2E8F0; font-size: 13px;">Escríbenos directamente en nuestro canal de atención a afiliados.</p>
+            <a href="https://t.me/Rabbittyme_bot" style="display: inline-block; background: #EAB308; color: #000; font-weight: 900; font-size: 13px; padding: 12px 26px; border-radius: 12px; text-decoration: none;">Hablar con Soporte 📲</a>
+          </div>
+        `;
+        const emailHtml = wrapInRabbittyEmailLayout(`Solicitud En Revisión 🔍`, updated.name, content);
+        await sendEmail({
+          to: targetEmail,
+          subject: `🔍 Tu negocio ${updated.name} está en proceso de revisión en Rabbitty`,
+          html: emailHtml,
+        });
+      } catch (e) {
+        console.error('Failed to send under review email:', e);
+      }
+    }
+  }
+
   if (status === 'APPROVED') {
-    const owner = await db.query.users.findFirst({
-      where: eq(users.id, updated.ownerId),
-    });
-
-    // Extraer correo del owner o de los datos de la solicitud
-    const targetEmail = owner?.email || (updated.verificationData ? JSON.parse(updated.verificationData)?.email : null) || 'iaherrerav10@gmail.com';
-
     let magicUrl = 'https://admin.rabbitty.me/login';
 
     if (owner?.id) {
@@ -100,7 +153,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // Notificación vía Correo Electrónico (siempre que exista correo en el owner o en los datos del negocio)
+    // Notificación vía Correo Electrónico
     if (targetEmail) {
       try {
         const { sendEmail, getApplicationApprovedEmailTemplate } = await import('@/lib/email');

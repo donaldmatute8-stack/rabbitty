@@ -96,17 +96,14 @@ export default function ScanPage() {
 
         {/* My Code tab */}
         {activeTab === 'my-code' && (
-          <div className="flex flex-col items-center gap-5 p-8 bg-white/5 rounded-[40px] border border-white/10 mx-6 backdrop-blur-md w-[calc(100%-48px)] max-w-[340px]">
-            <div className="w-16 h-16 bg-[rgba(233,30,99,0.15)] rounded-[20px] border border-[rgba(233,30,99,0.25)] flex items-center justify-center">
-              <QrCode size={32} color="#E91E63" />
+          <div className="flex flex-col items-center justify-center w-full px-4 py-2">
+            <div className="text-center mb-2">
+              <h2 className="text-xl font-extrabold text-white m-0 mb-1">Tu Código Rabbitter</h2>
+              <p className="text-white/60 text-xs leading-relaxed m-0">Muestra este código en caja para acumular Bunz por tu consumo.</p>
             </div>
-            <div className="text-center">
-              <h2 className="text-xl font-extrabold text-white m-0 mb-2">Tu Código Rabbitter</h2>
-              <p className="text-white/50 text-xs leading-[1.6] m-0">Muestra este código en caja para acumular Bunz por tu consumo.</p>
-            </div>
-            <div className="flex items-center justify-center min-h-[360px] w-full py-4">
+            <div className="flex items-center justify-center w-full max-h-[70vh] py-2">
               {qrValue ? (
-                <RabbittyCode data={qrValue} size={200} showCardFrame={true} />
+                <RabbittyCode data={qrValue} size={190} showCardFrame={true} />
               ) : (
                 <div className="w-[180px] h-[180px] bg-white/[0.03] flex items-center justify-center rounded-xl border-2 border-dashed border-white/10">
                   <span className="text-white/40 text-xs font-bold">Cargando...</span>

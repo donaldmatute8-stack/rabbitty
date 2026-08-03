@@ -32,6 +32,36 @@ export async function POST(req: Request) {
     const result = await res.json();
     console.log('[Landing Apply] Telegram response:', result);
 
+    // Registrar o actualizar solicitud en la base de datos (para visualización en Admin Panel)
+    try {
+      const { db } = await import('@/db');
+      const { ownedBusinesses } = await import('@/db/schema');
+      const { eq } = await import('drizzle-orm');
+
+      const existing = data.email ? await db.query.ownedBusinesses.findFirst({
+        where: eq(ownedBusinesses.name, data.negocio || 'Sin nombre')
+      }) : null;
+
+      if (!existing) {
+        await db.insert(ownedBusinesses).values({
+          id: crypto.randomUUID(),
+          ownerId: 'f7178385-0010-4000-8000-000000000001', // ID por defecto asignable hasta vincular telegram
+          name: data.negocio || 'Nuevo Negocio',
+          category: data.tipo || 'Restaurante',
+          description: data.mensaje || 'Solicitud de afiliación enviada desde el sitio web rabbitty.me',
+          address: data.ubicacion || 'Por confirmar',
+          lat: 19.4326,
+          lng: -99.1332,
+          rewardPercentage: 10,
+          status: 'PENDING',
+          verificationMethod: 'web_form',
+          verificationData: JSON.stringify(data),
+        });
+      }
+    } catch (e) {
+      console.error('[Landing Apply] Error insertando negocio en DB:', e);
+    }
+
     // Disparar correo de confirmación de recepción al usuario si proporcionó email
     if (data.email) {
       const apiKey = process.env.RESEND_API_KEY;

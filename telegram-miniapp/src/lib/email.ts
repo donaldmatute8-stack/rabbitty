@@ -41,7 +41,7 @@ export async function sendEmail({ to, subject, html }: EmailPayload) {
 }
 
 // Layout Base de Correo Institucional Rabbitty
-function wrapInRabbittyEmailLayout(title: string, subtitle: string, bodyContent: string) {
+export function wrapInRabbittyEmailLayout(title: string, subtitle: string, bodyContent: string) {
   return `
     <!DOCTYPE html>
     <html>
