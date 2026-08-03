@@ -46,24 +46,56 @@ export async function POST(req: Request) {
         totalBunzEarned: 0
       }).returning();
       user = newUser;
+    } // <-- Missing brace added here
 
-      if (startParam && startParam.startsWith('ref_')) {
-        const inviterTelegramId = startParam.replace('ref_', '');
-        
-        if (inviterTelegramId !== telegramId) {
-          const inviter = await db.query.users.findFirst({
-            where: eq(users.telegramId, inviterTelegramId)
+    if (startParam && startParam.startsWith('ref_') && isNewUser) {
+      const inviterTelegramId = startParam.replace('ref_', '');
+      
+      if (inviterTelegramId !== telegramId) {
+        const inviter = await db.query.users.findFirst({
+          where: eq(users.telegramId, inviterTelegramId)
+        });
+
+        if (inviter) {
+          await db.insert(referrals).values({
+            inviterId: inviter.id,
+            invitedId: user.id,
+            status: "PENDING",
+            rewardAmount: 50
           });
-
-          if (inviter) {
-            await db.insert(referrals).values({
-              inviterId: inviter.id,
-              invitedId: user.id,
-              status: "PENDING",
-              rewardAmount: 50
-            });
-          }
         }
+      }
+    }
+
+    if (startParam && startParam.startsWith('claim_')) {
+      const claimId = startParam.replace('claim_', ''); // UUID sin guiones
+      
+      // Buscar el negocio usando sql helper de drizzle para el WHERE
+      const { sql: drizzleSql } = require('drizzle-orm');
+      const { ownedBusinesses } = require('@/db/schema');
+      
+      const [business] = await db
+        .select({ id: ownedBusinesses.id })
+        .from(ownedBusinesses)
+        .where(eq(drizzleSql`REPLACE(${ownedBusinesses.id}::text, '-', '')`, claimId))
+        .limit(1);
+
+      if (business) {
+        const bId = business.id;
+        
+        // Actualizar el negocio asignándole el ownerId
+        await db.execute(
+          drizzleSql`UPDATE "ownedBusinesses" SET "ownerId" = ${user.id} WHERE id = ${bId}`
+        );
+
+        // Actualizar el rol del usuario a AFFILIATE si no lo es ya
+        if (user.role !== 'AFFILIATE' && user.role !== 'ADMIN') {
+          await db.execute(
+            drizzleSql`UPDATE "users" SET "role" = 'AFFILIATE' WHERE id = ${user.id}`
+          );
+        }
+        
+        console.log(`[Claim Business] Negocio ${bId} asignado al usuario ${user.id}`);
       }
     }
 
