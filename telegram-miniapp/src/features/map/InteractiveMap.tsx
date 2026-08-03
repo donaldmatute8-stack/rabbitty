@@ -116,7 +116,7 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
 
   // Radar sweep RAF removed since we use CSS animation now
 
-  // Map Initialization
+  // Map Initialization — runs ONCE on mount
   useEffect(() => {
     if (!mapRef.current || mapInst.current) return;
     
@@ -124,8 +124,8 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
     const fallbackLat = businesses.length > 0 && businesses[0].lat ? parseFloat(businesses[0].lat) : 25.7275;
     const fallbackLng = businesses.length > 0 && businesses[0].lng ? parseFloat(businesses[0].lng) : -100.312;
 
-    const centerLat = userLat || fallbackLat;
-    const centerLng = userLng || fallbackLng;
+    const centerLat = userLat != null ? userLat : fallbackLat;
+    const centerLng = userLng != null ? userLng : fallbackLng;
 
     const map = L.map(mapRef.current, {
       center: [centerLat, centerLng],
@@ -139,8 +139,8 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
       maxZoom: 19, opacity: 0.92,
     }).addTo(map);
 
-    // Add User Location Marker
-    if (userLat && userLng) {
+    // Add destination marker (from affiliate 'Llegar')
+    if (userLat != null && userLng != null) {
       const uIcon = L.divIcon({ html: userMarkerHTML(), className:'', iconSize:[26,26], iconAnchor:[13,13] });
       L.marker([userLat, userLng], { icon: uIcon, zIndexOffset: 2000 }).addTo(map);
 
@@ -158,6 +158,13 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
       map.remove(); 
       mapInst.current = null; 
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Initialize only once — don't re-init on coord change
+
+  // Pan to target location if coordinates come in after mount
+  useEffect(() => {
+    if (!mapInst.current || userLat == null || userLng == null) return;
+    mapInst.current.setView([userLat, userLng], 16, { animate: true });
   }, [userLat, userLng]);
 
   // Render Business Markers

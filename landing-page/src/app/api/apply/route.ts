@@ -32,20 +32,51 @@ export async function POST(req: Request) {
     const result = await res.json();
     console.log('[Landing Apply] Telegram response:', result);
 
-    // Notificar al backend de la MiniApp para registrar la solicitud en Postgres DB
-    try {
-      const miniappUrl = process.env.MINIAPP_URL || 'https://t.me/Rabbittyme_bot/app';
-      const apiEndpoint = miniappUrl.includes('localhost') 
-        ? 'http://localhost:3000/api/admin/business' 
-        : 'https://rabbitty.me/api/admin/business'; // proxy o URL directa
+    // Insertar la solicitud directamente en Neon DB (CORE_DATABASE_URL debe estar en Vercel)
+    const dbUrl = process.env.CORE_DATABASE_URL;
+    if (dbUrl) {
+      try {
+        const postgres = (await import('postgres')).default;
+        const sql = postgres(dbUrl, { ssl: 'require', max: 1 });
 
-      await fetch(apiEndpoint, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      }).catch(err => console.error('[Landing Apply] HTTP sync error:', err));
-    } catch (e) {
-      console.error('[Landing Apply] Sync exception:', e);
+        // Check if already exists by name
+        const existing = await sql`
+          SELECT id FROM "ownedBusinesses" WHERE name = ${data.negocio || 'Nuevo Negocio'} LIMIT 1
+        `;
+
+        if (existing.length === 0) {
+          await sql`
+            INSERT INTO "ownedBusinesses" (
+              id, "ownerId", name, category, description, address, lat, lng,
+              "rewardPercentage", status, "verificationMethod", "verificationData", "createdAt", "updatedAt"
+            ) VALUES (
+              gen_random_uuid(),
+              'f7178385-0010-4000-8000-000000000001',
+              ${data.negocio || 'Nuevo Negocio'},
+              ${data.tipo || 'Restaurante'},
+              ${data.mensaje || 'Solicitud de afiliación desde rabbitty.me'},
+              ${data.ubicacion || 'Por confirmar'},
+              19.4326,
+              -99.1332,
+              10,
+              'PENDING',
+              'web_form',
+              ${JSON.stringify(data)},
+              NOW(),
+              NOW()
+            )
+          `;
+          console.log('[Landing Apply] Negocio insertado en DB:', data.negocio);
+        } else {
+          console.log('[Landing Apply] Negocio ya existe en DB:', data.negocio);
+        }
+
+        await sql.end();
+      } catch (dbErr) {
+        console.error('[Landing Apply] Error insertando en Neon DB:', dbErr);
+      }
+    } else {
+      console.warn('[Landing Apply] CORE_DATABASE_URL no configurada en Vercel');
     }
 
     // Disparar correo de confirmación de recepción al usuario si proporcionó email
