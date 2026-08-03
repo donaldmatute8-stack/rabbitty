@@ -170,6 +170,59 @@ export async function POST(req: Request) {
     }
   }
 
+  if (status === 'REJECTED') {
+    // Notificación Telegram si aplica
+    if (owner?.telegramId && TELEGRAM_BOT_TOKEN) {
+      const message =
+        `❌ *Solicitud Rechazada para ${updated.name}*\n\n` +
+        `Lamentablemente tu solicitud de registro de negocio no ha cumplido con los criterios de aprobación en este momento.\n\n` +
+        `Si crees que esto es un error, por favor contacta a soporte.\n\n` +
+        `🐰 — Rabbitty Team`;
+      try {
+        await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: owner.telegramId, text: message, parse_mode: 'Markdown' }),
+        });
+      } catch (e) {
+        console.error('Failed to send rejection Telegram msg:', e);
+      }
+    }
+
+    // Correo Transaccional Neón "Rechazado"
+    if (targetEmail) {
+      try {
+        const { sendEmail, wrapInRabbittyEmailLayout } = await import('@/lib/email');
+        const content = `
+          <div style="background: rgba(244,63,94,0.06); border-radius: 18px; padding: 22px; margin-bottom: 24px; border: 1px solid rgba(244,63,94,0.3);">
+            <p style="font-size: 15px; line-height: 1.6; color: #E2E8F0; margin: 0 0 12px 0;">
+              Hola <strong>${updated.name}</strong>,
+            </p>
+            <p style="font-size: 14px; line-height: 1.6; color: #CBD5E1; margin: 0 0 12px 0;">
+              Lamentamos informarte que tu solicitud de registro de negocio <strong>ha sido rechazada</strong>.
+            </p>
+            <p style="font-size: 14px; line-height: 1.6; color: #CBD5E1; margin: 0;">
+              🕵️‍♂️ Tu negocio no cumple con los criterios de aprobación en este momento.
+            </p>
+          </div>
+          <div style="background: linear-gradient(135deg, rgba(234,179,8,0.12), rgba(244,63,94,0.12)); border-radius: 18px; padding: 20px; text-align: center; margin-bottom: 24px; border: 1px solid rgba(234,179,8,0.25);">
+            <h3 style="margin: 0 0 8px 0; color: #FFF; font-size: 15px; font-weight: 800;">💬 ¿Crees que es un error?</h3>
+            <p style="margin: 0 0 16px 0; color: #E2E8F0; font-size: 13px;">Comunícate con soporte para apelar esta decisión.</p>
+            <a href="https://t.me/Rabbittyme_bot" style="display: inline-block; background: #EAB308; color: #000; font-weight: 900; font-size: 13px; padding: 12px 26px; border-radius: 12px; text-decoration: none;">Hablar con Soporte 📲</a>
+          </div>
+        `;
+        const emailHtml = wrapInRabbittyEmailLayout(`Solicitud Rechazada ❌`, updated.name, content);
+        await sendEmail({
+          to: targetEmail,
+          subject: `❌ Tu solicitud para ${updated.name} ha sido rechazada en Rabbitty`,
+          html: emailHtml,
+        });
+      } catch (e) {
+        console.error('Failed to send rejection email:', e);
+      }
+    }
+  }
+
   return NextResponse.json({ success: true, business: updated });
 }
 
