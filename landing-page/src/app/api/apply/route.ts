@@ -32,34 +32,20 @@ export async function POST(req: Request) {
     const result = await res.json();
     console.log('[Landing Apply] Telegram response:', result);
 
-    // Registrar o actualizar solicitud en la base de datos (para visualización en Admin Panel)
+    // Notificar al backend de la MiniApp para registrar la solicitud en Postgres DB
     try {
-      const { db } = await import('@/db');
-      const { ownedBusinesses } = await import('@/db/schema');
-      const { eq } = await import('drizzle-orm');
+      const miniappUrl = process.env.MINIAPP_URL || 'https://t.me/Rabbittyme_bot/app';
+      const apiEndpoint = miniappUrl.includes('localhost') 
+        ? 'http://localhost:3000/api/admin/business' 
+        : 'https://rabbitty.me/api/admin/business'; // proxy o URL directa
 
-      const existing = data.email ? await db.query.ownedBusinesses.findFirst({
-        where: eq(ownedBusinesses.name, data.negocio || 'Sin nombre')
-      }) : null;
-
-      if (!existing) {
-        await db.insert(ownedBusinesses).values({
-          id: crypto.randomUUID(),
-          ownerId: 'f7178385-0010-4000-8000-000000000001', // ID por defecto asignable hasta vincular telegram
-          name: data.negocio || 'Nuevo Negocio',
-          category: data.tipo || 'Restaurante',
-          description: data.mensaje || 'Solicitud de afiliación enviada desde el sitio web rabbitty.me',
-          address: data.ubicacion || 'Por confirmar',
-          lat: 19.4326,
-          lng: -99.1332,
-          rewardPercentage: 10,
-          status: 'PENDING',
-          verificationMethod: 'web_form',
-          verificationData: JSON.stringify(data),
-        });
-      }
+      await fetch(apiEndpoint, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      }).catch(err => console.error('[Landing Apply] HTTP sync error:', err));
     } catch (e) {
-      console.error('[Landing Apply] Error insertando negocio en DB:', e);
+      console.error('[Landing Apply] Sync exception:', e);
     }
 
     // Disparar correo de confirmación de recepción al usuario si proporcionó email

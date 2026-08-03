@@ -171,3 +171,40 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ success: true, business: updated });
 }
+
+export async function PUT(req: Request) {
+  try {
+    const data = await req.json();
+    if (!data.negocio && !data.nombre) {
+      return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
+    }
+
+    const existing = data.negocio ? await db.query.ownedBusinesses.findFirst({
+      where: eq(ownedBusinesses.name, data.negocio)
+    }) : null;
+
+    if (!existing) {
+      const [inserted] = await db.insert(ownedBusinesses).values({
+        id: crypto.randomUUID(),
+        ownerId: 'f7178385-0010-4000-8000-000000000001',
+        name: data.negocio || 'Nuevo Negocio',
+        category: data.tipo || 'Restaurante',
+        description: data.mensaje || 'Solicitud de afiliación recibida desde la landing page rabbitty.me',
+        address: data.ubicacion || 'Por confirmar',
+        lat: 19.4326,
+        lng: -99.1332,
+        rewardPercentage: 10,
+        status: 'PENDING',
+        verificationMethod: 'web_form',
+        verificationData: JSON.stringify(data),
+      }).returning();
+
+      return NextResponse.json({ success: true, business: inserted });
+    }
+
+    return NextResponse.json({ success: true, message: 'Already exists' });
+  } catch (e) {
+    console.error('[PUT /api/admin/business error]:', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
