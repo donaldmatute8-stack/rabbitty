@@ -97,9 +97,8 @@ export default function ScanPage() {
         {/* My Code tab */}
         {activeTab === 'my-code' && (
           <div className="flex flex-col items-center justify-center w-full px-4 py-2">
-            <div className="text-center mb-10">
-              <h2 className="text-xl font-extrabold text-white m-0 mb-1">Tu Código Rabbitter</h2>
-              <p className="text-white/60 text-xs leading-relaxed m-0">Muestra este código en caja para acumular Bunz por tu consumo.</p>
+            <div className="text-center mb-8">
+              <p className="text-white/70 text-xs leading-relaxed m-0 max-w-[260px]">Muestra este código en caja para acumular Bunz por tu consumo.</p>
             </div>
             <div className="flex items-center justify-center w-full pt-8 pb-4">
               {qrValue ? (

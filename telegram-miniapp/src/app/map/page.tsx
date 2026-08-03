@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Search, MapPin, Crosshair } from 'lucide-react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import BottomNav from '@/components/BottomNav';
 import Header from '@/components/ui/Header';
@@ -31,6 +32,10 @@ type Biz = {
 const FILTERS = ['Todos', 'Cafés', 'Restaurantes', 'Gimnasios', 'Retail', 'Belleza'];
 
 export default function MapPage() {
+  const searchParams = useSearchParams();
+  const targetLat = searchParams.get('lat') ? parseFloat(searchParams.get('lat')!) : null;
+  const targetLng = searchParams.get('lng') ? parseFloat(searchParams.get('lng')!) : null;
+
   const [activeFilter, setActiveFilter] = useState('Todos');
   const [showList, setShowList] = useState(true);
   const [businesses, setBusinesses] = useState<Biz[]>([]);
@@ -68,7 +73,7 @@ export default function MapPage() {
 
       <main className="flex-1 relative">
         <div className="h-[50vh] bg-[#0D0D1A] relative overflow-hidden">
-          <InteractiveMap businesses={businesses} />
+          <InteractiveMap businesses={businesses} userLat={targetLat} userLng={targetLng} />
         </div>
 
         <motion.div
