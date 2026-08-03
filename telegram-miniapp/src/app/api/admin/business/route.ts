@@ -33,24 +33,39 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   }
 
+  const currentBiz = await db.query.ownedBusinesses.findFirst({
+    where: eq(ownedBusinesses.id, businessId),
+  });
+
+  if (!currentBiz) {
+    return NextResponse.json({ error: 'Business not found' }, { status: 404 });
+  }
+
+  let existingVerificationData: any = {};
+  try {
+    if (currentBiz.verificationData) {
+      existingVerificationData = JSON.parse(currentBiz.verificationData);
+    }
+  } catch {}
+
   const [updated] = await db.update(ownedBusinesses)
     .set({
       status,
       verificationMethod: 'admin',
-      verificationData: JSON.stringify({ updatedAt: new Date().toISOString(), updatedBy: telegramId }),
+      verificationData: JSON.stringify({
+        ...existingVerificationData,
+        updatedAt: new Date().toISOString(),
+        updatedBy: telegramId,
+      }),
     })
     .where(eq(ownedBusinesses.id, businessId))
     .returning();
-
-  if (!updated) {
-    return NextResponse.json({ error: 'Business not found' }, { status: 404 });
-  }
 
   const owner = await db.query.users.findFirst({
     where: eq(users.id, updated.ownerId),
   });
 
-  const targetEmail = owner?.email || (updated.verificationData ? JSON.parse(updated.verificationData)?.email : null) || 'iaherrerav10@gmail.com';
+  const targetEmail = owner?.email || existingVerificationData?.email || 'iaherrerav10@gmail.com';
 
   if (status === 'UNDER_REVIEW') {
     // Notificación Telegram si aplica

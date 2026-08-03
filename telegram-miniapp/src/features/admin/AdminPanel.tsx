@@ -541,7 +541,7 @@ function BusinessApprovals() {
         </motion.div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 400, overflowY: 'auto', paddingRight: 4, scrollbarWidth: 'thin' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 420, overflowY: 'auto', padding: '4px 6px 24px 4px', scrollbarWidth: 'thin' }}>
         <AnimatePresence>
           {filtered.slice(0, 20).map((b: any) => {
             const isPending = b.status === 'PENDING' || b.status === 'PENDING_VERIFICATION';
@@ -559,9 +559,9 @@ function BusinessApprovals() {
                 style={{ 
                   backgroundColor: '#fff', 
                   borderRadius: 16, 
-                  padding: 16, 
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
-                  border: '1px solid #F0F0F0',
+                  padding: '14px 16px', 
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.04)',
+                  border: '1px solid #EFEFEF',
                   position: 'relative',
                   overflow: 'hidden'
                 }}
@@ -569,12 +569,12 @@ function BusinessApprovals() {
                 {/* Accent line based on status */}
                 <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, backgroundColor: isPending ? '#F57C00' : isReview ? '#CA8A04' : isApproved ? '#4CAF50' : '#F44336' }} />
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, paddingLeft: 4 }}>
-                  <div style={{ flex: 1, paddingRight: 12 }}>
-                    <p style={{ margin: 0, fontSize: 16, fontWeight: 900, color: '#111', lineHeight: 1.2 }}>{b.name || 'Sin nombre'}</p>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: '#666', backgroundColor: '#F5F5F5', padding: '2px 8px', borderRadius: 6 }}>{b.category}</span>
-                      <span style={{ fontSize: 11, color: '#888', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 150 }}>📍 {b.address?.split(',')[0]}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8, paddingLeft: 4 }}>
+                  <div style={{ flex: 1, paddingRight: 8 }}>
+                    <p style={{ margin: 0, fontSize: 15, fontWeight: 900, color: '#111', lineHeight: 1.25 }}>{b.name || 'Sin nombre'}</p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#555', backgroundColor: '#F3F4F6', padding: '2px 8px', borderRadius: 6 }}>{b.category || 'Comercio'}</span>
+                      {b.address && <span style={{ fontSize: 10, color: '#888', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }}>📍 {b.address.split(',')[0]}</span>}
                     </div>
                   </div>
                   
@@ -583,48 +583,50 @@ function BusinessApprovals() {
                     padding: '4px 10px', borderRadius: 8, fontSize: 10, fontWeight: 800, whiteSpace: 'nowrap',
                     backgroundColor: isPending ? 'rgba(245, 124, 0, 0.1)' : isReview ? 'rgba(202, 138, 4, 0.1)' : isApproved ? 'rgba(76, 175, 80, 0.1)' : 'rgba(244, 67, 54, 0.1)', 
                     color: isPending ? '#F57C00' : isReview ? '#CA8A04' : isApproved ? '#4CAF50' : '#F44336',
-                    border: `1px solid ${isPending ? 'rgba(245, 124, 0, 0.2)' : isReview ? 'rgba(202, 138, 4, 0.2)' : isApproved ? 'rgba(76, 175, 80, 0.2)' : 'rgba(244, 67, 54, 0.2)'}`
+                    border: `1px solid ${isPending ? 'rgba(245, 124, 0, 0.25)' : isReview ? 'rgba(202, 138, 4, 0.25)' : isApproved ? 'rgba(76, 175, 80, 0.25)' : 'rgba(244, 67, 54, 0.25)'}`
                   }}>
                     {isReview ? 'EN REVISIÓN' : b.status === 'PENDING_VERIFICATION' ? 'PENDING' : b.status}
                   </div>
                 </div>
 
-                <div style={{ backgroundColor: '#FAFAFA', borderRadius: 10, padding: 10, marginBottom: 12, marginLeft: 4 }}>
-                  <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 800, color: '#444' }}>Solicitante</p>
+                <div style={{ backgroundColor: '#FAFAFA', borderRadius: 10, padding: '8px 10px', marginBottom: (isPending || isReview) ? 10 : 0, marginLeft: 4 }}>
+                  <p style={{ margin: '0 0 2px', fontSize: 10, fontWeight: 800, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5 }}>Solicitante</p>
                   {b.owner ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <p style={{ margin: 0, fontSize: 12, color: '#111', fontWeight: 600 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <p style={{ margin: 0, fontSize: 12, color: '#111', fontWeight: 700 }}>
                         👤 {b.owner.firstName || ''} {b.owner.lastName || ''}
                       </p>
                       {(b.owner.phoneNumber || b.owner.username || b.owner.telegramId) && (
-                        <p style={{ margin: 0, fontSize: 11, color: '#666', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <p style={{ margin: 0, fontSize: 10, color: '#666', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                           {b.owner.phoneNumber && <span>📞 {b.owner.phoneNumber}</span>}
                           {b.owner.telegramId && <span>📱 @{b.owner.username || b.owner.telegramId?.slice(0, 8)}</span>}
                         </p>
                       )}
                     </div>
                   ) : (
-                    <p style={{ margin: 0, fontSize: 12, color: '#888', fontStyle: 'italic' }}>Sin asignar</p>
+                    <p style={{ margin: 0, fontSize: 11, color: '#888', fontStyle: 'italic' }}>Sin usuario asignado</p>
                   )}
                 </div>
 
-                <div style={{ display: 'flex', gap: 8, marginLeft: 4 }}>
-                  {b.status !== 'UNDER_REVIEW' && (
-                    <button onClick={() => handleAction(b.id, 'UNDER_REVIEW')} style={{ flex: 1, backgroundColor: '#FEF9C3', color: '#A16207', border: 'none', padding: '10px 0', borderRadius: 8, fontWeight: 800, fontSize: 12, cursor: 'pointer', transition: 'background 0.2s' }}>
-                      Pasar a Revisión
-                    </button>
-                  )}
-                  {b.status !== 'REJECTED' && (
-                    <button onClick={() => handleAction(b.id, 'REJECTED')} style={{ width: 44, backgroundColor: '#FEF2F2', color: '#EF4444', border: 'none', borderRadius: 8, fontWeight: 800, fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      ×
-                    </button>
-                  )}
-                  {b.status !== 'APPROVED' && (
-                    <button onClick={() => handleAction(b.id, 'APPROVED')} style={{ flex: 2, backgroundColor: '#111', color: '#FFF', border: 'none', padding: '10px 0', borderRadius: 8, fontWeight: 800, fontSize: 12, cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
-                      Aprobar Negocio
-                    </button>
-                  )}
-                </div>
+                {(isPending || isReview) && (
+                  <div style={{ display: 'flex', gap: 8, marginLeft: 4, marginTop: 4 }}>
+                    {b.status !== 'UNDER_REVIEW' && (
+                      <button onClick={() => handleAction(b.id, 'UNDER_REVIEW')} style={{ flex: 1, backgroundColor: '#FEF9C3', color: '#A16207', border: 'none', padding: '10px 0', borderRadius: 8, fontWeight: 800, fontSize: 11, cursor: 'pointer', transition: 'background 0.2s' }}>
+                        Pasar a Revisión
+                      </button>
+                    )}
+                    {b.status !== 'REJECTED' && (
+                      <button onClick={() => handleAction(b.id, 'REJECTED')} style={{ width: 40, backgroundColor: '#FEF2F2', color: '#EF4444', border: 'none', borderRadius: 8, fontWeight: 800, fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        ×
+                      </button>
+                    )}
+                    {b.status !== 'APPROVED' && (
+                      <button onClick={() => handleAction(b.id, 'APPROVED')} style={{ flex: 1.5, backgroundColor: '#111', color: '#FFF', border: 'none', padding: '10px 0', borderRadius: 8, fontWeight: 800, fontSize: 11, cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+                        Aprobar Negocio
+                      </button>
+                    )}
+                  </div>
+                )}
               </motion.div>
             );
           })}
