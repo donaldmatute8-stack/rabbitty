@@ -15,7 +15,7 @@ export default function RootError({
 
   return (
     <div className="flex flex-col items-center justify-center min-h-dvh bg-[#FAFAFA] px-6 text-center">
-      <span className="text-5xl mb-4">🐰</span>
+      <img src="/logo_conejo.png" alt="Rabbitty Logo" className="w-16 h-16 object-contain mb-4 filter drop-shadow-[0_0_12px_rgba(233,30,99,0.3)]" />
       <h1 className="text-xl font-bold text-[#111] mb-2">Algo salió mal</h1>
       <p className="text-sm text-[#888] mb-6 max-w-xs leading-relaxed">
         Tuvimos un problema inesperado. Ya lo registramos.

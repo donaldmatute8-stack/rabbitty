@@ -470,7 +470,7 @@ function BusinessApprovals() {
   return (
     <div>
       <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
-        {['PENDING', 'APPROVED', 'REJECTED', 'ALL'].map(f => (
+        {['PENDING', 'UNDER_REVIEW', 'APPROVED', 'REJECTED', 'ALL'].map(f => (
           <button
             key={f}
             onClick={() => setFilter(f)}
@@ -479,7 +479,7 @@ function BusinessApprovals() {
               backgroundColor: filter === f ? '#111' : '#E0E0E0', color: filter === f ? '#fff' : '#666'
             }}
           >
-            {f === 'ALL' ? 'Todos' : f}
+            {f === 'PENDING' ? 'Pendientes' : f === 'UNDER_REVIEW' ? 'En Revisión' : f === 'APPROVED' ? 'Aprobados' : f === 'REJECTED' ? 'Rechazados' : 'Todos'}
           </button>
         ))}
       </div>
@@ -505,18 +505,23 @@ function BusinessApprovals() {
                   </p>
                 )}
               </div>
-              <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 6, backgroundColor: b.status === 'PENDING' ? '#FFF3E0' : b.status === 'APPROVED' ? '#E8F5E9' : '#FFEBEE', color: b.status === 'PENDING' ? '#F57C00' : b.status === 'APPROVED' ? '#4CAF50' : '#F44336' }}>
-                {b.status}
+              <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 6, backgroundColor: b.status === 'PENDING' ? '#FFF3E0' : b.status === 'UNDER_REVIEW' ? '#FEF9C3' : b.status === 'APPROVED' ? '#E8F5E9' : '#FFEBEE', color: b.status === 'PENDING' ? '#F57C00' : b.status === 'UNDER_REVIEW' ? '#CA8A04' : b.status === 'APPROVED' ? '#4CAF50' : '#F44336' }}>
+                {b.status === 'UNDER_REVIEW' ? 'EN REVISIÓN' : b.status}
               </span>
             </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+              {b.status !== 'UNDER_REVIEW' && (
+                <button onClick={() => handleAction(b.id, 'UNDER_REVIEW')} style={{ flex: 1, backgroundColor: '#FEF9C3', color: '#CA8A04', border: 'none', padding: '6px', borderRadius: 6, fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>
+                  En Revisión
+                </button>
+              )}
               {b.status !== 'REJECTED' && (
-                <button onClick={() => handleAction(b.id, 'REJECTED')} style={{ flex: 1, backgroundColor: '#FFEBEE', color: '#F44336', border: 'none', padding: '6px', borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                <button onClick={() => handleAction(b.id, 'REJECTED')} style={{ flex: 1, backgroundColor: '#FFEBEE', color: '#F44336', border: 'none', padding: '6px', borderRadius: 6, fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>
                   Rechazar
                 </button>
               )}
               {b.status !== 'APPROVED' && (
-                <button onClick={() => handleAction(b.id, 'APPROVED')} style={{ flex: 1, backgroundColor: '#E8F5E9', color: '#4CAF50', border: 'none', padding: '6px', borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                <button onClick={() => handleAction(b.id, 'APPROVED')} style={{ flex: 1, backgroundColor: '#E8F5E9', color: '#4CAF50', border: 'none', padding: '6px', borderRadius: 6, fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>
                   Aprobar
                 </button>
               )}

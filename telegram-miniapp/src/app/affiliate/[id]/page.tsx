@@ -15,6 +15,8 @@ export default function AffiliateProfilePage() {
   const { showToast } = useToast();
   const [affiliate, setAffiliate] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [showMapSelector, setShowMapSelector] = useState(false);
+  const [showInAppBrowser, setShowInAppBrowser] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -52,10 +54,6 @@ export default function AffiliateProfilePage() {
       </div>
     );
   }
-
-  // Dynamic Modals State
-  const [showMapSelector, setShowMapSelector] = useState(false);
-  const [showInAppBrowser, setShowInAppBrowser] = useState(false);
 
   // Parse gallery safely
   let parsedGallery = [];
