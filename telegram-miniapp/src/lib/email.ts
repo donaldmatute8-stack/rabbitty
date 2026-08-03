@@ -7,10 +7,10 @@ export interface EmailPayload {
 }
 
 export async function sendEmail({ to, subject, html }: EmailPayload) {
-  const apiKey = process.env.RESEND_API_KEY;
+  const apiKey = process.env.RESEND_API_KEY || process.env.AUTH_RESEND_KEY || process.env.RESEND_KEY;
 
   if (!apiKey) {
-    console.warn('[Email Service] RESEND_API_KEY no encontrada. Omitiendo envío de correo a:', to);
+    console.warn('[Email Service] RESEND_API_KEY / AUTH_RESEND_KEY no encontrada. Omitiendo envío de correo a:', to);
     return { ok: false, error: 'RESEND_API_KEY missing' };
   }
 
