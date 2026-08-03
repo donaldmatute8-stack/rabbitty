@@ -40,6 +40,15 @@ export async function POST(req: Request) {
         const postgres = (await import('postgres')).default;
         const sql = postgres(dbUrl, { ssl: 'require', max: 1 });
 
+        // Upsert a system placeholder user for web applications
+        const sysUser = await sql`
+          INSERT INTO "users" (id, "telegramId", "firstName", "lastName", "role")
+          VALUES (gen_random_uuid(), 'WEB_FORM_SYS', 'Aspirante', '(Web)', 'USER')
+          ON CONFLICT ("telegramId") DO UPDATE SET "firstName" = 'Aspirante'
+          RETURNING id
+        `;
+        const placeholderOwnerId = sysUser[0].id;
+
         // Check if already exists by name
         const existing = await sql`
           SELECT id FROM "ownedBusinesses" WHERE name = ${data.negocio || 'Nuevo Negocio'} LIMIT 1
@@ -52,7 +61,7 @@ export async function POST(req: Request) {
               "rewardPercentage", status, "verificationMethod", "verificationData", "createdAt", "updatedAt"
             ) VALUES (
               gen_random_uuid(),
-              'f7178385-0010-4000-8000-000000000001',
+              ${placeholderOwnerId},
               ${data.negocio || 'Nuevo Negocio'},
               ${data.tipo || 'Restaurante'},
               ${data.mensaje || 'Solicitud de afiliación desde rabbitty.me'},
