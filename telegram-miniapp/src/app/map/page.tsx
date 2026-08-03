@@ -1,14 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Search, MapPin, Crosshair } from 'lucide-react';
+import { Search } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import BottomNav from '@/components/BottomNav';
 import Header from '@/components/ui/Header';
-import EmptyState from '@/components/ui/EmptyState';
 
 const InteractiveMap = dynamic(() => import('@/features/map/InteractiveMap'), {
   ssr: false,
@@ -31,7 +30,8 @@ type Biz = {
 
 const FILTERS = ['Todos', 'Cafés', 'Restaurantes', 'Gimnasios', 'Retail', 'Belleza'];
 
-export default function MapPage() {
+// Inner component that uses useSearchParams — must be inside Suspense
+function MapPageInner() {
   const searchParams = useSearchParams();
   const targetLat = searchParams.get('lat') ? parseFloat(searchParams.get('lat')!) : null;
   const targetLng = searchParams.get('lng') ? parseFloat(searchParams.get('lng')!) : null;
@@ -118,7 +118,7 @@ export default function MapPage() {
               <p className="text-center text-[#8A8A8A] py-4">No hay negocios con ubicación disponible.</p>
             )}
 
-            {filtered.map((business, i) => (
+            {filtered.map((business) => (
               <Link
                 key={business.id}
                 href={`/affiliate/${business.id}`}
@@ -142,5 +142,18 @@ export default function MapPage() {
       </main>
       <BottomNav />
     </div>
+  );
+}
+
+// Outer page wraps inner in Suspense to satisfy Next.js static-page requirement for useSearchParams
+export default function MapPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen bg-[#0D0D1A]">
+        <div className="w-10 h-10 rounded-full border-2 border-pink-500/30 border-t-pink-500 animate-spin" />
+      </div>
+    }>
+      <MapPageInner />
+    </Suspense>
   );
 }

@@ -401,7 +401,7 @@ export default function AffiliateProfilePage() {
       {showInAppBrowser && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#05020A', display: 'flex', flexDirection: 'column' }}>
           {/* Header del Visor In-App */}
-          <div style={{ paddingTop: 'calc(max(env(safe-area-inset-top), 50px) + 8px)', paddingBottom: 12, paddingLeft: 16, paddingRight: 16, background: '#110720', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 56px)', paddingBottom: 12, paddingLeft: 16, paddingRight: 16, background: '#110720', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <button onClick={() => setShowInAppBrowser(false)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', width: 36, height: 36, borderRadius: '50%', cursor: 'pointer', fontWeight: 800 }}>✕</button>
               <div>
