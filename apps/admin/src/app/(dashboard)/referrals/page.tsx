@@ -5,20 +5,13 @@ import { Card } from "@rabbitty/ui";
 import { Gift, Users, TrendingUp, DollarSign } from "lucide-react";
 
 export default function ReferralsPage() {
-  const { data: analytics } = trpc.admin.getReferralAnalytics.useQuery();
+  const { data } = trpc.admin.getReferralAnalytics.useQuery(undefined, { retry: false });
 
-  if (!analytics) {
-    return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-black text-white">Referidos</h1>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-24 animate-pulse rounded-xl bg-white/5" />
-          ))}
-        </div>
-      </div>
-    );
-  }
+  const analytics = data ?? {
+    totalInviters: 0,
+    totalInvited: 0,
+    referrals: [],
+  };
 
   const totalRewardsPaid = analytics.referrals.reduce((s: number, r: { rewardAmount?: number }) => s + (r.rewardAmount ?? 0), 0);
 

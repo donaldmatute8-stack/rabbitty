@@ -21,39 +21,39 @@ export default function QRGeneratorPage() {
   };
 
   return (
-    <div className="flex h-screen flex-col">
-      <div className="border-b border-gray-200 bg-white px-6 py-4">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">Generador de QR de Mesa</h2>
-          <p className="text-sm text-gray-500">Genera códigos QR únicos por mesa para identificación</p>
-        </div>
-      </div>
-
+    <div className="flex h-screen flex-col bg-black">
       <div className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-4xl">
+        <div className="mx-auto max-w-4xl space-y-6">
+          {/* Header Banner */}
+          <div className="relative overflow-hidden rounded-3xl border border-white/5 bg-gradient-to-br from-gray-900/60 to-black/80 p-8 shadow-2xl backdrop-blur-xl">
+            <div className="absolute top-0 right-0 h-48 w-48 rounded-full bg-purple-500/10 blur-3xl pointer-events-none" />
+            <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-400">Códigos QR de Mesa</h1>
+            <p className="text-sm font-medium text-gray-400 mt-1">Genera códigos QR únicos por mesa para auto-pedido y pago</p>
+          </div>
+
           {tables?.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <AlertTriangle className="mb-4 h-16 w-16 text-gray-300" />
-              <p className="text-lg font-medium text-gray-500">No hay mesas registradas</p>
-              <p className="mt-1 text-sm text-gray-400">Agrega mesas desde Configuración</p>
+            <div className="flex flex-col items-center justify-center py-20 text-center rounded-3xl border border-white/5 bg-white/5 backdrop-blur-xl">
+              <AlertTriangle className="mb-4 h-16 w-16 text-pink-500/30" />
+              <p className="text-lg font-bold text-white">No hay mesas registradas</p>
+              <p className="mt-1 text-sm text-gray-400">Agrega mesas desde el menú de Mesas & Disposición</p>
             </div>
           ) : (
             <div className="space-y-6">
-              <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-                <h3 className="mb-4 text-lg font-semibold text-gray-900">Mesas Disponibles</h3>
+              <div className="rounded-3xl border border-white/5 bg-white/5 p-6 shadow-2xl backdrop-blur-xl">
+                <h3 className="mb-4 text-lg font-bold text-white">Mesas Disponibles</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                   {tables?.map((table) => (
                     <button
                       key={table.id}
                       onClick={() => setSelectedTable(table.id)}
-                      className={`flex flex-col items-center justify-center rounded-xl border p-4 transition-all ${
+                      className={`flex flex-col items-center justify-center rounded-2xl border p-4 transition-all ${
                         selectedTable === table.id
-                          ? "border-pink-500 bg-pink-50"
-                          : "border-gray-200 hover:border-pink-300"
+                          ? "border-pink-500 bg-pink-500/10 text-pink-400 shadow-[0_0_20px_rgba(236,72,153,0.2)]"
+                          : "border-white/5 bg-white/5 text-gray-400 hover:border-white/20 hover:text-white"
                       }`}
                     >
-                      <span className="text-3xl font-bold text-gray-900">{table.number}</span>
-                      <span className="mt-2 text-xs font-medium text-gray-500">
+                      <span className="text-3xl font-bold">{table.number}</span>
+                      <span className="mt-2 text-xs font-medium">
                         {table.capacity} personas
                       </span>
                       {qrData && qrData.qrCode && (

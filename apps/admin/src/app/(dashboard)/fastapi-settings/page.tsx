@@ -26,41 +26,39 @@ export default function FastApiSettingsPage() {
 
   return (
     <div className="flex h-screen flex-col">
-      <div className="border-b border-gray-200 bg-white px-6 py-4">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">FastAPI Webhook Bridge</h2>
-          <p className="text-sm text-gray-500">
-            Configura la sincronización con FastAPI para transacciones Core
-          </p>
-        </div>
-      </div>
-
       <div className="flex-1 overflow-y-auto p-6">
         <div className="mx-auto max-w-3xl space-y-6">
+          {/* Header Banner */}
+          <div className="relative overflow-hidden rounded-3xl border border-white/5 bg-gradient-to-br from-gray-900/60 to-black/80 p-8 shadow-2xl backdrop-blur-xl">
+            <div className="absolute top-0 right-0 h-48 w-48 rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
+            <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-400">FastAPI Webhook Bridge</h1>
+            <p className="text-sm font-medium text-gray-400 mt-1">Configura la sincronización con FastAPI para transacciones Core</p>
+          </div>
+
           {/* Status Card */}
-          <div className={`rounded-2xl border p-6 ${config?.isActive ? "border-green-200 bg-green-50/30" : "border-yellow-200 bg-yellow-50/30"}`}>
+          <div className={`rounded-3xl border p-6 backdrop-blur-xl ${config?.isActive ? "border-emerald-500/20 bg-emerald-500/10" : "border-amber-500/20 bg-amber-500/10"}`}>
             <div className="flex items-center gap-3 mb-4">
               {config?.isActive ? (
-                <CheckCircle className="h-8 w-8 text-green-600" />
+                <CheckCircle className="h-8 w-8 text-emerald-400" />
               ) : (
-                <AlertTriangle className="h-8 w-8 text-yellow-600" />
+                <AlertTriangle className="h-8 w-8 text-amber-400" />
               )}
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">
-                  {config?.isActive ? "FastAPI Webhook Activo" : "FastAPI Webhook Desactivado"}
+                <h3 className="text-lg font-bold text-white">
+                  {config?.isActive ? "FastAPI Webhook Activo" : "FastAPI Webhook Pendiente"}
                 </h3>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-gray-400">
                   {config?.isActive 
-                    ? " webhook configurado y activo para sincronizar transacciones" 
-                    : "no se ha configurado un endpoint FastAPI"}
+                    ? "Webhook configurado y activo para sincronizar transacciones" 
+                    : "No se ha configurado un endpoint FastAPI todavía"}
                 </p>
               </div>
             </div>
 
             {config?.isActive && config.url && (
-              <div className="rounded-xl bg-white p-4 shadow-sm">
-                <p className="text-sm text-gray-500 mb-1">URL Configurada:</p>
-                <code className="block rounded bg-gray-100 p-2 text-sm text-gray-700">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-xl">
+                <p className="text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">URL Configurada:</p>
+                <code className="block rounded-xl bg-black/40 p-3 text-sm text-emerald-400 font-mono">
                   {config.url}
                 </code>
               </div>

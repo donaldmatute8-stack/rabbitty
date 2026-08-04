@@ -14,18 +14,18 @@ const LEVEL_ICONS: Record<string, string> = {
 };
 
 export default function LoyaltyPage() {
-  const { data } = trpc.admin.getLoyaltyStats.useQuery();
+  const { data } = trpc.admin.getLoyaltyStats.useQuery(undefined, { retry: false });
 
-  if (!data) {
-    return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-black text-white">Lealtad</h1>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[...Array(4)].map((_, i) => <div key={i} className="h-24 animate-pulse rounded-xl bg-white/5" />)}
-        </div>
-      </div>
-    );
-  }
+  const totalUsers = data?.totalUsers ?? 0;
+  const totalBunzEarned = data?.totalBunzEarned ?? 0;
+  const totalSpent = data?.totalSpent ?? 0;
+  const levels = data?.levels ?? [
+    { id: "1", name: "Huevo", requiredHops: 0, bunzMultiplier: 1.0, userCount: 0 },
+    { id: "2", name: "Polluelo", requiredHops: 10, bunzMultiplier: 1.2, userCount: 0 },
+    { id: "3", name: "Conejo", requiredHops: 50, bunzMultiplier: 1.5, userCount: 0 },
+    { id: "4", name: "Zorro", requiredHops: 200, bunzMultiplier: 2.0, userCount: 0 },
+  ];
+  const topUsers = data?.topUsers ?? [];
 
   return (
     <div className="space-y-6">
@@ -38,7 +38,7 @@ export default function LoyaltyPage() {
               <Users className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-2xl font-black text-white">{data.totalUsers}</p>
+              <p className="text-2xl font-black text-white">{totalUsers}</p>
               <p className="text-xs text-gray-400">Usuarios registrados</p>
             </div>
           </div>
@@ -50,7 +50,7 @@ export default function LoyaltyPage() {
               <Star className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-2xl font-black text-white">{data.totalBunzEarned.toLocaleString()}</p>
+              <p className="text-2xl font-black text-white">{totalBunzEarned.toLocaleString()}</p>
               <p className="text-xs text-gray-400">Bunz ganados totales</p>
             </div>
           </div>
@@ -62,7 +62,7 @@ export default function LoyaltyPage() {
               <TrendingUp className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-2xl font-black text-white">{data.totalSpent.toLocaleString()}</p>
+              <p className="text-2xl font-black text-white">{totalSpent.toLocaleString()}</p>
               <p className="text-xs text-gray-400">Bunz gastados totales</p>
             </div>
           </div>
@@ -71,11 +71,11 @@ export default function LoyaltyPage() {
         <Card className="border border-white/5 bg-white/5 p-5 backdrop-blur-md">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-400">
-              <Flame className="h-5 w-5" />
+              <Award className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-2xl font-black text-white">{data.totalHops.toLocaleString()}</p>
-              <p className="text-xs text-gray-400">Hops acumulados</p>
+              <p className="text-2xl font-black text-white">{levels.length}</p>
+              <p className="text-xs text-gray-400">Niveles activos</p>
             </div>
           </div>
         </Card>
@@ -90,7 +90,7 @@ export default function LoyaltyPage() {
           </h2>
         </div>
         <div className="divide-y divide-white/5">
-          {data.levels.map((level) => (
+          {levels.map((level: any) => (
             <div key={level.id} className="flex items-center justify-between p-4 hover:bg-white/5 transition-all">
               <div className="flex items-center gap-3">
                 <span className="text-2xl">{LEVEL_ICONS[level.requiredHops?.toString()?.[0]] || "⭐"}</span>
@@ -105,7 +105,7 @@ export default function LoyaltyPage() {
               </div>
             </div>
           ))}
-          {data.levels.length === 0 && (
+          {levels.length === 0 && (
             <p className="p-5 text-sm text-gray-500">Sin niveles configurados</p>
           )}
         </div>
@@ -120,7 +120,7 @@ export default function LoyaltyPage() {
           </h2>
         </div>
         <div className="divide-y divide-white/5">
-          {data.topUsers.map((user, i) => (
+          {topUsers.map((user: any, i: number) => (
             <div key={user.id} className="flex items-center justify-between p-4 hover:bg-white/5 transition-all">
               <div className="flex items-center gap-3">
                 <span className={`w-6 text-center font-black text-sm ${i === 0 ? "text-yellow-400" : i === 1 ? "text-gray-300" : i === 2 ? "text-amber-600" : "text-gray-500"}`}>
@@ -137,7 +137,7 @@ export default function LoyaltyPage() {
               </div>
             </div>
           ))}
-          {data.topUsers.length === 0 && (
+          {topUsers.length === 0 && (
             <p className="p-5 text-sm text-gray-500">Sin usuarios registrados</p>
           )}
         </div>

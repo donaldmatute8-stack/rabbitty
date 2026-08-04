@@ -68,55 +68,53 @@ export default function CustomerHistoryPage() {
 
   return (
     <div className="flex h-screen flex-col">
-      <div className="border-b border-gray-200 bg-white px-6 py-4">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">Historial de Clientes</h2>
-          <p className="text-sm text-gray-500">
-            Visitas, compras y gastos por Rabbitter
-          </p>
-        </div>
-      </div>
-
       <div className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-6xl">
+        <div className="mx-auto max-w-6xl space-y-6">
+          {/* Header Banner */}
+          <div className="relative overflow-hidden rounded-3xl border border-white/5 bg-gradient-to-br from-gray-900/60 to-black/80 p-8 shadow-2xl backdrop-blur-xl">
+            <div className="absolute top-0 right-0 h-48 w-48 rounded-full bg-pink-500/10 blur-3xl pointer-events-none" />
+            <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-400">Historial de Clientes</h1>
+            <p className="text-sm font-medium text-gray-400 mt-1">Visitas, compras y gastos por Rabbitter</p>
+          </div>
+
           {/* Stats Cards */}
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4 mb-6">
-            <div className="rounded-xl bg-white p-4 shadow-sm border border-gray-100">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <div className="rounded-2xl bg-white/5 p-5 shadow-2xl border border-white/5 backdrop-blur-xl">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-gray-500">Total Clientes</span>
-                <Users className="h-5 w-5 text-pink-500" />
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Clientes</span>
+                <Users className="h-5 w-5 text-pink-400" />
               </div>
-              <div className="text-2xl font-bold text-gray-900">
+              <div className="text-2xl font-black text-white">
                 {stats.totalCustomers}
               </div>
             </div>
 
-            <div className="rounded-xl bg-white p-4 shadow-sm border border-gray-100">
+            <div className="rounded-2xl bg-white/5 p-5 shadow-2xl border border-white/5 backdrop-blur-xl">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-gray-500">Total Vendido</span>
-                <ShoppingBag className="h-5 w-5 text-green-500" />
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Vendido</span>
+                <ShoppingBag className="h-5 w-5 text-emerald-400" />
               </div>
-              <div className="text-2xl font-bold text-green-600">
+              <div className="text-2xl font-black text-emerald-400">
                 ${stats.totalSpent.toFixed(2)}
               </div>
             </div>
 
-            <div className="rounded-xl bg-white p-4 shadow-sm border border-gray-100">
+            <div className="rounded-2xl bg-white/5 p-5 shadow-2xl border border-white/5 backdrop-blur-xl">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-gray-500">Órdenes Totales</span>
-                <TrendingUp className="h-5 w-5 text-blue-500" />
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Órdenes Totales</span>
+                <TrendingUp className="h-5 w-5 text-blue-400" />
               </div>
-              <div className="text-2xl font-bold text-blue-600">
+              <div className="text-2xl font-black text-blue-400">
                 {stats.totalOrders}
               </div>
             </div>
 
-            <div className="rounded-xl bg-white p-4 shadow-sm border border-gray-100">
+            <div className="rounded-2xl bg-white/5 p-5 shadow-2xl border border-white/5 backdrop-blur-xl">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-gray-500">Promedio Orden</span>
-                <ShoppingBag className="h-5 w-5 text-yellow-500" />
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Promedio Orden</span>
+                <ShoppingBag className="h-5 w-5 text-amber-400" />
               </div>
-              <div className="text-2xl font-bold text-yellow-600">
+              <div className="text-2xl font-black text-amber-400">
                 ${stats.avgOrder.toFixed(2)}
               </div>
             </div>
@@ -125,28 +123,28 @@ export default function CustomerHistoryPage() {
           {/* Customers List */}
           <div className="space-y-2">
             {customers.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-center">
-                <Users className="mb-4 h-16 w-16 text-gray-300" />
-                <p className="text-lg font-medium text-gray-500">
+              <div className="flex flex-col items-center justify-center py-20 text-center rounded-3xl border border-white/5 bg-white/5 backdrop-blur-xl">
+                <Users className="mb-4 h-16 w-16 text-pink-500/30" />
+                <p className="text-lg font-bold text-white">
                   Sin clientes registrados
                 </p>
                 <p className="mt-1 text-sm text-gray-400">
-                  Las compras aparecerán aquí
+                  Las compras registradas aparecerán aquí automáticamente
                 </p>
               </div>
             ) : (
-              <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
-                <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-6 py-3">
-                  <span className="text-sm font-semibold text-gray-600">
+              <div className="overflow-hidden rounded-3xl border border-white/5 bg-white/5 backdrop-blur-xl shadow-2xl">
+                <div className="flex items-center gap-2 border-b border-white/10 bg-white/5 px-6 py-4">
+                  <span className="text-sm font-bold text-white">
                     {customers.length} clientes
                   </span>
-                  <span className="text-sm text-gray-400">|</span>
-                  <span className="text-sm text-gray-500">
+                  <span className="text-sm text-gray-500">|</span>
+                  <span className="text-sm text-emerald-400 font-semibold">
                     ${stats.totalSpent.toFixed(2)} vendidos
                   </span>
                 </div>
 
-                <div className="divide-y divide-gray-100">
+                <div className="divide-y divide-white/5">
                   {customers.map((customer) => (
                     <div
                       key={customer.id}
