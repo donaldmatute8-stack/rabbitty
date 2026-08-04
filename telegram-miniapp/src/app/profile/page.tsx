@@ -201,10 +201,14 @@ export default function ProfilePage() {
                   const app = mod.default;
                   app.showScanQrPopup({ text: "Escanea el código QR de tu PC" }, (qrText: string) => {
                     (async () => {
-                      // Extract token: https://t.me/Rabbittyme_bot/app?startapp=qrlogin_{TOKEN}
                       let qrToken = qrText;
                       if (qrText.includes('qrlogin_')) {
-                        qrToken = qrText.split('qrlogin_')[1];
+                        qrToken = qrText.split('qrlogin_')[1].split('&')[0].split('?')[0];
+                      } else if (qrText.startsWith('{')) {
+                        try {
+                          const parsed = JSON.parse(qrText);
+                          if (parsed.token) qrToken = parsed.token;
+                        } catch (e) {}
                       }
 
                       try {
