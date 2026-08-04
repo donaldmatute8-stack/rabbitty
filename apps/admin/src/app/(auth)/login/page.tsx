@@ -2,7 +2,7 @@
 
 import { signIn } from "next-auth/react";
 import { useState, useEffect } from "react";
-import { Mail, QrCode, Sparkles } from "lucide-react";
+import { Mail, QrCode, Sparkles, UserCheck, Clock } from "lucide-react";
 import RabbittyCode from "@/components/ui/RabbittyCode";
 
 export default function LoginPage() {
@@ -10,6 +10,7 @@ export default function LoginPage() {
   const [sent, setSent] = useState(false);
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [recentEmails, setRecentEmails] = useState<string[]>([]);
 
   useEffect(() => {
     // Generar sesión QR para login
@@ -22,6 +23,20 @@ export default function LoginPage() {
         }
       })
       .catch(() => {});
+
+    // Cargar historial de correos del almacenamiento local / navegador
+    try {
+      const saved = localStorage.getItem("rabbitty_recent_emails");
+      if (saved) {
+        const parsed: string[] = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setRecentEmails(parsed);
+          setEmail(parsed[0]); // Autocompletar con el último correo usado
+        }
+      }
+    } catch {
+      // ignore
+    }
   }, []);
 
   useEffect(() => {
@@ -39,8 +54,20 @@ export default function LoginPage() {
     return () => clearInterval(interval);
   }, [sessionId, qrToken]);
 
+  const saveRecentEmail = (emailToSave: string) => {
+    if (!emailToSave || !emailToSave.includes("@")) return;
+    try {
+      const updated = [emailToSave, ...recentEmails.filter((e) => e !== emailToSave)].slice(0, 3);
+      localStorage.setItem("rabbitty_recent_emails", JSON.stringify(updated));
+      setRecentEmails(updated);
+    } catch {
+      // ignore
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    saveRecentEmail(email);
     await signIn("resend", { email, redirect: false });
     setSent(true);
   };
@@ -131,16 +158,51 @@ export default function LoginPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
+              <label htmlFor="email" className="sr-only">Correo electrónico</label>
               <input
+                id="email"
+                name="email"
                 type="email"
+                inputMode="email"
+                autoComplete="username email"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 placeholder="tu@correo.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 className="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm text-white placeholder-gray-500 outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 transition-all duration-300"
               />
+
+              {/* Detección de Correos Recientes */}
+              {recentEmails.length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                  <span className="flex items-center gap-1 text-[10px] font-semibold text-gray-400">
+                    <Clock className="w-3 h-3 text-pink-400" /> Usados recientemente:
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {recentEmails.map((savedEmail) => (
+                      <button
+                        key={savedEmail}
+                        type="button"
+                        onClick={() => setEmail(savedEmail)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer ${
+                          email === savedEmail
+                            ? "bg-pink-500/20 border border-pink-500/40 text-pink-300 shadow-[0_0_12px_rgba(236,72,153,0.2)]"
+                            : "bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 hover:text-white"
+                        }`}
+                      >
+                        <UserCheck className="w-3.5 h-3.5 text-pink-400" />
+                        {savedEmail}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
+
             <button
               type="submit"
               className="flex h-12 w-full items-center justify-center rounded-2xl bg-gradient-to-r from-pink-500 to-pink-600 font-bold text-white transition-all hover:scale-[1.02] active:scale-95 shadow-[0_4px_14px_rgba(236,72,153,0.39)] cursor-pointer"

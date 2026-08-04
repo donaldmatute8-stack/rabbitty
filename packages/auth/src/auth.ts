@@ -58,10 +58,8 @@ const authResult = NextAuth({
         }
 
         let appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.ORIGIN || "https://admin.rabbitty.me";
-        if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
-          if (appUrl.includes("localhost") || appUrl.includes("127.0.0.1")) {
-            appUrl = "https://admin.rabbitty.me";
-          }
+        if (!appUrl || appUrl.includes("localhost") || appUrl.includes("127.0.0.1")) {
+          appUrl = "https://admin.rabbitty.me";
         }
         const encodedAppUrl = encodeURIComponent(appUrl);
 
