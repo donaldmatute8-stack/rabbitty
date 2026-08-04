@@ -67,13 +67,33 @@ export async function POST(req: Request) {
 
   const targetEmail = owner?.email || existingVerificationData?.email || 'iaherrerav10@gmail.com';
 
+  let magicUrl = 'https://admin.rabbitty.me/login';
+  if (owner?.id) {
+    try {
+      const qrToken = crypto.randomBytes(32).toString('hex');
+      const tokenHash = crypto.createHash('sha256').update(qrToken).digest('hex');
+
+      const [session] = await db.insert(webSessions).values({
+        id: crypto.randomUUID(),
+        jwtToken: tokenHash,
+        userId: owner.id,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      }).returning();
+
+      magicUrl = `https://admin.rabbitty.me/magic?token=${qrToken}&sid=${session.id}`;
+    } catch (e) {
+      console.error('Failed to generate magic URL:', e);
+    }
+  }
+
   if (status === 'UNDER_REVIEW') {
     // Notificación Telegram si aplica
     if (owner?.telegramId && TELEGRAM_BOT_TOKEN) {
       const message =
         `🔍 *Tu negocio ${updated.name} está en Proceso de Revisión*\n\n` +
-        `Nuestro equipo está validando los detalles de tu comercio para dejar todo listo antes del lanzamiento oficial.\n\n` +
-        `Nos pondremos en contacto contigo en breve si requerimos algún dato adicional.\n\n` +
+        `Nuestro equipo está validando los detalles de tu comercio para dejar todo listo.\n\n` +
+        `🔑 *Puedes ir configurando tus productos y datos aquí:*\n` +
+        `${magicUrl}\n\n` +
         `🐰 — Rabbitty Team`;
       try {
         await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
@@ -91,7 +111,7 @@ export async function POST(req: Request) {
       try {
         const { sendEmail, wrapInRabbittyEmailLayout } = await import('@/lib/email');
         const content = `
-          <div style="background: rgba(234,179,8,0.06); border-radius: 18px; padding: 22px; margin-bottom: 24px; border: 1px solid rgba(234,179,8,0.3);">
+          <div style="background: rgba(234,179,8,0.06); border-radius: 18px; padding: 22px; margin-bottom: 20px; border: 1px solid rgba(234,179,8,0.3);">
             <p style="font-size: 15px; line-height: 1.6; color: #E2E8F0; margin: 0 0 12px 0;">
               Hola <strong>${updated.name}</strong>,
             </p>
@@ -99,20 +119,30 @@ export async function POST(req: Request) {
               Tu solicitud de registro ha pasado a nuestro estado prioritario <strong>"En Revisión"</strong>.
             </p>
             <p style="font-size: 14px; line-height: 1.6; color: #CBD5E1; margin: 0;">
-              🕵️‍♂️ Un especialista de Rabbitty revisará los datos de tu menú/servicios y ubicación. En caso de requerir algún ajuste, nos comunicaremos directamente por Telegram o respuesta a este correo.
+              🕵️‍♂️ Un especialista de Rabbitty está revisando tu comercio. Mientras tanto, ya puedes ingresar a tu panel para configurar tu menú, catálogo y servicios.
             </p>
+          </div>
+
+          <div style="background: rgba(234,179,8,0.08); border-radius: 18px; padding: 22px; margin-bottom: 24px; border: 1px solid rgba(234,179,8,0.3); text-align: center;">
+            <h3 style="margin: 0 0 10px 0; color: #FFF; font-size: 16px; font-weight: 800;">🔑 Acceso Anticipado a tu Panel</h3>
+            <p style="font-size: 13px; line-height: 1.6; color: #E2E8F0; margin: 0 0 18px 0;">
+              Haz clic en el siguiente botón para iniciar sesión automáticamente y comenzar a llenar la información de tu negocio:
+            </p>
+            <a href="${magicUrl}" style="display: inline-block; background: #EAB308; color: #000; font-weight: 900; font-size: 14px; padding: 14px 28px; border-radius: 12px; text-decoration: none; box-shadow: 0 4px 14px rgba(234,179,8,0.3);">
+              🚀 Ingresar a mi Panel de Administración
+            </a>
           </div>
 
           <div style="background: linear-gradient(135deg, rgba(234,179,8,0.12), rgba(244,63,94,0.12)); border-radius: 18px; padding: 20px; text-align: center; margin-bottom: 24px; border: 1px solid rgba(234,179,8,0.25);">
             <h3 style="margin: 0 0 8px 0; color: #FFF; font-size: 15px; font-weight: 800;">💬 ¿Necesitas agilizar tu verificación?</h3>
             <p style="margin: 0 0 16px 0; color: #E2E8F0; font-size: 13px;">Escríbenos directamente en nuestro canal de atención a afiliados.</p>
-            <a href="https://t.me/Rabbittyme_bot" style="display: inline-block; background: #EAB308; color: #000; font-weight: 900; font-size: 13px; padding: 12px 26px; border-radius: 12px; text-decoration: none;">Hablar con Soporte 📲</a>
+            <a href="https://t.me/Rabbittyme_bot" style="display: inline-block; background: rgba(255,255,255,0.1); color: #FFF; font-weight: 800; font-size: 13px; padding: 12px 24px; border-radius: 12px; text-decoration: none; border: 1px solid rgba(255,255,255,0.2);">Hablar con Soporte 📲</a>
           </div>
         `;
         const emailHtml = wrapInRabbittyEmailLayout(`Solicitud En Revisión 🔍`, updated.name, content);
         await sendEmail({
           to: targetEmail,
-          subject: `🔍 Tu negocio ${updated.name} está en proceso de revisión en Rabbitty`,
+          subject: `🔍 Tu negocio ${updated.name} está en revisión (Acceso a tu Panel)`,
           html: emailHtml,
         });
       } catch (e) {
