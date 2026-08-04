@@ -49,6 +49,104 @@ const authResult = NextAuth({
   providers: [
     Resend({
       from: process.env.AUTH_RESEND_FROM || "Rabbitty Team <hola@rabbitty.me>",
+      apiKey: process.env.RESEND_API_KEY || process.env.AUTH_RESEND_KEY || process.env.RESEND_KEY,
+      async sendVerificationRequest({ identifier: email, url }) {
+        const apiKey = process.env.RESEND_API_KEY || process.env.AUTH_RESEND_KEY || process.env.RESEND_KEY;
+        if (!apiKey) {
+          console.error("[Auth Resend] API Key no encontrada");
+          return;
+        }
+
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.ORIGIN || "https://admin.rabbitty.me";
+        const finalUrl = url.replace(/http:\/\/(localhost|127\.0\.0\.1):\d+/g, appUrl);
+
+        const html = `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acceso Mágico - Rabbitty Admin</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #050508; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #ffffff;">
+  <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #050508; padding: 40px 10px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" max-width="560" border="0" cellspacing="0" cellpadding="0" style="max-width: 560px; background-color: #0e0e14; border: 1px solid rgba(255,255,255,0.1); border-radius: 24px; padding: 40px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
+          <!-- Header Logo -->
+          <tr>
+            <td align="center" style="padding-bottom: 24px;">
+              <table role="presentation" border="0" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td align="center" style="background: linear-gradient(135deg, #ec4899 0%, #a855f7 100%); border-radius: 16px; padding: 12px 20px;">
+                    <span style="font-size: 20px; font-weight: 900; color: #ffffff; letter-spacing: 2px;">RABBITTY ADMIN</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Title -->
+          <tr>
+            <td align="center" style="padding-bottom: 16px;">
+              <h1 style="margin: 0; font-size: 24px; font-weight: 900; color: #ffffff; letter-spacing: -0.5px;">Acceso Mágico a tu Panel</h1>
+            </td>
+          </tr>
+
+          <!-- Description -->
+          <tr>
+            <td align="center" style="padding-bottom: 32px;">
+              <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #a1a1aa;">
+                Has solicitado un enlace directo para ingresar a tu panel de administración con la cuenta <strong style="color: #ffffff;">${email}</strong>.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Button CTA -->
+          <tr>
+            <td align="center" style="padding-bottom: 32px;">
+              <a href="${finalUrl}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%); color: #ffffff; font-size: 15px; font-weight: 800; text-decoration: none; padding: 16px 36px; border-radius: 14px; box-shadow: 0 8px 25px rgba(236,72,153,0.35);">
+                🚀 Ingresar a mi Panel de Administración
+              </a>
+            </td>
+          </tr>
+
+          <!-- Security note -->
+          <tr>
+            <td align="center" style="border-t: 1px solid rgba(255,255,255,0.08); padding-top: 24px;">
+              <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #71717a;">
+                Si no solicitaste este correo, puedes ignorarlo de manera segura. El enlace expirará automáticamente.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+        `;
+
+        try {
+          const res = await fetch("https://api.resend.com/emails", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              from: process.env.AUTH_RESEND_FROM || "Rabbitty Team <hola@rabbitty.me>",
+              to: email,
+              subject: "🔑 Acceso Mágico a tu Panel - Rabbitty Admin",
+              html,
+            }),
+          });
+          const data = await res.json();
+          console.log("[Auth Resend] Email enviado:", data);
+        } catch (err) {
+          console.error("[Auth Resend Error]:", err);
+        }
+      },
     }),
     ...(process.env.E2E_TEST === "true" ? [
       Credentials({
