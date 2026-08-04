@@ -42,6 +42,15 @@ export function AdminSidebar() {
   const pathname = usePathname();
   const { isCollapsed, setIsCollapsed } = useSidebar();
 
+  const handleLogout = async () => {
+    try {
+      await signOut({ redirect: false });
+    } catch {
+      // ignore
+    }
+    window.location.href = "/login";
+  };
+
   return (
     <aside className={cn(
       "relative flex h-screen flex-col border-r border-white/5 bg-black/45 backdrop-blur-xl text-white z-20 transition-all duration-300 ease-in-out",
@@ -117,7 +126,7 @@ export function AdminSidebar() {
       {/* Footer & Logout */}
       <div className="border-t border-white/5 p-3 space-y-2">
         <button
-          onClick={() => signOut({ callbackUrl: "/login" })}
+          onClick={handleLogout}
           className={cn(
             "group flex w-full items-center rounded-xl py-2.5 text-xs font-bold text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all duration-300 relative cursor-pointer",
             isCollapsed ? "justify-center px-0" : "px-4"
