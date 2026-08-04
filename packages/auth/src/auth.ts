@@ -43,6 +43,9 @@ const customAdapter: any = {
 
 const authResult = NextAuth({
   adapter: customAdapter,
+  session: { strategy: "jwt" },
+  trustHost: true,
+  secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "rabbitty-admin-secret-key-32chars-minimum-length",
   providers: [
     Resend({
       from: process.env.AUTH_RESEND_FROM || "Rabbitty Team <hola@rabbitty.me>",
