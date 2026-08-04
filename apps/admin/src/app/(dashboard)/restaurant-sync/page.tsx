@@ -56,22 +56,22 @@ export default function RestaurantSyncPage() {
 
   return (
     <div className="flex h-screen flex-col">
-      <div className="border-b border-gray-200 bg-white px-6 py-4">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">Sincronización de Restaurant</h2>
-          <p className="text-sm text-gray-500">Sincroniza restaurantes con FastAPI para Core transactions</p>
-        </div>
-      </div>
-
       <div className="flex-1 overflow-y-auto p-6">
         <div className="mx-auto max-w-4xl space-y-6">
-          <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+          {/* Header Banner */}
+          <div className="relative overflow-hidden rounded-3xl border border-white/5 bg-gradient-to-br from-gray-900/60 to-black/80 p-8 shadow-2xl backdrop-blur-xl">
+            <div className="absolute top-0 right-0 h-48 w-48 rounded-full bg-pink-500/10 blur-3xl pointer-events-none" />
+            <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-400">Sincronización de Restaurante</h1>
+            <p className="text-sm font-medium text-gray-400 mt-1">Sincroniza restaurantes con FastAPI para Core transactions</p>
+          </div>
+
+          <div className="rounded-3xl border border-white/5 bg-white/5 p-6 shadow-2xl backdrop-blur-xl">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Restaurantes</h3>
+              <h3 className="text-lg font-bold text-white">Restaurantes Registrados</h3>
               <button
                 onClick={handleSyncAll}
                 disabled={syncing || !restaurants}
-                className="flex items-center gap-2 rounded-lg bg-pink-600 px-4 py-2 text-sm font-semibold text-white hover:bg-pink-700 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 px-5 py-2.5 text-xs font-bold text-white shadow-lg hover:brightness-110 disabled:opacity-50 transition-all"
               >
                 <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
                 {syncing ? "Sincronizando..." : `Sincronizar todos (${restaurants?.length || 0})`}
@@ -80,27 +80,27 @@ export default function RestaurantSyncPage() {
 
             {restaurants?.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10">
-                <Store className="mb-3 h-12 w-12 text-gray-300" />
-                <p className="text-sm text-gray-500">No hay restaurantes registrados</p>
+                <Store className="mb-3 h-12 w-12 text-pink-500/40" />
+                <p className="text-sm text-gray-400">No hay restaurantes registrados</p>
               </div>
             ) : (
               <div className="space-y-3">
                 {restaurants?.map((restaurant) => (
                   <div
                     key={restaurant.id}
-                    className="flex flex-col gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3"
+                    className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-md"
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-semibold text-gray-900">{restaurant.name}</p>
-                        <p className="text-xs text-gray-500">
+                        <p className="font-bold text-white text-base">{restaurant.name}</p>
+                        <p className="text-xs text-gray-400 font-mono">
                           ID: {restaurant.id.slice(0, 8)}...
                         </p>
                       </div>
                       <button
                         onClick={() => handleSyncRestaurant(restaurant.id)}
                         disabled={syncing}
-                        className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                        className="flex items-center gap-2 rounded-xl bg-blue-500/10 border border-blue-500/20 px-3 py-1.5 text-xs font-bold text-blue-400 hover:bg-blue-500/20 disabled:opacity-50 transition-all"
                       >
                         <RefreshCw className="h-3 w-3" />
                         Sincronizar FastAPI

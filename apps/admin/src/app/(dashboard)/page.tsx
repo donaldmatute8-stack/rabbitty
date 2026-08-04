@@ -6,6 +6,7 @@ import { TrendingUp, DollarSign, ShoppingCart, UtensilsCrossed, ArrowUpRight, Ac
 import { motion, type Variants } from "framer-motion";
 import { useBranch } from "../../components/DashboardClientWrapper";
 import { BranchSelector } from "../../components/BranchSelector";
+import { OnboardingWizard } from "../../components/OnboardingWizard";
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
@@ -95,6 +96,9 @@ export default function AdminPage() {
           </div>
         </div>
       </div>
+
+      {/* Guía General / Onboarding Wizard */}
+      <OnboardingWizard />
 
       {/* Stats Grid */}
       <motion.div

@@ -541,7 +541,7 @@ function BusinessApprovals() {
         </motion.div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxHeight: 480, overflowY: 'auto', padding: '6px 8px 36px 6px', scrollbarWidth: 'thin' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <AnimatePresence>
           {filtered.slice(0, 25).map((b: any) => {
             const isPending = b.status === 'PENDING' || b.status === 'PENDING_VERIFICATION';
