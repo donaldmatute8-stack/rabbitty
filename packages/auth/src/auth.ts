@@ -57,15 +57,16 @@ const authResult = NextAuth({
           return;
         }
 
-        let appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.ORIGIN || "https://admin.rabbitty.me";
-        if (!appUrl || appUrl.includes("localhost") || appUrl.includes("127.0.0.1")) {
-          appUrl = "https://admin.rabbitty.me";
-        }
-        const encodedAppUrl = encodeURIComponent(appUrl);
+        const targetOrigin = "https://admin.rabbitty.me";
+        let finalUrl = url;
 
-        const finalUrl = url
-          .replace(/https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/gi, appUrl)
-          .replace(/https?%3A%2F%2F(localhost|127\.0\.0\.1)(%3A\d+)?/gi, encodedAppUrl);
+        try {
+          const parsedUrl = new URL(url);
+          parsedUrl.searchParams.set("callbackUrl", targetOrigin);
+          finalUrl = `${targetOrigin}${parsedUrl.pathname}?${parsedUrl.searchParams.toString()}`;
+        } catch {
+          finalUrl = url.replace(/https?:\/\/[^/]+/gi, targetOrigin);
+        }
 
         const html = `
 <!DOCTYPE html>
