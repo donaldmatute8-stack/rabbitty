@@ -115,8 +115,8 @@ const authResult = NextAuth({
       async authorize(credentials) {
         if (!credentials?.token || !credentials?.sid) return null;
 
-        const coreDbUrl = process.env.CORE_DATABASE_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL;
-        if (!coreDbUrl) return null;
+        const DEFAULT_NEON_URL = "postgresql://neondb_owner:npg_ltE02YwbyAaP@ep-delicate-violet-ap6izh0k-pooler.c-7.us-east-1.aws.neon.tech/neondb?sslmode=require";
+        const coreDbUrl = process.env.CORE_DATABASE_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL || DEFAULT_NEON_URL;
 
         try {
           const { default: pg } = await import("pg");
@@ -135,7 +135,10 @@ const authResult = NextAuth({
 
           await pool.end();
 
-          if (result.rows.length === 0) return null;
+          if (result.rows.length === 0) {
+            console.warn('[Magic Link Auth] Session not found or expired:', { sid: credentials.sid });
+            return null;
+          }
 
           const user = result.rows[0];
           return {
@@ -143,7 +146,8 @@ const authResult = NextAuth({
             name: [user.firstName, user.lastName].filter(Boolean).join(" "),
             email: `${user.telegramId}@telegram.rabbitty`,
           };
-        } catch {
+        } catch (err) {
+          console.error('[Magic Link Auth Error]:', err);
           return null;
         }
       },
