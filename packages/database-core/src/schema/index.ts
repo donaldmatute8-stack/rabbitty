@@ -34,6 +34,13 @@ export const users = pgTable("users", {
   ...timestamps,
 });
 
+export const verificationTokens = pgTable("verificationTokens", {
+  identifier: text("identifier").notNull(),
+  token: text("token").notNull().primaryKey(),
+  expires: timestamp("expires").notNull(),
+  createdAt: timestamp("createdAt").defaultNow(),
+});
+
 export const webSessions = pgTable("webSessions", {
   id: id(),
   jwtToken: text("jwtToken").notNull().unique(),
