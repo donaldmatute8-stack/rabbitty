@@ -97,10 +97,79 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* Guía General / Onboarding Wizard */}
-      <OnboardingWizard />
-
       {/* Stats Grid */}
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="show"
+        className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+      >
+        {stats.map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <motion.div key={stat.label} variants={itemVariants}>
+              <div
+                className={cn(
+                  "flex items-center gap-4 rounded-2xl border border-white/5 bg-white/5 p-6 backdrop-blur-md transition-all duration-300 cursor-default",
+                  stat.hoverGlow
+                )}
+              >
+                <div className={cn("flex h-12 w-12 items-center justify-center rounded-xl border shrink-0", stat.bgClass)}>
+                  <Icon className={cn("h-6 w-6", stat.colorClass)} />
+                </div>
+                <div className="flex-1">
+                  <p className="text-2xl font-black tracking-tight text-white">{stat.value}</p>
+                  <p className="text-xs font-semibold text-gray-400 mt-0.5">{stat.label}</p>
+                </div>
+                <ArrowUpRight className="h-4 w-4 text-gray-600 self-start mt-0.5" />
+              </div>
+            </motion.div>
+          );
+        })}
+      </motion.div>
+
+      {/* Multi-Store Section */}
+      {crossStore && crossStore.branchCount > 1 && (
+        <motion.div variants={containerVariants} initial="hidden" animate="show">
+          <Card className="p-6 border border-white/5 bg-white/5 backdrop-blur-md hover:border-white/10 transition-all duration-300">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
+                <Building2 className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-white text-base">Multi-Sucursal</h3>
+                <p className="text-xs text-gray-400">{crossStore.branchCount} sucursales activas</p>
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3 mb-6">
+              <div className="rounded-xl border border-white/5 bg-white/5 p-4 text-center">
+                <p className="text-2xl font-black text-white">{crossStore.totals.totalOrders}</p>
+                <p className="text-xs text-gray-400 mt-1">Órdenes totales</p>
+              </div>
+              <div className="rounded-xl border border-white/5 bg-white/5 p-4 text-center">
+                <p className="text-2xl font-black text-emerald-400">${crossStore.totals.totalRevenue.toFixed(2)}</p>
+                <p className="text-xs text-gray-400 mt-1">Ingresos totales</p>
+              </div>
+              <div className="rounded-xl border border-white/5 bg-white/5 p-4 text-center">
+                <p className="text-2xl font-black text-blue-400">{crossStore.totals.totalCustomers}</p>
+                <p className="text-xs text-gray-400 mt-1">Clientes únicos</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {crossStore.branches.map((b) => (
+                <div key={b.branchId} className="flex items-center justify-between rounded-xl border border-white/5 bg-white/5 p-3 hover:border-white/10 transition-all">
+                  <p className="text-sm font-bold text-white">{b.branchName}</p>
+                  <div className="flex items-center gap-4 text-xs text-gray-400">
+                    <span>{b.totalOrders} órdenes</span>
+                    <span className="text-emerald-400 font-bold">${b.totalRevenue.toFixed(2)}</span>
+                    <span>{b.totalCustomers} clientes</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </motion.div>
+      )}
       <motion.div
         variants={containerVariants}
         initial="hidden"
