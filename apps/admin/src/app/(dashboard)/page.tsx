@@ -19,9 +19,9 @@ const itemVariants: Variants = {
 
 export default function AdminPage() {
   const { branchId } = useBranch();
-  const { data: orders } = trpc.pos.getOrders.useQuery({});
-  const { data: tables } = trpc.pos.getTables.useQuery();
-  const { data: crossStore } = trpc.admin.getCrossStoreKpis.useQuery();
+  const { data: orders } = trpc.pos.getOrders.useQuery({}, { retry: false });
+  const { data: tables } = trpc.pos.getTables.useQuery(undefined, { retry: false });
+  const { data: crossStore } = trpc.admin.getCrossStoreKpis.useQuery(undefined, { retry: false });
 
   const openOrders = orders?.filter((o) => o.status === "PENDING" || o.status === "OPEN") ?? [];
   const paidOrders = orders?.filter((o) => o.status === "PAID" || o.status === "COMPLETED") ?? [];
