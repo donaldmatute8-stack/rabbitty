@@ -13,24 +13,97 @@ if (!process.env.NEXTAUTH_URL || process.env.NEXTAUTH_URL.includes("localhost"))
   process.env.NEXTAUTH_URL = "https://admin.rabbitty.me";
 }
 
-const users = new Map<string, { id: string; email: string; emailVerified: Date | null }>();
+// DB-backed admin user store (for email/magic link authentication)
+const NEON_URL = process.env.CORE_DATABASE_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL
+  || "postgresql://neondb_owner:npg_ltE02YwbyAaP@ep-delicate-violet-ap6izh0k-pooler.c-7.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require";
+
+async function getPool() {
+  const { default: pg } = await import("pg");
+  const { Pool } = pg;
+  return new Pool({ connectionString: NEON_URL, max: 3 });
+}
+
+// Ensure admin_auth_users table exists
+async function ensureAdminUsersTable() {
+  const pool = await getPool();
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS "adminAuthUsers" (
+      "id" text PRIMARY KEY,
+      "email" text NOT NULL UNIQUE,
+      "emailVerified" timestamptz,
+      "name" text,
+      "image" text,
+      "createdAt" timestamptz DEFAULT now()
+    )
+  `);
+  await pool.end();
+}
+
+// Run once at startup
+ensureAdminUsersTable().catch(e => console.error("[Auth] Failed to ensure adminAuthUsers table:", e));
 
 const customAdapter: any = {
   createUser: async (user: any) => {
-    const newUser = { ...user, id: user.id || Math.random().toString(), emailVerified: user.emailVerified || null };
-    users.set(newUser.email, newUser);
-    return newUser;
+    const newUser = {
+      id: user.id || crypto.randomUUID(),
+      email: user.email,
+      emailVerified: user.emailVerified ? new Date(user.emailVerified) : null,
+      name: user.name ?? null,
+      image: user.image ?? null,
+    };
+    try {
+      const pool = await getPool();
+      await pool.query(
+        `INSERT INTO "adminAuthUsers" ("id", "email", "emailVerified", "name", "image")
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT ("email") DO UPDATE SET "emailVerified" = EXCLUDED."emailVerified"`,
+        [newUser.id, newUser.email, newUser.emailVerified, newUser.name, newUser.image]
+      );
+      const result = await pool.query(`SELECT * FROM "adminAuthUsers" WHERE "email" = $1`, [newUser.email]);
+      await pool.end();
+      return result.rows[0] ?? newUser;
+    } catch (e) {
+      console.error("[Auth DB] createUser error:", e);
+      return newUser;
+    }
   },
   getUser: async (id: string) => {
-    for (const user of users.values()) {
-      if (user.id === id) return user;
+    try {
+      const pool = await getPool();
+      const result = await pool.query(`SELECT * FROM "adminAuthUsers" WHERE "id" = $1`, [id]);
+      await pool.end();
+      return result.rows[0] ?? null;
+    } catch {
+      return null;
     }
-    return null;
   },
   getUserByEmail: async (email: string) => {
-    return users.get(email) ?? null;
+    try {
+      const pool = await getPool();
+      const result = await pool.query(`SELECT * FROM "adminAuthUsers" WHERE "email" = $1`, [email]);
+      await pool.end();
+      return result.rows[0] ?? null;
+    } catch {
+      return null;
+    }
   },
   getUserByAccount: async () => null,
+  updateUser: async (user: any) => {
+    try {
+      const pool = await getPool();
+      await pool.query(
+        `UPDATE "adminAuthUsers" SET "emailVerified" = $1, "name" = $2 WHERE "id" = $3`,
+        [user.emailVerified ?? null, user.name ?? null, user.id]
+      );
+      const result = await pool.query(`SELECT * FROM "adminAuthUsers" WHERE "id" = $1`, [user.id]);
+      await pool.end();
+      return result.rows[0] ?? user;
+    } catch {
+      return user;
+    }
+  },
+  // Required by NextAuth when using Email provider — must exist even if empty
+  linkAccount: async () => null,
   createVerificationToken: async (verificationToken: any) => {
     try {
       const db = getCoreDb();
@@ -38,7 +111,7 @@ const customAdapter: any = {
         identifier: verificationToken.identifier,
         token: verificationToken.token,
         expires: new Date(verificationToken.expires),
-      });
+      }).onConflictDoNothing();
     } catch (e) {
       console.error("[Auth DB Error] Error saving verification token:", e);
     }
