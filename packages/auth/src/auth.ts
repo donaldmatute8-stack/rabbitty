@@ -1,10 +1,18 @@
 import NextAuth from "next-auth";
 import Resend from "next-auth/providers/resend";
 import Credentials from "next-auth/providers/credentials";
-import crypto from "crypto";
-import { createHash } from "crypto";
+import crypto, { createHash } from "crypto";
+import { getCoreDb } from "@rabbitty/api/db";
+import { verificationTokens } from "@rabbitty/database-core";
+import { eq } from "drizzle-orm";
 
-const tokens = new Map<string, { token: string; expires: Date }>();
+if (!process.env.AUTH_URL || process.env.AUTH_URL.includes("localhost")) {
+  process.env.AUTH_URL = "https://admin.rabbitty.me";
+}
+if (!process.env.NEXTAUTH_URL || process.env.NEXTAUTH_URL.includes("localhost")) {
+  process.env.NEXTAUTH_URL = "https://admin.rabbitty.me";
+}
+
 const users = new Map<string, { id: string; email: string; emailVerified: Date | null }>();
 
 const customAdapter: any = {
@@ -24,18 +32,31 @@ const customAdapter: any = {
   },
   getUserByAccount: async () => null,
   createVerificationToken: async (verificationToken: any) => {
-    tokens.set(`${verificationToken.identifier}:${verificationToken.token}`, {
-      token: verificationToken.token,
-      expires: verificationToken.expires,
-    });
+    try {
+      const db = getCoreDb();
+      await db.insert(verificationTokens).values({
+        identifier: verificationToken.identifier,
+        token: verificationToken.token,
+        expires: new Date(verificationToken.expires),
+      });
+    } catch (e) {
+      console.error("[Auth DB Error] Error saving verification token:", e);
+    }
     return verificationToken;
   },
   useVerificationToken: async ({ identifier, token }: any) => {
-    const key = `${identifier}:${token}`;
-    const stored = tokens.get(key);
-    if (stored) {
-      tokens.delete(key);
-      return { identifier, token, expires: stored.expires };
+    try {
+      const db = getCoreDb();
+      const [stored] = await db
+        .select()
+        .from(verificationTokens)
+        .where(eq(verificationTokens.token, token));
+      if (stored) {
+        await db.delete(verificationTokens).where(eq(verificationTokens.token, token));
+        return { identifier: stored.identifier, token: stored.token, expires: stored.expires };
+      }
+    } catch (e) {
+      console.error("[Auth DB Error] Error using verification token:", e);
     }
     return null;
   },
