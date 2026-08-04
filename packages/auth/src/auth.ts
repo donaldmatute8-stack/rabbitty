@@ -58,7 +58,11 @@ const authResult = NextAuth({
         }
 
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.ORIGIN || "https://admin.rabbitty.me";
-        const finalUrl = url.replace(/http:\/\/(localhost|127\.0\.0\.1):\d+/g, appUrl);
+        const encodedAppUrl = encodeURIComponent(appUrl);
+
+        const finalUrl = url
+          .replace(/https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/gi, appUrl)
+          .replace(/https?%3A%2F%2F(localhost|127\.0\.0\.1)(%3A\d+)?/gi, encodedAppUrl);
 
         const html = `
 <!DOCTYPE html>
