@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signOut } from "next-auth/react";
 import { cn } from "@rabbitty/ui";
-import { LayoutDashboard, Store, Users, Settings, ChefHat, ClipboardList, Package, Printer, ChevronLeft, ChevronRight, Sparkles, Clock, Salad, Truck, Receipt, CalendarCheck, DollarSign, Monitor, FileText, Gift, Award, Megaphone, Cake, Repeat, QrCode, BookUser, Table2, Webhook, UserRound } from "lucide-react";
+import { LayoutDashboard, Store, Users, Settings, ChefHat, ClipboardList, Package, Printer, ChevronLeft, ChevronRight, Sparkles, Clock, Salad, Truck, Receipt, CalendarCheck, DollarSign, Monitor, FileText, Gift, Award, Megaphone, Cake, Repeat, QrCode, BookUser, Table2, Webhook, UserRound, LogOut } from "lucide-react";
 import { useSidebar } from "./DashboardClientWrapper";
 
 const links = [
@@ -113,9 +114,27 @@ export function AdminSidebar() {
         })}
       </nav>
 
-      {/* Footer Branding */}
-      <div className="border-t border-white/5 p-4 text-center text-[10px] tracking-wider text-gray-500 font-semibold uppercase whitespace-nowrap overflow-hidden">
-        {isCollapsed ? "v1.0" : "Rabbitty v1.0"}
+      {/* Footer & Logout */}
+      <div className="border-t border-white/5 p-3 space-y-2">
+        <button
+          onClick={() => signOut({ callbackUrl: "/login" })}
+          className={cn(
+            "group flex w-full items-center rounded-xl py-2.5 text-xs font-bold text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all duration-300 relative cursor-pointer",
+            isCollapsed ? "justify-center px-0" : "px-4"
+          )}
+        >
+          <LogOut className="h-4 w-4 shrink-0 transition-transform duration-300 group-hover:-translate-x-0.5" />
+          {!isCollapsed && <span className="ml-3 whitespace-nowrap">Cerrar Sesión</span>}
+          {isCollapsed && (
+            <span className="absolute left-20 scale-0 group-hover:scale-100 rounded-xl bg-red-950 border border-red-500/20 px-3 py-2 text-xs font-bold text-red-300 shadow-xl backdrop-blur-md transition-all duration-200 pointer-events-none z-50 whitespace-nowrap">
+              Cerrar Sesión
+            </span>
+          )}
+        </button>
+
+        <div className="text-center text-[10px] tracking-wider text-gray-500 font-semibold uppercase whitespace-nowrap overflow-hidden">
+          {isCollapsed ? "v1.0" : "Rabbitty v1.0"}
+        </div>
       </div>
     </aside>
   );

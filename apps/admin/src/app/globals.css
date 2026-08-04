@@ -5,3 +5,30 @@
 body {
   font-family: var(--font-outfit), var(--rabbitty-font), sans-serif;
 }
+
+/* Custom Rabbitty Identity Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(236, 72, 153, 0.3);
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(236, 72, 153, 0.7);
+  box-shadow: 0 0 12px rgba(236, 72, 153, 0.5);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(236, 72, 153, 0.35) rgba(0, 0, 0, 0.5);
+}
