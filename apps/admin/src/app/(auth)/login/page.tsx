@@ -88,16 +88,29 @@ export default function LoginPage() {
             Abre la app de Rabbitty en Telegram, ve a <strong className="text-white">Perfil ➔ Escanear PC</strong> y apunta tu cámara a este código.
           </p>
 
-          <div className="p-4 bg-white/5 border border-pink-500/30 rounded-2xl shadow-[0_0_30px_rgba(236,72,153,0.15)] relative">
+          <div className="p-4 bg-white/5 border border-pink-500/30 rounded-2xl shadow-[0_0_30px_rgba(236,72,153,0.15)] relative min-w-[212px] min-h-[212px] flex items-center justify-center">
             {qrToken ? (
               <RabbittyCode
-                data={JSON.stringify({ type: 'auth', token: qrToken, sid: sessionId })}
+                data={`https://t.me/Rabbittyme_bot/app?startapp=qrlogin_${qrToken}`}
                 size={180}
                 showCardFrame={false}
               />
             ) : (
-              <div className="w-[180px] h-[180px] flex items-center justify-center text-xs text-gray-500 animate-pulse">
-                Generando QR...
+              <div className="w-[180px] h-[180px] flex flex-col items-center justify-center text-center p-4 space-y-3 relative overflow-hidden">
+                {/* Concentric Neon Radar Rings */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="w-28 h-28 rounded-full border border-pink-500/20 animate-ping" />
+                  <div className="w-20 h-20 rounded-full border border-purple-500/30 animate-pulse" />
+                </div>
+
+                <div className="relative z-10 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-pink-500/20 to-purple-500/20 border border-pink-500/30 text-pink-400 shadow-[0_0_20px_rgba(236,72,153,0.3)]">
+                  <QrCode className="h-6 w-6 animate-pulse" />
+                </div>
+
+                <div className="relative z-10 space-y-1">
+                  <p className="text-xs font-bold text-white tracking-wide">Generando QR...</p>
+                  <p className="text-[10px] text-pink-400/80 font-medium">Conexión cifrada</p>
+                </div>
               </div>
             )}
           </div>
