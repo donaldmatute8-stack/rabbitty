@@ -22,9 +22,8 @@ export const staffRouter = router({
   createStaff: protectedProcedure
     .input(
       z.object({
-        branchId: z.string(),
-        name: z.string(),
-        email: z.string(),
+        name: z.string().min(1),
+        email: z.string().email(),
         role: z.enum(["WAITER", "CASHIER", "MANAGER", "ADMIN"]).default("WAITER"),
         pinCode: z.string().length(4).optional(),
       })
@@ -32,7 +31,7 @@ export const staffRouter = router({
     .mutation(async ({ ctx, input }) => {
       const [result] = await ctx.restaurantDb.insert(staffTable).values({
         userId: ctx.userId,
-        branchId: input.branchId,
+        branchId: ctx.branchId,
         name: input.name,
         email: input.email,
         role: input.role,

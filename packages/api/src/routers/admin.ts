@@ -131,15 +131,14 @@ export const adminRouter = router({
   createCategory: protectedProcedure
     .input(
       z.object({
-        branchId: z.string(),
-        name: z.string(),
+        name: z.string().min(1),
         description: z.string().optional(),
         sortOrder: z.number().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       const [category] = await ctx.restaurantDb.insert(dbSchema.menuCategories).values({
-        branchId: input.branchId,
+        branchId: ctx.branchId,
         name: input.name,
         description: input.description ?? null,
         sortOrder: input.sortOrder ?? 0,
@@ -172,8 +171,7 @@ export const adminRouter = router({
     .input(
       z.object({
         categoryId: z.string(),
-        branchId: z.string(),
-        name: z.string(),
+        name: z.string().min(1),
         description: z.string().optional(),
         price: z.number(),
         cost: z.number().optional(),
@@ -186,7 +184,7 @@ export const adminRouter = router({
     .mutation(async ({ ctx, input }) => {
       const [menuItem] = await ctx.restaurantDb.insert(dbSchema.menuItems).values({
         categoryId: input.categoryId,
-        branchId: input.branchId,
+        branchId: ctx.branchId,
         name: input.name,
         description: input.description ?? null,
         price: input.price,
