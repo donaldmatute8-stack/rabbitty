@@ -21,11 +21,13 @@ export default function RecipesPage() {
       utils.inventory.getRecipe.invalidate();
       toast.success("Ingrediente agregado");
       setIngForm({ inventoryItemId: "", quantityRequired: 0, unit: "pz" });
+      setDialogOpen(false);
     },
     onError: (e) => toast.error(e.message),
   });
 
   const [ingForm, setIngForm] = useState({ inventoryItemId: "", quantityRequired: 0, unit: "pz" });
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [search, setSearch] = useState("");
 
   const selectedItem = menuItems?.find((i) => i.id === selectedItemId);
@@ -136,7 +138,7 @@ export default function RecipesPage() {
                     <h3 className="font-bold text-lg text-white">Ingredientes</h3>
                     <p className="text-xs text-gray-400 mt-0.5">{recipe?.length ?? 0} ingredientes en la receta</p>
                   </div>
-                  <Button onClick={() => setIngForm({ inventoryItemId: "", quantityRequired: 0, unit: "pz" })}>
+                  <Button onClick={() => { setIngForm({ inventoryItemId: "", quantityRequired: 0, unit: "pz" }); setDialogOpen(true); }}>
                     <Plus className="h-4 w-4" />
                     Agregar Ingrediente
                   </Button>
@@ -179,8 +181,8 @@ export default function RecipesPage() {
       </div>
 
       <Dialog
-        open={!!selectedItemId && !inventoryItems?.length}
-        onClose={() => {}}
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
         title="Agregar Ingrediente"
       >
         <div className="space-y-4">

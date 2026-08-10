@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Outfit } from "next/font/google";
 import "./globals.css";
 import { TRPCProvider } from "../lib/providers";
-import { ErrorBoundary } from "@rabbitty/ui";
+import { ErrorBoundary, Toaster } from "@rabbitty/ui";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -23,7 +23,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="es" className={`${outfit.variable} antialiased dark`}>
       <body className="min-h-screen" style={{ background: "var(--bg-primary)", color: "var(--text-primary)" }}>
         <ErrorBoundary>
-          <TRPCProvider>{children}</TRPCProvider>
+          <TRPCProvider>
+            {children}
+            <Toaster theme="dark" position="top-right" />
+          </TRPCProvider>
         </ErrorBoundary>
       </body>
     </html>
