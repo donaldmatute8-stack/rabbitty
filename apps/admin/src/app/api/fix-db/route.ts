@@ -1,13 +1,19 @@
 import { NextResponse } from "next/server";
-import { getCoreDb, getRestaurantDb } from "../../../../../packages/api/src/db";
 import * as schemaCore from "@rabbitty/database-core/schema";
 import * as schemaRest from "@rabbitty/database-restaurant/schema";
 import { eq } from "drizzle-orm";
+import postgres from "postgres";
+import { drizzle as drizzleRest } from "drizzle-orm/postgres-js";
+import { drizzle as drizzleCore } from "drizzle-orm/postgres-js";
 
 export async function GET() {
   try {
-    const coreDb = getCoreDb();
-    const restDb = getRestaurantDb();
+    const url = process.env.RESTAURANT_DATABASE_URL || process.env.DATABASE_URL || process.env.CORE_DATABASE_URL;
+    if (!url) throw new Error("No database URL");
+    const client = postgres(url);
+    const coreDb = drizzleCore(client, { schema: schemaCore });
+    const restDb = drizzleRest(client, { schema: schemaRest });
+
 
     // 1. Create a dummy user
     const users = await coreDb.select().from(schemaCore.users);
@@ -32,6 +38,8 @@ export async function GET() {
         name: "Rabbitty Restaurant",
         category: "Food",
         address: "123 Main St",
+        lat: 0,
+        lng: 0,
         status: "APPROVED"
       }).onConflictDoNothing();
     }
