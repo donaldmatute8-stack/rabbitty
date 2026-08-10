@@ -6,26 +6,29 @@ import { Card, Badge, Button, Dialog, Input, Select, toast } from "@rabbitty/ui"
 import { Plus, Pencil, Trash2 } from "lucide-react";
 
 const roleOptions = [
-  { value: "waiter", label: "Mesero" },
-  { value: "cook", label: "Cocina" },
-  { value: "admin", label: "Admin" },
+  { value: "WAITER", label: "Mesero" },
+  { value: "CASHIER", label: "Cajero" },
+  { value: "MANAGER", label: "Gerente" },
+  { value: "ADMIN", label: "Admin" },
 ];
 
 const roleColors: Record<string, "default" | "secondary" | "success" | "warning" | "danger"> = {
-  admin: "danger",
-  cook: "warning",
-  waiter: "secondary",
+  ADMIN: "danger",
+  MANAGER: "warning",
+  CASHIER: "secondary",
+  WAITER: "default",
 };
 
 const roleLabels: Record<string, string> = {
-  admin: "Admin",
-  cook: "Cocina",
-  waiter: "Mesero",
+  ADMIN: "Admin",
+  MANAGER: "Gerente",
+  CASHIER: "Cajero",
+  WAITER: "Mesero",
 };
 
 type StaffForm = { name: string; email: string; role: string; pinCode: string };
 
-const defaultForm: StaffForm = { name: "", email: "", role: "waiter", pinCode: "" };
+const defaultForm: StaffForm = { name: "", email: "", role: "WAITER", pinCode: "" };
 
 export default function StaffPage() {
   const utils = trpc.useUtils();
@@ -45,7 +48,7 @@ export default function StaffPage() {
 
   const save = () => {
     if (dialog?.mode === "create") {
-      createStaff.mutate({ ...form, branchId: process.env.NEXT_PUBLIC_BRANCH_ID ?? "b1", role: form.role as "WAITER" | "CASHIER" | "MANAGER" | "ADMIN" });
+      createStaff.mutate({ name: form.name, email: form.email, role: form.role as "WAITER" | "CASHIER" | "MANAGER" | "ADMIN", pinCode: form.pinCode || undefined });
     } else if (dialog?.id) {
       updateStaff.mutate({ id: dialog.id, name: form.name, email: form.email, role: form.role as "WAITER" | "CASHIER" | "MANAGER" | "ADMIN" });
     }

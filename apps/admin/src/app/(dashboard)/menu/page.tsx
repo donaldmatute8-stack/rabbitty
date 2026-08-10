@@ -43,7 +43,7 @@ export default function MenuPage() {
 
   const saveItem = () => {
     if (itemDialog?.mode === "create") {
-      createItem.mutate({ ...itemForm, branchId: process.env.NEXT_PUBLIC_BRANCH_ID ?? "b1" });
+      createItem.mutate({ ...itemForm });
     } else if (itemDialog?.id) {
       updateItem.mutate({ id: itemDialog.id, ...itemForm });
     }
@@ -51,7 +51,7 @@ export default function MenuPage() {
 
   const saveCategory = () => {
     if (catDialog?.mode === "create") {
-      createCategory.mutate({ ...catForm, branchId: process.env.NEXT_PUBLIC_BRANCH_ID ?? "b1" });
+      createCategory.mutate({ ...catForm });
     } else if (catDialog?.id) {
       updateCategory.mutate({ id: catDialog.id, name: catForm.name });
     }
