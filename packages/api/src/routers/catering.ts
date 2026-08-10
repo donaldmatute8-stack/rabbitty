@@ -28,7 +28,6 @@ export const cateringRouter = router({
 
   create: protectedProcedure
     .input(z.object({
-      branchId: z.string(),
       eventName: z.string().min(1),
       eventDate: z.string(),
       partySize: z.number().default(1),
@@ -44,6 +43,7 @@ export const cateringRouter = router({
     .mutation(async ({ ctx, input }) => {
       const [event] = await ctx.restaurantDb.insert(cateringEvents).values({
         ...input,
+        branchId: ctx.branchId,
         eventDate: new Date(input.eventDate),
         menuDetails: input.menuDetails ? JSON.stringify(input.menuDetails) : null,
       }).returning();

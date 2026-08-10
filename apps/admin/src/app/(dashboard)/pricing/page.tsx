@@ -26,14 +26,14 @@ export default function PricingPage() {
   const [dialog, setDialog] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState<any>({
-    branchId: "b1", name: "", priority: 0, adjustmentType: "PERCENTAGE",
+    name: "", priority: 0, adjustmentType: "PERCENTAGE",
     adjustmentValue: 10, dayOfWeek: "", startTime: "", endTime: "",
     minPrice: "", maxPrice: "",
   });
 
   const openEdit = (r: any) => {
     setForm({
-      branchId: r.branchId, name: r.name, priority: r.priority ?? 0,
+      name: r.name, priority: r.priority ?? 0,
       adjustmentType: r.adjustmentType, adjustmentValue: r.adjustmentValue,
       dayOfWeek: r.dayOfWeek?.toString() ?? "",
       startTime: r.startTime ?? "", endTime: r.endTime ?? "",
@@ -57,7 +57,6 @@ export default function PricingPage() {
       }
       updateRule.mutate(payload);
     } else {
-      data.branchId = "b1";
       if (data.dayOfWeek === "") data.dayOfWeek = undefined;
       else data.dayOfWeek = parseInt(data.dayOfWeek);
       if (data.minPrice === "") data.minPrice = undefined;
@@ -81,7 +80,7 @@ export default function PricingPage() {
             </h1>
             <p className="text-gray-400 mt-2 text-sm font-medium">Reglas de precio automáticas según hora, día y demanda</p>
           </div>
-          <Button onClick={() => { setEditing(null); setForm({ branchId: "b1", name: "", priority: 0, adjustmentType: "PERCENTAGE", adjustmentValue: 10, dayOfWeek: "", startTime: "", endTime: "", minPrice: "", maxPrice: "" }); setDialog(true); }}>
+          <Button onClick={() => { setEditing(null); setForm({ name: "", priority: 0, adjustmentType: "PERCENTAGE", adjustmentValue: 10, dayOfWeek: "", startTime: "", endTime: "", minPrice: "", maxPrice: "" }); setDialog(true); }}>
             <Plus className="h-4 w-4" />
             Nueva Regla
           </Button>

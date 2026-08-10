@@ -25,7 +25,6 @@ export const pricingRouter = router({
 
   create: protectedProcedure
     .input(z.object({
-      branchId: z.string(),
       menuItemId: z.string().optional(),
       name: z.string().min(1),
       priority: z.number().default(0),
@@ -38,7 +37,7 @@ export const pricingRouter = router({
       maxPrice: z.number().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const [rule] = await ctx.restaurantDb.insert(dynamicPricingRules).values(input).returning();
+      const [rule] = await ctx.restaurantDb.insert(dynamicPricingRules).values({ ...input, branchId: ctx.branchId }).returning();
       return rule;
     }),
 
