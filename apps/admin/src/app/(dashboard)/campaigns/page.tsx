@@ -162,7 +162,7 @@ export default function CampaignsPage() {
               <div className="flex justify-end gap-3 pt-2">
                 <Button variant="secondary" onClick={() => setDialog(false)}>Cancelar</Button>
                 <Button
-                  onClick={() => createCampaign.mutate({ branchId: "b1", ...form })}
+                  onClick={() => createCampaign.mutate({ ...form })}
                   disabled={!form.name || !form.message}
                 >
                   <Send className="h-4 w-4" />

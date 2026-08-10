@@ -59,7 +59,7 @@ export default function StaffShiftsPage() {
             {staff?.filter((s) => !onShift.find((o) => o.id === s.id)).map((member) => (
               <button
                 key={member.id}
-                onClick={() => clockIn.mutate({ staffId: member.id, branchId: process.env.NEXT_PUBLIC_BRANCH_ID ?? "b1" })}
+                onClick={() => clockIn.mutate({ staffId: member.id })}
                 disabled={clockIn.isPending}
                 className="w-full flex items-center justify-between rounded-xl border border-white/5 bg-white/5 p-3 hover:bg-white/10 hover:border-white/10 transition-all text-left disabled:opacity-50"
               >

@@ -34,7 +34,7 @@ export default function InventoryPage() {
   };
 
   const handleCreate = () => {
-    createItem.mutate({ ...form, branchId: process.env.NEXT_PUBLIC_BRANCH_ID ?? "b1" });
+    createItem.mutate({ ...form });
   };
 
   return (

@@ -21,8 +21,7 @@ export const inventoryRouter = router({
   createItem: protectedProcedure
     .input(
       z.object({
-        branchId: z.string(),
-        name: z.string(),
+        name: z.string().min(1),
         sku: z.string().optional(),
         unit: z.string().default("pz"),
         stock: z.number().default(0),
@@ -32,7 +31,7 @@ export const inventoryRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const [item] = await ctx.restaurantDb.insert(inventoryItems).values({
-        branchId: input.branchId,
+        branchId: ctx.branchId,
         name: input.name,
         sku: input.sku ?? null,
         unit: input.unit,

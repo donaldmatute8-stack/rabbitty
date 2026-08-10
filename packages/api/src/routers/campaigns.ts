@@ -12,14 +12,13 @@ export const campaignsRouter = router({
 
   create: protectedProcedure
     .input(z.object({
-      branchId: z.string(),
       name: z.string().min(1),
       targetSegment: z.enum(["ALL", "VIP", "RECURRENT", "NEW", "CHURN_RISK"]),
       message: z.string().min(1),
     }))
     .mutation(async ({ ctx, input }) => {
       const [campaign] = await ctx.restaurantDb.insert(campaigns).values({
-        branchId: input.branchId,
+        branchId: ctx.branchId,
         name: input.name,
         targetSegment: input.targetSegment,
         message: input.message,

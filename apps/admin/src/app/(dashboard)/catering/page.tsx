@@ -41,7 +41,6 @@ export default function CateringPage() {
   const [dialog, setDialog] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState({
-    branchId: "b1",
     eventName: "", eventDate: "", partySize: 1,
     customerName: "", customerPhone: "", customerEmail: "",
     deposit: 0, totalAmount: 0, notes: "", status: "PENDING",
@@ -49,7 +48,7 @@ export default function CateringPage() {
 
   const openEdit = (ev: any) => {
     setForm({
-      branchId: ev.branchId, eventName: ev.eventName,
+      eventName: ev.eventName,
       eventDate: ev.eventDate ? new Date(ev.eventDate).toISOString().split("T")[0] : "",
       partySize: ev.partySize, customerName: ev.customerName,
       customerPhone: ev.customerPhone ?? "", customerEmail: ev.customerEmail ?? "",
@@ -81,7 +80,7 @@ export default function CateringPage() {
             </h1>
             <p className="text-gray-400 mt-2 text-sm font-medium">Gestión de eventos, menús personalizados y contratos</p>
           </div>
-          <Button onClick={() => { setEditing(null); setForm({ branchId: "b1", eventName: "", eventDate: "", partySize: 1, customerName: "", customerPhone: "", customerEmail: "", deposit: 0, totalAmount: 0, notes: "", status: "PENDING" }); setDialog(true); }}>
+          <Button onClick={() => { setEditing(null); setForm({ eventName: "", eventDate: "", partySize: 1, customerName: "", customerPhone: "", customerEmail: "", deposit: 0, totalAmount: 0, notes: "", status: "PENDING" }); setDialog(true); }}>
             <Plus className="h-4 w-4" />
             Nuevo Evento
           </Button>

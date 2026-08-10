@@ -86,11 +86,11 @@ export const staffRouter = router({
     }),
 
   clockIn: protectedProcedure
-    .input(z.object({ staffId: z.string(), branchId: z.string() }))
+    .input(z.object({ staffId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const [shift] = await ctx.restaurantDb.insert(staffShifts).values({
         staffId: input.staffId,
-        branchId: input.branchId,
+        branchId: ctx.branchId,
         status: "ACTIVE",
       }).returning();
       if (!shift) {
