@@ -2,11 +2,23 @@
 
 import { useState } from "react";
 import { trpc } from "../../../lib/trpc-client";
-import { Card, Badge, Button, Dialog, Input, toast } from "@rabbitty/ui";
+import { Card, Badge, Button, Dialog, Input, Select, toast } from "@rabbitty/ui";
 import { Plus, Package, TrendingUp, TrendingDown, AlertTriangle, Trash2 } from "lucide-react";
 
 type ItemForm = { name: string; sku: string; unit: string; stock: number; minStock: number; costPerUnit: number };
 const defaultItemForm: ItemForm = { name: "", sku: "", unit: "pz", stock: 0, minStock: 5, costPerUnit: 0 };
+
+const inventoryUnits = [
+  { value: "pz", label: "Pieza (pz)" },
+  { value: "kg", label: "Kilogramo (kg)" },
+  { value: "gr", label: "Gramo (gr)" },
+  { value: "L", label: "Litro (L)" },
+  { value: "ml", label: "Mililitro (ml)" },
+  { value: "caja", label: "Caja" },
+  { value: "lata", label: "Lata" },
+  { value: "frasco", label: "Frasco" },
+  { value: "costal", label: "Costal" },
+];
 
 export default function InventoryPage() {
   const utils = trpc.useUtils();
@@ -146,16 +158,12 @@ export default function InventoryPage() {
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
           />
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="SKU"
-              value={form.sku}
-              onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))}
-            />
-            <Input
-              label="Unidad"
+          <div className="grid grid-cols-1 gap-4">
+            <Select
+              label="Unidad de Medida"
               value={form.unit}
               onChange={(e) => setForm((f) => ({ ...f, unit: e.target.value }))}
+              options={inventoryUnits}
             />
           </div>
           <div className="grid grid-cols-3 gap-4">

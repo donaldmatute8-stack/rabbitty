@@ -30,10 +30,12 @@ export const inventoryRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const generatedSku = input.sku || `SKU-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      
       const [item] = await ctx.restaurantDb.insert(inventoryItems).values({
         branchId: ctx.branchId,
         name: input.name,
-        sku: input.sku ?? null,
+        sku: generatedSku,
         unit: input.unit,
         stock: input.stock,
         minStock: input.minStock,

@@ -5,6 +5,19 @@ import { trpc } from "../../../lib/trpc-client";
 import { Card, Badge, Button, Dialog, Input, Select, toast } from "@rabbitty/ui";
 import { Salad, Plus, Trash2, DollarSign, PieChart, Scale, ChevronRight, Search } from "lucide-react";
 
+const recipeUnits = [
+  { value: "pz", label: "Pieza (pz)" },
+  { value: "kg", label: "Kilogramo (kg)" },
+  { value: "gr", label: "Gramo (gr)" },
+  { value: "L", label: "Litro (L)" },
+  { value: "ml", label: "Mililitro (ml)" },
+  { value: "cucharada", label: "Cucharada (15ml)" },
+  { value: "cucharadita", label: "Cucharadita (5ml)" },
+  { value: "taza", label: "Taza (250ml)" },
+  { value: "pizca", label: "Pizca" },
+  { value: "puñado", label: "Puñado" },
+];
+
 export default function RecipesPage() {
   const utils = trpc.useUtils();
   const { data: menuItems } = trpc.pos.getMenuItems.useQuery({});
@@ -199,11 +212,11 @@ export default function RecipesPage() {
             value={ingForm.quantityRequired}
             onChange={(e) => setIngForm((f) => ({ ...f, quantityRequired: Number(e.target.value) }))}
           />
-          <Input
-            label="Unidad"
+          <Select
+            label="Unidad de Medida"
             value={ingForm.unit}
             onChange={(e) => setIngForm((f) => ({ ...f, unit: e.target.value }))}
-            placeholder="pz, gr, ml, etc."
+            options={recipeUnits}
           />
           <div className="flex justify-end gap-3 pt-2">
             <Button onClick={() => {
