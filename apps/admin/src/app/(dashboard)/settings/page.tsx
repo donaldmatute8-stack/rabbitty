@@ -4,11 +4,11 @@ import { useState, useEffect } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { Card, Badge, Button, Input, toast } from "@rabbitty/ui";
 import { 
-  Store, DollarSign, Clock, Gift, Monitor, Sun, Moon, Edit3, Check, X, 
-  Mail, Phone, Shield, Key, Smartphone, Fingerprint, Trash2, Plus, QrCode, 
+  Store, DollarSign, Gift, Monitor, Edit3, Check, X, 
+  Mail, Shield, Key, Smartphone, Fingerprint, Trash2, Plus, QrCode, 
   Coffee, UtensilsCrossed, Wine, Truck, ChefHat, Zap, Settings, 
   ToggleLeft, ToggleRight, Table2, Package, Users, CalendarCheck, 
-  Sparkles, BookUser, Receipt, Lock
+  Sparkles, BookUser, Receipt
 } from "lucide-react";
 import { cn } from "@rabbitty/ui";
 
@@ -114,6 +114,34 @@ const ALL_MODULES: ModuleConfig[] = [
 
 const STORAGE_KEY = "rabbitty_business_type";
 const MODULES_STORAGE_KEY = "rabbitty_active_modules";
+const MODULES_CHANGED_EVENT = "rabbitty-modules-changed";
+
+// Las tasas de recompensa se guardan como porcentaje entero (20 = 20%).
+// Normaliza valores legacy almacenados como fracción (< 1) al percent.
+const normalizePercent = (v: number | null | undefined, fallback = 20) => {
+  if (v == null) return fallback;
+  return v > 0 && v < 1 ? Math.round(v * 100) : v;
+};
+
+// btoa con String.fromCharCode(...bytes) rompe con buffers grandes (RangeError).
+// Se codifica por chunks de 0x8000 bytes.
+const toBase64 = (bytes: Uint8Array): string => {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+};
+
+const persistModules = (modules: Set<string>) => {
+  try {
+    localStorage.setItem(MODULES_STORAGE_KEY, JSON.stringify([...modules]));
+  } catch {
+    // Almacenamiento no disponible o lleno — el estado en memoria sigue valiendo
+  }
+  window.dispatchEvent(new CustomEvent(MODULES_CHANGED_EVENT, { detail: { modules: [...modules] } }));
+};
 
 // ─────────────────────────────────────────────────────────────────
 // MAIN COMPONENT
@@ -149,14 +177,39 @@ export default function SettingsPage() {
   const profile = profileQuery.data;
   const security = securityQuery.data;
 
-  // ─── Business Type State ───
-  const [selectedType, setSelectedType] = useState<BusinessType>("restaurant");
-  const [activeModules, setActiveModules] = useState<Set<string>>(new Set());
+  // ─── Business Type State (inicialización lazy desde localStorage) ───
+  const [selectedType, setSelectedType] = useState<BusinessType>(() => {
+    if (typeof window === "undefined") return "restaurant";
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY) as BusinessType | null;
+      if (saved && BUSINESS_PRESETS.find((p) => p.id === saved)) return saved;
+    } catch {
+      // localStorage corrupto o bloqueado — default
+    }
+    return "restaurant";
+  });
+  const [activeModules, setActiveModules] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set(BUSINESS_PRESETS[0].defaultModules);
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY) as BusinessType | null;
+      if (saved && BUSINESS_PRESETS.find((p) => p.id === saved)) {
+        const savedModules = localStorage.getItem(MODULES_STORAGE_KEY);
+        if (savedModules) {
+          const parsed = JSON.parse(savedModules);
+          if (Array.isArray(parsed)) return new Set(parsed);
+        }
+        return new Set(BUSINESS_PRESETS.find((p) => p.id === saved)!.defaultModules);
+      }
+    } catch {
+      // localStorage corrupto o bloqueado — default
+    }
+    return new Set(BUSINESS_PRESETS[0].defaultModules);
+  });
   const [activeTab, setActiveTab] = useState<"business" | "general" | "security">("business");
 
   // Form states
   const [editing, setEditing] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", taxRate: 0, defaultRewardRate: 0.05, acceptsBunz: true, happyHourStart: "", happyHourEnd: "", happyHourRewardRate: 0.1 });
+  const [form, setForm] = useState({ name: "", taxRate: 0, defaultRewardRate: 20, acceptsBunz: true, happyHourStart: "", happyHourEnd: "", happyHourRewardRate: 40 });
   const [email, setEmail] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -173,50 +226,36 @@ export default function SettingsPage() {
   const [revokingAll, setRevokingAll] = useState(false);
   const [revokeAllCode, setRevokeAllCode] = useState("");
 
-  // Load business type and modules from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY) as BusinessType | null;
-    const savedModules = localStorage.getItem(MODULES_STORAGE_KEY);
-    if (saved && BUSINESS_PRESETS.find(p => p.id === saved)) {
-      setSelectedType(saved);
-      if (savedModules) {
-        setActiveModules(new Set(JSON.parse(savedModules)));
-      } else {
-        const preset = BUSINESS_PRESETS.find(p => p.id === saved)!;
-        setActiveModules(new Set(preset.defaultModules));
-      }
-    } else {
-      const preset = BUSINESS_PRESETS[0];
-      setActiveModules(new Set(preset.defaultModules));
-    }
-  }, []);
+  // Load business type and modules from localStorage (lazy init arriba)
 
   const handleSelectType = (type: BusinessType) => {
     setSelectedType(type);
-    const preset = BUSINESS_PRESETS.find(p => p.id === type)!;
+    const preset = BUSINESS_PRESETS.find((p) => p.id === type)!;
     const newModules = new Set(preset.defaultModules);
     setActiveModules(newModules);
-    localStorage.setItem(STORAGE_KEY, type);
-    localStorage.setItem(MODULES_STORAGE_KEY, JSON.stringify([...newModules]));
+    try {
+      localStorage.setItem(STORAGE_KEY, type);
+    } catch {
+      // Almacenamiento no disponible
+    }
+    persistModules(newModules);
     toast.success(`Perfil de negocio cambiado a ${preset.label}`);
   };
 
   const toggleModule = (moduleId: string) => {
-    setActiveModules(prev => {
-      const next = new Set(prev);
-      if (next.has(moduleId)) {
-        next.delete(moduleId);
-      } else {
-        next.add(moduleId);
-      }
-      localStorage.setItem(MODULES_STORAGE_KEY, JSON.stringify([...next]));
-      return next;
-    });
+    const next = new Set(activeModules);
+    if (next.has(moduleId)) {
+      next.delete(moduleId);
+    } else {
+      next.add(moduleId);
+    }
+    setActiveModules(next);
+    persistModules(next);
   };
 
   useEffect(() => {
     if (r) {
-      setForm({ name: r.name, taxRate: r.taxRate, defaultRewardRate: r.defaultRewardRate ?? 0.05, acceptsBunz: r.acceptsBunz ?? true, happyHourStart: r.happyHourStart ?? "", happyHourEnd: r.happyHourEnd ?? "", happyHourRewardRate: r.happyHourRewardRate ?? 0.1 });
+      setForm({ name: r.name, taxRate: r.taxRate, defaultRewardRate: normalizePercent(r.defaultRewardRate, 20), acceptsBunz: r.acceptsBunz ?? true, happyHourStart: r.happyHourStart ?? "", happyHourEnd: r.happyHourEnd ?? "", happyHourRewardRate: normalizePercent(r.happyHourRewardRate, 40) });
     }
   }, [r]);
 
@@ -231,7 +270,7 @@ export default function SettingsPage() {
 
   const startEdit = (section: string) => {
     if (!r) return;
-    setForm({ name: r.name, taxRate: r.taxRate, defaultRewardRate: r.defaultRewardRate ?? 0.05, acceptsBunz: r.acceptsBunz ?? true, happyHourStart: r.happyHourStart ?? "", happyHourEnd: r.happyHourEnd ?? "", happyHourRewardRate: r.happyHourRewardRate ?? 0.1 });
+    setForm({ name: r.name, taxRate: r.taxRate, defaultRewardRate: normalizePercent(r.defaultRewardRate, 20), acceptsBunz: r.acceptsBunz ?? true, happyHourStart: r.happyHourStart ?? "", happyHourEnd: r.happyHourEnd ?? "", happyHourRewardRate: normalizePercent(r.happyHourRewardRate, 40) });
     setEditing(section);
   };
 
@@ -245,7 +284,7 @@ export default function SettingsPage() {
       if (!credential) { toast.error("Registro cancelado"); return; }
       const response = (credential as any).response;
       const transports = response.getTransports?.() ?? [];
-      const credentialData = { id: credential.id, rawId: btoa(String.fromCharCode(...new Uint8Array((credential as any).rawId))), response: { clientDataJSON: btoa(String.fromCharCode(...new Uint8Array(response.clientDataJSON))), attestationObject: btoa(String.fromCharCode(...new Uint8Array(response.attestationObject))), transports }, type: credential.type, clientExtensionResults: (credential as any).clientExtensionResults ?? {}, authenticatorAttachment: (credential as any).authenticatorAttachment ?? null };
+      const credentialData = { id: credential.id, rawId: toBase64(new Uint8Array((credential as any).rawId)), response: { clientDataJSON: toBase64(new Uint8Array(response.clientDataJSON)), attestationObject: toBase64(new Uint8Array(response.attestationObject)), transports }, type: credential.type, clientExtensionResults: (credential as any).clientExtensionResults ?? {}, authenticatorAttachment: (credential as any).authenticatorAttachment ?? null };
       await verifyPasskeyRegistration.mutateAsync({ credential: credentialData, deviceName: `Passkey (${navigator.platform ?? "dispositivo"})` });
     } catch (e: any) { toast.error(e?.message ?? "Error al registrar passkey"); } finally { setRegisteringPasskey(false); }
   };
@@ -306,6 +345,12 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      {error && (
+        <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-5 py-4 text-sm text-red-300 font-semibold">
+          No se pudieron cargar los datos del negocio: {error.message}
+        </div>
+      )}
 
       {/* ══════════════════════════════════════════════════════════════
           TAB: BUSINESS TYPE & MODULES
@@ -482,7 +527,7 @@ export default function SettingsPage() {
             {editing === "bunz" ? (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="space-y-4">
-                  <Input label="Tasa de recompensa (%)" type="number" value={form.defaultRewardRate * 100} onChange={(e) => setForm((f) => ({ ...f, defaultRewardRate: Number(e.target.value) / 100 }))} />
+                  <Input label="Tasa de recompensa (%)" type="number" value={form.defaultRewardRate} onChange={(e) => setForm((f) => ({ ...f, defaultRewardRate: Number(e.target.value) }))} />
                   <label className="flex items-center gap-2.5 text-sm text-gray-300 font-semibold cursor-pointer">
                     <input type="checkbox" checked={form.acceptsBunz} onChange={(e) => setForm((f) => ({ ...f, acceptsBunz: e.target.checked }))} className="h-5 w-5 rounded border-white/10 bg-white/5 text-pink-500 cursor-pointer" />
                     Acepta Bunz como forma de pago
@@ -494,7 +539,7 @@ export default function SettingsPage() {
                     <Input label="Hora Inicio" type="time" value={form.happyHourStart || ""} onChange={(e) => setForm((f) => ({ ...f, happyHourStart: e.target.value }))} />
                     <Input label="Hora Fin" type="time" value={form.happyHourEnd || ""} onChange={(e) => setForm((f) => ({ ...f, happyHourEnd: e.target.value }))} />
                     <div className="col-span-2">
-                      <Input label="Recompensa Happy Hour (%)" type="number" value={(form.happyHourRewardRate || 0) * 100} onChange={(e) => setForm((f) => ({ ...f, happyHourRewardRate: Number(e.target.value) / 100 }))} />
+                      <Input label="Recompensa Happy Hour (%)" type="number" value={form.happyHourRewardRate || 0} onChange={(e) => setForm((f) => ({ ...f, happyHourRewardRate: Number(e.target.value) }))} />
                     </div>
                   </div>
                 </div>
@@ -502,7 +547,7 @@ export default function SettingsPage() {
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 text-sm">
                 <div className="rounded-xl border border-white/5 bg-white/5 p-4 text-center">
-                  <p className="text-2xl font-black text-pink-400">{r?.defaultRewardRate != null ? `${(r.defaultRewardRate * 100).toFixed(0)}%` : "5%"}</p>
+                  <p className="text-2xl font-black text-pink-400">{r?.defaultRewardRate != null ? `${normalizePercent(r.defaultRewardRate, 20)}%` : "20%"}</p>
                   <p className="text-xs text-gray-400 mt-1">Cashback Bunz</p>
                 </div>
                 <div className="rounded-xl border border-white/5 bg-white/5 p-4 text-center">
@@ -511,7 +556,7 @@ export default function SettingsPage() {
                 </div>
                 <div className={cn("rounded-xl border p-4 text-center", r?.happyHourStart ? "border-pink-500/20 bg-pink-500/10" : "border-white/5 bg-white/5")}>
                   <p className="text-sm font-bold text-pink-300">{r?.happyHourStart && r?.happyHourEnd ? `${r.happyHourStart} - ${r.happyHourEnd}` : "Sin Happy Hour"}</p>
-                  <p className="text-xs text-gray-400 mt-1">{r?.happyHourRewardRate ? `×${(r.happyHourRewardRate * 100).toFixed(0)}% Bunz` : "Happy Hour"}</p>
+                  <p className="text-xs text-gray-400 mt-1">{r?.happyHourRewardRate ? `×${normalizePercent(r.happyHourRewardRate, 40)}% Bunz` : "Happy Hour"}</p>
                 </div>
               </div>
             )}

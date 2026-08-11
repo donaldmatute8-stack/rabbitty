@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
-import { restaurants, branches, orders, tables } from "@rabbitty/database-restaurant/schema";
+import { restaurants, branches, orders, tables, staff } from "@rabbitty/database-restaurant/schema";
 import { referrals, users, levels, ownedBusinesses } from "@rabbitty/database-core";
 import { customers } from "@rabbitty/database-restaurant/schema";
 import { miniappClient } from "../services/miniapp-client";
@@ -96,17 +96,40 @@ export const adminRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // Soft-guard de ownership (IDOR): si el usuario tiene personal vinculado,
+      // solo puede editar restaurantes de las sucursales de su staff. Si NO tiene
+      // staff vinculado (p.ej. seed o setup inicial), mantiene comportamiento legacy.
+      const staffRows = await ctx.restaurantDb
+        .select({ branchId: staff.branchId })
+        .from(staff)
+        .where(eq(staff.userId, ctx.userId));
+      const branchIds = staffRows.map((s) => s.branchId).filter(Boolean);
+      if (branchIds.length > 0) {
+        const branchRows = await ctx.restaurantDb
+          .select({ restaurantId: branches.restaurantId })
+          .from(branches)
+          .where(inArray(branches.id, branchIds));
+        const allowedIds = branchRows.map((b) => b.restaurantId).filter(Boolean);
+        if (allowedIds.length > 0 && !allowedIds.includes(input.id)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "No tienes permisos para modificar este restaurante." });
+        }
+      }
+
       await ctx.restaurantDb.update(restaurants).set(input).where(eq(restaurants.id, input.id));
 
       // Auto-sync to miniapp
       try {
         const [updated] = await ctx.restaurantDb.select().from(restaurants).where(eq(restaurants.id, input.id));
         if (updated?.businessId) {
+          // rewardPercentage en la miniapp es percent entero. Normaliza valores legacy < 1.
+          const rate = typeof updated.defaultRewardRate === "number" && updated.defaultRewardRate > 0 && updated.defaultRewardRate < 1
+            ? Math.round(updated.defaultRewardRate * 100)
+            : updated.defaultRewardRate;
           await miniappClient.createBusiness({
             name: updated.name,
             category: "Restaurante",
             address: "",
-            rewardPercentage: updated.defaultRewardRate ?? 10,
+            rewardPercentage: rate ?? 10,
             telegramId: updated.businessId,
           });
         }

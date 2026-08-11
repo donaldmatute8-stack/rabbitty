@@ -1,9 +1,8 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { systemSettings } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-
-const ADMIN_TELEGRAM_IDS = (process.env.ADMIN_TELEGRAM_IDS || '798431743').split(',');
+import { getVerifiedAdminId, isAdminAllowed } from '@/lib/adminAuth';
 
 const DEFAULT_SETTINGS: Record<string, string> = {
   free_registration: 'true',
@@ -11,9 +10,8 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   fee_due_days: '30',
 };
 
-export async function GET(req: Request) {
-  const telegramId = req.headers.get('X-Telegram-Id');
-  if (!telegramId || !ADMIN_TELEGRAM_IDS.includes(telegramId)) {
+export async function GET(req: NextRequest) {
+  if (!isAdminAllowed(getVerifiedAdminId(req))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -30,9 +28,8 @@ export async function GET(req: Request) {
   return NextResponse.json({ success: true, settings });
 }
 
-export async function POST(req: Request) {
-  const telegramId = req.headers.get('X-Telegram-Id');
-  if (!telegramId || !ADMIN_TELEGRAM_IDS.includes(telegramId)) {
+export async function POST(req: NextRequest) {
+  if (!isAdminAllowed(getVerifiedAdminId(req))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 

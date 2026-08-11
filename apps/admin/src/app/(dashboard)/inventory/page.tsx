@@ -15,6 +15,7 @@ const inventoryUnits = [
   { value: "ml", label: "Mililitro (ml)" }, { value: "caja", label: "Caja" },
   { value: "lata", label: "Lata" }, { value: "frasco", label: "Frasco" },
   { value: "costal", label: "Costal" }, { value: "cucharada", label: "Cucharada (15ml)" },
+  { value: "cucharadita", label: "Cucharadita (5ml)" }, { value: "puñado", label: "Puñado" },
   { value: "taza", label: "Taza (250ml)" }, { value: "pizca", label: "Pizca" },
 ];
 

@@ -1,13 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useActiveWallet } from "thirdweb/react";
 import QRScanner from '@/features/transactions/QRScanner';
 import { toast } from 'sonner';
 import { useAuth } from '@/features/auth/AuthProvider';
 
 export default function BusinessScanPage() {
-  const wallet = useActiveWallet();
   const { user } = useAuth();
   const [business, setBusiness] = useState<any>(null);
   const [isScanning, setIsScanning] = useState(false);
@@ -31,44 +29,9 @@ export default function BusinessScanPage() {
 
   const handleScan = async (decodedText: string) => {
     setIsScanning(false);
-    
-    // Check if it's a Coupon (usually a 32-char hex string from crypto.randomBytes(16))
-    if (decodedText.length === 32 && /^[0-9a-fA-F]+$/.test(decodedText)) {
-      await processRedeem(decodedText);
-    } else {
-      // Treat as Wallet Address / Telegram ID for general consumption
-      setScannedAddress(decodedText);
-      setShowMintModal(true);
-    }
-  };
-
-  const processRedeem = async (qrCodeData: string) => {
-    setProcessing(true);
-    const toastId = toast.loading("Verificando certificado...");
-    
-    try {
-      const res = await fetch('/api/business/scan/redeem', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          businessWallet: wallet?.getAccount()?.address || 'unknown',
-          qrCodeData
-        })
-      });
-      
-      const data = await res.json();
-      
-      if (data.success) {
-        toast.success(`¡Canje exitoso! Entrega: ${data.offerTitle}`, { id: toastId, duration: 5000 });
-      } else {
-        toast.error(data.error || "No disponible", { id: toastId, duration: 5000 });
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error("Error al conectar con el servidor", { id: toastId });
-    } finally {
-      setProcessing(false);
-    }
+    // Treat as Wallet Address / Telegram ID for general consumption
+    setScannedAddress(decodedText);
+    setShowMintModal(true);
   };
 
   const handleMintSubmit = async (e: React.FormEvent) => {
@@ -80,13 +43,18 @@ export default function BusinessScanPage() {
     const toastId = toast.loading("Procesando recompensa...");
     
     try {
+      const mod = await import('@twa-dev/sdk');
+      const app = mod.default;
+      const initData = typeof window !== 'undefined' ? app.initData : '';
+
       const res = await fetch('/api/business/scan/mint', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           telegramId: scannedAddress, // The customer's scanned ID/telegramId/wallet
           businessId: business.id,     // The merchant's business ID
-          fiatAmount: Number(fiatAmount)
+          fiatAmount: Number(fiatAmount),
+          initData
         })
       });
       

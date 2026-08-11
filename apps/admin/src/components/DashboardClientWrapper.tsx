@@ -32,6 +32,17 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
     enabled: !twoFaChecked && pathname !== "/auth/2fa",
   });
 
+  const { data: branches } = trpc.admin.getBranches.useQuery(undefined, {
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  useEffect(() => {
+    if (branches && branches.length > 0 && !branches.some((b) => b.id === branchId)) {
+      setBranchId(branches[0].id);
+    }
+  }, [branches, branchId]);
+
   useEffect(() => {
     if (isFetched && !twoFaChecked) {
       if (twoFa?.requireTotpForLogin) {

@@ -1,10 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { sql } from "drizzle-orm";
 import * as coreSchema from "@rabbitty/database-core";
+import { getVerifiedAdminId, isAdminAllowed } from "@/lib/adminAuth";
 
-const ADMIN_TELEGRAM_IDS = (process.env.ADMIN_TELEGRAM_IDS || '798431743').split(',');
 const TELEGRAM_ALERT_CHAT = process.env.SCALING_ALERT_CHAT_ID || "@mardelbull";
 
 const THRESHOLDS = {
@@ -41,9 +41,8 @@ async function sendTelegramAlert(metrics: { label: string; pct: number }[]) {
   }
 }
 
-export async function GET(req: Request) {
-  const telegramId = req.headers.get('X-Telegram-Id');
-  if (!telegramId || !ADMIN_TELEGRAM_IDS.includes(telegramId)) {
+export async function GET(req: NextRequest) {
+  if (!isAdminAllowed(getVerifiedAdminId(req))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
