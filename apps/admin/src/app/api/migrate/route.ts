@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getRestaurantDb } from "../../../../../packages/api/src/db";
+import { getRestaurantDb } from "@rabbitty/api/db";
 import { sql } from "drizzle-orm";
 
 export async function GET() {
