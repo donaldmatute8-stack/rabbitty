@@ -4,11 +4,9 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { toast } from "@rabbitty/ui";
 import { 
-  Save, Plus, Trash2, Square, Circle, Minus, ArrowRight, 
-  Layers, Upload, Monitor, Smartphone, ChevronDown, ChevronRight,
-  Move, RotateCw, Eye, EyeOff, Zap, Maximize2
+  Save, Plus, Trash2, Layers, Upload,
+  Eye, EyeOff, Zap
 } from "lucide-react";
-import Link from "next/link";
 import { cn } from "@rabbitty/ui";
 
 // ─────────────────────────────────────────────────────────────────
@@ -16,11 +14,13 @@ import { cn } from "@rabbitty/ui";
 // ─────────────────────────────────────────────────────────────────
 
 type ElementType = 
-  | "table_round" | "table_square" | "table_rect" | "table_bar"
+  | "table_round" | "table_square" | "table_rect" | "table_bar" | "table_high"
   | "chair" | "stool" | "booth"
   | "wall_h" | "wall_v" | "door" | "window"
   | "bar_counter" | "kitchen_zone" | "bathroom" | "entrance"
   | "plant" | "column" | "stage" | "dance_floor";
+
+const TABLE_TYPES: ElementType[] = ["table_round", "table_square", "table_rect", "table_bar", "table_high"];
 
 type TableStatus = "free" | "occupied" | "reserved" | "billing" | "cleaning";
 
@@ -67,6 +67,7 @@ const ELEMENTS: ElementDef[] = [
   { type: "table_square", label: "Mesa Cuadrada", emoji: "■", defaultW: 80, defaultH: 80, isTable: true, category: "tables", color: "bg-blue-500/20", borderColor: "border-blue-500/40" },
   { type: "table_rect", label: "Mesa Rectangular", emoji: "▬", defaultW: 120, defaultH: 70, isTable: true, category: "tables", color: "bg-blue-500/20", borderColor: "border-blue-500/40" },
   { type: "table_bar", label: "Mesa de Barra", emoji: "▭", defaultW: 160, defaultH: 50, isTable: true, category: "tables", color: "bg-purple-500/20", borderColor: "border-purple-500/40" },
+  { type: "table_high", label: "Mesa Alta", emoji: "◧", defaultW: 70, defaultH: 70, isTable: true, category: "tables", color: "bg-cyan-500/20", borderColor: "border-cyan-500/40" },
   // Seating
   { type: "chair", label: "Silla", emoji: "🪑", defaultW: 30, defaultH: 30, category: "seating", color: "bg-gray-500/20", borderColor: "border-gray-400/30" },
   { type: "stool", label: "Banquito / Stool", emoji: "🔘", defaultW: 28, defaultH: 28, category: "seating", color: "bg-gray-500/20", borderColor: "border-gray-400/30" },
@@ -246,19 +247,28 @@ export default function TableLayoutEditorPage() {
   useEffect(() => {
     if (dbTables) {
       const loaded: FloorElement[] = dbTables.map((t) => {
-        let coords = { x: 50, y: 50, w: 80, h: 80 };
-        if (t.location) { try { coords = { ...coords, ...JSON.parse(t.location) }; } catch {} }
+        let parsed: Record<string, any> = {};
+        if (t.location) { try { parsed = JSON.parse(t.location); } catch {} }
+        // El cliente usa w/h pero el servidor persiste width/height — acepta ambos.
+        const w = typeof parsed.width === "number" ? parsed.width : (typeof parsed.w === "number" ? parsed.w : 80);
+        const h = typeof parsed.height === "number" ? parsed.height : (typeof parsed.h === "number" ? parsed.h : 80);
+        const type = parsed.type && ELEMENTS.find((e) => e.type === parsed.type) ? parsed.type : "table_square";
         return {
           id: t.id,
-          type: "table_square" as ElementType,
-          x: coords.x, y: coords.y, w: coords.w, h: coords.h,
-          label: `M${t.number ?? 1}`,
-          capacity: t.capacity,
-          status: "free" as TableStatus,
+          type: type as ElementType,
+          x: parsed.x ?? 50,
+          y: parsed.y ?? 50,
+          w,
+          h,
+          rotation: parsed.rotation,
+          label: parsed.label ?? `M${t.number ?? 1}`,
+          capacity: t.capacity ?? parsed.capacity,
+          status: parsed.status ?? "free" as TableStatus,
+          zone: parsed.zone,
         };
       });
       setElements(loaded);
-      setTableCounter(loaded.filter(e => ["table_round","table_square","table_rect","table_bar"].includes(e.type)).length + 1);
+      setTableCounter(loaded.filter((e) => TABLE_TYPES.includes(e.type)).length + 1);
     }
   }, [dbTables]);
 
@@ -297,20 +307,28 @@ export default function TableLayoutEditorPage() {
   const handleMouseDown = useCallback((e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     const el = elements.find(x => x.id === id);
-    if (!el) return;
-    const canvas = canvasRef.current!.getBoundingClientRect();
-    setDrag({ id, ox: e.clientX - canvas.left - el.x, oy: e.clientY - canvas.top - el.y });
+    const canvas = canvasRef.current;
+    if (!el || !canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    setDrag({ id, ox: e.clientX - rect.left + canvas.scrollLeft - el.x, oy: e.clientY - rect.top + canvas.scrollTop - el.y });
     setSelected(id);
   }, [elements]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (!drag) return;
-    const canvas = canvasRef.current!.getBoundingClientRect();
-    setElements(prev => prev.map(el =>
-      el.id === drag.id
-        ? { ...el, x: Math.max(0, e.clientX - canvas.left - drag.ox), y: Math.max(0, e.clientY - canvas.top - drag.oy) }
-        : el
-    ));
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const width = Math.max(rect.width, canvas.scrollWidth);
+    const height = Math.max(rect.height, canvas.scrollHeight);
+    setElements(prev => prev.map(el => {
+      if (el.id !== drag.id) return el;
+      const x = e.clientX - rect.left + canvas.scrollLeft - drag.ox;
+      const y = e.clientY - rect.top + canvas.scrollTop - drag.oy;
+      const maxX = Math.max(0, width - el.w);
+      const maxY = Math.max(0, height - el.h);
+      return { ...el, x: Math.min(maxX, Math.max(0, x)), y: Math.min(maxY, Math.max(0, y)) };
+    }));
   }, [drag]);
 
   const handleMouseUp = useCallback(() => setDrag(null), []);
@@ -323,16 +341,18 @@ export default function TableLayoutEditorPage() {
 
   // ── Save ──
   const handleSave = useCallback(() => {
-    const tables = elements.filter(e =>
-      ["table_round","table_square","table_rect","table_bar"].includes(e.type) &&
-      !e.id.startsWith("el_")
-    );
-    saveLayout(tables.map((t) => ({
+    const tableElements = elements.filter((e) => TABLE_TYPES.includes(e.type));
+    saveLayout(tableElements.map((t) => ({
       id: t.id,
+      type: t.type,
       x: t.x, y: t.y,
       width: t.w,
       height: t.h,
       capacity: t.capacity ?? 4,
+      label: t.label,
+      status: t.status,
+      zone: t.zone,
+      rotation: t.rotation,
     })));
   }, [elements, saveLayout]);
 
@@ -344,6 +364,7 @@ export default function TableLayoutEditorPage() {
     try {
       const imported = await heuristicImport(file);
       setElements(imported);
+      setTableCounter(imported.filter((e) => TABLE_TYPES.includes(e.type)).length + 1);
       setSelected(null);
     } finally {
       setImportLoading(false);
@@ -472,27 +493,6 @@ export default function TableLayoutEditorPage() {
               </button>
             ))}
           </div>
-
-          {/* POS / Kiosk Quick Access */}
-          <div className="border-t border-white/10 p-2 space-y-1.5">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 px-2 py-1">Acceso Rápido</p>
-            <Link
-              href="/pos"
-              className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5 text-xs font-bold text-emerald-400 hover:bg-emerald-500/20 transition-all cursor-pointer group"
-            >
-              <Monitor className="h-4 w-4" />
-              <span>POS Cajero</span>
-              <ArrowRight className="h-3.5 w-3.5 ml-auto opacity-0 group-hover:opacity-100 transition-all" />
-            </Link>
-            <Link
-              href="/kiosk"
-              className="flex items-center gap-2 rounded-xl border border-purple-500/30 bg-purple-500/10 px-3 py-2.5 text-xs font-bold text-purple-400 hover:bg-purple-500/20 transition-all cursor-pointer group"
-            >
-              <Smartphone className="h-4 w-4" />
-              <span>Kiosk iPad</span>
-              <ArrowRight className="h-3.5 w-3.5 ml-auto opacity-0 group-hover:opacity-100 transition-all" />
-            </Link>
-          </div>
         </div>
 
         {/* ── Center: Canvas ── */}
@@ -503,7 +503,7 @@ export default function TableLayoutEditorPage() {
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
-          onClick={(e) => { if (e.target === canvasRef.current) setSelected(null); }}
+          onClick={(e) => { if (!(e.target as HTMLElement).closest("[data-el]")) setSelected(null); }}
         >
           {/* Grid Overlay */}
           <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
@@ -524,6 +524,7 @@ export default function TableLayoutEditorPage() {
             return (
               <div
                 key={el.id}
+                data-el={el.id}
                 onMouseDown={(e) => handleMouseDown(e, el.id)}
                 style={{ position: "absolute", left: el.x, top: el.y }}
               >

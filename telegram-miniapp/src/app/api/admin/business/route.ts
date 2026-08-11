@@ -1,16 +1,15 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 import { db } from '@/db';
 import { users, ownedBusinesses, webSessions } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import crypto from 'crypto';
+import { getVerifiedAdminId, isAdminAllowed } from '@/lib/adminAuth';
 
-const ADMIN_TELEGRAM_IDS = (process.env.ADMIN_TELEGRAM_IDS || '798431743').split(',');
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
-export async function GET(req: Request) {
-  const telegramId = req.headers.get('X-Telegram-Id');
-  if (!telegramId || !ADMIN_TELEGRAM_IDS.includes(telegramId)) {
+export async function GET(req: NextRequest) {
+  if (!isAdminAllowed(getVerifiedAdminId(req))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -22,9 +21,9 @@ export async function GET(req: Request) {
   return NextResponse.json({ success: true, businesses });
 }
 
-export async function POST(req: Request) {
-  const telegramId = req.headers.get('X-Telegram-Id');
-  if (!telegramId || !ADMIN_TELEGRAM_IDS.includes(telegramId)) {
+export async function POST(req: NextRequest) {
+  const telegramId = getVerifiedAdminId(req);
+  if (!isAdminAllowed(telegramId)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 

@@ -5,6 +5,24 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useToast } from '@/contexts/ToastContext';
 
+let initDataPromise: Promise<string> | null = null;
+function getInitData(): Promise<string> {
+  if (!initDataPromise) {
+    initDataPromise = import('@twa-dev/sdk')
+      .then((mod) => mod.default.initData || '')
+      .catch(() => '');
+  }
+  return initDataPromise;
+}
+async function adminHeaders(user: any, json = false): Promise<Record<string, string>> {
+  const initData = await getInitData();
+  return {
+    ...(json ? { 'Content-Type': 'application/json' } : {}),
+    'X-Telegram-Id': user?.telegramId || '',
+    'x-init-data': initData,
+  };
+}
+
 export default function AdminPanel({ onClose }: { onClose: () => void }) {
   const { user } = useAuth();
   const { showToast } = useToast();
@@ -21,44 +39,42 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
   const [loadingSettings, setLoadingSettings] = useState(true);
 
   useEffect(() => {
-    fetch('/api/admin/gamification', {
-      headers: { 'X-Telegram-Id': user?.telegramId || '' }
-    })
-    .then(res => res.json())
-    .then(data => {
-      if (data.levels) setLevels(data.levels);
-      if (data.tricks) setTricks(data.tricks);
-      setLoading(false);
-    })
-    .catch(err => {
-      console.error(err);
-      setLoading(false);
-    });
+    (async () => {
+      try {
+        const res = await fetch('/api/admin/gamification', { headers: await adminHeaders(user) });
+        const data = await res.json();
+        if (data.levels) setLevels(data.levels);
+        if (data.tricks) setTricks(data.tricks);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, [user]);
 
   useEffect(() => {
-    fetch('/api/admin/settings', {
-      headers: { 'X-Telegram-Id': user?.telegramId || '' }
-    })
-    .then(res => res.json())
-    .then(data => {
-      if (data.settings) {
-        setFreeRegistration(data.settings.free_registration !== 'false');
-        setRegistrationFee(parseInt(data.settings.registration_fee) || 5000);
+    (async () => {
+      try {
+        const res = await fetch('/api/admin/settings', { headers: await adminHeaders(user) });
+        const data = await res.json();
+        if (data.settings) {
+          setFreeRegistration(data.settings.free_registration !== 'false');
+          setRegistrationFee(parseInt(data.settings.registration_fee) || 5000);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoadingSettings(false);
       }
-      setLoadingSettings(false);
-    })
-    .catch(() => setLoadingSettings(false));
+    })();
   }, [user]);
 
   const handleCreateTrick = async () => {
     try {
       const res = await fetch('/api/admin/gamification', {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'X-Telegram-Id': user?.telegramId || ''
-        },
+        headers: await adminHeaders(user, true),
         body: JSON.stringify({ action: 'CREATE_TRICK', payload: newTrick })
       });
       const data = await res.json();
@@ -148,7 +164,7 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
                     const newVal = !freeRegistration;
                     await fetch('/api/admin/settings', {
                       method: 'POST',
-                      headers: { 'Content-Type': 'application/json', 'X-Telegram-Id': user?.telegramId || '' },
+                      headers: await adminHeaders(user, true),
                       body: JSON.stringify({ key: 'free_registration', value: String(newVal) }),
                     });
                     setFreeRegistration(newVal);
@@ -180,7 +196,7 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
                       onClick={async () => {
                         await fetch('/api/admin/settings', {
                           method: 'POST',
-                          headers: { 'Content-Type': 'application/json', 'X-Telegram-Id': user?.telegramId || '' },
+                          headers: await adminHeaders(user, true),
                           body: JSON.stringify({ key: 'registration_fee', value: String(registrationFee) }),
                         });
                         showToast(`Cuota actualizada a ${registrationFee.toLocaleString()} Bunz`, 'success');
@@ -280,16 +296,18 @@ function ScalingDashboard() {
   const { user } = useAuth();
 
   useEffect(() => {
-    fetch('/api/admin/scaling', {
-      headers: { 'X-Telegram-Id': user?.telegramId || '' }
-    })
-      .then(res => res.json())
-      .then(data => {
+    (async () => {
+      try {
+        const res = await fetch('/api/admin/scaling', { headers: await adminHeaders(user) });
+        const data = await res.json();
         if (data.metrics) setMetrics(data.metrics);
         if (data.alertTriggered) setAlertSent(true);
+      } catch (err) {
+        console.error(err);
+      } finally {
         setLoading(false);
-      })
-      .catch(() => setLoading(false));
+      }
+    })();
   }, [user]);
 
   if (loading) return <p style={{ fontSize: 13, color: '#888' }}>Cargando metricas...</p>;
@@ -431,18 +449,20 @@ function BusinessApprovals() {
   const { user } = useAuth();
   const { showToast } = useToast();
 
-  const fetchBusinesses = () => {
+  const fetchBusinesses = async () => {
     setLoading(true);
-    fetch(`/api/admin/business?t=${Date.now()}`, {
-      headers: { 'X-Telegram-Id': user?.telegramId || '' },
-      cache: 'no-store'
-    })
-      .then(r => r.json())
-      .then(data => {
-        if (data.success) setBusinesses(data.businesses || []);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    try {
+      const res = await fetch(`/api/admin/business?t=${Date.now()}`, {
+        headers: await adminHeaders(user),
+        cache: 'no-store'
+      });
+      const data = await res.json();
+      if (data.success) setBusinesses(data.businesses || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { fetchBusinesses(); }, [user]);
@@ -451,7 +471,7 @@ function BusinessApprovals() {
     try {
       const res = await fetch('/api/admin/business', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Telegram-Id': user?.telegramId || '' },
+        headers: await adminHeaders(user, true),
         body: JSON.stringify({ businessId, status })
       });
       const data = await res.json();

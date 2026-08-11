@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
@@ -54,6 +54,48 @@ type MenuPillar = {
   title: string;
   icon: any;
   items: MenuItem[];
+};
+
+// Mapeo de href de menú → módulo de negocio (settings). Los href sin módulo
+// (Dashboard, Settings, Sucursales, etc.) siempre se muestran para no dejar al
+// usuario sin forma de re-activar módulos desde Configuración.
+const MODULE_BY_HREF: Record<string, string> = {
+  "/kitchen": "kitchen",
+  "/staff/shifts": "staff",
+  "/table-layout": "table_layout",
+  "/reservations": "reservations",
+  "/menu": "menu",
+  "/recipes": "recipes",
+  "/inventory": "inventory",
+  "/suppliers": "suppliers",
+  "/expenses": "expenses",
+  "/pricing": "pricing",
+  "/menu-boards": "menu_boards",
+  "/loyalty": "loyalty",
+  "/customers": "customers",
+  "/referrals": "referrals",
+  "/campaigns": "campaigns",
+  "/birthdays": "birthdays",
+  "/catering": "catering",
+  "/staff": "staff",
+  "/hardware": "hardware",
+  "/qr-generator": "qr",
+};
+
+const MODULES_STORAGE_KEY = "rabbitty_active_modules";
+const MODULES_CHANGED_EVENT = "rabbitty-modules-changed";
+
+const readActiveModules = (): Set<string> | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(MODULES_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return new Set(parsed);
+  } catch {
+    // localStorage corrupto o bloqueado — mostrar todo el menú
+  }
+  return null;
 };
 
 const menuPillars: MenuPillar[] = [
@@ -116,6 +158,26 @@ export function AdminSidebar() {
   const pathname = usePathname();
   const { isCollapsed, setIsCollapsed } = useSidebar();
 
+  // Módulos activos desde settings. null = sin configuración previa → todo visible.
+  const [activeModules, setActiveModules] = useState<Set<string> | null>(readActiveModules);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { modules?: string[] } | undefined;
+      if (detail?.modules) setActiveModules(new Set(detail.modules));
+    };
+    window.addEventListener(MODULES_CHANGED_EVENT, handler);
+    return () => window.removeEventListener(MODULES_CHANGED_EVENT, handler);
+  }, []);
+
+  const visibleItems = (pillar: MenuPillar) =>
+    activeModules
+      ? pillar.items.filter((i) => {
+          const mod = MODULE_BY_HREF[i.href];
+          return !mod || activeModules.has(mod);
+        })
+      : pillar.items;
+
   // Keep all pillars open by default for quick access, user can toggle
   const [openPillars, setOpenPillars] = useState<Record<string, boolean>>({
     operation: true,
@@ -177,9 +239,11 @@ export function AdminSidebar() {
       {/* Navigation Pillars */}
       <nav className="flex-1 space-y-4 px-3 py-4 overflow-y-auto custom-scrollbar">
         {menuPillars.map((pillar) => {
+          const items = visibleItems(pillar);
+          if (items.length === 0) return null;
           const PillarIcon = pillar.icon;
           const isOpen = openPillars[pillar.id];
-          const hasActiveItem = pillar.items.some((i) => i.href === pathname);
+          const hasActiveItem = items.some((i) => i.href === pathname);
 
           return (
             <div key={pillar.id} className="space-y-1">
@@ -207,6 +271,8 @@ export function AdminSidebar() {
                 <div className="space-y-1 pl-1">
                   {pillar.items.map(({ href, label, icon: Icon }) => {
                     const isActive = pathname === href;
+                    const mod = MODULE_BY_HREF[href];
+                    if (activeModules && mod && !activeModules.has(mod)) return null;
                     return (
                       <Link
                         key={href}

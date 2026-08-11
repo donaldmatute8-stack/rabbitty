@@ -241,13 +241,19 @@ export const posRouter = router({
       const [restaurant] = await ctx.restaurantDb.select().from(restaurants).where(eq(restaurants.id, branch.restaurantId));
       if (!restaurant) throw new Error("Restaurante no encontrado");
       
-      let rewardRate = restaurant.defaultRewardRate ?? 0.05;
-      
+      // defaultRewardRate se almacena como porcentaje entero (20 = 20%).
+      // Si por datos legacy es una fracción (< 1), se normaliza a porcentaje
+      // y luego se divide entre 100 para obtener el multiplicador.
+      const normalizeToPercent = (v: number | null | undefined) =>
+        typeof v === "number" && v > 0 && v < 1 ? v * 100 : v;
+
+      let rewardRate = (normalizeToPercent(restaurant.defaultRewardRate) ?? 20) / 100;
+
       if (restaurant.happyHourStart && restaurant.happyHourEnd) {
         const now = new Date();
         const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
         if (timeString >= restaurant.happyHourStart && timeString <= restaurant.happyHourEnd) {
-          rewardRate = restaurant.happyHourRewardRate ?? rewardRate;
+          rewardRate = (normalizeToPercent(restaurant.happyHourRewardRate) ?? (normalizeToPercent(restaurant.defaultRewardRate) ?? 20)) / 100;
         }
       }
 

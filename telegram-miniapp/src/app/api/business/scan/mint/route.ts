@@ -5,6 +5,7 @@ import { eq, and, or, sql } from "drizzle-orm";
 import { processReferralAndNotifications } from '@/lib/referralLogic';
 import { awardHops, evaluateHatTricks } from '@/lib/gamificationLogic';
 import { sendToOracle } from '@/lib/oracle-client';
+import { parseTelegramUser, validateTelegramInitData } from '@/lib/telegramAuth';
 import crypto from 'crypto';
 import { z } from 'zod';
 
@@ -31,6 +32,38 @@ export async function POST(req: NextRequest) {
 
     if (!business) {
       return NextResponse.json({ error: "Negocio no encontrado o no autorizado." }, { status: 403 });
+    }
+
+    const authHeader = req.headers.get("authorization");
+    const expectedSecret = process.env.RABBITTY_API_SECRET;
+    const serverAuthed = !!expectedSecret && authHeader === `Bearer ${expectedSecret}`;
+
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+
+    if (!serverAuthed) {
+      const initData = typeof body.initData === "string" ? body.initData : "";
+      let callerUserId: string | null = null;
+
+      if (initData && botToken) {
+        if (!validateTelegramInitData(initData, botToken)) {
+          return NextResponse.json({ error: "Credenciales de Telegram inválidas." }, { status: 401 });
+        }
+        const tgUser = parseTelegramUser(initData);
+        if (tgUser?.id) {
+          const caller = await db.query.users.findFirst({ where: eq(users.telegramId, tgUser.id.toString()) });
+          if (caller) callerUserId = caller.id;
+        }
+      } else if (!initData && botToken) {
+        return NextResponse.json({ error: "Autenticación requerida." }, { status: 401 });
+      }
+
+      if (callerUserId) {
+        if (business.ownerId !== callerUserId) {
+          return NextResponse.json({ error: "No autorizado para operar este negocio." }, { status: 403 });
+        }
+      } else if (botToken) {
+        return NextResponse.json({ error: "No autorizado: identidad no registrada." }, { status: 403 });
+      }
     }
 
     const conditions = [

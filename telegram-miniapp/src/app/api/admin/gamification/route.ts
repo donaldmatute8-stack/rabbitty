@@ -3,12 +3,10 @@ import { db } from '@/db';
 import { levels, hatTricks, users } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import crypto from 'crypto';
-
-const ADMIN_TELEGRAM_IDS = (process.env.ADMIN_TELEGRAM_IDS || '798431743').split(',');
+import { getVerifiedAdminId, isAdminAllowed } from '@/lib/adminAuth';
 
 export async function GET(req: NextRequest) {
-  const telegramId = req.headers.get('X-Telegram-Id');
-  if (!telegramId || !ADMIN_TELEGRAM_IDS.includes(telegramId)) {
+  if (!isAdminAllowed(getVerifiedAdminId(req))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -23,8 +21,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const telegramId = req.headers.get('X-Telegram-Id');
-  if (!telegramId || !ADMIN_TELEGRAM_IDS.includes(telegramId)) {
+  if (!isAdminAllowed(getVerifiedAdminId(req))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 

@@ -17,17 +17,30 @@ const LEVEL_ICONS: Record<string, string> = {
 export default function LoyaltyPage() {
   const utils = trpc.useUtils();
   const { data } = trpc.admin.getLoyaltyStats.useQuery(undefined, { retry: false });
-  const { data: business } = trpc.restaurants.getRestaurants.useQuery(undefined, { retry: false });
+  const { data: restaurants } = trpc.admin.getRestaurants.useQuery(undefined, { retry: false });
+  const updateRewardRate = trpc.admin.updateRestaurant.useMutation({
+    onSuccess: () => {
+      utils.admin.getRestaurants.invalidate();
+      toast.success(`Configuración actualizada: ${rewardPercentage}% de Cashback Bunz activo.`);
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   // Cashback Reward Rate state
   const [rewardPercentage, setRewardPercentage] = useState<number>(10);
   const [simulatedTicket, setSimulatedTicket] = useState<number>(500);
 
   useEffect(() => {
-    if (business && business.length > 0) {
-      setRewardPercentage(10);
+    if (restaurants && restaurants.length > 0) {
+      const currentRate = restaurants[0].defaultRewardRate;
+      // Se almacena como porcentaje entero (20 = 20%). Normaliza valores legacy < 1.
+      if (typeof currentRate === "number" && currentRate > 0) {
+        setRewardPercentage(Math.round(currentRate < 1 ? currentRate * 100 : currentRate));
+      } else {
+        setRewardPercentage(10);
+      }
     }
-  }, [business]);
+  }, [restaurants]);
 
   const totalUsers = data?.totalUsers ?? 0;
   const totalBunzEarned = data?.totalBunzEarned ?? 0;
@@ -44,7 +57,14 @@ export default function LoyaltyPage() {
   const calculatedBunz = Math.round(simulatedTicket * (rewardPercentage / 100));
 
   const handleSaveRewardRate = () => {
-    toast.success(`Configuración actualizada: ${rewardPercentage}% de Cashback Bunz activo.`);
+    if (!restaurants || restaurants.length === 0) {
+      toast.error("No se encontró un restaurante activo para guardar la tasa.");
+      return;
+    }
+    updateRewardRate.mutate({
+      id: restaurants[0].id,
+      defaultRewardRate: rewardPercentage,
+    });
   };
 
   return (
@@ -147,8 +167,8 @@ export default function LoyaltyPage() {
               </div>
             </div>
 
-            <Button onClick={handleSaveRewardRate} className="w-full bg-gradient-to-r from-pink-500 to-purple-600 font-bold hover:opacity-90 transition-all cursor-pointer">
-              Guardar Configuración de Cashback
+            <Button onClick={handleSaveRewardRate} disabled={updateRewardRate.isPending} className="w-full bg-gradient-to-r from-pink-500 to-purple-600 font-bold hover:opacity-90 transition-all cursor-pointer">
+              {updateRewardRate.isPending ? "Guardando..." : "Guardar Configuración de Cashback"}
             </Button>
           </div>
 

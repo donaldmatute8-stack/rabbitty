@@ -3,24 +3,25 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { useActiveAccount } from "thirdweb/react";
 
 export default function WelcomePage() {
   const router = useRouter();
-  const account = useActiveAccount();
   const [loading, setLoading] = useState<string | null>(null);
 
   const handleChooseRole = async (role: "RABBITTER" | "AFFILIATE") => {
     setLoading(role);
     try {
-      const walletAddress = account?.address;
-      if (walletAddress) {
-        await fetch('/api/auth/set-role', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ smart_wallet_address: walletAddress, role }),
-        });
-      }
+      const mod = await import('@twa-dev/sdk');
+      const app = mod.default;
+      const initData = typeof window !== 'undefined' ? app.initData : '';
+      const targetRole = role === "RABBITTER" ? "USER" : "AFFILIATE";
+
+      await fetch('/api/auth/set-role', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: targetRole, initData }),
+      });
+
       if (role === "AFFILIATE") {
         router.push('/business');
       } else {
