@@ -2,7 +2,8 @@
 
 import { trpc } from "../../../lib/trpc-client";
 import { useState, useMemo } from "react";
-import { Users, ShoppingBag, TrendingUp, ChevronDown, ChevronUp } from "lucide-react";
+import { Users, ShoppingBag, TrendingUp, ChevronDown, ChevronUp, Award, Phone, Calendar, Search, ShieldCheck } from "lucide-react";
+import { Card, Input } from "@rabbitty/ui";
 
 interface Customer {
   id: string;
@@ -11,12 +12,15 @@ interface Customer {
   totalOrders: number;
   totalSpent: number;
   lastVisit: string;
+  tier: "Bronce" | "Plata" | "Oro" | "Diamante";
+  tierColor: string;
   avatar: string;
 }
 
 export default function CustomerHistoryPage() {
   const { data: orders } = trpc.pos.getOrders.useQuery({});
   const { data: tables } = trpc.pos.getTables.useQuery();
+  const [searchTerm, setSearchTerm] = useState("");
 
   const customers = useMemo<Customer[]>(() => {
     if (!orders || !tables) return [];
@@ -30,12 +34,14 @@ export default function CustomerHistoryPage() {
       if (!customerMap.has(key)) {
         customerMap.set(key, {
           id: key,
-          name: order.customerName || "Sin nombre",
-          phone: order.customerPhone || "",
+          name: order.customerName || "Cliente Registrado",
+          phone: order.customerPhone || "N/A",
           totalOrders: 0,
           totalSpent: 0,
           lastVisit: "",
-          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${key}`,
+          tier: "Bronce",
+          tierColor: "text-amber-700 border-amber-700/30 bg-amber-900/20",
+          avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${key}`,
         });
       }
 
@@ -45,12 +51,32 @@ export default function CustomerHistoryPage() {
       if (order.createdAt) {
         customer.lastVisit = new Date(order.createdAt).toLocaleDateString("es-MX");
       }
+
+      // Assign dynamic tier based on spent / frequency
+      if (customer.totalSpent > 3000) {
+        customer.tier = "Diamante";
+        customer.tierColor = "text-cyan-400 border-cyan-500/30 bg-cyan-950/40";
+      } else if (customer.totalSpent > 1500) {
+        customer.tier = "Oro";
+        customer.tierColor = "text-amber-400 border-amber-500/30 bg-amber-950/40";
+      } else if (customer.totalSpent > 500) {
+        customer.tier = "Plata";
+        customer.tierColor = "text-slate-300 border-slate-400/30 bg-slate-800/40";
+      }
     });
 
     return Array.from(customerMap.values()).sort((a, b) => b.totalSpent - a.totalSpent);
   }, [orders, tables]);
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const filteredCustomers = useMemo(() => {
+    if (!searchTerm.trim()) return customers;
+    const q = searchTerm.toLowerCase();
+    return customers.filter(
+      (c) => c.name.toLowerCase().includes(q) || c.phone.toLowerCase().includes(q) || c.tier.toLowerCase().includes(q)
+    );
+  }, [customers, searchTerm]);
 
   const stats = useMemo(() => {
     const totalCustomers = customers.length;
@@ -61,218 +87,142 @@ export default function CustomerHistoryPage() {
     return { totalCustomers, totalSpent, totalOrders, avgOrder };
   }, [customers]);
 
-  const tableMap = useMemo(() => {
-    if (!tables) return new Map<string, any>();
-    return new Map(tables.map((t) => [t.id, t]));
-  }, [tables]);
-
   return (
-    <div className="flex h-screen flex-col">
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-6xl space-y-6">
-          {/* Header Banner */}
-          <div className="relative overflow-hidden rounded-3xl border border-white/5 bg-gradient-to-br from-gray-900/60 to-black/80 p-8 shadow-2xl backdrop-blur-xl">
-            <div className="absolute top-0 right-0 h-48 w-48 rounded-full bg-pink-500/10 blur-3xl pointer-events-none" />
-            <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-400">Historial de Clientes</h1>
-            <p className="text-sm font-medium text-gray-400 mt-1">Visitas, compras y gastos por Rabbitter</p>
-          </div>
+    <div className="space-y-8 pb-10">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-6">
+        <div>
+          <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-pink-500">
+            <Users className="h-3.5 w-3.5" /> Rabbitter CRM
+          </span>
+          <h1 className="text-3xl font-black text-white mt-1">Directorio de Clientes & Rabbitters</h1>
+          <p className="text-sm text-gray-400">Consulta el historial de consumos, nivel de lealtad y frecuencia de tus comensales.</p>
+        </div>
+      </div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <div className="rounded-2xl bg-white/5 p-5 shadow-2xl border border-white/5 backdrop-blur-xl">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Clientes</span>
-                <Users className="h-5 w-5 text-pink-400" />
-              </div>
-              <div className="text-2xl font-black text-white">
-                {stats.totalCustomers}
-              </div>
+      {/* Stats Header */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card className="border border-white/5 bg-white/5 p-5 backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-400 border border-blue-500/20">
+              <Users className="h-6 w-6" />
             </div>
-
-            <div className="rounded-2xl bg-white/5 p-5 shadow-2xl border border-white/5 backdrop-blur-xl">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Vendido</span>
-                <ShoppingBag className="h-5 w-5 text-emerald-400" />
-              </div>
-              <div className="text-2xl font-black text-emerald-400">
-                ${stats.totalSpent.toFixed(2)}
-              </div>
-            </div>
-
-            <div className="rounded-2xl bg-white/5 p-5 shadow-2xl border border-white/5 backdrop-blur-xl">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Órdenes Totales</span>
-                <TrendingUp className="h-5 w-5 text-blue-400" />
-              </div>
-              <div className="text-2xl font-black text-blue-400">
-                {stats.totalOrders}
-              </div>
-            </div>
-
-            <div className="rounded-2xl bg-white/5 p-5 shadow-2xl border border-white/5 backdrop-blur-xl">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Promedio Orden</span>
-                <ShoppingBag className="h-5 w-5 text-amber-400" />
-              </div>
-              <div className="text-2xl font-black text-amber-400">
-                ${stats.avgOrder.toFixed(2)}
-              </div>
+            <div>
+              <p className="text-2xl font-black text-white">{stats.totalCustomers}</p>
+              <p className="text-xs font-semibold text-gray-400">Clientes Identificados</p>
             </div>
           </div>
+        </Card>
 
-          {/* Customers List */}
-          <div className="space-y-2">
-            {customers.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-center rounded-3xl border border-white/5 bg-white/5 backdrop-blur-xl">
-                <Users className="mb-4 h-16 w-16 text-pink-500/30" />
-                <p className="text-lg font-bold text-white">
-                  Sin clientes registrados
-                </p>
-                <p className="mt-1 text-sm text-gray-400">
-                  Las compras registradas aparecerán aquí automáticamente
-                </p>
+        <Card className="border border-white/5 bg-white/5 p-5 backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <TrendingUp className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-2xl font-black text-emerald-400">${stats.totalSpent.toFixed(2)}</p>
+              <p className="text-xs font-semibold text-gray-400">Consumo Acumulado</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="border border-white/5 bg-white/5 p-5 backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-500/10 text-purple-400 border border-purple-500/20">
+              <ShoppingBag className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-2xl font-black text-white">{stats.totalOrders}</p>
+              <p className="text-xs font-semibold text-gray-400">Visitas Totales</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="border border-white/5 bg-white/5 p-5 backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-pink-500/10 text-pink-400 border border-pink-500/20">
+              <Award className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-2xl font-black text-white">${stats.avgOrder.toFixed(2)}</p>
+              <p className="text-xs font-semibold text-gray-400">Ticket Promedio</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Filter and Table */}
+      <Card className="border border-white/5 bg-white/5 p-6 backdrop-blur-md">
+        <div className="flex items-center justify-between gap-4 mb-6">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3.5 top-3 h-4 w-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Buscar por nombre, teléfono o nivel (ej. Oro, Diamante)..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full rounded-xl border border-white/10 bg-black/40 pl-10 pr-4 py-2.5 text-xs text-white placeholder-gray-500 focus:border-pink-500 focus:outline-none"
+            />
+          </div>
+          <span className="text-xs font-bold text-gray-400">{filteredCustomers.length} Rabbitters</span>
+        </div>
+
+        <div className="overflow-hidden rounded-2xl border border-white/5 bg-black/40">
+          <div className="grid grid-cols-12 gap-4 border-b border-white/10 bg-white/5 px-6 py-3.5 text-xs font-bold text-gray-400 uppercase tracking-wider">
+            <div className="col-span-4">Cliente / Rabbitter</div>
+            <div className="col-span-2">Nivel de Lealtad</div>
+            <div className="col-span-2 text-center">Visitas</div>
+            <div className="col-span-2 text-right">Consumo Total</div>
+            <div className="col-span-2 text-right">Última Visita</div>
+          </div>
+
+          <div className="divide-y divide-white/5">
+            {filteredCustomers.length === 0 ? (
+              <div className="py-12 text-center text-sm text-gray-500">
+                No se encontraron clientes registrados con los datos ingresados.
               </div>
             ) : (
-              <div className="overflow-hidden rounded-3xl border border-white/5 bg-white/5 backdrop-blur-xl shadow-2xl">
-                <div className="flex items-center gap-2 border-b border-white/10 bg-white/5 px-6 py-4">
-                  <span className="text-sm font-bold text-white">
-                    {customers.length} clientes
-                  </span>
-                  <span className="text-sm text-gray-500">|</span>
-                  <span className="text-sm text-emerald-400 font-semibold">
-                    ${stats.totalSpent.toFixed(2)} vendidos
-                  </span>
-                </div>
-
-                <div className="divide-y divide-white/5">
-                  {customers.map((customer) => (
-                    <div
-                      key={customer.id}
-                      className="hover:bg-gray-50 transition-colors"
-                    >
-                      <button
-                        onClick={() =>
-                          setExpandedId(
-                            expandedId === customer.id ? null : customer.id
-                          )
-                        }
-                        className="flex w-full items-center justify-between px-6 py-4 text-left"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-pink-100 text-lg">
-                            {customer.name.charAt(0)}
-                          </div>
-                          <div>
-                            <p className="font-semibold text-gray-900">
-                              {customer.name}
-                            </p>
-                            <p className="text-sm text-gray-500">
-                              {customer.phone}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-6">
-                          <div className="text-right">
-                            <p className="text-sm font-bold text-gray-900">
-                              ${customer.totalSpent.toFixed(2)}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {customer.totalOrders} órdenes
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm text-gray-500">
-                              Última: {customer.lastVisit}
-                            </p>
-                          </div>
-                          {expandedId === customer.id ? (
-                            <ChevronUp className="h-5 w-5 text-gray-400" />
-                          ) : (
-                            <ChevronDown className="h-5 w-5 text-gray-400" />
-                          )}
-                        </div>
-                      </button>
-
-                      {expandedId === customer.id && (
-                        <div className="border-t border-gray-100 bg-gray-50/50 px-6 py-4">
-                          <p className="mb-3 text-xs font-semibold text-gray-400 uppercase">
-                            Historial de Órdenes
-                          </p>
-                          <div className="space-y-2">
-                            {orders?.filter(
-                              (o) =>
-                                o.customerName === customer.name ||
-                                o.customerPhone === customer.phone
-                            )
-                              .slice(0, 5)
-                              .map((order) => {
-                                const table = tableMap.get(order.tableId || "");
-                                return (
-                                  <div
-                                    key={order.id}
-                                    className="flex items-center justify-between rounded-lg bg-white px-4 py-2 shadow-sm"
-                                  >
-                                    <div className="flex items-center gap-3">
-                                      <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center">
-                                        <span className="text-sm font-bold text-gray-600">
-                                          {table?.number || "Takeout"}
-                                        </span>
-                                      </div>
-                                      <div>
-                                        <p className="text-sm font-medium text-gray-900">
-                                          {order.orderType === "DINE_IN"
-                                            ? "Mesa"
-                                            : order.orderType === "TAKEOUT"
-                                            ? "Para llevar"
-                                            : "Delivery"}
-                                        </p>
-                                         <p className="text-xs text-gray-500">
-                                           {order.createdAt && new Date(order.createdAt).toLocaleString(
-                                             "es-MX",
-                                             { hour: "2-digit", minute: "2-digit" }
-                                           )}
-                                         </p>
-                                      </div>
-                                    </div>
-                                    <div className="text-right">
-                                      <p className="text-sm font-bold text-gray-900">
-                                        ${order.total.toFixed(2)}
-                                      </p>
-                                      <span
-                                        className={`text-xs ${
-                                          order.status === "PAID"
-                                            ? "text-green-500"
-                                            : order.status === "CANCELLED"
-                                            ? "text-red-500"
-                                            : "text-yellow-500"
-                                        }`}
-                                      >
-                                        {order.status}
-                                      </span>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                           </div>
-                           {orders && orders.filter(
-                             (o) =>
-                               o.customerName === customer.name ||
-                               o.customerPhone === customer.phone
-                           ).length > 5 && (
-                             <p className="mt-3 text-center text-sm text-gray-400">
-                               ...y {orders.filter((o) => o.customerName === customer.name || o.customerPhone === customer.phone).length - 5} más
-                             </p>
-                          )}
-                        </div>
-                      )}
+              filteredCustomers.map((customer) => (
+                <div key={customer.id} className="transition-all hover:bg-white/5">
+                  <div
+                    onClick={() => setExpandedId(expandedId === customer.id ? null : customer.id)}
+                    className="grid grid-cols-12 gap-4 items-center px-6 py-4 cursor-pointer text-xs"
+                  >
+                    <div className="col-span-4 flex items-center gap-3">
+                      <img src={customer.avatar} alt={customer.name} className="h-9 w-9 rounded-xl bg-pink-500/10 border border-white/10 p-1 shrink-0" />
+                      <div>
+                        <p className="font-bold text-white text-sm">{customer.name}</p>
+                        <p className="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5">
+                          <Phone className="h-3 w-3 text-pink-500" /> {customer.phone || "Sin teléfono"}
+                        </p>
+                      </div>
                     </div>
-                  ))}
+
+                    <div className="col-span-2">
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-extrabold border ${customer.tierColor}`}>
+                        <ShieldCheck className="h-3 w-3" /> {customer.tier}
+                      </span>
+                    </div>
+
+                    <div className="col-span-2 text-center font-bold text-white">
+                      {customer.totalOrders} {customer.totalOrders === 1 ? "visita" : "visitas"}
+                    </div>
+
+                    <div className="col-span-2 text-right font-black text-emerald-400 text-sm">
+                      ${customer.totalSpent.toFixed(2)}
+                    </div>
+
+                    <div className="col-span-2 text-right flex items-center justify-end gap-2 text-gray-400">
+                      <span>{customer.lastVisit || "Hoy"}</span>
+                      {expandedId === customer.id ? <ChevronUp className="h-4 w-4 text-pink-400" /> : <ChevronDown className="h-4 w-4" />}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              ))
             )}
           </div>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
