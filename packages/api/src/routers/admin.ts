@@ -11,6 +11,14 @@ import { miniappClient } from "../services/miniapp-client";
 import * as cheerio from "cheerio";
 
 export const adminRouter = router({
+  getProfile: protectedProcedure.query(async ({ ctx }) => {
+    return {
+      userId: ctx.userId,
+      role: ctx.staffRole ?? "OWNER",
+      branchId: ctx.staffBranchId,
+    };
+  }),
+
   getPendingBusinesses: protectedProcedure.query(async ({ ctx }) => {
     const list = await ctx.coreDb
       .select({
@@ -423,11 +431,17 @@ export const adminRouter = router({
     }),
 
   getBranches: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.staffRole && ctx.staffBranchId) {
+      return await ctx.restaurantDb.select().from(branches).where(eq(branches.id, ctx.staffBranchId));
+    }
     return await ctx.restaurantDb.select().from(branches);
   }),
 
   getCrossStoreKpis: protectedProcedure.query(async ({ ctx }) => {
-    const allBranches = await ctx.restaurantDb.select().from(branches);
+    let allBranches = await ctx.restaurantDb.select().from(branches);
+    if (ctx.staffRole && ctx.staffBranchId) {
+      allBranches = allBranches.filter(b => b.id === ctx.staffBranchId);
+    }
 
     const branchKpis = await Promise.all(
       allBranches.map(async (branch) => {

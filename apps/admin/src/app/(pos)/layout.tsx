@@ -1,6 +1,26 @@
-import React from "react";
+"use client";
+import React, { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { trpc } from "../../lib/trpc-client";
 
 export default function PosLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  
+  // Enforce auth on client side for POS & Kiosk
+  const { data: profile, isLoading, error } = trpc.admin.getProfile.useQuery(undefined, {
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  useEffect(() => {
+    if (!isLoading && (error || !profile)) {
+      router.replace("/login");
+    }
+  }, [isLoading, error, profile, router]);
+
+  if (isLoading) return <div className="h-screen w-screen bg-black" />;
+  if (!profile) return null;
+
   return (
     <div className="relative flex h-screen w-screen overflow-hidden bg-black text-white select-none">
       {/* Dark modern background for POS and Kiosk */}

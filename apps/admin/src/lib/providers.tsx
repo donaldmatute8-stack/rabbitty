@@ -12,6 +12,15 @@ export function TRPCProvider({ children }: { children: React.ReactNode }) {
       links: [
         httpBatchLink({
           url: "/api/trpc",
+          headers() {
+            if (typeof window !== "undefined") {
+              const activeBranch = localStorage.getItem("activeBranchId");
+              if (activeBranch) {
+                return { "x-branch-id": activeBranch };
+              }
+            }
+            return {};
+          },
         }),
       ],
     })
