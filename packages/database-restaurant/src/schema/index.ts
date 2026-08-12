@@ -190,9 +190,10 @@ export const inventoryItems = pgTable("inventory_items", {
 export const menuItemIngredients = pgTable("menu_item_ingredients", {
   id: id(),
   menuItemId: fkId("menuItemId").references(() => menuItems.id),
-  inventoryItemId: fkId("inventoryItemId").references(() => inventoryItems.id),
+  inventoryItemId: fkIdOpt("inventoryItemId").references(() => inventoryItems.id),
+  subRecipeId: fkIdOpt("subRecipeId").references(() => menuItems.id),
   quantityRequired: real("quantityRequired").notNull(),
-  unit: text("unit").default("pz").notNull(), // Allows custom units like 'pizca', 'gramos'
+  unit: text("unit").default("pz").notNull(),
   isActive: boolean("isActive").default(true).notNull(),
   ...timestamps,
 });
