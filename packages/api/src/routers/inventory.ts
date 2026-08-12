@@ -105,12 +105,25 @@ export const inventoryRouter = router({
   addRecipeIngredient: protectedProcedure
     .input(z.object({
       menuItemId: z.string(),
-      inventoryItemId: z.string(),
+      inventoryItemId: z.string().optional(),
+      subRecipeId: z.string().optional(),
       quantityRequired: z.number(),
       unit: z.string(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const [ing] = await ctx.restaurantDb.insert(dbSchema.menuItemIngredients).values(input).returning();
+      const dataToInsert = {
+        ...input,
+        inventoryItemId: input.inventoryItemId ?? null,
+        subRecipeId: input.subRecipeId ?? null,
+      };
+      const [ing] = await ctx.restaurantDb.insert(dbSchema.menuItemIngredients).values(dataToInsert).returning();
       return ing;
+    }),
+  
+  removeRecipeIngredient: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.restaurantDb.delete(dbSchema.menuItemIngredients).where(eq(dbSchema.menuItemIngredients.id, input.id));
+      return { success: true };
     }),
 });

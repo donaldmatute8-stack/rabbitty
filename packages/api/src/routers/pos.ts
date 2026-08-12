@@ -210,6 +210,7 @@ export const posRouter = router({
             .where(eq(dbSchema.menuItemIngredients.menuItemId, item.menuItemId));
           
           for (const ing of ingredients) {
+            if (!ing.inventoryItemId) continue;
             const deductionAmount = ing.quantityRequired * item.quantity;
             
             // Insert movement

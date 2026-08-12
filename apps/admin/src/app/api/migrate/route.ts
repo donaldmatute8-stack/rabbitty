@@ -18,6 +18,7 @@ export async function GET() {
       ALTER TABLE "restaurants" ADD COLUMN IF NOT EXISTS "happyHourRewardRate" integer;
       ALTER TABLE "restaurants" ADD COLUMN IF NOT EXISTS "printerType" text;
       ALTER TABLE "restaurants" ADD COLUMN IF NOT EXISTS "printerConfig" jsonb;
+      ALTER TABLE "menu_item_ingredients" ADD COLUMN IF NOT EXISTS "subRecipeId" text;
     `);
 
     return NextResponse.json({ success: true, message: "Base de datos migrada exitosamente" });
