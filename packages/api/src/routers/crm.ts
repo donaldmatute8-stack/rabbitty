@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { router, protectedProcedure } from "../trpc";
+import { router, protectedProcedure, adminOnlyProcedure } from "../trpc";
 import { eq, desc } from "drizzle-orm";
 import { customers, branches } from "@rabbitty/database-restaurant/schema";
 
 export const crmRouter = router({
-  getCustomers: protectedProcedure.query(async ({ ctx }) => {
+  getCustomers: adminOnlyProcedure.query(async ({ ctx }) => {
     const [branch] = await ctx.restaurantDb
       .select()
       .from(branches)
@@ -19,7 +19,7 @@ export const crmRouter = router({
     return list;
   }),
 
-  updateCustomerSegment: protectedProcedure
+  updateCustomerSegment: adminOnlyProcedure
     .input(
       z.object({
         customerId: z.string(),

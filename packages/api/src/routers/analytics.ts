@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, protectedProcedure } from "../trpc";
+import { router, protectedProcedure, resolveBranchId } from "../trpc";
 import { and, eq, gte, inArray } from "drizzle-orm";
 import { orders, orderItems, menuItems, payments, branches, customers } from "@rabbitty/database-restaurant/schema";
 
@@ -20,7 +20,7 @@ export const analyticsRouter = router({
         .from(orders)
         .where(
           and(
-            eq(orders.branchId, input.branchId),
+            eq(orders.branchId, resolveBranchId(ctx, input.branchId)),
             eq(orders.status, "COMPLETED"),
             gte(orders.createdAt, startDate)
           )
@@ -65,7 +65,7 @@ export const analyticsRouter = router({
         .from(orders)
         .where(
           and(
-            eq(orders.branchId, input.branchId),
+            eq(orders.branchId, resolveBranchId(ctx, input.branchId)),
             eq(orders.status, "COMPLETED")
           )
         );
@@ -81,7 +81,7 @@ export const analyticsRouter = router({
       const menuItemsList = await ctx.restaurantDb
         .select()
         .from(menuItems)
-        .where(eq(menuItems.branchId, input.branchId));
+        .where(eq(menuItems.branchId, resolveBranchId(ctx, input.branchId)));
 
       const productRevenueMap = new Map<string, number>();
       for (const item of itemsList) {
@@ -118,7 +118,7 @@ export const analyticsRouter = router({
         .from(orders)
         .where(
           and(
-            eq(orders.branchId, input.branchId),
+            eq(orders.branchId, resolveBranchId(ctx, input.branchId)),
             gte(orders.createdAt, startDate)
           )
         );
@@ -166,7 +166,7 @@ export const analyticsRouter = router({
       const [branch] = await ctx.restaurantDb
         .select()
         .from(branches)
-        .where(eq(branches.id, input.branchId));
+        .where(eq(branches.id, resolveBranchId(ctx, input.branchId)));
       if (!branch) return [];
 
       const ordersList = await ctx.restaurantDb
@@ -174,7 +174,7 @@ export const analyticsRouter = router({
         .from(orders)
         .where(
           and(
-            eq(orders.branchId, input.branchId),
+            eq(orders.branchId, resolveBranchId(ctx, input.branchId)),
             gte(orders.createdAt, startDate)
           )
         );

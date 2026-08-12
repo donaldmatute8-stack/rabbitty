@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { and, eq, desc, sql } from "drizzle-orm";
-import { router, protectedProcedure } from "../trpc";
+import { router, protectedProcedure, adminOnlyProcedure, platformOnlyProcedure } from "../trpc";
 import { campaigns, customers } from "@rabbitty/database-restaurant/schema";
 import { referrals, levels, users } from "@rabbitty/database-core";
 
@@ -9,7 +9,7 @@ export const loyaltyRouter = router({
     return await ctx.coreDb.select().from(levels).orderBy(levels.requiredHops);
   }),
 
-  getReferralStats: protectedProcedure.query(async ({ ctx }) => {
+  getReferralStats: platformOnlyProcedure.query(async ({ ctx }) => {
     const allReferrals = await ctx.coreDb.select().from(referrals);
     const totalInviters = new Set(allReferrals.map((r) => r.inviterId)).size;
     const totalInvited = new Set(allReferrals.map((r) => r.invitedId)).size;
@@ -51,7 +51,7 @@ export const loyaltyRouter = router({
       return campaign;
     }),
 
-  getUpcomingBirthdays: protectedProcedure.query(async ({ ctx }) => {
+  getUpcomingBirthdays: adminOnlyProcedure.query(async ({ ctx }) => {
     // This is a simplified fetch; in production we might query by month/day.
     // For now we return customers that have a birthDate, ordered by name or date.
     return await ctx.restaurantDb

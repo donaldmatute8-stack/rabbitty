@@ -74,16 +74,23 @@ export const expensesRouter = router({
           )
         );
 
-      const revenue = await ctx.restaurantDb
-        .select({ total: sql<number>`COALESCE(SUM(${payments.amount}), 0)` })
-        .from(payments)
-        .where(
-          and(
+      const revenueWhere = ctx.staffRole
+        ? and(
+            sql`${payments.createdAt} >= ${start}`,
+            sql`${payments.createdAt} <= ${end}`,
+            eq(payments.status, "COMPLETED"),
+            sql`${payments.orderId} IN (SELECT id FROM orders WHERE "branchId" = ${ctx.staffBranchId})`
+          )
+        : and(
             sql`${payments.createdAt} >= ${start}`,
             sql`${payments.createdAt} <= ${end}`,
             eq(payments.status, "COMPLETED")
-          )
-        );
+          );
+
+      const revenue = await ctx.restaurantDb
+        .select({ total: sql<number>`COALESCE(SUM(${payments.amount}), 0)` })
+        .from(payments)
+        .where(revenueWhere);
 
       const totalRevenue = revenue[0]?.total ?? 0;
       const totalExpenses = expenseList.reduce((sum, e) => sum + e.amount, 0);
