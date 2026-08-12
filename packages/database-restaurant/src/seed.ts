@@ -1,6 +1,7 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { scryptSync, randomBytes } from "crypto";
+import { pathToFileURL } from "url";
 import {
   restaurants,
   branches,
@@ -109,7 +110,9 @@ export async function seed() {
   await client.end();
 }
 
-seed().catch((e) => {
-  console.error("Seed failed:", e);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  seed().catch((e) => {
+    console.error("Seed failed:", e);
+    process.exit(1);
+  });
+}
