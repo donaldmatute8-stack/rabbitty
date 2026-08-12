@@ -1,5 +1,5 @@
-import { pgTable, text, integer, real, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { pgTable, text, integer, real, timestamp, boolean, jsonb, check } from "drizzle-orm/pg-core";
+import { relations, sql } from "drizzle-orm";
 import crypto from "crypto";
 
 function genId(): string {
@@ -196,7 +196,9 @@ export const menuItemIngredients = pgTable("menu_item_ingredients", {
   unit: text("unit").default("pz").notNull(),
   isActive: boolean("isActive").default(true).notNull(),
   ...timestamps,
-});
+}, (t) => [
+  check("menu_item_ingredients_at_least_one_check", sql`${t.inventoryItemId} IS NOT NULL OR ${t.subRecipeId} IS NOT NULL`),
+]);
 
 export const inventoryMovements = pgTable("inventory_movements", {
   id: id(),
