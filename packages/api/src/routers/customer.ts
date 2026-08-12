@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
 import { orders, invoices, branches } from "@rabbitty/database-restaurant";
 import { billingProfiles } from "@rabbitty/database-core/schema";
@@ -9,11 +9,18 @@ export const customerRouter = router({
   lookupCustomer: protectedProcedure
     .input(z.object({ phone: z.string().optional(), email: z.string().optional() }))
     .query(async ({ ctx, input }) => {
+      const branchScope = ctx.staffRole ? eq(orders.branchId, ctx.staffBranchId as string) : undefined;
       if (input.phone) {
-        const [customer] = await ctx.restaurantDb.select().from(orders).where(eq(orders.customerPhone, input.phone));
+        const customerWhere = branchScope
+          ? and(eq(orders.customerPhone, input.phone), branchScope)
+          : eq(orders.customerPhone, input.phone);
+        const [customer] = await ctx.restaurantDb.select().from(orders).where(customerWhere);
         return customer ? { found: true, ...customer } : { found: false };
       } else if (input.email) {
-        const [customer] = await ctx.restaurantDb.select().from(orders).where(eq(orders.customerId, input.email));
+        const customerWhere = branchScope
+          ? and(eq(orders.customerId, input.email), branchScope)
+          : eq(orders.customerId, input.email);
+        const [customer] = await ctx.restaurantDb.select().from(orders).where(customerWhere);
         return customer ? { found: true, ...customer } : { found: false };
       }
       return { found: false };
@@ -22,7 +29,10 @@ export const customerRouter = router({
   getCustomerHistory: protectedProcedure
     .input(z.object({ phone: z.string() }))
     .query(async ({ ctx, input }) => {
-      const result = await ctx.restaurantDb.select().from(orders).where(eq(orders.customerPhone, input.phone));
+      const customerWhere = ctx.staffRole
+        ? and(eq(orders.customerPhone, input.phone), eq(orders.branchId, ctx.staffBranchId as string))
+        : eq(orders.customerPhone, input.phone);
+      const result = await ctx.restaurantDb.select().from(orders).where(customerWhere);
       return { phone: input.phone, orders: result };
     }),
 

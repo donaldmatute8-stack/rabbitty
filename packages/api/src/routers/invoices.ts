@@ -15,8 +15,9 @@ export const invoicesRouter = router({
     .query(async ({ ctx, input }) => {
       const conditions = [];
 
-      if (input.branchId) {
-        conditions.push(eq(invoices.branchId, input.branchId));
+      const branchId = ctx.staffRole ? ctx.staffBranchId : input.branchId;
+      if (branchId) {
+        conditions.push(eq(invoices.branchId, branchId));
       }
       if (input.status) {
         conditions.push(eq(invoices.status, input.status));
@@ -121,7 +122,8 @@ export const invoicesRouter = router({
   stats: protectedProcedure
     .input(z.object({ branchId: z.string().optional() }))
     .query(async ({ ctx, input }) => {
-      const conditions = input.branchId ? [eq(invoices.branchId, input.branchId)] : [];
+      const branchId = ctx.staffRole ? ctx.staffBranchId : input.branchId;
+      const conditions = branchId ? [eq(invoices.branchId, branchId)] : [];
 
       const where = conditions.length > 0
         ? sql`${conditions.reduce((a, b) => sql`${a} AND ${b}`)}`

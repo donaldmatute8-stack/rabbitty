@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { eq, desc, and } from "drizzle-orm";
-import { router, protectedProcedure } from "../trpc";
+import { router, protectedProcedure, resolveBranchId } from "../trpc";
 import { events } from "@rabbitty/database-restaurant/schema";
 
 export const notificationsRouter = router({
@@ -39,7 +39,7 @@ export const notificationsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const [event] = await ctx.restaurantDb.insert(events).values({
-        branchId: input.branchId,
+        branchId: resolveBranchId(ctx, input.branchId),
         type: input.type,
         payload: input.payload,
       }).returning();

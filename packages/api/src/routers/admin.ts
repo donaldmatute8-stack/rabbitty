@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { router, protectedProcedure } from "../trpc";
+import { router, protectedProcedure, adminOnlyProcedure, platformOnlyProcedure, resolveBranchId } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
@@ -44,7 +44,7 @@ export const adminRouter = router({
     return list;
   }),
 
-  approveOwnedBusiness: protectedProcedure
+  approveOwnedBusiness: platformOnlyProcedure
     .input(z.object({ id: z.string(), status: z.enum(["APPROVED", "VERIFIED", "REJECTED"]) }))
     .mutation(async ({ ctx, input }) => {
       const [updated] = await ctx.coreDb
@@ -82,12 +82,12 @@ export const adminRouter = router({
       return { success: true };
     }),
 
-  getRestaurants: protectedProcedure.query(async ({ ctx }) => {
+  getRestaurants: platformOnlyProcedure.query(async ({ ctx }) => {
     const result = await ctx.restaurantDb.select().from(restaurants);
     return result;
   }),
 
-  updateRestaurant: protectedProcedure
+  updateRestaurant: adminOnlyProcedure
     .input(
       z.object({
         id: z.string(),
@@ -148,7 +148,7 @@ export const adminRouter = router({
       return { success: true };
     }),
 
-  verifyBusiness: protectedProcedure
+  verifyBusiness: platformOnlyProcedure
     .input(z.object({ businessId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const [restaurant] = await ctx.restaurantDb.select().from(restaurants).where(eq(restaurants.businessId, input.businessId));
@@ -159,7 +159,7 @@ export const adminRouter = router({
       return { success: false };
     }),
 
-  createCategory: protectedProcedure
+  createCategory: adminOnlyProcedure
     .input(
       z.object({
         name: z.string().min(1),
@@ -169,7 +169,7 @@ export const adminRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const [category] = await ctx.restaurantDb.insert(dbSchema.menuCategories).values({
-        branchId: ctx.branchId,
+        branchId: resolveBranchId(ctx, undefined),
         name: input.name,
         description: input.description ?? null,
         sortOrder: input.sortOrder ?? 0,
@@ -177,7 +177,7 @@ export const adminRouter = router({
       return category;
     }),
 
-  updateCategory: protectedProcedure
+  updateCategory: adminOnlyProcedure
     .input(
       z.object({
         id: z.string(),
@@ -187,18 +187,32 @@ export const adminRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const [existing] = await ctx.restaurantDb
+        .select({ id: dbSchema.menuCategories.id })
+        .from(dbSchema.menuCategories)
+        .where(and(eq(dbSchema.menuCategories.id, input.id), eq(dbSchema.menuCategories.branchId, resolveBranchId(ctx, undefined))));
+      if (!existing) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Categoría no encontrada en esta sucursal" });
+      }
       await ctx.restaurantDb.update(dbSchema.menuCategories).set(input).where(eq(dbSchema.menuCategories.id, input.id));
       return { success: true };
     }),
 
-  deleteCategory: protectedProcedure
+  deleteCategory: adminOnlyProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const [existing] = await ctx.restaurantDb
+        .select({ id: dbSchema.menuCategories.id })
+        .from(dbSchema.menuCategories)
+        .where(and(eq(dbSchema.menuCategories.id, input.id), eq(dbSchema.menuCategories.branchId, resolveBranchId(ctx, undefined))));
+      if (!existing) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Categoría no encontrada en esta sucursal" });
+      }
       await ctx.restaurantDb.delete(dbSchema.menuCategories).where(eq(dbSchema.menuCategories.id, input.id));
       return { success: true };
     }),
 
-  createMenuItem: protectedProcedure
+  createMenuItem: adminOnlyProcedure
     .input(
       z.object({
         categoryId: z.string(),
@@ -215,7 +229,7 @@ export const adminRouter = router({
     .mutation(async ({ ctx, input }) => {
       const [menuItem] = await ctx.restaurantDb.insert(dbSchema.menuItems).values({
         categoryId: input.categoryId,
-        branchId: ctx.branchId,
+        branchId: resolveBranchId(ctx, undefined),
         name: input.name,
         description: input.description ?? null,
         price: input.price,
@@ -228,7 +242,7 @@ export const adminRouter = router({
       return menuItem;
     }),
 
-  updateMenuItem: protectedProcedure
+  updateMenuItem: adminOnlyProcedure
     .input(
       z.object({
         id: z.string(),
@@ -244,13 +258,27 @@ export const adminRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const [existing] = await ctx.restaurantDb
+        .select({ id: dbSchema.menuItems.id })
+        .from(dbSchema.menuItems)
+        .where(and(eq(dbSchema.menuItems.id, input.id), eq(dbSchema.menuItems.branchId, resolveBranchId(ctx, undefined))));
+      if (!existing) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Platillo no encontrado en esta sucursal" });
+      }
       await ctx.restaurantDb.update(dbSchema.menuItems).set(input).where(eq(dbSchema.menuItems.id, input.id));
       return { success: true };
     }),
 
-  deleteMenuItem: protectedProcedure
+  deleteMenuItem: adminOnlyProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const [existing] = await ctx.restaurantDb
+        .select({ id: dbSchema.menuItems.id })
+        .from(dbSchema.menuItems)
+        .where(and(eq(dbSchema.menuItems.id, input.id), eq(dbSchema.menuItems.branchId, resolveBranchId(ctx, undefined))));
+      if (!existing) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Platillo no encontrado en esta sucursal" });
+      }
       await ctx.restaurantDb.delete(dbSchema.menuItems).where(eq(dbSchema.menuItems.id, input.id));
       return { success: true };
     }),
@@ -274,10 +302,11 @@ export const adminRouter = router({
       return { totalSales, totalOrders };
     }),
 
-  importUberEatsMenu: protectedProcedure
+  importUberEatsMenu: adminOnlyProcedure
     .input(z.object({ branchId: z.string(), url: z.string().url() }))
     .mutation(async ({ ctx, input }) => {
       try {
+        const branchId = resolveBranchId(ctx, input.branchId);
         const response = await fetch(input.url, {
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
@@ -367,7 +396,7 @@ export const adminRouter = router({
 
           for (const category of categories) {
             const [cat] = await ctx.restaurantDb.insert(dbSchema.menuCategories).values({
-              branchId: input.branchId,
+              branchId,
               name: category.name,
               sortOrder: sortOrder++,
             }).returning();
@@ -377,7 +406,7 @@ export const adminRouter = router({
             if (category.items.length > 0) {
               const itemsToInsert = category.items.map((item, index) => ({
                 categoryId: cat.id,
-                branchId: input.branchId,
+                branchId,
                 name: item.name,
                 price: item.price,
                 description: item.description || null,
@@ -399,7 +428,7 @@ export const adminRouter = router({
 
         for (const section of sections) {
           const [cat] = await ctx.restaurantDb.insert(dbSchema.menuCategories).values({
-            branchId: input.branchId,
+            branchId,
             name: section.name || "Categoría Importada",
             sortOrder: sortOrder++,
           }).returning();
@@ -413,7 +442,7 @@ export const adminRouter = router({
               const priceMatch = item.offers?.price ? Number(item.offers.price) : 100;
               await ctx.restaurantDb.insert(dbSchema.menuItems).values({
                 categoryId: cat.id,
-                branchId: input.branchId,
+                branchId,
                 name: item.name,
                 description: item.description?.substring(0, 255) || null,
                 price: priceMatch,
@@ -518,7 +547,7 @@ export const adminRouter = router({
     };
   }),
 
-  updateBirthdaySettings: protectedProcedure
+  updateBirthdaySettings: adminOnlyProcedure
     .input(z.object({
       birthdayBonusBunz: z.number().min(0).default(100),
       birthdayMessageTemplate: z.string().default("¡Feliz cumpleaños {name}! 🎂 Como regalo, te hemos acreditado {bonus} Bunz. ¡Disfruta tu día!"),

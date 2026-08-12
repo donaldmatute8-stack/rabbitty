@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { and, eq, desc } from "drizzle-orm";
-import { router, protectedProcedure } from "../trpc";
+import { router, protectedProcedure, resolveBranchId } from "../trpc";
 import { reservations, tables } from "@rabbitty/database-restaurant/schema";
 import { miniappClient } from "../services/miniapp-client";
 
@@ -10,7 +10,7 @@ export const reservationsRouter = router({
   list: protectedProcedure
     .input(z.object({ branchId: z.string().optional(), date: z.string().optional(), status: z.string().optional() }))
     .query(async ({ ctx, input }) => {
-      let where = eq(reservations.branchId, input.branchId ?? ctx.branchId);
+      let where = eq(reservations.branchId, resolveBranchId(ctx, input.branchId));
       if (input.status) where = and(where, eq(reservations.status, input.status))!;
       const result = await ctx.restaurantDb
         .select()
@@ -34,7 +34,7 @@ export const reservationsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const [reservation] = await ctx.restaurantDb.insert(reservations).values({
-        branchId: input.branchId ?? ctx.branchId,
+        branchId: resolveBranchId(ctx, input.branchId),
         tableId: input.tableId ?? null,
         customerName: input.customerName,
         customerPhone: input.customerPhone ?? null,

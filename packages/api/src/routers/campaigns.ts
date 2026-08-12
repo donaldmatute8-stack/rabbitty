@@ -1,13 +1,16 @@
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
-import { router, protectedProcedure } from "../trpc";
+import { router, protectedProcedure, adminOnlyProcedure } from "../trpc";
 import { campaigns, customers, restaurants } from "@rabbitty/database-restaurant";
 import { TRPCError } from "@trpc/server";
 import { enqueueCampaignDelivery } from "../services/queue";
 
 export const campaignsRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
-    return await ctx.restaurantDb.select().from(campaigns).orderBy(campaigns.createdAt);
+    const branchScope = ctx.staffRole ? eq(campaigns.branchId, ctx.staffBranchId as string) : undefined;
+    return branchScope
+      ? await ctx.restaurantDb.select().from(campaigns).where(branchScope).orderBy(campaigns.createdAt)
+      : await ctx.restaurantDb.select().from(campaigns).orderBy(campaigns.createdAt);
   }),
 
   create: protectedProcedure
@@ -32,10 +35,13 @@ export const campaignsRouter = router({
       return campaign;
     }),
 
-  send: protectedProcedure
+  send: adminOnlyProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const [campaign] = await ctx.restaurantDb.select().from(campaigns).where(eq(campaigns.id, input.id));
+      const branchScope = ctx.staffRole ? eq(campaigns.branchId, ctx.staffBranchId as string) : undefined;
+      const [campaign] = await ctx.restaurantDb.select().from(campaigns).where(
+        branchScope ? and(eq(campaigns.id, input.id), branchScope) : eq(campaigns.id, input.id)
+      );
       if (!campaign) throw new TRPCError({ code: "NOT_FOUND", message: "Campaign not found" });
 
       if (campaign.status === "SENT") {

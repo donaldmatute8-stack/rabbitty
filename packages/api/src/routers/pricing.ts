@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { eq, and, desc, sql } from "drizzle-orm";
-import { router, protectedProcedure } from "../trpc";
+import { router, protectedProcedure, resolveBranchId } from "../trpc";
 import { dynamicPricingRules, menuItems } from "@rabbitty/database-restaurant";
 
 export const pricingRouter = router({
@@ -8,7 +8,8 @@ export const pricingRouter = router({
     .input(z.object({ branchId: z.string().optional(), isActive: z.boolean().optional() }))
     .query(async ({ ctx, input }) => {
       const conditions = [];
-      if (input.branchId) conditions.push(eq(dynamicPricingRules.branchId, input.branchId));
+      const branchId = ctx.staffRole ? ctx.staffBranchId : input.branchId;
+      if (branchId) conditions.push(eq(dynamicPricingRules.branchId, branchId));
       if (input.isActive !== undefined) conditions.push(eq(dynamicPricingRules.isActive, input.isActive));
 
       return conditions.length > 0
@@ -95,7 +96,7 @@ export const pricingRouter = router({
         .from(dynamicPricingRules)
         .where(
           and(
-            eq(dynamicPricingRules.branchId, input.branchId),
+            eq(dynamicPricingRules.branchId, resolveBranchId(ctx, input.branchId)),
             eq(dynamicPricingRules.isActive, true),
             sql`(${dynamicPricingRules.menuItemId} IS NULL OR ${dynamicPricingRules.menuItemId} = ${input.menuItemId})`,
             sql`(${dynamicPricingRules.dayOfWeek} IS NULL OR ${dynamicPricingRules.dayOfWeek} = ${currentDay})`,

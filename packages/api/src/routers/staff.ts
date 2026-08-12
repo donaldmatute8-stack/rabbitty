@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
-import { router, protectedProcedure, publicProcedure } from "../trpc";
+import { TRPCError } from "@trpc/server";
+import { router, protectedProcedure, publicProcedure, adminOnlyProcedure, resolveBranchId } from "../trpc";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
 import { staff as staffTable, staffShifts } from "@rabbitty/database-restaurant/schema";
@@ -12,14 +13,12 @@ export const staffRouter = router({
   getStaff: protectedProcedure
     .input(z.object({ branchId: z.string().optional() }))
     .query(async ({ ctx, input }) => {
-      const where = input.branchId
-        ? eq(staffTable.branchId, input.branchId)
-        : eq(staffTable.branchId, ctx.branchId);
-      const staff = await ctx.restaurantDb.select().from(staffTable).where(where);
+      const branchId = resolveBranchId(ctx, input.branchId);
+      const staff = await ctx.restaurantDb.select().from(staffTable).where(eq(staffTable.branchId, branchId));
       return staff.map((s) => ({ ...s, pinCode: undefined }));
     }),
 
-  createStaff: protectedProcedure
+  createStaff: adminOnlyProcedure
     .input(
       z.object({
         name: z.string().min(1),
@@ -40,7 +39,7 @@ export const staffRouter = router({
       return { ...result, pinCode: undefined };
     }),
 
-  updateStaff: protectedProcedure
+  updateStaff: adminOnlyProcedure
     .input(
       z.object({
         id: z.string(),
@@ -51,6 +50,13 @@ export const staffRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const [existing] = await ctx.restaurantDb
+        .select()
+        .from(staffTable)
+        .where(and(eq(staffTable.id, input.id), eq(staffTable.branchId, resolveBranchId(ctx, undefined))));
+      if (!existing) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Empleado no encontrado en esta sucursal" });
+      }
       const data: Record<string, unknown> = {};
       if (input.name) data.name = input.name;
       if (input.email) data.email = input.email;
@@ -60,9 +66,16 @@ export const staffRouter = router({
       return { success: true };
     }),
 
-  deleteStaff: protectedProcedure
+  deleteStaff: adminOnlyProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const [existing] = await ctx.restaurantDb
+        .select({ id: staffTable.id })
+        .from(staffTable)
+        .where(and(eq(staffTable.id, input.id), eq(staffTable.branchId, resolveBranchId(ctx, undefined))));
+      if (!existing) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Empleado no encontrado en esta sucursal" });
+      }
       await ctx.restaurantDb.delete(staffTable).where(eq(staffTable.id, input.id));
       return { success: true };
     }),

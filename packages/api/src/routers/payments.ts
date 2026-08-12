@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { router, protectedProcedure, publicLimitedProcedure } from "../trpc";
+import { router, protectedProcedure, publicLimitedProcedure, resolveBranchId } from "../trpc";
 import { orders, payments, tables, orderItems } from "@rabbitty/database-restaurant/schema";
 import { bus, EventTypes } from "@rabbitty/events";
 
@@ -121,7 +121,8 @@ export const paymentsRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const conditions = [];
-      if (input.branchId) conditions.push(eq(orders.branchId, input.branchId));
+      const branchId = ctx.staffRole ? ctx.staffBranchId : input.branchId;
+      if (branchId) conditions.push(eq(orders.branchId, branchId));
       if (input.status) conditions.push(eq(payments.status, input.status));
 
       const query = ctx.restaurantDb.select({

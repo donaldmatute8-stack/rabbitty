@@ -16,13 +16,13 @@ const handler = async (req: Request) => {
     router: appRouter,
     createContext: async () => {
       const restaurantDb = getRestaurantDb();
-      let staffRole: "WAITER" | "CASHIER" | "MANAGER" | "ADMIN" | null = null;
+      let staffRole: "WAITER" | "CASHIER" | "KITCHEN" | "MANAGER" | "ADMIN" | null = null;
       let staffBranchId = null;
 
       if (session?.user?.email) {
         const [staffRecord] = await restaurantDb.select().from(staff).where(eq(staff.email, session.user.email));
         if (staffRecord) {
-          staffRole = staffRecord.role as "WAITER" | "CASHIER" | "MANAGER" | "ADMIN" | null;
+          staffRole = staffRecord.role as "WAITER" | "CASHIER" | "KITCHEN" | "MANAGER" | "ADMIN" | null;
           staffBranchId = staffRecord.branchId;
         }
       }
