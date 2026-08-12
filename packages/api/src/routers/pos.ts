@@ -202,34 +202,45 @@ export const posRouter = router({
       if (totalPaid >= orderRow.total) {
         await ctx.restaurantDb.update(orders).set({ status: "COMPLETED" }).where(eq(orders.id, input.orderId));
 
-        // INVENTORY DEDUCTION LOGIC
+        // INVENTORY DEDUCTION LOGIC (recursive for sub-recipes)
         const items = await ctx.restaurantDb.select().from(orderItems).where(eq(orderItems.orderId, input.orderId));
-        for (const item of items) {
+
+        const deductRecipe = async (menuItemId: string, qty: number, path: Set<string>) => {
+          if (path.has(menuItemId)) return;
+          path.add(menuItemId);
           const ingredients = await ctx.restaurantDb.select()
             .from(dbSchema.menuItemIngredients)
-            .where(eq(dbSchema.menuItemIngredients.menuItemId, item.menuItemId));
-          
-          for (const ing of ingredients) {
-            if (!ing.inventoryItemId) continue;
-            const deductionAmount = ing.quantityRequired * item.quantity;
-            
-            // Insert movement
-            await ctx.restaurantDb.insert(dbSchema.inventoryMovements).values({
-              itemId: ing.inventoryItemId,
-              branchId: ctx.branchId,
-              type: "SALE_DEDUCTION",
-              quantity: deductionAmount,
-              reference: input.orderId,
-              notes: `Order ${input.orderId} completed`,
-            });
+            .where(eq(dbSchema.menuItemIngredients.menuItemId, menuItemId));
 
-            // Update stock
-            await ctx.restaurantDb.execute(sql`
-              UPDATE inventory_items 
-              SET stock = stock - ${deductionAmount} 
-              WHERE id = ${ing.inventoryItemId}
-            `);
+          for (const ing of ingredients) {
+            if (ing.inventoryItemId) {
+              const deductionAmount = ing.quantityRequired * qty;
+
+              // Insert movement
+              await ctx.restaurantDb.insert(dbSchema.inventoryMovements).values({
+                itemId: ing.inventoryItemId,
+                branchId: ctx.branchId,
+                type: "SALE_DEDUCTION",
+                quantity: deductionAmount,
+                reference: input.orderId,
+                notes: `Order ${input.orderId} completed`,
+              });
+
+              // Update stock
+              await ctx.restaurantDb.execute(sql`
+                UPDATE inventory_items 
+                SET stock = stock - ${deductionAmount} 
+                WHERE id = ${ing.inventoryItemId}
+              `);
+            } else if (ing.subRecipeId) {
+              await deductRecipe(ing.subRecipeId, ing.quantityRequired * qty, path);
+            }
           }
+          path.delete(menuItemId);
+        };
+
+        for (const item of items) {
+          await deductRecipe(item.menuItemId, item.quantity, new Set());
         }
       } else {
         await ctx.restaurantDb.update(orders).set({ status: "PARTIAL_PAID" }).where(eq(orders.id, input.orderId));

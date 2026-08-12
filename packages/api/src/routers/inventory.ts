@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { and, eq, sql } from "drizzle-orm";
-import { router, protectedProcedure } from "../trpc";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { router, protectedProcedure, resolveBranchId } from "../trpc";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
 import { inventoryItems, inventoryMovements } from "@rabbitty/database-restaurant/schema";
@@ -11,9 +11,7 @@ export const inventoryRouter = router({
   getItems: protectedProcedure
     .input(z.object({ branchId: z.string().optional() }))
     .query(async ({ ctx, input }) => {
-      const where = input.branchId
-        ? eq(inventoryItems.branchId, input.branchId)
-        : eq(inventoryItems.branchId, ctx.branchId);
+      const where = eq(inventoryItems.branchId, resolveBranchId(ctx, input.branchId));
       const items = await ctx.restaurantDb.select().from(inventoryItems).where(where);
       return items;
     }),
@@ -59,6 +57,9 @@ export const inventoryRouter = router({
       if (!item) {
         throw new Error("Producto no encontrado");
       }
+      if (item.branchId !== ctx.branchId) {
+        throw new Error("Producto de otra sucursal");
+      }
       let newStock = item.stock;
       if (input.type === "ADD") {
         newStock += input.quantity;
@@ -103,18 +104,40 @@ export const inventoryRouter = router({
     }),
 
   addRecipeIngredient: protectedProcedure
-    .input(z.object({
-      menuItemId: z.string(),
-      inventoryItemId: z.string().optional(),
-      subRecipeId: z.string().optional(),
-      quantityRequired: z.number(),
-      unit: z.string(),
-    }))
+    .input(
+      z.object({
+        menuItemId: z.string(),
+        inventoryItemId: z.string().trim().optional().transform((v) => v || undefined),
+        subRecipeId: z.string().trim().optional().transform((v) => v || undefined),
+        quantityRequired: z.number().positive(),
+        unit: z.string(),
+      }).refine(
+        (d) => !!d.inventoryItemId || !!d.subRecipeId,
+        { message: "Se requiere inventoryItemId o subRecipeId" }
+      )
+    )
     .mutation(async ({ ctx, input }) => {
+      const menuIds = [input.menuItemId];
+      if (input.subRecipeId) menuIds.push(input.subRecipeId);
+
+      const owned = await ctx.restaurantDb
+        .select({ id: dbSchema.menuItems.id, branchId: dbSchema.menuItems.branchId })
+        .from(dbSchema.menuItems)
+        .where(inArray(dbSchema.menuItems.id, menuIds));
+
+      if (owned.length !== menuIds.length) {
+        throw new Error("Platillo no encontrado");
+      }
+      if (owned.some((m) => m.branchId !== ctx.branchId)) {
+        throw new Error("Platillo de otra sucursal");
+      }
+
       const dataToInsert = {
-        ...input,
+        menuItemId: input.menuItemId,
         inventoryItemId: input.inventoryItemId ?? null,
         subRecipeId: input.subRecipeId ?? null,
+        quantityRequired: input.quantityRequired,
+        unit: input.unit,
       };
       const [ing] = await ctx.restaurantDb.insert(dbSchema.menuItemIngredients).values(dataToInsert).returning();
       return ing;
@@ -123,6 +146,20 @@ export const inventoryRouter = router({
   removeRecipeIngredient: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const [ing] = await ctx.restaurantDb
+        .select()
+        .from(dbSchema.menuItemIngredients)
+        .where(eq(dbSchema.menuItemIngredients.id, input.id));
+      if (!ing) {
+        throw new Error("Ingrediente no encontrado");
+      }
+      const [menuItem] = await ctx.restaurantDb
+        .select({ branchId: dbSchema.menuItems.branchId })
+        .from(dbSchema.menuItems)
+        .where(eq(dbSchema.menuItems.id, ing.menuItemId));
+      if (!menuItem || menuItem.branchId !== ctx.branchId) {
+        throw new Error("No autorizado: ingrediente de otra sucursal");
+      }
       await ctx.restaurantDb.delete(dbSchema.menuItemIngredients).where(eq(dbSchema.menuItemIngredients.id, input.id));
       return { success: true };
     }),
