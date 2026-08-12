@@ -6,6 +6,8 @@ import { logAudit } from "./middleware/auditLog";
 export interface Context {
   userId?: string | null;
   user?: { id?: string | null; name?: string | null; email?: string | null; image?: string | null } | null;
+  staffRole?: "WAITER" | "CASHIER" | "MANAGER" | "ADMIN" | null;
+  staffBranchId?: string | null;
   restaurantDb: ReturnType<typeof getRestaurantDb>;
   coreDb: ReturnType<typeof getCoreDb>;
   branchId: string;

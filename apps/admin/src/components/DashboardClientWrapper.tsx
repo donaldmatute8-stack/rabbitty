@@ -37,9 +37,17 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: profile } = trpc.admin.getProfile.useQuery(undefined, {
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+
   useEffect(() => {
     if (branches && branches.length > 0 && !branches.some((b) => b.id === branchId)) {
       setBranchId(branches[0].id);
+    }
+    if (typeof window !== "undefined") {
+      localStorage.setItem("activeBranchId", branchId);
     }
   }, [branches, branchId]);
 
@@ -51,6 +59,18 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
       setTwoFaChecked(true);
     }
   }, [isFetched, twoFa, twoFaChecked, router]);
+
+  useEffect(() => {
+    if (profile) {
+      if (profile.role === "CASHIER" && !pathname.startsWith("/pos")) {
+        router.replace("/pos");
+      } else if (profile.role === "WAITER" && !pathname.startsWith("/pos")) {
+        router.replace("/pos");
+      } else if (profile.role === "KITCHEN" && !pathname.startsWith("/kitchen")) {
+        router.replace("/kitchen");
+      }
+    }
+  }, [profile, pathname, router]);
 
   return (
     <BranchContext.Provider value={{ branchId, setBranchId }}>
