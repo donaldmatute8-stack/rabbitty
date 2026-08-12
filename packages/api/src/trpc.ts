@@ -46,10 +46,12 @@ export const protectedProcedure = t.procedure
     return next({ ctx: { ...ctx, userId: ctx.userId } });
   });
 
-// Blocks staff below ADMIN. Owners (staffRole === null) and ADMIN staff pass.
+// Blocks staff below MANAGER. Owners (staffRole === null), ADMIN and MANAGER staff pass.
+// Managers operate their own branch (resolveBranchId scopes writes to ctx.branchId);
+// OWNER-only guards exist separately via platformOnlyProcedure.
 export const adminOnlyProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.staffRole && ctx.staffRole !== "ADMIN") {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Acción restringida a administradores" });
+  if (ctx.staffRole && ctx.staffRole !== "ADMIN" && ctx.staffRole !== "MANAGER") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Acción restringida a administradores y gerentes" });
   }
   return next({ ctx });
 });
