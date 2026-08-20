@@ -193,7 +193,7 @@ export default function ExpensesPage() {
             type="number"
             step="0.01"
             value={form.amount}
-            onChange={(e) => setForm((f) => ({ ...f, amount: Number(e.target.value) }))}
+            onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value === "" ? ("" as any) : Number(e.target.value) }))}
           />
           <Input
             label="Fecha"

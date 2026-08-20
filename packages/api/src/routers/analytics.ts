@@ -52,6 +52,40 @@ export const analyticsRouter = router({
       return trends;
     }),
 
+  getHourlySales: protectedProcedure
+    .input(
+      z.object({
+        branchId: z.string().optional(),
+        days: z.number(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - input.days);
+
+      const ordersList = await ctx.restaurantDb
+        .select()
+        .from(orders)
+        .where(
+          and(
+            eq(orders.branchId, resolveBranchId(ctx, input.branchId)),
+            eq(orders.status, "COMPLETED"),
+            gte(orders.createdAt, startDate)
+          )
+        );
+
+      const hourlySales = Array(24).fill(0).map((_, hour) => ({ hour, sales: 0, orderCount: 0 }));
+
+      for (const order of ordersList) {
+        if (!order.createdAt) continue;
+        const hour = order.createdAt.getHours();
+        hourlySales[hour]!.sales += Number(order.total);
+        hourlySales[hour]!.orderCount += 1;
+      }
+
+      return hourlySales;
+    }),
+
   getTopProducts: protectedProcedure
     .input(
       z.object({

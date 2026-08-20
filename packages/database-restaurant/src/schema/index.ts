@@ -162,6 +162,9 @@ export const orderItems = pgTable("order_items", {
   notes: text("notes"),
   status: text("status").default("PENDING").notNull(),
   sortOrder: integer("sortOrder").default(0).notNull(),
+  voidReason: text("voidReason"),
+  voidedAt: timestamp("voidedAt"),
+  authorizedById: fkIdOpt("authorizedById").references(() => staff.id),
 });
 
 export const payments = pgTable("payments", {
@@ -384,5 +387,15 @@ export const waitlistEntries = pgTable("waitlist_entries", {
   notifiedViaTelegram: boolean("notifiedViaTelegram").default(false),
   notifiedAt: timestamp("notifiedAt"),
   tableId: fkIdOpt("tableId").references(() => tables.id),
+  ...timestamps,
+});
+
+export const aiStrategies = pgTable("ai_strategies", {
+  id: id(),
+  branchId: fkId("branchId").references(() => branches.id),
+  goal: text("goal").notNull(),
+  status: text("status").default("ACTIVE").notNull(),
+  memory: jsonb("memory"),
+  isActive: boolean("isActive").default(true).notNull(),
   ...timestamps,
 });
