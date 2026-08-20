@@ -71,6 +71,20 @@
       "when": 1781927243408,
       "tag": "0009_chubby_beyonder",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787263332169,
+      "tag": "0010_pale_the_professor",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1787263382334,
+      "tag": "0011_stale_hairball",
+      "breakpoints": true
     }
   ]
 }

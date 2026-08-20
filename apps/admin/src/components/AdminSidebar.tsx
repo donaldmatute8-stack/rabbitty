@@ -40,7 +40,8 @@ import {
   UtensilsCrossed,
   TrendingUp,
   TabletSmartphone,
-  TerminalSquare
+  TerminalSquare,
+  Brain
 } from "lucide-react";
 import { useSidebar } from "./DashboardClientWrapper";
 
@@ -107,6 +108,7 @@ const menuPillars: MenuPillar[] = [
     icon: Zap,
     items: [
       { href: "/", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/strategy", label: "Estrategia Hermes", icon: Brain, badge: "IA" },
       { href: "/kitchen", label: "Cocina / KDS", icon: ChefHat },
       { href: "/staff/shifts", label: "Turnos y Reloj", icon: Clock },
       { href: "/table-layout", label: "Mapa de Mesas", icon: Table2 },

@@ -15,9 +15,22 @@ export default function PosPage() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<any[]>([]);
+  const [voidingItem, setVoidingItem] = useState<any | null>(null);
+  const [voidReason, setVoidReason] = useState("");
+  const [managerPin, setManagerPin] = useState("");
 
   const { data: categories } = trpc.pos.getCategories.useQuery(undefined, { retry: false });
   const { data: menuItems } = trpc.pos.getMenuItems.useQuery({}, { retry: false });
+
+  const voidItemMutation = trpc.pos.voidItem.useMutation({
+    onSuccess: () => {
+      setCart((prev) => prev.filter((i) => i.id !== voidingItem.id));
+      setVoidingItem(null);
+      setManagerPin("");
+      setVoidReason("");
+    },
+    onError: (err) => alert(err.message),
+  });
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -235,7 +248,16 @@ export default function PosPage() {
                       <Plus className="h-5 w-5" />
                     </button>
                     <span className="py-2 text-xl font-black text-white">{item.quantity}</span>
-                    <button onClick={() => updateQuantity(item.id, -1)} className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-gray-400 hover:bg-red-500 hover:text-white transition-all active:scale-90">
+                    <button 
+                      onClick={() => {
+                        if (item.isSent && item.quantity === 1) {
+                          setVoidingItem(item);
+                        } else {
+                          updateQuantity(item.id, -1);
+                        }
+                      }} 
+                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-gray-400 hover:bg-red-500 hover:text-white transition-all active:scale-90"
+                    >
                       <Minus className="h-5 w-5" />
                     </button>
                   </div>

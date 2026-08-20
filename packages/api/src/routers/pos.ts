@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql, inArray } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
@@ -136,6 +136,12 @@ export const posRouter = router({
   removeFromCart: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const [item] = await ctx.restaurantDb.select().from(orderItems).where(eq(orderItems.id, input.id));
+      if (!item) throw new Error("Item no encontrado");
+      if (item.status !== "PENDING") {
+        throw new Error("No puedes eliminar un artículo que ya está en cocina. Usa la función de Cancelación (Void).");
+      }
+
       const [removed] = await ctx.restaurantDb.delete(orderItems).where(eq(orderItems.id, input.id)).returning();
       if (removed) {
         const allItems = await ctx.restaurantDb.select().from(orderItems).where(eq(orderItems.orderId, removed.orderId));
@@ -143,14 +149,76 @@ export const posRouter = router({
         const tax = Math.round(subtotal * 0.16 * 100) / 100;
         const total = subtotal + tax;
         await ctx.restaurantDb.update(orders).set({ subtotal, tax, total }).where(eq(orders.id, removed.orderId));
+        return removed;
       }
-      return { success: true };
+      return null;
     }),
 
   clearCart: protectedProcedure
     .input(z.object({ orderId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.restaurantDb.delete(orderItems).where(eq(orderItems.orderId, input.orderId)).returning();
+      // Only delete PENDING items
+      await ctx.restaurantDb.delete(orderItems).where(and(
+        eq(orderItems.orderId, input.orderId),
+        eq(orderItems.status, "PENDING")
+      )).returning();
+      
+      const allItems = await ctx.restaurantDb.select().from(orderItems).where(eq(orderItems.orderId, input.orderId));
+      const subtotal = allItems.reduce((s, i) => s + Number(i.totalPrice), 0);
+      const tax = Math.round(subtotal * 0.16 * 100) / 100;
+      const total = subtotal + tax;
+      await ctx.restaurantDb.update(orders).set({ subtotal, tax, total }).where(eq(orders.id, input.orderId));
+      
+      return { success: true };
+    }),
+
+  voidItem: protectedProcedure
+    .input(z.object({
+      id: z.string(),
+      reason: z.string(),
+      managerPin: z.string(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Import dynamically to avoid circular dependencies if any
+      const { staff } = await import("@rabbitty/database-restaurant/schema");
+      const { verifyPin } = await import("../services/crypto");
+
+      // Verify manager PIN
+      const managers = await ctx.restaurantDb.select().from(staff).where(
+        and(
+          eq(staff.branchId, ctx.branchId),
+          inArray(staff.role, ["MANAGER", "ADMIN"])
+        )
+      );
+
+      let authorizedStaffId = null;
+      for (const s of managers) {
+        if (s.pinCode && verifyPin(input.managerPin, s.pinCode)) {
+          authorizedStaffId = s.id;
+          break;
+        }
+      }
+
+      if (!authorizedStaffId) {
+        throw new Error("PIN de Manager inválido");
+      }
+
+      const [item] = await ctx.restaurantDb.update(orderItems).set({
+        status: "CANCELLED",
+        voidReason: input.reason,
+        authorizedById: authorizedStaffId,
+        voidedAt: new Date(),
+        totalPrice: 0, // Voided items cost 0
+      }).where(eq(orderItems.id, input.id)).returning();
+
+      if (item) {
+        const allItems = await ctx.restaurantDb.select().from(orderItems).where(eq(orderItems.orderId, item.orderId));
+        const subtotal = allItems.reduce((s, i) => s + Number(i.totalPrice), 0);
+        const tax = Math.round(subtotal * 0.16 * 100) / 100;
+        const total = subtotal + tax;
+        await ctx.restaurantDb.update(orders).set({ subtotal, tax, total }).where(eq(orders.id, item.orderId));
+      }
+
       return { success: true };
     }),
 

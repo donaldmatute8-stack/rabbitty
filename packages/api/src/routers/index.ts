@@ -26,6 +26,7 @@ import { settingsRouter } from "./settings";
 import { totpRouter } from "./totp";
 import { passkeysRouter } from "./passkeys";
 import { trustedSessionsRouter } from "./trustedSessions";
+import { aiRouter } from "./ai";
 
 import "../services/queue";
 
@@ -57,6 +58,7 @@ export const appRouter = router({
   totp: totpRouter,
   passkeys: passkeysRouter,
   trustedSessions: trustedSessionsRouter,
+  ai: aiRouter,
 });
 
 export type AppRouter = typeof appRouter;
