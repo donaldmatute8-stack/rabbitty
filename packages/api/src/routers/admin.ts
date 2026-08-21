@@ -291,10 +291,15 @@ export const adminRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
+      const start = new Date(input.startDate);
+      const end = new Date(input.endDate);
+      end.setDate(end.getDate() + 1);
+
       const result = await ctx.restaurantDb.select().from(orders).where(
         and(
           eq(orders.branchId, ctx.branchId),
-          sql`${orders.createdAt} BETWEEN ${input.startDate} AND ${input.endDate}`
+          sql`${orders.createdAt} >= ${start}`,
+          sql`${orders.createdAt} < ${end}`
         )
       );
       const totalSales = result.reduce((sum, order) => sum + order.total, 0);

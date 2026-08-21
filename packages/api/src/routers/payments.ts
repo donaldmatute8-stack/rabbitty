@@ -148,15 +148,19 @@ export const paymentsRouter = router({
   getTotals: protectedProcedure
     .input(z.object({ startDate: z.string(), endDate: z.string() }))
     .query(async ({ ctx, input }) => {
+      const start = new Date(input.startDate);
+      const end = new Date(input.endDate);
+      end.setDate(end.getDate() + 1);
+
       const [cashPayments, cardPayments, bunzPayments] = await Promise.all([
         ctx.restaurantDb.select().from(payments).where(
-          and(eq(payments.method, "CASH"), sql`${payments.createdAt} BETWEEN ${input.startDate} AND ${input.endDate}`)
+          and(eq(payments.method, "CASH"), sql`${payments.createdAt} >= ${start}`, sql`${payments.createdAt} < ${end}`)
         ),
         ctx.restaurantDb.select().from(payments).where(
-          and(inArray(payments.method, ["CREDIT_CARD", "DEBIT_CARD"]), sql`${payments.createdAt} BETWEEN ${input.startDate} AND ${input.endDate}`)
+          and(inArray(payments.method, ["CREDIT_CARD", "DEBIT_CARD"]), sql`${payments.createdAt} >= ${start}`, sql`${payments.createdAt} < ${end}`)
         ),
         ctx.restaurantDb.select().from(payments).where(
-          and(eq(payments.method, "BUNZ"), sql`${payments.createdAt} BETWEEN ${input.startDate} AND ${input.endDate}`)
+          and(eq(payments.method, "BUNZ"), sql`${payments.createdAt} >= ${start}`, sql`${payments.createdAt} < ${end}`)
         ),
       ]);
       return {

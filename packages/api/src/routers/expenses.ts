@@ -19,7 +19,11 @@ export const expensesRouter = router({
       const conditions = [eq(expenses.branchId, ctx.branchId)];
       if (input?.category) conditions.push(eq(expenses.category, input.category));
       if (input?.startDate) conditions.push(sql`${expenses.expenseDate} >= ${new Date(input.startDate)}`);
-      if (input?.endDate) conditions.push(sql`${expenses.expenseDate} <= ${new Date(input.endDate)}`);
+      if (input?.endDate) {
+        const end = new Date(input.endDate);
+        end.setDate(end.getDate() + 1);
+        conditions.push(sql`${expenses.expenseDate} < ${end}`);
+      }
 
       return ctx.restaurantDb
         .select()
@@ -62,6 +66,7 @@ export const expensesRouter = router({
     .query(async ({ ctx, input }) => {
       const start = new Date(input.startDate);
       const end = new Date(input.endDate);
+      end.setDate(end.getDate() + 1);
 
       const expenseList = await ctx.restaurantDb
         .select()
@@ -70,20 +75,20 @@ export const expensesRouter = router({
           and(
             eq(expenses.branchId, ctx.branchId),
             sql`${expenses.expenseDate} >= ${start}`,
-            sql`${expenses.expenseDate} <= ${end}`
+            sql`${expenses.expenseDate} < ${end}`
           )
         );
 
       const revenueWhere = ctx.staffRole
         ? and(
             sql`${payments.createdAt} >= ${start}`,
-            sql`${payments.createdAt} <= ${end}`,
+            sql`${payments.createdAt} < ${end}`,
             eq(payments.status, "COMPLETED"),
             sql`${payments.orderId} IN (SELECT id FROM orders WHERE "branchId" = ${ctx.staffBranchId})`
           )
         : and(
             sql`${payments.createdAt} >= ${start}`,
-            sql`${payments.createdAt} <= ${end}`,
+            sql`${payments.createdAt} < ${end}`,
             eq(payments.status, "COMPLETED")
           );
 
