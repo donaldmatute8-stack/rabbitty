@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { trpc } from "../../../lib/trpc-client";
-import { Button, Dialog, Input, cn } from "@rabbitty/ui";
+import { Button, Dialog, Input, toast, cn } from "@rabbitty/ui";
 import { Clock, Wifi, Search, User, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -23,14 +23,28 @@ export default function PosPage() {
   const { data: categories } = trpc.pos.getCategories.useQuery(undefined, { retry: false });
   const { data: menuItems } = trpc.pos.getMenuItems.useQuery({}, { retry: false });
 
+  const verifyPinMutation = trpc.staff.verifyAdminPin.useMutation({
+    onSuccess: () => {
+      if (voidingItem) {
+        setCart((prev) => prev.filter((i) => i.id !== voidingItem.id));
+        toast.success(`"${voidingItem.name}" eliminado de la orden`);
+        setVoidingItem(null);
+        setManagerPin("");
+        setVoidReason("");
+      }
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   const voidItemMutation = trpc.pos.voidItem.useMutation({
     onSuccess: () => {
       setCart((prev) => prev.filter((i) => i.id !== voidingItem.id));
+      toast.success(`"${voidingItem.name}" anulado correctamente`);
       setVoidingItem(null);
       setManagerPin("");
       setVoidReason("");
     },
-    onError: (err) => alert(err.message),
+    onError: (err) => toast.error(err.message),
   });
 
   useEffect(() => {
@@ -170,36 +184,69 @@ export default function PosPage() {
         )}
 
         {/* Center: Hero Bento Grid */}
-        <main className="flex-1 overflow-y-auto p-6 custom-scrollbar z-10">
+        <main className="flex-1 overflow-y-auto p-6 custom-scrollbar z-10 flex flex-col">
+          {/* Top Category Pills */}
+          {categories && categories.length > 0 && !search && (
+            <div className="flex gap-2 overflow-x-auto pb-3 mb-4 custom-scrollbar shrink-0">
+              <button
+                type="button"
+                onClick={() => setActiveCategory(null)}
+                className={cn(
+                  "shrink-0 rounded-full px-5 py-2 text-xs font-bold transition-all duration-300 cursor-pointer",
+                  !activeCategory
+                    ? "bg-cyan-500 text-gray-950 shadow-[0_4px_14px_rgba(6,182,212,0.4)]"
+                    : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/5"
+                )}
+              >
+                Todos los Platillos
+              </button>
+              {categories.map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setActiveCategory(cat.id)}
+                  className={cn(
+                    "shrink-0 rounded-full px-5 py-2 text-xs font-bold transition-all duration-300 cursor-pointer",
+                    activeCategory === cat.id
+                      ? "bg-cyan-500 text-gray-950 shadow-[0_4px_14px_rgba(6,182,212,0.4)]"
+                      : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/5"
+                  )}
+                >
+                  {cat.name}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {filteredItems.map((item, i) => (
+            {filteredItems.map((item) => (
               <button
                 key={item.id}
                 onClick={() => addToCart(item)}
-                className="group relative flex aspect-[4/5] flex-col justify-between overflow-hidden rounded-[2rem] bg-gray-900 border border-white/5 p-1 text-left transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_20px_40px_rgba(0,0,0,0.5)] hover:border-cyan-500/50 active:scale-95"
+                className="group relative flex aspect-[4/5] flex-col justify-between overflow-hidden rounded-[2rem] bg-gray-900 border border-white/5 p-1 text-left transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_20px_40px_rgba(0,0,0,0.6)] hover:border-cyan-500/40 active:scale-95 cursor-pointer"
               >
                 {/* Big Image Top */}
-                <div className="relative h-[55%] w-full rounded-[1.75rem] overflow-hidden bg-gray-800">
-                  <div className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110" style={{ backgroundImage: `url(${PLACEHOLDER_IMG})` }} />
+                <div className="relative h-[65%] w-full rounded-[1.75rem] overflow-hidden bg-gray-800">
+                  <div className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105" style={{ backgroundImage: `url(${PLACEHOLDER_IMG})` }} />
                   <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-transparent opacity-80" />
                   
+                  {/* Subtle centered '+' in fade mode */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white/30 group-hover:text-white/90 group-hover:bg-cyan-500/20 group-hover:border-cyan-500/40 group-hover:scale-110 transition-all duration-300 shadow-2xl">
+                      <Plus className="h-5 w-5" />
+                    </div>
+                  </div>
+
                   {/* Price Tag Badge */}
                   <div className="absolute top-3 right-3 rounded-full bg-black/60 backdrop-blur-md px-3 py-1.5 border border-white/10 shadow-xl">
                     <span className="text-sm font-black text-emerald-400">${item.price.toFixed(2)}</span>
                   </div>
                 </div>
                 
-                {/* Content Bottom */}
-                <div className="flex flex-col justify-between h-[45%] p-4 pt-3">
-                  <div>
-                    <h3 className="text-lg font-black leading-tight text-white line-clamp-2 group-hover:text-cyan-400 transition-colors">{item.name}</h3>
-                    <p className="mt-1 text-[11px] text-gray-500 font-medium line-clamp-2">{item.description || "Delicioso y preparado al momento."}</p>
-                  </div>
-                  
-                  {/* Add Button Indicator */}
-                  <div className="mt-2 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-white/5 border border-white/5 text-sm font-bold text-gray-400 group-hover:bg-cyan-500/20 group-hover:border-cyan-500/50 group-hover:text-cyan-400 transition-all">
-                    <Plus className="h-4 w-4" /> Agregar
-                  </div>
+                {/* Content Bottom (clean without the button bar) */}
+                <div className="flex flex-col justify-center h-[35%] p-4 pt-2">
+                  <h3 className="text-base font-black leading-tight text-white line-clamp-2 group-hover:text-cyan-400 transition-colors">{item.name}</h3>
+                  <p className="mt-1 text-[11px] text-gray-500 font-medium line-clamp-1">{item.description || "Delicioso y preparado al momento."}</p>
                 </div>
               </button>
             ))}
@@ -235,35 +282,51 @@ export default function PosPage() {
           {/* Cart Items Area */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
             {cart.map((item) => (
-              <div key={item.id} className="group flex flex-col rounded-[1.5rem] bg-gray-900 border border-white/5 p-4 shadow-lg transition-all hover:border-white/20">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <h4 className="text-lg font-black text-white leading-tight">{item.name}</h4>
-                    <div className="mt-1 text-lg font-black text-emerald-400">${item.price.toFixed(2)}</div>
-                    {/* Mock Modifier Tags */}
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      <span className="rounded-lg bg-black px-2 py-1 text-[10px] font-bold text-gray-400 border border-white/5 uppercase">Sin Cebolla</span>
-                      <span className="rounded-lg bg-purple-500/20 px-2 py-1 text-[10px] font-bold text-purple-400 border border-purple-500/30 uppercase">+ Extra Queso</span>
-                    </div>
-                  </div>
-                  
-                  {/* Huge Stepper */}
-                  <div className="flex flex-col items-center rounded-[1.25rem] bg-black border border-white/10 p-1 shrink-0 shadow-inner">
-                    <button onClick={() => updateQuantity(item.id, 1)} className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-white hover:bg-cyan-500 hover:text-black transition-all active:scale-90 cursor-pointer">
-                      <Plus className="h-5 w-5" />
-                    </button>
-                    <span className="py-2 text-xl font-black text-white">{item.quantity}</span>
-                    <button 
+              <div key={item.id} className="group flex items-center justify-between rounded-[1.5rem] bg-gray-900 border border-white/5 p-4 shadow-lg transition-all hover:border-white/20 gap-3">
+                <div className="flex-1">
+                  <h4 className="text-base font-black text-white leading-tight">{item.name}</h4>
+                  <div className="mt-0.5 text-base font-black text-emerald-400">${item.price.toFixed(2)}</div>
+                  {item.quantity > 1 && (
+                    <div className="text-xs text-gray-500 font-bold mt-0.5">Subtotal: ${(item.price * item.quantity).toFixed(2)}</div>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {/* Dedicated Delete Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVoidingItem(item);
+                      setVoidReason("");
+                      setManagerPin("");
+                    }}
+                    title="Eliminar artículo (Requiere PIN)"
+                    className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white border border-red-500/20 transition-all active:scale-90 cursor-pointer"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+
+                  {/* Stepper */}
+                  <div className="flex items-center rounded-xl bg-black border border-white/10 p-1 shrink-0 shadow-inner">
+                    <button
+                      type="button"
                       onClick={() => {
-                        if (item.isSent && item.quantity === 1) {
-                          setVoidingItem(item);
-                        } else {
-                          updateQuantity(item.id, -1);
-                        }
-                      }} 
-                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-gray-400 hover:bg-red-500 hover:text-white transition-all active:scale-90 cursor-pointer"
+                        setVoidingItem({ ...item, isDecrease: item.quantity > 1 });
+                        setVoidReason("");
+                        setManagerPin("");
+                      }}
+                      title="Disminuir / Eliminar (Requiere PIN)"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-gray-400 hover:bg-red-500 hover:text-white transition-all active:scale-90 cursor-pointer"
                     >
-                      <Minus className="h-5 w-5" />
+                      <Minus className="h-4 w-4" />
+                    </button>
+                    <span className="px-3 text-base font-black text-white">{item.quantity}</span>
+                    <button
+                      type="button"
+                      onClick={() => updateQuantity(item.id, 1)}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-white hover:bg-cyan-500 hover:text-black transition-all active:scale-90 cursor-pointer"
+                    >
+                      <Plus className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
@@ -363,27 +426,47 @@ export default function PosPage() {
         </div>
       </Dialog>
 
-      {/* Modal de Anulación / Void con PIN de Gerente */}
-      <Dialog open={!!voidingItem} onClose={() => { setVoidingItem(null); setManagerPin(""); setVoidReason(""); }} title="Autorización de Anulación (Void)">
+      {/* Modal de Anulación / Eliminación con PIN de Gerente */}
+      <Dialog
+        open={!!voidingItem}
+        onClose={() => { setVoidingItem(null); setManagerPin(""); setVoidReason(""); }}
+        title={voidingItem?.isDecrease ? "Autorización para Disminuir Cantidad" : "Autorización para Eliminar Artículo"}
+      >
         {voidingItem && (
           <div className="space-y-4">
             <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">
               <Shield className="h-5 w-5 shrink-0" />
-              <span>Anular un platillo ya enviado a cocina requiere autorización de Gerente / Administrador.</span>
+              <span>
+                {voidingItem.isDecrease
+                  ? "Disminuir la cantidad de un platillo en la comanda requiere autorización de Gerente."
+                  : "Eliminar o anular un platillo de la comanda requiere motivo y PIN de Gerente / Administrador."}
+              </span>
             </div>
+
+            <div className="bg-white/5 border border-white/10 rounded-xl p-3 flex justify-between items-center">
+              <div>
+                <p className="text-sm font-bold text-white">{voidingItem.name}</p>
+                <p className="text-xs text-gray-400">Precio unitario: ${voidingItem.price.toFixed(2)}</p>
+              </div>
+              <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-white/10 text-gray-300">
+                Cantidad actual: {voidingItem.quantity}
+              </span>
+            </div>
+
             <div>
-              <p className="text-sm font-bold text-white mb-1">{voidingItem.name}</p>
-              <p className="text-xs text-gray-400">Precio: ${voidingItem.price.toFixed(2)}</p>
+              <label className="text-xs font-bold uppercase tracking-wider text-cyan-400 block mb-1">
+                Motivo de Eliminación / Anulación *
+              </label>
+              <Input
+                placeholder="Ej. Cliente cambió de opinión / Error de captura / No le gustó"
+                value={voidReason}
+                onChange={(e) => setVoidReason(e.target.value)}
+              />
             </div>
-            <Input
-              label="Motivo de Anulación *"
-              placeholder="Ej. Cliente cambió de opinión / Error de comanda"
-              value={voidReason}
-              onChange={(e) => setVoidReason(e.target.value)}
-            />
+
             <div>
               <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block mb-1">
-                PIN de Gerente (4 dígitos) *
+                PIN de Administrador / Gerente (4 dígitos) *
               </label>
               <input
                 type="password"
@@ -394,6 +477,7 @@ export default function PosPage() {
                 className="w-full rounded-xl border border-white/10 bg-black/60 p-3 text-center text-2xl tracking-[0.5em] text-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none"
               />
             </div>
+
             <div className="flex justify-end gap-3 pt-3 border-t border-white/5">
               <Button variant="secondary" onClick={() => { setVoidingItem(null); setManagerPin(""); setVoidReason(""); }}>
                 Cancelar
@@ -401,17 +485,26 @@ export default function PosPage() {
               <Button
                 variant="danger"
                 onClick={() => {
-                  if (voidingItem && managerPin.length === 4) {
-                    voidItemMutation.mutate({
-                      id: voidingItem.id,
-                      reason: voidReason || "Anulación en caja",
-                      managerPin,
-                    });
+                  if (voidingItem && managerPin.length === 4 && voidReason.trim()) {
+                    if (voidingItem.isSent) {
+                      voidItemMutation.mutate({
+                        id: voidingItem.id,
+                        reason: voidReason.trim(),
+                        managerPin,
+                      });
+                    } else {
+                      verifyPinMutation.mutate({ pin: managerPin });
+                    }
                   }
                 }}
-                disabled={voidItemMutation.isPending || managerPin.length !== 4}
+                disabled={
+                  verifyPinMutation.isPending ||
+                  voidItemMutation.isPending ||
+                  managerPin.length !== 4 ||
+                  !voidReason.trim()
+                }
               >
-                {voidItemMutation.isPending ? "Anulando..." : "Confirmar Anulación"}
+                {verifyPinMutation.isPending || voidItemMutation.isPending ? "Validando..." : "Confirmar Eliminación"}
               </Button>
             </div>
           </div>
