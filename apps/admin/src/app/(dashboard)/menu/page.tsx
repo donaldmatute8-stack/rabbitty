@@ -96,9 +96,9 @@ export default function MenuPage() {
         {categories?.map((cat) => (
           <div key={cat.id} className="group relative shrink-0">
             <button
-              onClick={() => setActiveCategory(cat.name)}
+              onClick={() => setActiveCategory(cat.id)}
               className={`rounded-full px-5 py-2.5 text-sm font-semibold transition-all duration-300 ${
-                activeCategory === cat.name
+                activeCategory === cat.id
                   ? "bg-pink-500 text-white shadow-[0_4px_14px_rgba(236,72,153,0.35)] border border-pink-400/20"
                   : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/5 shadow-sm"
               }`}
@@ -146,7 +146,9 @@ export default function MenuPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <h3 className="font-bold text-lg text-white">{item.name}</h3>
-                    <p className="mt-0.5 text-xs text-gray-500 font-mono">ID: {item.categoryId.slice(0, 8)}</p>
+                    <p className="mt-0.5 text-xs text-pink-400 font-semibold">
+                      {categories?.find((c) => c.id === item.categoryId)?.name ?? "Sin categoría"}
+                    </p>
                   </div>
                   <Badge variant={item.isAvailable ? "success" : "warning"}>
                     {item.isAvailable ? "Disponible" : "Agotado"}
@@ -179,6 +181,7 @@ export default function MenuPage() {
         open={!!itemDialog}
         onClose={() => setItemDialog(null)}
         title={itemDialog?.mode === "create" ? "Agregar Platillo" : "Editar Platillo"}
+        className="max-w-xl"
       >
         <div className="space-y-4">
           <Input
@@ -229,6 +232,7 @@ export default function MenuPage() {
         open={!!catDialog}
         onClose={() => setCatDialog(null)}
         title={catDialog?.mode === "create" ? "Agregar Categoría" : "Editar Categoría"}
+        className="max-w-xl"
       >
         <div className="space-y-4">
           <Input
