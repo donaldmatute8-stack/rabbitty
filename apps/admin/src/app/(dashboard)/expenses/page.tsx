@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { Card, Badge, Button, Dialog, Input, Select, toast } from "@rabbitty/ui";
-import { Receipt, Plus, Trash2, TrendingDown, TrendingUp, DollarSign, PieChart, Calendar } from "lucide-react";
+import { Receipt, Plus, Trash2, Pencil, TrendingDown, TrendingUp, DollarSign, PieChart, Calendar, Shield } from "lucide-react";
 
 const CATEGORIES = [
   { value: "RENT", label: "Renta" },
@@ -11,6 +11,8 @@ const CATEGORIES = [
   { value: "UTILITIES", label: "Servicios" },
   { value: "SUPPLIES", label: "Insumos" },
   { value: "MAINTENANCE", label: "Mantenimiento" },
+  { value: "REMODELING", label: "Remodelación" },
+  { value: "CONSTRUCTION", label: "Construcción" },
   { value: "MARKETING", label: "Marketing" },
   { value: "INSURANCE", label: "Seguros" },
   { value: "OTHER", label: "Otros" },
@@ -22,6 +24,8 @@ const CATEGORY_COLORS: Record<string, string> = {
   UTILITIES: "from-amber-500/20 to-amber-600/20 text-amber-400",
   SUPPLIES: "from-green-500/20 to-green-600/20 text-green-400",
   MAINTENANCE: "from-purple-500/20 to-purple-600/20 text-purple-400",
+  REMODELING: "from-orange-500/20 to-orange-600/20 text-orange-400",
+  CONSTRUCTION: "from-yellow-500/20 to-amber-600/20 text-yellow-400",
   MARKETING: "from-pink-500/20 to-pink-600/20 text-pink-400",
   INSURANCE: "from-cyan-500/20 to-cyan-600/20 text-cyan-400",
   OTHER: "from-gray-500/20 to-gray-600/20 text-gray-400",
@@ -39,15 +43,21 @@ export default function ExpensesPage() {
     endDate: dateRange.endDate,
   });
   const { data: pandl } = trpc.expenses.getPandL.useQuery(dateRange);
+
   const createExpense = trpc.expenses.create.useMutation({
     onSuccess: () => { utils.expenses.list.invalidate(); utils.expenses.getPandL.invalidate(); toast.success("Gasto registrado"); setDialog(false); },
     onError: (e) => toast.error(e.message),
   });
 
-  const [dialog, setDialog] = useState(false);
-  const [form, setForm] = useState({ category: "SUPPLIES", description: "", amount: 0, reference: "", paidTo: "", notes: "", expenseDate: new Date().toISOString().split("T")[0] });
-  const [deleteExpenseId, setDeleteExpenseId] = useState<string | null>(null);
-  const [deletePin, setDeletePin] = useState("");
+  const updateExpense = trpc.expenses.update.useMutation({
+    onSuccess: () => {
+      utils.expenses.list.invalidate();
+      utils.expenses.getPandL.invalidate();
+      toast.success("Gasto actualizado correctamente");
+      setEditExpense(null);
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   const deleteExpense = trpc.expenses.delete.useMutation({
     onSuccess: () => {
@@ -59,6 +69,25 @@ export default function ExpensesPage() {
     },
     onError: (e) => toast.error(e.message),
   });
+
+  const [dialog, setDialog] = useState(false);
+  const [form, setForm] = useState({ category: "SUPPLIES", description: "", amount: 0, reference: "", paidTo: "", notes: "", expenseDate: new Date().toISOString().split("T")[0] });
+  
+  const [editExpense, setEditExpense] = useState<{
+    id: string;
+    category: string;
+    description: string;
+    amount: number;
+    expenseDate: string;
+    paidTo: string;
+    reference: string;
+    notes: string;
+    editReason: string;
+    adminPin: string;
+  } | null>(null);
+
+  const [deleteExpenseId, setDeleteExpenseId] = useState<string | null>(null);
+  const [deletePin, setDeletePin] = useState("");
 
   return (
     <div className="space-y-8 pb-10">
@@ -150,15 +179,38 @@ export default function ExpensesPage() {
                           {expense.expenseDate ? new Date(expense.expenseDate).toLocaleDateString("es-MX") : ""}
                         </span>
                       </p>
+                      {expense.notes && (
+                        <p className="text-[11px] text-gray-500 mt-0.5 truncate max-w-md">{expense.notes}</p>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3">
                     <div className="text-right">
                       <p className="font-bold text-red-400">-${expense.amount.toFixed(2)}</p>
                       {expense.reference && (
                         <p className="text-xs text-gray-500">{expense.reference}</p>
                       )}
                     </div>
+                    <button
+                      onClick={() => {
+                        setEditExpense({
+                          id: expense.id,
+                          category: expense.category,
+                          description: expense.description,
+                          amount: expense.amount,
+                          expenseDate: expense.expenseDate ? new Date(expense.expenseDate).toISOString().split("T")[0]! : new Date().toISOString().split("T")[0]!,
+                          paidTo: expense.paidTo ?? "",
+                          reference: expense.reference ?? "",
+                          notes: expense.notes ?? "",
+                          editReason: "",
+                          adminPin: "",
+                        });
+                      }}
+                      className="p-2 rounded-lg text-gray-500 hover:text-amber-400 hover:bg-amber-500/10 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                      title="Editar gasto"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
                     <button
                       onClick={() => { setDeleteExpenseId(expense.id); setDeletePin(""); }}
                       className="p-2 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
@@ -197,6 +249,7 @@ export default function ExpensesPage() {
         </div>
       </div>
 
+      {/* Dialog para Registrar Gasto */}
       <Dialog open={dialog} onClose={() => setDialog(false)} title="Registrar Gasto">
         <div className="space-y-4">
           <Select
@@ -245,6 +298,110 @@ export default function ExpensesPage() {
             </Button>
           </div>
         </div>
+      </Dialog>
+
+      {/* Dialog para Editar Gasto con PIN y Motivo de Cambio */}
+      <Dialog open={!!editExpense} onClose={() => setEditExpense(null)} title="Editar Gasto Registrado">
+        {editExpense && (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-300 flex items-center gap-2">
+              <Shield className="h-4 w-4 shrink-0" />
+              <span>La edición de gastos requiere PIN de Administrador y un motivo de auditoría.</span>
+            </div>
+
+            <Select
+              label="Categoría"
+              value={editExpense.category}
+              onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, category: e.target.value }) : null)}
+              options={CATEGORIES}
+            />
+            <Input
+              label="Descripción"
+              value={editExpense.description}
+              onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, description: e.target.value }) : null)}
+            />
+            <Input
+              label="Monto"
+              type="number"
+              step="0.01"
+              value={editExpense.amount}
+              onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, amount: e.target.value === "" ? ("" as any) : Number(e.target.value) }) : null)}
+            />
+            <Input
+              label="Fecha"
+              type="date"
+              value={editExpense.expenseDate}
+              onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, expenseDate: e.target.value }) : null)}
+            />
+            <Input
+              label="Pagado a"
+              value={editExpense.paidTo}
+              onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, paidTo: e.target.value }) : null)}
+            />
+            <Input
+              label="Referencia (factura/receipt)"
+              value={editExpense.reference}
+              onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, reference: e.target.value }) : null)}
+            />
+            <Input
+              label="Notas adicionales"
+              value={editExpense.notes}
+              onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, notes: e.target.value }) : null)}
+            />
+
+            {/* Motivo de cambio obligatorio */}
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wider text-pink-400 block mb-1">
+                Motivo del Cambio *
+              </label>
+              <Input
+                placeholder="Ej. Se corrigió el monto según factura / Categoría corregida"
+                value={editExpense.editReason}
+                onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, editReason: e.target.value }) : null)}
+              />
+            </div>
+
+            {/* PIN de Administrador */}
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block mb-1">
+                PIN de Administrador (4 dígitos) *
+              </label>
+              <input
+                type="password"
+                maxLength={4}
+                placeholder="••••"
+                value={editExpense.adminPin}
+                onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, adminPin: e.target.value.replace(/\D/g, "") }) : null)}
+                className="w-full rounded-xl border border-white/10 bg-gray-900 p-3 text-center text-xl tracking-[0.5em] text-white focus:border-pink-500 focus:ring-1 focus:ring-pink-500 outline-none"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="secondary" onClick={() => setEditExpense(null)}>Cancelar</Button>
+              <Button
+                onClick={() => {
+                  if (editExpense && editExpense.editReason && editExpense.adminPin.length === 4) {
+                    updateExpense.mutate({
+                      id: editExpense.id,
+                      category: editExpense.category as any,
+                      description: editExpense.description,
+                      amount: editExpense.amount,
+                      expenseDate: editExpense.expenseDate,
+                      paidTo: editExpense.paidTo || undefined,
+                      reference: editExpense.reference || undefined,
+                      notes: editExpense.notes || undefined,
+                      editReason: editExpense.editReason,
+                      adminPin: editExpense.adminPin,
+                    });
+                  }
+                }}
+                disabled={updateExpense.isPending || !editExpense.description || !editExpense.amount || !editExpense.editReason || editExpense.adminPin.length !== 4}
+              >
+                {updateExpense.isPending ? "Guardando..." : "Guardar Cambios"}
+              </Button>
+            </div>
+          </div>
+        )}
       </Dialog>
 
       {/* PIN Confirmation Dialog for Deleting Expense */}
