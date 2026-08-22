@@ -1,9 +1,216 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "../../../lib/trpc-client";
-import { Card, Badge, Button, Dialog, Input, Select, toast } from "@rabbitty/ui";
-import { Receipt, Plus, Trash2, Pencil, TrendingDown, TrendingUp, DollarSign, PieChart, Calendar, Shield } from "lucide-react";
+import { Card, Badge, Button, Dialog, Input, Select, toast, cn } from "@rabbitty/ui";
+import { Receipt, Plus, Trash2, Pencil, TrendingDown, TrendingUp, DollarSign, PieChart, Calendar, Shield, Search, X, Check, Building2, UserX } from "lucide-react";
+
+function SmartSupplierPicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+}) {
+  const utils = trpc.useUtils();
+  const { data: suppliers } = trpc.suppliers.list.useQuery();
+  const [searchTerm, setSearchTerm] = useState(value);
+  const [isOpen, setIsOpen] = useState(false);
+  const [isCreatingInline, setIsCreatingInline] = useState(false);
+  const [newContactName, setNewContactName] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+
+  const createSupplier = trpc.suppliers.create.useMutation({
+    onSuccess: (newSupp) => {
+      utils.suppliers.list.invalidate();
+      onChange(newSupp.name);
+      setSearchTerm(newSupp.name);
+      setIsCreatingInline(false);
+      setIsOpen(false);
+      toast.success(`Proveedor "${newSupp.name}" registrado`);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  useEffect(() => {
+    setSearchTerm(value);
+  }, [value]);
+
+  const filtered = (suppliers ?? []).filter((s) =>
+    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (s.contactName && s.contactName.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
+  const exactMatch = (suppliers ?? []).some(
+    (s) => s.name.trim().toLowerCase() === searchTerm.trim().toLowerCase()
+  );
+
+  return (
+    <div className="space-y-1.5 relative">
+      <div className="flex items-center justify-between">
+        <label className="block text-sm font-medium text-gray-300">
+          Pagado a (Proveedor / Beneficiario)
+        </label>
+        {value && (
+          <button
+            type="button"
+            onClick={() => {
+              onChange("");
+              setSearchTerm("");
+            }}
+            className="text-xs text-pink-400 hover:text-pink-300 font-semibold flex items-center gap-1 cursor-pointer"
+          >
+            <X className="h-3 w-3" /> Omitir / Sin Proveedor
+          </button>
+        )}
+      </div>
+
+      {/* Input de búsqueda inteligente */}
+      <div className="relative">
+        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+        <input
+          type="text"
+          value={searchTerm}
+          onFocus={() => setIsOpen(true)}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            onChange(e.target.value);
+            setIsOpen(true);
+          }}
+          placeholder="Buscar o escribir nombre del proveedor..."
+          className="w-full rounded-2xl border border-white/10 bg-white/5 pl-10 pr-10 py-3 text-sm font-medium text-white transition-all duration-300 placeholder:text-gray-500 hover:bg-white/10 hover:border-white/20 focus:bg-white/10 focus:border-pink-500 focus:outline-none focus:ring-2 focus:ring-pink-500/30"
+        />
+        {searchTerm && (
+          <button
+            type="button"
+            onClick={() => {
+              onChange("");
+              setSearchTerm("");
+            }}
+            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white cursor-pointer"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Dropdown flotante inteligente */}
+      {isOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-20"
+            onClick={() => {
+              setIsOpen(false);
+              setIsCreatingInline(false);
+            }}
+          />
+          <div className="absolute left-0 right-0 top-full mt-1.5 z-30 rounded-2xl border border-white/10 bg-gray-950/95 backdrop-blur-2xl shadow-2xl p-2 space-y-1 max-h-60 overflow-y-auto">
+            {/* Opciones filtradas */}
+            {filtered.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => {
+                  onChange(s.name);
+                  setSearchTerm(s.name);
+                  setIsOpen(false);
+                }}
+                className={cn(
+                  "w-full flex items-center justify-between p-2.5 rounded-xl text-left text-sm transition-all cursor-pointer",
+                  value === s.name
+                    ? "bg-pink-500/20 text-pink-300 font-bold border border-pink-500/30"
+                    : "text-gray-300 hover:bg-white/10 hover:text-white"
+                )}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Building2 className="h-4 w-4 text-pink-400 shrink-0" />
+                  <div>
+                    <p className="font-semibold text-white leading-tight">{s.name}</p>
+                    {s.contactName && (
+                      <p className="text-xs text-gray-400 mt-0.5">{s.contactName} {s.phone ? `· ${s.phone}` : ""}</p>
+                    )}
+                  </div>
+                </div>
+                {value === s.name && <Check className="h-4 w-4 text-pink-400" />}
+              </button>
+            ))}
+
+            {/* Si no hay coincidencia exacta y se escribió algo */}
+            {searchTerm.trim().length > 0 && !exactMatch && !isCreatingInline && (
+              <div className="pt-1 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setIsCreatingInline(true)}
+                  className="w-full flex items-center gap-2 p-2.5 rounded-xl bg-pink-500/10 hover:bg-pink-500/20 text-pink-400 text-sm font-bold transition-all border border-pink-500/20 cursor-pointer"
+                >
+                  <Plus className="h-4 w-4 shrink-0" />
+                  <span>+ Agregar <strong>"{searchTerm.trim()}"</strong> como nuevo proveedor</span>
+                </button>
+              </div>
+            )}
+
+            {/* Mini formulario inline para agregar proveedor rápido */}
+            {isCreatingInline && (
+              <div className="p-3 rounded-xl bg-black/60 border border-pink-500/30 space-y-2.5">
+                <p className="text-xs font-bold text-pink-400">Nuevo Proveedor: {searchTerm.trim()}</p>
+                <input
+                  type="text"
+                  placeholder="Persona de contacto (opcional)"
+                  value={newContactName}
+                  onChange={(e) => setNewContactName(e.target.value)}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-white placeholder:text-gray-500 focus:outline-none focus:border-pink-500"
+                />
+                <input
+                  type="text"
+                  placeholder="Teléfono (opcional)"
+                  value={newPhone}
+                  onChange={(e) => setNewPhone(e.target.value)}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-white placeholder:text-gray-500 focus:outline-none focus:border-pink-500"
+                />
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsCreatingInline(false)}
+                    className="text-xs text-gray-400 hover:text-white px-2 py-1 cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      createSupplier.mutate({
+                        name: searchTerm.trim(),
+                        contactName: newContactName || undefined,
+                        phone: newPhone || undefined,
+                      });
+                    }}
+                    disabled={createSupplier.isPending || !searchTerm.trim()}
+                  >
+                    {createSupplier.isPending ? "Guardando..." : "Guardar y Seleccionar"}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Opción para omitir */}
+            <button
+              type="button"
+              onClick={() => {
+                onChange("");
+                setSearchTerm("");
+                setIsOpen(false);
+              }}
+              className="w-full flex items-center justify-center gap-2 p-2 rounded-xl text-xs text-gray-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+            >
+              <UserX className="h-3.5 w-3.5" />
+              <span>Omitir proveedor (Sin proveedor)</span>
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 const CATEGORIES = [
   { value: "RENT", label: "Renta" },
@@ -277,39 +484,10 @@ export default function ExpensesPage() {
             value={form.expenseDate}
             onChange={(e) => setForm((f) => ({ ...f, expenseDate: e.target.value }))}
           />
-          <div>
-            <Input
-              label="Pagado a (Proveedor / Beneficiario)"
-              list="suppliers-list"
-              value={form.paidTo}
-              onChange={(e) => setForm((f) => ({ ...f, paidTo: e.target.value }))}
-              placeholder="Selecciona o escribe un proveedor..."
-            />
-            <datalist id="suppliers-list">
-              {suppliers?.map((s) => (
-                <option key={s.id} value={s.name}>
-                  {s.contactName ? `${s.name} · ${s.contactName}` : s.name}
-                </option>
-              ))}
-            </datalist>
-            {suppliers && suppliers.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider self-center mr-1">
-                  Proveedores:
-                </span>
-                {suppliers.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => setForm((f) => ({ ...f, paidTo: s.name }))}
-                    className="text-[11px] bg-white/5 hover:bg-pink-500/20 hover:text-pink-300 hover:border-pink-500/30 border border-white/10 px-2.5 py-1 rounded-lg text-gray-300 transition-all cursor-pointer"
-                  >
-                    {s.name}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <SmartSupplierPicker
+            value={form.paidTo}
+            onChange={(val) => setForm((f) => ({ ...f, paidTo: val }))}
+          />
           <Input
             label="Referencia (factura/receipt)"
             value={form.reference}
@@ -362,39 +540,10 @@ export default function ExpensesPage() {
               value={editExpense.expenseDate}
               onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, expenseDate: e.target.value }) : null)}
             />
-            <div>
-              <Input
-                label="Pagado a (Proveedor / Beneficiario)"
-                list="suppliers-list-edit"
-                value={editExpense.paidTo}
-                onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, paidTo: e.target.value }) : null)}
-                placeholder="Selecciona o escribe un proveedor..."
-              />
-              <datalist id="suppliers-list-edit">
-                {suppliers?.map((s) => (
-                  <option key={s.id} value={s.name}>
-                    {s.contactName ? `${s.name} · ${s.contactName}` : s.name}
-                  </option>
-                ))}
-              </datalist>
-              {suppliers && suppliers.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider self-center mr-1">
-                    Proveedores:
-                  </span>
-                  {suppliers.map((s) => (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => setEditExpense((prev) => prev ? ({ ...prev, paidTo: s.name }) : null)}
-                      className="text-[11px] bg-white/5 hover:bg-pink-500/20 hover:text-pink-300 hover:border-pink-500/30 border border-white/10 px-2.5 py-1 rounded-lg text-gray-300 transition-all cursor-pointer"
-                    >
-                      {s.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <SmartSupplierPicker
+              value={editExpense.paidTo}
+              onChange={(val) => setEditExpense((prev) => prev ? ({ ...prev, paidTo: val }) : null)}
+            />
             <Input
               label="Referencia (factura/receipt)"
               value={editExpense.reference}
