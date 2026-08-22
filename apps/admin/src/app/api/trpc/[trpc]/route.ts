@@ -3,7 +3,7 @@ import { appRouter } from "@rabbitty/api";
 import { auth } from "@rabbitty/auth";
 import { getRestaurantDb, getCoreDb } from "@rabbitty/api/db";
 import { getEnv } from "@/env";
-import { staff } from "@rabbitty/database-restaurant/schema";
+import { staff, branches } from "@rabbitty/database-restaurant/schema";
 import { eq } from "drizzle-orm";
 
 const handler = async (req: Request) => {
@@ -28,6 +28,12 @@ const handler = async (req: Request) => {
       }
 
       const headerBranchId = req.headers.get("x-branch-id");
+      let activeBranchId = staffBranchId || (headerBranchId && headerBranchId !== "b1" ? headerBranchId : null);
+
+      if (!activeBranchId) {
+        const [firstBranch] = await restaurantDb.select({ id: branches.id }).from(branches).limit(1);
+        activeBranchId = firstBranch?.id || env.BRANCH_ID;
+      }
 
       return {
         userId: session?.user?.id ?? null,
@@ -36,7 +42,7 @@ const handler = async (req: Request) => {
         staffBranchId,
         restaurantDb,
         coreDb: getCoreDb(),
-        branchId: staffBranchId || headerBranchId || env.BRANCH_ID,
+        branchId: activeBranchId,
       };
     },
   });

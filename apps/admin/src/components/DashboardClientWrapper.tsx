@@ -43,11 +43,14 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
   });
 
   useEffect(() => {
-    if (branches && branches.length > 0 && !branches.some((b) => b.id === branchId)) {
-      setBranchId(branches[0].id);
-    }
-    if (typeof window !== "undefined") {
-      localStorage.setItem("activeBranchId", branchId);
+    if (branches && branches.length > 0) {
+      const currentValid = branches.some((b) => b.id === branchId);
+      if (!currentValid || branchId === "b1") {
+        setBranchId(branches[0].id);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("activeBranchId", branches[0].id);
+        }
+      }
     }
   }, [branches, branchId]);
 
