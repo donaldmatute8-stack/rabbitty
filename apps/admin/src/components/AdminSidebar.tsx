@@ -41,7 +41,8 @@ import {
   TrendingUp,
   TabletSmartphone,
   TerminalSquare,
-  Brain
+  Brain,
+  FlaskConical
 } from "lucide-react";
 import { useSidebar } from "./DashboardClientWrapper";
 
@@ -63,6 +64,7 @@ type MenuPillar = {
 // (Dashboard, Settings, Sucursales, etc.) siempre se muestran para no dejar al
 // usuario sin forma de re-activar módulos desde Configuración.
 const MODULE_BY_HREF: Record<string, string> = {
+  "/sandbox": "sandbox",
   "/kitchen": "kitchen",
   "/staff/shifts": "staff",
   "/table-layout": "table_layout",
@@ -108,6 +110,7 @@ const menuPillars: MenuPillar[] = [
     icon: Zap,
     items: [
       { href: "/", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/sandbox", label: "Modo Sandbox", icon: FlaskConical, badge: "Test" },
       { href: "/strategy", label: "Estrategia Hermes", icon: Brain, badge: "IA" },
       { href: "/kitchen", label: "Cocina / KDS", icon: ChefHat },
       { href: "/staff/shifts", label: "Turnos y Reloj", icon: Clock },

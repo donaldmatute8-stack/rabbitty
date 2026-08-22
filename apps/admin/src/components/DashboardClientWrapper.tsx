@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { AdminSidebar } from "./AdminSidebar";
 import { BranchSelector } from "./BranchSelector";
 import { CommandMenu } from "./CommandMenu";
+import { SandboxBanner } from "./SandboxBanner";
 import { trpc } from "../lib/trpc-client";
 
 const SidebarContext = createContext<{
@@ -90,6 +91,7 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
           {/* Main Layout Area */}
           <div className="relative z-10 flex-1 flex flex-col h-screen overflow-hidden">
             {/* Executive Top Bar */}
+            <SandboxBanner />
             <header className="flex h-16 items-center justify-between border-b border-white/5 bg-black/40 backdrop-blur-xl px-8 z-10">
               <div className="flex items-center gap-4">
                 <CommandMenu />
