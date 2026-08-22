@@ -43,6 +43,7 @@ export default function ExpensesPage() {
     endDate: dateRange.endDate,
   });
   const { data: pandl } = trpc.expenses.getPandL.useQuery(dateRange);
+  const { data: suppliers } = trpc.suppliers.list.useQuery();
 
   const createExpense = trpc.expenses.create.useMutation({
     onSuccess: () => { utils.expenses.list.invalidate(); utils.expenses.getPandL.invalidate(); toast.success("Gasto registrado"); setDialog(false); },
@@ -276,11 +277,39 @@ export default function ExpensesPage() {
             value={form.expenseDate}
             onChange={(e) => setForm((f) => ({ ...f, expenseDate: e.target.value }))}
           />
-          <Input
-            label="Pagado a"
-            value={form.paidTo}
-            onChange={(e) => setForm((f) => ({ ...f, paidTo: e.target.value }))}
-          />
+          <div>
+            <Input
+              label="Pagado a (Proveedor / Beneficiario)"
+              list="suppliers-list"
+              value={form.paidTo}
+              onChange={(e) => setForm((f) => ({ ...f, paidTo: e.target.value }))}
+              placeholder="Selecciona o escribe un proveedor..."
+            />
+            <datalist id="suppliers-list">
+              {suppliers?.map((s) => (
+                <option key={s.id} value={s.name}>
+                  {s.contactName ? `${s.name} · ${s.contactName}` : s.name}
+                </option>
+              ))}
+            </datalist>
+            {suppliers && suppliers.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider self-center mr-1">
+                  Proveedores:
+                </span>
+                {suppliers.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, paidTo: s.name }))}
+                    className="text-[11px] bg-white/5 hover:bg-pink-500/20 hover:text-pink-300 hover:border-pink-500/30 border border-white/10 px-2.5 py-1 rounded-lg text-gray-300 transition-all cursor-pointer"
+                  >
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <Input
             label="Referencia (factura/receipt)"
             value={form.reference}
@@ -333,11 +362,39 @@ export default function ExpensesPage() {
               value={editExpense.expenseDate}
               onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, expenseDate: e.target.value }) : null)}
             />
-            <Input
-              label="Pagado a"
-              value={editExpense.paidTo}
-              onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, paidTo: e.target.value }) : null)}
-            />
+            <div>
+              <Input
+                label="Pagado a (Proveedor / Beneficiario)"
+                list="suppliers-list-edit"
+                value={editExpense.paidTo}
+                onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, paidTo: e.target.value }) : null)}
+                placeholder="Selecciona o escribe un proveedor..."
+              />
+              <datalist id="suppliers-list-edit">
+                {suppliers?.map((s) => (
+                  <option key={s.id} value={s.name}>
+                    {s.contactName ? `${s.name} · ${s.contactName}` : s.name}
+                  </option>
+                ))}
+              </datalist>
+              {suppliers && suppliers.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider self-center mr-1">
+                    Proveedores:
+                  </span>
+                  {suppliers.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setEditExpense((prev) => prev ? ({ ...prev, paidTo: s.name }) : null)}
+                      className="text-[11px] bg-white/5 hover:bg-pink-500/20 hover:text-pink-300 hover:border-pink-500/30 border border-white/10 px-2.5 py-1 rounded-lg text-gray-300 transition-all cursor-pointer"
+                    >
+                      {s.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <Input
               label="Referencia (factura/receipt)"
               value={editExpense.reference}
