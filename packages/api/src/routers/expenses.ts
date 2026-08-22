@@ -16,19 +16,23 @@ export const expensesRouter = router({
       endDate: z.string().optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
-      const conditions = [eq(expenses.branchId, ctx.branchId)];
+      const conditions: ReturnType<typeof eq>[] = [];
       if (input?.category) conditions.push(eq(expenses.category, input.category));
-      if (input?.startDate) conditions.push(sql`${expenses.expenseDate} >= ${new Date(input.startDate)}`);
+      if (input?.startDate) conditions.push(sql`${expenses.expenseDate} >= ${new Date(input.startDate)}` as any);
       if (input?.endDate) {
         const end = new Date(input.endDate);
         end.setDate(end.getDate() + 1);
-        conditions.push(sql`${expenses.expenseDate} < ${end}`);
+        conditions.push(sql`${expenses.expenseDate} < ${end}` as any);
       }
+
+      const whereClause = conditions.length > 0
+        ? and(eq(expenses.branchId, ctx.branchId), ...conditions)
+        : eq(expenses.branchId, ctx.branchId);
 
       return ctx.restaurantDb
         .select()
         .from(expenses)
-        .where(and(...conditions))
+        .where(whereClause)
         .orderBy(expenses.expenseDate);
     }),
 

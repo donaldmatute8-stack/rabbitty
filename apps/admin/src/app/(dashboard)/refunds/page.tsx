@@ -24,7 +24,8 @@ export default function RefundsPage() {
   const [refundNote, setRefundNote] = useState("");
 
   const { data: payments, isLoading, refetch } = trpc.payments.list.useQuery({ limit: 100 });
-  const { data: totals } = trpc.payments.getTotals.useQuery({ startDate: "", endDate: "" });
+  const todayStr = new Date().toISOString().split("T")[0]!;
+  const { data: totals } = trpc.payments.getTotals.useQuery({ startDate: todayStr, endDate: todayStr });
   const { mutate: refundPayment, isPending } = trpc.payments.refund.useMutation({
     onSuccess: () => { toast.success("Reembolso procesado"); setSelectedPaymentId(null); setRefundNote(""); refetch(); },
     onError: (err) => toast.error(err.message),

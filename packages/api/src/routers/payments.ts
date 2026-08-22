@@ -148,8 +148,8 @@ export const paymentsRouter = router({
   getTotals: protectedProcedure
     .input(z.object({ startDate: z.string(), endDate: z.string() }))
     .query(async ({ ctx, input }) => {
-      const start = new Date(input.startDate);
-      const end = new Date(input.endDate);
+      const start = input.startDate ? new Date(input.startDate) : new Date(0);
+      const end = input.endDate ? new Date(input.endDate) : new Date();
       end.setDate(end.getDate() + 1);
 
       const [cashPayments, cardPayments, bunzPayments] = await Promise.all([
