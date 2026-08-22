@@ -458,57 +458,65 @@ export default function ExpensesPage() {
       </div>
 
       {/* Dialog para Registrar Gasto */}
-      <Dialog open={dialog} onClose={() => setDialog(false)} title="Registrar Gasto">
+      <Dialog open={dialog} onClose={() => setDialog(false)} title="Registrar Gasto" className="max-w-3xl">
         <div className="space-y-4">
-          <Select
-            label="Categoría"
-            value={form.category}
-            onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-            options={CATEGORIES}
-          />
-          <Input
-            label="Descripción"
-            value={form.description}
-            onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-          />
-          <Input
-            label="Monto"
-            type="number"
-            step="0.01"
-            value={form.amount}
-            onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value === "" ? ("" as any) : Number(e.target.value) }))}
-          />
-          <Input
-            label="Fecha"
-            type="date"
-            value={form.expenseDate}
-            onChange={(e) => setForm((f) => ({ ...f, expenseDate: e.target.value }))}
-          />
-          <SmartSupplierPicker
-            value={form.paidTo}
-            onChange={(val) => setForm((f) => ({ ...f, paidTo: val }))}
-          />
-          <Input
-            label="Referencia (factura/receipt)"
-            value={form.reference}
-            onChange={(e) => setForm((f) => ({ ...f, reference: e.target.value }))}
-          />
-          <Input
-            label="Notas"
-            value={form.notes}
-            onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-          />
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Select
+              label="Categoría"
+              value={form.category}
+              onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+              options={CATEGORIES}
+            />
+            <Input
+              label="Descripción del Gasto"
+              value={form.description}
+              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              placeholder="Ej. Compra de insumos, Mantenimiento..."
+            />
+            <Input
+              label="Monto ($ MXN)"
+              type="number"
+              step="0.01"
+              value={form.amount}
+              onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value === "" ? ("" as any) : Number(e.target.value) }))}
+            />
+            <Input
+              label="Fecha"
+              type="date"
+              value={form.expenseDate}
+              onChange={(e) => setForm((f) => ({ ...f, expenseDate: e.target.value }))}
+            />
+            <div className="md:col-span-2">
+              <SmartSupplierPicker
+                value={form.paidTo}
+                onChange={(val) => setForm((f) => ({ ...f, paidTo: val }))}
+              />
+            </div>
+            <Input
+              label="Referencia (factura / ticket)"
+              value={form.reference}
+              onChange={(e) => setForm((f) => ({ ...f, reference: e.target.value }))}
+              placeholder="Ej. Factura #08786, Nota de remisión..."
+            />
+            <Input
+              label="Notas adicionales"
+              value={form.notes}
+              onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+              placeholder="Notas u observaciones del gasto..."
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-3 border-t border-white/5">
             <Button variant="secondary" onClick={() => setDialog(false)}>Cancelar</Button>
             <Button onClick={() => createExpense.mutate(form as any)} disabled={createExpense.isPending || !form.description || !form.amount}>
-              Registrar
+              Registrar Gasto
             </Button>
           </div>
         </div>
       </Dialog>
 
       {/* Dialog para Editar Gasto con PIN y Motivo de Cambio */}
-      <Dialog open={!!editExpense} onClose={() => setEditExpense(null)} title="Editar Gasto Registrado">
+      <Dialog open={!!editExpense} onClose={() => setEditExpense(null)} title="Editar Gasto Registrado" className="max-w-3xl">
         {editExpense && (
           <div className="space-y-4">
             <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-300 flex items-center gap-2">
@@ -516,73 +524,80 @@ export default function ExpensesPage() {
               <span>La edición de gastos requiere PIN de Administrador y un motivo de auditoría.</span>
             </div>
 
-            <Select
-              label="Categoría"
-              value={editExpense.category}
-              onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, category: e.target.value }) : null)}
-              options={CATEGORIES}
-            />
-            <Input
-              label="Descripción"
-              value={editExpense.description}
-              onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, description: e.target.value }) : null)}
-            />
-            <Input
-              label="Monto"
-              type="number"
-              step="0.01"
-              value={editExpense.amount}
-              onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, amount: e.target.value === "" ? ("" as any) : Number(e.target.value) }) : null)}
-            />
-            <Input
-              label="Fecha"
-              type="date"
-              value={editExpense.expenseDate}
-              onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, expenseDate: e.target.value }) : null)}
-            />
-            <SmartSupplierPicker
-              value={editExpense.paidTo}
-              onChange={(val) => setEditExpense((prev) => prev ? ({ ...prev, paidTo: val }) : null)}
-            />
-            <Input
-              label="Referencia (factura/receipt)"
-              value={editExpense.reference}
-              onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, reference: e.target.value }) : null)}
-            />
-            <Input
-              label="Notas adicionales"
-              value={editExpense.notes}
-              onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, notes: e.target.value }) : null)}
-            />
-
-            {/* Motivo de cambio obligatorio */}
-            <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-pink-400 block mb-1">
-                Motivo del Cambio *
-              </label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Select
+                label="Categoría"
+                value={editExpense.category}
+                onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, category: e.target.value }) : null)}
+                options={CATEGORIES}
+              />
               <Input
-                placeholder="Ej. Se corrigió el monto según factura / Categoría corregida"
-                value={editExpense.editReason}
-                onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, editReason: e.target.value }) : null)}
+                label="Descripción del Gasto"
+                value={editExpense.description}
+                onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, description: e.target.value }) : null)}
               />
+              <Input
+                label="Monto ($ MXN)"
+                type="number"
+                step="0.01"
+                value={editExpense.amount}
+                onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, amount: e.target.value === "" ? ("" as any) : Number(e.target.value) }) : null)}
+              />
+              <Input
+                label="Fecha"
+                type="date"
+                value={editExpense.expenseDate}
+                onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, expenseDate: e.target.value }) : null)}
+              />
+              <div className="md:col-span-2">
+                <SmartSupplierPicker
+                  value={editExpense.paidTo}
+                  onChange={(val) => setEditExpense((prev) => prev ? ({ ...prev, paidTo: val }) : null)}
+                />
+              </div>
+              <Input
+                label="Referencia (factura / ticket)"
+                value={editExpense.reference}
+                onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, reference: e.target.value }) : null)}
+              />
+              <Input
+                label="Notas adicionales"
+                value={editExpense.notes}
+                onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, notes: e.target.value }) : null)}
+              />
+
+              {/* Motivo de cambio obligatorio */}
+              <div className="md:col-span-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-pink-400 block mb-1">
+                  Motivo del Cambio (Auditoría) *
+                </label>
+                <Input
+                  placeholder="Ej. Se corrigió el monto según factura / Categoría corregida"
+                  value={editExpense.editReason}
+                  onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, editReason: e.target.value }) : null)}
+                />
+              </div>
+
+              {/* PIN de Administrador */}
+              <div className="md:col-span-2 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white/5 border border-white/10 rounded-2xl p-4">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-white block">
+                    PIN de Administrador (4 dígitos) *
+                  </label>
+                  <p className="text-xs text-gray-400 mt-0.5">Autorización requerida para guardar los cambios</p>
+                </div>
+                <input
+                  type="password"
+                  maxLength={4}
+                  placeholder="••••"
+                  value={editExpense.adminPin}
+                  onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, adminPin: e.target.value.replace(/\D/g, "") }) : null)}
+                  className="w-36 rounded-xl border border-white/10 bg-black/60 p-2.5 text-center text-xl tracking-[0.5em] text-white focus:border-pink-500 focus:ring-1 focus:ring-pink-500 outline-none"
+                />
+              </div>
             </div>
 
-            {/* PIN de Administrador */}
-            <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block mb-1">
-                PIN de Administrador (4 dígitos) *
-              </label>
-              <input
-                type="password"
-                maxLength={4}
-                placeholder="••••"
-                value={editExpense.adminPin}
-                onChange={(e) => setEditExpense((prev) => prev ? ({ ...prev, adminPin: e.target.value.replace(/\D/g, "") }) : null)}
-                className="w-full rounded-xl border border-white/10 bg-gray-900 p-3 text-center text-xl tracking-[0.5em] text-white focus:border-pink-500 focus:ring-1 focus:ring-pink-500 outline-none"
-              />
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2">
+            <div className="flex justify-end gap-3 pt-3 border-t border-white/5">
               <Button variant="secondary" onClick={() => setEditExpense(null)}>Cancelar</Button>
               <Button
                 onClick={() => {
