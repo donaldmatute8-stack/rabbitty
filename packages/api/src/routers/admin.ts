@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, gte, lt, sql } from "drizzle-orm";
 import { router, protectedProcedure, adminOnlyProcedure, platformOnlyProcedure, resolveBranchId } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import * as dbSchema from "@rabbitty/database-restaurant";
@@ -298,8 +298,8 @@ export const adminRouter = router({
       const result = await ctx.restaurantDb.select().from(orders).where(
         and(
           eq(orders.branchId, ctx.branchId),
-          sql`${orders.createdAt} >= ${start}`,
-          sql`${orders.createdAt} < ${end}`
+          gte(orders.createdAt, start),
+          lt(orders.createdAt, end)
         )
       );
       const totalSales = result.reduce((sum, order) => sum + order.total, 0);

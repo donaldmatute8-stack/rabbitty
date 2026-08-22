@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, gte, lt, sql } from "drizzle-orm";
 import { router, protectedProcedure, publicLimitedProcedure, resolveBranchId } from "../trpc";
 import { orders, payments, tables, orderItems } from "@rabbitty/database-restaurant/schema";
 import { bus, EventTypes } from "@rabbitty/events";
@@ -154,13 +154,13 @@ export const paymentsRouter = router({
 
       const [cashPayments, cardPayments, bunzPayments] = await Promise.all([
         ctx.restaurantDb.select().from(payments).where(
-          and(eq(payments.method, "CASH"), sql`${payments.createdAt} >= ${start}`, sql`${payments.createdAt} < ${end}`)
+          and(eq(payments.method, "CASH"), gte(payments.createdAt, start), lt(payments.createdAt, end))
         ),
         ctx.restaurantDb.select().from(payments).where(
-          and(inArray(payments.method, ["CREDIT_CARD", "DEBIT_CARD"]), sql`${payments.createdAt} >= ${start}`, sql`${payments.createdAt} < ${end}`)
+          and(inArray(payments.method, ["CREDIT_CARD", "DEBIT_CARD"]), gte(payments.createdAt, start), lt(payments.createdAt, end))
         ),
         ctx.restaurantDb.select().from(payments).where(
-          and(eq(payments.method, "BUNZ"), sql`${payments.createdAt} >= ${start}`, sql`${payments.createdAt} < ${end}`)
+          and(eq(payments.method, "BUNZ"), gte(payments.createdAt, start), lt(payments.createdAt, end))
         ),
       ]);
       return {

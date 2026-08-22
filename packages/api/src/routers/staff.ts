@@ -147,4 +147,53 @@ export const staffRouter = router({
     }
     return shiftsWithStaff;
   }),
+
+  getAdminPinStatus: protectedProcedure.query(async ({ ctx }) => {
+    const staffList = await ctx.restaurantDb
+      .select()
+      .from(staffTable)
+      .where(eq(staffTable.branchId, ctx.branchId));
+
+    const adminWithPin = staffList.find(
+      (s) => ["ADMIN", "MANAGER", "admin", "manager"].includes(s.role) && !!s.pinCode
+    );
+
+    return {
+      hasAdminPin: !!adminWithPin,
+      adminName: adminWithPin?.name ?? null,
+    };
+  }),
+
+  setAdminPin: protectedProcedure
+    .input(z.object({ pin: z.string().length(4, "El PIN debe ser de 4 dígitos") }))
+    .mutation(async ({ ctx, input }) => {
+      const staffList = await ctx.restaurantDb
+        .select()
+        .from(staffTable)
+        .where(eq(staffTable.branchId, ctx.branchId));
+
+      const admin = staffList.find(
+        (s) => ["ADMIN", "MANAGER", "admin", "manager"].includes(s.role)
+      );
+
+      if (admin) {
+        await ctx.restaurantDb
+          .update(staffTable)
+          .set({ pinCode: hashPin(input.pin) })
+          .where(eq(staffTable.id, admin.id));
+        return { success: true, message: "PIN de Administrador actualizado con éxito" };
+      }
+
+      await ctx.restaurantDb.insert(staffTable).values({
+        userId: ctx.userId ?? "admin-owner",
+        branchId: ctx.branchId,
+        name: ctx.user?.name || "Administrador Principal",
+        email: ctx.user?.email || "admin@rabbitty.me",
+        role: "ADMIN",
+        pinCode: hashPin(input.pin),
+        isActive: true,
+      });
+
+      return { success: true, message: "PIN de Administrador creado con éxito" };
+    }),
 });

@@ -1,7 +1,9 @@
 import { z } from "zod";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, gte, lt, sql } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
-import { expenses, orders, payments } from "@rabbitty/database-restaurant/schema";
+import { expenses, orders, payments, staff as staffTable } from "@rabbitty/database-restaurant/schema";
+import { TRPCError } from "@trpc/server";
+import { verifyPin } from "../services/crypto";
 
 const EXPENSE_CATEGORIES = [
   "RENT", "PAYROLL", "UTILITIES", "SUPPLIES",
@@ -16,23 +18,22 @@ export const expensesRouter = router({
       endDate: z.string().optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
-      const conditions: ReturnType<typeof eq>[] = [];
+      const conditions = [eq(expenses.branchId, ctx.branchId)];
       if (input?.category) conditions.push(eq(expenses.category, input.category));
-      if (input?.startDate) conditions.push(sql`${expenses.expenseDate} >= ${new Date(input.startDate)}` as any);
+      if (input?.startDate) {
+        const start = new Date(input.startDate);
+        conditions.push(gte(expenses.expenseDate, start));
+      }
       if (input?.endDate) {
         const end = new Date(input.endDate);
         end.setDate(end.getDate() + 1);
-        conditions.push(sql`${expenses.expenseDate} < ${end}` as any);
+        conditions.push(lt(expenses.expenseDate, end));
       }
-
-      const whereClause = conditions.length > 0
-        ? and(eq(expenses.branchId, ctx.branchId), ...conditions)
-        : eq(expenses.branchId, ctx.branchId);
 
       return ctx.restaurantDb
         .select()
         .from(expenses)
-        .where(whereClause)
+        .where(and(...conditions))
         .orderBy(expenses.expenseDate);
     }),
 
@@ -56,8 +57,44 @@ export const expensesRouter = router({
     }),
 
   delete: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ 
+      id: z.string(),
+      adminPin: z.string().length(4).optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
+      // Find admin/managers for this branch
+      const admins = await ctx.restaurantDb
+        .select()
+        .from(staffTable)
+        .where(
+          and(
+            eq(staffTable.branchId, ctx.branchId),
+            sql`lower(${staffTable.role}) IN ('admin', 'manager')`
+          )
+        );
+
+      const hasConfiguredPin = admins.some((a) => !!a.pinCode);
+
+      if (hasConfiguredPin) {
+        if (!input.adminPin) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "Se requiere PIN de Administrador para eliminar gastos",
+          });
+        }
+
+        const isValid = admins.some(
+          (a) => a.pinCode && verifyPin(input.adminPin!, a.pinCode)
+        );
+
+        if (!isValid) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "PIN de Administrador incorrecto",
+          });
+        }
+      }
+
       await ctx.restaurantDb.delete(expenses).where(eq(expenses.id, input.id));
       return { success: true };
     }),
@@ -78,21 +115,21 @@ export const expensesRouter = router({
         .where(
           and(
             eq(expenses.branchId, ctx.branchId),
-            sql`${expenses.expenseDate} >= ${start}`,
-            sql`${expenses.expenseDate} < ${end}`
+            gte(expenses.expenseDate, start),
+            lt(expenses.expenseDate, end)
           )
         );
 
       const revenueWhere = ctx.staffRole
         ? and(
-            sql`${payments.createdAt} >= ${start}`,
-            sql`${payments.createdAt} < ${end}`,
+            gte(payments.createdAt, start),
+            lt(payments.createdAt, end),
             eq(payments.status, "COMPLETED"),
             sql`${payments.orderId} IN (SELECT id FROM orders WHERE "branchId" = ${ctx.staffBranchId})`
           )
         : and(
-            sql`${payments.createdAt} >= ${start}`,
-            sql`${payments.createdAt} < ${end}`,
+            gte(payments.createdAt, start),
+            lt(payments.createdAt, end),
             eq(payments.status, "COMPLETED")
           );
 

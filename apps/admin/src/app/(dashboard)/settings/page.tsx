@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { trpc } from "../../../lib/trpc-client";
 import { Card, Badge, Button, Input, toast } from "@rabbitty/ui";
 import { 
@@ -8,7 +9,7 @@ import {
   Mail, Shield, Key, Smartphone, Fingerprint, Trash2, Plus, QrCode, 
   Coffee, UtensilsCrossed, Wine, Truck, ChefHat, Zap, Settings, 
   ToggleLeft, ToggleRight, Table2, Package, Users, CalendarCheck, 
-  Sparkles, BookUser, Receipt
+  Sparkles, BookUser, Receipt, Lock, Hash, AlertTriangle, ShieldCheck
 } from "lucide-react";
 import { cn } from "@rabbitty/ui";
 
@@ -177,6 +178,19 @@ export default function SettingsPage() {
   const profile = profileQuery.data;
   const security = securityQuery.data;
 
+  const adminPinQuery = trpc.staff.getAdminPinStatus.useQuery();
+  const setAdminPinMutation = trpc.staff.setAdminPin.useMutation({
+    onSuccess: (data) => {
+      utils.staff.getAdminPinStatus.invalidate();
+      toast.success(data.message || "PIN de Administrador guardado correctamente");
+      setAdminPinInput("");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const searchParams = useSearchParams();
+  const tabParam = searchParams?.get("tab");
+
   // ─── Business Type State (inicialización lazy desde localStorage) ───
   const [selectedType, setSelectedType] = useState<BusinessType>(() => {
     if (typeof window === "undefined") return "restaurant";
@@ -205,10 +219,19 @@ export default function SettingsPage() {
     }
     return new Set(BUSINESS_PRESETS[0].defaultModules);
   });
-  const [activeTab, setActiveTab] = useState<"business" | "general" | "security">("business");
+  const [activeTab, setActiveTab] = useState<"business" | "general" | "security">(() => {
+    return tabParam === "security" ? "security" : "business";
+  });
+
+  useEffect(() => {
+    if (tabParam === "security") {
+      setActiveTab("security");
+    }
+  }, [tabParam]);
 
   // Form states
   const [editing, setEditing] = useState<string | null>(null);
+  const [adminPinInput, setAdminPinInput] = useState("");
   const [form, setForm] = useState({ name: "", taxRate: 0, defaultRewardRate: 20, acceptsBunz: true, happyHourStart: "", happyHourEnd: "", happyHourRewardRate: 40 });
   const [email, setEmail] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
@@ -581,6 +604,75 @@ export default function SettingsPage() {
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
+            {/* PIN DE ADMINISTRADOR / AUTORIZACIONES */}
+            <Card className={cn(
+              "p-6 border backdrop-blur-md transition-all duration-300 lg:col-span-2",
+              adminPinQuery.data?.hasAdminPin
+                ? "border-emerald-500/20 bg-emerald-500/5 hover:border-emerald-500/30"
+                : "border-amber-500/30 bg-amber-500/5 hover:border-amber-500/40 shadow-[0_0_30px_rgba(245,158,11,0.08)]"
+            )}>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-white/5">
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    "flex h-12 w-12 items-center justify-center rounded-2xl border shrink-0",
+                    adminPinQuery.data?.hasAdminPin
+                      ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                      : "bg-amber-500/10 border-amber-500/20 text-amber-400"
+                  )}>
+                    <Lock className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-white text-lg">PIN de Administrador</h3>
+                      {adminPinQuery.data?.hasAdminPin ? (
+                        <Badge variant="success" className="gap-1">
+                          <ShieldCheck className="h-3 w-3" /> Configurado
+                        </Badge>
+                      ) : (
+                        <Badge variant="warning" className="gap-1 animate-pulse">
+                          <AlertTriangle className="h-3 w-3" /> Sin Configurar
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-gray-400 text-xs mt-0.5">
+                      Autoriza cancelaciones y mermas (Voids) en el POS y eliminación de gastos registrados.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-5 grid md:grid-cols-2 gap-6 items-center">
+                <div>
+                  <p className="text-sm text-gray-300 leading-relaxed">
+                    {adminPinQuery.data?.hasAdminPin
+                      ? "Tu sucursal ya cuenta con un PIN de autorización activo. Si deseas cambiarlo, introduce el nuevo PIN de 4 dígitos."
+                      : "⚠️ Es crítico configurar este PIN antes de operar para prevenir fraude y autorizar eliminaciones o cancelaciones de comandas."}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="password"
+                    maxLength={4}
+                    placeholder="••••"
+                    value={adminPinInput}
+                    onChange={(e) => setAdminPinInput(e.target.value.replace(/\D/g, ""))}
+                    className="flex-1 rounded-xl border border-white/10 bg-black/50 p-3 text-center text-2xl tracking-[0.5em] text-white focus:border-pink-500 focus:ring-1 focus:ring-pink-500 outline-none"
+                  />
+                  <Button
+                    onClick={() => {
+                      if (adminPinInput.length === 4) {
+                        setAdminPinMutation.mutate({ pin: adminPinInput });
+                      }
+                    }}
+                    disabled={setAdminPinMutation.isPending || adminPinInput.length !== 4}
+                    className="shrink-0"
+                  >
+                    {setAdminPinMutation.isPending ? "Guardando..." : adminPinQuery.data?.hasAdminPin ? "Actualizar PIN" : "Guardar PIN"}
+                  </Button>
+                </div>
+              </div>
+            </Card>
+
             {/* INFO PERSONAL */}
             <Card className="p-6 border border-white/5 bg-white/5 backdrop-blur-md">
               <div className="mb-5 flex items-center gap-3">

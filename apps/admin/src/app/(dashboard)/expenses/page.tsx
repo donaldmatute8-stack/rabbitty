@@ -46,6 +46,19 @@ export default function ExpensesPage() {
 
   const [dialog, setDialog] = useState(false);
   const [form, setForm] = useState({ category: "SUPPLIES", description: "", amount: 0, reference: "", paidTo: "", notes: "", expenseDate: new Date().toISOString().split("T")[0] });
+  const [deleteExpenseId, setDeleteExpenseId] = useState<string | null>(null);
+  const [deletePin, setDeletePin] = useState("");
+
+  const deleteExpense = trpc.expenses.delete.useMutation({
+    onSuccess: () => {
+      utils.expenses.list.invalidate();
+      utils.expenses.getPandL.invalidate();
+      toast.success("Gasto eliminado");
+      setDeleteExpenseId(null);
+      setDeletePin("");
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   return (
     <div className="space-y-8 pb-10">
@@ -123,7 +136,7 @@ export default function ExpensesPage() {
             <h3 className="font-bold text-lg text-white mb-4">Gastos Registrados</h3>
             <div className="space-y-3">
               {expenses?.map((expense) => (
-                <div key={expense.id} className="flex items-center justify-between rounded-xl border border-white/5 bg-white/5 p-4 hover:border-white/10 transition-all">
+                <div key={expense.id} className="flex items-center justify-between rounded-xl border border-white/5 bg-white/5 p-4 hover:border-white/10 transition-all group">
                   <div className="flex items-center gap-4">
                     <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${CATEGORY_COLORS[expense.category] ?? CATEGORY_COLORS["OTHER"]} border border-white/5 flex items-center justify-center`}>
                       <Receipt className="h-5 w-5" />
@@ -139,11 +152,20 @@ export default function ExpensesPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-bold text-red-400">-${expense.amount.toFixed(2)}</p>
-                    {expense.reference && (
-                      <p className="text-xs text-gray-500">{expense.reference}</p>
-                    )}
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <p className="font-bold text-red-400">-${expense.amount.toFixed(2)}</p>
+                      {expense.reference && (
+                        <p className="text-xs text-gray-500">{expense.reference}</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => { setDeleteExpenseId(expense.id); setDeletePin(""); }}
+                      className="p-2 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                      title="Eliminar gasto"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
               ))}
@@ -220,6 +242,40 @@ export default function ExpensesPage() {
             <Button variant="secondary" onClick={() => setDialog(false)}>Cancelar</Button>
             <Button onClick={() => createExpense.mutate(form as any)} disabled={createExpense.isPending || !form.description || !form.amount}>
               Registrar
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* PIN Confirmation Dialog for Deleting Expense */}
+      <Dialog open={!!deleteExpenseId} onClose={() => { setDeleteExpenseId(null); setDeletePin(""); }} title="Autorización de Administrador Requerida">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-400">
+            Eliminar un gasto registrado es una acción de riesgo financiero. Ingresa el <strong className="text-white">PIN de 4 dígitos</strong> de Administrador para confirmar.
+          </p>
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block mb-2">PIN de Administrador</label>
+            <input
+              type="password"
+              maxLength={4}
+              placeholder="••••"
+              value={deletePin}
+              onChange={(e) => setDeletePin(e.target.value.replace(/\D/g, ""))}
+              className="w-full rounded-xl border border-white/10 bg-gray-900 p-3 text-center text-2xl tracking-[0.5em] text-white focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none"
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" onClick={() => { setDeleteExpenseId(null); setDeletePin(""); }}>Cancelar</Button>
+            <Button
+              className="bg-red-600 hover:bg-red-500 text-white"
+              onClick={() => {
+                if (deleteExpenseId) {
+                  deleteExpense.mutate({ id: deleteExpenseId, adminPin: deletePin });
+                }
+              }}
+              disabled={deleteExpense.isPending || deletePin.length !== 4}
+            >
+              {deleteExpense.isPending ? "Verificando..." : "Eliminar Gasto"}
             </Button>
           </div>
         </div>
