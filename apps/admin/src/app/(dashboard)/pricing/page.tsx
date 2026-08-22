@@ -24,6 +24,7 @@ export default function PricingPage() {
   });
 
   const [dialog, setDialog] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState<any>({
     name: "", priority: 0, adjustmentType: "PERCENTAGE",
@@ -146,7 +147,11 @@ export default function PricingPage() {
                 <button onClick={() => openEdit(rule)} className="rounded-xl border border-white/5 bg-white/5 p-2 text-gray-400 hover:text-white transition-all">
                   <Pencil className="h-4 w-4" />
                 </button>
-                <button onClick={() => deleteRule.mutate({ id: rule.id })} className="rounded-xl border border-red-500/10 bg-red-500/5 p-2 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-all duration-300">
+                <button
+                  onClick={() => setDeleteConfirm({ id: rule.id, name: rule.name })}
+                  className="rounded-xl border border-red-500/10 bg-red-500/5 p-2 text-red-400 hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/30 transition-all duration-300 cursor-pointer"
+                  title="Eliminar regla"
+                >
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
@@ -201,6 +206,34 @@ export default function PricingPage() {
             <Button variant="secondary" onClick={() => setDialog(false)}>Cancelar</Button>
             <Button onClick={save} disabled={!form.name}>
               {editing ? "Actualizar" : "Crear Regla"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* Delete Rule Confirmation Dialog */}
+      <Dialog open={!!deleteConfirm} onClose={() => setDeleteConfirm(null)} title="Confirmar eliminación de regla">
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+            <Trash2 className="h-5 w-5 shrink-0" />
+            <span>Esta acción no se puede deshacer.</span>
+          </div>
+          <p className="text-sm text-gray-300">
+            ¿Estás seguro de que deseas eliminar la regla de precio <strong className="text-white font-bold">"{deleteConfirm?.name}"</strong>?
+          </p>
+          <div className="flex justify-end gap-3 pt-3 border-t border-white/5">
+            <Button variant="secondary" onClick={() => setDeleteConfirm(null)}>Cancelar</Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                if (deleteConfirm) {
+                  deleteRule.mutate({ id: deleteConfirm.id });
+                  setDeleteConfirm(null);
+                }
+              }}
+              disabled={deleteRule.isPending}
+            >
+              Sí, Eliminar
             </Button>
           </div>
         </div>

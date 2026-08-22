@@ -323,17 +323,20 @@ export default function KioskPage() {
 
             <div className="flex flex-col items-end gap-4 bg-gray-900 border border-white/10 p-10 rounded-[3rem] shadow-2xl">
               <div className="flex justify-between w-full max-w-lg text-2xl text-gray-400 font-semibold">
-                <span>Subtotal</span>
-                <span>${total.toFixed(2)}</span>
+                <span>Subtotal (Base)</span>
+                <span>${(total / 1.16).toFixed(2)}</span>
               </div>
-              <div className="flex justify-between w-full max-w-lg text-2xl text-gray-400 font-semibold">
-                <span>IVA (16%)</span>
-                <span>${(total * 0.16).toFixed(2)}</span>
+              <div className="flex justify-between w-full max-w-lg text-2xl text-purple-400/80 font-semibold">
+                <span>IVA (16% Incluido)</span>
+                <span>${(total - total / 1.16).toFixed(2)}</span>
               </div>
               <div className="w-full max-w-lg h-px bg-white/10 my-4" />
               <div className="flex justify-between w-full max-w-lg text-5xl font-black text-white items-end">
-                <span>Total</span>
-                <span className="text-emerald-400 text-6xl tracking-tighter">${(total * 1.16).toFixed(2)}</span>
+                <div>
+                  <span className="block">Total</span>
+                  <span className="text-sm text-gray-500 font-normal">IVA incluido</span>
+                </div>
+                <span className="text-emerald-400 text-6xl tracking-tighter">${total.toFixed(2)}</span>
               </div>
             </div>
 

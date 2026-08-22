@@ -259,23 +259,31 @@ export default function MenuPage() {
         onClose={() => setDeleteConfirm(null)}
         title="Confirmar eliminación"
       >
-        <p className="text-sm text-[var(--text-secondary)]">
-          ¿Estás seguro de eliminar <strong className="text-[var(--text-primary)]">{deleteConfirm?.name}</strong>? Esta acción no se puede deshacer.
-        </p>
-        <div className="flex justify-end gap-3 pt-4">
-          <Button variant="secondary" onClick={() => setDeleteConfirm(null)}>Cancelar</Button>
-          <Button
-            variant="danger"
-            onClick={() => {
-              if (!deleteConfirm) return;
-              if (deleteConfirm.type === "item") deleteItem.mutate({ id: deleteConfirm.id });
-              else deleteCategory.mutate({ id: deleteConfirm.id });
-              setDeleteConfirm(null);
-            }}
-            disabled={deleteItem.isPending || deleteCategory.isPending}
-          >
-            Eliminar
-          </Button>
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+            <Trash2 className="h-5 w-5 shrink-0" />
+            <span>Esta acción no se puede deshacer y eliminará el registro permanentemente.</span>
+          </div>
+          <p className="text-sm text-gray-300">
+            ¿Estás seguro de que deseas eliminar{" "}
+            {deleteConfirm?.type === "category" ? "la categoría" : "el platillo"}{" "}
+            <strong className="text-white font-bold">"{deleteConfirm?.name}"</strong>?
+          </p>
+          <div className="flex justify-end gap-3 pt-3 border-t border-white/5">
+            <Button variant="secondary" onClick={() => setDeleteConfirm(null)}>Cancelar</Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                if (!deleteConfirm) return;
+                if (deleteConfirm.type === "item") deleteItem.mutate({ id: deleteConfirm.id });
+                else deleteCategory.mutate({ id: deleteConfirm.id });
+                setDeleteConfirm(null);
+              }}
+              disabled={deleteItem.isPending || deleteCategory.isPending}
+            >
+              Sí, Eliminar
+            </Button>
+          </div>
         </div>
       </Dialog>
     </div>
