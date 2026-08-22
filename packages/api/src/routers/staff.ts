@@ -196,4 +196,34 @@ export const staffRouter = router({
 
       return { success: true, message: "PIN de Administrador creado con éxito" };
     }),
+
+  verifyAdminPin: protectedProcedure
+    .input(z.object({ pin: z.string().length(4, "El PIN debe ser de 4 dígitos") }))
+    .mutation(async ({ ctx, input }) => {
+      const staffList = await ctx.restaurantDb
+        .select()
+        .from(staffTable)
+        .where(eq(staffTable.branchId, ctx.branchId));
+
+      const managers = staffList.filter((s) =>
+        ["ADMIN", "MANAGER", "admin", "manager"].includes(s.role) && !!s.pinCode
+      );
+
+      let authorized = false;
+      for (const m of managers) {
+        if (m.pinCode && verifyPin(input.pin, m.pinCode)) {
+          authorized = true;
+          break;
+        }
+      }
+
+      if (!authorized) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "PIN de Administrador / Gerente incorrecto",
+        });
+      }
+
+      return { success: true };
+    }),
 });
