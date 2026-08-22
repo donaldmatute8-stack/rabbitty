@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { trpc } from "../../lib/trpc-client";
 import { Card, cn } from "@rabbitty/ui";
-import { TrendingUp, DollarSign, ShoppingCart, UtensilsCrossed, ArrowUpRight, Activity, Building2 } from "lucide-react";
+import { TrendingUp, DollarSign, ShoppingCart, UtensilsCrossed, ArrowUpRight, Activity, Building2, Lock, ArrowRight, ShieldAlert } from "lucide-react";
 import { motion, type Variants } from "framer-motion";
 import { useBranch } from "../../components/DashboardClientWrapper";
 import { BranchSelector } from "../../components/BranchSelector";
@@ -23,6 +24,7 @@ export default function AdminPage() {
   const { data: orders } = trpc.pos.getOrders.useQuery({}, { retry: false });
   const { data: tables } = trpc.pos.getTables.useQuery(undefined, { retry: false });
   const { data: crossStore } = trpc.admin.getCrossStoreKpis.useQuery(undefined, { retry: false });
+  const { data: pinStatus } = trpc.staff.getAdminPinStatus.useQuery(undefined, { retry: false });
 
   const openOrders = orders?.filter((o) => o.status === "PENDING" || o.status === "OPEN") ?? [];
   const paidOrders = orders?.filter((o) => o.status === "PAID" || o.status === "COMPLETED") ?? [];
@@ -69,6 +71,37 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-8 pb-10">
+      {/* 0. Alerta de PIN de Administrador no configurado */}
+      {pinStatus && !pinStatus.hasAdminPin && (
+        <div className="relative overflow-hidden rounded-3xl border border-amber-500/30 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-black/60 p-6 backdrop-blur-xl shadow-[0_0_40px_rgba(245,158,11,0.12)] animate-in fade-in slide-in-from-top-4 duration-500">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/20 border border-amber-500/30 text-amber-400 shrink-0">
+                <Lock className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white flex items-center gap-2">
+                  Aún no se ha generado un PIN de Administrador
+                  <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 bg-amber-500/20 border border-amber-500/30 px-2.5 py-0.5 rounded-full">
+                    Seguridad Requerida
+                  </span>
+                </h3>
+                <p className="text-sm text-gray-300 mt-1 max-w-2xl leading-relaxed">
+                  Para proteger la operación de tu negocio, autorizar cancelaciones (Voids) en el POS y autorizar la eliminación de gastos u operaciones críticas, es indispensable configurar un PIN de 4 dígitos antes de operar.
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/settings?tab=security"
+              className="flex items-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-black px-5 py-3 text-sm transition-all shrink-0 active:scale-95 shadow-[0_0_20px_rgba(245,158,11,0.3)]"
+            >
+              Configurar PIN Ahora
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* 1. Top Banner Disruptivo */}
       <div className="relative overflow-hidden rounded-3xl border border-white/5 bg-gradient-to-br from-gray-900/60 to-black/80 p-8 shadow-2xl backdrop-blur-xl">
         <div className="absolute top-0 right-0 h-48 w-48 rounded-full bg-pink-500/10 blur-3xl pointer-events-none" />
