@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { Button, Dialog, Input, toast, cn } from "@rabbitty/ui";
-import { Clock, Wifi, Search, User, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield } from "lucide-react";
+import { Clock, Wifi, Search, User, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, Table2, ShoppingBag, Bike, UtensilsCrossed } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -19,9 +19,20 @@ export default function PosPage() {
   const [voidReason, setVoidReason] = useState("");
   const [managerPin, setManagerPin] = useState("");
   const [confirmClearCart, setConfirmClearCart] = useState(false);
+  const [tableModal, setTableModal] = useState(false);
+  const [orderType, setOrderType] = useState<"DINE_IN" | "TAKEAWAY" | "DELIVERY">("DINE_IN");
+  const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
 
   const { data: categories } = trpc.pos.getCategories.useQuery(undefined, { retry: false });
   const { data: menuItems } = trpc.pos.getMenuItems.useQuery({}, { retry: false });
+  const { data: tables } = trpc.pos.getTables.useQuery(undefined, { retry: false });
+
+  // Auto-select first table when tables load if DINE_IN
+  useEffect(() => {
+    if (tables && tables.length > 0 && !selectedTableId && orderType === "DINE_IN") {
+      setSelectedTableId(tables[0].id);
+    }
+  }, [tables, selectedTableId, orderType]);
 
   const verifyPinMutation = trpc.staff.verifyAdminPin.useMutation({
     onSuccess: () => {
@@ -255,28 +266,107 @@ export default function PosPage() {
 
         {/* Right: Massive Cart / Ticket Panel */}
         <aside className="w-[420px] shrink-0 bg-gray-950/80 backdrop-blur-3xl border-l border-white/10 flex flex-col z-20 shadow-[-20px_0_50px_rgba(0,0,0,0.5)]">
-          {/* Cart Header */}
-          <div className="flex h-[88px] items-center justify-between border-b border-white/10 px-6 bg-black/40">
-            <div>
-              <div className="flex items-center gap-2 text-sm font-bold text-gray-400 uppercase tracking-widest mb-1">
-                <div className="h-2 w-2 rounded-full bg-cyan-500 shadow-[0_0_8px_#06b6d4]"></div>
-                Orden Actual
-              </div>
-              <div className="text-2xl font-black text-white flex items-center gap-3">
-                Mesa 4 
-                <span className="rounded-md bg-white/10 px-2 py-0.5 text-sm text-gray-300 border border-white/10">Para Llevar</span>
-              </div>
+          {/* Cart Header with Table Selector & Order Type */}
+          <div className="flex flex-col border-b border-white/10 p-4 bg-black/40 gap-3">
+            <div className="flex items-center justify-between">
+              {/* Table Selector Button */}
+              <button
+                type="button"
+                onClick={() => setTableModal(true)}
+                className="flex items-center gap-2.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 px-3.5 py-2 transition-all cursor-pointer group"
+                title="Cambiar mesa o salón"
+              >
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+                  {orderType === "DINE_IN" ? (
+                    <Table2 className="h-4 w-4" />
+                  ) : orderType === "TAKEAWAY" ? (
+                    <ShoppingBag className="h-4 w-4" />
+                  ) : (
+                    <Bike className="h-4 w-4" />
+                  )}
+                </div>
+                <div className="text-left">
+                  <div className="text-[10px] font-black uppercase tracking-wider text-gray-400 flex items-center gap-1">
+                    {orderType === "DINE_IN" ? "Mesa Asignada" : "Servicio"}
+                    <ChevronDown className="h-3 w-3 text-cyan-400 group-hover:translate-y-0.5 transition-transform" />
+                  </div>
+                  <div className="text-sm font-black text-white">
+                    {orderType === "DINE_IN"
+                      ? (() => {
+                          const curr = tables?.find((t) => t.id === selectedTableId);
+                          return curr ? `Mesa ${curr.number} (${curr.location || "Salón"})` : "Seleccionar Mesa";
+                        })()
+                      : orderType === "TAKEAWAY"
+                      ? "Para Llevar"
+                      : "A Domicilio"}
+                  </div>
+                </div>
+              </button>
+
+              <button 
+                onClick={() => {
+                  if (cart.length > 0) setConfirmClearCart(true);
+                }} 
+                disabled={cart.length === 0}
+                title="Vaciar orden actual"
+                className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white border border-red-500/20 transition-all active:scale-95 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
             </div>
-            <button 
-              onClick={() => {
-                if (cart.length > 0) setConfirmClearCart(true);
-              }} 
-              disabled={cart.length === 0}
-              title="Vaciar orden actual"
-              className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white border border-red-500/20 transition-all active:scale-95 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
-            >
-              <Trash2 className="h-5 w-5" />
-            </button>
+
+            {/* Order Type Segmented Control */}
+            <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-black/60 border border-white/5">
+              <button
+                type="button"
+                onClick={() => {
+                  setOrderType("DINE_IN");
+                  if (!selectedTableId && tables && tables.length > 0) {
+                    setSelectedTableId(tables[0].id);
+                  }
+                }}
+                className={cn(
+                  "flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer",
+                  orderType === "DINE_IN"
+                    ? "bg-cyan-500 text-gray-950 shadow-md"
+                    : "text-gray-400 hover:text-white hover:bg-white/5"
+                )}
+              >
+                <UtensilsCrossed className="h-3.5 w-3.5" /> Aquí
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setOrderType("TAKEAWAY");
+                  setSelectedTableId(null);
+                }}
+                className={cn(
+                  "flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer",
+                  orderType === "TAKEAWAY"
+                    ? "bg-purple-500 text-white shadow-md"
+                    : "text-gray-400 hover:text-white hover:bg-white/5"
+                )}
+              >
+                <ShoppingBag className="h-3.5 w-3.5" /> Llevar
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setOrderType("DELIVERY");
+                  setSelectedTableId(null);
+                }}
+                className={cn(
+                  "flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer",
+                  orderType === "DELIVERY"
+                    ? "bg-emerald-500 text-gray-950 shadow-md"
+                    : "text-gray-400 hover:text-white hover:bg-white/5"
+                )}
+              >
+                <Bike className="h-3.5 w-3.5" /> Domicilio
+              </button>
+            </div>
           </div>
 
           {/* Cart Items Area */}
@@ -509,6 +599,112 @@ export default function PosPage() {
             </div>
           </div>
         )}
+      </Dialog>
+
+      {/* Modal para Selección / Cambio de Mesa */}
+      <Dialog
+        open={tableModal}
+        onClose={() => setTableModal(false)}
+        title="Seleccionar Mesa o Tipo de Servicio"
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setOrderType("TAKEAWAY");
+                setSelectedTableId(null);
+                setTableModal(false);
+                toast.success("Modo: Pedido Para Llevar");
+              }}
+              className={cn(
+                "flex items-center gap-3 p-3.5 rounded-2xl border transition-all cursor-pointer text-left",
+                orderType === "TAKEAWAY"
+                  ? "bg-purple-500/20 border-purple-500 text-purple-300"
+                  : "bg-white/5 border-white/10 hover:bg-white/10 text-gray-300"
+              )}
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/20 text-purple-400 font-bold text-lg">
+                🛍️
+              </div>
+              <div>
+                <h4 className="font-bold text-sm text-white">Para Llevar</h4>
+                <p className="text-[11px] text-gray-400">Sin asignar mesa</p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setOrderType("DELIVERY");
+                setSelectedTableId(null);
+                setTableModal(false);
+                toast.success("Modo: Entrega a Domicilio");
+              }}
+              className={cn(
+                "flex items-center gap-3 p-3.5 rounded-2xl border transition-all cursor-pointer text-left",
+                orderType === "DELIVERY"
+                  ? "bg-emerald-500/20 border-emerald-500 text-emerald-300"
+                  : "bg-white/5 border-white/10 hover:bg-white/10 text-gray-300"
+              )}
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400 font-bold text-lg">
+                🛵
+              </div>
+              <div>
+                <h4 className="font-bold text-sm text-white">A Domicilio</h4>
+                <p className="text-[11px] text-gray-400">Entrega externa</p>
+              </div>
+            </button>
+          </div>
+
+          <div className="pt-2 border-t border-white/5">
+            <h4 className="text-xs font-black uppercase tracking-wider text-gray-400 mb-3 flex items-center gap-1.5">
+              <Table2 className="h-4 w-4 text-cyan-400" /> Mesas del Restaurante
+            </h4>
+
+            {tables && tables.length > 0 ? (
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 max-h-64 overflow-y-auto custom-scrollbar p-1">
+                {tables.map((t) => {
+                  const isSelected = selectedTableId === t.id && orderType === "DINE_IN";
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedTableId(t.id);
+                        setOrderType("DINE_IN");
+                        setTableModal(false);
+                        toast.success(`Mesa ${t.number} asignada`);
+                      }}
+                      className={cn(
+                        "flex flex-col items-center justify-center p-3 rounded-2xl border transition-all cursor-pointer active:scale-95",
+                        isSelected
+                          ? "bg-cyan-500 text-gray-950 border-cyan-400 shadow-[0_4px_20px_rgba(6,182,212,0.4)]"
+                          : "bg-white/5 border-white/10 text-white hover:bg-white/10 hover:border-white/20"
+                      )}
+                    >
+                      <span className="text-lg font-black leading-none mb-1">Mesa {t.number}</span>
+                      <span className={cn("text-[10px] font-bold", isSelected ? "text-gray-900" : "text-gray-400")}>
+                        {t.location || "Salón"} • 👤 {t.capacity}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-6 text-gray-500 text-xs">
+                No hay mesas registradas en esta sucursal.
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end pt-3 border-t border-white/5">
+            <Button variant="secondary" onClick={() => setTableModal(false)}>
+              Cerrar
+            </Button>
+          </div>
+        </div>
       </Dialog>
     </div>
   );
