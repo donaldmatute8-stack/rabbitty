@@ -23,6 +23,7 @@ export default function SuppliersPage() {
   });
 
   const [dialog, setDialog] = useState<{ mode: "create" | "edit"; id?: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
   const [form, setForm] = useState({ name: "", contactName: "", phone: "", email: "", address: "", notes: "" });
   const [poDialog, setPoDialog] = useState<string | null>(null);
   const [poForm, setPoForm] = useState<{ inventoryItemId: string; quantity: number; unitCost: number }[]>([{ inventoryItemId: "", quantity: 1, unitCost: 0 }]);
@@ -98,8 +99,9 @@ export default function SuppliersPage() {
                 <Package className="h-4 w-4 mr-1" /> Orden
               </Button>
               <button
-                onClick={() => deleteSupplier.mutate({ id: supplier.id })}
-                className="rounded-xl border border-red-500/10 bg-red-500/5 p-2 text-red-400 hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/30 transition-all duration-300"
+                onClick={() => setDeleteConfirm({ id: supplier.id, name: supplier.name })}
+                className="rounded-xl border border-red-500/10 bg-red-500/5 p-2 text-red-400 hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/30 transition-all duration-300 cursor-pointer"
+                title="Eliminar proveedor"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -119,6 +121,34 @@ export default function SuppliersPage() {
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={() => setDialog(null)}>Cancelar</Button>
             <Button onClick={save}>{dialog?.mode === "create" ? "Crear" : "Guardar"}</Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* Confirmation Dialog for Deleting Supplier */}
+      <Dialog open={!!deleteConfirm} onClose={() => setDeleteConfirm(null)} title="Confirmar eliminación de proveedor">
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+            <Trash2 className="h-5 w-5 shrink-0" />
+            <span>Esta acción no se puede deshacer.</span>
+          </div>
+          <p className="text-sm text-gray-300">
+            ¿Estás seguro de que deseas eliminar al proveedor <strong className="text-white font-bold">"{deleteConfirm?.name}"</strong>?
+          </p>
+          <div className="flex justify-end gap-3 pt-3 border-t border-white/5">
+            <Button variant="secondary" onClick={() => setDeleteConfirm(null)}>Cancelar</Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                if (deleteConfirm) {
+                  deleteSupplier.mutate({ id: deleteConfirm.id });
+                  setDeleteConfirm(null);
+                }
+              }}
+              disabled={deleteSupplier.isPending}
+            >
+              Sí, Eliminar
+            </Button>
           </div>
         </div>
       </Dialog>

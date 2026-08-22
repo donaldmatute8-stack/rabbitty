@@ -2,8 +2,8 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { trpc } from "../../../lib/trpc-client";
-import { Button, cn } from "@rabbitty/ui";
-import { Clock, Wifi, Search, User, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2 } from "lucide-react";
+import { Button, Dialog, Input, cn } from "@rabbitty/ui";
+import { Clock, Wifi, Search, User, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -18,6 +18,7 @@ export default function PosPage() {
   const [voidingItem, setVoidingItem] = useState<any | null>(null);
   const [voidReason, setVoidReason] = useState("");
   const [managerPin, setManagerPin] = useState("");
+  const [confirmClearCart, setConfirmClearCart] = useState(false);
 
   const { data: categories } = trpc.pos.getCategories.useQuery(undefined, { retry: false });
   const { data: menuItems } = trpc.pos.getMenuItems.useQuery({}, { retry: false });
@@ -220,8 +221,12 @@ export default function PosPage() {
               </div>
             </div>
             <button 
-              onClick={() => setCart([])} 
-              className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white border border-red-500/20 transition-all active:scale-95"
+              onClick={() => {
+                if (cart.length > 0) setConfirmClearCart(true);
+              }} 
+              disabled={cart.length === 0}
+              title="Vaciar orden actual"
+              className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white border border-red-500/20 transition-all active:scale-95 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
             >
               <Trash2 className="h-5 w-5" />
             </button>
@@ -244,7 +249,7 @@ export default function PosPage() {
                   
                   {/* Huge Stepper */}
                   <div className="flex flex-col items-center rounded-[1.25rem] bg-black border border-white/10 p-1 shrink-0 shadow-inner">
-                    <button onClick={() => updateQuantity(item.id, 1)} className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-white hover:bg-cyan-500 hover:text-black transition-all active:scale-90">
+                    <button onClick={() => updateQuantity(item.id, 1)} className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-white hover:bg-cyan-500 hover:text-black transition-all active:scale-90 cursor-pointer">
                       <Plus className="h-5 w-5" />
                     </button>
                     <span className="py-2 text-xl font-black text-white">{item.quantity}</span>
@@ -256,7 +261,7 @@ export default function PosPage() {
                           updateQuantity(item.id, -1);
                         }
                       }} 
-                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-gray-400 hover:bg-red-500 hover:text-white transition-all active:scale-90"
+                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-gray-400 hover:bg-red-500 hover:text-white transition-all active:scale-90 cursor-pointer"
                     >
                       <Minus className="h-5 w-5" />
                     </button>
@@ -276,41 +281,44 @@ export default function PosPage() {
             )}
           </div>
 
-          {/* Cart Footer - Massive Pay Area */}
+          {/* Cart Footer - Massive Pay Area with Tax-Included Breakdown */}
           <div className="border-t border-white/10 bg-gray-950 p-6 pt-4 space-y-5 rounded-t-3xl shadow-[0_-20px_40px_rgba(0,0,0,0.5)]">
             <div className="space-y-2">
               <div className="flex justify-between text-base font-bold text-gray-400">
-                <span>Subtotal</span>
-                <span>${total.toFixed(2)}</span>
+                <span>Subtotal (Base)</span>
+                <span>${(total / 1.16).toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-base font-bold text-gray-400">
-                <span>IVA (16%)</span>
-                <span>${(total * 0.16).toFixed(2)}</span>
+              <div className="flex justify-between text-base font-bold text-cyan-400/80">
+                <span>IVA (16% Incluido)</span>
+                <span>${(total - total / 1.16).toFixed(2)}</span>
               </div>
               <div className="my-3 h-px w-full bg-white/10" />
               <div className="flex justify-between items-end">
-                <span className="text-2xl font-bold text-white">Total</span>
+                <div>
+                  <span className="text-2xl font-bold text-white block">Total</span>
+                  <span className="text-xs text-gray-500 font-semibold">Impuestos incluidos</span>
+                </div>
                 <span className="text-[2.5rem] font-black text-emerald-400 leading-none tracking-tighter">
-                  ${(total * 1.16).toFixed(2)}
+                  ${total.toFixed(2)}
                 </span>
               </div>
             </div>
 
             {/* Quick Payment Methods */}
             <div className="grid grid-cols-4 gap-3">
-              <button className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-4 border border-white/10 hover:bg-emerald-500/20 hover:border-emerald-500/50 transition-all active:scale-95">
+              <button className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-4 border border-white/10 hover:bg-emerald-500/20 hover:border-emerald-500/50 transition-all active:scale-95 cursor-pointer">
                 <Banknote className="h-6 w-6 text-gray-400 group-hover:text-emerald-400" />
                 <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 group-hover:text-emerald-400">Efectivo</span>
               </button>
-              <button className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-4 border border-white/10 hover:bg-blue-500/20 hover:border-blue-500/50 transition-all active:scale-95">
+              <button className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-4 border border-white/10 hover:bg-blue-500/20 hover:border-blue-500/50 transition-all active:scale-95 cursor-pointer">
                 <CreditCard className="h-6 w-6 text-gray-400 group-hover:text-blue-400" />
                 <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 group-hover:text-blue-400">Tarjeta</span>
               </button>
-              <button className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-4 border border-white/10 hover:bg-purple-500/20 hover:border-purple-500/50 transition-all active:scale-95">
+              <button className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-4 border border-white/10 hover:bg-purple-500/20 hover:border-purple-500/50 transition-all active:scale-95 cursor-pointer">
                 <QrCode className="h-6 w-6 text-gray-400 group-hover:text-purple-400" />
                 <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 group-hover:text-purple-400">QR Bunz</span>
               </button>
-              <button className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-4 border border-white/10 hover:bg-orange-500/20 hover:border-orange-500/50 transition-all active:scale-95">
+              <button className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-4 border border-white/10 hover:bg-orange-500/20 hover:border-orange-500/50 transition-all active:scale-95 cursor-pointer">
                 <SplitSquareHorizontal className="h-6 w-6 text-gray-400 group-hover:text-orange-400" />
                 <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 group-hover:text-orange-400">Dividir</span>
               </button>
@@ -319,16 +327,96 @@ export default function PosPage() {
             {/* Massive Checkout Button */}
             <button 
               disabled={cart.length === 0}
-              className="relative w-full overflow-hidden rounded-[2rem] bg-cyan-500 py-6 text-2xl font-black text-gray-950 shadow-[0_15px_40px_rgba(6,182,212,0.4)] transition-all hover:bg-cyan-400 active:scale-95 disabled:opacity-50 disabled:shadow-none group"
+              className="relative w-full overflow-hidden rounded-[2rem] bg-cyan-500 py-6 text-2xl font-black text-gray-950 shadow-[0_15px_40px_rgba(6,182,212,0.4)] transition-all hover:bg-cyan-400 active:scale-95 disabled:opacity-50 disabled:shadow-none group cursor-pointer"
             >
               <div className="absolute inset-0 bg-white/20 translate-y-[100%] group-hover:translate-y-[0%] transition-transform duration-300 ease-out" />
               <span className="relative z-10 flex items-center justify-center gap-3">
-                <Check className="h-8 w-8" /> COBRAR ORDEN
+                <Check className="h-8 w-8" /> COBRAR ORDEN (${total.toFixed(2)})
               </span>
             </button>
           </div>
         </aside>
       </div>
+
+      {/* Modal de Confirmación para Vaciar Orden */}
+      <Dialog open={confirmClearCart} onClose={() => setConfirmClearCart(false)} title="¿Vaciar la orden actual?">
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+            <AlertTriangle className="h-5 w-5 shrink-0" />
+            <span>Esta acción eliminará todos los ({cart.reduce((s, i) => s + i.quantity, 0)}) platillos seleccionados de la cuenta actual.</span>
+          </div>
+          <p className="text-sm text-gray-300">
+            ¿Confirmas que deseas cancelar y vaciar los elementos de esta comanda?
+          </p>
+          <div className="flex justify-end gap-3 pt-3 border-t border-white/5">
+            <Button variant="secondary" onClick={() => setConfirmClearCart(false)}>Cancelar</Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                setCart([]);
+                setConfirmClearCart(false);
+              }}
+            >
+              Sí, Vaciar Orden
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* Modal de Anulación / Void con PIN de Gerente */}
+      <Dialog open={!!voidingItem} onClose={() => { setVoidingItem(null); setManagerPin(""); setVoidReason(""); }} title="Autorización de Anulación (Void)">
+        {voidingItem && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">
+              <Shield className="h-5 w-5 shrink-0" />
+              <span>Anular un platillo ya enviado a cocina requiere autorización de Gerente / Administrador.</span>
+            </div>
+            <div>
+              <p className="text-sm font-bold text-white mb-1">{voidingItem.name}</p>
+              <p className="text-xs text-gray-400">Precio: ${voidingItem.price.toFixed(2)}</p>
+            </div>
+            <Input
+              label="Motivo de Anulación *"
+              placeholder="Ej. Cliente cambió de opinión / Error de comanda"
+              value={voidReason}
+              onChange={(e) => setVoidReason(e.target.value)}
+            />
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block mb-1">
+                PIN de Gerente (4 dígitos) *
+              </label>
+              <input
+                type="password"
+                maxLength={4}
+                placeholder="••••"
+                value={managerPin}
+                onChange={(e) => setManagerPin(e.target.value.replace(/\D/g, ""))}
+                className="w-full rounded-xl border border-white/10 bg-black/60 p-3 text-center text-2xl tracking-[0.5em] text-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none"
+              />
+            </div>
+            <div className="flex justify-end gap-3 pt-3 border-t border-white/5">
+              <Button variant="secondary" onClick={() => { setVoidingItem(null); setManagerPin(""); setVoidReason(""); }}>
+                Cancelar
+              </Button>
+              <Button
+                variant="danger"
+                onClick={() => {
+                  if (voidingItem && managerPin.length === 4) {
+                    voidItemMutation.mutate({
+                      id: voidingItem.id,
+                      reason: voidReason || "Anulación en caja",
+                      managerPin,
+                    });
+                  }
+                }}
+                disabled={voidItemMutation.isPending || managerPin.length !== 4}
+              >
+                {voidItemMutation.isPending ? "Anulando..." : "Confirmar Anulación"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Dialog>
     </div>
   );
 }
