@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { Button, Dialog, Input, toast, cn } from "@rabbitty/ui";
-import { Clock, Wifi, Search, User, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, Table2, ShoppingBag, Bike, UtensilsCrossed } from "lucide-react";
+import { Clock, Wifi, Search, User, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, Table2, ShoppingBag, Bike, UtensilsCrossed, Store } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -20,7 +20,7 @@ export default function PosPage() {
   const [managerPin, setManagerPin] = useState("");
   const [confirmClearCart, setConfirmClearCart] = useState(false);
   const [tableModal, setTableModal] = useState(false);
-  const [orderType, setOrderType] = useState<"DINE_IN" | "TAKEAWAY" | "DELIVERY">("DINE_IN");
+  const [orderType, setOrderType] = useState<"COUNTER" | "DINE_IN" | "TAKEAWAY" | "DELIVERY">("COUNTER");
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
 
   const { data: categories } = trpc.pos.getCategories.useQuery(undefined, { retry: false });
@@ -274,15 +274,17 @@ export default function PosPage() {
                 type="button"
                 onClick={() => setTableModal(true)}
                 className="flex items-center gap-2.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 px-3.5 py-2 transition-all cursor-pointer group"
-                title="Cambiar mesa o salón"
+                title="Cambiar mesa o servicio"
               >
                 <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
-                  {orderType === "DINE_IN" ? (
-                    <Table2 className="h-4 w-4" />
+                  {orderType === "COUNTER" ? (
+                    <Store className="h-4 w-4 text-amber-400" />
+                  ) : orderType === "DINE_IN" ? (
+                    <Table2 className="h-4 w-4 text-cyan-400" />
                   ) : orderType === "TAKEAWAY" ? (
-                    <ShoppingBag className="h-4 w-4" />
+                    <ShoppingBag className="h-4 w-4 text-purple-400" />
                   ) : (
-                    <Bike className="h-4 w-4" />
+                    <Bike className="h-4 w-4 text-emerald-400" />
                   )}
                 </div>
                 <div className="text-left">
@@ -291,7 +293,9 @@ export default function PosPage() {
                     <ChevronDown className="h-3 w-3 text-cyan-400 group-hover:translate-y-0.5 transition-transform" />
                   </div>
                   <div className="text-sm font-black text-white">
-                    {orderType === "DINE_IN"
+                    {orderType === "COUNTER"
+                      ? "Venta Mostrador"
+                      : orderType === "DINE_IN"
                       ? (() => {
                           const curr = tables?.find((t) => t.id === selectedTableId);
                           return curr ? `Mesa ${curr.number} (${curr.location || "Salón"})` : "Seleccionar Mesa";
@@ -315,8 +319,24 @@ export default function PosPage() {
               </button>
             </div>
 
-            {/* Order Type Segmented Control */}
-            <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-black/60 border border-white/5">
+            {/* Order Type Segmented Control (4 Options) */}
+            <div className="grid grid-cols-4 gap-1 p-1 rounded-xl bg-black/60 border border-white/5">
+              <button
+                type="button"
+                onClick={() => {
+                  setOrderType("COUNTER");
+                  setSelectedTableId(null);
+                }}
+                className={cn(
+                  "flex items-center justify-center gap-1 py-1.5 rounded-lg text-[11px] font-black transition-all cursor-pointer",
+                  orderType === "COUNTER"
+                    ? "bg-amber-500 text-gray-950 shadow-md"
+                    : "text-gray-400 hover:text-white hover:bg-white/5"
+                )}
+              >
+                <Store className="h-3 w-3" /> Mostrador
+              </button>
+
               <button
                 type="button"
                 onClick={() => {
@@ -326,13 +346,13 @@ export default function PosPage() {
                   }
                 }}
                 className={cn(
-                  "flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer",
+                  "flex items-center justify-center gap-1 py-1.5 rounded-lg text-[11px] font-black transition-all cursor-pointer",
                   orderType === "DINE_IN"
                     ? "bg-cyan-500 text-gray-950 shadow-md"
                     : "text-gray-400 hover:text-white hover:bg-white/5"
                 )}
               >
-                <UtensilsCrossed className="h-3.5 w-3.5" /> Aquí
+                <UtensilsCrossed className="h-3 w-3" /> Mesa
               </button>
 
               <button
@@ -342,13 +362,13 @@ export default function PosPage() {
                   setSelectedTableId(null);
                 }}
                 className={cn(
-                  "flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer",
+                  "flex items-center justify-center gap-1 py-1.5 rounded-lg text-[11px] font-black transition-all cursor-pointer",
                   orderType === "TAKEAWAY"
                     ? "bg-purple-500 text-white shadow-md"
                     : "text-gray-400 hover:text-white hover:bg-white/5"
                 )}
               >
-                <ShoppingBag className="h-3.5 w-3.5" /> Llevar
+                <ShoppingBag className="h-3 w-3" /> Llevar
               </button>
 
               <button
@@ -358,13 +378,13 @@ export default function PosPage() {
                   setSelectedTableId(null);
                 }}
                 className={cn(
-                  "flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer",
+                  "flex items-center justify-center gap-1 py-1.5 rounded-lg text-[11px] font-black transition-all cursor-pointer",
                   orderType === "DELIVERY"
                     ? "bg-emerald-500 text-gray-950 shadow-md"
                     : "text-gray-400 hover:text-white hover:bg-white/5"
                 )}
               >
-                <Bike className="h-3.5 w-3.5" /> Domicilio
+                <Bike className="h-3 w-3" /> Domicilio
               </button>
             </div>
           </div>
@@ -608,7 +628,31 @@ export default function PosPage() {
         title="Seleccionar Mesa o Tipo de Servicio"
       >
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                setOrderType("COUNTER");
+                setSelectedTableId(null);
+                setTableModal(false);
+                toast.success("Modo: Venta de Mostrador / Caja Rápida");
+              }}
+              className={cn(
+                "flex flex-col items-center justify-center p-3 rounded-2xl border transition-all cursor-pointer text-center gap-1.5",
+                orderType === "COUNTER"
+                  ? "bg-amber-500/20 border-amber-500 text-amber-300"
+                  : "bg-white/5 border-white/10 hover:bg-white/10 text-gray-300"
+              )}
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400 font-bold text-lg">
+                🏪
+              </div>
+              <div>
+                <h4 className="font-bold text-xs text-white">Mostrador</h4>
+                <p className="text-[10px] text-gray-400">Caja rápida</p>
+              </div>
+            </button>
+
             <button
               type="button"
               onClick={() => {
@@ -618,7 +662,7 @@ export default function PosPage() {
                 toast.success("Modo: Pedido Para Llevar");
               }}
               className={cn(
-                "flex items-center gap-3 p-3.5 rounded-2xl border transition-all cursor-pointer text-left",
+                "flex flex-col items-center justify-center p-3 rounded-2xl border transition-all cursor-pointer text-center gap-1.5",
                 orderType === "TAKEAWAY"
                   ? "bg-purple-500/20 border-purple-500 text-purple-300"
                   : "bg-white/5 border-white/10 hover:bg-white/10 text-gray-300"
@@ -628,8 +672,8 @@ export default function PosPage() {
                 🛍️
               </div>
               <div>
-                <h4 className="font-bold text-sm text-white">Para Llevar</h4>
-                <p className="text-[11px] text-gray-400">Sin asignar mesa</p>
+                <h4 className="font-bold text-xs text-white">Para Llevar</h4>
+                <p className="text-[10px] text-gray-400">Sin mesa</p>
               </div>
             </button>
 
@@ -642,7 +686,7 @@ export default function PosPage() {
                 toast.success("Modo: Entrega a Domicilio");
               }}
               className={cn(
-                "flex items-center gap-3 p-3.5 rounded-2xl border transition-all cursor-pointer text-left",
+                "flex flex-col items-center justify-center p-3 rounded-2xl border transition-all cursor-pointer text-center gap-1.5",
                 orderType === "DELIVERY"
                   ? "bg-emerald-500/20 border-emerald-500 text-emerald-300"
                   : "bg-white/5 border-white/10 hover:bg-white/10 text-gray-300"
@@ -652,8 +696,8 @@ export default function PosPage() {
                 🛵
               </div>
               <div>
-                <h4 className="font-bold text-sm text-white">A Domicilio</h4>
-                <p className="text-[11px] text-gray-400">Entrega externa</p>
+                <h4 className="font-bold text-xs text-white">A Domicilio</h4>
+                <p className="text-[10px] text-gray-400">Reparto</p>
               </div>
             </button>
           </div>
