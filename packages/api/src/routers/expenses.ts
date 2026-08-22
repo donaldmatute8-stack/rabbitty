@@ -7,7 +7,8 @@ import { verifyPin } from "../services/crypto";
 
 const EXPENSE_CATEGORIES = [
   "RENT", "PAYROLL", "UTILITIES", "SUPPLIES",
-  "MAINTENANCE", "MARKETING", "INSURANCE", "OTHER",
+  "MAINTENANCE", "MARKETING", "INSURANCE",
+  "REMODELING", "CONSTRUCTION", "OTHER",
 ] as const;
 
 export const expensesRouter = router({
@@ -54,6 +55,75 @@ export const expensesRouter = router({
         expenseDate: input.expenseDate ? new Date(input.expenseDate) : new Date(),
       }).returning();
       return expense;
+    }),
+
+  update: protectedProcedure
+    .input(z.object({
+      id: z.string(),
+      category: z.enum(EXPENSE_CATEGORIES),
+      description: z.string(),
+      amount: z.number().positive(),
+      expenseDate: z.string().optional(),
+      reference: z.string().optional(),
+      paidTo: z.string().optional(),
+      notes: z.string().optional(),
+      editReason: z.string().min(1, "Debes especificar el motivo del cambio"),
+      adminPin: z.string().length(4).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Verify Admin / Manager PIN
+      const admins = await ctx.restaurantDb
+        .select()
+        .from(staffTable)
+        .where(
+          and(
+            eq(staffTable.branchId, ctx.branchId),
+            sql`lower(${staffTable.role}) IN ('admin', 'manager')`
+          )
+        );
+
+      const hasConfiguredPin = admins.some((a) => !!a.pinCode);
+
+      if (hasConfiguredPin) {
+        if (!input.adminPin) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "Se requiere PIN de Administrador para editar gastos",
+          });
+        }
+
+        const isValid = admins.some(
+          (a) => a.pinCode && verifyPin(input.adminPin!, a.pinCode)
+        );
+
+        if (!isValid) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "PIN de Administrador incorrecto",
+          });
+        }
+      }
+
+      const formattedNotes = input.editReason
+        ? `${input.notes ? input.notes + " | " : ""}Motivo edición: ${input.editReason}`
+        : input.notes;
+
+      const [updated] = await ctx.restaurantDb
+        .update(expenses)
+        .set({
+          category: input.category,
+          description: input.description,
+          amount: input.amount,
+          expenseDate: input.expenseDate ? new Date(input.expenseDate) : undefined,
+          reference: input.reference ?? null,
+          paidTo: input.paidTo ?? null,
+          notes: formattedNotes,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(expenses.id, input.id), eq(expenses.branchId, ctx.branchId)))
+        .returning();
+
+      return updated;
     }),
 
   delete: protectedProcedure
