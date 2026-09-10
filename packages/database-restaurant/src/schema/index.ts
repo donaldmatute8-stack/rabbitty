@@ -29,6 +29,13 @@ export const restaurants = pgTable("restaurants", {
   happyHourRewardRate: integer("happyHourRewardRate"), // e.g. 40 for 2X if default is 20
   printerType: text("printerType"),
   printerConfig: jsonb("printerConfig"),
+  legalName: text("legalName"),
+  rfc: text("rfc"),
+  taxRegime: text("taxRegime"),
+  logoUrl: text("logoUrl"),
+  email: text("email"),
+  phone: text("phone"),
+  ticketFooter: text("ticketFooter"),
   isActive: boolean("isActive").default(true).notNull(),
   ...timestamps,
 });

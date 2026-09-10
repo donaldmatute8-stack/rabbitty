@@ -101,6 +101,15 @@ export const adminRouter = router({
         happyHourStart: z.string().optional().nullable(),
         happyHourEnd: z.string().optional().nullable(),
         happyHourRewardRate: z.number().optional().nullable(),
+        printerType: z.string().optional().nullable(),
+        printerConfig: z.any().optional().nullable(),
+        legalName: z.string().optional().nullable(),
+        rfc: z.string().optional().nullable(),
+        taxRegime: z.string().optional().nullable(),
+        logoUrl: z.string().optional().nullable(),
+        email: z.string().optional().nullable(),
+        phone: z.string().optional().nullable(),
+        ticketFooter: z.string().optional().nullable(),
       })
     )
     .mutation(async ({ ctx, input }) => {
