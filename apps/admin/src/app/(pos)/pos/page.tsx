@@ -3,9 +3,10 @@
 import { useState, useMemo, useEffect } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { Button, Dialog, Input, toast, cn } from "@rabbitty/ui";
-import { Clock, Wifi, Search, User, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, Table2, ShoppingBag, Bike, UtensilsCrossed, Store } from "lucide-react";
+import { Clock, Wifi, Search, User, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, Table2, ShoppingBag, Bike, UtensilsCrossed, Store, Printer } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import { TicketTemplate, TicketData } from "../../../components/TicketTemplate";
 
 // Placeholder for missing images
 const PLACEHOLDER_IMG = "https://images.unsplash.com/photo-1544148103-0773bf10d330?q=80&w=1000&auto=format&fit=crop";
@@ -22,10 +23,13 @@ export default function PosPage() {
   const [tableModal, setTableModal] = useState(false);
   const [orderType, setOrderType] = useState<"COUNTER" | "DINE_IN" | "TAKEAWAY" | "DELIVERY">("COUNTER");
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+  const [receiptModal, setReceiptModal] = useState(false);
+  const [paidTicketData, setPaidTicketData] = useState<TicketData | null>(null);
 
   const { data: categories } = trpc.pos.getCategories.useQuery(undefined, { retry: false });
   const { data: menuItems } = trpc.pos.getMenuItems.useQuery({}, { retry: false });
   const { data: tables } = trpc.pos.getTables.useQuery(undefined, { retry: false });
+  const { data: ticketContext } = trpc.printing.getTicketData.useQuery(undefined, { retry: false });
 
   // Auto-select first table when tables load if DINE_IN
   useEffect(() => {
@@ -103,6 +107,55 @@ export default function PosPage() {
   };
 
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+  const handleCheckout = (method: string = "EFECTIVO") => {
+    if (cart.length === 0) return;
+
+    const rest = ticketContext?.restaurant;
+    const branch = ticketContext?.branch;
+    const taxRate = rest?.taxRate ?? 0.16;
+    const subtotal = total / (1 + taxRate);
+    const tax = total - subtotal;
+    const orderNumber = Math.floor(1000 + Math.random() * 9000).toString();
+
+    const selectedTable = tables?.find((t) => t.id === selectedTableId);
+    const tableLabel = orderType === "DINE_IN" ? (selectedTable ? `Mesa ${selectedTable.number}` : "Salón") : orderType === "TAKEAWAY" ? "Para Llevar" : orderType === "DELIVERY" ? "Domicilio" : "Mostrador";
+
+    const ticket: TicketData = {
+      restaurantName: rest?.name || "Rabbitty Bistro",
+      legalName: (rest as any)?.legalName || undefined,
+      rfc: (rest as any)?.rfc || undefined,
+      taxRegime: (rest as any)?.taxRegime || undefined,
+      logoUrl: (rest as any)?.logoUrl || undefined,
+      address: branch?.address || undefined,
+      phone: (rest as any)?.phone || branch?.phone || undefined,
+      email: (rest as any)?.email || undefined,
+      ticketFooter: (rest as any)?.ticketFooter || "¡Gracias por su compra en Rabbitty! Vuelva pronto.",
+      orderNumber,
+      tableNumber: tableLabel,
+      orderType: orderType === "DINE_IN" ? "Consumo en Sitio" : orderType === "TAKEAWAY" ? "Para Llevar" : orderType === "DELIVERY" ? "A Domicilio" : "Caja Rápida",
+      cashierName: "Caja Principal",
+      date: new Date().toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" }),
+      items: cart.map((i) => ({
+        id: i.id,
+        name: i.name,
+        quantity: i.quantity,
+        unitPrice: i.price,
+        totalPrice: i.price * i.quantity,
+      })),
+      subtotal,
+      taxRate,
+      tax,
+      discount: 0,
+      total,
+      paymentMethod: method,
+      currency: rest?.currency || "MXN",
+      bunzCashbackRate: rest?.defaultRewardRate ?? 20,
+    };
+
+    setPaidTicketData(ticket);
+    setReceiptModal(true);
+  };
 
   return (
     <div className="flex h-screen w-full flex-col bg-gray-950 text-white overflow-hidden select-none font-sans">
@@ -479,19 +532,35 @@ export default function PosPage() {
 
             {/* Quick Payment Methods */}
             <div className="grid grid-cols-4 gap-3">
-              <button className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-4 border border-white/10 hover:bg-emerald-500/20 hover:border-emerald-500/50 transition-all active:scale-95 cursor-pointer">
+              <button 
+                onClick={() => handleCheckout("EFECTIVO")}
+                disabled={cart.length === 0}
+                className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-4 border border-white/10 hover:bg-emerald-500/20 hover:border-emerald-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
+              >
                 <Banknote className="h-6 w-6 text-gray-400 group-hover:text-emerald-400" />
                 <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 group-hover:text-emerald-400">Efectivo</span>
               </button>
-              <button className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-4 border border-white/10 hover:bg-blue-500/20 hover:border-blue-500/50 transition-all active:scale-95 cursor-pointer">
+              <button 
+                onClick={() => handleCheckout("TARJETA")}
+                disabled={cart.length === 0}
+                className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-4 border border-white/10 hover:bg-blue-500/20 hover:border-blue-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
+              >
                 <CreditCard className="h-6 w-6 text-gray-400 group-hover:text-blue-400" />
                 <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 group-hover:text-blue-400">Tarjeta</span>
               </button>
-              <button className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-4 border border-white/10 hover:bg-purple-500/20 hover:border-purple-500/50 transition-all active:scale-95 cursor-pointer">
+              <button 
+                onClick={() => handleCheckout("QR BUNZ")}
+                disabled={cart.length === 0}
+                className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-4 border border-white/10 hover:bg-purple-500/20 hover:border-purple-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
+              >
                 <QrCode className="h-6 w-6 text-gray-400 group-hover:text-purple-400" />
                 <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 group-hover:text-purple-400">QR Bunz</span>
               </button>
-              <button className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-4 border border-white/10 hover:bg-orange-500/20 hover:border-orange-500/50 transition-all active:scale-95 cursor-pointer">
+              <button 
+                onClick={() => handleCheckout("DIVIDIDA")}
+                disabled={cart.length === 0}
+                className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-4 border border-white/10 hover:bg-orange-500/20 hover:border-orange-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
+              >
                 <SplitSquareHorizontal className="h-6 w-6 text-gray-400 group-hover:text-orange-400" />
                 <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 group-hover:text-orange-400">Dividir</span>
               </button>
@@ -499,6 +568,7 @@ export default function PosPage() {
 
             {/* Massive Checkout Button */}
             <button 
+              onClick={() => handleCheckout("VENTA DIRECTA")}
               disabled={cart.length === 0}
               className="relative w-full overflow-hidden rounded-[2rem] bg-cyan-500 py-6 text-2xl font-black text-gray-950 shadow-[0_15px_40px_rgba(6,182,212,0.4)] transition-all hover:bg-cyan-400 active:scale-95 disabled:opacity-50 disabled:shadow-none group cursor-pointer"
             >
@@ -746,6 +816,57 @@ export default function PosPage() {
           <div className="flex justify-end pt-3 border-t border-white/5">
             <Button variant="secondary" onClick={() => setTableModal(false)}>
               Cerrar
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* Modal de Ticket de Venta / Comprobante de Cobro */}
+      <Dialog
+        open={receiptModal}
+        onClose={() => {
+          setReceiptModal(false);
+          setCart([]);
+        }}
+        title="Ticket de Venta Generado"
+      >
+        <div className="space-y-4">
+          <div className="flex items-center justify-between p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+              <span>¡Orden cobrada con éxito! El ticket está listo para imprimir.</span>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => window.print()}
+              className="bg-emerald-500 hover:bg-emerald-600 text-gray-950 font-black flex items-center gap-1.5 shrink-0"
+            >
+              <Printer className="h-4 w-4" /> Imprimir
+            </Button>
+          </div>
+
+          <div className="flex justify-center max-h-[60vh] overflow-y-auto custom-scrollbar p-2 bg-black/40 rounded-2xl border border-white/5">
+            {paidTicketData && (
+              <TicketTemplate data={paidTicketData} />
+            )}
+          </div>
+
+          <div className="flex justify-between items-center pt-3 border-t border-white/5">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setReceiptModal(false);
+                setCart([]);
+              }}
+            >
+              Nueva Orden (Listo)
+            </Button>
+
+            <Button
+              onClick={() => window.print()}
+              className="bg-cyan-500 hover:bg-cyan-400 text-gray-950 font-bold flex items-center gap-2"
+            >
+              <Printer className="h-4 w-4" /> Imprimir Ticket Físico
             </Button>
           </div>
         </div>

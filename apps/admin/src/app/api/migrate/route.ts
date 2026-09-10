@@ -32,6 +32,13 @@ export async function GET() {
       ALTER TABLE "restaurants" ADD COLUMN IF NOT EXISTS "happyHourRewardRate" integer;
       ALTER TABLE "restaurants" ADD COLUMN IF NOT EXISTS "printerType" text;
       ALTER TABLE "restaurants" ADD COLUMN IF NOT EXISTS "printerConfig" jsonb;
+      ALTER TABLE "restaurants" ADD COLUMN IF NOT EXISTS "legalName" text;
+      ALTER TABLE "restaurants" ADD COLUMN IF NOT EXISTS "rfc" text;
+      ALTER TABLE "restaurants" ADD COLUMN IF NOT EXISTS "taxRegime" text;
+      ALTER TABLE "restaurants" ADD COLUMN IF NOT EXISTS "logoUrl" text;
+      ALTER TABLE "restaurants" ADD COLUMN IF NOT EXISTS "email" text;
+      ALTER TABLE "restaurants" ADD COLUMN IF NOT EXISTS "phone" text;
+      ALTER TABLE "restaurants" ADD COLUMN IF NOT EXISTS "ticketFooter" text;
       ALTER TABLE "menu_item_ingredients" ADD COLUMN IF NOT EXISTS "subRecipeId" text;
       ALTER TABLE "menu_item_ingredients" ALTER COLUMN "inventoryItemId" DROP NOT NULL;
       ALTER TABLE "menu_item_ingredients" ALTER COLUMN "subRecipeId" DROP NOT NULL;
