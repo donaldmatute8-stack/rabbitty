@@ -1,18 +1,22 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { trpc } from "../../../lib/trpc-client";
-import { Card, Badge, Button, Input, toast } from "@rabbitty/ui";
+import { Card, Badge, Button, Input, Dialog, toast } from "@rabbitty/ui";
 import { 
   Printer, Monitor, Layers, Cpu, Download, BookOpen, Terminal, 
   CheckCircle, FileText, Sparkles, Building2, Phone, Mail, 
-  MapPin, ShieldCheck, Save, RefreshCw, Eye
+  MapPin, ShieldCheck, Save, RefreshCw, Eye, Share2, MessageCircle, 
+  FileDown, Image as ImageIcon, ExternalLink, Maximize2
 } from "lucide-react";
 import { TicketTemplate, TicketData } from "../../../components/TicketTemplate";
 
 export default function HardwarePage() {
   const utils = trpc.useUtils();
   const [activeTab, setActiveTab] = useState<"ticket" | "devices" | "agent">("ticket");
+  const [fullscreenModal, setFullscreenModal] = useState(false);
+  const [thermalPaperMode, setThermalPaperMode] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   // Fetch restaurant & branch data
   const { data: restaurants, isLoading: loadingRest } = trpc.admin.getRestaurants.useQuery();
@@ -93,7 +97,7 @@ export default function HardwarePage() {
     window.print();
   };
 
-  // Preview Mock Data
+  // Preview Mock Data synced in real time with the form
   const previewTicketData: TicketData = {
     restaurantName: ticketForm.name || "Rabbitty Bistro & Coffee",
     legalName: ticketForm.legalName || "OPERADORA GASTRONOMICA RABBITTY S.A. DE C.V.",
@@ -124,6 +128,119 @@ export default function HardwarePage() {
     paymentMethod: "TARJETA (DEBIT)",
     currency: currentRestaurant?.currency || "MXN",
     bunzCashbackRate: (currentRestaurant as any)?.defaultRewardRate ?? 20,
+  };
+
+  // ── EXPORT AS IMAGE (PNG) VIA SVG FOREIGN OBJECT ──
+  const handleExportImage = async () => {
+    try {
+      setIsExporting(true);
+      const element = document.getElementById("thermal-printable-receipt");
+      if (!element) {
+        toast.error("No se encontró el contenedor del ticket");
+        return;
+      }
+
+      // Clone styles to make a clean standalone SVG
+      const width = element.offsetWidth || 340;
+      const height = element.offsetHeight || 650;
+
+      // Extract outerHTML and sanitize
+      const cloned = element.cloneNode(true) as HTMLElement;
+      // Force background if needed
+      cloned.style.margin = "0";
+
+      const html = new XMLSerializer().serializeToString(cloned);
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+          <foreignObject width="100%" height="100%">
+            <div xmlns="http://www.w3.org/1999/xhtml" style="background:#0a0a0c; color:#ffffff; font-family:sans-serif; height:100%; border-radius:24px;">
+              ${html}
+            </div>
+          </foreignObject>
+        </svg>
+      `;
+
+      const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = width * 2;
+        canvas.height = height * 2;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.scale(2, 2);
+          ctx.drawImage(img, 0, 0);
+          canvas.toBlob((pngBlob) => {
+            if (pngBlob) {
+              const pngUrl = URL.createObjectURL(pngBlob);
+              const downloadLink = document.createElement("a");
+              downloadLink.href = pngUrl;
+              downloadLink.download = `ticket-${ticketForm.name || "rabbitty"}-${Date.now()}.png`;
+              document.body.appendChild(downloadLink);
+              downloadLink.click();
+              document.body.removeChild(downloadLink);
+              URL.revokeObjectURL(pngUrl);
+              toast.success("Imagen del ticket descargada exitosamente (PNG)");
+            }
+          }, "image/png");
+        }
+        URL.revokeObjectURL(url);
+        setIsExporting(false);
+      };
+
+      img.onerror = () => {
+        // Fallback: direct SVG download
+        const downloadLink = document.createElement("a");
+        downloadLink.href = url;
+        downloadLink.download = `ticket-${ticketForm.name || "rabbitty"}.svg`;
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+        toast.success("Ticket descargado como archivo vectorial SVG");
+        setIsExporting(false);
+      };
+
+      img.src = url;
+    } catch (err: any) {
+      toast.error("Error al exportar la imagen: " + err.message);
+      setIsExporting(false);
+    }
+  };
+
+  // ── EXPORT AS PDF ──
+  const handleExportPDF = () => {
+    toast.info("En el cuadro de diálogo de impresión, selecciona 'Guardar como PDF'");
+    window.print();
+  };
+
+  // ── SHARE VIA WHATSAPP ──
+  const handleShareWhatsApp = () => {
+    const business = ticketForm.name || "Rabbitty Bistro";
+    const totalFormatted = `$${previewTicketData.total.toFixed(2)} ${previewTicketData.currency}`;
+    const rfcText = ticketForm.rfc ? ` (RFC: ${ticketForm.rfc})` : "";
+    const itemsSummary = previewTicketData.items
+      .map((i) => `• ${i.quantity}x ${i.name} - $${i.totalPrice.toFixed(2)}`)
+      .join("%0A");
+
+    const message = 
+      `🧾 *TICKET DE VENTA - ${encodeURIComponent(business)}*${rfcText}%0A` +
+      `📅 Fecha: ${encodeURIComponent(previewTicketData.date || "")}%0A` +
+      `🔖 Folio: #${previewTicketData.orderNumber}%0A%0A` +
+      `*Detalle del Consumo:*%0A${itemsSummary}%0A%0A` +
+      `*Subtotal:* $${previewTicketData.subtotal?.toFixed(2)}%0A` +
+      `*IVA (16%):* $${previewTicketData.tax?.toFixed(2)}%0A` +
+      `*TOTAL:* ${encodeURIComponent(totalFormatted)}%0A%0A` +
+      `🐰 _Emitido con Rabbitty OS POS • rabbitty.app_`;
+
+    const phoneClean = ticketForm.phone.replace(/\D/g, "");
+    const waUrl = phoneClean 
+      ? `https://wa.me/${phoneClean}?text=${message}`
+      : `https://wa.me/?text=${message}`;
+
+    window.open(waUrl, "_blank");
+    toast.success("Abriendo WhatsApp con el resumen del ticket...");
   };
 
   const devices = [
@@ -199,7 +316,7 @@ export default function HardwarePage() {
               Impresoras y Tickets
             </h1>
             <p className="text-gray-400 mt-2 text-sm font-medium">
-              Diseño de ticket de venta con datos fiscales, desglose de IVA y controladores térmicos.
+              Diseño en tiempo real con datos fiscales, desglose de IVA, exportación PDF/Imagen y envío por WhatsApp.
             </p>
           </div>
 
@@ -207,17 +324,17 @@ export default function HardwarePage() {
           <div className="flex rounded-2xl bg-white/5 p-1 border border-white/10 shrink-0">
             <button
               onClick={() => setActiveTab("ticket")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === "ticket"
                   ? "bg-pink-500 text-white shadow-lg"
                   : "text-gray-400 hover:text-white"
               }`}
             >
-              <FileText className="h-4 w-4" /> Configuración de Ticket
+              <FileText className="h-4 w-4" /> Configuración & Preview en Vivo
             </button>
             <button
               onClick={() => setActiveTab("devices")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === "devices"
                   ? "bg-pink-500 text-white shadow-lg"
                   : "text-gray-400 hover:text-white"
@@ -242,10 +359,10 @@ export default function HardwarePage() {
                   </div>
                   <div>
                     <h2 className="text-lg font-bold text-white">Datos Comerciales y Fiscales del Ticket</h2>
-                    <p className="text-xs text-gray-400">Esta información se imprimirá en el encabezado de cada comprobante.</p>
+                    <p className="text-xs text-gray-400">Escribe y observa cómo se refleja cada campo al instante en el ticket.</p>
                   </div>
                 </div>
-                <Badge variant="success">En Línea</Badge>
+                <Badge variant="success">En Vivo</Badge>
               </div>
 
               <form onSubmit={handleSaveTicket} className="space-y-5">
@@ -348,7 +465,7 @@ export default function HardwarePage() {
                   <Button
                     type="submit"
                     disabled={updateRestaurant.isPending}
-                    className="bg-pink-500 hover:bg-pink-600 text-white font-bold flex items-center gap-2"
+                    className="bg-pink-500 hover:bg-pink-600 text-white font-bold flex items-center gap-2 cursor-pointer"
                   >
                     <Save className="h-4 w-4" />
                     {updateRestaurant.isPending ? "Guardando..." : "Guardar Cambios"}
@@ -357,16 +474,47 @@ export default function HardwarePage() {
               </form>
             </Card>
 
-            {/* Print Help Box */}
-            <div className="p-4 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 text-xs flex items-center gap-3">
-              <Sparkles className="h-5 w-5 shrink-0 text-cyan-400" />
-              <span>
-                <strong>Tip de Producción:</strong> Una vez conectado el cable USB o Ethernet de tu impresora térmica, la configuración de arriba se sincroniza automáticamente con el POS y la impresión directa.
-              </span>
+            {/* Quick Actions Card */}
+            <div className="p-5 rounded-2xl bg-gradient-to-r from-pink-500/10 via-purple-500/10 to-cyan-500/10 border border-white/10 space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="font-bold text-white text-sm flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-pink-400" /> Opciones de Compartir y Descargar
+                </h4>
+                <Badge variant="success">Listo para Producción</Badge>
+              </div>
+              <p className="text-xs text-gray-400 leading-relaxed">
+                Puedes descargar este ticket como ejemplo visual para tu negocio, enviárselo a tus clientes por WhatsApp o descargarlo en PDF e imagen de alta resolución.
+              </p>
+              <div className="flex flex-wrap gap-2.5 pt-1">
+                <Button 
+                  size="sm" 
+                  variant="secondary" 
+                  onClick={handleExportPDF}
+                  className="flex items-center gap-1.5 border-white/10 hover:border-white/30"
+                >
+                  <FileDown className="h-4 w-4 text-pink-400" /> Descargar PDF
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="secondary" 
+                  onClick={handleExportImage}
+                  disabled={isExporting}
+                  className="flex items-center gap-1.5 border-white/10 hover:border-white/30"
+                >
+                  <ImageIcon className="h-4 w-4 text-cyan-400" /> {isExporting ? "Generando..." : "Descargar Imagen"}
+                </Button>
+                <Button 
+                  size="sm" 
+                  onClick={handleShareWhatsApp}
+                  className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
+                >
+                  <MessageCircle className="h-4 w-4" /> Enviar por WhatsApp
+                </Button>
+              </div>
             </div>
           </div>
 
-          {/* Right: Live Ticket Preview */}
+          {/* Right: Live Interactive Ticket Preview */}
           <div className="lg:col-span-5 space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -374,23 +522,79 @@ export default function HardwarePage() {
                 <h3 className="font-bold text-white text-base">Previsualización en Vivo</h3>
               </div>
 
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={handlePrintTest}
-                className="flex items-center gap-1.5 border-white/20 hover:border-white/40"
-              >
-                <Printer className="h-4 w-4 text-pink-400" /> Imprimir Ticket de Prueba
-              </Button>
+              {/* View Switchers & Fullscreen */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setThermalPaperMode(!thermalPaperMode)}
+                  className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                    thermalPaperMode 
+                      ? "bg-white text-black border-white" 
+                      : "bg-white/5 text-gray-300 border-white/10 hover:bg-white/10"
+                  }`}
+                  title="Cambiar entre modo oscuro Rabbitty y papel térmico blanco"
+                >
+                  {thermalPaperMode ? "Papel Térmico" : "Modo Oscuro"}
+                </button>
+
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setFullscreenModal(true)}
+                  className="flex items-center gap-1 border-white/20 hover:border-white/40"
+                  title="Abrir vista completa"
+                >
+                  <Maximize2 className="h-3.5 w-3.5 text-cyan-400" />
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={handlePrintTest}
+                  className="flex items-center gap-1.5 border-white/20 hover:border-white/40"
+                >
+                  <Printer className="h-4 w-4 text-pink-400" /> Imprimir
+                </Button>
+              </div>
             </div>
 
             <p className="text-xs text-gray-400">
-              Así es como aparecerá el comprobante al salir de la impresora térmica conectada al negocio:
+              Conforme vas llenando el formulario, este ticket se actualiza en tiempo real:
             </p>
 
-            {/* Ticket Canvas Wrapper */}
-            <div className="flex justify-center p-4 rounded-3xl bg-black/40 border border-white/5 shadow-2xl backdrop-blur-md">
-              <TicketTemplate data={previewTicketData} />
+            {/* Ticket Canvas Wrapper with shadow and glass aesthetic */}
+            <div className="flex justify-center p-6 rounded-3xl bg-gradient-to-b from-gray-900/60 to-black/90 border border-white/10 shadow-2xl backdrop-blur-2xl relative group">
+              <div className="transition-all duration-300 transform group-hover:scale-[1.01]">
+                <TicketTemplate data={previewTicketData} isThermalPaper={thermalPaperMode} />
+              </div>
+            </div>
+
+            {/* Footer Action Bar */}
+            <div className="grid grid-cols-3 gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={handleExportPDF}
+                className="flex items-center justify-center gap-1 text-xs"
+              >
+                <FileDown className="h-3.5 w-3.5 text-pink-400" /> PDF
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={handleExportImage}
+                disabled={isExporting}
+                className="flex items-center justify-center gap-1 text-xs"
+              >
+                <ImageIcon className="h-3.5 w-3.5 text-cyan-400" /> Imagen
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleShareWhatsApp}
+                className="flex items-center justify-center gap-1 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
+              >
+                <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
+              </Button>
             </div>
           </div>
         </div>
@@ -505,6 +709,55 @@ export default function HardwarePage() {
           </div>
         </div>
       )}
+
+      {/* ── MODAL DE VISTA COMPLETA (FULLSCREEN PREVIEW) ── */}
+      <Dialog
+        open={fullscreenModal}
+        onClose={() => setFullscreenModal(false)}
+        title="Vista Completa del Ticket de Venta"
+      >
+        <div className="space-y-4">
+          <div className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/10">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-300 font-medium">Estilo de render:</span>
+              <button
+                type="button"
+                onClick={() => setThermalPaperMode(!thermalPaperMode)}
+                className={`text-xs font-bold px-3 py-1 rounded-xl border transition-all cursor-pointer ${
+                  thermalPaperMode ? "bg-white text-black" : "bg-white/10 text-white"
+                }`}
+              >
+                {thermalPaperMode ? "Papel Térmico Blanco (80mm)" : "Identidad Rabbitty (Dark Glass)"}
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="secondary" onClick={handleExportPDF}>
+                <FileDown className="h-3.5 w-3.5" /> PDF
+              </Button>
+              <Button size="sm" variant="secondary" onClick={handleExportImage} disabled={isExporting}>
+                <ImageIcon className="h-3.5 w-3.5" /> Imagen
+              </Button>
+              <Button size="sm" onClick={handleShareWhatsApp} className="bg-emerald-600 hover:bg-emerald-500 text-white">
+                <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex justify-center max-h-[65vh] overflow-y-auto custom-scrollbar p-6 bg-black/60 rounded-3xl border border-white/5">
+            <TicketTemplate data={previewTicketData} isThermalPaper={thermalPaperMode} />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-white/5">
+            <Button variant="secondary" onClick={() => setFullscreenModal(false)}>
+              Cerrar
+            </Button>
+            <Button onClick={handlePrintTest} className="bg-cyan-500 hover:bg-cyan-400 text-gray-950 font-bold flex items-center gap-1.5">
+              <Printer className="h-4 w-4" /> Imprimir Físico
+            </Button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }

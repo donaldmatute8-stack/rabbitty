@@ -834,15 +834,42 @@ export default function PosPage() {
           <div className="flex items-center justify-between p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
-              <span>¡Orden cobrada con éxito! El ticket está listo para imprimir.</span>
+              <span>¡Orden cobrada con éxito! Comprobante emitido.</span>
             </div>
-            <Button
-              size="sm"
-              onClick={() => window.print()}
-              className="bg-emerald-500 hover:bg-emerald-600 text-gray-950 font-black flex items-center gap-1.5 shrink-0"
-            >
-              <Printer className="h-4 w-4" /> Imprimir
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  if (!paidTicketData) return;
+                  const business = paidTicketData.restaurantName || "Rabbitty Bistro";
+                  const totalFormatted = `$${paidTicketData.total.toFixed(2)} ${paidTicketData.currency || "MXN"}`;
+                  const itemsSummary = paidTicketData.items
+                    .map((i) => `• ${i.quantity}x ${i.name} - $${i.totalPrice.toFixed(2)}`)
+                    .join("%0A");
+                  const message = 
+                    `🧾 *TICKET DE VENTA - ${encodeURIComponent(business)}*%0A` +
+                    `📅 Fecha: ${encodeURIComponent(paidTicketData.date || "")}%0A` +
+                    `🔖 Folio: #${paidTicketData.orderNumber}%0A%0A` +
+                    `*Detalle del Consumo:*%0A${itemsSummary}%0A%0A` +
+                    `*Subtotal:* $${paidTicketData.subtotal?.toFixed(2)}%0A` +
+                    `*IVA (16%):* $${paidTicketData.tax?.toFixed(2)}%0A` +
+                    `*TOTAL:* ${encodeURIComponent(totalFormatted)}%0A%0A` +
+                    `🐰 _Emitido con Rabbitty OS POS • rabbitty.app_`;
+                  window.open(`https://wa.me/?text=${message}`, "_blank");
+                }}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center gap-1.5"
+              >
+                WhatsApp
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => window.print()}
+                className="bg-emerald-500 hover:bg-emerald-600 text-gray-950 font-black flex items-center gap-1.5 shrink-0"
+              >
+                <Printer className="h-4 w-4" /> Imprimir
+              </Button>
+            </div>
           </div>
 
           <div className="flex justify-center max-h-[60vh] overflow-y-auto custom-scrollbar p-2 bg-black/40 rounded-2xl border border-white/5">
