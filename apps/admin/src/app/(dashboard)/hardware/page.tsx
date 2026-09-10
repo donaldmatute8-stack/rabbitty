@@ -7,7 +7,7 @@ import {
   Printer, Monitor, Layers, Cpu, Download, BookOpen, Terminal, 
   CheckCircle, FileText, Sparkles, Building2, Phone, Mail, 
   MapPin, ShieldCheck, Save, RefreshCw, Eye, Share2, MessageCircle, 
-  FileDown, Image as ImageIcon, ExternalLink, Maximize2
+  FileDown, Image as ImageIcon, ExternalLink, Maximize2, Upload, X
 } from "lucide-react";
 import { TicketTemplate, TicketData } from "../../../components/TicketTemplate";
 
@@ -375,12 +375,76 @@ export default function HardwarePage() {
                     required
                   />
 
-                  <Input
-                    label="Logo URL (opcional)"
-                    placeholder="https://tudominio.com/logo.png"
-                    value={ticketForm.logoUrl}
-                    onChange={(e) => setTicketForm({ ...ticketForm, logoUrl: e.target.value })}
-                  />
+                  {/* Logo Upload / URL component */}
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block mb-1">
+                      Logo del Negocio (Reemplaza el logo Rabbitty)
+                    </label>
+                    <div className="flex items-center gap-3">
+                      {ticketForm.logoUrl ? (
+                        <div className="relative h-12 w-12 rounded-xl overflow-hidden border border-white/20 bg-white/5 p-1 shrink-0 flex items-center justify-center group">
+                          <img
+                            src={ticketForm.logoUrl}
+                            alt="Logo preview"
+                            className="max-h-full max-w-full object-contain rounded-lg"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setTicketForm({ ...ticketForm, logoUrl: "" })}
+                            className="absolute inset-0 bg-black/70 flex items-center justify-center text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Quitar logo y restaurar Rabbitty"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="h-12 w-12 rounded-xl border border-dashed border-white/20 bg-white/5 flex items-center justify-center shrink-0 text-cyan-400 font-bold text-lg">
+                          🐰
+                        </div>
+                      )}
+
+                      <div className="flex-1 space-y-1.5">
+                        <div className="flex gap-2">
+                          <label className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-xs font-bold text-white cursor-pointer transition-all">
+                            <Upload className="h-3.5 w-3.5 text-pink-400" />
+                            <span>Subir Logo</span>
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  if (file.size > 2 * 1024 * 1024) {
+                                    toast.error("La imagen no debe superar los 2MB");
+                                    return;
+                                  }
+                                  const reader = new FileReader();
+                                  reader.onload = (ev) => {
+                                    const base64 = ev.target?.result as string;
+                                    setTicketForm((prev) => ({ ...prev, logoUrl: base64 }));
+                                    toast.success("Logo cargado y previsualizado en el ticket");
+                                  };
+                                  reader.readAsDataURL(file);
+                                }
+                              }}
+                            />
+                          </label>
+
+                          <input
+                            type="text"
+                            placeholder="O pega URL (https://...)"
+                            value={ticketForm.logoUrl.startsWith("data:") ? "Logo cargado localmente" : ticketForm.logoUrl}
+                            onChange={(e) => setTicketForm({ ...ticketForm, logoUrl: e.target.value })}
+                            className="flex-1 rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-xs text-white placeholder-gray-500 focus:border-pink-500 outline-none"
+                          />
+                        </div>
+                        <p className="text-[10px] text-gray-500">
+                          {ticketForm.logoUrl ? "Logo activo. Reemplaza el ícono de Rabbitty en el encabezado." : "Sube tu PNG, JPG o SVG. Al agregarlo, sustituirá el ícono de Rabbitty."}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
