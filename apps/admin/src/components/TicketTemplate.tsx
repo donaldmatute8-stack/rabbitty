@@ -45,9 +45,11 @@ export interface TicketData {
 export function TicketTemplate({
   data,
   isThermalPaper = false,
+  id = "thermal-printable-receipt",
 }: {
   data: TicketData;
   isThermalPaper?: boolean;
+  id?: string;
 }) {
   const currency = data.currency || "MXN";
   const taxRate = data.taxRate ?? 0.16;
@@ -61,7 +63,7 @@ export function TicketTemplate({
   // Visual mode: Dark aesthetic on screen, or clean thermal paper for print
   return (
     <div
-      id="thermal-printable-receipt"
+      id={id}
       className={
         isThermalPaper
           ? "w-[300px] bg-white text-black p-4 font-mono text-xs leading-tight mx-auto select-text shadow-sm"
