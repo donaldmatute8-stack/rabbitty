@@ -45,10 +45,12 @@ export interface TicketData {
 export function TicketTemplate({
   data,
   isThermalPaper = false,
+  paperWidth = "80mm",
   id = "thermal-printable-receipt",
 }: {
   data: TicketData;
   isThermalPaper?: boolean;
+  paperWidth?: "58mm" | "80mm";
   id?: string;
 }) {
   const currency = data.currency || "MXN";
@@ -60,14 +62,16 @@ export function TicketTemplate({
   const bunzRate = data.bunzCashbackRate ?? 20;
   const estimatedBunz = Math.round(data.total * (bunzRate / 100));
 
+  const is58mm = paperWidth === "58mm";
+
   // Visual mode: Dark aesthetic on screen, or clean thermal paper for print
   return (
     <div
       id={id}
       className={
         isThermalPaper
-          ? "w-[300px] bg-white text-black p-4 font-mono text-xs leading-tight mx-auto select-text shadow-sm"
-          : "w-full max-w-[340px] rounded-3xl border border-white/10 bg-gradient-to-b from-gray-900/95 via-gray-950/90 to-black p-6 font-mono text-xs leading-relaxed text-gray-200 shadow-2xl backdrop-blur-2xl relative overflow-hidden select-none"
+          ? `${is58mm ? "w-[240px]" : "w-[300px]"} bg-white text-black p-3 font-mono text-xs leading-tight mx-auto select-text shadow-sm`
+          : `${is58mm ? "w-full max-w-[280px]" : "w-full max-w-[340px]"} rounded-3xl border border-white/10 bg-gradient-to-b from-gray-900/95 via-gray-950/90 to-black p-5 font-mono text-xs leading-relaxed text-gray-200 shadow-2xl backdrop-blur-2xl relative overflow-hidden select-none`
       }
     >
       {/* Decorative Glow inside screen mode */}

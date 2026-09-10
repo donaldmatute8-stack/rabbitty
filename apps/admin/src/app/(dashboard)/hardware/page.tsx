@@ -10,10 +10,11 @@ import {
   FileDown, Image as ImageIcon, ExternalLink, Maximize2, Upload, X
 } from "lucide-react";
 import { TicketTemplate, TicketData } from "../../../components/TicketTemplate";
+import { HardwareConnectionGuide } from "../../../components/HardwareConnectionGuide";
 
 export default function HardwarePage() {
   const utils = trpc.useUtils();
-  const [activeTab, setActiveTab] = useState<"ticket" | "devices" | "agent">("ticket");
+  const [activeTab, setActiveTab] = useState<"ticket" | "manual" | "devices">("ticket");
   const [fullscreenModal, setFullscreenModal] = useState(false);
   const [thermalPaperMode, setThermalPaperMode] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -321,26 +322,36 @@ export default function HardwarePage() {
           </div>
 
           {/* Segmented Tab Controls */}
-          <div className="flex rounded-2xl bg-white/5 p-1 border border-white/10 shrink-0">
+          <div className="flex rounded-2xl bg-white/5 p-1 border border-white/10 shrink-0 gap-1">
             <button
               onClick={() => setActiveTab("ticket")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === "ticket"
                   ? "bg-pink-500 text-white shadow-lg"
                   : "text-gray-400 hover:text-white"
               }`}
             >
-              <FileText className="h-4 w-4" /> Configuración & Preview en Vivo
+              <FileText className="h-4 w-4" /> Configuración & Preview
+            </button>
+            <button
+              onClick={() => setActiveTab("manual")}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === "manual"
+                  ? "bg-cyan-500 text-gray-950 shadow-lg"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              <BookOpen className="h-4 w-4" /> Manual de Conexión (PDF)
             </button>
             <button
               onClick={() => setActiveTab("devices")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === "devices"
                   ? "bg-pink-500 text-white shadow-lg"
                   : "text-gray-400 hover:text-white"
               }`}
             >
-              <Printer className="h-4 w-4" /> Periféricos & Driver
+              <Printer className="h-4 w-4" /> Periféricos & Agent
             </button>
           </div>
         </div>
@@ -497,17 +508,19 @@ export default function HardwarePage() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block mb-2">
-                      Ancho / Tipo de Impresora
+                      Conexión & Ancho de Papel
                     </label>
                     <select
                       value={ticketForm.printerType}
                       onChange={(e) => setTicketForm({ ...ticketForm, printerType: e.target.value })}
                       className="w-full rounded-xl border border-white/10 bg-black/60 p-3 text-sm text-white focus:border-pink-500 outline-none"
                     >
-                      <option value="ESC/POS 80mm">ESC/POS Térmica 80mm (Recomendado)</option>
-                      <option value="ESC/POS 58mm">ESC/POS Térmica 58mm</option>
-                      <option value="NETWORK_RAW">Impresora de Red / Ethernet (Socket RAW 9100)</option>
-                      <option value="GENERIC_TEXT">Genérico / Solo Texto</option>
+                      <option value="BLUETOOTH_80mm">🔵 Térmica Bluetooth (80mm - Recomendado)</option>
+                      <option value="BLUETOOTH_58mm">🔵 Térmica Bluetooth (58mm - Portátil)</option>
+                      <option value="ESC/POS 80mm">🔌 USB / ESC/POS Térmica 80mm</option>
+                      <option value="ESC/POS 58mm">🔌 USB / ESC/POS Térmica 58mm</option>
+                      <option value="NETWORK_RAW">🌐 Impresora de Red / Ethernet (RAW 9100)</option>
+                      <option value="GENERIC_TEXT">📄 Genérico / Solo Texto</option>
                     </select>
                   </div>
 
@@ -629,7 +642,11 @@ export default function HardwarePage() {
             {/* Ticket Canvas Wrapper with shadow and glass aesthetic */}
             <div className="flex justify-center p-6 rounded-3xl bg-gradient-to-b from-gray-900/60 to-black/90 border border-white/10 shadow-2xl backdrop-blur-2xl relative group">
               <div className="transition-all duration-300 transform group-hover:scale-[1.01]">
-                <TicketTemplate data={previewTicketData} isThermalPaper={thermalPaperMode} />
+                <TicketTemplate 
+                  data={previewTicketData} 
+                  isThermalPaper={thermalPaperMode} 
+                  paperWidth={ticketForm.printerType.includes("58mm") ? "58mm" : "80mm"}
+                />
               </div>
             </div>
 
@@ -664,7 +681,12 @@ export default function HardwarePage() {
         </div>
       )}
 
-      {/* ── TAB 2: PERIPHERALS & HARDWARE GUIDES ── */}
+      {/* ── TAB 2: MANUAL DE CONEXIÓN INTERACTIVO (MINI-LANDING / PDF) ── */}
+      {activeTab === "manual" && (
+        <HardwareConnectionGuide />
+      )}
+
+      {/* ── TAB 3: PERIPHERALS & HARDWARE GUIDES ── */}
       {activeTab === "devices" && (
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Device Cards */}
@@ -749,22 +771,22 @@ export default function HardwarePage() {
                       <BookOpen className="h-5 w-5" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-white">Guía de Conexión</h3>
+                      <h3 className="font-bold text-white">Guía de Conexión Térmica & Bluetooth</h3>
                       <p className="text-xs text-gray-400">Puesta en marcha en 3 pasos</p>
                     </div>
                   </div>
                   <div className="space-y-3 pt-2 text-sm text-gray-400">
                     <div className="flex gap-3">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10 font-bold text-xs text-white">1</span>
-                      <p>Conecta la impresora térmica por USB o Red y enciéndela.</p>
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-cyan-500/20 font-bold text-xs text-cyan-400">1</span>
+                      <p><strong>Para Impresoras Bluetooth:</strong> Enciende la impresora. En tu tablet, PC o teléfono ve a <em>Ajustes &gt; Bluetooth</em>, busca el dispositivo (ej. <code>MTP-II</code>, <code>POS-58</code>, <code>RPP02N</code>) y vincúlala con PIN (comúnmente <code>0000</code> o <code>1234</code>).</p>
                     </div>
                     <div className="flex gap-3">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10 font-bold text-xs text-white">2</span>
-                      <p>Configura los datos fiscales en la pestaña <strong>Configuración de Ticket</strong>.</p>
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-cyan-500/20 font-bold text-xs text-cyan-400">2</span>
+                      <p><strong>Configura el papel en Rabbitty:</strong> Selecciona en la pestaña <em>Configuración &amp; Preview</em> si es de <strong>80mm</strong> o <strong>58mm (portátil)</strong>.</p>
                     </div>
                     <div className="flex gap-3">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10 font-bold text-xs text-white">3</span>
-                      <p>Haz clic en <strong>Imprimir Ticket de Prueba</strong> para verificar márgenes y corte automático.</p>
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-cyan-500/20 font-bold text-xs text-cyan-400">3</span>
+                      <p><strong>Prueba física:</strong> Presiona <strong>Imprimir Ticket de Prueba</strong>. En el diálogo del navegador, selecciona tu impresora Bluetooth emparejada. En márgenes elige <em>"Ninguno"</em> y desactivar encabezados/pies de página.</p>
                     </div>
                   </div>
                 </div>
@@ -809,7 +831,11 @@ export default function HardwarePage() {
           </div>
 
           <div className="flex justify-center max-h-[65vh] overflow-y-auto custom-scrollbar p-6 bg-black/60 rounded-3xl border border-white/5">
-            <TicketTemplate data={previewTicketData} isThermalPaper={thermalPaperMode} />
+            <TicketTemplate 
+              data={previewTicketData} 
+              isThermalPaper={thermalPaperMode} 
+              paperWidth={ticketForm.printerType.includes("58mm") ? "58mm" : "80mm"}
+            />
           </div>
 
           <div className="flex justify-end gap-2 pt-2 border-t border-white/5">
