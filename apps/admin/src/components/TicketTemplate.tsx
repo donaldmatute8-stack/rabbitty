@@ -77,26 +77,25 @@ export function TicketTemplate({
 
       {/* ── TOP HEADER / BRANDING ── */}
       <div className="text-center space-y-2 border-b border-dashed border-gray-700 pb-4">
-        {/* Rabbitty Badge Tag */}
-        <div className="flex items-center justify-center gap-1 text-[10px] font-black uppercase tracking-widest text-pink-400">
-          <Sparkles className="h-3 w-3" />
-          <span>RABBITTY OS POS</span>
-        </div>
-
-        {/* Business Logo or Avatar */}
+        {/* Business Logo or Avatar - Replaces default Rabbitty icon when provided */}
         {data.logoUrl ? (
-          <div className="flex justify-center my-2">
-            <img
-              src={data.logoUrl}
-              alt={data.restaurantName || "Logo"}
-              className="h-12 w-12 rounded-xl object-contain border border-white/10 bg-white/5 p-1"
-            />
+          <div className="flex flex-col items-center justify-center my-2">
+            <div className="relative h-16 w-16 rounded-2xl overflow-hidden border border-white/15 bg-white/10 p-1.5 shadow-xl flex items-center justify-center">
+              <img
+                src={data.logoUrl}
+                alt={data.restaurantName || "Logo del Negocio"}
+                className="max-h-full max-w-full object-contain rounded-xl"
+              />
+            </div>
           </div>
         ) : (
-          <div className="flex justify-center my-1.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-500/10 text-cyan-400 font-black text-xl border border-cyan-500/20">
+          <div className="flex flex-col items-center justify-center my-1.5">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/10 text-cyan-400 font-black text-2xl border border-cyan-500/20 shadow-lg">
               🐰
             </div>
+            <span className="text-[9px] font-black uppercase tracking-widest text-pink-400 mt-1">
+              RABBITTY OS POS
+            </span>
           </div>
         )}
 
