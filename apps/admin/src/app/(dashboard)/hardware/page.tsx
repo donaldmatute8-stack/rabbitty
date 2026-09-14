@@ -23,7 +23,12 @@ export default function HardwarePage() {
   const { data: restaurants, isLoading: loadingRest } = trpc.admin.getRestaurants.useQuery();
   const { data: ticketContext, isLoading: loadingTicket } = trpc.printing.getTicketData.useQuery(undefined);
   
-  const currentRestaurant = restaurants?.[0] || ticketContext?.restaurant;
+  const [selectedRestaurantId, setSelectedRestaurantId] = useState<string>("");
+  
+  const currentRestaurant = 
+    restaurants?.find((r) => r.id === selectedRestaurantId) || 
+    restaurants?.[0] || 
+    ticketContext?.restaurant;
   const currentBranch = ticketContext?.branch;
 
   // Form State for Ticket Fiscal & Business Information
@@ -37,8 +42,15 @@ export default function HardwarePage() {
     email: "",
     address: "",
     ticketFooter: "",
-    printerType: "ESC/POS 80mm",
+    printerType: "ESC/POS 58mm",
   });
+
+  useEffect(() => {
+    if (restaurants && restaurants.length > 0 && !selectedRestaurantId) {
+      // Default cleanly to the first available restaurant without forced tenant pre-selection
+      setSelectedRestaurantId(restaurants[0].id);
+    }
+  }, [restaurants, selectedRestaurantId]);
 
   useEffect(() => {
     if (currentRestaurant) {
@@ -52,7 +64,7 @@ export default function HardwarePage() {
         email: (currentRestaurant as any).email || "",
         address: currentBranch?.address || "",
         ticketFooter: (currentRestaurant as any).ticketFooter || "¡Gracias por su compra en Rabbitty! Vuelva pronto.",
-        printerType: currentRestaurant.printerType || "ESC/POS 80mm",
+        printerType: currentRestaurant.printerType || "ESC/POS 58mm",
       });
     }
   }, [currentRestaurant, currentBranch]);
@@ -94,8 +106,47 @@ export default function HardwarePage() {
     toast.success(`Descarga iniciada para ${os}`);
   };
 
-  const handlePrintTest = () => {
+  const handlePrintTest = async () => {
+    try {
+      toast.info("Enviando comando ESC/POS directo a Rabbitty POS Printer...");
+      const res = await fetch("/api/print", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(previewTicketData),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("¡Ticket emitido físicamente en Rabbitty POS Printer!");
+        return;
+      }
+    } catch {
+      // Fallback
+    }
+    // Fallback: Browser print dialog
     window.print();
+  };
+
+  const handlePrintWelcome = async () => {
+    try {
+      toast.info("Enviando Ticket de Bienvenida Rabbitty a la impresora...");
+      const res = await fetch("/api/print", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...previewTicketData,
+          isWelcome: true,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("🐰 ¡Bienvenida Rabbitty emitida físicamente con éxito!");
+        return;
+      } else {
+        toast.error(data.error || "No se pudo emitir el ticket de bienvenida");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error al conectar con la impresora");
+    }
   };
 
   // Preview Mock Data synced in real time with the form
@@ -233,7 +284,7 @@ export default function HardwarePage() {
       `*Subtotal:* $${previewTicketData.subtotal?.toFixed(2)}%0A` +
       `*IVA (16%):* $${previewTicketData.tax?.toFixed(2)}%0A` +
       `*TOTAL:* ${encodeURIComponent(totalFormatted)}%0A%0A` +
-      `🐰 _Emitido con Rabbitty OS POS • rabbitty.app_`;
+      `🐰 _Emitido con Rabbitty OS POS • rabbitty.me_`;
 
     const phoneClean = ticketForm.phone.replace(/\D/g, "");
     const waUrl = phoneClean 
@@ -377,6 +428,29 @@ export default function HardwarePage() {
               </div>
 
               <form onSubmit={handleSaveTicket} className="space-y-5">
+                {/* Tenant / Business Selector */}
+                {restaurants && restaurants.length > 1 && (
+                  <div className="p-4 rounded-2xl bg-white/5 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <label className="text-xs font-black uppercase tracking-wider text-pink-400 block">
+                        Negocio / Tenant Activo
+                      </label>
+                      <p className="text-xs text-gray-400">Selecciona el negocio para configurar su ticketera e identidad</p>
+                    </div>
+                    <select
+                      value={selectedRestaurantId}
+                      onChange={(e) => setSelectedRestaurantId(e.target.value)}
+                      className="px-3.5 py-2 rounded-xl bg-black/60 border border-white/20 text-white text-xs font-bold focus:outline-none focus:border-pink-500"
+                    >
+                      {restaurants.map((r) => (
+                        <option key={r.id} value={r.id} className="bg-gray-900 text-white">
+                          {r.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Input
                     label="Nombre Comercial del Negocio *"
@@ -627,10 +701,20 @@ export default function HardwarePage() {
                 <Button
                   size="sm"
                   variant="secondary"
+                  onClick={handlePrintWelcome}
+                  className="flex items-center gap-1.5 bg-pink-500/20 hover:bg-pink-500/30 border-pink-500/40 text-pink-300 font-bold"
+                  title="Imprime un ticket de bienvenida y verificación Rabbitty"
+                >
+                  <Sparkles className="h-3.5 w-3.5 text-pink-400" /> Bienvenida
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant="secondary"
                   onClick={handlePrintTest}
                   className="flex items-center gap-1.5 border-white/20 hover:border-white/40"
                 >
-                  <Printer className="h-4 w-4 text-pink-400" /> Imprimir
+                  <Printer className="h-4 w-4 text-cyan-400" /> Imprimir
                 </Button>
               </div>
             </div>

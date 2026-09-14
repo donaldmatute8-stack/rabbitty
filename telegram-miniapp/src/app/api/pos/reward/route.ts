@@ -90,22 +90,20 @@ export async function POST(request: Request) {
 
     if (existingUser) {
       // 4a. Existing User: Pay off offline debt first
+      const currentDebt = existingUser.pendingDebtBunz ?? 0;
+      let payoff = 0;
       let remainingMint = bunzToMint;
-      let newDebt = existingUser.pendingDebtBunz ?? 0;
-      let newEarned = existingUser.totalBunzEarned;
 
-      if (newDebt > 0) {
-        const payoff = Math.min(newDebt, remainingMint);
-        newDebt -= payoff;
+      if (currentDebt > 0) {
+        payoff = Math.min(currentDebt, remainingMint);
         remainingMint -= payoff;
       }
 
-      newEarned += remainingMint;
-
+      // Atomic update using PostgreSQL SQL expressions to prevent race conditions
       await db.update(users)
         .set({ 
-          totalBunzEarned: newEarned,
-          pendingDebtBunz: newDebt
+          totalBunzEarned: sql`COALESCE(total_bunz_earned, 0) + ${remainingMint}`,
+          pendingDebtBunz: sql`GREATEST(0, COALESCE(pending_debt_bunz, 0) - ${payoff})`
         })
         .where(eq(users.id, existingUser.id));
 

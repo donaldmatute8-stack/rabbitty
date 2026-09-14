@@ -240,14 +240,16 @@ export const posRouter = router({
 
       // Server-side discount calculation (trust the server, not the client)
       let finalAmount = input.amount;
+      let calculatedDiscount = orderRow.discount || 0;
       if (input.discountPercent && input.discountPercent > 0) {
         const serverCalculated = orderRow.total * (1 - input.discountPercent / 100);
         if (Math.abs(serverCalculated - input.amount) > 1) {
           throw new Error("Monto de descuento inválido");
         }
         finalAmount = serverCalculated;
+        calculatedDiscount = (input.discountPercent / 100) * orderRow.total;
         await ctx.restaurantDb.update(orders)
-          .set({ discount: input.discountPercent / 100 * orderRow.total })
+          .set({ discount: calculatedDiscount })
           .where(eq(orders.id, input.orderId));
       }
 
@@ -267,7 +269,8 @@ export const posRouter = router({
           .where(eq(orders.id, input.orderId));
       }
 
-      if (totalPaid >= orderRow.total) {
+      const targetPayableAmount = Math.max(0, orderRow.total - calculatedDiscount);
+      if (totalPaid >= targetPayableAmount) {
         await ctx.restaurantDb.update(orders).set({ status: "COMPLETED" }).where(eq(orders.id, input.orderId));
 
         // INVENTORY DEDUCTION LOGIC (recursive for sub-recipes)
@@ -513,5 +516,177 @@ export const posRouter = router({
     .mutation(async ({ ctx, input }) => {
       await ctx.restaurantDb.update(menuItemModifiers).set(input).where(eq(menuItemModifiers.id, input.id));
       return { success: true };
+    }),
+
+  directCheckout: protectedProcedure
+    .input(
+      z.object({
+        tableId: z.string().optional(),
+        orderType: z.enum(["DINE_IN", "TO_GO", "DELIVERY"]).default("DINE_IN"),
+        customerName: z.string().optional(),
+        customerPhone: z.string().optional(),
+        items: z.array(
+          z.object({
+            menuItemId: z.string(),
+            quantity: z.number().min(1),
+            price: z.number(),
+            notes: z.string().optional(),
+          })
+        ),
+        paymentMethod: z.enum(["CASH", "CREDIT_CARD", "DEBIT_CARD", "BUNZ"]),
+        discountPercent: z.number().min(0).max(100).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // 1. Create order
+      const [order] = await ctx.restaurantDb.insert(orders).values({
+        branchId: ctx.branchId,
+        tableId: input.tableId ?? null,
+        orderType: input.orderType,
+        customerName: input.customerName ?? null,
+        customerPhone: input.customerPhone ?? null,
+        subtotal: 0,
+        tax: 0,
+        discount: 0,
+        tip: 0,
+        total: 0,
+        status: "PENDING",
+      }).returning();
+
+      if (!order) throw new Error("No se pudo crear la orden en base de datos");
+
+      // 2. Insert items and sum subtotal
+      let calculatedSubtotal = 0;
+      for (const [i, item] of input.items.entries()) {
+        const totalPrice = item.price * item.quantity;
+        calculatedSubtotal += totalPrice;
+
+        await ctx.restaurantDb.insert(orderItems).values({
+          orderId: order.id,
+          menuItemId: item.menuItemId,
+          quantity: item.quantity,
+          unitPrice: item.price,
+          totalPrice,
+          sortOrder: i,
+          notes: item.notes ?? null,
+        });
+      }
+
+      const calculatedTax = Math.round(calculatedSubtotal * 0.16 * 100) / 100;
+      const originalTotal = calculatedSubtotal + calculatedTax;
+      let finalAmount = originalTotal;
+      let calculatedDiscount = 0;
+
+      if (input.discountPercent && input.discountPercent > 0) {
+        calculatedDiscount = (input.discountPercent / 100) * originalTotal;
+        finalAmount = Math.max(0, originalTotal - calculatedDiscount);
+      }
+
+      await ctx.restaurantDb.update(orders).set({
+        subtotal: calculatedSubtotal,
+        tax: calculatedTax,
+        discount: calculatedDiscount,
+        total: originalTotal,
+      }).where(eq(orders.id, order.id));
+
+      // 3. Delegate to payOrder logic (insert payment, deduct inventory, trigger Bunz and CRM)
+      const [payment] = await ctx.restaurantDb.insert(payments).values({
+        orderId: order.id,
+        method: input.paymentMethod,
+        amount: finalAmount,
+      }).returning();
+
+      await ctx.restaurantDb.update(orders).set({ status: "COMPLETED" }).where(eq(orders.id, order.id));
+
+      // Deduct inventory
+      const deductRecipe = async (menuItemId: string, qty: number, path: Set<string>) => {
+        if (path.has(menuItemId)) return;
+        path.add(menuItemId);
+        const ingredients = await ctx.restaurantDb.select()
+          .from(dbSchema.menuItemIngredients)
+          .where(eq(dbSchema.menuItemIngredients.menuItemId, menuItemId));
+
+        for (const ing of ingredients) {
+          if (ing.inventoryItemId) {
+            const deductionAmount = ing.quantityRequired * qty;
+            await ctx.restaurantDb.insert(dbSchema.inventoryMovements).values({
+              itemId: ing.inventoryItemId,
+              branchId: ctx.branchId,
+              type: "SALE_DEDUCTION",
+              quantity: deductionAmount,
+              reference: order.id,
+              notes: `Order ${order.id} completed via Direct POS`,
+            });
+            await ctx.restaurantDb.execute(sql`
+              UPDATE inventory_items 
+              SET stock = stock - ${deductionAmount} 
+              WHERE id = ${ing.inventoryItemId}
+            `);
+          } else if (ing.subRecipeId) {
+            await deductRecipe(ing.subRecipeId, ing.quantityRequired * qty, path);
+          }
+        }
+        path.delete(menuItemId);
+      };
+
+      for (const item of input.items) {
+        await deductRecipe(item.menuItemId, item.quantity, new Set());
+      }
+
+      // CRM Auto-segmentation & Bunz Minting
+      const [branch] = await ctx.restaurantDb.select().from(dbSchema.branches).where(eq(dbSchema.branches.id, ctx.branchId));
+      if (branch) {
+        const [restaurant] = await ctx.restaurantDb.select().from(restaurants).where(eq(restaurants.id, branch.restaurantId));
+        if (restaurant && input.customerPhone) {
+          const [existingCustomer] = await ctx.restaurantDb.select().from(dbSchema.customers).where(
+            and(
+              eq(dbSchema.customers.restaurantId, restaurant.id),
+              eq(dbSchema.customers.phone, input.customerPhone)
+            )
+          );
+
+          let newVisits = 1;
+          let newSpent = finalAmount;
+          if (existingCustomer) {
+            newVisits = existingCustomer.totalVisits + 1;
+            newSpent = existingCustomer.totalSpent + finalAmount;
+            let newSegment = newVisits >= 5 ? "VIP" : newVisits > 1 ? "RECURRENT" : "NEW";
+            await ctx.restaurantDb.update(dbSchema.customers).set({
+              totalVisits: newVisits,
+              totalSpent: newSpent,
+              lastVisitAt: new Date(),
+              segment: newSegment,
+            }).where(eq(dbSchema.customers.id, existingCustomer.id));
+          } else {
+            await ctx.restaurantDb.insert(dbSchema.customers).values({
+              restaurantId: restaurant.id,
+              phone: input.customerPhone,
+              name: input.customerName,
+              totalVisits: 1,
+              totalSpent: finalAmount,
+              lastVisitAt: new Date(),
+              segment: "NEW",
+            });
+          }
+
+          // Mint Bunz
+          const rewardRate = (restaurant.defaultRewardRate ?? 20) / 100;
+          try {
+            await miniappClient.rewardBunz(input.customerPhone, finalAmount, order.id, ctx.branchId);
+          } catch {}
+        }
+      }
+
+      bus.emit(EventTypes.ORDER_CREATED, { orderId: order.id, tableId: input.tableId });
+      bus.emit(EventTypes.ORDER_PAID, { orderId: order.id });
+
+      return {
+        success: true,
+        orderId: order.id,
+        orderNumber: order.id.slice(-4).toUpperCase(),
+        total: finalAmount,
+        subtotal: calculatedSubtotal,
+        tax: calculatedTax,
+      };
     }),
 });

@@ -39,8 +39,15 @@ export default function OrdersPage() {
     onError: (e) => toast.error(e.message),
   });
 
-  const openOrders = orders?.filter((o) => o.status === "open") ?? [];
-  const paidOrders = orders?.filter((o) => o.status === "paid") ?? [];
+  const openOrders = orders?.filter((o) => {
+    const s = o.status?.toUpperCase();
+    return s === "PENDING" || s === "OPEN" || s === "PARTIAL_PAID";
+  }) ?? [];
+
+  const paidOrders = orders?.filter((o) => {
+    const s = o.status?.toUpperCase();
+    return s === "COMPLETED" || s === "PAID";
+  }) ?? [];
 
   const handleVoid = (orderId: string, reason: string) => {
     voidOrder.mutate({ orderId, reason });
