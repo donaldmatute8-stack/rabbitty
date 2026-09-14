@@ -62,6 +62,12 @@ export default function PosPage() {
     onError: (err) => toast.error(err.message),
   });
 
+  const directCheckoutMutation = trpc.pos.directCheckout.useMutation({
+    onError: (err) => {
+      toast.error(err.message || "Error al procesar el cobro en el backend");
+    },
+  });
+
   useEffect(() => {
     const timer = setInterval(() => {
       setTime(new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" }));
@@ -108,7 +114,7 @@ export default function PosPage() {
 
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
-  const handleCheckout = (method: string = "EFECTIVO") => {
+  const handleCheckout = async (method: string = "EFECTIVO") => {
     if (cart.length === 0) return;
 
     const rest = ticketContext?.restaurant;
@@ -116,7 +122,40 @@ export default function PosPage() {
     const taxRate = rest?.taxRate ?? 0.16;
     const subtotal = total / (1 + taxRate);
     const tax = total - subtotal;
-    const orderNumber = Math.floor(1000 + Math.random() * 9000).toString();
+
+    // Map payment method string to schema enum
+    let mappedMethod: "CASH" | "CREDIT_CARD" | "DEBIT_CARD" | "BUNZ" = "CASH";
+    if (method.includes("TARJETA") || method.includes("CREDIT")) mappedMethod = "CREDIT_CARD";
+    else if (method.includes("DEBIT")) mappedMethod = "DEBIT_CARD";
+    else if (method.includes("BUNZ") || method.includes("QR")) mappedMethod = "BUNZ";
+
+    // Map orderType
+    const mappedOrderType: "DINE_IN" | "TO_GO" | "DELIVERY" = 
+      orderType === "TAKEAWAY" || orderType === "COUNTER" ? "TO_GO" :
+      orderType === "DELIVERY" ? "DELIVERY" : "DINE_IN";
+
+    let realOrderNumber = Math.floor(1000 + Math.random() * 9000).toString();
+
+    // 1. Dispatch real order to backend DB (inventories, Bunz cashback, CRM)
+    try {
+      const checkoutResult = await directCheckoutMutation.mutateAsync({
+        tableId: selectedTableId || undefined,
+        orderType: mappedOrderType,
+        paymentMethod: mappedMethod,
+        items: cart.map((i) => ({
+          menuItemId: i.menuItemId,
+          quantity: i.quantity,
+          price: i.price,
+        })),
+      });
+
+      if (checkoutResult.orderNumber) {
+        realOrderNumber = checkoutResult.orderNumber;
+      }
+      toast.success(`Orden #${realOrderNumber} registrada y pagada en el sistema`);
+    } catch {
+      // Allow ticket generation even if backend offline (graceful degradation)
+    }
 
     const selectedTable = tables?.find((t) => t.id === selectedTableId);
     const tableLabel = orderType === "DINE_IN" ? (selectedTable ? `Mesa ${selectedTable.number}` : "Salón") : orderType === "TAKEAWAY" ? "Para Llevar" : orderType === "DELIVERY" ? "Domicilio" : "Mostrador";
@@ -131,7 +170,7 @@ export default function PosPage() {
       phone: (rest as any)?.phone || branch?.phone || undefined,
       email: (rest as any)?.email || undefined,
       ticketFooter: (rest as any)?.ticketFooter || "¡Gracias por su compra en Rabbitty! Vuelva pronto.",
-      orderNumber,
+      orderNumber: realOrderNumber,
       tableNumber: tableLabel,
       orderType: orderType === "DINE_IN" ? "Consumo en Sitio" : orderType === "TAKEAWAY" ? "Para Llevar" : orderType === "DELIVERY" ? "A Domicilio" : "Caja Rápida",
       cashierName: "Caja Principal",
@@ -855,7 +894,7 @@ export default function PosPage() {
                     `*Subtotal:* $${paidTicketData.subtotal?.toFixed(2)}%0A` +
                     `*IVA (16%):* $${paidTicketData.tax?.toFixed(2)}%0A` +
                     `*TOTAL:* ${encodeURIComponent(totalFormatted)}%0A%0A` +
-                    `🐰 _Emitido con Rabbitty OS POS • rabbitty.app_`;
+                    `🐰 _Emitido con Rabbitty OS POS • rabbitty.me_`;
                   window.open(`https://wa.me/?text=${message}`, "_blank");
                 }}
                 className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center gap-1.5"
@@ -864,8 +903,24 @@ export default function PosPage() {
               </Button>
               <Button
                 size="sm"
-                onClick={() => window.print()}
-                className="bg-emerald-500 hover:bg-emerald-600 text-gray-950 font-black flex items-center gap-1.5 shrink-0"
+                onClick={async () => {
+                  if (paidTicketData) {
+                    try {
+                      const res = await fetch("/api/print", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(paidTicketData),
+                      });
+                      const data = await res.json();
+                      if (data.success) {
+                        toast.success("Ticket emitido en Rabbitty POS Printer");
+                        return;
+                      }
+                    } catch {}
+                  }
+                  window.print();
+                }}
+                className="bg-emerald-500 hover:bg-emerald-600 text-gray-950 font-black flex items-center gap-1.5 shrink-0 cursor-pointer"
               >
                 <Printer className="h-4 w-4" /> Imprimir
               </Button>

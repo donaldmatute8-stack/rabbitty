@@ -269,7 +269,7 @@ export function TicketTemplate({
         <div className="pt-2 flex items-center justify-center gap-1.5 font-black text-[9px] tracking-wider text-gray-500 uppercase">
           <span>🐰 POWERED BY RABBITTY OS</span>
         </div>
-        <p className="text-[8px] text-gray-600">rabbitty.app • Punto de Venta Inteligente</p>
+        <p className="text-[8px] text-gray-600">rabbitty.me • Punto de Venta Inteligente</p>
       </div>
     </div>
   );
