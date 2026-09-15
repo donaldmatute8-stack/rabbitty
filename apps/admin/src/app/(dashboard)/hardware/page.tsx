@@ -875,28 +875,19 @@ export default function HardwarePage() {
               </div>
             </div>
 
-            {/* Action buttons row */}
+            {/* Action buttons row — only print & export, BT se gestiona desde el panel de estado */}
             <div className="flex flex-wrap gap-2 px-5 py-3 border-b border-white/5 shrink-0">
-              {btConnected ? (
-                <button onClick={handleDisconnectBluetooth} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500/20 border border-blue-500/40 text-blue-300 text-xs font-bold hover:bg-blue-500/30 transition-all cursor-pointer">
-                  <BluetoothConnected className="h-3 w-3" /> {btDeviceName?.substring(0, 12) || "BT Activo"}
-                </button>
-              ) : (
-                <button onClick={handleConnectBluetooth} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs font-bold hover:bg-blue-500/20 transition-all cursor-pointer">
-                  <Bluetooth className="h-3 w-3" /> Conectar BT
-                </button>
-              )}
               <button onClick={handlePrintWelcome} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pink-500/10 border border-pink-500/30 text-pink-400 text-xs font-bold hover:bg-pink-500/20 transition-all cursor-pointer">
-                <Sparkles className="h-3 w-3" /> Bienvenida
+                <Sparkles className="h-3 w-3" /> Ticket Bienvenida
               </button>
               <button onClick={handlePrintTest} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs font-bold hover:bg-cyan-500/20 transition-all cursor-pointer">
-                <Printer className="h-3 w-3" /> Imprimir
+                <Printer className="h-3 w-3" /> Imprimir Prueba
               </button>
               <button onClick={handleExportPDF} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/15 text-gray-300 text-xs font-bold hover:bg-white/10 transition-all cursor-pointer">
                 <FileDown className="h-3 w-3 text-pink-400" /> PDF
               </button>
               <button onClick={handleExportImage} disabled={isExporting} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/15 text-gray-300 text-xs font-bold hover:bg-white/10 transition-all cursor-pointer disabled:opacity-50">
-                <ImageIcon className="h-3 w-3 text-cyan-400" /> {isExporting ? "..." : "Imagen"}
+                <ImageIcon className="h-3 w-3 text-cyan-400" /> {isExporting ? "Generando..." : "Imagen"}
               </button>
               <button onClick={handleShareWhatsApp} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600/20 border border-emerald-500/30 text-emerald-300 text-xs font-bold hover:bg-emerald-600/30 transition-all cursor-pointer">
                 <MessageCircle className="h-3 w-3" /> WhatsApp
