@@ -168,6 +168,24 @@ export default function HardwarePage() {
   }, [checkPrinterStatus]);
 
   const handleConnectBluetooth = async () => {
+    // Diagnostics — help debug why BT might not work
+    const protocol = window.location.protocol;
+    const host = window.location.hostname;
+    const btAvailable = "bluetooth" in navigator;
+    console.info("[BT Debug]", { protocol, host, btAvailable, userAgent: navigator.userAgent });
+
+    if (!btAvailable) {
+      const isSecure = protocol === "https:" || host === "localhost" || host === "127.0.0.1";
+      if (!isSecure) {
+        toast.error(`❌ Web Bluetooth requiere HTTPS. Estás en: ${protocol}//${host}`);
+      } else {
+        toast.error(
+          `❌ navigator.bluetooth no disponible en ${protocol}//${host}. Revisa chrome://flags/#enable-experimental-web-platform-features`
+        );
+      }
+      return;
+    }
+
     try {
       toast.info("Buscando impresora Bluetooth POS-58 / MTP...");
       const result = await connectBluetoothPrinter();
@@ -175,7 +193,7 @@ export default function HardwarePage() {
         setBtConnected(true);
         setBtDeviceName(result.deviceName);
         toast.success(`🐰 ¡Conectado directamente a ${result.deviceName}!`);
-      } else {
+      } else if (result.error !== "Selección cancelada.") {
         toast.error(result.error || "No se pudo emparejar con la impresora Bluetooth");
       }
     } catch (err: any) {
