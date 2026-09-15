@@ -30,6 +30,9 @@ async function ensureRestaurantColumns(client: ReturnType<typeof postgres>) {
       ALTER TABLE "restaurants" ADD COLUMN IF NOT EXISTS "email" text;
       ALTER TABLE "restaurants" ADD COLUMN IF NOT EXISTS "phone" text;
       ALTER TABLE "restaurants" ADD COLUMN IF NOT EXISTS "ticketFooter" text;
+      ALTER TABLE "restaurants" ADD COLUMN IF NOT EXISTS "isActive" boolean DEFAULT true NOT NULL;
+      ALTER TABLE "restaurants" ADD COLUMN IF NOT EXISTS "createdAt" timestamp DEFAULT now();
+      ALTER TABLE "restaurants" ADD COLUMN IF NOT EXISTS "updatedAt" timestamp DEFAULT now();
     `;
   } catch (e) {
     console.warn("Auto-migration notice (restaurants):", e);
