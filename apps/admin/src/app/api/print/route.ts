@@ -165,3 +165,106 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
+
+// GET endpoint to discover hardware bridge status and real printer health
+export async function GET() {
+  const CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+  };
+
+  const printerUri = process.env.RABBITTY_PRINTER_URI || "usb://YICHIP3121/POS-58%20Printer?serial=B120300001";
+  const printerName = process.env.RABBITTY_PRINTER_NAME || "Rabbitty POS Printer";
+
+  // Helper: run a shell command and return stdout/stderr
+  const runCmd = (cmd: string, args: string[]): Promise<{ stdout: string; stderr: string; code: number }> =>
+    new Promise((resolve) => {
+      const proc = spawn(cmd, args);
+      let stdout = "";
+      let stderr = "";
+      proc.stdout?.on("data", (d: Buffer) => { stdout += d.toString(); });
+      proc.stderr?.on("data", (d: Buffer) => { stderr += d.toString(); });
+      proc.on("close", (code: number) => resolve({ stdout, stderr, code: code ?? -1 }));
+      proc.on("error", () => resolve({ stdout, stderr, code: -1 }));
+    });
+
+  try {
+    // 1. Try lpstat -p to check if any printer is accepting/ready
+    const lpstat = await runCmd("lpstat", ["-p"]);
+    const lpstatOut = lpstat.stdout + lpstat.stderr;
+
+    // 2. Try lpinfo -v to enumerate discovered USB devices
+    const lpinfo = await runCmd("lpinfo", ["-v"]);
+    const lpinfoOut = lpinfo.stdout + lpinfo.stderr;
+
+    // Detect if our USB printer is visible to the CUPS subsystem
+    const usbVisible =
+      lpinfoOut.toLowerCase().includes("yichip") ||
+      lpinfoOut.toLowerCase().includes("pos-58") ||
+      lpinfoOut.toLowerCase().includes("pos58") ||
+      lpinfoOut.toLowerCase().includes("rabbitty") ||
+      lpinfoOut.toLowerCase().includes("usb:");
+
+    // Detect if it's accepting jobs
+    const printerAccepting =
+      lpstatOut.toLowerCase().includes("enabled") ||
+      lpstatOut.toLowerCase().includes("accepting") ||
+      lpstatOut.toLowerCase().includes("rabbitty") ||
+      lpstatOut.toLowerCase().includes("pos-58");
+
+    const bridgeMode = process.platform === "darwin" ? "macOS (CUPS USB)" : "Linux (CUPS USB)";
+
+    // 3. Determine consolidated status
+    let status: "online" | "offline" | "degraded" = "offline";
+    let message = "Impresora no detectada en el sistema";
+
+    if (usbVisible && printerAccepting) {
+      status = "online";
+      message = "Impresora conectada y lista para imprimir";
+    } else if (usbVisible && !printerAccepting) {
+      status = "degraded";
+      message = "Impresora detectada por USB pero no habilitada en CUPS";
+    } else if (!usbVisible && lpinfo.code === 0) {
+      status = "offline";
+      message = "Impresora no visible — verifica conexión USB";
+    } else {
+      // CUPS not available (Railway / production / no USB)
+      status = "degraded";
+      message = "Sistema CUPS no disponible — modo bridge de red o Bluetooth recomendado";
+    }
+
+    return NextResponse.json(
+      {
+        status,
+        message,
+        name: printerName,
+        model: "POS-58 (YICHIP3121)",
+        uri: printerUri,
+        bridge: bridgeMode,
+        bridgeReady: status !== "offline",
+        usbVisible,
+        cupsAccepting: printerAccepting,
+        supportedModes: ["USB", "BLE_GATT", "HTTP_BRIDGE"],
+        checkedAt: new Date().toISOString(),
+      },
+      { headers: CORS_HEADERS }
+    );
+  } catch (err: any) {
+    return NextResponse.json(
+      { status: "error", error: err.message, checkedAt: new Date().toISOString() },
+      { status: 500, headers: CORS_HEADERS }
+    );
+  }
+}
+
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    },
+  });
+}

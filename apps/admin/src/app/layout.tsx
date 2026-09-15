@@ -10,11 +10,17 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "Rabbitty Admin",
-  description: "Panel de administración Rabbitty",
+  title: "Rabbitty Admin & POS",
+  description: "Punto de Venta Inteligente y Gestión de Negocios Rabbitty",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Rabbitty POS",
+  },
   icons: {
     icon: '/favicon.ico',
-    apple: '/favicon.ico',
+    apple: '/Ra.png',
   },
 };
 
