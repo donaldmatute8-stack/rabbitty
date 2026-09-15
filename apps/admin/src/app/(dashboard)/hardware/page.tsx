@@ -862,26 +862,25 @@ export default function HardwarePage() {
       {/* ══ PREVIEW MODAL ══ */}
       {previewModal && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-5"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4"
           onClick={(e) => { if (e.target === e.currentTarget) setPreviewModal(false); }}
         >
-          {/* Modal panel: full height on mobile, capped on larger screens */}
-          <div className="relative w-full max-w-md sm:max-w-lg flex flex-col rounded-2xl sm:rounded-3xl border border-white/10 bg-gray-950/98 backdrop-blur-2xl shadow-2xl overflow-hidden"
+          <div
+            className="relative w-full max-w-sm sm:max-w-md flex flex-col rounded-2xl sm:rounded-3xl border border-white/10 bg-gray-950/98 backdrop-blur-2xl shadow-2xl overflow-hidden"
             style={{ maxHeight: "calc(100dvh - 1.5rem)" }}
           >
-            {/* ── Header ── */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 shrink-0 gap-2">
+            {/* ── Header: título + toggle dark/paper + cerrar ── */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 shrink-0">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_#22d3ee] shrink-0" />
                 <span className="font-bold text-white text-sm shrink-0">Preview</span>
                 <span className="text-[10px] text-gray-500 font-mono truncate">{ticketForm.name || "Tu Negocio"}</span>
               </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                {/* Paper mode toggle */}
+              <div className="flex items-center gap-1.5 shrink-0 ml-2">
                 <button
                   type="button"
                   onClick={() => setThermalPaperMode(!thermalPaperMode)}
-                  className={`text-[10px] font-bold px-2 py-1 rounded-lg border transition-all cursor-pointer whitespace-nowrap ${
+                  className={`text-[10px] font-bold px-2.5 py-1.5 rounded-lg border transition-all cursor-pointer whitespace-nowrap ${
                     thermalPaperMode ? "bg-white text-black border-white" : "bg-white/5 text-gray-300 border-white/10 hover:bg-white/10"
                   }`}
                 >
@@ -890,54 +889,33 @@ export default function HardwarePage() {
                 <button
                   onClick={() => setPreviewModal(false)}
                   className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/5 border border-white/10 text-gray-400 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 transition-all cursor-pointer shrink-0"
+                  aria-label="Cerrar previsualización"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
             </div>
 
-            {/* ── Action buttons — grid adapts to width ── */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 px-3 py-2.5 border-b border-white/5 shrink-0">
+            {/* ── Solo acciones de impresión — exportar está en la tarjeta de datos ── */}
+            <div className="flex gap-2 px-4 py-2.5 border-b border-white/5 shrink-0">
               <button
                 onClick={handlePrintWelcome}
-                className="flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl bg-pink-500/10 border border-pink-500/30 text-pink-400 text-[11px] font-bold hover:bg-pink-500/20 active:scale-95 transition-all cursor-pointer"
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-pink-500/10 border border-pink-500/30 text-pink-400 text-[11px] font-bold hover:bg-pink-500/20 active:scale-95 transition-all cursor-pointer"
               >
                 <Sparkles className="h-3 w-3 shrink-0" />
-                <span className="truncate">Bienvenida</span>
+                <span>Ticket Bienvenida</span>
               </button>
               <button
                 onClick={handlePrintTest}
-                className="flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-[11px] font-bold hover:bg-cyan-500/20 active:scale-95 transition-all cursor-pointer"
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-[11px] font-bold hover:bg-cyan-500/20 active:scale-95 transition-all cursor-pointer"
               >
                 <Printer className="h-3 w-3 shrink-0" />
-                <span className="truncate">Imprimir</span>
-              </button>
-              <button
-                onClick={handleExportPDF}
-                className="flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl bg-white/5 border border-white/15 text-gray-300 text-[11px] font-bold hover:bg-white/10 active:scale-95 transition-all cursor-pointer"
-              >
-                <FileDown className="h-3 w-3 text-pink-400 shrink-0" />
-                <span className="truncate">PDF</span>
-              </button>
-              <button
-                onClick={handleExportImage}
-                disabled={isExporting}
-                className="flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl bg-white/5 border border-white/15 text-gray-300 text-[11px] font-bold hover:bg-white/10 active:scale-95 transition-all cursor-pointer disabled:opacity-40"
-              >
-                <ImageIcon className="h-3 w-3 text-cyan-400 shrink-0" />
-                <span className="truncate">{isExporting ? "..." : "Imagen"}</span>
-              </button>
-              <button
-                onClick={handleShareWhatsApp}
-                className="col-span-2 sm:col-span-1 flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl bg-emerald-600/20 border border-emerald-500/30 text-emerald-300 text-[11px] font-bold hover:bg-emerald-600/30 active:scale-95 transition-all cursor-pointer"
-              >
-                <MessageCircle className="h-3 w-3 shrink-0" />
-                <span className="truncate">WhatsApp</span>
+                <span>Imprimir Prueba</span>
               </button>
             </div>
 
             {/* ── Ticket preview — scrollable ── */}
-            <div className="flex-1 overflow-y-auto overscroll-contain flex justify-center px-4 py-5 bg-gradient-to-b from-gray-900/40 to-black/60 min-h-0">
+            <div className="flex-1 overflow-y-auto overscroll-contain flex justify-center px-3 py-4 bg-gradient-to-b from-gray-900/40 to-black/60 min-h-0">
               <div className="w-full max-w-full flex justify-center">
                 <TicketTemplate
                   data={previewTicketData}
