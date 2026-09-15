@@ -209,8 +209,11 @@ export function AdminSidebar() {
 
   return (
     <aside className={cn(
-      "relative flex h-screen flex-col border-r border-white/5 bg-black/60 backdrop-blur-2xl text-white z-20 transition-all duration-300 ease-in-out select-none",
-      isCollapsed ? "w-20" : "w-64"
+      "relative flex h-screen flex-col border-r border-white/5 bg-black/80 backdrop-blur-2xl text-white z-20 transition-all duration-300 ease-in-out select-none shrink-0",
+      // Desktop: inline, collapses to icon rail
+      // Tablet/Drawer: always w-72, controlled by parent translate
+      "lg:relative lg:translate-x-0",
+      isCollapsed ? "w-20" : "w-72"
     )}>
       {/* Brand Section */}
       <div className={cn(

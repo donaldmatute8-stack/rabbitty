@@ -190,29 +190,32 @@ export default function HardwarePage() {
   };
 
   const handlePrintTest = async () => {
-    try {
-      // 1. If Web Bluetooth direct is connected, send ESC/POS binary chunks
-      if (btConnected && isBluetoothConnected()) {
+    // 1. Web Bluetooth direct path
+    if (btConnected && isBluetoothConnected()) {
+      try {
         toast.info(`Imprimiendo inalámbricamente vía Bluetooth en ${btDeviceName}...`);
         const encoder = new TextEncoder();
-        const escInit = new Uint8Array([0x1b, 0x40, 0x1b, 0x61, 0x01]); // Init + Center
+        const escInit = new Uint8Array([0x1b, 0x40, 0x1b, 0x61, 0x01]);
         const title = encoder.encode(`\n${ticketForm.name.toUpperCase()}\n`);
         const divider = encoder.encode("--------------------------------\n");
         const body = encoder.encode(`Ticket: #${previewTicketData.orderNumber}\nFecha: ${previewTicketData.date}\nTotal: $${previewTicketData.total.toFixed(2)}\n\n🐰 POWERED BY RABBITTY OS\nrabbitty.me\n\n\n\n`);
-        
         const fullPayload = new Uint8Array(escInit.length + title.length + divider.length + body.length);
         fullPayload.set(escInit, 0);
         fullPayload.set(title, escInit.length);
         fullPayload.set(divider, escInit.length + title.length);
         fullPayload.set(body, escInit.length + title.length + divider.length);
-
         await sendEscPosToBluetooth(fullPayload);
         toast.success("¡Ticket emitido directamente por Bluetooth!");
         return;
+      } catch (err: any) {
+        toast.error("Error Bluetooth: " + (err.message || "Intenta reconectar"));
+        return;
       }
+    }
 
-      // 2. Otherwise send to USB CUPS backend on local server / bridge
-      toast.info("Enviando comando ESC/POS directo a Rabbitty POS Printer...");
+    // 2. USB/CUPS bridge via /api/print
+    try {
+      toast.info("Enviando ticket a Rabbitty POS Printer (USB)...");
       const res = await fetch("/api/print", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -220,14 +223,14 @@ export default function HardwarePage() {
       });
       const data = await res.json();
       if (data.success) {
-        toast.success("¡Ticket emitido físicamente en Rabbitty POS Printer!");
+        toast.success("¡Ticket impreso en Rabbitty POS Printer!");
         return;
       }
+      // Show the real error — don't silently open browser PDF
+      toast.error(`Impresora USB: ${data.error || "Error al imprimir"}. Conecta la impresora o usa Bluetooth.`);
     } catch {
-      // Fallback
+      toast.error("No se pudo contactar al servidor de impresión. Verifica que la app esté en la Mac con la impresora.");
     }
-    // Fallback: Browser print dialog
-    window.print();
   };
 
   const handlePrintWelcome = async () => {
@@ -470,170 +473,152 @@ export default function HardwarePage() {
   const StatusIcon = sc.Icon;
 
   return (
-    <div className="space-y-8 pb-10">
-      {/* Header Banner */}
-      <div className="relative overflow-hidden rounded-3xl border border-white/5 bg-gradient-to-br from-gray-900/60 to-black/80 p-8 shadow-2xl backdrop-blur-xl">
+    <div className="space-y-4 sm:space-y-6 lg:space-y-8 pb-10 w-full min-w-0">
+      {/* Header Banner — compact on mobile */}
+      <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-white/5 bg-gradient-to-br from-gray-900/60 to-black/80 p-4 sm:p-6 lg:p-8 shadow-2xl backdrop-blur-xl">
         <div className="absolute top-0 right-0 h-48 w-48 rounded-full bg-pink-500/10 blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="relative z-10 flex flex-col gap-4">
           <div>
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-pink-400 mb-1">
-              <Printer className="h-4 w-4" /> Hardware & Impresión
+              <Printer className="h-3.5 w-3.5" /> Hardware & Impresión
             </div>
-            <h1 className="text-4xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-500">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-500">
               Impresoras y Tickets
             </h1>
-            <p className="text-gray-400 mt-2 text-sm font-medium">
-              Diseño en tiempo real con datos fiscales, desglose de IVA, exportación PDF/Imagen y envío por WhatsApp.
+            <p className="text-gray-400 mt-1 text-xs sm:text-sm font-medium">
+              Diseño en tiempo real con datos fiscales, IVA, exportación PDF/Imagen y WhatsApp.
             </p>
           </div>
 
-          {/* Segmented Tab Controls */}
-          <div className="flex rounded-2xl bg-white/5 p-1 border border-white/10 shrink-0 gap-1">
+          {/* Segmented Tab Controls — wraps on mobile */}
+          <div className="flex flex-wrap rounded-2xl bg-white/5 p-1 border border-white/10 gap-1">
             <button
               onClick={() => setActiveTab("ticket")}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex-1 sm:flex-none justify-center ${
                 activeTab === "ticket"
                   ? "bg-pink-500 text-white shadow-lg"
                   : "text-gray-400 hover:text-white"
               }`}
             >
-              <FileText className="h-4 w-4" /> Configuración & Preview
+              <FileText className="h-3.5 w-3.5 shrink-0" />
+              <span className="hidden xs:inline sm:inline">Configuración &</span> Preview
             </button>
             <button
               onClick={() => setActiveTab("manual")}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex-1 sm:flex-none justify-center ${
                 activeTab === "manual"
                   ? "bg-cyan-500 text-gray-950 shadow-lg"
                   : "text-gray-400 hover:text-white"
               }`}
             >
-              <BookOpen className="h-4 w-4" /> Manual de Conexión (PDF)
+              <BookOpen className="h-3.5 w-3.5 shrink-0" />
+              <span>Manual</span>
             </button>
             <button
               onClick={() => setActiveTab("devices")}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex-1 sm:flex-none justify-center ${
                 activeTab === "devices"
                   ? "bg-pink-500 text-white shadow-lg"
                   : "text-gray-400 hover:text-white"
               }`}
             >
-              <Printer className="h-4 w-4" /> Periféricos & Agent
+              <Printer className="h-3.5 w-3.5 shrink-0" />
+              <span>Periféricos</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* ── PRINTER STATUS PANEL ── */}
-      <div className={`rounded-2xl border p-5 ${sc.bg} transition-all duration-500`}>
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-          {/* Status indicator */}
-          <div className="flex items-center gap-3 flex-1">
-            <div className={`relative flex h-11 w-11 items-center justify-center rounded-2xl border ${sc.bg} shrink-0`}>
-              <StatusIcon className={`h-5 w-5 ${sc.color}`} />
+      {/* ── PRINTER STATUS PANEL — fully responsive ── */}
+      <div className={`rounded-2xl border p-4 sm:p-5 ${sc.bg} transition-all duration-500 w-full min-w-0`}>
+        <div className="flex flex-col gap-3">
+          {/* Row 1: icon + status text */}
+          <div className="flex items-start sm:items-center gap-3">
+            <div className={`relative flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-2xl border ${sc.bg} shrink-0`}>
+              <StatusIcon className={`h-4 w-4 sm:h-5 sm:w-5 ${sc.color}`} />
               {sc.pulse && (
-                <span className={`absolute -top-1 -right-1 h-3 w-3 rounded-full ${sc.dot} animate-ping opacity-60`} />
+                <span className={`absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full ${sc.dot} animate-ping opacity-60`} />
               )}
-              <span className={`absolute -top-1 -right-1 h-3 w-3 rounded-full border-2 border-black ${sc.dot}`} />
+              <span className={`absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full border-2 border-black ${sc.dot}`} />
             </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className={`text-sm font-black uppercase tracking-wider ${sc.color}`}>
-                  {sc.label}
-                </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span className={`text-sm font-black uppercase tracking-wider ${sc.color}`}>{sc.label}</span>
                 <span className="text-[10px] text-gray-500 font-mono">
                   {printerStatus.checkedAt
                     ? new Date(printerStatus.checkedAt).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
                     : ""}
                 </span>
               </div>
-              <p className="text-xs text-gray-300 mt-0.5 truncate max-w-xs">{printerStatus.message}</p>
+              <p className="text-xs text-gray-300 mt-0.5 leading-snug">{printerStatus.message}</p>
               {printerStatus.name && (
-                <p className="text-[10px] text-gray-500 mt-0.5">
-                  {printerStatus.name} · {printerStatus.model}
-                </p>
+                <p className="text-[10px] text-gray-500 mt-0.5">{printerStatus.name} · {printerStatus.model}</p>
               )}
             </div>
           </div>
 
-          {/* Capability chips */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* USB */}
-            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-bold ${
-              printerStatus.usbVisible
-                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                : "bg-white/5 border-white/10 text-gray-500"
-            }`}>
-              <Usb className="h-3 w-3" />
-              USB {printerStatus.usbVisible ? "✓" : "—"}
+          {/* Row 2: capability chips + action buttons */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {/* Chips */}
+            <div className="flex flex-wrap gap-1.5">
+              <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold ${
+                printerStatus.usbVisible ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : "bg-white/5 border-white/10 text-gray-500"
+              }`}>
+                <Usb className="h-2.5 w-2.5" /> USB
+              </div>
+              <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold ${
+                printerStatus.cupsAccepting ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : "bg-white/5 border-white/10 text-gray-500"
+              }`}>
+                <Printer className="h-2.5 w-2.5" /> CUPS
+              </div>
+              <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold ${
+                btConnected ? "bg-blue-500/10 border-blue-500/30 text-blue-400" : "bg-white/5 border-white/10 text-gray-500"
+              }`}>
+                <Bluetooth className="h-2.5 w-2.5" /> BT{btConnected && btDeviceName ? ` ${btDeviceName.substring(0, 8)}` : ""}
+              </div>
+              <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold ${
+                printerStatus.bridgeReady ? "bg-purple-500/10 border-purple-500/30 text-purple-400" : "bg-white/5 border-white/10 text-gray-500"
+              }`}>
+                <Wifi className="h-2.5 w-2.5" /> Bridge
+              </div>
             </div>
 
-            {/* CUPS */}
-            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-bold ${
-              printerStatus.cupsAccepting
-                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                : "bg-white/5 border-white/10 text-gray-500"
-            }`}>
-              <Printer className="h-3 w-3" />
-              CUPS {printerStatus.cupsAccepting ? "✓" : "—"}
-            </div>
-
-            {/* Bluetooth */}
-            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-bold ${
-              btConnected
-                ? "bg-blue-500/10 border-blue-500/30 text-blue-400"
-                : "bg-white/5 border-white/10 text-gray-500"
-            }`}>
-              <Bluetooth className="h-3 w-3" />
-              BT {btConnected ? btDeviceName ?? "✓" : "—"}
-            </div>
-
-            {/* Bridge */}
-            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-bold ${
-              printerStatus.bridgeReady
-                ? "bg-purple-500/10 border-purple-500/30 text-purple-400"
-                : "bg-white/5 border-white/10 text-gray-500"
-            }`}>
-              <Wifi className="h-3 w-3" />
-              Bridge {printerStatus.bridgeReady ? "✓" : "—"}
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-2 shrink-0">
-            {/* BT connect/disconnect */}
-            {btConnected ? (
+            {/* Action buttons */}
+            <div className="flex flex-wrap gap-2">
+              {btConnected ? (
+                <button
+                  onClick={handleDisconnectBluetooth}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500/20 border border-blue-500/40 text-blue-300 text-xs font-bold hover:bg-blue-500/30 transition-all cursor-pointer"
+                >
+                  <BluetoothConnected className="h-3 w-3" /> Desconectar BT
+                </button>
+              ) : (
+                <button
+                  onClick={handleConnectBluetooth}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs font-bold hover:bg-blue-500/20 transition-all cursor-pointer"
+                >
+                  <Bluetooth className="h-3 w-3" /> Conectar BT
+                </button>
+              )}
               <button
-                onClick={handleDisconnectBluetooth}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-500/20 border border-blue-500/40 text-blue-300 text-xs font-bold hover:bg-blue-500/30 transition-all cursor-pointer"
+                onClick={checkPrinterStatus}
+                disabled={isCheckingPrinter}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/20 text-gray-300 text-xs font-bold hover:bg-white/10 transition-all cursor-pointer disabled:opacity-50"
               >
-                <BluetoothConnected className="h-3.5 w-3.5" /> Desconectar BT
+                <RefreshCw className={`h-3 w-3 ${isCheckingPrinter ? "animate-spin" : ""}`} />
+                {isCheckingPrinter ? "Verificando..." : "Verificar"}
               </button>
-            ) : (
-              <button
-                onClick={handleConnectBluetooth}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs font-bold hover:bg-blue-500/20 transition-all cursor-pointer"
-              >
-                <Bluetooth className="h-3.5 w-3.5" /> Conectar BT
-              </button>
-            )}
-            <button
-              onClick={checkPrinterStatus}
-              disabled={isCheckingPrinter}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/20 text-gray-300 text-xs font-bold hover:bg-white/10 transition-all cursor-pointer disabled:opacity-50"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${isCheckingPrinter ? "animate-spin" : ""}`} />
-              {isCheckingPrinter ? "Verificando..." : "Verificar"}
-            </button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* ── TAB 1: TICKET CONFIGURATION & LIVE PREVIEW ── */}
       {activeTab === "ticket" && (
-        <div className="grid gap-8 lg:grid-cols-12 items-start">
+        <div className="grid gap-5 sm:gap-6 lg:gap-8 lg:grid-cols-12 items-start w-full min-w-0">
           {/* Left Form: Fiscal, Contact & Header Data */}
-          <div className="lg:col-span-7 space-y-6">
-            <Card className="p-6 md:p-8 border border-white/5 bg-white/5 backdrop-blur-md">
+          <div className="lg:col-span-7 space-y-4 sm:space-y-6 min-w-0">
+            <Card className="p-4 sm:p-6 lg:p-8 border border-white/5 bg-white/5 backdrop-blur-md">
               <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-6">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-500/10 border border-pink-500/20 text-pink-400">
@@ -887,33 +872,34 @@ export default function HardwarePage() {
           </div>
 
           {/* Right: Live Interactive Ticket Preview */}
-          <div className="lg:col-span-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee] animate-pulse" />
-                <h3 className="font-bold text-white text-base">Previsualización en Vivo</h3>
-              </div>
-
-              {/* View Switchers & Fullscreen */}
-              <div className="flex items-center gap-2">
+          <div className="lg:col-span-5 space-y-3 sm:space-y-4 min-w-0">
+            {/* Preview header: title + action buttons in 2 rows */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee] animate-pulse" />
+                  <h3 className="font-bold text-white text-sm sm:text-base">Previsualización en Vivo</h3>
+                </div>
                 <button
                   type="button"
                   onClick={() => setThermalPaperMode(!thermalPaperMode)}
-                  className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
-                    thermalPaperMode 
-                      ? "bg-white text-black border-white" 
+                  className={`text-[10px] sm:text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer shrink-0 ${
+                    thermalPaperMode
+                      ? "bg-white text-black border-white"
                       : "bg-white/5 text-gray-300 border-white/10 hover:bg-white/10"
                   }`}
-                  title="Cambiar entre modo oscuro Rabbitty y papel térmico blanco"
                 >
-                  {thermalPaperMode ? "Papel Térmico" : "Modo Oscuro"}
+                  {thermalPaperMode ? "Papel" : "Dark"}
                 </button>
+              </div>
 
+              {/* Action button row — wraps naturally */}
+              <div className="flex flex-wrap gap-1.5">
                 <Button
                   size="sm"
                   variant="secondary"
                   onClick={() => setFullscreenModal(true)}
-                  className="flex items-center gap-1 border-white/20 hover:border-white/40"
+                  className="flex items-center gap-1 border-white/20 hover:border-white/40 h-8 px-2.5"
                   title="Abrir vista completa"
                 >
                   <Maximize2 className="h-3.5 w-3.5 text-cyan-400" />
@@ -924,22 +910,22 @@ export default function HardwarePage() {
                     size="sm"
                     variant="secondary"
                     onClick={handleDisconnectBluetooth}
-                    className="flex items-center gap-1.5 bg-blue-500/20 border-blue-500/40 text-blue-300 font-bold"
+                    className="flex items-center gap-1 bg-blue-500/20 border-blue-500/40 text-blue-300 font-bold h-8 px-2.5"
                     title={`Desconectar ${btDeviceName}`}
                   >
                     <BluetoothConnected className="h-3.5 w-3.5 text-blue-400" />
-                    <span className="hidden sm:inline">{btDeviceName || "BT Activo"}</span>
+                    <span className="text-[10px] hidden sm:inline">{btDeviceName?.substring(0, 10) || "BT"}</span>
                   </Button>
                 ) : (
                   <Button
                     size="sm"
                     variant="secondary"
                     onClick={handleConnectBluetooth}
-                    className="flex items-center gap-1.5 border-blue-500/30 hover:border-blue-500/60 text-blue-400 font-bold"
-                    title="Conectar directamente por Bluetooth (Web Bluetooth)"
+                    className="flex items-center gap-1 border-blue-500/30 hover:border-blue-500/60 text-blue-400 font-bold h-8 px-2.5"
+                    title="Conectar por Bluetooth"
                   >
                     <Bluetooth className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Conectar BT</span>
+                    <span className="text-[10px] hidden sm:inline">BT</span>
                   </Button>
                 )}
 
@@ -947,19 +933,21 @@ export default function HardwarePage() {
                   size="sm"
                   variant="secondary"
                   onClick={handlePrintWelcome}
-                  className="flex items-center gap-1.5 bg-pink-500/20 hover:bg-pink-500/30 border-pink-500/40 text-pink-300 font-bold"
-                  title="Imprime un ticket de bienvenida y verificación Rabbitty"
+                  className="flex items-center gap-1 bg-pink-500/20 hover:bg-pink-500/30 border-pink-500/40 text-pink-300 font-bold h-8 px-2.5"
+                  title="Ticket de bienvenida"
                 >
-                  <Sparkles className="h-3.5 w-3.5 text-pink-400" /> Bienvenida
+                  <Sparkles className="h-3.5 w-3.5 text-pink-400" />
+                  <span className="text-[10px] hidden sm:inline">Bienvenida</span>
                 </Button>
 
                 <Button
                   size="sm"
                   variant="secondary"
                   onClick={handlePrintTest}
-                  className="flex items-center gap-1.5 border-white/20 hover:border-white/40"
+                  className="flex items-center gap-1 border-cyan-500/30 hover:border-cyan-500/60 text-cyan-300 font-bold h-8 px-2.5"
                 >
-                  <Printer className="h-4 w-4 text-cyan-400" /> Imprimir
+                  <Printer className="h-3.5 w-3.5 text-cyan-400" />
+                  <span className="text-[10px]">Imprimir</span>
                 </Button>
               </div>
             </div>
