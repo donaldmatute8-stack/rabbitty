@@ -15,8 +15,95 @@ export interface BluetoothDeviceState {
   deviceId: string | null;
 }
 
+export interface PrinterDiagnostics {
+  secure: boolean;
+  topLevel: boolean;
+  userAgent: string;
+  browser: "chrome" | "edge" | "safari" | "firefox" | "other";
+  isIOS: boolean;
+  isIPadOS: boolean;
+  isAndroid: boolean;
+  os: string;
+  protocol: string;
+  host: string;
+  webBluetooth: boolean;
+  status: "OK" | "HTTP" | "BLOCKED_BY_CONTEXT" | "BLOCKED_BY_BROWSER" | "BLE_ONLY";
+  recommendation: string;
+}
+
 let activeCharacteristic: any = null;
 let activeDevice: any = null;
+
+// Web Bluetooth solo puede ver periféricos BLE (GATT). Las impresoras térmicas
+// de bajo costo suelen ser Bluetooth Classic (SPP/ESC/POS) y JAMÁS aparecerán
+// en el picker del navegador. Esta función arma el diagnóstico exacto.
+export function diagnosePrinterConnection(): PrinterDiagnostics {
+  const ua = navigator.userAgent;
+  const uaData = (navigator as any).userAgentData;
+  const platform: string = uaData?.platform || (navigator as any).platform || "";
+
+  const isIPadOS =
+    /iPad/.test(ua) ||
+    ((platform === "MacIntel" || platform === "macOS") && (navigator as any).maxTouchPoints > 1);
+  const isIOS = isIPadOS || /iPhone/.test(ua) || /iPod/.test(ua);
+  const isAndroid = /Android/i.test(ua);
+  const isMac = platform.includes("Mac") && !isIPadOS;
+  const isWindows = platform.includes("Win");
+
+  let browser: PrinterDiagnostics["browser"] = "other";
+  if (/Edg\//.test(ua)) browser = "edge";
+  else if (/Chrome\//.test(ua) && !/CriOS|FxiOS/.test(ua)) browser = "chrome";
+  else if (/Firefox|FxiOS/i.test(ua)) browser = "firefox";
+  else if (/Safari\//.test(ua)) browser = "safari";
+
+  const os = isWindows ? "Windows" : isMac ? "macOS" : isIOS ? (isIPadOS ? "iPadOS" : "iOS") : isAndroid ? "Android" : platform || "Unknown";
+
+  const secure = window.isSecureContext ?? false;
+  const topLevel = window.top === window;
+  const webBluetooth = "bluetooth" in navigator;
+
+  let status: PrinterDiagnostics["status"];
+  let recommendation: string;
+
+  if (!secure) {
+    status = "HTTP";
+    recommendation =
+      "Abre el admin en HTTPS (https://admin.rabbitty.me). Web Bluetooth (y la mayoría de APIs del navegador) requieren una conexión segura.";
+  } else if (!topLevel) {
+    status = "BLOCKED_BY_CONTEXT";
+    recommendation =
+      "La página corre dentro de un iframe/webview de otra app. Ábrela en una pestaña directa del navegador para conectar por Bluetooth.";
+  } else if (isIOS && !webBluetooth) {
+    status = "BLOCKED_BY_BROWSER";
+    recommendation =
+      `Safari en ${os} no soporta Web Bluetooth. Si la impresora es BLE usa el navegador Bluefy; ` +
+      "en el resto de casos usa el modo USB/Mac Bridge (Rabbitty POS Printer) desde la máquina de caja, no el BT directo.";
+  } else if (!webBluetooth) {
+    status = "BLOCKED_BY_BROWSER";
+    recommendation = `Tu navegador (${browser}) no expone Web Bluetooth. Usa Chrome o Edge de escritorio (o Android) en una pestaña HTTPS normal.`;
+  } else {
+    status = "BLE_ONLY";
+    recommendation =
+      "Web Bluetooth disponible. Solo verás impresoras BLE (GATT): las Bluetooth Classic/SPP (p.ej. YICHIP POS-58) nunca aparecen en el selector. " +
+      "Si no ves tu impresora, usa el modo USB/Mac Bridge o una impresora Wi-Fi/red.";
+  }
+
+  return {
+    secure,
+    topLevel,
+    userAgent: ua,
+    browser,
+    isIOS,
+    isIPadOS,
+    isAndroid,
+    os,
+    protocol: window.location.protocol,
+    host: window.location.hostname,
+    webBluetooth,
+    status,
+    recommendation,
+  };
+}
 
 export async function connectBluetoothPrinter(): Promise<{ success: boolean; deviceName: string; error?: string }> {
   if (typeof window === "undefined") {
