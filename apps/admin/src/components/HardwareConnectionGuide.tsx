@@ -207,7 +207,7 @@ export function HardwareConnectionGuide() {
                     Instrucciones de Conexión: Impresora Térmica Bluetooth
                   </h3>
                   <p className="text-xs text-gray-400">
-                    Aplica para marcas estándar (Goojprt, MUNBYN, Netum, Xprinter, Epson, POS-58, POS-80, etc.).
+                    Dos tipos de Bluetooth distintos: <strong className="text-cyan-300">BLE</strong> (se ve con "Conectar BT") y <strong className="text-pink-300">Classic/SPP</strong> (la mayoría: Goojprt, MUNBYN, Netum, Xprinter, POS-58, YICHIP... usa bridge USB o Wi-Fi).
                   </p>
                 </div>
               </div>
@@ -234,21 +234,22 @@ export function HardwareConnectionGuide() {
                   <span className="flex h-6 w-6 rounded-full bg-pink-500/20 items-center justify-center text-xs">2</span>
                   Vinculación
                 </div>
-                <h4 className="font-bold text-white text-base">Emparejar Bluetooth</h4>
+                <h4 className="font-bold text-white text-base">BLE o Classic: saber cuál tienes</h4>
                 <div className="text-xs text-gray-300 space-y-2 leading-relaxed">
-                  {selectedOs === "android_ios" && (
-                    <p>En tu Tablet o Teléfono, ve a <strong>Ajustes &gt; Bluetooth</strong>. Activa el escáner y busca dispositivos cercanos.</p>
-                  )}
-                  {selectedOs === "windows" && (
-                    <p>En Windows, presiona <code>Win + I</code> &gt; <strong>Dispositivos &gt; Bluetooth &gt; Agregar dispositivo</strong>.</p>
-                  )}
-                  {selectedOs === "mac" && (
-                    <p>En macOS, ve a <strong>Ajustes del Sistema &gt; Bluetooth</strong> y espera a que aparezca la ticketera.</p>
-                  )}
-                  <p className="text-[11px] text-gray-400 bg-white/5 p-2 rounded-lg border border-white/5">
-                    Nombres comunes: <code>MTP-II</code>, <code>POS-58</code>, <code>POS-80</code>, <code>RPP02N</code> o <code>Bluetooth Printer</code>.
+                  <p>
+                    <strong className="text-cyan-300">Impresora BLE (GATT):</strong> aparece en el botón{" "}
+                    <strong>"Conectar BT"</strong> del Panel de Impresoras sin emparejar nada en el sistema.
+                    Funciona en Chrome/Edge (escritorio y Android).
                   </p>
-                  <p><strong>PIN por defecto:</strong> Ingresa <code>0000</code> o <code>1234</code>.</p>
+                  <p>
+                    <strong className="text-pink-300">Impresora Classic (SPP):</strong> la mayoría de POS-58, MTP-II, RPP02N y YICHIP.
+                    Jamás aparecerá en "Conectar BT" por límite de la web. Se enlaza por Ajustes &gt; Bluetooth con PIN{" "}
+                    <code>0000</code> o <code>1234</code>, pero para imprimir usa el{" "}
+                    <strong>modo Rabbitty POS Printer (USB / Mac Bridge)</strong> o el diálogo del navegador.
+                  </p>
+                  <p className="text-[11px] text-gray-400 bg-white/5 p-2 rounded-lg border border-white/5">
+                    En iPad/iOS Safari no hay Web Bluetooth: si tu impresora es BLE usa el navegador Bluefy; si es Classic, usa el bridge USB.
+                  </p>
                 </div>
               </div>
 
@@ -260,15 +261,9 @@ export function HardwareConnectionGuide() {
                 </div>
                 <h4 className="font-bold text-white text-base">Prueba de Impresión</h4>
                 <ul className="text-xs text-gray-300 space-y-2 leading-relaxed">
-                  <li>• En la pestaña <em>Configuración de Ticket</em>, selecciona <strong>🔵 Térmica Bluetooth (80mm o 58mm)</strong>.</li>
-                  <li>• Presiona <strong>Imprimir Ticket de Prueba</strong>.</li>
-                  <li>• En el diálogo de impresión:
-                    <ul className="pl-3 pt-1 space-y-1 text-gray-400">
-                      <li>- <strong>Destino:</strong> Tu impresora Bluetooth.</li>
-                      <li>- <strong>Márgenes:</strong> Ninguno (None).</li>
-                      <li>- <strong>Opciones:</strong> Desactivar encabezados y pies de página.</li>
-                    </ul>
-                  </li>
+                  <li>• En la pestaña <em>Configuración de Ticket</em>, selecciona tu <strong>tipo de conexión</strong> y ancho de papel.</li>
+                  <li>• <strong>Si es BLE:</strong> presiona <strong>"Conectar BT"</strong> en el Panel de Impresoras, elige tu ticketera en el selector y pulsa <strong>Imprimir Prueba</strong>.</li>
+                  <li>• <strong>Si es Classic, USB o iPad:</strong> usa el modo <strong>Rabbitty POS Printer (USB / Mac Bridge)</strong> con la impresora conectada por cable a la Mac de caja, o el diálogo de impresión del navegador.</li>
                 </ul>
               </div>
             </div>
@@ -277,10 +272,10 @@ export function HardwareConnectionGuide() {
             <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-start gap-3">
               <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
               <div className="space-y-1">
-                <p className="font-bold">¿El dispositivo no encuentra la impresora por Bluetooth?</p>
+                <p className="font-bold">"Conectar BT" abre el selector pero no veo mi impresora</p>
                 <p className="text-amber-200/80 leading-relaxed">
-                  1. Muchas impresoras portátiles apagan el Bluetooth si pasan 3 minutos sin conectarse para ahorrar batería. Apágala y vuelve a encenderla.<br />
-                  2. Si la impresora ya estaba emparejada a otro celular o tablet, <strong>desconéctala primero del otro dispositivo</strong>, ya que las impresoras térmicas solo admiten 1 conexión Bluetooth activa a la vez.
+                  Es una impresora <strong>Bluetooth Classic (SPP)</strong>, y Web Bluetooth solo detecta <strong>BLE (GATT)</strong> — no es un fallo del sistema. Soluciones:
+                  conéctala por <strong>USB a la Mac de caja</strong> y usa "Rabbitty POS Printer (USB / Mac Bridge)", o una impresora de red/Wi-Fi.
                 </p>
               </div>
             </div>
@@ -336,7 +331,8 @@ export function HardwareConnectionGuide() {
                 </div>
                 <h4 className="font-bold text-white text-base">Impresión Silenciosa</h4>
                 <p className="text-xs text-gray-300 leading-relaxed">
-                  Si deseas que el ticket se imprima inmediatamente al pulsar "Cobrar" en el POS sin que se abra el cuadro de diálogo del navegador, descarga e inicia el <strong>Rabbitty Print Agent</strong>.
+                  El bridge actual (<strong>Rabbitty POS Printer</strong>) imprime directo por USB cuando Rabbitty corre en la Mac de caja con CUPS.
+                  El <strong>Rabbitty Print Agent</strong> de escritorio (macOS/Windows, <em>próximamente</em>) dará impresión silenciosa sin diálogo del navegador desde cualquier dispositivo.
                 </p>
               </div>
             </div>
@@ -390,9 +386,10 @@ export function HardwareConnectionGuide() {
                   <span className="flex h-6 w-6 rounded-full bg-pink-500/20 items-center justify-center text-xs">3</span>
                   Configurar en Rabbitty
                 </div>
-                <h4 className="font-bold text-white text-base">Asignar Zona de Cocina</h4>
+                <h4 className="font-bold text-white text-base">Requiere Print Agent (próximamente)</h4>
                 <p className="text-xs text-gray-300 leading-relaxed">
-                  En el menú de hardware, selecciona <strong>Impresora de Red (RAW 9100)</strong> e ingresa la IP de la ticketera para recibir comandas instantáneas.
+                  La impresión por red (<strong>RAW 9100</strong>) no se puede hacer desde el navegador (no existe raw-TCP web).
+                  Llegará con el <strong>Rabbitty Print Agent</strong> local. Por ahora, para comandas de cocina usa el bridge USB/Mac o una impresora BLE.
                 </p>
               </div>
             </div>
@@ -436,9 +433,9 @@ export function HardwareConnectionGuide() {
                   Disparo Automático al Cobrar
                 </div>
                 <h4 className="font-bold text-white text-base">Apertura en Cobro de Efectivo</h4>
-                <p className="text-xs text-gray-300 leading-relaxed">
-                  Al registrar una venta en <strong>Efectivo</strong> en el POS de Rabbitty, el comando de impresión envía automáticamente la señal de pulso <code>ESC p 0 25 250</code> para abrir la gaveta sin necesidad de llave.
-                </p>
+<p className="text-xs text-gray-300 leading-relaxed">
+                    Al registrar una venta en <strong>Efectivo</strong> y emitir el ticket por el <strong>bridge USB/Mac (Rabbitty POS Printer)</strong>, el pulso <code>ESC p 0 25 250</code> abre la gaveta automáticamente sin llave.
+                  </p>
               </div>
             </div>
           </div>

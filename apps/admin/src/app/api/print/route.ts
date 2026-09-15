@@ -13,6 +13,7 @@ const BOLD_OFF = `${ESC}E\x00`;
 const DOUBLE_ON = `${GS}!\x11`;
 const DOUBLE_OFF = `${GS}!\x00`;
 const FEED_3 = "\n\n\n\n";
+const OPEN_DRAWER = `${ESC}p\x00\x19\xfa`; // ESC p 0 25 250 → pulso 12V/24V al cajón (RJ11/DK)
 
 export async function POST(req: Request) {
   try {
@@ -34,9 +35,15 @@ export async function POST(req: Request) {
       total = 0,
       paymentMethod = "EFECTIVO",
       bunzCashbackRate = 20,
+      openDrawer = false,
     } = body;
 
-    let ticket = "";
+    // Abre el cajón (ESC p 0 25 250) al imprimir ventas en efectivo,
+    // o de forma explícita cuando el cliente manda openDrawer: true.
+    const cashLike = ["EFECTIVO", "CASH", "MIXTO", "MIXED"].includes(String(paymentMethod).toUpperCase());
+    const shouldOpenDrawer = openDrawer === true || cashLike;
+
+    let ticket = shouldOpenDrawer ? OPEN_DRAWER : "";
     ticket += INIT;
 
     if (isWelcome) {

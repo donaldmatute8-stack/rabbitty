@@ -113,7 +113,7 @@ export default function AdminPage() {
             <h1 className="text-4xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-500 mt-2">
               Resumen Operativo
             </h1>
-            <p className="text-gray-400 mt-1 text-sm font-medium">
+            <p suppressHydrationWarning className="text-gray-400 mt-1 text-sm font-medium">
               Dashboard ejecutivo para la sucursal de {new Date().toLocaleDateString("es-MX", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
             </p>
           </div>
