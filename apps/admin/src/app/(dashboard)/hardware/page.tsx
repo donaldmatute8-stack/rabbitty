@@ -1,16 +1,24 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { Card, Badge, Button, Input, Dialog, toast } from "@rabbitty/ui";
 import { 
   Printer, Monitor, Layers, Cpu, Download, BookOpen, Terminal, 
   CheckCircle, FileText, Sparkles, Building2, Phone, Mail, 
   MapPin, ShieldCheck, Save, RefreshCw, Eye, Share2, MessageCircle, 
-  FileDown, Image as ImageIcon, ExternalLink, Maximize2, Upload, X
+  FileDown, Image as ImageIcon, ExternalLink, Maximize2, Upload, X,
+  Bluetooth, BluetoothConnected, Wifi, WifiOff, AlertTriangle, Activity,
+  Usb, Signal, ZapOff, Zap
 } from "lucide-react";
 import { TicketTemplate, TicketData } from "../../../components/TicketTemplate";
 import { HardwareConnectionGuide } from "../../../components/HardwareConnectionGuide";
+import { 
+  connectBluetoothPrinter, 
+  isBluetoothConnected, 
+  disconnectBluetoothPrinter,
+  sendEscPosToBluetooth 
+} from "../../../lib/web-bluetooth";
 
 export default function HardwarePage() {
   const utils = trpc.useUtils();
@@ -106,8 +114,104 @@ export default function HardwarePage() {
     toast.success(`Descarga iniciada para ${os}`);
   };
 
+  const [btConnected, setBtConnected] = useState(false);
+  const [btDeviceName, setBtDeviceName] = useState<string | null>(null);
+
+  // ── PRINTER STATUS (polling /api/print GET) ──
+  type PrinterStatus = {
+    status: "online" | "offline" | "degraded" | "checking" | "unknown";
+    message: string;
+    name?: string;
+    model?: string;
+    bridge?: string;
+    usbVisible?: boolean;
+    cupsAccepting?: boolean;
+    bridgeReady?: boolean;
+    checkedAt?: string;
+  };
+  const [printerStatus, setPrinterStatus] = useState<PrinterStatus>({
+    status: "unknown",
+    message: "Estado no verificado aún",
+  });
+  const [isCheckingPrinter, setIsCheckingPrinter] = useState(false);
+
+  const checkPrinterStatus = useCallback(async () => {
+    setIsCheckingPrinter(true);
+    setPrinterStatus((prev) => ({ ...prev, status: "checking", message: "Verificando impresora..." }));
+    try {
+      const res = await fetch("/api/print", { method: "GET", cache: "no-store" });
+      const data = await res.json();
+      setPrinterStatus({
+        status: data.status ?? "unknown",
+        message: data.message ?? (data.status === "online" ? "Impresora lista" : "Estado desconocido"),
+        name: data.name,
+        model: data.model,
+        bridge: data.bridge,
+        usbVisible: data.usbVisible,
+        cupsAccepting: data.cupsAccepting,
+        bridgeReady: data.bridgeReady,
+        checkedAt: data.checkedAt,
+      });
+    } catch {
+      setPrinterStatus({ status: "offline", message: "No se pudo contactar al servidor de impresión" });
+    } finally {
+      setIsCheckingPrinter(false);
+    }
+  }, []);
+
+  // Auto-check on mount and every 30s
+  useEffect(() => {
+    checkPrinterStatus();
+    const interval = setInterval(checkPrinterStatus, 30_000);
+    return () => clearInterval(interval);
+  }, [checkPrinterStatus]);
+
+  const handleConnectBluetooth = async () => {
+    try {
+      toast.info("Buscando impresora Bluetooth POS-58 / MTP...");
+      const result = await connectBluetoothPrinter();
+      if (result.success) {
+        setBtConnected(true);
+        setBtDeviceName(result.deviceName);
+        toast.success(`🐰 ¡Conectado directamente a ${result.deviceName}!`);
+      } else {
+        toast.error(result.error || "No se pudo emparejar con la impresora Bluetooth");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error al conectar por Bluetooth");
+    }
+  };
+
+  const handleDisconnectBluetooth = async () => {
+    await disconnectBluetoothPrinter();
+    setBtConnected(false);
+    setBtDeviceName(null);
+    toast.info("Impresora Bluetooth desconectada");
+  };
+
   const handlePrintTest = async () => {
     try {
+      // 1. If Web Bluetooth direct is connected, send ESC/POS binary chunks
+      if (btConnected && isBluetoothConnected()) {
+        toast.info(`Imprimiendo inalámbricamente vía Bluetooth en ${btDeviceName}...`);
+        const encoder = new TextEncoder();
+        const escInit = new Uint8Array([0x1b, 0x40, 0x1b, 0x61, 0x01]); // Init + Center
+        const title = encoder.encode(`\n${ticketForm.name.toUpperCase()}\n`);
+        const divider = encoder.encode("--------------------------------\n");
+        const body = encoder.encode(`Ticket: #${previewTicketData.orderNumber}\nFecha: ${previewTicketData.date}\nTotal: $${previewTicketData.total.toFixed(2)}\n\n🐰 POWERED BY RABBITTY OS\nrabbitty.me\n\n\n\n`);
+        
+        const fullPayload = new Uint8Array(escInit.length + title.length + divider.length + body.length);
+        fullPayload.set(escInit, 0);
+        fullPayload.set(title, escInit.length);
+        fullPayload.set(divider, escInit.length + title.length);
+        fullPayload.set(body, escInit.length + title.length + divider.length);
+
+        await sendEscPosToBluetooth(fullPayload);
+        toast.success("¡Ticket emitido directamente por Bluetooth!");
+        return;
+      }
+
+      // 2. Otherwise send to USB CUPS backend on local server / bridge
       toast.info("Enviando comando ESC/POS directo a Rabbitty POS Printer...");
       const res = await fetch("/api/print", {
         method: "POST",
@@ -354,6 +458,17 @@ export default function HardwarePage() {
     },
   ];
 
+  // Status helpers
+  const statusConfig = {
+    online: { color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/30", dot: "bg-emerald-400", pulse: true, Icon: Zap, label: "En Línea" },
+    degraded: { color: "text-amber-400", bg: "bg-amber-500/10 border-amber-500/30", dot: "bg-amber-400", pulse: false, Icon: AlertTriangle, label: "Degradado" },
+    offline: { color: "text-red-400", bg: "bg-red-500/10 border-red-500/30", dot: "bg-red-500", pulse: false, Icon: ZapOff, label: "Sin Conexión" },
+    checking: { color: "text-cyan-400", bg: "bg-cyan-500/10 border-cyan-500/30", dot: "bg-cyan-400", pulse: true, Icon: Activity, label: "Verificando" },
+    unknown: { color: "text-gray-400", bg: "bg-white/5 border-white/10", dot: "bg-gray-600", pulse: false, Icon: Signal, label: "No verificado" },
+  };
+  const sc = statusConfig[printerStatus.status] ?? statusConfig.unknown;
+  const StatusIcon = sc.Icon;
+
   return (
     <div className="space-y-8 pb-10">
       {/* Header Banner */}
@@ -403,6 +518,111 @@ export default function HardwarePage() {
               }`}
             >
               <Printer className="h-4 w-4" /> Periféricos & Agent
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── PRINTER STATUS PANEL ── */}
+      <div className={`rounded-2xl border p-5 ${sc.bg} transition-all duration-500`}>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+          {/* Status indicator */}
+          <div className="flex items-center gap-3 flex-1">
+            <div className={`relative flex h-11 w-11 items-center justify-center rounded-2xl border ${sc.bg} shrink-0`}>
+              <StatusIcon className={`h-5 w-5 ${sc.color}`} />
+              {sc.pulse && (
+                <span className={`absolute -top-1 -right-1 h-3 w-3 rounded-full ${sc.dot} animate-ping opacity-60`} />
+              )}
+              <span className={`absolute -top-1 -right-1 h-3 w-3 rounded-full border-2 border-black ${sc.dot}`} />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className={`text-sm font-black uppercase tracking-wider ${sc.color}`}>
+                  {sc.label}
+                </span>
+                <span className="text-[10px] text-gray-500 font-mono">
+                  {printerStatus.checkedAt
+                    ? new Date(printerStatus.checkedAt).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+                    : ""}
+                </span>
+              </div>
+              <p className="text-xs text-gray-300 mt-0.5 truncate max-w-xs">{printerStatus.message}</p>
+              {printerStatus.name && (
+                <p className="text-[10px] text-gray-500 mt-0.5">
+                  {printerStatus.name} · {printerStatus.model}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Capability chips */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* USB */}
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-bold ${
+              printerStatus.usbVisible
+                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                : "bg-white/5 border-white/10 text-gray-500"
+            }`}>
+              <Usb className="h-3 w-3" />
+              USB {printerStatus.usbVisible ? "✓" : "—"}
+            </div>
+
+            {/* CUPS */}
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-bold ${
+              printerStatus.cupsAccepting
+                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                : "bg-white/5 border-white/10 text-gray-500"
+            }`}>
+              <Printer className="h-3 w-3" />
+              CUPS {printerStatus.cupsAccepting ? "✓" : "—"}
+            </div>
+
+            {/* Bluetooth */}
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-bold ${
+              btConnected
+                ? "bg-blue-500/10 border-blue-500/30 text-blue-400"
+                : "bg-white/5 border-white/10 text-gray-500"
+            }`}>
+              <Bluetooth className="h-3 w-3" />
+              BT {btConnected ? btDeviceName ?? "✓" : "—"}
+            </div>
+
+            {/* Bridge */}
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-bold ${
+              printerStatus.bridgeReady
+                ? "bg-purple-500/10 border-purple-500/30 text-purple-400"
+                : "bg-white/5 border-white/10 text-gray-500"
+            }`}>
+              <Wifi className="h-3 w-3" />
+              Bridge {printerStatus.bridgeReady ? "✓" : "—"}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-2 shrink-0">
+            {/* BT connect/disconnect */}
+            {btConnected ? (
+              <button
+                onClick={handleDisconnectBluetooth}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-500/20 border border-blue-500/40 text-blue-300 text-xs font-bold hover:bg-blue-500/30 transition-all cursor-pointer"
+              >
+                <BluetoothConnected className="h-3.5 w-3.5" /> Desconectar BT
+              </button>
+            ) : (
+              <button
+                onClick={handleConnectBluetooth}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs font-bold hover:bg-blue-500/20 transition-all cursor-pointer"
+              >
+                <Bluetooth className="h-3.5 w-3.5" /> Conectar BT
+              </button>
+            )}
+            <button
+              onClick={checkPrinterStatus}
+              disabled={isCheckingPrinter}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/20 text-gray-300 text-xs font-bold hover:bg-white/10 transition-all cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isCheckingPrinter ? "animate-spin" : ""}`} />
+              {isCheckingPrinter ? "Verificando..." : "Verificar"}
             </button>
           </div>
         </div>
@@ -589,10 +809,11 @@ export default function HardwarePage() {
                       onChange={(e) => setTicketForm({ ...ticketForm, printerType: e.target.value })}
                       className="w-full rounded-xl border border-white/10 bg-black/60 p-3 text-sm text-white focus:border-pink-500 outline-none"
                     >
-                      <option value="BLUETOOTH_80mm">🔵 Térmica Bluetooth (80mm - Recomendado)</option>
-                      <option value="BLUETOOTH_58mm">🔵 Térmica Bluetooth (58mm - Portátil)</option>
-                      <option value="ESC/POS 80mm">🔌 USB / ESC/POS Térmica 80mm</option>
+                      <option value="RABBITTY_POS_PRINTER">🐰 Rabbitty POS Printer (POS-58 USB / Mac Bridge - Activa)</option>
+                      <option value="BLUETOOTH_58mm">🔵 Térmica Bluetooth Directa (58mm - Web Bluetooth)</option>
+                      <option value="BLUETOOTH_80mm">🔵 Térmica Bluetooth Directa (80mm - Web Bluetooth)</option>
                       <option value="ESC/POS 58mm">🔌 USB / ESC/POS Térmica 58mm</option>
+                      <option value="ESC/POS 80mm">🔌 USB / ESC/POS Térmica 80mm</option>
                       <option value="NETWORK_RAW">🌐 Impresora de Red / Ethernet (RAW 9100)</option>
                       <option value="GENERIC_TEXT">📄 Genérico / Solo Texto</option>
                     </select>
@@ -697,6 +918,30 @@ export default function HardwarePage() {
                 >
                   <Maximize2 className="h-3.5 w-3.5 text-cyan-400" />
                 </Button>
+
+                {btConnected ? (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={handleDisconnectBluetooth}
+                    className="flex items-center gap-1.5 bg-blue-500/20 border-blue-500/40 text-blue-300 font-bold"
+                    title={`Desconectar ${btDeviceName}`}
+                  >
+                    <BluetoothConnected className="h-3.5 w-3.5 text-blue-400" />
+                    <span className="hidden sm:inline">{btDeviceName || "BT Activo"}</span>
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={handleConnectBluetooth}
+                    className="flex items-center gap-1.5 border-blue-500/30 hover:border-blue-500/60 text-blue-400 font-bold"
+                    title="Conectar directamente por Bluetooth (Web Bluetooth)"
+                  >
+                    <Bluetooth className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Conectar BT</span>
+                  </Button>
+                )}
 
                 <Button
                   size="sm"

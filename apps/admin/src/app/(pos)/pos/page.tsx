@@ -3,10 +3,16 @@
 import { useState, useMemo, useEffect } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { Button, Dialog, Input, toast, cn } from "@rabbitty/ui";
-import { Clock, Wifi, Search, User, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, Table2, ShoppingBag, Bike, UtensilsCrossed, Store, Printer } from "lucide-react";
+import { Clock, Wifi, Search, User, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, Table2, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { TicketTemplate, TicketData } from "../../../components/TicketTemplate";
+import { 
+  connectBluetoothPrinter, 
+  isBluetoothConnected, 
+  disconnectBluetoothPrinter,
+  sendEscPosToBluetooth 
+} from "../../../lib/web-bluetooth";
 
 // Placeholder for missing images
 const PLACEHOLDER_IMG = "https://images.unsplash.com/photo-1544148103-0773bf10d330?q=80&w=1000&auto=format&fit=crop";
@@ -25,6 +31,31 @@ export default function PosPage() {
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [receiptModal, setReceiptModal] = useState(false);
   const [paidTicketData, setPaidTicketData] = useState<TicketData | null>(null);
+  const [btConnected, setBtConnected] = useState(false);
+  const [btDeviceName, setBtDeviceName] = useState<string | null>(null);
+
+  const handleConnectBluetooth = async () => {
+    try {
+      toast.info("Buscando impresora Bluetooth POS-58 / MTP...");
+      const result = await connectBluetoothPrinter();
+      if (result.success) {
+        setBtConnected(true);
+        setBtDeviceName(result.deviceName);
+        toast.success(`🐰 ¡Impresora ${result.deviceName} vinculada con éxito!`);
+      } else {
+        toast.error(result.error || "No se pudo emparejar");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error al conectar Bluetooth");
+    }
+  };
+
+  const handleDisconnectBluetooth = async () => {
+    await disconnectBluetoothPrinter();
+    setBtConnected(false);
+    setBtDeviceName(null);
+    toast.info("Impresora Bluetooth desconectada");
+  };
 
   const { data: categories } = trpc.pos.getCategories.useQuery(undefined, { retry: false });
   const { data: menuItems } = trpc.pos.getMenuItems.useQuery({}, { retry: false });
@@ -219,6 +250,27 @@ export default function PosPage() {
             </div>
             <span className="text-sm font-bold text-emerald-400 uppercase tracking-widest">Online</span>
           </div>
+
+          {/* Bluetooth Thermal Printer Indicator / Connect */}
+          {btConnected ? (
+            <button
+              onClick={handleDisconnectBluetooth}
+              className="flex items-center gap-2 rounded-xl bg-blue-500/20 px-3.5 py-2 border border-blue-500/40 text-blue-300 text-xs font-bold hover:bg-blue-500/30 transition-all cursor-pointer"
+              title={`Impresora Bluetooth Conectada: ${btDeviceName}. Toca para desconectar.`}
+            >
+              <BluetoothConnected className="h-4 w-4 text-blue-400" />
+              <span className="hidden md:inline">{btDeviceName || "POS-58"}</span>
+            </button>
+          ) : (
+            <button
+              onClick={handleConnectBluetooth}
+              className="flex items-center gap-2 rounded-xl bg-white/5 hover:bg-white/10 px-3.5 py-2 border border-white/10 text-gray-400 hover:text-blue-400 hover:border-blue-500/30 text-xs font-bold transition-all cursor-pointer"
+              title="Vincular ticketera térmica Bluetooth directa"
+            >
+              <Bluetooth className="h-4 w-4" />
+              <span className="hidden md:inline">Vincular Printer</span>
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-6">
@@ -905,6 +957,34 @@ export default function PosPage() {
                 size="sm"
                 onClick={async () => {
                   if (paidTicketData) {
+                    // 1. If Web Bluetooth is connected, print wireless directly
+                    if (btConnected && isBluetoothConnected()) {
+                      try {
+                        toast.info("Imprimiendo inalámbricamente vía Bluetooth...");
+                        const encoder = new TextEncoder();
+                        const escInit = new Uint8Array([0x1b, 0x40, 0x1b, 0x61, 0x01]);
+                        const restName = encoder.encode(`\n${(paidTicketData.restaurantName || "RABBITTY POS").toUpperCase()}\n`);
+                        const div = encoder.encode("--------------------------------\n");
+                        const itemsTxt = paidTicketData.items.map(i => `${i.quantity}x ${(i.name || "").substring(0, 16).padEnd(16)} $${i.totalPrice.toFixed(2)}\n`).join("");
+                        const itemsBytes = encoder.encode(itemsTxt);
+                        const totalsTxt = `--------------------------------\nSUBTOTAL:  $${(paidTicketData.subtotal || 0).toFixed(2)}\nIVA (16%): $${(paidTicketData.tax || 0).toFixed(2)}\nTOTAL:     $${paidTicketData.total.toFixed(2)}\n\n🐰 POWERED BY RABBITTY OS\nrabbitty.me\n\n\n\n`;
+                        const totalsBytes = encoder.encode(totalsTxt);
+
+                        const payload = new Uint8Array(escInit.length + restName.length + div.length + itemsBytes.length + totalsBytes.length);
+                        let offset = 0;
+                        payload.set(escInit, offset); offset += escInit.length;
+                        payload.set(restName, offset); offset += restName.length;
+                        payload.set(div, offset); offset += div.length;
+                        payload.set(itemsBytes, offset); offset += itemsBytes.length;
+                        payload.set(totalsBytes, offset);
+
+                        await sendEscPosToBluetooth(payload);
+                        toast.success("¡Ticket emitido directamente por Bluetooth!");
+                        return;
+                      } catch {}
+                    }
+
+                    // 2. Otherwise local USB server / bridge
                     try {
                       const res = await fetch("/api/print", {
                         method: "POST",
