@@ -116,6 +116,7 @@ export default function HardwarePage() {
 
   const [btConnected, setBtConnected] = useState(false);
   const [btDeviceName, setBtDeviceName] = useState<string | null>(null);
+  const [previewModal, setPreviewModal] = useState(false);
 
   // ── PRINTER STATUS (polling /api/print GET) ──
   type PrinterStatus = {
@@ -615,384 +616,302 @@ export default function HardwarePage() {
 
       {/* ── TAB 1: TICKET CONFIGURATION & LIVE PREVIEW ── */}
       {activeTab === "ticket" && (
-        <div className="grid gap-5 sm:gap-6 lg:gap-8 lg:grid-cols-12 items-start w-full min-w-0">
-          {/* Left Form: Fiscal, Contact & Header Data */}
-          <div className="lg:col-span-7 space-y-4 sm:space-y-6 min-w-0">
-            <Card className="p-4 sm:p-6 lg:p-8 border border-white/5 bg-white/5 backdrop-blur-md">
-              <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-500/10 border border-pink-500/20 text-pink-400">
-                    <Building2 className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-bold text-white">Datos Comerciales y Fiscales del Ticket</h2>
-                    <p className="text-xs text-gray-400">Escribe y observa cómo se refleja cada campo al instante en el ticket.</p>
-                  </div>
+        <div className="w-full min-w-0 space-y-4 sm:space-y-6">
+          {/* Single-column full-width form */}
+          <Card className="p-4 sm:p-6 lg:p-8 border border-white/5 bg-white/5 backdrop-blur-md">
+            <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-6">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-500/10 border border-pink-500/20 text-pink-400 shrink-0">
+                  <Building2 className="h-5 w-5" />
                 </div>
-                <Badge variant="success">En Vivo</Badge>
+                <div className="min-w-0">
+                  <h2 className="text-base sm:text-lg font-bold text-white">Datos Comerciales y Fiscales del Ticket</h2>
+                  <p className="text-xs text-gray-400">Configura aquí y abre la previsualización para ver el resultado en tiempo real.</p>
+                </div>
+              </div>
+              {/* Preview trigger button — prominent */}
+              <button
+                type="button"
+                onClick={() => setPreviewModal(true)}
+                className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500/20 to-purple-500/20 border border-cyan-500/30 hover:border-cyan-400/60 text-cyan-300 font-bold text-xs transition-all hover:scale-105 cursor-pointer shrink-0 group"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                <Eye className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Previsualizar</span>
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveTicket} className="space-y-5">
+              {/* Tenant / Business Selector */}
+              {restaurants && restaurants.length > 1 && (
+                <div className="p-4 rounded-2xl bg-white/5 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <label className="text-xs font-black uppercase tracking-wider text-pink-400 block">
+                      Negocio / Tenant Activo
+                    </label>
+                    <p className="text-xs text-gray-400">Selecciona el negocio para configurar su ticketera e identidad</p>
+                  </div>
+                  <select
+                    value={selectedRestaurantId}
+                    onChange={(e) => setSelectedRestaurantId(e.target.value)}
+                    className="px-3.5 py-2 rounded-xl bg-black/60 border border-white/20 text-white text-xs font-bold focus:outline-none focus:border-pink-500"
+                  >
+                    {restaurants.map((r) => (
+                      <option key={r.id} value={r.id} className="bg-gray-900 text-white">
+                        {r.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <Input
+                  label="Nombre Comercial del Negocio *"
+                  placeholder="Ej. Rabbitty Bistro"
+                  value={ticketForm.name}
+                  onChange={(e) => setTicketForm({ ...ticketForm, name: e.target.value })}
+                  required
+                />
+                <Input
+                  label="Razón Social del Negocio *"
+                  placeholder="Ej. OPERADORA GASTRONOMICA SA DE CV"
+                  value={ticketForm.legalName}
+                  onChange={(e) => setTicketForm({ ...ticketForm, legalName: e.target.value })}
+                />
+                <Input
+                  label="RFC del Negocio *"
+                  placeholder="Ej. OGR210815XYZ"
+                  value={ticketForm.rfc}
+                  onChange={(e) => setTicketForm({ ...ticketForm, rfc: e.target.value.toUpperCase() })}
+                />
               </div>
 
-              <form onSubmit={handleSaveTicket} className="space-y-5">
-                {/* Tenant / Business Selector */}
-                {restaurants && restaurants.length > 1 && (
-                  <div className="p-4 rounded-2xl bg-white/5 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div>
-                      <label className="text-xs font-black uppercase tracking-wider text-pink-400 block">
-                        Negocio / Tenant Activo
-                      </label>
-                      <p className="text-xs text-gray-400">Selecciona el negocio para configurar su ticketera e identidad</p>
-                    </div>
-                    <select
-                      value={selectedRestaurantId}
-                      onChange={(e) => setSelectedRestaurantId(e.target.value)}
-                      className="px-3.5 py-2 rounded-xl bg-black/60 border border-white/20 text-white text-xs font-bold focus:outline-none focus:border-pink-500"
-                    >
-                      {restaurants.map((r) => (
-                        <option key={r.id} value={r.id} className="bg-gray-900 text-white">
-                          {r.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Input
-                    label="Nombre Comercial del Negocio *"
-                    placeholder="Ej. Rabbitty Bistro"
-                    value={ticketForm.name}
-                    onChange={(e) => setTicketForm({ ...ticketForm, name: e.target.value })}
-                    required
-                  />
-
-                  {/* Logo Upload / URL component */}
-                  <div>
-                    <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block mb-1">
-                      Logo del Negocio (Reemplaza el logo Rabbitty)
-                    </label>
-                    <div className="flex items-center gap-3">
-                      {ticketForm.logoUrl ? (
-                        <div className="relative h-12 w-12 rounded-xl overflow-hidden border border-white/20 bg-white/5 p-1 shrink-0 flex items-center justify-center group">
-                          <img
-                            src={ticketForm.logoUrl}
-                            alt="Logo preview"
-                            className="max-h-full max-w-full object-contain rounded-lg"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setTicketForm({ ...ticketForm, logoUrl: "" })}
-                            className="absolute inset-0 bg-black/70 flex items-center justify-center text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                            title="Quitar logo y restaurar Rabbitty"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="h-12 w-12 rounded-xl border border-dashed border-white/20 bg-white/5 flex items-center justify-center shrink-0 text-cyan-400 font-bold text-lg">
-                          🐰
-                        </div>
-                      )}
-
-                      <div className="flex-1 space-y-1.5">
-                        <div className="flex gap-2">
-                          <label className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-xs font-bold text-white cursor-pointer transition-all">
-                            <Upload className="h-3.5 w-3.5 text-pink-400" />
-                            <span>Subir Logo</span>
-                            <input
-                              type="file"
-                              accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                              className="hidden"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                  if (file.size > 2 * 1024 * 1024) {
-                                    toast.error("La imagen no debe superar los 2MB");
-                                    return;
-                                  }
-                                  const reader = new FileReader();
-                                  reader.onload = (ev) => {
-                                    const base64 = ev.target?.result as string;
-                                    setTicketForm((prev) => ({ ...prev, logoUrl: base64 }));
-                                    toast.success("Logo cargado y previsualizado en el ticket");
-                                  };
-                                  reader.readAsDataURL(file);
-                                }
-                              }}
-                            />
-                          </label>
-
-                          <input
-                            type="text"
-                            placeholder="O pega URL (https://...)"
-                            value={ticketForm.logoUrl.startsWith("data:") ? "Logo cargado localmente" : ticketForm.logoUrl}
-                            onChange={(e) => setTicketForm({ ...ticketForm, logoUrl: e.target.value })}
-                            className="flex-1 rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-xs text-white placeholder-gray-500 focus:border-pink-500 outline-none"
-                          />
-                        </div>
-                        <p className="text-[10px] text-gray-500">
-                          {ticketForm.logoUrl ? "Logo activo. Reemplaza el ícono de Rabbitty en el encabezado." : "Sube tu PNG, JPG o SVG. Al agregarlo, sustituirá el ícono de Rabbitty."}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Input
-                    label="Razón Social del Negocio *"
-                    placeholder="Ej. OPERADORA GASTRONOMICA SA DE CV"
-                    value={ticketForm.legalName}
-                    onChange={(e) => setTicketForm({ ...ticketForm, legalName: e.target.value })}
-                  />
-
-                  <Input
-                    label="RFC del Negocio *"
-                    placeholder="Ej. OGR210815XYZ"
-                    value={ticketForm.rfc}
-                    onChange={(e) => setTicketForm({ ...ticketForm, rfc: e.target.value.toUpperCase() })}
-                  />
-                </div>
-
+              <div className="grid gap-4 sm:grid-cols-2">
                 <Input
                   label="Régimen Fiscal (SAT / Hacienda)"
-                  placeholder="Ej. 601 - General de Ley Personas Morales / 626 - RESICO"
+                  placeholder="Ej. 626 - RESICO"
                   value={ticketForm.taxRegime}
                   onChange={(e) => setTicketForm({ ...ticketForm, taxRegime: e.target.value })}
                 />
-
                 <Input
                   label="Dirección Física de la Sucursal"
                   placeholder="Calle, Número, Colonia, Ciudad, C.P."
                   value={ticketForm.address}
                   onChange={(e) => setTicketForm({ ...ticketForm, address: e.target.value })}
                 />
+              </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Input
-                    label="Teléfono de Contacto"
-                    placeholder="Ej. 55 1234 5678"
-                    value={ticketForm.phone}
-                    onChange={(e) => setTicketForm({ ...ticketForm, phone: e.target.value })}
-                  />
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <Input
+                  label="Teléfono de Contacto"
+                  placeholder="Ej. 55 1234 5678"
+                  value={ticketForm.phone}
+                  onChange={(e) => setTicketForm({ ...ticketForm, phone: e.target.value })}
+                />
+                <Input
+                  label="Email de Contacto"
+                  type="email"
+                  placeholder="contacto@turestaurante.com"
+                  value={ticketForm.email}
+                  onChange={(e) => setTicketForm({ ...ticketForm, email: e.target.value })}
+                />
+                <Input
+                  label="Pie de Ticket / Agradecimiento"
+                  placeholder="Ej. ¡Gracias por su preferencia!"
+                  value={ticketForm.ticketFooter}
+                  onChange={(e) => setTicketForm({ ...ticketForm, ticketFooter: e.target.value })}
+                />
+              </div>
 
-                  <Input
-                    label="Email de Contacto"
-                    type="email"
-                    placeholder="contacto@turestaurante.com"
-                    value={ticketForm.email}
-                    onChange={(e) => setTicketForm({ ...ticketForm, email: e.target.value })}
-                  />
+              {/* Logo + Printer type row */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                {/* Logo Upload */}
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block mb-2">
+                    Logo del Negocio
+                  </label>
+                  <div className="flex items-center gap-3">
+                    {ticketForm.logoUrl ? (
+                      <div className="relative h-12 w-12 rounded-xl overflow-hidden border border-white/20 bg-white/5 p-1 shrink-0 flex items-center justify-center group">
+                        <img
+                          src={ticketForm.logoUrl}
+                          alt="Logo preview"
+                          className="max-h-full max-w-full object-contain rounded-lg"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setTicketForm({ ...ticketForm, logoUrl: "" })}
+                          className="absolute inset-0 bg-black/70 flex items-center justify-center text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="h-12 w-12 rounded-xl border border-dashed border-white/20 bg-white/5 flex items-center justify-center shrink-0 text-cyan-400 font-bold text-lg">
+                        🐰
+                      </div>
+                    )}
+                    <div className="flex-1 space-y-1.5 min-w-0">
+                      <div className="flex gap-2">
+                        <label className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-xs font-bold text-white cursor-pointer transition-all shrink-0">
+                          <Upload className="h-3.5 w-3.5 text-pink-400" />
+                          <span>Subir</span>
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                if (file.size > 2 * 1024 * 1024) { toast.error("La imagen no debe superar los 2MB"); return; }
+                                const reader = new FileReader();
+                                reader.onload = (ev) => {
+                                  setTicketForm((prev) => ({ ...prev, logoUrl: ev.target?.result as string }));
+                                  toast.success("Logo cargado");
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                          />
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="O pega URL (https://...)"
+                          value={ticketForm.logoUrl.startsWith("data:") ? "Logo local" : ticketForm.logoUrl}
+                          onChange={(e) => setTicketForm({ ...ticketForm, logoUrl: e.target.value })}
+                          className="flex-1 min-w-0 rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-xs text-white placeholder-gray-500 focus:border-pink-500 outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block mb-2">
-                      Conexión & Ancho de Papel
-                    </label>
-                    <select
-                      value={ticketForm.printerType}
-                      onChange={(e) => setTicketForm({ ...ticketForm, printerType: e.target.value })}
-                      className="w-full rounded-xl border border-white/10 bg-black/60 p-3 text-sm text-white focus:border-pink-500 outline-none"
-                    >
-                      <option value="RABBITTY_POS_PRINTER">🐰 Rabbitty POS Printer (POS-58 USB / Mac Bridge - Activa)</option>
-                      <option value="BLUETOOTH_58mm">🔵 Térmica Bluetooth Directa (58mm - Web Bluetooth)</option>
-                      <option value="BLUETOOTH_80mm">🔵 Térmica Bluetooth Directa (80mm - Web Bluetooth)</option>
-                      <option value="ESC/POS 58mm">🔌 USB / ESC/POS Térmica 58mm</option>
-                      <option value="ESC/POS 80mm">🔌 USB / ESC/POS Térmica 80mm</option>
-                      <option value="NETWORK_RAW">🌐 Impresora de Red / Ethernet (RAW 9100)</option>
-                      <option value="GENERIC_TEXT">📄 Genérico / Solo Texto</option>
-                    </select>
-                  </div>
-
-                  <Input
-                    label="Pie de Ticket / Agradecimiento"
-                    placeholder="Ej. ¡Gracias por su preferencia!"
-                    value={ticketForm.ticketFooter}
-                    onChange={(e) => setTicketForm({ ...ticketForm, ticketFooter: e.target.value })}
-                  />
+                {/* Printer type */}
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block mb-2">
+                    Conexión & Ancho de Papel
+                  </label>
+                  <select
+                    value={ticketForm.printerType}
+                    onChange={(e) => setTicketForm({ ...ticketForm, printerType: e.target.value })}
+                    className="w-full rounded-xl border border-white/10 bg-black/60 p-3 text-sm text-white focus:border-pink-500 outline-none"
+                  >
+                    <option value="RABBITTY_POS_PRINTER">🐰 Rabbitty POS Printer (USB / Mac Bridge)</option>
+                    <option value="BLUETOOTH_58mm">🔵 Bluetooth Directa 58mm</option>
+                    <option value="BLUETOOTH_80mm">🔵 Bluetooth Directa 80mm</option>
+                    <option value="ESC/POS 58mm">🔌 USB ESC/POS 58mm</option>
+                    <option value="ESC/POS 80mm">🔌 USB ESC/POS 80mm</option>
+                    <option value="NETWORK_RAW">🌐 Red / Ethernet (RAW 9100)</option>
+                    <option value="GENERIC_TEXT">📄 Genérico / Solo Texto</option>
+                  </select>
                 </div>
+              </div>
 
-                {/* Submit button bar */}
-                <div className="flex items-center justify-between pt-4 border-t border-white/5">
-                  <div className="flex items-center gap-2 text-xs text-gray-400">
-                    <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                    <span>Conectado con Rabbitty OS Core & SAT</span>
+              {/* Submit + share bar */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-white/5">
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="secondary" onClick={handleExportPDF} className="flex items-center gap-1.5 border-white/10 hover:border-white/30">
+                    <FileDown className="h-3.5 w-3.5 text-pink-400" /> PDF
+                  </Button>
+                  <Button size="sm" variant="secondary" onClick={handleExportImage} disabled={isExporting} className="flex items-center gap-1.5 border-white/10 hover:border-white/30">
+                    <ImageIcon className="h-3.5 w-3.5 text-cyan-400" /> {isExporting ? "..." : "Imagen"}
+                  </Button>
+                  <Button size="sm" onClick={handleShareWhatsApp} className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold">
+                    <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
+                  </Button>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                    <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0" />
+                    <span className="hidden sm:inline">Conectado con Rabbitty OS & SAT</span>
                   </div>
-
                   <Button
                     type="submit"
                     disabled={updateRestaurant.isPending}
                     className="bg-pink-500 hover:bg-pink-600 text-white font-bold flex items-center gap-2 cursor-pointer"
                   >
                     <Save className="h-4 w-4" />
-                    {updateRestaurant.isPending ? "Guardando..." : "Guardar Cambios"}
+                    {updateRestaurant.isPending ? "Guardando..." : "Guardar"}
                   </Button>
                 </div>
-              </form>
-            </Card>
-
-            {/* Quick Actions Card */}
-            <div className="p-5 rounded-2xl bg-gradient-to-r from-pink-500/10 via-purple-500/10 to-cyan-500/10 border border-white/10 space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="font-bold text-white text-sm flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-pink-400" /> Opciones de Compartir y Descargar
-                </h4>
-                <Badge variant="success">Listo para Producción</Badge>
               </div>
-              <p className="text-xs text-gray-400 leading-relaxed">
-                Puedes descargar este ticket como ejemplo visual para tu negocio, enviárselo a tus clientes por WhatsApp o descargarlo en PDF e imagen de alta resolución.
-              </p>
-              <div className="flex flex-wrap gap-2.5 pt-1">
-                <Button 
-                  size="sm" 
-                  variant="secondary" 
-                  onClick={handleExportPDF}
-                  className="flex items-center gap-1.5 border-white/10 hover:border-white/30"
-                >
-                  <FileDown className="h-4 w-4 text-pink-400" /> Descargar PDF
-                </Button>
-                <Button 
-                  size="sm" 
-                  variant="secondary" 
-                  onClick={handleExportImage}
-                  disabled={isExporting}
-                  className="flex items-center gap-1.5 border-white/10 hover:border-white/30"
-                >
-                  <ImageIcon className="h-4 w-4 text-cyan-400" /> {isExporting ? "Generando..." : "Descargar Imagen"}
-                </Button>
-                <Button 
-                  size="sm" 
-                  onClick={handleShareWhatsApp}
-                  className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
-                >
-                  <MessageCircle className="h-4 w-4" /> Enviar por WhatsApp
-                </Button>
-              </div>
-            </div>
-          </div>
+            </form>
+          </Card>
+        </div>
+      )}
 
-          {/* Right: Live Interactive Ticket Preview */}
-          <div className="lg:col-span-5 space-y-3 sm:space-y-4 min-w-0">
-            {/* Preview header: title + action buttons in 2 rows */}
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee] animate-pulse" />
-                  <h3 className="font-bold text-white text-sm sm:text-base">Previsualización en Vivo</h3>
-                </div>
+      {/* ══ PREVIEW MODAL ══ */}
+      {previewModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setPreviewModal(false); }}
+        >
+          <div className="relative w-full max-w-lg max-h-[95vh] flex flex-col rounded-3xl border border-white/10 bg-gray-950/95 backdrop-blur-2xl shadow-2xl overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <span className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_#22d3ee]" />
+                <span className="font-bold text-white text-sm">Previsualización en Vivo</span>
+                <span className="text-[10px] text-gray-500 font-mono">{ticketForm.name || "Tu Negocio"}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {/* Paper mode toggle */}
                 <button
                   type="button"
                   onClick={() => setThermalPaperMode(!thermalPaperMode)}
-                  className={`text-[10px] sm:text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer shrink-0 ${
-                    thermalPaperMode
-                      ? "bg-white text-black border-white"
-                      : "bg-white/5 text-gray-300 border-white/10 hover:bg-white/10"
+                  className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                    thermalPaperMode ? "bg-white text-black border-white" : "bg-white/5 text-gray-300 border-white/10 hover:bg-white/10"
                   }`}
                 >
                   {thermalPaperMode ? "Papel" : "Dark"}
                 </button>
-              </div>
-
-              {/* Action button row — wraps naturally */}
-              <div className="flex flex-wrap gap-1.5">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => setFullscreenModal(true)}
-                  className="flex items-center gap-1 border-white/20 hover:border-white/40 h-8 px-2.5"
-                  title="Abrir vista completa"
+                <button
+                  onClick={() => setPreviewModal(false)}
+                  className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/5 border border-white/10 text-gray-400 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 transition-all cursor-pointer"
                 >
-                  <Maximize2 className="h-3.5 w-3.5 text-cyan-400" />
-                </Button>
-
-                {btConnected ? (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={handleDisconnectBluetooth}
-                    className="flex items-center gap-1 bg-blue-500/20 border-blue-500/40 text-blue-300 font-bold h-8 px-2.5"
-                    title={`Desconectar ${btDeviceName}`}
-                  >
-                    <BluetoothConnected className="h-3.5 w-3.5 text-blue-400" />
-                    <span className="text-[10px] hidden sm:inline">{btDeviceName?.substring(0, 10) || "BT"}</span>
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={handleConnectBluetooth}
-                    className="flex items-center gap-1 border-blue-500/30 hover:border-blue-500/60 text-blue-400 font-bold h-8 px-2.5"
-                    title="Conectar por Bluetooth"
-                  >
-                    <Bluetooth className="h-3.5 w-3.5" />
-                    <span className="text-[10px] hidden sm:inline">BT</span>
-                  </Button>
-                )}
-
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={handlePrintWelcome}
-                  className="flex items-center gap-1 bg-pink-500/20 hover:bg-pink-500/30 border-pink-500/40 text-pink-300 font-bold h-8 px-2.5"
-                  title="Ticket de bienvenida"
-                >
-                  <Sparkles className="h-3.5 w-3.5 text-pink-400" />
-                  <span className="text-[10px] hidden sm:inline">Bienvenida</span>
-                </Button>
-
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={handlePrintTest}
-                  className="flex items-center gap-1 border-cyan-500/30 hover:border-cyan-500/60 text-cyan-300 font-bold h-8 px-2.5"
-                >
-                  <Printer className="h-3.5 w-3.5 text-cyan-400" />
-                  <span className="text-[10px]">Imprimir</span>
-                </Button>
+                  <X className="h-4 w-4" />
+                </button>
               </div>
             </div>
 
-            <p className="text-xs text-gray-400">
-              Conforme vas llenando el formulario, este ticket se actualiza en tiempo real:
-            </p>
+            {/* Action buttons row */}
+            <div className="flex flex-wrap gap-2 px-5 py-3 border-b border-white/5 shrink-0">
+              {btConnected ? (
+                <button onClick={handleDisconnectBluetooth} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500/20 border border-blue-500/40 text-blue-300 text-xs font-bold hover:bg-blue-500/30 transition-all cursor-pointer">
+                  <BluetoothConnected className="h-3 w-3" /> {btDeviceName?.substring(0, 12) || "BT Activo"}
+                </button>
+              ) : (
+                <button onClick={handleConnectBluetooth} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs font-bold hover:bg-blue-500/20 transition-all cursor-pointer">
+                  <Bluetooth className="h-3 w-3" /> Conectar BT
+                </button>
+              )}
+              <button onClick={handlePrintWelcome} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pink-500/10 border border-pink-500/30 text-pink-400 text-xs font-bold hover:bg-pink-500/20 transition-all cursor-pointer">
+                <Sparkles className="h-3 w-3" /> Bienvenida
+              </button>
+              <button onClick={handlePrintTest} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs font-bold hover:bg-cyan-500/20 transition-all cursor-pointer">
+                <Printer className="h-3 w-3" /> Imprimir
+              </button>
+              <button onClick={handleExportPDF} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/15 text-gray-300 text-xs font-bold hover:bg-white/10 transition-all cursor-pointer">
+                <FileDown className="h-3 w-3 text-pink-400" /> PDF
+              </button>
+              <button onClick={handleExportImage} disabled={isExporting} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/15 text-gray-300 text-xs font-bold hover:bg-white/10 transition-all cursor-pointer disabled:opacity-50">
+                <ImageIcon className="h-3 w-3 text-cyan-400" /> {isExporting ? "..." : "Imagen"}
+              </button>
+              <button onClick={handleShareWhatsApp} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600/20 border border-emerald-500/30 text-emerald-300 text-xs font-bold hover:bg-emerald-600/30 transition-all cursor-pointer">
+                <MessageCircle className="h-3 w-3" /> WhatsApp
+              </button>
+            </div>
 
-            {/* Ticket Canvas Wrapper with shadow and glass aesthetic */}
-            <div className="flex justify-center p-6 rounded-3xl bg-gradient-to-b from-gray-900/60 to-black/90 border border-white/10 shadow-2xl backdrop-blur-2xl relative group">
-              <div className="transition-all duration-300 transform group-hover:scale-[1.01]">
-                <TicketTemplate 
-                  data={previewTicketData} 
-                  isThermalPaper={thermalPaperMode} 
+            {/* Ticket preview — scrollable */}
+            <div className="flex-1 overflow-y-auto flex justify-center p-5 bg-gradient-to-b from-gray-900/40 to-black/60">
+              <div className="transition-all duration-300 max-w-full">
+                <TicketTemplate
+                  data={previewTicketData}
+                  isThermalPaper={thermalPaperMode}
                   paperWidth={ticketForm.printerType.includes("58mm") ? "58mm" : "80mm"}
                 />
               </div>
-            </div>
-
-            {/* Footer Action Bar */}
-            <div className="grid grid-cols-3 gap-2">
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={handleExportPDF}
-                className="flex items-center justify-center gap-1 text-xs"
-              >
-                <FileDown className="h-3.5 w-3.5 text-pink-400" /> PDF
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={handleExportImage}
-                disabled={isExporting}
-                className="flex items-center justify-center gap-1 text-xs"
-              >
-                <ImageIcon className="h-3.5 w-3.5 text-cyan-400" /> Imagen
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleShareWhatsApp}
-                className="flex items-center justify-center gap-1 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
-              >
-                <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
-              </Button>
             </div>
           </div>
         </div>
