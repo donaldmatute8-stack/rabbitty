@@ -76,8 +76,8 @@ export function diagnosePrinterConnection(): PrinterDiagnostics {
   } else if (isIOS && !webBluetooth) {
     status = "BLOCKED_BY_BROWSER";
     recommendation =
-      `Safari en ${os} no soporta Web Bluetooth. Si la impresora es BLE usa el navegador Bluefy; ` +
-      "en el resto de casos usa el modo USB/Mac Bridge (Rabbitty POS Printer) desde la máquina de caja, no el BT directo.";
+      `En ${os} ningún navegador soporta Web Bluetooth: aunque veas "Chrome"/"Edge", en iPhone/iPad todos usan el motor de Safari (WebKit), no hay excepción. ` +
+      "Si tu impresora es BLE usa la app Bluefy. Si es Bluetooth Classic (POS-58/YICHIP), usa el modo USB/Mac Bridge (Rabbitty POS Printer) desde la máquina de caja o una impresora Wi-Fi.";
   } else if (!webBluetooth) {
     status = "BLOCKED_BY_BROWSER";
     recommendation = `Tu navegador (${browser}) no expone Web Bluetooth. Usa Chrome o Edge de escritorio (o Android) en una pestaña HTTPS normal.`;

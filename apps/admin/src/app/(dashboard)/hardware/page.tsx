@@ -113,7 +113,7 @@ export default function HardwarePage() {
   };
 
   const handleDownload = (os: string) => {
-    toast.success(`Descarga iniciada para ${os}`);
+    toast.info(`El Rabbitty Print Agent para ${os} estará disponible próximamente. Por ahora usa el bridge USB/Mac o impresión del navegador.`);
   };
 
   const [btConnected, setBtConnected] = useState(false);
@@ -441,16 +441,16 @@ export default function HardwarePage() {
     },
     {
       title: "Cajón de Dinero (RJ11)",
-      description: "Apertura automática mediante pulsos del puerto RJ11 de la impresora de tickets.",
+      description: "Apertura automática mediante pulsos del puerto RJ11 de la impresora de tickets al cobrar en efectivo.",
       icon: Layers,
       color: "text-amber-400",
       bg: "bg-amber-500/10 border-amber-500/20",
       status: "Soportado",
       badgeVariant: "success" as const,
       details: [
-        "Conexión física al puerto RJ11 de la ticketera.",
-        "Apertura automática configurable al registrar ventas en efectivo.",
-        "Apertura manual por PIN de seguridad del cajero.",
+        "Conexión física al puerto DK/RJ11 de la ticketera.",
+        "Apertura automática al imprimir ventas en efectivo por el bridge USB/Mac (pulso ESC p 0 25 250).",
+        "Requiere que el ticket salga por el bridge o una térmica USB local.",
       ],
     },
     {
@@ -469,16 +469,16 @@ export default function HardwarePage() {
     },
     {
       title: "Básculas y Balanzas USB",
-      description: "Lectura directa del peso en el POS para productos vendidos a granel (fase beta).",
+      description: "Lectura directa del peso en el POS para productos vendidos a granel (en desarrollo).",
       icon: Cpu,
       color: "text-purple-400",
       bg: "bg-purple-500/10 border-purple-500/20",
-      status: "Beta",
+      status: "Próximamente",
       badgeVariant: "warning" as const,
       details: [
-        "Protocolo de transmisión serie emulado vía USB.",
+        "Protocolo de transmisión serie emulado vía USB (Web Serial).",
         "Sincronización de peso en tiempo real en la pantalla de cobro.",
-        "Compatibilidad con marcas populares (Torrey, CAS).",
+        "Compatibilidad con marcas populares (Torrey, CAS) — planificada.",
       ],
     },
   ];
@@ -858,12 +858,10 @@ export default function HardwarePage() {
                     className="w-full rounded-xl border border-white/10 bg-black/60 p-3 text-sm text-white focus:border-pink-500 outline-none"
                   >
                     <option value="RABBITTY_POS_PRINTER">🐰 Rabbitty POS Printer (USB / Mac Bridge)</option>
-                    <option value="BLUETOOTH_58mm">🔵 Bluetooth Directa 58mm</option>
-                    <option value="BLUETOOTH_80mm">🔵 Bluetooth Directa 80mm</option>
-                    <option value="ESC/POS 58mm">🔌 USB ESC/POS 58mm</option>
-                    <option value="ESC/POS 80mm">🔌 USB ESC/POS 80mm</option>
-                    <option value="NETWORK_RAW">🌐 Red / Ethernet (RAW 9100)</option>
-                    <option value="GENERIC_TEXT">📄 Genérico / Solo Texto</option>
+                    <option value="BLUETOOTH_58mm">🔵 Bluetooth BLE 58mm (Web Bluetooth)</option>
+                    <option value="BLUETOOTH_80mm">🔵 Bluetooth BLE 80mm (Web Bluetooth)</option>
+                    <option value="ESC/POS 58mm">🔌 USB ESC/POS 58mm (bridge / navegador)</option>
+                    <option value="ESC/POS 80mm">🔌 USB ESC/POS 80mm (bridge / navegador)</option>
                   </select>
                 </div>
               </div>
@@ -1035,10 +1033,11 @@ export default function HardwarePage() {
                     <div>
                       <h3 className="font-bold text-white">Rabbitty Print Agent</h3>
                       <p className="text-xs text-gray-400">Servicio local para impresión silenciosa</p>
+                      <Badge variant="warning" className="mt-1.5 text-[10px]">Próximamente</Badge>
                     </div>
                   </div>
                   <p className="text-sm text-gray-400 leading-relaxed">
-                    Esta pequeña aplicación se instala en la máquina local de caja para comunicarse directamente con las impresoras USB/Red sin abrir el cuadro de diálogo del navegador web.
+                    En desarrollo. Conectará la Mac/Windows de caja con impresoras USB y de Red (RAW 9100) para imprimir sin el diálogo del navegador. Mientras tanto, el <strong>bridge USB/Mac</strong> ya imprime directo por USB y Web Bluetooth cubre impresoras BLE.
                   </p>
                   <div className="pt-2 flex flex-wrap gap-2.5">
                     <Button variant="secondary" size="sm" onClick={() => handleDownload("macOS")}>
@@ -1068,7 +1067,7 @@ export default function HardwarePage() {
                   <div className="space-y-3 pt-2 text-sm text-gray-400">
                     <div className="flex gap-3">
                       <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-cyan-500/20 font-bold text-xs text-cyan-400">1</span>
-                      <p><strong>Para Impresoras Bluetooth:</strong> Enciende la impresora. En tu tablet, PC o teléfono ve a <em>Ajustes &gt; Bluetooth</em>, busca el dispositivo (ej. <code>MTP-II</code>, <code>POS-58</code>, <code>RPP02N</code>) y vincúlala con PIN (comúnmente <code>0000</code> o <code>1234</code>).</p>
+                      <p><strong>Son dos Bluetooth distintas:</strong> Web Bluetooth (botón <em>Conectar BT</em>) solo ve impresoras <strong>BLE</strong>. Las Classic/SPP (POS-58, MTP-II, YICHIP) jamás aparecen — para esas usa USB/Wi-Fi o el bridge.</p>
                     </div>
                     <div className="flex gap-3">
                       <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-cyan-500/20 font-bold text-xs text-cyan-400">2</span>
@@ -1076,7 +1075,7 @@ export default function HardwarePage() {
                     </div>
                     <div className="flex gap-3">
                       <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-cyan-500/20 font-bold text-xs text-cyan-400">3</span>
-                      <p><strong>Prueba física:</strong> Presiona <strong>Imprimir Ticket de Prueba</strong>. En el diálogo del navegador, selecciona tu impresora Bluetooth emparejada. En márgenes elige <em>"Ninguno"</em> y desactivar encabezados/pies de página.</p>
+                      <p><strong>Prueba física:</strong> Si es BLE, presiona <strong>Conectar BT</strong> y elige la impresora. Si no aparece, es Classic → conecta por USB a la Mac de caja y usa <strong>Rabbitty POS Printer (USB / Mac Bridge)</strong>; en el diálogo elige márgenes "Ninguno" y sin encabezados.</p>
                     </div>
                   </div>
                 </div>
