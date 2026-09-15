@@ -17,7 +17,9 @@ import {
   connectBluetoothPrinter, 
   isBluetoothConnected, 
   disconnectBluetoothPrinter,
-  sendEscPosToBluetooth 
+  sendEscPosToBluetooth,
+  diagnosePrinterConnection,
+  type PrinterDiagnostics,
 } from "../../../lib/web-bluetooth";
 
 export default function HardwarePage() {
@@ -117,6 +119,7 @@ export default function HardwarePage() {
   const [btConnected, setBtConnected] = useState(false);
   const [btDeviceName, setBtDeviceName] = useState<string | null>(null);
   const [previewModal, setPreviewModal] = useState(false);
+  const [diag, setDiag] = useState<PrinterDiagnostics | null>(null);
 
   // ── PRINTER STATUS (polling /api/print GET) ──
   type PrinterStatus = {
@@ -167,27 +170,27 @@ export default function HardwarePage() {
     return () => clearInterval(interval);
   }, [checkPrinterStatus]);
 
+  // One-time browser/connection diagnosis (also refreshed by handleConnectBluetooth)
+  useEffect(() => {
+    setDiag(diagnosePrinterConnection());
+  }, []);
+
   const handleConnectBluetooth = async () => {
     // Diagnostics — help debug why BT might not work
-    const protocol = window.location.protocol;
-    const host = window.location.hostname;
-    const btAvailable = "bluetooth" in navigator;
-    console.info("[BT Debug]", { protocol, host, btAvailable, userAgent: navigator.userAgent });
+    const d = diagnosePrinterConnection();
+    console.info("[BT Debug]", d);
 
-    if (!btAvailable) {
-      const isSecure = protocol === "https:" || host === "localhost" || host === "127.0.0.1";
-      if (!isSecure) {
-        toast.error(`❌ Web Bluetooth requiere HTTPS. Estás en: ${protocol}//${host}`);
-      } else {
-        toast.error(
-          `❌ navigator.bluetooth no disponible en ${protocol}//${host}. Revisa chrome://flags/#enable-experimental-web-platform-features`
-        );
-      }
+    if (d.status === "HTTP" || d.status === "BLOCKED_BY_CONTEXT" || d.status === "BLOCKED_BY_BROWSER") {
+      toast.error("❌ " + d.recommendation);
       return;
     }
 
     try {
-      toast.info("Buscando impresora Bluetooth POS-58 / MTP...");
+      toast.info(
+        d.status === "BLE_ONLY"
+          ? "Buscando impresora BLE... (si no aparece la tuya, es Bluetooth Classic → usa el bridge USB/Mac)"
+          : "Buscando impresora Bluetooth POS-58 / MTP..."
+      );
       const result = await connectBluetoothPrinter();
       if (result.success) {
         setBtConnected(true);
@@ -631,6 +634,45 @@ export default function HardwarePage() {
           </div>
         </div>
       </div>
+
+      {/* ── PRINTER CONNECTION DIAGNOSTIC REPORT ── */}
+      {diag && (
+        <div className="rounded-2xl border border-white/5 bg-white/5 backdrop-blur-md p-4 sm:p-5 w-full min-w-0">
+          <div className="flex items-center gap-2 mb-3">
+            <Terminal className="h-4 w-4 text-cyan-400" />
+            <h2 className="text-sm font-black text-white">Reporte de Conexión de Impresora</h2>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 mb-3">
+            <div className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold ${diag.secure ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : "bg-red-500/10 border-red-500/30 text-red-400"}`}>
+              <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+              HTTPS: {diag.secure ? "Sí" : "No"}
+            </div>
+            <div className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold ${diag.webBluetooth ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : "bg-amber-500/10 border-amber-500/30 text-amber-400"}`}>
+              <Bluetooth className="h-3.5 w-3.5 shrink-0" />
+              Web Bluetooth: {diag.webBluetooth ? "Disponible" : "No disponible"}
+            </div>
+            <div className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold ${diag.topLevel ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : "bg-red-500/10 border-red-500/30 text-red-400"}`}>
+              <Monitor className="h-3.5 w-3.5 shrink-0" />
+              Pestaña principal: {diag.topLevel ? "Sí" : "No (iframe)"}
+            </div>
+            <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-gray-300">
+              <Cpu className="h-3.5 w-3.5 shrink-0 text-pink-400" />
+              {diag.browser} · {diag.os}
+            </div>
+          </div>
+
+          <div className={`rounded-xl border px-3 py-2.5 text-xs leading-relaxed ${
+            diag.status === "OK" || diag.status === "BLE_ONLY"
+              ? "bg-cyan-500/10 border-cyan-500/30 text-cyan-100"
+              : "bg-amber-500/10 border-amber-500/30 text-amber-100"
+          }`}>
+            <span className="font-black uppercase tracking-wider text-[10px] opacity-70">Recomendación: </span>
+            {diag.recommendation}
+          </div>
+          <p className="mt-2 text-[10px] text-gray-500 font-mono truncate">{diag.userAgent}</p>
+        </div>
+      )}
 
       {/* ── TAB 1: TICKET CONFIGURATION & LIVE PREVIEW ── */}
       {activeTab === "ticket" && (
