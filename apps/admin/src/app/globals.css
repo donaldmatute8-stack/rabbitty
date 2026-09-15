@@ -2,6 +2,11 @@
 @source "../../../../packages/ui/src/**/*.{ts,tsx}";
 @import "@rabbitty/design/tokens";
 
+html, body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
 body {
   font-family: var(--font-outfit), var(--rabbitty-font), sans-serif;
 }

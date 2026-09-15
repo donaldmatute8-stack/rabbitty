@@ -101,7 +101,7 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
   return (
     <BranchContext.Provider value={{ branchId, setBranchId }}>
       <SidebarContext.Provider value={{ isCollapsed, setIsCollapsed }}>
-        <div className="relative flex h-screen w-screen overflow-hidden bg-black text-[var(--text-primary)]">
+        <div className="relative flex h-screen w-full overflow-hidden bg-black text-[var(--text-primary)]">
           {/* Neon Glow Accents */}
           <div className="absolute top-[-10%] right-[-10%] h-[500px] w-[500px] rounded-full bg-pink-500/10 blur-[120px] pointer-events-none" />
           <div className="absolute bottom-[-10%] left-[-10%] h-[500px] w-[500px] rounded-full bg-purple-500/10 blur-[120px] pointer-events-none" />

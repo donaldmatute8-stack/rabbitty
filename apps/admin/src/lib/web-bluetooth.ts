@@ -19,22 +19,60 @@ let activeCharacteristic: any = null;
 let activeDevice: any = null;
 
 export async function connectBluetoothPrinter(): Promise<{ success: boolean; deviceName: string; error?: string }> {
-  if (typeof window === "undefined" || !(navigator as any).bluetooth) {
-    throw new Error("Tu navegador no soporta Web Bluetooth. Usa Google Chrome, Edge o Bluefy (iOS).");
+  if (typeof window === "undefined") {
+    throw new Error("Web Bluetooth solo funciona en el navegador.");
+  }
+
+  // Distinguish: browser lacks BT support vs context is not secure (HTTP)
+  if (!(navigator as any).bluetooth) {
+    const isSecure =
+      window.location.protocol === "https:" ||
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1";
+    if (!isSecure) {
+      throw new Error(
+        "Web Bluetooth requiere HTTPS. Abre el admin en https:// o en localhost para conectar impresoras Bluetooth."
+      );
+    }
+    throw new Error(
+      "Tu navegador no soporta Web Bluetooth. Usa Google Chrome (escritorio/Android) o Edge. En iOS usa Bluefy."
+    );
   }
 
   try {
-    const device = await (navigator as any).bluetooth.requestDevice({
-      filters: [
-        { namePrefix: "POS" },
-        { namePrefix: "MTP" },
-        { namePrefix: "RPP" },
-        { namePrefix: "Printer" },
-        { namePrefix: "Rabbitty" },
-        { namePrefix: "YICHIP" },
-      ],
-      optionalServices: BLE_PRINTER_SERVICES,
-    });
+    // Try with known thermal printer name prefixes first
+    let device: any;
+    try {
+      device = await (navigator as any).bluetooth.requestDevice({
+        filters: [
+          { namePrefix: "POS" },
+          { namePrefix: "MTP" },
+          { namePrefix: "RPP" },
+          { namePrefix: "Printer" },
+          { namePrefix: "printer" },
+          { namePrefix: "Rabbitty" },
+          { namePrefix: "YICHIP" },
+          { namePrefix: "BT" },
+          { namePrefix: "Xprinter" },
+          { namePrefix: "Thermal" },
+        ],
+        optionalServices: BLE_PRINTER_SERVICES,
+      });
+    } catch (filterErr: any) {
+      // User cancelled → propagate immediately
+      if (
+        filterErr.name === "NotFoundError" ||
+        filterErr.name === "AbortError" ||
+        filterErr.message?.toLowerCase().includes("cancel")
+      ) {
+        throw filterErr;
+      }
+      // Printer has an unusual name → show ALL BLE devices as fallback
+      device = await (navigator as any).bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: BLE_PRINTER_SERVICES,
+      });
+    }
 
     const server = await device.gatt.connect();
 
@@ -72,7 +110,9 @@ export async function connectBluetoothPrinter(): Promise<{ success: boolean; dev
     }
 
     if (!writeChar) {
-      throw new Error("No se encontró canal de escritura ESC/POS en el dispositivo");
+      throw new Error(
+        "No se encontró canal de escritura ESC/POS en este dispositivo. Verifica que sea una impresora térmica Bluetooth."
+      );
     }
 
     activeDevice = device;
@@ -88,6 +128,15 @@ export async function connectBluetoothPrinter(): Promise<{ success: boolean; dev
       deviceName: device.name || "Rabbitty POS Printer",
     };
   } catch (err: any) {
+    // User cancelled the picker → soft failure, no scary error
+    if (
+      err.name === "NotFoundError" ||
+      err.name === "AbortError" ||
+      err.message?.toLowerCase().includes("cancel") ||
+      err.message?.toLowerCase().includes("cancelled")
+    ) {
+      return { success: false, deviceName: "", error: "Selección cancelada." };
+    }
     return {
       success: false,
       deviceName: "",
