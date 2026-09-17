@@ -1,58 +1,86 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useState, Suspense } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, CheckCircle, XCircle } from "lucide-react";
 
 /**
- * /magic-confirm — Página intermediaria anti-prefetch
+ * /magic-confirm — Página de confirmación de acceso mágico
  *
- * El link del email apunta aquí (/magic-confirm?url=<encoded_callback>)
- * en lugar de directo al callback de NextAuth.
+ * Recibe: ?token=<tok>&email=<email>
  *
- * Propósito: evitar que clientes de correo (Gmail, Bluefy, iOS Mail)
- * hagan prefetch del URL y consuman el token de un solo uso antes de
- * que el usuario lo toque intencionalmente.
+ * Al presionar "Ingresar" llama a /api/auth/email-verify (POST) que:
+ *   1. Verifica el token en la DB sin CSRF
+ *   2. Lo consume (single use)
+ *   3. Crea la sesión JWT y setea la cookie
+ *   4. Redirige al dashboard
  *
- * El token SOLO se consume cuando el usuario presiona "Ingresar".
+ * Esto resuelve:
+ *   - Prefetch: el token solo se consume al presionar el botón
+ *   - Cross-browser: no depende de cookies del browser que inició el login
  */
 function MagicConfirmContent() {
   const searchParams = useSearchParams();
-  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState("");
 
-  // El URL real de NextAuth callback viene encodificado en ?url=
-  const rawUrl = searchParams.get("url");
+  const token = searchParams.get("token");
+  const email = searchParams.get("email");
 
-  if (!rawUrl) {
+  if (!token || !email) {
     return (
       <div className="relative flex min-h-screen items-center justify-center bg-black text-white p-4">
         <div className="w-full max-w-md rounded-3xl border border-white/5 bg-white/5 p-8 text-center space-y-4 backdrop-blur-xl">
-          <div className="text-4xl">❌</div>
-          <h1 className="text-xl font-black">Enlace inválido</h1>
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400">
+            <XCircle className="h-8 w-8" />
+          </div>
+          <h1 className="text-xl font-black text-white">Enlace inválido</h1>
           <p className="text-sm text-gray-400">
-            El enlace no contiene los parámetros necesarios. Solicita un nuevo
-            enlace desde el panel de administración.
+            El enlace no contiene los parámetros necesarios. Solicita un nuevo acceso.
           </p>
           <a
             href="/login"
             className="inline-block mt-2 px-6 py-3 rounded-xl bg-pink-500 hover:bg-pink-600 text-white font-bold text-sm transition-colors"
           >
-            Volver al login
+            Ir al login
           </a>
         </div>
       </div>
     );
   }
 
-  const handleEnter = () => {
-    setLoading(true);
-    // Navegar al callback real de NextAuth — AQUÍ se consume el token
-    window.location.href = rawUrl;
+  const handleEnter = async () => {
+    setStatus("loading");
+    try {
+      const res = await fetch("/api/auth/email-verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, email }),
+        credentials: "include", // importante: incluir cookies en la respuesta
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.ok) {
+        setStatus("success");
+        // Pequeño delay para que la cookie se escriba antes del redirect
+        setTimeout(() => {
+          router.replace("/");
+        }, 800);
+      } else {
+        setStatus("error");
+        setErrorMsg(data.error || "No se pudo verificar el enlace.");
+      }
+    } catch {
+      setStatus("error");
+      setErrorMsg("Error de red. Verifica tu conexión e intenta de nuevo.");
+    }
   };
 
   return (
     <div className="relative flex min-h-screen items-center justify-center bg-black text-white overflow-hidden p-4">
-      {/* Background glow */}
+      {/* Background glows */}
       <div className="absolute top-[-10%] right-[-10%] h-[500px] w-[500px] rounded-full bg-pink-500/10 blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] left-[-10%] h-[400px] w-[400px] rounded-full bg-purple-500/10 blur-[120px] pointer-events-none" />
 
@@ -63,36 +91,77 @@ function MagicConfirmContent() {
           <span className="font-black text-white text-sm tracking-widest uppercase">Rabbitty Admin</span>
         </div>
 
-        <div className="space-y-2">
-          <h1 className="text-2xl font-black text-white">¡Tu enlace está listo!</h1>
-          <p className="text-sm text-gray-400 leading-relaxed">
-            Presiona el botón para ingresar de forma segura a tu panel de administración.
-          </p>
-        </div>
+        {/* State: idle / loading */}
+        {(status === "idle" || status === "loading") && (
+          <div className="space-y-2">
+            <h1 className="text-2xl font-black text-white">¡Tu enlace está listo!</h1>
+            <p className="text-sm text-gray-400 leading-relaxed">
+              Presiona el botón para ingresar de forma segura a tu panel.
+            </p>
+            {email && (
+              <p className="text-xs text-gray-500 font-mono bg-white/5 rounded-lg px-3 py-1.5 inline-block">
+                {email}
+              </p>
+            )}
+          </div>
+        )}
 
-        {/* Main CTA */}
-        <button
-          onClick={handleEnter}
-          disabled={loading}
-          className="w-full flex items-center justify-center gap-3 py-4 px-6 rounded-2xl bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-400 hover:to-purple-500 text-white font-black text-base transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed shadow-[0_8px_25px_rgba(236,72,153,0.35)] cursor-pointer"
-        >
-          {loading ? (
-            <>
-              <Loader2 className="h-5 w-5 animate-spin" />
-              Verificando acceso...
-            </>
-          ) : (
-            <>
-              🚀 Ingresar a mi Panel
-            </>
-          )}
-        </button>
+        {/* State: success */}
+        {status === "success" && (
+          <div className="space-y-3">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.15)]">
+              <CheckCircle className="h-8 w-8" />
+            </div>
+            <h1 className="text-2xl font-black text-white">¡Acceso concedido!</h1>
+            <p className="text-sm text-gray-400">Redirigiendo al panel...</p>
+          </div>
+        )}
+
+        {/* State: error */}
+        {status === "error" && (
+          <div className="space-y-3">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400">
+              <XCircle className="h-8 w-8" />
+            </div>
+            <h1 className="text-xl font-black text-white">Enlace inválido o expirado</h1>
+            <p className="text-sm text-gray-400">{errorMsg}</p>
+          </div>
+        )}
+
+        {/* CTA Button */}
+        {(status === "idle" || status === "loading") && (
+          <button
+            onClick={handleEnter}
+            disabled={status === "loading"}
+            className="w-full flex items-center justify-center gap-3 py-4 px-6 rounded-2xl bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-400 hover:to-purple-500 text-white font-black text-base transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed shadow-[0_8px_25px_rgba(236,72,153,0.35)] cursor-pointer"
+          >
+            {status === "loading" ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Verificando...
+              </>
+            ) : (
+              "🚀 Ingresar a mi Panel"
+            )}
+          </button>
+        )}
+
+        {/* Error: try again */}
+        {status === "error" && (
+          <a
+            href="/login"
+            className="inline-block w-full py-3 px-6 rounded-2xl bg-white/10 hover:bg-white/15 text-white font-bold text-sm transition-colors"
+          >
+            Solicitar nuevo enlace
+          </a>
+        )}
 
         {/* Security note */}
-        <p className="text-xs text-gray-500 leading-relaxed">
-          🔒 Este enlace es de un solo uso y expirará en breve.
-          Si no solicitaste este acceso, ignora este mensaje.
-        </p>
+        {status === "idle" && (
+          <p className="text-xs text-gray-500 leading-relaxed">
+            🔒 Este enlace es de un solo uso y expirará en breve.
+          </p>
+        )}
       </div>
     </div>
   );
