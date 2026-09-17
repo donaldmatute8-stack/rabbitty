@@ -54,20 +54,21 @@ function MagicConfirmContent() {
   const handleEnter = async () => {
     setStatus("loading");
     try {
+      // By omitting redirect: false, NextAuth will use a native <form> POST.
+      // This is crucial for WKWebView browsers (like Bluefy) because fetch()
+      // sometimes fails to persist cookies before JavaScript navigates away.
+      // A native POST -> 302 Redirect guarantees the session cookie is saved.
       const result = await signIn("email-token", {
         token,
         email,
-        redirect: false,
+        callbackUrl: "/",
       });
-
-      if (result?.ok && !result?.error) {
-        setStatus("success");
-        setTimeout(() => {
-          router.replace("/");
-        }, 800);
-      } else {
+      
+      // If result is returned, it means there was an error (because successful
+      // native sign-ins cause a full page redirect and this code never runs).
+      if (result?.error) {
         setStatus("error");
-        setErrorMsg(result?.error || "El enlace ha expirado o ya fue utilizado.");
+        setErrorMsg(result.error);
       }
     } catch {
       setStatus("error");
