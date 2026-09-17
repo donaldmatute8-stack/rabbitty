@@ -2,6 +2,7 @@
 
 import { useSearchParams, useRouter } from "next/navigation";
 import { useState, Suspense } from "react";
+import { signIn } from "next-auth/react";
 import { Loader2, CheckCircle, XCircle } from "lucide-react";
 
 /**
@@ -9,15 +10,15 @@ import { Loader2, CheckCircle, XCircle } from "lucide-react";
  *
  * Recibe: ?token=<tok>&email=<email>
  *
- * Al presionar "Ingresar" llama a /api/auth/email-verify (POST) que:
- *   1. Verifica el token en la DB sin CSRF
+ * Al presionar "Ingresar" llama a signIn("email-token") de NextAuth:
+ *   1. Verifica el token en la DB
  *   2. Lo consume (single use)
- *   3. Crea la sesión JWT y setea la cookie
+ *   3. Crea la sesión JWT
  *   4. Redirige al dashboard
  *
  * Esto resuelve:
  *   - Prefetch: el token solo se consume al presionar el botón
- *   - Cross-browser: no depende de cookies del browser que inició el login
+ *   - Cross-browser: el token se envía como credencial y NextAuth maneja el CSRF en este nuevo request
  */
 function MagicConfirmContent() {
   const searchParams = useSearchParams();
@@ -53,24 +54,20 @@ function MagicConfirmContent() {
   const handleEnter = async () => {
     setStatus("loading");
     try {
-      const res = await fetch("/api/auth/email-verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, email }),
-        credentials: "include", // importante: incluir cookies en la respuesta
+      const result = await signIn("email-token", {
+        token,
+        email,
+        redirect: false,
       });
 
-      const data = await res.json();
-
-      if (res.ok && data.ok) {
+      if (result?.ok && !result?.error) {
         setStatus("success");
-        // Pequeño delay para que la cookie se escriba antes del redirect
         setTimeout(() => {
           router.replace("/");
         }, 800);
       } else {
         setStatus("error");
-        setErrorMsg(data.error || "No se pudo verificar el enlace.");
+        setErrorMsg(result?.error || "El enlace ha expirado o ya fue utilizado.");
       }
     } catch {
       setStatus("error");
