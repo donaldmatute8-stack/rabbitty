@@ -377,6 +377,8 @@ const authResult = NextAuth({
         }
       },
     }),
+    Credentials({
+      id: "magic-link",
       name: "Magic Link",
       credentials: {
         token: { label: "Token", type: "text" },
