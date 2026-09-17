@@ -313,7 +313,70 @@ const authResult = NextAuth({
       },
     }),
     Credentials({
-      id: "magic-link",
+      id: "email-token",
+      name: "Email Token",
+      credentials: {
+        token: { label: "Token", type: "text" },
+        email: { label: "Email", type: "email" },
+      },
+      async authorize(credentials) {
+        if (!credentials?.token || !credentials?.email) return null;
+
+        try {
+          const db = getCoreDb();
+
+          // 1. Find the token in DB
+          const [stored] = await db
+            .select()
+            .from(verificationTokens)
+            .where(eq(verificationTokens.token, credentials.token as string));
+
+          if (!stored) {
+            console.warn("[email-token] Token no encontrado:", credentials.email);
+            return null;
+          }
+
+          // 2. Check expiry
+          if (new Date(stored.expires) < new Date()) {
+            await db.delete(verificationTokens).where(eq(verificationTokens.token, credentials.token as string));
+            console.warn("[email-token] Token expirado:", credentials.email);
+            return null;
+          }
+
+          // 3. Verify email matches
+          if (stored.identifier.toLowerCase() !== (credentials.email as string).toLowerCase()) {
+            console.warn("[email-token] Email mismatch", stored.identifier, credentials.email);
+            return null;
+          }
+
+          // 4. Consume token (single-use)
+          await db.delete(verificationTokens).where(eq(verificationTokens.token, credentials.token as string));
+
+          // 5. Upsert user and return
+          const pool = await getPool();
+          await pool.query(
+            `INSERT INTO "adminAuthUsers" ("id", "email", "emailVerified")
+             VALUES (gen_random_uuid()::text, $1, NOW())
+             ON CONFLICT ("email") DO UPDATE SET "emailVerified" = NOW()`,
+            [stored.identifier]
+          );
+          const res = await pool.query(
+            `SELECT "id", "email" FROM "adminAuthUsers" WHERE "email" = $1`,
+            [stored.identifier]
+          );
+          await pool.end();
+
+          const user = res.rows[0];
+          if (!user) return null;
+
+          console.log("[email-token] ✅ Sesión creada para:", user.email);
+          return { id: user.id, email: user.email, name: user.email };
+        } catch (err) {
+          console.error("[email-token] Error:", err);
+          return null;
+        }
+      },
+    }),
       name: "Magic Link",
       credentials: {
         token: { label: "Token", type: "text" },
