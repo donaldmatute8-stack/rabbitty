@@ -127,39 +127,14 @@ export async function connectBluetoothPrinter(): Promise<{ success: boolean; dev
   }
 
   try {
-    // Try with known thermal printer name prefixes first
-    let device: any;
-    try {
-      device = await (navigator as any).bluetooth.requestDevice({
-        filters: [
-          { namePrefix: "POS" },
-          { namePrefix: "MTP" },
-          { namePrefix: "RPP" },
-          { namePrefix: "Printer" },
-          { namePrefix: "printer" },
-          { namePrefix: "Rabbitty" },
-          { namePrefix: "YICHIP" },
-          { namePrefix: "BT" },
-          { namePrefix: "Xprinter" },
-          { namePrefix: "Thermal" },
-        ],
-        optionalServices: BLE_PRINTER_SERVICES,
-      });
-    } catch (filterErr: any) {
-      // User cancelled → propagate immediately
-      if (
-        filterErr.name === "NotFoundError" ||
-        filterErr.name === "AbortError" ||
-        filterErr.message?.toLowerCase().includes("cancel")
-      ) {
-        throw filterErr;
-      }
-      // Printer has an unusual name → show ALL BLE devices as fallback
-      device = await (navigator as any).bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: BLE_PRINTER_SERVICES,
-      });
-    }
+    // We use acceptAllDevices: true instead of namePrefix filters because 
+    // some iOS Bluetooth Web wrappers (like Bluefy) fail or return early 
+    // when providing complex filter arrays. The native picker will show all
+    // nearby devices, which is more reliable.
+    const device = await (navigator as any).bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: BLE_PRINTER_SERVICES,
+    });
 
     const server = await device.gatt.connect();
 
