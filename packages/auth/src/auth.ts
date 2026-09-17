@@ -153,18 +153,24 @@ const authResult = NextAuth({
 
         const targetOrigin = "https://admin.rabbitty.me";
 
-        // Extract token + email from the NextAuth-generated URL
-        // We build our OWN confirm page URL so we bypass NextAuth's CSRF cookie
-        // requirement — allowing the link to work in ANY browser, not just the
-        // one where the login form was submitted (cross-browser magic link fix).
-        let token = "";
+        // We build our OWN token and confirm page URL so we bypass NextAuth's CSRF cookie
+        // requirement AND its internal token hashing. We delete the token NextAuth just
+        // inserted, and insert our own raw UUID token.
+        const myToken = crypto.randomUUID();
         try {
-          const parsedUrl = new URL(url);
-          token = parsedUrl.searchParams.get("token") ?? "";
-        } catch { /* ignore */ }
+          const db = getCoreDb();
+          await db.delete(verificationTokens).where(eq(verificationTokens.identifier, email));
+          await db.insert(verificationTokens).values({
+            identifier: email,
+            token: myToken,
+            expires: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+          });
+        } catch (e) {
+          console.error("[Auth Resend] Error replacing token in DB:", e);
+        }
 
         // /magic-confirm verifies token server-side without CSRF cookies
-        const finalUrl = `${targetOrigin}/magic-confirm?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
+        const finalUrl = `${targetOrigin}/magic-confirm?token=${encodeURIComponent(myToken)}&email=${encodeURIComponent(email)}`;
 
         const html = `
 <!DOCTYPE html>
