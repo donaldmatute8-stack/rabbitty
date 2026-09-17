@@ -152,15 +152,20 @@ const authResult = NextAuth({
         }
 
         const targetOrigin = "https://admin.rabbitty.me";
-        let finalUrl = url;
+        let callbackUrl = url;
 
         try {
           const parsedUrl = new URL(url);
           parsedUrl.searchParams.set("callbackUrl", targetOrigin);
-          finalUrl = `${targetOrigin}${parsedUrl.pathname}?${parsedUrl.searchParams.toString()}`;
+          callbackUrl = `${targetOrigin}${parsedUrl.pathname}?${parsedUrl.searchParams.toString()}`;
         } catch {
-          finalUrl = url.replace(/https?:\/\/[^/]+/gi, targetOrigin);
+          callbackUrl = url.replace(/https?:\/\/[^/]+/gi, targetOrigin);
         }
+
+        // ⚡ Anti-prefetch: wrap the real callback in /magic-confirm so that
+        // Bluefy, Gmail and other pre-fetching clients cannot consume the
+        // single-use token before the user taps the button.
+        const finalUrl = `${targetOrigin}/magic-confirm?url=${encodeURIComponent(callbackUrl)}`;
 
         const html = `
 <!DOCTYPE html>
