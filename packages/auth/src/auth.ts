@@ -152,20 +152,19 @@ const authResult = NextAuth({
         }
 
         const targetOrigin = "https://admin.rabbitty.me";
-        let callbackUrl = url;
 
+        // Extract token + email from the NextAuth-generated URL
+        // We build our OWN confirm page URL so we bypass NextAuth's CSRF cookie
+        // requirement — allowing the link to work in ANY browser, not just the
+        // one where the login form was submitted (cross-browser magic link fix).
+        let token = "";
         try {
           const parsedUrl = new URL(url);
-          parsedUrl.searchParams.set("callbackUrl", targetOrigin);
-          callbackUrl = `${targetOrigin}${parsedUrl.pathname}?${parsedUrl.searchParams.toString()}`;
-        } catch {
-          callbackUrl = url.replace(/https?:\/\/[^/]+/gi, targetOrigin);
-        }
+          token = parsedUrl.searchParams.get("token") ?? "";
+        } catch { /* ignore */ }
 
-        // ⚡ Anti-prefetch: wrap the real callback in /magic-confirm so that
-        // Bluefy, Gmail and other pre-fetching clients cannot consume the
-        // single-use token before the user taps the button.
-        const finalUrl = `${targetOrigin}/magic-confirm?url=${encodeURIComponent(callbackUrl)}`;
+        // /magic-confirm verifies token server-side without CSRF cookies
+        const finalUrl = `${targetOrigin}/magic-confirm?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
 
         const html = `
 <!DOCTYPE html>
