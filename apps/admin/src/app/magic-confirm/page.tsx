@@ -58,18 +58,13 @@ function MagicConfirmContent() {
       // This is crucial for WKWebView browsers (like Bluefy) because fetch()
       // sometimes fails to persist cookies before JavaScript navigates away.
       // A native POST -> 302 Redirect guarantees the session cookie is saved.
-      const result = await signIn("email-token", {
+      await signIn("email-token", {
         token,
         email,
         callbackUrl: "/",
       });
-      
-      // If result is returned, it means there was an error (because successful
-      // native sign-ins cause a full page redirect and this code never runs).
-      if (result?.error) {
-        setStatus("error");
-        setErrorMsg(result.error);
-      }
+      // The browser will redirect natively to / or /login?error=...
+      // so this code below will technically not be reached.
     } catch {
       setStatus("error");
       setErrorMsg("Error de red. Verifica tu conexión e intenta de nuevo.");
