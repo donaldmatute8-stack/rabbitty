@@ -34,6 +34,43 @@ export default function PosPage() {
   const [btConnected, setBtConnected] = useState(false);
   const [btDeviceName, setBtDeviceName] = useState<string | null>(null);
 
+  // Keep Screen Awake (WakeLock API) to prevent Bluetooth drop and keep POS active
+  useEffect(() => {
+    let wakeLock: any = null;
+
+    const requestWakeLock = async () => {
+      try {
+        if ("wakeLock" in navigator) {
+          wakeLock = await (navigator as any).wakeLock.request("screen");
+        }
+      } catch (err) {
+        // Ignored
+      }
+    };
+
+    requestWakeLock();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        requestWakeLock();
+      } else if (document.hidden && btConnected) {
+        // Disconnect BT on background to prevent zombie connection
+        disconnectBluetoothPrinter();
+        setBtConnected(false);
+        setBtDeviceName(null);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (wakeLock !== null) {
+        wakeLock.release().catch(() => {});
+      }
+      disconnectBluetoothPrinter();
+    };
+  }, [btConnected]);
+
   const handleConnectBluetooth = async () => {
     try {
       toast.info("Buscando impresora Bluetooth POS-58 / MTP...");
