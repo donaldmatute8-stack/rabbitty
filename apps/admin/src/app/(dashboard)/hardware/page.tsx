@@ -175,6 +175,37 @@ export default function HardwarePage() {
     setDiag(diagnosePrinterConnection());
   }, []);
 
+  // Keep Screen Awake (WakeLock API) to prevent Bluetooth drop
+  useEffect(() => {
+    let wakeLock: any = null;
+
+    const requestWakeLock = async () => {
+      try {
+        if ("wakeLock" in navigator) {
+          wakeLock = await (navigator as any).wakeLock.request("screen");
+        }
+      } catch (err) {
+        // WakeLock might be denied if battery is low or not supported
+      }
+    };
+
+    requestWakeLock();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        requestWakeLock();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (wakeLock !== null) {
+        wakeLock.release().catch(() => {});
+      }
+    };
+  }, []);
+
   // Cleanup Bluetooth connection on unmount or when the user backgrounds the app/tab
   useEffect(() => {
     const handleVisibilityChange = () => {
