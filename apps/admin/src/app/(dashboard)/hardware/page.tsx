@@ -175,6 +175,23 @@ export default function HardwarePage() {
     setDiag(diagnosePrinterConnection());
   }, []);
 
+  // Cleanup Bluetooth connection on unmount or when the user backgrounds the app/tab
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && btConnected) {
+        disconnectBluetoothPrinter();
+        setBtConnected(false);
+        setBtDeviceName(null);
+      }
+    };
+    
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      disconnectBluetoothPrinter();
+    };
+  }, [btConnected]);
+
   const handleConnectBluetooth = async () => {
     // Diagnostics — help debug why BT might not work
     const d = diagnosePrinterConnection();
