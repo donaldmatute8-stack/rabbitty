@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { trpc } from "../../../lib/trpc-client";
-import { Card, Badge, Button, Input, Dialog, toast } from "@rabbitty/ui";
+import { Card, Badge, Button, Input, Select, Dialog, toast } from "@rabbitty/ui";
 import { 
   Printer, Monitor, Layers, Cpu, Download, BookOpen, Terminal, 
   CheckCircle, FileText, Sparkles, Building2, Phone, Mail, 
@@ -800,11 +800,30 @@ export default function HardwarePage() {
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <Input
+                <Select
                   label="Régimen Fiscal (SAT / Hacienda)"
-                  placeholder="Ej. 626 - RESICO"
+                  placeholder="Selecciona un régimen"
                   value={ticketForm.taxRegime}
                   onChange={(e) => setTicketForm({ ...ticketForm, taxRegime: e.target.value })}
+                  options={[
+                    { value: "601 - General de Ley Personas Morales", label: "601 - General de Ley Personas Morales" },
+                    { value: "603 - Personas Morales con Fines no Lucrativos", label: "603 - Personas Morales con Fines no Lucrativos" },
+                    { value: "605 - Sueldos y Salarios", label: "605 - Sueldos y Salarios" },
+                    { value: "606 - Arrendamiento", label: "606 - Arrendamiento" },
+                    { value: "608 - Demás ingresos", label: "608 - Demás ingresos" },
+                    { value: "611 - Ingresos por Dividendos", label: "611 - Ingresos por Dividendos" },
+                    { value: "612 - Personas Físicas con Actividades Empresariales y Profesionales", label: "612 - PF Actividades Empresariales y Profesionales" },
+                    { value: "614 - Ingresos por intereses", label: "614 - Ingresos por intereses" },
+                    { value: "615 - Ingresos por obtención de premios", label: "615 - Obtención de premios" },
+                    { value: "616 - Sin obligaciones fiscales", label: "616 - Sin obligaciones fiscales" },
+                    { value: "620 - Sociedades Cooperativas de Producción", label: "620 - Sociedades Cooperativas de Producción" },
+                    { value: "621 - Incorporación Fiscal", label: "621 - Incorporación Fiscal" },
+                    { value: "622 - Actividades Agrícolas, Ganaderas, Silvícolas y Pesqueras", label: "622 - Agrícolas, Ganaderas, Silvícolas y Pesqueras" },
+                    { value: "623 - Opcional para Grupos de Sociedades", label: "623 - Opcional para Grupos de Sociedades" },
+                    { value: "624 - Coordinados", label: "624 - Coordinados" },
+                    { value: "625 - Régimen de las Actividades Empresariales con ingresos a través de Plataformas Tecnológicas", label: "625 - Plataformas Tecnológicas" },
+                    { value: "626 - Régimen Simplificado de Confianza (RESICO)", label: "626 - Régimen Simplificado de Confianza (RESICO)" },
+                  ]}
                 />
                 <Input
                   label="Dirección Física de la Sucursal"
