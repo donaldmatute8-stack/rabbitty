@@ -107,6 +107,7 @@ export default function HardwarePage() {
       logoUrl: ticketForm.logoUrl,
       phone: ticketForm.phone,
       email: ticketForm.email,
+      address: ticketForm.address,
       ticketFooter: ticketForm.ticketFooter,
       printerType: ticketForm.printerType,
     });
@@ -296,10 +297,11 @@ export default function HardwarePage() {
         toast.success("¡Ticket impreso en Rabbitty POS Printer!");
         return;
       }
-      // Show the real error — don't silently open browser PDF
-      toast.error(`Impresora USB: ${data.error || "Error al imprimir"}. Conecta la impresora o usa Bluetooth.`);
+      toast.error(`Impresora USB: ${data.error || "Error al imprimir"}. Usando impresión web...`);
+      setTimeout(() => window.print(), 1500);
     } catch {
-      toast.error("No se pudo contactar al servidor de impresión. Verifica que la app esté en la Mac con la impresora.");
+      toast.error("No se pudo contactar al bridge USB. Usando impresión web...");
+      setTimeout(() => window.print(), 1000);
     }
   };
 
@@ -319,10 +321,12 @@ export default function HardwarePage() {
         toast.success("🐰 ¡Bienvenida Rabbitty emitida físicamente con éxito!");
         return;
       } else {
-        toast.error(data.error || "No se pudo emitir el ticket de bienvenida");
+        toast.error(`${data.error || "No se pudo emitir el ticket"}. Usando impresión web...`);
+        setTimeout(() => window.print(), 1500);
       }
     } catch (err: any) {
-      toast.error(err.message || "Error al conectar con la impresora");
+      toast.error(`${err.message || "Error al conectar con la impresora"}. Usando impresión web...`);
+      setTimeout(() => window.print(), 1000);
     }
   };
 

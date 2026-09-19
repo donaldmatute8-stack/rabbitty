@@ -109,6 +109,7 @@ export const adminRouter = router({
         logoUrl: z.string().optional().nullable(),
         email: z.string().optional().nullable(),
         phone: z.string().optional().nullable(),
+        address: z.string().optional().nullable(),
         ticketFooter: z.string().optional().nullable(),
       })
     )
@@ -132,7 +133,14 @@ export const adminRouter = router({
         }
       }
 
-      await ctx.restaurantDb.update(restaurants).set(input).where(eq(restaurants.id, input.id));
+      const updateData = { ...input } as any;
+      delete updateData.address; // Don't save address on restaurants table
+      await ctx.restaurantDb.update(restaurants).set(updateData).where(eq(restaurants.id, input.id));
+
+      if (input.address !== undefined && branchIds.length > 0) {
+        // Update the main branch address since it's commonly 1-to-1 for POS setup
+        await ctx.restaurantDb.update(branches).set({ address: input.address || "" }).where(inArray(branches.id, branchIds));
+      }
 
       // Auto-sync to miniapp
       try {

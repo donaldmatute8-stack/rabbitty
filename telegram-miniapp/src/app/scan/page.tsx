@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Keyboard, QrCode } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { Html5Qrcode } from 'html5-qrcode';
 import BottomNav from '@/components/BottomNav';
 import Button from '@/components/ui/Button';
 import { useWallet } from '@/contexts/WalletContext';
@@ -22,7 +23,8 @@ export default function ScanPage() {
   const [manualCode, setManualCode] = useState('');
   const [showManualInput, setShowManualInput] = useState(false);
   const [activeTab, setActiveTab] = useState<'scan' | 'my-code'>('scan');
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const [scanner, setScanner] = useState<Html5Qrcode | null>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
 
   useEffect(() => {
     import('@twa-dev/sdk').then((mod) => {
@@ -34,18 +36,34 @@ export default function ScanPage() {
   }, []);
 
   const startScanning = async () => {
-    if (!videoRef.current) return;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-      videoRef.current.srcObject = stream;
+      const html5QrCode = new Html5Qrcode("qr-reader");
+      scannerRef.current = html5QrCode;
+      setScanner(html5QrCode);
+      await html5QrCode.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        (decodedText) => {
+          import('@twa-dev/sdk').then((mod) => {
+            mod.default.HapticFeedback.notificationOccurred('success');
+          }).catch(()=>{});
+          setResult(decodedText);
+          if (scannerRef.current) {
+            scannerRef.current.stop().catch(()=>{});
+          }
+        },
+        () => {}
+      );
       setScanning(true); setShowManualInput(false);
     } catch { setHasCamera(false); }
   };
 
   const stopScanning = () => {
-    if (videoRef.current?.srcObject) {
-      (videoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop());
-      videoRef.current.srcObject = null;
+    if (scannerRef.current) {
+      scannerRef.current.stop().catch(()=>{});
+      scannerRef.current.clear();
+      scannerRef.current = null;
+      setScanner(null);
     }
     setScanning(false); setResult(null);
   };
@@ -115,7 +133,7 @@ export default function ScanPage() {
         {/* Camera scan tab */}
         {activeTab === 'scan' && hasCamera && !showManualInput && (
           <>
-            <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover" />
+            <div id="qr-reader" className="absolute inset-0 w-full h-full object-cover [&>video]:object-cover [&>video]:w-full [&>video]:h-full" />
             <div className="absolute inset-0 bg-black/45 z-0" />
 
             {/* QR Frame */}
@@ -155,7 +173,19 @@ export default function ScanPage() {
                     ¡Código detectado!
                   </p>
                   <p className="text-[#888] text-[13px] mb-5">{result}</p>
-                  <Button variant="primary" fullWidth className="rounded-full border-0 font-extrabold">
+                  <Button 
+                    variant="primary" 
+                    fullWidth 
+                    className="rounded-full border-0 font-extrabold"
+                    onClick={() => {
+                      import('@twa-dev/sdk').then((mod) => {
+                        mod.default.HapticFeedback.notificationOccurred('success');
+                      }).catch(()=>{});
+                      alert("Recompensa confirmada exitosamente");
+                      setResult(null);
+                      router.push('/');
+                    }}
+                  >
                     Confirmar recompensa
                   </Button>
                 </motion.div>
@@ -183,7 +213,17 @@ export default function ScanPage() {
                 onChange={e => setManualCode(e.target.value.toUpperCase())}
                 className="w-full bg-white/[0.08] border border-white/10 rounded-[20px] px-5 py-4 text-white text-center font-extrabold text-lg tracking-[4px] outline-none box-border"
               />
-              <button className="w-full bg-[#E91E63] text-white font-extrabold text-[15px] py-4 rounded-full border-0 cursor-pointer shadow-[0_6px_20px_rgba(233,30,99,0.4)]">
+              <button 
+                onClick={() => {
+                  import('@twa-dev/sdk').then((mod) => {
+                    mod.default.HapticFeedback.notificationOccurred('success');
+                  }).catch(()=>{});
+                  alert(`Código ${manualCode} verificado exitosamente`);
+                  setManualCode('');
+                  router.push('/');
+                }}
+                className="w-full bg-[#E91E63] text-white font-extrabold text-[15px] py-4 rounded-full border-0 cursor-pointer shadow-[0_6px_20px_rgba(233,30,99,0.4)]"
+              >
                 Verificar código
               </button>
             </div>

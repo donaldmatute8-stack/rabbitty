@@ -71,6 +71,11 @@ export default function WalletPage() {
       alert('Ingresa una dirección y cantidad válida.');
       return;
     }
+    
+    import('@twa-dev/sdk').then((mod) => {
+      mod.default.HapticFeedback.impactOccurred('medium');
+    }).catch(()=>{});
+
     try {
       const nanoTon = Math.floor(parseFloat(sendAmount) * 1000000000).toString();
       const transaction = {
@@ -190,8 +195,19 @@ export default function WalletPage() {
           {!address ? (
             <p className="text-center text-[#CCC] text-[13px] py-4">Conecta tu billetera para ver el historial</p>
           ) : historyLoading ? (
-            <div className="flex justify-center py-6">
-              <div className="w-6 h-6 rounded-full border-2 border-[rgba(233,30,99,0.3)] border-t-[#E91E63]" style={{ animation: 'spin 0.8s linear infinite' }} />
+            <div className="flex flex-col gap-3">
+              {[1, 2, 3].map((_, i) => (
+                <div key={i} className="flex items-center justify-between py-2 animate-pulse">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-[14px] bg-[#F0F0F0]" />
+                    <div className="flex flex-col gap-2">
+                      <div className="w-24 h-4 rounded bg-[#F0F0F0]" />
+                      <div className="w-16 h-3 rounded bg-[#F0F0F0]" />
+                    </div>
+                  </div>
+                  <div className="w-16 h-4 rounded bg-[#F0F0F0]" />
+                </div>
+              ))}
             </div>
           ) : history.length === 0 ? (
             <p className="text-center text-[#CCC] text-[13px] py-4">Aún no tienes transacciones</p>
