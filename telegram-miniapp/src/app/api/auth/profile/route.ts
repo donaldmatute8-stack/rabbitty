@@ -13,15 +13,17 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Missing identifier" }, { status: 400 });
     }
 
+    // Fetch profile and join with levels
     let profile = null;
-    
     if (telegramId) {
       profile = await db.query.users.findFirst({
         where: eq(users.telegramId, telegramId),
+        with: { level: true },
       });
     } else if (wallet) {
       profile = await db.query.users.findFirst({
         where: eq(users.tonWalletAddress, wallet),
+        with: { level: true },
       });
     }
 
@@ -31,7 +33,7 @@ export async function GET(req: NextRequest) {
       const result = await db.select({
         total: sql<number>`COALESCE(SUM(${referrals.rewardAmount}), 0)`,
       }).from(referrals)
-        .where(and(eq(referrals.invitedId, profile.id), eq(referrals.status, "PENDING")));
+        .where(and(eq(referrals.inviterId, profile.id), eq(referrals.status, "PENDING")));
       pendingBunz = result[0]?.total ?? 0;
     }
 
