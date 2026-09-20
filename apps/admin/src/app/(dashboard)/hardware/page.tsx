@@ -19,6 +19,7 @@ import {
   disconnectBluetoothPrinter,
   sendEscPosToBluetooth,
   diagnosePrinterConnection,
+  generateEscPosTicketPayload,
   type PrinterDiagnostics,
 } from "../../../lib/web-bluetooth";
 
@@ -256,17 +257,10 @@ export default function HardwarePage() {
     if (btConnected && isBluetoothConnected()) {
       try {
         toast.info(`Imprimiendo inalámbricamente vía Bluetooth en ${btDeviceName}...`);
-        const encoder = new TextEncoder();
-        const escInit = new Uint8Array([0x1b, 0x40, 0x1b, 0x61, 0x01]);
-        const title = encoder.encode(`\n${ticketForm.name.toUpperCase()}\n`);
-        const divider = encoder.encode("--------------------------------\n");
-        const body = encoder.encode(`Ticket: #${previewTicketData.orderNumber}\nFecha: ${previewTicketData.date}\nTotal: $${previewTicketData.total.toFixed(2)}\n\n🐰 POWERED BY RABBITTY OS\nrabbitty.me\n\n\n\n`);
-        const fullPayload = new Uint8Array(escInit.length + title.length + divider.length + body.length);
-        fullPayload.set(escInit, 0);
-        fullPayload.set(title, escInit.length);
-        fullPayload.set(divider, escInit.length + title.length);
-        fullPayload.set(body, escInit.length + title.length + divider.length);
-        await sendEscPosToBluetooth(fullPayload);
+        const is58mm = ticketForm.printerType.includes("58mm");
+        const payload = generateEscPosTicketPayload(previewTicketData, is58mm);
+        
+        await sendEscPosToBluetooth(payload);
         toast.success("¡Ticket emitido directamente por Bluetooth!");
         return;
       } catch (err: any) {
@@ -534,7 +528,17 @@ export default function HardwarePage() {
     checking: { color: "text-cyan-400", bg: "bg-cyan-500/10 border-cyan-500/30", dot: "bg-cyan-400", pulse: true, Icon: Activity, label: "Verificando" },
     unknown: { color: "text-gray-400", bg: "bg-white/5 border-white/10", dot: "bg-gray-600", pulse: false, Icon: Signal, label: "No verificado" },
   };
-  const sc = statusConfig[printerStatus.status] ?? statusConfig.unknown;
+  let effectiveStatus = printerStatus.status;
+  let effectiveMessage = printerStatus.message;
+  let effectiveName = printerStatus.name;
+
+  if (btConnected && isBluetoothConnected()) {
+    effectiveStatus = "online";
+    effectiveMessage = "Conectado inalámbricamente a impresora Bluetooth";
+    effectiveName = btDeviceName || "Impresora Térmica Bluetooth";
+  }
+
+  const sc = statusConfig[effectiveStatus as keyof typeof statusConfig] ?? statusConfig.unknown;
   const StatusIcon = sc.Icon;
 
   return (
@@ -615,9 +619,9 @@ export default function HardwarePage() {
                     : ""}
                 </span>
               </div>
-              <p className="text-xs text-gray-300 mt-0.5 leading-snug">{printerStatus.message}</p>
-              {printerStatus.name && (
-                <p className="text-[10px] text-gray-500 mt-0.5">{printerStatus.name} · {printerStatus.model}</p>
+              <p className="text-xs text-gray-300 mt-0.5 leading-snug">{effectiveMessage}</p>
+              {effectiveName && (
+                <p className="text-[10px] text-gray-500 mt-0.5">{effectiveName} {printerStatus.model ? `· ${printerStatus.model}` : ""}</p>
               )}
             </div>
           </div>
@@ -1018,7 +1022,7 @@ export default function HardwarePage() {
 
             {/* ── Ticket preview — scrollable ── */}
             <div className="flex-1 overflow-y-auto overscroll-contain flex justify-center px-3 py-4 bg-gradient-to-b from-gray-900/40 to-black/60 min-h-0">
-              <div className="w-full max-w-full flex justify-center">
+              <div className="w-full max-w-full flex justify-center transform scale-90 sm:scale-75 md:scale-100 origin-top transition-transform">
                 <TicketTemplate
                   data={previewTicketData}
                   isThermalPaper={thermalPaperMode}

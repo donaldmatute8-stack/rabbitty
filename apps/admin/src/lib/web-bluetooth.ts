@@ -251,3 +251,84 @@ export async function sendEscPosToBluetooth(data: Uint8Array): Promise<boolean> 
   }
   return true;
 }
+
+// Genera un payload en texto crudo (ESC/POS) completo a partir de los datos del ticket
+export function generateEscPosTicketPayload(data: any, is58mm: boolean = true): Uint8Array {
+  const encoder = new TextEncoder();
+  const width = is58mm ? 32 : 48; // Caracteres por linea max (aprox)
+
+  const alignCenter = new Uint8Array([0x1b, 0x61, 0x01]);
+  const alignLeft = new Uint8Array([0x1b, 0x61, 0x00]);
+  const alignRight = new Uint8Array([0x1b, 0x61, 0x02]);
+  const init = new Uint8Array([0x1b, 0x40]);
+  const boldOn = new Uint8Array([0x1b, 0x45, 0x01]);
+  const boldOff = new Uint8Array([0x1b, 0x45, 0x00]);
+  
+  let chunks: Uint8Array[] = [init, alignCenter];
+
+  const addText = (text: string) => chunks.push(encoder.encode(text));
+  const divider = "-".repeat(width) + "\n";
+
+  // HEADER
+  chunks.push(boldOn);
+  addText(`\n${(data.restaurantName || "RABBITTY POS").toUpperCase()}\n`);
+  chunks.push(boldOff);
+
+  if (data.legalName) addText(`${data.legalName}\n`);
+  if (data.rfc) addText(`RFC: ${data.rfc}\n`);
+  if (data.taxRegime) addText(`${data.taxRegime}\n`);
+  if (data.address) addText(`${data.address}\n`);
+  if (data.phone) addText(`Tel: ${data.phone}\n`);
+  addText(divider);
+
+  // META
+  chunks.push(alignLeft);
+  addText(`Ticket: #${data.orderNumber || "0001"}\n`);
+  addText(`Fecha: ${data.date || new Date().toLocaleString("es-MX")}\n`);
+  addText(`Tipo: ${data.orderType || "Consumo en Sitio"}\n`);
+  if (data.tableNumber) addText(`Mesa: ${data.tableNumber}\n`);
+  addText(divider);
+
+  // ITEMS
+  if (data.items && data.items.length > 0) {
+    data.items.forEach((item: any) => {
+      const qty = `${item.quantity}x `.padEnd(4);
+      const name = (item.name || "").substring(0, width - 14);
+      const price = `$${item.totalPrice.toFixed(2)}`;
+      
+      const spaceLen = width - (qty.length + name.length + price.length);
+      const space = spaceLen > 0 ? " ".repeat(spaceLen) : " ";
+      
+      addText(`${qty}${name}${space}${price}\n`);
+    });
+    addText(divider);
+  }
+
+  // TOTALS
+  chunks.push(alignRight);
+  const sub = `$${(data.subtotal || 0).toFixed(2)}`;
+  const tax = `$${(data.tax || 0).toFixed(2)}`;
+  const tot = `$${(data.total || 0).toFixed(2)}`;
+  
+  addText(`SUBTOTAL: ${sub.padStart(10)}\n`);
+  addText(`IVA:      ${tax.padStart(10)}\n`);
+  chunks.push(boldOn);
+  addText(`TOTAL:    ${tot.padStart(10)}\n`);
+  chunks.push(boldOff);
+  addText(divider);
+
+  // FOOTER
+  chunks.push(alignCenter);
+  if (data.ticketFooter) addText(`${data.ticketFooter}\n\n`);
+  addText("🐰 POWERED BY RABBITTY OS\nrabbitty.me\n\n\n\n");
+
+  // Flat all chunks into one Uint8Array
+  const totalLength = chunks.reduce((acc, curr) => acc + curr.length, 0);
+  const result = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return result;
+}

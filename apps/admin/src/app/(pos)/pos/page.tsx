@@ -11,7 +11,8 @@ import {
   connectBluetoothPrinter, 
   isBluetoothConnected, 
   disconnectBluetoothPrinter,
-  sendEscPosToBluetooth 
+  sendEscPosToBluetooth,
+  generateEscPosTicketPayload
 } from "../../../lib/web-bluetooth";
 
 // Placeholder for missing images
@@ -993,22 +994,7 @@ export default function PosPage() {
                     if (btConnected && isBluetoothConnected()) {
                       try {
                         toast.info("Imprimiendo inalámbricamente vía Bluetooth...");
-                        const encoder = new TextEncoder();
-                        const escInit = new Uint8Array([0x1b, 0x40, 0x1b, 0x61, 0x01]);
-                        const restName = encoder.encode(`\n${(paidTicketData.restaurantName || "RABBITTY POS").toUpperCase()}\n`);
-                        const div = encoder.encode("--------------------------------\n");
-                        const itemsTxt = paidTicketData.items.map(i => `${i.quantity}x ${(i.name || "").substring(0, 16).padEnd(16)} $${i.totalPrice.toFixed(2)}\n`).join("");
-                        const itemsBytes = encoder.encode(itemsTxt);
-                        const totalsTxt = `--------------------------------\nSUBTOTAL:  $${(paidTicketData.subtotal || 0).toFixed(2)}\nIVA (16%): $${(paidTicketData.tax || 0).toFixed(2)}\nTOTAL:     $${paidTicketData.total.toFixed(2)}\n\n🐰 POWERED BY RABBITTY OS\nrabbitty.me\n\n\n\n`;
-                        const totalsBytes = encoder.encode(totalsTxt);
-
-                        const payload = new Uint8Array(escInit.length + restName.length + div.length + itemsBytes.length + totalsBytes.length);
-                        let offset = 0;
-                        payload.set(escInit, offset); offset += escInit.length;
-                        payload.set(restName, offset); offset += restName.length;
-                        payload.set(div, offset); offset += div.length;
-                        payload.set(itemsBytes, offset); offset += itemsBytes.length;
-                        payload.set(totalsBytes, offset);
+                        const payload = generateEscPosTicketPayload(paidTicketData, true); // Assuming 58mm by default for POS for now, or we can check settings
 
                         await sendEscPosToBluetooth(payload);
                         toast.success("¡Ticket emitido directamente por Bluetooth!");
