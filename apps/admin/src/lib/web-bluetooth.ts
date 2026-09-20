@@ -231,16 +231,34 @@ export async function sendEscPosToBluetooth(data: Uint8Array): Promise<boolean> 
     throw new Error("Impresora Bluetooth no conectada");
   }
 
-  // Reducido a 20 bytes (BLE estandar MTU seguro) y con delay para evitar overflows en impresoras baratas
-  const CHUNK_SIZE = 20;
+  // Bluefy / WebBLE son sensibles al buffer. 50 bytes es un balance bueno.
+  const CHUNK_SIZE = 50;
   for (let offset = 0; offset < data.length; offset += CHUNK_SIZE) {
     const chunk = data.slice(offset, offset + CHUNK_SIZE);
-    if (activeCharacteristic.writeValueWithResponse) {
-      await activeCharacteristic.writeValueWithResponse(chunk);
-    } else {
-      await activeCharacteristic.writeValue(chunk);
+    try {
+      if (activeCharacteristic.properties.writeWithoutResponse && activeCharacteristic.writeValueWithoutResponse) {
+        await activeCharacteristic.writeValueWithoutResponse(chunk);
+      } else if (activeCharacteristic.writeValueWithResponse) {
+        await activeCharacteristic.writeValueWithResponse(chunk);
+      } else {
+        await activeCharacteristic.writeValue(chunk);
+      }
+    } catch (err) {
+      console.warn("BLE chunk write error, retrying...", err);
+      // Pequeño descanso si el buffer de la impresora se saturó
+      await new Promise(r => setTimeout(r, 50));
+      try {
+        if (activeCharacteristic.properties.writeWithoutResponse && activeCharacteristic.writeValueWithoutResponse) {
+          await activeCharacteristic.writeValueWithoutResponse(chunk);
+        } else {
+          await activeCharacteristic.writeValue(chunk);
+        }
+      } catch (retryErr) {
+        console.error("BLE chunk retry failed:", retryErr);
+        // No lanzamos error para intentar que el resto del ticket siga imprimiendo
+      }
     }
-    // Delay de 20ms para que Bluefy y la impresora digieran el paquete
+    // Delay de 20ms para que Bluefy/Impresora procese el paquete
     await new Promise(r => setTimeout(r, 20));
   }
   return true;
