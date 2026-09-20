@@ -11,6 +11,7 @@ Thumbs.db
 git-push-all.sh
 *.log
 ROADMAP-V2.md
+ROADMAP-NATIVE-POS.md
 
 # Rabbit Bot runtime
 rabbit-bot/.env
