@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { and, asc, desc, eq, sql, inArray } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
+import { TRPCError } from "@trpc/server";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
 import { tables as tablesTable, menuCategories, menuItems, orders, orderItems, payments, menuItemModifiers, restaurants } from "@rabbitty/database-restaurant/schema";
@@ -538,6 +539,13 @@ export const posRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      if (input.paymentMethod === "BUNZ") {
+        throw new TRPCError({ 
+          code: "BAD_REQUEST", 
+          message: "Los pagos con BUNZ requieren verificación del sistema. Usa createPaymentIntent." 
+        });
+      }
+
       // 1. Create order
       const [order] = await ctx.restaurantDb.insert(orders).values({
         branchId: ctx.branchId,
@@ -594,6 +602,7 @@ export const posRouter = router({
         orderId: order.id,
         method: input.paymentMethod,
         amount: finalAmount,
+        verificationMethod: "CASHIER_CONFIRMED",
       }).returning();
 
       await ctx.restaurantDb.update(orders).set({ status: "COMPLETED" }).where(eq(orders.id, order.id));
@@ -688,5 +697,126 @@ export const posRouter = router({
         subtotal: calculatedSubtotal,
         tax: calculatedTax,
       };
+    }),
+
+  createPaymentIntent: protectedProcedure
+    .input(
+      z.object({
+        tableId: z.string().optional(),
+        orderType: z.enum(["DINE_IN", "TO_GO", "DELIVERY"]).default("DINE_IN"),
+        customerName: z.string().optional(),
+        customerPhone: z.string().optional(),
+        items: z.array(
+          z.object({
+            menuItemId: z.string(),
+            quantity: z.number().min(1),
+            price: z.number(),
+            notes: z.string().optional(),
+          })
+        ),
+        discountPercent: z.number().min(0).max(100).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // 1. Create order
+      const [order] = await ctx.restaurantDb.insert(orders).values({
+        branchId: ctx.branchId,
+        tableId: input.tableId ?? null,
+        orderType: input.orderType,
+        customerName: input.customerName ?? null,
+        customerPhone: input.customerPhone ?? null,
+        subtotal: 0,
+        tax: 0,
+        discount: 0,
+        tip: 0,
+        total: 0,
+        status: "PENDING_PAYMENT",
+      }).returning();
+
+      if (!order) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Error al crear la orden" });
+
+      // 2. Insert items and sum subtotal
+      let calculatedSubtotal = 0;
+      for (const [i, item] of input.items.entries()) {
+        const totalPrice = item.price * item.quantity;
+        calculatedSubtotal += totalPrice;
+
+        await ctx.restaurantDb.insert(orderItems).values({
+          orderId: order.id,
+          menuItemId: item.menuItemId,
+          quantity: item.quantity,
+          unitPrice: item.price,
+          totalPrice,
+          sortOrder: i,
+          notes: item.notes ?? null,
+        });
+      }
+
+      const calculatedTax = Math.round(calculatedSubtotal * 0.16 * 100) / 100;
+      const originalTotal = calculatedSubtotal + calculatedTax;
+      let finalAmount = originalTotal;
+      let calculatedDiscount = 0;
+
+      if (input.discountPercent && input.discountPercent > 0) {
+        calculatedDiscount = (input.discountPercent / 100) * originalTotal;
+        finalAmount = Math.max(0, originalTotal - calculatedDiscount);
+      }
+
+      await ctx.restaurantDb.update(orders).set({
+        subtotal: calculatedSubtotal,
+        tax: calculatedTax,
+        discount: calculatedDiscount,
+        total: originalTotal,
+      }).where(eq(orders.id, order.id));
+
+      // 3. Create Payment Intent
+      const expiresAt = new Date();
+      expiresAt.setMinutes(expiresAt.getMinutes() + 5); // 5 minutes TTL
+
+      // 1 Bunz = 1 MXN (V1 Fixed Redemption Rate)
+      const BUNZ_REDEMPTION_RATE_MXN = 1.00;
+      const bunzAmount = finalAmount / BUNZ_REDEMPTION_RATE_MXN;
+
+      const [intent] = await ctx.restaurantDb.insert(dbSchema.paymentIntents).values({
+        orderId: order.id,
+        merchantId: ctx.branchId,
+        amountMxn: finalAmount,
+        bunzAmount: bunzAmount,
+        status: "PENDING_PAYMENT",
+        expiresAt,
+      }).returning();
+
+      if (!intent) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Error al crear payment intent" });
+
+      return {
+        success: true,
+        paymentIntentId: intent.id,
+        orderId: order.id,
+        expiresAt: intent.expiresAt,
+        bunzAmount: intent.bunzAmount,
+      };
+    }),
+
+  pollPaymentIntent: protectedProcedure
+    .input(z.object({ paymentIntentId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const [intent] = await ctx.restaurantDb.select().from(dbSchema.paymentIntents)
+        .where(eq(dbSchema.paymentIntents.id, input.paymentIntentId));
+
+      if (!intent) throw new TRPCError({ code: "NOT_FOUND", message: "Intent no encontrado" });
+
+      // Check TTL
+      if (intent.status === "PENDING_PAYMENT" && new Date() > intent.expiresAt) {
+        // Expire it
+        await ctx.restaurantDb.update(dbSchema.paymentIntents).set({ status: "EXPIRED" })
+          .where(eq(dbSchema.paymentIntents.id, intent.id));
+        
+        await ctx.restaurantDb.update(orders).set({ status: "EXPIRED" })
+          .where(eq(orders.id, intent.orderId));
+
+        return { status: "EXPIRED" };
+      }
+
+      return { status: intent.status }; // PENDING_PAYMENT, PAYMENT_VERIFIED, EXPIRED
     }),
 });

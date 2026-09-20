@@ -35,6 +35,8 @@ export default function PosPage() {
   const [paidTicketData, setPaidTicketData] = useState<TicketData | null>(null);
   const [btConnected, setBtConnected] = useState(false);
   const [btDeviceName, setBtDeviceName] = useState<string | null>(null);
+  const [waPhone, setWaPhone] = useState("");
+  const [qrPaymentModal, setQrPaymentModal] = useState<{ intentId: string; amount: number; bunz: number; expiresAt: Date } | null>(null);
 
   // Keep Screen Awake (WakeLock API) to prevent Bluetooth drop and keep POS active
   useEffect(() => {
@@ -134,6 +136,32 @@ export default function PosPage() {
     },
   });
 
+  const createPaymentIntentMutation = trpc.pos.createPaymentIntent.useMutation({
+    onError: (err) => {
+      toast.error(err.message || "Error al generar código QR de pago");
+    },
+  });
+
+  const { data: pollData } = trpc.pos.pollPaymentIntent.useQuery(
+    { paymentIntentId: qrPaymentModal?.intentId ?? "" },
+    {
+      enabled: !!qrPaymentModal,
+      refetchInterval: (query) => (query.state.data?.status === "PENDING_PAYMENT" ? 2000 : false),
+    }
+  );
+
+  useEffect(() => {
+    if (pollData?.status === "PAYMENT_VERIFIED" && qrPaymentModal) {
+      toast.success("¡Pago con Bunz verificado exitosamente!");
+      const realOrderNumber = qrPaymentModal.intentId.slice(-4).toUpperCase();
+      finalizeCheckout(realOrderNumber, "QR BUNZ");
+      setQrPaymentModal(null);
+    } else if (pollData?.status === "EXPIRED" && qrPaymentModal) {
+      toast.error("El tiempo para pagar con Bunz ha expirado.");
+      setQrPaymentModal(null);
+    }
+  }, [pollData?.status]);
+
   useEffect(() => {
     const timer = setInterval(() => {
       setTime(new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" }));
@@ -180,46 +208,9 @@ export default function PosPage() {
   const subtotal = total / (1 + taxRate);
   const tax = total - subtotal;
 
-  const handleCheckout = async (method: string = "EFECTIVO") => {
-    if (cart.length === 0) return;
-
+  const finalizeCheckout = async (realOrderNumber: string, method: string) => {
     const rest = ticketContext?.restaurant;
     const branch = ticketContext?.branch;
-
-    // Map payment method string to schema enum
-    let mappedMethod: "CASH" | "CREDIT_CARD" | "DEBIT_CARD" | "BUNZ" = "CASH";
-    if (method.includes("TARJETA") || method.includes("CREDIT")) mappedMethod = "CREDIT_CARD";
-    else if (method.includes("DEBIT")) mappedMethod = "DEBIT_CARD";
-    else if (method.includes("BUNZ") || method.includes("QR")) mappedMethod = "BUNZ";
-
-    // Map orderType
-    const mappedOrderType: "DINE_IN" | "TO_GO" | "DELIVERY" = 
-      orderType === "TAKEAWAY" || orderType === "COUNTER" ? "TO_GO" :
-      orderType === "DELIVERY" ? "DELIVERY" : "DINE_IN";
-
-    let realOrderNumber = Math.floor(1000 + Math.random() * 9000).toString();
-
-    // 1. Dispatch real order to backend DB (inventories, Bunz cashback, CRM)
-    try {
-      const checkoutResult = await directCheckoutMutation.mutateAsync({
-        tableId: selectedTableId || undefined,
-        orderType: mappedOrderType,
-        paymentMethod: mappedMethod,
-        items: cart.map((i) => ({
-          menuItemId: i.menuItemId,
-          quantity: i.quantity,
-          price: i.price,
-        })),
-      });
-
-      if (checkoutResult.orderNumber) {
-        realOrderNumber = checkoutResult.orderNumber;
-      }
-      toast.success(`Orden #${realOrderNumber} registrada y pagada en el sistema`);
-    } catch {
-      // Allow ticket generation even if backend offline (graceful degradation)
-    }
-
     const selectedTable = tables?.find((t) => t.id === selectedTableId);
     const tableLabel = orderType === "DINE_IN" ? (selectedTable ? `Mesa ${selectedTable.number}` : "Salón") : orderType === "TAKEAWAY" ? "Para Llevar" : orderType === "DELIVERY" ? "Domicilio" : "Mostrador";
 
@@ -269,6 +260,69 @@ export default function PosPage() {
         toast.error("Error al imprimir Bluetooth: " + (e.message || ""));
       }
     }
+
+    setCart([]);
+    setSelectedTableId(null);
+  };
+
+  const handleCheckout = async (method: string = "EFECTIVO") => {
+    if (cart.length === 0) return;
+
+    // Map payment method string to schema enum
+    let mappedMethod: "CASH" | "CREDIT_CARD" | "DEBIT_CARD" | "BUNZ" = "CASH";
+    if (method.includes("TARJETA") || method.includes("CREDIT")) mappedMethod = "CREDIT_CARD";
+    else if (method.includes("DEBIT")) mappedMethod = "DEBIT_CARD";
+    else if (method.includes("BUNZ") || method.includes("QR")) mappedMethod = "BUNZ";
+
+    // Map orderType
+    const mappedOrderType: "DINE_IN" | "TO_GO" | "DELIVERY" = 
+      orderType === "TAKEAWAY" || orderType === "COUNTER" ? "TO_GO" :
+      orderType === "DELIVERY" ? "DELIVERY" : "DINE_IN";
+
+    let realOrderNumber = Math.floor(1000 + Math.random() * 9000).toString();
+
+    // 1. Dispatch real order to backend DB (inventories, Bunz cashback, CRM)
+    try {
+      if (mappedMethod === "BUNZ") {
+        const result = await createPaymentIntentMutation.mutateAsync({
+          tableId: selectedTableId || undefined,
+          orderType: mappedOrderType,
+          items: cart.map((i) => ({
+            menuItemId: i.menuItemId,
+            quantity: i.quantity,
+            price: i.price,
+          })),
+        });
+        setQrPaymentModal({
+          intentId: result.paymentIntentId,
+          amount: total,
+          bunz: result.bunzAmount,
+          expiresAt: new Date(result.expiresAt)
+        });
+        return; // Don't finalize yet, wait for polling!
+      } else {
+        const checkoutResult = await directCheckoutMutation.mutateAsync({
+          tableId: selectedTableId || undefined,
+          orderType: mappedOrderType,
+          paymentMethod: mappedMethod,
+          items: cart.map((i) => ({
+            menuItemId: i.menuItemId,
+            quantity: i.quantity,
+            price: i.price,
+          })),
+        });
+
+        if (checkoutResult.orderNumber) {
+          realOrderNumber = checkoutResult.orderNumber;
+        }
+        toast.success(`Orden #${realOrderNumber} registrada y pagada en el sistema`);
+      }
+    } catch {
+      if (mappedMethod === "BUNZ") return; // If createIntent fails, stop
+      // Allow ticket generation even if backend offline (graceful degradation)
+    }
+
+    await finalizeCheckout(realOrderNumber, method);
   };
 
   return (
@@ -1016,10 +1070,10 @@ export default function PosPage() {
             <p className="text-gray-400 text-sm mt-1">El ticket ha sido emitido.</p>
           </div>
 
-          {/* Scrollable, scaled ticket preview */}
-          <div className="flex justify-center bg-white rounded-xl shadow-inner mx-auto mb-6 w-full max-w-[400px] overflow-hidden">
-            <div className="w-full max-h-[50vh] overflow-y-auto custom-scrollbar p-2">
-              <div className="transform scale-90 sm:scale-100 origin-top">
+          {/* Scaled ticket preview */}
+          <div className="flex justify-center mx-auto mb-6 w-full max-w-[400px]">
+            <div className="w-full max-h-[60vh] overflow-y-auto overflow-x-hidden custom-scrollbar">
+              <div className="transform scale-[0.85] origin-top flex justify-center w-full">
                 {paidTicketData && (
                   <TicketTemplate data={paidTicketData} />
                 )}
@@ -1028,23 +1082,34 @@ export default function PosPage() {
           </div>
 
           <div className="flex flex-col gap-3 pt-3 border-t border-white/5">
-            <Button
-              onClick={() => {
-                if (paidTicketData && ticketContext?.restaurant) {
-                  const itemsSummary = paidTicketData.items.map(i => `${i.quantity}x ${i.name} - $${i.totalPrice.toFixed(2)}`).join('%0A');
-                  const message = `¡Hola! Aquí está tu ticket de compra en *${ticketContext.restaurant.name}*%0A%0A` +
-                    `📅 Fecha: ${encodeURIComponent(paidTicketData.date || "")}%0A` +
-                    `🔖 Folio: #${paidTicketData.orderNumber}%0A%0A` +
-                    `*Artículos:*%0A${itemsSummary}%0A%0A` +
-                    `*Total:* $${paidTicketData.total.toFixed(2)} ${paidTicketData.currency}%0A%0A` +
-                    `¡Gracias por tu preferencia! 🐰`;
-                  window.open(`https://wa.me/?text=${message}`, "_blank");
-                }
-              }}
-              className="w-full bg-green-500 hover:bg-green-400 text-white font-bold flex items-center justify-center gap-2"
-            >
-              <MessageCircle className="h-4 w-4" /> Enviar por WhatsApp
-            </Button>
+            <div className="flex flex-col gap-2">
+              <Input
+                placeholder="Número de WhatsApp (Ej. 5512345678)"
+                type="tel"
+                value={waPhone}
+                onChange={(e) => setWaPhone(e.target.value.replace(/\D/g, ''))}
+                className="w-full text-center"
+              />
+              <Button
+                onClick={() => {
+                  if (paidTicketData && ticketContext?.restaurant && waPhone.length >= 10) {
+                    const itemsSummary = paidTicketData.items.map(i => `${i.quantity}x ${i.name} - $${i.totalPrice.toFixed(2)}`).join('%0A');
+                    const message = `¡Hola! Aquí está tu ticket de compra en *${ticketContext.restaurant.name}*%0A%0A` +
+                      `📅 Fecha: ${encodeURIComponent(paidTicketData.date || "")}%0A` +
+                      `🔖 Folio: #${paidTicketData.orderNumber}%0A%0A` +
+                      `*Artículos:*%0A${itemsSummary}%0A%0A` +
+                      `*Total:* $${paidTicketData.total.toFixed(2)} ${paidTicketData.currency}%0A%0A` +
+                      `¡Gracias por tu preferencia! 🐰`;
+                    window.open(`https://wa.me/52${waPhone}?text=${message}`, "_blank");
+                  } else {
+                    toast.error("Ingresa un número válido a 10 dígitos");
+                  }
+                }}
+                className="w-full bg-green-500 hover:bg-green-400 text-white font-bold flex items-center justify-center gap-2"
+              >
+                <MessageCircle className="h-4 w-4" /> Enviar por WhatsApp
+              </Button>
+            </div>
             
             <Button
               variant="secondary"
@@ -1058,6 +1123,59 @@ export default function PosPage() {
             </Button>
           </div>
         </div>
+      </Dialog>
+      <Dialog
+        open={!!qrPaymentModal}
+        onClose={() => setQrPaymentModal(null)}
+        title="Pago con Bunz"
+      >
+        {qrPaymentModal && (
+          <div className="flex flex-col items-center justify-center p-6 space-y-6">
+            <div className="text-center">
+              <h2 className="text-2xl font-black text-white">Escanea para Pagar</h2>
+              <p className="text-gray-400 mt-2">
+                Paga <span className="font-bold text-white">${qrPaymentModal.amount.toFixed(2)} MXN</span> con <span className="font-bold text-purple-400">{qrPaymentModal.bunz.toFixed(2)} Bunz</span>
+              </p>
+            </div>
+            
+            <div className="bg-white p-4 rounded-2xl shadow-[0_0_40px_rgba(168,85,247,0.3)] border-4 border-purple-500 relative">
+              {pollData?.status === "PAYMENT_VERIFIED" ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm rounded-xl">
+                  <CheckCircle2 className="w-16 h-16 text-emerald-500 mb-2" />
+                  <span className="text-emerald-600 font-bold">¡Pago Verificado!</span>
+                </div>
+              ) : null}
+              <img 
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(`https://t.me/RabbittyBot/app?startapp=pay_${qrPaymentModal.intentId}`)}`} 
+                alt="QR Code para pagar con Bunz" 
+                className="w-[200px] h-[200px] sm:w-[250px] sm:h-[250px]"
+              />
+            </div>
+
+            <div className="text-center w-full max-w-sm">
+              <p className="text-sm text-gray-400">
+                Tiempo restante: <span className="text-white">{Math.max(0, Math.floor((qrPaymentModal.expiresAt.getTime() - Date.now()) / 1000))}</span>s
+              </p>
+              <div className="w-full h-1 bg-white/10 rounded-full mt-2 overflow-hidden">
+                <div 
+                  className="h-full bg-purple-500 rounded-full transition-all duration-1000 ease-linear" 
+                  style={{ width: `${Math.max(0, (qrPaymentModal.expiresAt.getTime() - Date.now()) / (5 * 60 * 1000) * 100)}%` }} 
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-4 w-full">
+              <Button 
+                variant="secondary" 
+                className="flex-1" 
+                onClick={() => setQrPaymentModal(null)}
+                disabled={pollData?.status === "PAYMENT_VERIFIED"}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        )}
       </Dialog>
     </div>
   );

@@ -1020,9 +1020,9 @@ export default function HardwarePage() {
               </button>
             </div>
 
-            {/* ── Ticket preview — scrollable ── */}
-            <div className="flex-1 overflow-y-auto overscroll-contain flex justify-center px-3 py-4 bg-gradient-to-b from-gray-900/40 to-black/60 min-h-0">
-              <div className="w-full max-w-full flex justify-center transform scale-90 sm:scale-75 md:scale-100 origin-top transition-transform">
+            {/* ── Ticket preview — NO scrollable, fully visible ── */}
+            <div className="flex-1 flex justify-center px-3 py-4 bg-gradient-to-b from-gray-900/40 to-black/60 min-h-0 overflow-hidden">
+              <div className="w-full max-w-full flex justify-center transform scale-[0.5] sm:scale-[0.6] md:scale-75 lg:scale-90 origin-top transition-transform">
                 <TicketTemplate
                   data={previewTicketData}
                   isThermalPaper={thermalPaperMode}
