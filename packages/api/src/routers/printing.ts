@@ -19,10 +19,21 @@ export const printingRouter = router({
   getTicketData: protectedProcedure
     .input(z.object({ orderId: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
-      const [branch] = await ctx.restaurantDb.select().from(branches).where(eq(branches.id, ctx.branchId));
+      let [branch] = await ctx.restaurantDb.select().from(branches).where(eq(branches.id, ctx.branchId));
       let restaurant = null;
       if (branch) {
         [restaurant] = await ctx.restaurantDb.select().from(restaurants).where(eq(restaurants.id, branch.restaurantId));
+      } else {
+        // Fallback para Superadmin que no tiene un staff asociado a una sucursal específica.
+        // Tomamos el primer restaurante y su primera sucursal.
+        const allRestaurants = await ctx.restaurantDb.select().from(restaurants);
+        if (allRestaurants.length > 0 && allRestaurants[0]) {
+          restaurant = allRestaurants[0];
+          const restBranches = await ctx.restaurantDb.select().from(branches).where(eq(branches.restaurantId, restaurant.id));
+          if (restBranches.length > 0) {
+            branch = restBranches[0];
+          }
+        }
       }
 
       let order = null;
