@@ -430,22 +430,29 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
   if (data.total > 0 && data.bunzCashbackRate) {
     const earnedBunz = data.total * (data.bunzCashbackRate / 100);
     chunks.push(boldOn);
-    addText(`¡Ganas +${earnedBunz.toFixed(2)} Bunz Recompensa!\n`);
-    chunks.push(boldOff);
-    addText(`Escanea tu ticket en la mini app de\nTelegram o Rabbitty para recibir tu cashback.\n\n`);
     
-    try {
-      // Create QR Code
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`https://t.me/RabbittyBot/app?startapp=claim_${data.orderNumber || "0000"}`)}`;
-      const qrBytes = await rasterizeImage(qrUrl, 200);
-      if (qrBytes) {
-        chunks.push(qrBytes);
+    if (data.paymentMethod === "QR BUNZ" || data.paymentMethod?.includes("BUNZ")) {
+      addText(`¡Cashback de +${earnedBunz.toFixed(2)} Bunz!\n`);
+      chunks.push(boldOff);
+      addText(`Depositado automaticamente a tu cuenta.\n\n`);
+    } else {
+      addText(`¡Ganas +${earnedBunz.toFixed(2)} Bunz Recompensa!\n`);
+      chunks.push(boldOff);
+      addText(`Escanea tu ticket en la mini app de\nTelegram o Rabbitty para recibir tu cashback.\n\n`);
+      
+      try {
+        // Create QR Code
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`https://t.me/RabbittyBot/app?startapp=claim_${data.orderNumber || "0000"}`)}`;
+        const qrBytes = await rasterizeImage(qrUrl, 200);
+        if (qrBytes) {
+          chunks.push(qrBytes);
+        }
+      } catch {
+        // Ignore if QR generation fails
       }
-    } catch {
-      // Ignore if QR generation fails
+      
+      addText(`\nRBBTY-VERIF-${data.orderNumber || "0001"}\n\n`);
     }
-    
-    addText(`\nRBBTY-VERIF-${data.orderNumber || "0001"}\n\n`);
   }
 
   addText("🐰 POWERED BY RABBITTY OS\nrabbitty.me\n\n\n\n");
