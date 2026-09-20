@@ -137,9 +137,14 @@ export const adminRouter = router({
       delete updateData.address; // Don't save address on restaurants table
       await ctx.restaurantDb.update(restaurants).set(updateData).where(eq(restaurants.id, input.id));
 
-      if (input.address !== undefined && branchIds.length > 0) {
-        // Update the main branch address since it's commonly 1-to-1 for POS setup
-        await ctx.restaurantDb.update(branches).set({ address: input.address || "" }).where(inArray(branches.id, branchIds));
+      if (input.address !== undefined) {
+        if (branchIds.length > 0) {
+          // Update the specific branches the user has access to
+          await ctx.restaurantDb.update(branches).set({ address: input.address || "" }).where(inArray(branches.id, branchIds));
+        } else {
+          // Admin mode (no specific branch assigned): update all branches of this restaurant
+          await ctx.restaurantDb.update(branches).set({ address: input.address || "" }).where(eq(branches.restaurantId, input.id));
+        }
       }
 
       // Auto-sync to miniapp

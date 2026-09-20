@@ -231,7 +231,8 @@ export async function sendEscPosToBluetooth(data: Uint8Array): Promise<boolean> 
     throw new Error("Impresora Bluetooth no conectada");
   }
 
-  const CHUNK_SIZE = 64;
+  // Reducido a 20 bytes (BLE estandar MTU seguro) y con delay para evitar overflows en impresoras baratas
+  const CHUNK_SIZE = 20;
   for (let offset = 0; offset < data.length; offset += CHUNK_SIZE) {
     const chunk = data.slice(offset, offset + CHUNK_SIZE);
     if (activeCharacteristic.writeValueWithResponse) {
@@ -239,6 +240,8 @@ export async function sendEscPosToBluetooth(data: Uint8Array): Promise<boolean> 
     } else {
       await activeCharacteristic.writeValue(chunk);
     }
+    // Delay de 20ms para que Bluefy y la impresora digieran el paquete
+    await new Promise(r => setTimeout(r, 20));
   }
   return true;
 }
