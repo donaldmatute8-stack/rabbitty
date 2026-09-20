@@ -330,10 +330,38 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
   const boldOn = new Uint8Array([0x1b, 0x45, 0x01]);
   const boldOff = new Uint8Array([0x1b, 0x45, 0x00]);
   
-  let chunks: Uint8Array[] = [init, alignCenter];
+  const encodeText = (text: string): Uint8Array => {
+    const bytes: number[] = [];
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      switch (char) {
+        case 'á': bytes.push(160); break;
+        case 'í': bytes.push(161); break;
+        case 'ó': bytes.push(162); break;
+        case 'ú': bytes.push(163); break;
+        case 'ñ': bytes.push(164); break;
+        case 'Ñ': bytes.push(165); break;
+        case 'é': bytes.push(130); break;
+        case '¿': bytes.push(168); break;
+        case '¡': bytes.push(173); break;
+        default:
+          const code = char.charCodeAt(0);
+          if (code < 128) bytes.push(code);
+          else {
+            const normalized = char.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            bytes.push(normalized.charCodeAt(0) || 63); // 63 is '?'
+          }
+          break;
+      }
+    }
+    return new Uint8Array(bytes);
+  };
 
-  const sanitize = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  const addText = (text: string) => chunks.push(encoder.encode(sanitize(text)));
+  // Select PC437 code page (Standard for thermal printers) to ensure accents print correctly
+  const setCodePage = new Uint8Array([0x1b, 0x74, 0x00]);
+  let chunks: Uint8Array[] = [init, setCodePage, alignCenter];
+
+  const addText = (text: string) => chunks.push(encodeText(text));
   const divider = "-".repeat(width) + "\n";
 
   // LOGO
@@ -408,7 +436,7 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
     
     try {
       // Create QR Code
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`https://t.me/RabbittyBot/app`)}`;
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`https://t.me/RabbittyBot/app?startapp=claim_${data.orderNumber || "0000"}`)}`;
       const qrBytes = await rasterizeImage(qrUrl, 200);
       if (qrBytes) {
         chunks.push(qrBytes);
