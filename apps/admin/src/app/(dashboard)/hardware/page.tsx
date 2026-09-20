@@ -258,7 +258,7 @@ export default function HardwarePage() {
       try {
         toast.info(`Imprimiendo inalámbricamente vía Bluetooth en ${btDeviceName}...`);
         const is58mm = ticketForm.printerType.includes("58mm");
-        const payload = generateEscPosTicketPayload(previewTicketData, is58mm);
+        const payload = await generateEscPosTicketPayload(previewTicketData, is58mm);
         
         await sendEscPosToBluetooth(payload);
         toast.success("¡Ticket emitido directamente por Bluetooth!");

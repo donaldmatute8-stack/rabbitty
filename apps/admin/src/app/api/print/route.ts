@@ -141,7 +141,9 @@ export async function POST(req: Request) {
       DEVICE_URI: deviceUri,
     };
 
-    const buffer = Buffer.from(ticket, "latin1");
+    const sanitize = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const cleanTicket = sanitize(ticket);
+    const buffer = Buffer.from(cleanTicket, "latin1");
 
     return new Promise<NextResponse>((resolve) => {
       // If cups backend binary doesn't exist (e.g. Linux container or Windows), graceful fail to let frontend use window.print

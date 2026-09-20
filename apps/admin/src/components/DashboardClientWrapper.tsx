@@ -7,6 +7,8 @@ import { BranchSelector } from "./BranchSelector";
 import { CommandMenu } from "./CommandMenu";
 import { SandboxBanner } from "./SandboxBanner";
 import { trpc } from "../lib/trpc-client";
+import Link from "next/link";
+import { TerminalSquare, TabletSmartphone } from "lucide-react";
 
 const SidebarContext = createContext<{
   isCollapsed: boolean;
@@ -162,6 +164,23 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                 <CommandMenu />
               </div>
               <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                <Link
+                  href="/pos"
+                  target="_blank"
+                  className="hidden md:flex items-center gap-2 rounded-xl bg-cyan-500/10 px-3 py-2 text-xs font-bold text-cyan-400 hover:bg-cyan-500/20 transition-all border border-cyan-500/20"
+                >
+                  <TerminalSquare className="h-4 w-4" />
+                  <span>Caja POS</span>
+                </Link>
+                <Link
+                  href="/kiosk"
+                  target="_blank"
+                  className="hidden lg:flex items-center gap-2 rounded-xl bg-purple-500/10 px-3 py-2 text-xs font-bold text-purple-400 hover:bg-purple-500/20 transition-all border border-purple-500/20"
+                >
+                  <TabletSmartphone className="h-4 w-4" />
+                  <span>Kiosko iPad</span>
+                </Link>
+                <div className="w-px h-6 bg-white/10 mx-1 hidden md:block" />
                 <BranchSelector />
               </div>
             </header>
