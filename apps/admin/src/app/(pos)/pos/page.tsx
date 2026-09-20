@@ -53,11 +53,6 @@ export default function PosPage() {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         requestWakeLock();
-      } else if (document.hidden && btConnected) {
-        // Disconnect BT on background to prevent zombie connection
-        disconnectBluetoothPrinter();
-        setBtConnected(false);
-        setBtDeviceName(null);
       }
     };
 
