@@ -181,6 +181,7 @@ export const payments = pgTable("payments", {
   amount: real("amount").notNull(),
   reference: text("reference"),
   status: text("status").default("COMPLETED").notNull(),
+  verificationMethod: text("verificationMethod").default("CASHIER_CONFIRMED").notNull(),
   ...timestamps,
 });
 
@@ -404,5 +405,16 @@ export const aiStrategies = pgTable("ai_strategies", {
   status: text("status").default("ACTIVE").notNull(),
   memory: jsonb("memory"),
   isActive: boolean("isActive").default(true).notNull(),
+  ...timestamps,
+});
+
+export const paymentIntents = pgTable("payment_intents", {
+  id: id(),
+  orderId: fkId("orderId").references(() => orders.id),
+  merchantId: fkId("merchantId").references(() => branches.id),
+  amountMxn: real("amountMxn").notNull(),
+  bunzAmount: real("bunzAmount").notNull(),
+  status: text("status").default("PENDING_PAYMENT").notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
   ...timestamps,
 });

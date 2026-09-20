@@ -25,6 +25,7 @@ import {
   purchaseOrders,
   purchaseOrderItems,
   expenses,
+  paymentIntents,
 } from "./index";
 
 export const restaurantsRelations = relations(restaurants, ({ many }) => ({
@@ -100,6 +101,7 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
   staff: one(staff, { fields: [orders.staffId], references: [staff.id] }),
   items: many(orderItems),
   payments: many(payments),
+  paymentIntents: many(paymentIntents),
 }));
 
 export const orderItemsRelations = relations(orderItems, ({ one }) => ({

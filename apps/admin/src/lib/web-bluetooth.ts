@@ -338,7 +338,7 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
 
   // LOGO
   if (data.logoUrl || data.logo) {
-    const maxPixelWidth = is58mm ? 384 : 576; // 58mm -> 384 dots, 80mm -> 576 dots
+    const maxPixelWidth = is58mm ? 160 : 200; // REDUCED LOGO SIZE FOR FASTER PRINTING
     const rasterBytes = await rasterizeImage(data.logoUrl || data.logo, maxPixelWidth);
     if (rasterBytes) {
       chunks.push(rasterBytes);
@@ -394,9 +394,32 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
   chunks.push(boldOff);
   addText(divider);
 
-  // FOOTER
+  // FOOTER & REWARDS
   chunks.push(alignCenter);
   if (data.ticketFooter) addText(`${data.ticketFooter}\n\n`);
+
+  // BUNZ CASHBACK
+  if (data.total > 0 && data.bunzCashbackRate) {
+    const earnedBunz = data.total * (data.bunzCashbackRate / 100);
+    chunks.push(boldOn);
+    addText(`¡Ganas +${earnedBunz.toFixed(2)} Bunz Recompensa!\n`);
+    chunks.push(boldOff);
+    addText(`Escanea tu ticket en la mini app de\nTelegram o Rabbitty para recibir tu cashback.\n\n`);
+    
+    try {
+      // Create QR Code
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`https://t.me/RabbittyBot/app`)}`;
+      const qrBytes = await rasterizeImage(qrUrl, 200);
+      if (qrBytes) {
+        chunks.push(qrBytes);
+      }
+    } catch {
+      // Ignore if QR generation fails
+    }
+    
+    addText(`\nRBBTY-VERIF-${data.orderNumber || "0001"}\n\n`);
+  }
+
   addText("🐰 POWERED BY RABBITTY OS\nrabbitty.me\n\n\n\n");
 
   // Flat all chunks into one Uint8Array
