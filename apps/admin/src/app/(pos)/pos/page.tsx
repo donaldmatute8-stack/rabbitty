@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { Button, Dialog, Input, toast, cn } from "@rabbitty/ui";
-import { Clock, Wifi, Search, User, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, Table2, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected } from "lucide-react";
+import { Clock, Wifi, Search, User, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, Table2, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { TicketTemplate, TicketData } from "../../../components/TicketTemplate";
@@ -20,10 +20,11 @@ const PLACEHOLDER_IMG = "https://images.unsplash.com/photo-1544148103-0773bf10d3
 
 export default function PosPage() {
   const [time, setTime] = useState("");
-  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [activeCategory, setActiveCategory] = useState<string | null>("ALL");
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<any[]>([]);
   const [voidingItem, setVoidingItem] = useState<any | null>(null);
+  const [orderZoomModal, setOrderZoomModal] = useState(false);
   const [voidReason, setVoidReason] = useState("");
   const [managerPin, setManagerPin] = useState("");
   const [confirmClearCart, setConfirmClearCart] = useState(false);
@@ -140,19 +141,16 @@ export default function PosPage() {
     return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    if (categories && categories.length > 0 && !activeCategory) {
-      setActiveCategory(categories[0].id);
-    }
-  }, [categories, activeCategory]);
+  // Removed the useEffect that overrides activeCategory to the first category so "ALL" works.
 
   const filteredItems = useMemo(() => {
     if (!menuItems) return [];
     let items = menuItems;
-    if (search) {
-      items = items.filter((i) => i.name.toLowerCase().includes(search.toLowerCase()));
-    } else if (activeCategory) {
+    if (activeCategory && activeCategory !== "ALL") {
       items = items.filter((i) => i.categoryId === activeCategory);
+    }
+    if (search.trim()) {
+      items = items.filter((i) => i.name.toLowerCase().includes(search.toLowerCase()));
     }
     return items;
   }, [menuItems, activeCategory, search]);
@@ -178,15 +176,15 @@ export default function PosPage() {
   };
 
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const taxRate = ticketContext?.restaurant?.taxRate ?? 0.16;
+  const subtotal = total / (1 + taxRate);
+  const tax = total - subtotal;
 
   const handleCheckout = async (method: string = "EFECTIVO") => {
     if (cart.length === 0) return;
 
     const rest = ticketContext?.restaurant;
     const branch = ticketContext?.branch;
-    const taxRate = rest?.taxRate ?? 0.16;
-    const subtotal = total / (1 + taxRate);
-    const tax = total - subtotal;
 
     // Map payment method string to schema enum
     let mappedMethod: "CASH" | "CREDIT_CARD" | "DEBIT_CARD" | "BUNZ" = "CASH";
@@ -259,6 +257,18 @@ export default function PosPage() {
 
     setPaidTicketData(ticket);
     setReceiptModal(true);
+
+    // Auto-print Bluetooth if connected
+    if (btConnected && isBluetoothConnected()) {
+      try {
+        toast.info("Imprimiendo ticket vía Bluetooth...");
+        const payload = await generateEscPosTicketPayload(ticket, true);
+        await sendEscPosToBluetooth(payload);
+        toast.success("¡Ticket impreso correctamente!");
+      } catch (e: any) {
+        toast.error("Error al imprimir Bluetooth: " + (e.message || ""));
+      }
+    }
   };
 
   return (
@@ -379,10 +389,10 @@ export default function PosPage() {
             <div className="flex gap-2 overflow-x-auto pb-3 mb-4 custom-scrollbar shrink-0">
               <button
                 type="button"
-                onClick={() => setActiveCategory(null)}
+                onClick={() => setActiveCategory("ALL")}
                 className={cn(
                   "shrink-0 rounded-full px-5 py-2 text-xs font-bold transition-all duration-300 cursor-pointer",
-                  !activeCategory
+                  activeCategory === "ALL"
                     ? "bg-cyan-500 text-gray-950 shadow-[0_4px_14px_rgba(6,182,212,0.4)]"
                     : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/5"
                 )}
@@ -632,61 +642,70 @@ export default function PosPage() {
             )}
           </div>
 
-          {/* Cart Footer - Massive Pay Area with Tax-Included Breakdown */}
-          <div className="border-t border-white/10 bg-gray-950 p-6 pt-4 space-y-5 rounded-t-3xl shadow-[0_-20px_40px_rgba(0,0,0,0.5)]">
-            <div className="space-y-2">
-              <div className="flex justify-between text-base font-bold text-gray-400">
+          {/* Cart Footer (Totals & Actions) - Reduced vertical padding slightly */}
+          <div className="p-3 lg:p-4 bg-black/60 border-t border-white/10 shrink-0">
+            {/* Quick action to zoom order */}
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-[10px] text-gray-500 uppercase tracking-widest font-black">Resumen de Orden</span>
+              <button 
+                onClick={() => setOrderZoomModal(true)}
+                disabled={cart.length === 0}
+                className="text-xs text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+              >
+                <Maximize2 className="h-3 w-3" /> Ampliar Lista
+              </button>
+            </div>
+            
+            <div className="space-y-1.5 lg:space-y-2 mb-3 lg:mb-4">
+              <div className="flex justify-between text-xs lg:text-sm text-gray-400 font-bold">
                 <span>Subtotal (Base)</span>
-                <span>${(total / 1.16).toFixed(2)}</span>
+                <span>${subtotal.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-base font-bold text-cyan-400/80">
+              <div className="flex justify-between text-xs lg:text-sm text-cyan-500 font-bold">
                 <span>IVA (16% Incluido)</span>
-                <span>${(total - total / 1.16).toFixed(2)}</span>
+                <span>${tax.toFixed(2)}</span>
               </div>
-              <div className="my-3 h-px w-full bg-white/10" />
-              <div className="flex justify-between items-end">
-                <div>
-                  <span className="text-2xl font-bold text-white block">Total</span>
-                  <span className="text-xs text-gray-500 font-semibold">Impuestos incluidos</span>
+              <div className="flex justify-between text-lg lg:text-2xl font-black text-white mt-1 pt-2 border-t border-white/10">
+                <div className="flex flex-col">
+                  <span>Total</span>
+                  <span className="text-[9px] lg:text-[10px] text-gray-500 font-bold tracking-widest uppercase">Impuestos incluidos</span>
                 </div>
-                <span className="text-[2.5rem] font-black text-emerald-400 leading-none tracking-tighter">
-                  ${total.toFixed(2)}
-                </span>
+                <span className="text-emerald-400">${total.toFixed(2)}</span>
               </div>
             </div>
 
             {/* Quick Payment Methods */}
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-4 gap-3 mb-3">
               <button 
                 onClick={() => handleCheckout("EFECTIVO")}
                 disabled={cart.length === 0}
-                className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-4 border border-white/10 hover:bg-emerald-500/20 hover:border-emerald-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
+                className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-3 border border-white/10 hover:bg-emerald-500/20 hover:border-emerald-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
               >
-                <Banknote className="h-6 w-6 text-gray-400 group-hover:text-emerald-400" />
+                <Banknote className="h-5 w-5 text-gray-400 group-hover:text-emerald-400" />
                 <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 group-hover:text-emerald-400">Efectivo</span>
               </button>
               <button 
                 onClick={() => handleCheckout("TARJETA")}
                 disabled={cart.length === 0}
-                className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-4 border border-white/10 hover:bg-blue-500/20 hover:border-blue-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
+                className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-3 border border-white/10 hover:bg-blue-500/20 hover:border-blue-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
               >
-                <CreditCard className="h-6 w-6 text-gray-400 group-hover:text-blue-400" />
+                <CreditCard className="h-5 w-5 text-gray-400 group-hover:text-blue-400" />
                 <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 group-hover:text-blue-400">Tarjeta</span>
               </button>
               <button 
                 onClick={() => handleCheckout("QR BUNZ")}
                 disabled={cart.length === 0}
-                className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-4 border border-white/10 hover:bg-purple-500/20 hover:border-purple-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
+                className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-3 border border-white/10 hover:bg-purple-500/20 hover:border-purple-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
               >
-                <QrCode className="h-6 w-6 text-gray-400 group-hover:text-purple-400" />
+                <QrCode className="h-5 w-5 text-gray-400 group-hover:text-purple-400" />
                 <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 group-hover:text-purple-400">QR Bunz</span>
               </button>
               <button 
                 onClick={() => handleCheckout("DIVIDIDA")}
                 disabled={cart.length === 0}
-                className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-4 border border-white/10 hover:bg-orange-500/20 hover:border-orange-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
+                className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-3 border border-white/10 hover:bg-orange-500/20 hover:border-orange-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
               >
-                <SplitSquareHorizontal className="h-6 w-6 text-gray-400 group-hover:text-orange-400" />
+                <SplitSquareHorizontal className="h-5 w-5 text-gray-400 group-hover:text-orange-400" />
                 <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 group-hover:text-orange-400">Dividir</span>
               </button>
             </div>
@@ -695,11 +714,11 @@ export default function PosPage() {
             <button 
               onClick={() => handleCheckout("VENTA DIRECTA")}
               disabled={cart.length === 0}
-              className="relative w-full overflow-hidden rounded-[2rem] bg-cyan-500 py-6 text-2xl font-black text-gray-950 shadow-[0_15px_40px_rgba(6,182,212,0.4)] transition-all hover:bg-cyan-400 active:scale-95 disabled:opacity-50 disabled:shadow-none group cursor-pointer"
+              className="relative w-full overflow-hidden rounded-[1.5rem] bg-cyan-500 py-4 text-xl font-black text-gray-950 shadow-[0_15px_40px_rgba(6,182,212,0.4)] transition-all hover:bg-cyan-400 active:scale-95 disabled:opacity-50 disabled:shadow-none group cursor-pointer"
             >
               <div className="absolute inset-0 bg-white/20 translate-y-[100%] group-hover:translate-y-[0%] transition-transform duration-300 ease-out" />
-              <span className="relative z-10 flex items-center justify-center gap-3">
-                <Check className="h-8 w-8" /> COBRAR ORDEN (${total.toFixed(2)})
+              <span className="relative z-10 flex items-center justify-center gap-2">
+                <Check className="h-6 w-6" /> COBRAR ORDEN (${total.toFixed(2)})
               </span>
             </button>
           </div>
@@ -946,6 +965,39 @@ export default function PosPage() {
         </div>
       </Dialog>
 
+      {/* Modal para Ampliar Lista de Orden (Zoom) */}
+      <Dialog
+        open={orderZoomModal}
+        onClose={() => setOrderZoomModal(false)}
+        title="Resumen Ampliado de Orden"
+      >
+        <div className="space-y-4">
+          <div className="max-h-[60vh] overflow-y-auto custom-scrollbar space-y-2 p-1">
+            {cart.map((item) => (
+              <div key={item.id} className="flex items-center justify-between rounded-xl bg-gray-900 border border-white/10 p-3">
+                <div>
+                  <h4 className="text-sm font-bold text-white">{item.name}</h4>
+                  <p className="text-xs text-gray-400">${item.price.toFixed(2)} c/u</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-black text-cyan-400">x{item.quantity}</span>
+                  <span className="text-sm font-black text-emerald-400">${(item.price * item.quantity).toFixed(2)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="pt-3 border-t border-white/10 flex justify-between items-center">
+            <span className="text-sm font-bold text-gray-400">Total en Orden:</span>
+            <span className="text-xl font-black text-emerald-400">${total.toFixed(2)}</span>
+          </div>
+
+          <div className="flex justify-end pt-3 border-t border-white/5">
+            <Button onClick={() => setOrderZoomModal(false)}>Cerrar Resumen</Button>
+          </div>
+        </div>
+      </Dialog>
+
       {/* Modal de Ticket de Venta / Comprobante de Cobro */}
       <Dialog
         open={receiptModal}
@@ -956,111 +1008,53 @@ export default function PosPage() {
         title="Ticket de Venta Generado"
       >
         <div className="space-y-4">
-          <div className="flex items-center justify-between p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
-              <span>¡Orden cobrada con éxito! Comprobante emitido.</span>
+          <div className="text-center mb-4">
+            <div className="inline-flex items-center justify-center h-16 w-16 rounded-full bg-emerald-500/20 text-emerald-400 mb-4 shadow-[0_0_30px_rgba(16,185,129,0.3)]">
+              <CheckCircle2 className="h-8 w-8" />
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => {
-                  if (!paidTicketData) return;
-                  const business = paidTicketData.restaurantName || "Rabbitty Bistro";
-                  const totalFormatted = `$${paidTicketData.total.toFixed(2)} ${paidTicketData.currency || "MXN"}`;
-                  const itemsSummary = paidTicketData.items
-                    .map((i) => `• ${i.quantity}x ${i.name} - $${i.totalPrice.toFixed(2)}`)
-                    .join("%0A");
-                  const message = 
-                    `🧾 *TICKET DE VENTA - ${encodeURIComponent(business)}*%0A` +
+            <h2 className="text-2xl font-black text-white">¡Cobro Exitoso!</h2>
+            <p className="text-gray-400 text-sm mt-1">El ticket ha sido emitido.</p>
+          </div>
+
+          {/* Scrollable, scaled ticket preview */}
+          <div className="flex justify-center bg-white rounded-xl shadow-inner mx-auto mb-6 w-full max-w-[400px] overflow-hidden">
+            <div className="w-full max-h-[50vh] overflow-y-auto custom-scrollbar p-2">
+              <div className="transform scale-90 sm:scale-100 origin-top">
+                {paidTicketData && (
+                  <TicketTemplate data={paidTicketData} />
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 pt-3 border-t border-white/5">
+            <Button
+              onClick={() => {
+                if (paidTicketData && ticketContext?.restaurant) {
+                  const itemsSummary = paidTicketData.items.map(i => `${i.quantity}x ${i.name} - $${i.totalPrice.toFixed(2)}`).join('%0A');
+                  const message = `¡Hola! Aquí está tu ticket de compra en *${ticketContext.restaurant.name}*%0A%0A` +
                     `📅 Fecha: ${encodeURIComponent(paidTicketData.date || "")}%0A` +
                     `🔖 Folio: #${paidTicketData.orderNumber}%0A%0A` +
-                    `*Detalle del Consumo:*%0A${itemsSummary}%0A%0A` +
-                    `*Subtotal:* $${paidTicketData.subtotal?.toFixed(2)}%0A` +
-                    `*IVA (16%):* $${paidTicketData.tax?.toFixed(2)}%0A` +
-                    `*TOTAL:* ${encodeURIComponent(totalFormatted)}%0A%0A` +
-                    `🐰 _Emitido con Rabbitty OS POS • rabbitty.me_`;
+                    `*Artículos:*%0A${itemsSummary}%0A%0A` +
+                    `*Total:* $${paidTicketData.total.toFixed(2)} ${paidTicketData.currency}%0A%0A` +
+                    `¡Gracias por tu preferencia! 🐰`;
                   window.open(`https://wa.me/?text=${message}`, "_blank");
-                }}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center gap-1.5"
-              >
-                WhatsApp
-              </Button>
-              <Button
-                size="sm"
-                onClick={async () => {
-                  if (paidTicketData) {
-                    // 1. If Web Bluetooth is connected, print wireless directly
-                    if (btConnected && isBluetoothConnected()) {
-                      try {
-                        toast.info("Imprimiendo inalámbricamente vía Bluetooth...");
-                        const payload = generateEscPosTicketPayload(paidTicketData, true); // Assuming 58mm by default for POS for now, or we can check settings
-
-                        await sendEscPosToBluetooth(payload);
-                        toast.success("¡Ticket emitido directamente por Bluetooth!");
-                        return;
-                      } catch {}
-                    }
-
-                    // 2. Otherwise local USB server / bridge
-                    try {
-                      const res = await fetch("/api/print", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(paidTicketData),
-                      });
-                      const data = await res.json();
-                      if (data.success) {
-                        toast.success("Ticket emitido en Rabbitty POS Printer");
-                        return;
-                      }
-                    } catch {}
-                  }
-                  window.print();
-                }}
-                className="bg-emerald-500 hover:bg-emerald-600 text-gray-950 font-black flex items-center gap-1.5 shrink-0 cursor-pointer"
-              >
-                <Printer className="h-4 w-4" /> Imprimir
-              </Button>
-            </div>
-          </div>
-
-          <div className="flex justify-center max-h-[60vh] overflow-y-auto custom-scrollbar p-2 bg-black/40 rounded-2xl border border-white/5">
-            {paidTicketData && (
-              <TicketTemplate data={paidTicketData} />
-            )}
-          </div>
-
-          <div className="flex justify-between items-center pt-3 border-t border-white/5">
+                }
+              }}
+              className="w-full bg-green-500 hover:bg-green-400 text-white font-bold flex items-center justify-center gap-2"
+            >
+              <MessageCircle className="h-4 w-4" /> Enviar por WhatsApp
+            </Button>
+            
             <Button
               variant="secondary"
+              className="w-full"
               onClick={() => {
                 setReceiptModal(false);
                 setCart([]);
               }}
             >
-              Nueva Orden (Listo)
-            </Button>
-
-            <Button
-              onClick={async () => {
-                if (btConnected && isBluetoothConnected() && paidTicketData) {
-                  try {
-                    toast.info("Imprimiendo copia vía Bluetooth...");
-                    const payload = generateEscPosTicketPayload(paidTicketData, true);
-                    await sendEscPosToBluetooth(payload);
-                    toast.success("¡Ticket emitido correctamente!");
-                  } catch (e: any) {
-                    toast.error("Error al imprimir: " + (e.message || "Error desconocido"));
-                  }
-                } else {
-                  window.print();
-                }
-              }}
-              className="bg-cyan-500 hover:bg-cyan-400 text-gray-950 font-bold flex items-center gap-2"
-            >
-              <Printer className="h-4 w-4" /> Imprimir Ticket Físico
+              Nueva Orden (Cerrar)
             </Button>
           </div>
         </div>

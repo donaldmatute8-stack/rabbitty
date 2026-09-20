@@ -193,6 +193,23 @@ export function AdminSidebar() {
     settings: false,
   });
 
+  // Auto-expand pillar if current pathname is inside it
+  useEffect(() => {
+    setOpenPillars((prev) => {
+      let newState = { ...prev };
+      let changed = false;
+      for (const pillar of menuPillars) {
+        if (pillar.items.some((i) => pathname.startsWith(i.href))) {
+          if (!newState[pillar.id]) {
+            newState[pillar.id] = true;
+            changed = true;
+          }
+        }
+      }
+      return changed ? newState : prev;
+    });
+  }, [pathname]);
+
   const togglePillar = (id: string) => {
     if (isCollapsed) return;
     setOpenPillars((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -280,7 +297,7 @@ export function AdminSidebar() {
               {(isOpen || isCollapsed) && (
                 <div className="space-y-1 pl-1">
                   {pillar.items.map(({ href, label, icon: Icon }) => {
-                    const isActive = pathname === href;
+                    const isActive = pathname.startsWith(href);
                     const mod = MODULE_BY_HREF[href];
                     if (activeModules && mod && !activeModules.has(mod)) return null;
                     return (
@@ -326,42 +343,6 @@ export function AdminSidebar() {
 
       {/* Footer & Logout */}
       <div className="border-t border-white/5 p-3 space-y-2 bg-black/40">
-        
-        {/* Quick Access Apps */}
-        <Link
-          href="/pos"
-          target="_blank"
-          className={cn(
-            "group flex w-full items-center rounded-xl py-2.5 text-xs font-bold text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10 border border-transparent hover:border-cyan-500/20 transition-all duration-200 cursor-pointer relative",
-            isCollapsed ? "justify-center px-0" : "px-3.5"
-          )}
-        >
-          <TerminalSquare className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110" />
-          {!isCollapsed && <span className="ml-3 whitespace-nowrap">Caja POS</span>}
-          {isCollapsed && (
-            <span className="absolute left-16 scale-0 group-hover:scale-100 rounded-xl bg-cyan-950 border border-cyan-500/20 px-3 py-2 text-xs font-bold text-cyan-300 shadow-xl backdrop-blur-md transition-all duration-200 pointer-events-none z-50 whitespace-nowrap">
-              Abrir Caja POS
-            </span>
-          )}
-        </Link>
-        <Link
-          href="/kiosk"
-          target="_blank"
-          className={cn(
-            "group flex w-full items-center rounded-xl py-2.5 text-xs font-bold text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 border border-transparent hover:border-purple-500/20 transition-all duration-200 cursor-pointer relative",
-            isCollapsed ? "justify-center px-0" : "px-3.5"
-          )}
-        >
-          <TabletSmartphone className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110" />
-          {!isCollapsed && <span className="ml-3 whitespace-nowrap">Kiosko iPad</span>}
-          {isCollapsed && (
-            <span className="absolute left-16 scale-0 group-hover:scale-100 rounded-xl bg-purple-950 border border-purple-500/20 px-3 py-2 text-xs font-bold text-purple-300 shadow-xl backdrop-blur-md transition-all duration-200 pointer-events-none z-50 whitespace-nowrap">
-              Abrir Kiosko iPad
-            </span>
-          )}
-        </Link>
-
-        <div className="h-px w-full bg-white/5 my-1" />
 
         <button
           onClick={handleLogout}

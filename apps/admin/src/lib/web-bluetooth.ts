@@ -258,8 +258,68 @@ export async function sendEscPosToBluetooth(data: Uint8Array): Promise<boolean> 
   return true;
 }
 
+async function rasterizeImage(url: string, maxWidth: number = 384): Promise<Uint8Array | null> {
+  if (typeof window === "undefined" || typeof document === "undefined") return null;
+  return new Promise((resolve) => {
+    const img = new window.Image();
+    img.crossOrigin = "Anonymous";
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      let printWidth = img.width;
+      let printHeight = img.height;
+      if (printWidth > maxWidth) {
+        printHeight = Math.round((maxWidth * img.height) / img.width);
+        printWidth = maxWidth;
+      }
+      printWidth = Math.round(printWidth / 8) * 8; // force multiple of 8
+      
+      canvas.width = printWidth;
+      canvas.height = printHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return resolve(null);
+      
+      ctx.fillStyle = "white";
+      ctx.fillRect(0, 0, printWidth, printHeight);
+      ctx.drawImage(img, 0, 0, printWidth, printHeight);
+      
+      const imgData = ctx.getImageData(0, 0, printWidth, printHeight).data;
+      const bytesWidth = printWidth / 8;
+      const payload = [];
+      
+      payload.push(0x1d, 0x76, 0x30, 0); 
+      payload.push(bytesWidth % 256, Math.floor(bytesWidth / 256));
+      payload.push(printHeight % 256, Math.floor(printHeight / 256));
+      
+      for (let y = 0; y < printHeight; y++) {
+        for (let x = 0; x < bytesWidth; x++) {
+          let byte = 0;
+          for (let bit = 0; bit < 8; bit++) {
+            const pixelX = x * 8 + bit;
+            const idx = (y * printWidth + pixelX) * 4;
+            const a = imgData[idx + 3];
+            let luminance = 255;
+            if (a > 128) {
+              const r = imgData[idx];
+              const g = imgData[idx + 1];
+              const b = imgData[idx + 2];
+              luminance = (r * 0.299 + g * 0.587 + b * 0.114);
+            }
+            if (luminance < 128) {
+              byte |= (1 << (7 - bit));
+            }
+          }
+          payload.push(byte);
+        }
+      }
+      resolve(new Uint8Array(payload));
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
 // Genera un payload en texto crudo (ESC/POS) completo a partir de los datos del ticket
-export function generateEscPosTicketPayload(data: any, is58mm: boolean = true): Uint8Array {
+export async function generateEscPosTicketPayload(data: any, is58mm: boolean = true): Promise<Uint8Array> {
   const encoder = new TextEncoder();
   const width = is58mm ? 32 : 48; // Caracteres por linea max (aprox)
 
@@ -272,8 +332,19 @@ export function generateEscPosTicketPayload(data: any, is58mm: boolean = true): 
   
   let chunks: Uint8Array[] = [init, alignCenter];
 
-  const addText = (text: string) => chunks.push(encoder.encode(text));
+  const sanitize = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const addText = (text: string) => chunks.push(encoder.encode(sanitize(text)));
   const divider = "-".repeat(width) + "\n";
+
+  // LOGO
+  if (data.logoUrl || data.logo) {
+    const maxPixelWidth = is58mm ? 384 : 576; // 58mm -> 384 dots, 80mm -> 576 dots
+    const rasterBytes = await rasterizeImage(data.logoUrl || data.logo, maxPixelWidth);
+    if (rasterBytes) {
+      chunks.push(rasterBytes);
+      addText("\n");
+    }
+  }
 
   // HEADER
   chunks.push(boldOn);
