@@ -207,22 +207,13 @@ export default function HardwarePage() {
     };
   }, []);
 
-  // Cleanup Bluetooth connection on unmount or when the user backgrounds the app/tab
+  // Bluetooth connections should persist even if the screen dims or modal opens.
+  // Aggressive cleanup on visibilitychange causes instant disconnects on Bluefy.
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.hidden && btConnected) {
-        disconnectBluetoothPrinter();
-        setBtConnected(false);
-        setBtDeviceName(null);
-      }
-    };
-    
-    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
       disconnectBluetoothPrinter();
     };
-  }, [btConnected]);
+  }, []);
 
   const handleConnectBluetooth = async () => {
     // Diagnostics — help debug why BT might not work

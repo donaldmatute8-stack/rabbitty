@@ -138,28 +138,14 @@ export async function connectBluetoothPrinter(): Promise<{ success: boolean; dev
 
     const server = await device.gatt.connect();
 
-    // Scan for available thermal write characteristic
+    // Scan for available thermal write characteristic safely
+    // Cheap printers (YICHIP, POS-58) often crash if we guess a service they don't have via getPrimaryService(uuid).
+    // It's much safer to just enumerate all services they DO have.
     let writeChar: any = null;
-    for (const serviceUuid of BLE_PRINTER_SERVICES) {
+    const services = await server.getPrimaryServices();
+    
+    for (const s of services) {
       try {
-        const service = await server.getPrimaryService(serviceUuid);
-        const characteristics = await service.getCharacteristics();
-        for (const char of characteristics) {
-          if (char.properties.write || char.properties.writeWithoutResponse) {
-            writeChar = char;
-            break;
-          }
-        }
-        if (writeChar) break;
-      } catch {
-        continue;
-      }
-    }
-
-    if (!writeChar) {
-      // Fallback: try discovering any service
-      const services = await server.getPrimaryServices();
-      for (const s of services) {
         const chars = await s.getCharacteristics();
         for (const c of chars) {
           if (c.properties.write || c.properties.writeWithoutResponse) {
@@ -168,6 +154,8 @@ export async function connectBluetoothPrinter(): Promise<{ success: boolean; dev
           }
         }
         if (writeChar) break;
+      } catch {
+        continue;
       }
     }
 
