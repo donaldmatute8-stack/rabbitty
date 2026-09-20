@@ -2,7 +2,7 @@
 
 import React from "react";
 import Image from "next/image";
-import { Sparkles, QrCode, Phone, Mail, MapPin, Receipt, ShieldCheck } from "lucide-react";
+import { Sparkles, QrCode, Phone, Mail, MapPin, Receipt, ShieldCheck, CheckCircle2 } from "lucide-react";
 
 export interface TicketItem {
   id: string;
@@ -238,25 +238,39 @@ export function TicketTemplate({
 
       {/* ── BUNZ CASHBACK & RABBITTY LOYALTY ── */}
       <div className={`py-3 space-y-2 text-center border-b border-dashed border-gray-700 ${isThermalPaper ? "text-black" : "text-gray-300"}`}>
-        <div className="rounded-xl p-2 bg-gradient-to-r from-pink-500/10 via-purple-500/10 to-cyan-500/10 border border-white/5 space-y-1">
-          <div className="flex items-center justify-center gap-1.5 font-bold text-pink-400 text-[11px]">
-            <Sparkles className="h-3 w-3" />
-            <span>¡Ganas +{estimatedBunz} Bunz Recompensa!</span>
+        {(data.paymentMethod === "QR BUNZ" || data.paymentMethod?.includes("BUNZ")) ? (
+          <div className="rounded-xl p-2 bg-gradient-to-r from-emerald-500/10 via-emerald-400/10 to-emerald-500/10 border border-white/5 space-y-1">
+            <div className="flex items-center justify-center gap-1.5 font-bold text-emerald-500 text-[11px]">
+              <CheckCircle2 className="h-3 w-3" />
+              <span>¡Cashback de +{estimatedBunz} Bunz!</span>
+            </div>
+            <p className="text-[9px] text-gray-400">
+              Depositado automáticamente a tu cuenta.
+            </p>
           </div>
-          <p className="text-[9px] text-gray-400">
-            Escanea tu ticket en la mini app de Telegram o Rabbitty para recibir tu cashback.
-          </p>
-        </div>
+        ) : (
+          <>
+            <div className="rounded-xl p-2 bg-gradient-to-r from-pink-500/10 via-purple-500/10 to-cyan-500/10 border border-white/5 space-y-1">
+              <div className="flex items-center justify-center gap-1.5 font-bold text-pink-400 text-[11px]">
+                <Sparkles className="h-3 w-3" />
+                <span>¡Ganas +{estimatedBunz} Bunz Recompensa!</span>
+              </div>
+              <p className="text-[9px] text-gray-400">
+                Escanea tu ticket en la mini app de Telegram o Rabbitty para recibir tu cashback.
+              </p>
+            </div>
 
-        {/* Simulated QR Code for Validation / Bunz Claim */}
-        <div className="flex flex-col items-center justify-center pt-1">
-          <div className="bg-white p-2 rounded-xl shadow-md inline-block">
-            <QrCode className="h-16 w-16 text-black stroke-[2.5]" />
-          </div>
-          <p className="text-[8px] tracking-widest text-gray-400 uppercase mt-1 font-mono">
-            RBBTY-VERIF-{data.orderNumber || "0001"}
-          </p>
-        </div>
+            {/* Simulated QR Code for Validation / Bunz Claim */}
+            <div className="flex flex-col items-center justify-center pt-1">
+              <div className="bg-white p-2 rounded-xl shadow-md inline-block">
+                <QrCode className="h-16 w-16 text-black stroke-[2.5]" />
+              </div>
+              <p className="text-[8px] tracking-widest text-gray-400 uppercase mt-1 font-mono">
+                RBBTY-VERIF-{data.orderNumber || "0001"}
+              </p>
+            </div>
+          </>
+        )}
       </div>
 
       {/* ── FOOTER & POWERED BY ── */}
