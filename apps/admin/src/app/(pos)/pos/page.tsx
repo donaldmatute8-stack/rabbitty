@@ -339,15 +339,15 @@ export default function PosPage() {
         <div className="absolute top-[-20%] right-[30%] h-[800px] w-[800px] rounded-full bg-cyan-900/20 blur-[150px] pointer-events-none" />
         <div className="absolute bottom-[-10%] left-[-10%] h-[800px] w-[800px] rounded-full bg-blue-900/20 blur-[150px] pointer-events-none" />
 
-        {/* Left: Massive Categories Sidebar */}
+        {/* Left: Categories Sidebar */}
         {!search && (
-          <aside className="w-[140px] shrink-0 overflow-y-auto bg-black/40 backdrop-blur-md border-r border-white/5 p-3 flex flex-col gap-3 custom-scrollbar z-10">
+          <aside className="w-[100px] md:w-[120px] lg:w-[140px] shrink-0 overflow-y-auto bg-black/40 backdrop-blur-md border-r border-white/5 p-2 lg:p-3 flex flex-col gap-2 lg:gap-3 custom-scrollbar z-10">
             {categories?.map((cat, i) => (
               <button
                 key={cat.id}
                 onClick={() => setActiveCategory(cat.id)}
                 className={cn(
-                  "relative flex flex-col items-center justify-center gap-3 rounded-[24px] p-4 h-32 transition-all duration-300 group",
+                  "relative flex flex-col items-center justify-center gap-2 lg:gap-3 rounded-[18px] lg:rounded-[24px] p-2 lg:p-4 h-24 lg:h-32 transition-all duration-300 group",
                   activeCategory === cat.id 
                     ? "bg-cyan-500 shadow-[0_10px_30px_rgba(6,182,212,0.4)] border-none scale-105 z-10" 
                     : "bg-gray-900/80 border border-white/5 hover:bg-gray-800 hover:border-white/20 active:scale-95"
@@ -355,14 +355,14 @@ export default function PosPage() {
               >
                 {/* Simulated Category Icon (based on index) */}
                 <div className={cn(
-                  "flex h-12 w-12 items-center justify-center rounded-full text-2xl transition-transform duration-300",
+                  "flex h-10 w-10 lg:h-12 lg:w-12 items-center justify-center rounded-full text-xl lg:text-2xl transition-transform duration-300",
                   activeCategory === cat.id ? "bg-white/20 scale-110" : "bg-white/5 group-hover:bg-white/10"
                 )}>
                   {["☕", "🍔", "🍕", "🥗", "🍰", "🍺"][i % 6]}
                 </div>
                 
                 <span className={cn(
-                  "text-[13px] font-black uppercase tracking-wider text-center leading-tight line-clamp-2",
+                  "text-[10px] lg:text-[13px] font-black uppercase tracking-wider text-center leading-tight line-clamp-2",
                   activeCategory === cat.id ? "text-gray-950" : "text-gray-400 group-hover:text-white"
                 )}>
                   {cat.name}
@@ -407,43 +407,43 @@ export default function PosPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 lg:gap-4">
             {filteredItems.map((item) => (
               <button
                 key={item.id}
                 onClick={() => addToCart(item)}
-                className="group relative flex aspect-[4/5] flex-col justify-between overflow-hidden rounded-[2rem] bg-gray-900 border border-white/5 p-1 text-left transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_20px_40px_rgba(0,0,0,0.6)] hover:border-cyan-500/40 active:scale-95 cursor-pointer"
+                className="group relative flex aspect-square md:aspect-[4/5] flex-col justify-between overflow-hidden rounded-[1.5rem] lg:rounded-[2rem] bg-gray-900 border border-white/5 p-1 text-left transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_20px_40px_rgba(0,0,0,0.6)] hover:border-cyan-500/40 active:scale-95 cursor-pointer"
               >
                 {/* Big Image Top */}
-                <div className="relative h-[65%] w-full rounded-[1.75rem] overflow-hidden bg-gray-800">
+                <div className="relative h-[55%] lg:h-[65%] w-full rounded-[1.25rem] lg:rounded-[1.75rem] overflow-hidden bg-gray-800">
                   <div className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105" style={{ backgroundImage: `url(${PLACEHOLDER_IMG})` }} />
                   <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-transparent opacity-80" />
                   
                   {/* Subtle centered '+' in fade mode */}
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white/30 group-hover:text-white/90 group-hover:bg-cyan-500/20 group-hover:border-cyan-500/40 group-hover:scale-110 transition-all duration-300 shadow-2xl">
-                      <Plus className="h-5 w-5" />
+                    <div className="flex h-8 w-8 lg:h-11 lg:w-11 items-center justify-center rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white/30 group-hover:text-white/90 group-hover:bg-cyan-500/20 group-hover:border-cyan-500/40 group-hover:scale-110 transition-all duration-300 shadow-2xl">
+                      <Plus className="h-4 w-4 lg:h-5 lg:w-5" />
                     </div>
                   </div>
 
                   {/* Price Tag Badge */}
-                  <div className="absolute top-3 right-3 rounded-full bg-black/60 backdrop-blur-md px-3 py-1.5 border border-white/10 shadow-xl">
-                    <span className="text-sm font-black text-emerald-400">${item.price.toFixed(2)}</span>
+                  <div className="absolute top-2 right-2 lg:top-3 lg:right-3 rounded-full bg-black/60 backdrop-blur-md px-2 lg:px-3 py-1 lg:py-1.5 border border-white/10 shadow-xl">
+                    <span className="text-xs lg:text-sm font-black text-emerald-400">${item.price.toFixed(2)}</span>
                   </div>
                 </div>
                 
-                {/* Content Bottom (clean without the button bar) */}
-                <div className="flex flex-col justify-center h-[35%] p-4 pt-2">
-                  <h3 className="text-base font-black leading-tight text-white line-clamp-2 group-hover:text-cyan-400 transition-colors">{item.name}</h3>
-                  <p className="mt-1 text-[11px] text-gray-500 font-medium line-clamp-1">{item.description || "Delicioso y preparado al momento."}</p>
+                {/* Content Bottom */}
+                <div className="flex flex-col justify-center h-[45%] lg:h-[35%] px-3 py-2 lg:p-4 lg:pt-2">
+                  <h3 className="text-[13px] lg:text-base font-black leading-tight text-white line-clamp-2 lg:line-clamp-2 group-hover:text-cyan-400 transition-colors">{item.name}</h3>
+                  <p className="mt-0.5 lg:mt-1 text-[10px] lg:text-[11px] text-gray-500 font-medium line-clamp-1 lg:line-clamp-2">{item.description || "Delicioso y preparado al momento."}</p>
                 </div>
               </button>
             ))}
           </div>
         </main>
 
-        {/* Right: Massive Cart / Ticket Panel */}
-        <aside className="w-[420px] shrink-0 bg-gray-950/80 backdrop-blur-3xl border-l border-white/10 flex flex-col z-20 shadow-[-20px_0_50px_rgba(0,0,0,0.5)]">
+        {/* Right: Cart / Ticket Panel */}
+        <aside className="w-[300px] md:w-[340px] lg:w-[420px] shrink-0 bg-gray-950/80 backdrop-blur-3xl border-l border-white/10 flex flex-col z-20 shadow-[-20px_0_50px_rgba(0,0,0,0.5)]">
           {/* Cart Header with Table Selector & Order Type */}
           <div className="flex flex-col border-b border-white/10 p-4 bg-black/40 gap-3">
             <div className="flex items-center justify-between">
@@ -568,18 +568,18 @@ export default function PosPage() {
           </div>
 
           {/* Cart Items Area */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+          <div className="flex-1 overflow-y-auto p-2 lg:p-4 space-y-2 lg:space-y-3 custom-scrollbar">
             {cart.map((item) => (
-              <div key={item.id} className="group flex items-center justify-between rounded-[1.5rem] bg-gray-900 border border-white/5 p-4 shadow-lg transition-all hover:border-white/20 gap-3">
-                <div className="flex-1">
-                  <h4 className="text-base font-black text-white leading-tight">{item.name}</h4>
-                  <div className="mt-0.5 text-base font-black text-emerald-400">${item.price.toFixed(2)}</div>
+              <div key={item.id} className="group flex items-center justify-between rounded-[1rem] lg:rounded-[1.5rem] bg-gray-900 border border-white/5 p-3 lg:p-4 shadow-lg transition-all hover:border-white/20 gap-2 lg:gap-3">
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-[13px] lg:text-base font-black text-white leading-tight truncate">{item.name}</h4>
+                  <div className="mt-0.5 text-[13px] lg:text-base font-black text-emerald-400">${item.price.toFixed(2)}</div>
                   {item.quantity > 1 && (
-                    <div className="text-xs text-gray-500 font-bold mt-0.5">Subtotal: ${(item.price * item.quantity).toFixed(2)}</div>
+                    <div className="text-[10px] lg:text-xs text-gray-500 font-bold mt-0.5">Subtotal: ${(item.price * item.quantity).toFixed(2)}</div>
                   )}
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 lg:gap-2">
                   {/* Dedicated Delete Button */}
                   <button
                     type="button"
@@ -1044,7 +1044,20 @@ export default function PosPage() {
             </Button>
 
             <Button
-              onClick={() => window.print()}
+              onClick={async () => {
+                if (btConnected && isBluetoothConnected() && paidTicketData) {
+                  try {
+                    toast.info("Imprimiendo copia vía Bluetooth...");
+                    const payload = generateEscPosTicketPayload(paidTicketData, true);
+                    await sendEscPosToBluetooth(payload);
+                    toast.success("¡Ticket emitido correctamente!");
+                  } catch (e: any) {
+                    toast.error("Error al imprimir: " + (e.message || "Error desconocido"));
+                  }
+                } else {
+                  window.print();
+                }
+              }}
               className="bg-cyan-500 hover:bg-cyan-400 text-gray-950 font-bold flex items-center gap-2"
             >
               <Printer className="h-4 w-4" /> Imprimir Ticket Físico
