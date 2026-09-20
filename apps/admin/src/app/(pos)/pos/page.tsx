@@ -63,9 +63,10 @@ export default function PosPage() {
       if (wakeLock !== null) {
         wakeLock.release().catch(() => {});
       }
+      // ONLY disconnect on full component unmount, not on re-renders
       disconnectBluetoothPrinter();
     };
-  }, [btConnected]);
+  }, []); // <-- Empty array is CRITICAL so it doesn't run cleanup when btConnected changes
 
   const handleConnectBluetooth = async () => {
     try {

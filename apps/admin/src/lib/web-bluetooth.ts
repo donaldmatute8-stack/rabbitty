@@ -219,35 +219,41 @@ export async function sendEscPosToBluetooth(data: Uint8Array): Promise<boolean> 
     throw new Error("Impresora Bluetooth no conectada");
   }
 
-  // Bluefy / WebBLE son sensibles al buffer. 50 bytes es un balance bueno.
-  const CHUNK_SIZE = 50;
+  // Enviar a impresoras térmicas debe ser lento porque su motor físico y buffer de RAM (4KB) son lentos.
+  // Si enviamos muy rápido, el buffer se llena, Bluefy lanza error, y perdemos el resto del ticket.
+  const CHUNK_SIZE = 40;
   for (let offset = 0; offset < data.length; offset += CHUNK_SIZE) {
     const chunk = data.slice(offset, offset + CHUNK_SIZE);
-    try {
-      if (activeCharacteristic.properties.writeWithoutResponse && activeCharacteristic.writeValueWithoutResponse) {
-        await activeCharacteristic.writeValueWithoutResponse(chunk);
-      } else if (activeCharacteristic.writeValueWithResponse) {
-        await activeCharacteristic.writeValueWithResponse(chunk);
-      } else {
-        await activeCharacteristic.writeValue(chunk);
-      }
-    } catch (err) {
-      console.warn("BLE chunk write error, retrying...", err);
-      // Pequeño descanso si el buffer de la impresora se saturó
-      await new Promise(r => setTimeout(r, 50));
+    
+    let success = false;
+    let attempts = 0;
+    
+    while (!success && attempts < 4) {
       try {
         if (activeCharacteristic.properties.writeWithoutResponse && activeCharacteristic.writeValueWithoutResponse) {
           await activeCharacteristic.writeValueWithoutResponse(chunk);
+        } else if (activeCharacteristic.writeValueWithResponse) {
+          await activeCharacteristic.writeValueWithResponse(chunk);
         } else {
           await activeCharacteristic.writeValue(chunk);
         }
-      } catch (retryErr) {
-        console.error("BLE chunk retry failed:", retryErr);
-        // No lanzamos error para intentar que el resto del ticket siga imprimiendo
+        success = true;
+      } catch (err) {
+        attempts++;
+        console.warn(`BLE chunk write error (attempt ${attempts}), printer buffer full? retrying...`, err);
+        // Si falló, el buffer de la impresora seguramente está lleno.
+        // Le damos 200ms a la impresora para que imprima físicamente el papel y libere RAM.
+        await new Promise(r => setTimeout(r, 200));
       }
     }
-    // Delay de 20ms para que Bluefy/Impresora procese el paquete
-    await new Promise(r => setTimeout(r, 20));
+    
+    if (!success) {
+      console.error("BLE chunk failed completely after 4 attempts, aborting to prevent garbage.");
+      throw new Error("La impresora Bluetooth saturó su memoria y dejó de responder.");
+    }
+
+    // Delay normal entre paquetes exitosos
+    await new Promise(r => setTimeout(r, 30));
   }
   return true;
 }
