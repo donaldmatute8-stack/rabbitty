@@ -28,6 +28,7 @@ import { passkeysRouter } from "./passkeys";
 import { trustedSessionsRouter } from "./trustedSessions";
 import { aiRouter } from "./ai";
 import { sandboxRouter } from "./sandbox";
+import { cashDropsRouter } from "./cashDrops";
 
 import "../services/queue";
 
@@ -61,6 +62,7 @@ export const appRouter = router({
   trustedSessions: trustedSessionsRouter,
   ai: aiRouter,
   sandbox: sandboxRouter,
+  cashDrops: cashDropsRouter,
 });
 
 export type AppRouter = typeof appRouter;

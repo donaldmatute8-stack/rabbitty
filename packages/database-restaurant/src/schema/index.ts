@@ -48,6 +48,8 @@ export const branches = pgTable("branches", {
   phone: text("phone"),
   lat: real("lat"),
   lng: real("lng"),
+  cashDropEnabled: boolean("cashDropEnabled").default(false).notNull(),
+  cashDropThreshold: real("cashDropThreshold").default(3000).notNull(),
   isActive: boolean("isActive").default(true).notNull(),
   ...timestamps,
 });
@@ -417,4 +419,13 @@ export const paymentIntents = pgTable("payment_intents", {
   status: text("status").default("PENDING_PAYMENT").notNull(),
   expiresAt: timestamp("expiresAt").notNull(),
   ...timestamps,
+});
+
+export const cashDrops = pgTable("cash_drops", {
+  id: id(),
+  branchId: fkId("branchId").references(() => branches.id),
+  staffId: fkIdOpt("staffId").references(() => staff.id),
+  amount: real("amount").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow(),
 });

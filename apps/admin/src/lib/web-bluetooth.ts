@@ -386,6 +386,34 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
   if (data.phone) addText(`Tel: ${data.phone}\n`);
   addText(divider);
 
+  if (data.isCashDrop) {
+    chunks.push(alignLeft);
+    addText(`\nRETIRO DE EFECTIVO\n`);
+    addText(divider);
+    addText(`Monto: $${(data.amount || 0).toFixed(2)}\n`);
+    addText(`Fecha: ${new Date().toLocaleString("es-MX")}\n`);
+    if (data.staffName) addText(`Cajero: ${data.staffName}\n`);
+    if (data.notes) addText(`Notas: ${data.notes}\n`);
+    addText(divider);
+    addText(`Firma de entrega:\n\n\n___________________\n\n`);
+    addText(`Firma de recibido:\n\n\n___________________\n\n\n`);
+    
+    // Line feed & Cut paper
+    chunks.push(new Uint8Array([0x0a, 0x0a, 0x0a, 0x0a, 0x0a]));
+    const cut = new Uint8Array([0x1d, 0x56, 0x41, 0x00]);
+    chunks.push(cut);
+    
+    let totalLength = 0;
+    for (const c of chunks) totalLength += c.length;
+    const result = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const c of chunks) {
+      result.set(c, offset);
+      offset += c.length;
+    }
+    return result;
+  }
+
   // META
   chunks.push(alignLeft);
   addText(`Ticket: #${data.orderNumber || "0001"}\n`);
@@ -427,8 +455,8 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
   if (data.ticketFooter) addText(`${data.ticketFooter}\n\n`);
 
   // BUNZ CASHBACK
-  if (data.total > 0 && data.bunzCashbackRate) {
-    const earnedBunz = data.total * (data.bunzCashbackRate / 100);
+  if (data.estimatedBunz && data.estimatedBunz > 0) {
+    const earnedBunz = data.estimatedBunz;
     chunks.push(boldOn);
     
     if (data.paymentMethod === "QR BUNZ" || data.paymentMethod?.includes("BUNZ")) {
