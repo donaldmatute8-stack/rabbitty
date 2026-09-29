@@ -178,6 +178,16 @@ export default function SettingsPage() {
   const profile = profileQuery.data;
   const security = securityQuery.data;
 
+  const cashDropSettingsQuery = trpc.cashDrops.getSettings.useQuery({});
+  const updateCashDropSettings = trpc.cashDrops.updateSettings.useMutation({
+    onSuccess: () => {
+      utils.cashDrops.getSettings.invalidate();
+      toast.success("Configuración de retiros de efectivo guardada");
+      setEditing(null);
+    },
+    onError: (e: any) => toast.error(e.message)
+  });
+
   const adminPinQuery = trpc.staff.getAdminPinStatus.useQuery();
   const setAdminPinMutation = trpc.staff.setAdminPin.useMutation({
     onSuccess: (data) => {
@@ -232,7 +242,7 @@ export default function SettingsPage() {
   // Form states
   const [editing, setEditing] = useState<string | null>(null);
   const [adminPinInput, setAdminPinInput] = useState("");
-  const [form, setForm] = useState({ name: "", taxRate: 0, defaultRewardRate: 20, acceptsBunz: true, happyHourStart: "", happyHourEnd: "", happyHourRewardRate: 40 });
+  const [form, setForm] = useState({ name: "", taxRate: 0, defaultRewardRate: 20, acceptsBunz: true, happyHourStart: "", happyHourEnd: "", happyHourRewardRate: 40, cashDropEnabled: false, cashDropThreshold: 3000 });
   const [email, setEmail] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -278,7 +288,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (r) {
-      setForm({ name: r.name, taxRate: r.taxRate, defaultRewardRate: normalizePercent(r.defaultRewardRate, 20), acceptsBunz: r.acceptsBunz ?? true, happyHourStart: r.happyHourStart ?? "", happyHourEnd: r.happyHourEnd ?? "", happyHourRewardRate: normalizePercent(r.happyHourRewardRate, 40) });
+      setForm(prev => ({ ...prev, name: r.name, taxRate: r.taxRate, defaultRewardRate: normalizePercent(r.defaultRewardRate, 20), acceptsBunz: r.acceptsBunz ?? true, happyHourStart: r.happyHourStart ?? "", happyHourEnd: r.happyHourEnd ?? "", happyHourRewardRate: normalizePercent(r.happyHourRewardRate, 40) }));
     }
   }, [r]);
 
@@ -292,12 +302,25 @@ export default function SettingsPage() {
   }, [profile]);
 
   const startEdit = (section: string) => {
+    if (section === "cashDrop") {
+      setForm((f) => ({ ...f, cashDropEnabled: cashDropSettingsQuery.data?.cashDropEnabled ?? false, cashDropThreshold: cashDropSettingsQuery.data?.cashDropThreshold ?? 3000 }));
+      setEditing(section);
+      return;
+    }
     if (!r) return;
-    setForm({ name: r.name, taxRate: r.taxRate, defaultRewardRate: normalizePercent(r.defaultRewardRate, 20), acceptsBunz: r.acceptsBunz ?? true, happyHourStart: r.happyHourStart ?? "", happyHourEnd: r.happyHourEnd ?? "", happyHourRewardRate: normalizePercent(r.happyHourRewardRate, 40) });
+    setForm({ name: r.name, taxRate: r.taxRate, defaultRewardRate: normalizePercent(r.defaultRewardRate, 20), acceptsBunz: r.acceptsBunz ?? true, happyHourStart: r.happyHourStart ?? "", happyHourEnd: r.happyHourEnd ?? "", happyHourRewardRate: normalizePercent(r.happyHourRewardRate, 40), cashDropEnabled: form.cashDropEnabled, cashDropThreshold: form.cashDropThreshold });
     setEditing(section);
   };
 
-  const saveSection = () => { if (!r) return; update.mutate({ id: r.id, ...form }); setEditing(null); };
+  const saveSection = () => { 
+    if (editing === "cashDrop") {
+      updateCashDropSettings.mutate({ cashDropEnabled: form.cashDropEnabled, cashDropThreshold: form.cashDropThreshold });
+      return;
+    }
+    if (!r) return; 
+    update.mutate({ id: r.id, ...form }); 
+    setEditing(null); 
+  };
 
   const handleRegisterPasskey = async () => {
     setRegisteringPasskey(true);
@@ -580,6 +603,46 @@ export default function SettingsPage() {
                 <div className={cn("rounded-xl border p-4 text-center", r?.happyHourStart ? "border-pink-500/20 bg-pink-500/10" : "border-white/5 bg-white/5")}>
                   <p className="text-sm font-bold text-pink-300">{r?.happyHourStart && r?.happyHourEnd ? `${r.happyHourStart} - ${r.happyHourEnd}` : "Sin Happy Hour"}</p>
                   <p className="text-xs text-gray-400 mt-1">{r?.happyHourRewardRate ? `×${normalizePercent(r.happyHourRewardRate, 40)}% Bunz` : "Happy Hour"}</p>
+                </div>
+              </div>
+            )}
+          </Card>
+
+          {/* Cortes de Caja */}
+          <Card className="p-6 border border-white/5 bg-white/5 backdrop-blur-md hover:border-white/10 transition-all duration-300 lg:col-span-2 mt-6">
+            <div className="mb-5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500/10 border border-orange-500/20 text-orange-400 shrink-0"><DollarSign className="h-5 w-5" /></div>
+                <div><h3 className="font-bold text-white text-base">Cortes de Caja Obligatorios</h3><p className="text-xs text-gray-400">Bloquea el POS cuando se acumula mucho efectivo</p></div>
+              </div>
+              {editing !== "cashDrop" ? (
+                <button onClick={() => startEdit("cashDrop")} className="rounded-xl border border-white/5 bg-white/5 p-2 text-gray-400 hover:bg-white/10 hover:text-white transition-all cursor-pointer"><Edit3 className="h-4 w-4" /></button>
+              ) : (
+                <div className="flex gap-1.5">
+                  <button onClick={() => setEditing(null)} className="rounded-xl border border-white/5 bg-white/5 p-2 text-gray-400 cursor-pointer hover:bg-white/10 transition-all"><X className="h-4 w-4" /></button>
+                  <button onClick={saveSection} className="rounded-xl border border-green-500/20 bg-green-500/10 p-2 text-green-400 cursor-pointer hover:bg-green-500/20 transition-all"><Check className="h-4 w-4" /></button>
+                </div>
+              )}
+            </div>
+            {editing === "cashDrop" ? (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <label className="flex items-center gap-2.5 text-sm text-gray-300 font-semibold cursor-pointer">
+                    <input type="checkbox" checked={form.cashDropEnabled} onChange={(e) => setForm((f) => ({ ...f, cashDropEnabled: e.target.checked }))} className="h-5 w-5 rounded border-white/10 bg-white/5 text-orange-500 cursor-pointer" />
+                    Habilitar cortes obligatorios
+                  </label>
+                  <Input label="Límite máximo de efectivo ($)" type="number" value={form.cashDropThreshold} onChange={(e) => setForm((f) => ({ ...f, cashDropThreshold: Number(e.target.value) }))} disabled={!form.cashDropEnabled} />
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-sm">
+                <div className="rounded-xl border border-white/5 bg-white/5 p-4 text-center">
+                  <p className="text-2xl font-black text-white">{cashDropSettingsQuery.data?.cashDropEnabled ? "✅" : "❌"}</p>
+                  <p className="text-xs text-gray-400 mt-1">Habilitado</p>
+                </div>
+                <div className="rounded-xl border border-white/5 bg-white/5 p-4 text-center">
+                  <p className="text-2xl font-black text-orange-400">${cashDropSettingsQuery.data?.cashDropThreshold?.toFixed(2) ?? "3000.00"}</p>
+                  <p className="text-xs text-gray-400 mt-1">Límite Permitido</p>
                 </div>
               </div>
             )}

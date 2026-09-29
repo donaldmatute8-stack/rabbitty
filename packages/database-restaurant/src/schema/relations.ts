@@ -26,6 +26,7 @@ import {
   purchaseOrderItems,
   expenses,
   paymentIntents,
+  cashDrops,
 } from "./index";
 
 export const restaurantsRelations = relations(restaurants, ({ many }) => ({
@@ -51,6 +52,7 @@ export const branchesRelations = relations(branches, ({ one, many }) => ({
   cateringEvents: many(cateringEvents),
   dynamicPricingRules: many(dynamicPricingRules),
   expenses: many(expenses),
+  cashDrops: many(cashDrops),
 }));
 
 export const menuCategoriesRelations = relations(menuCategories, ({ one, many }) => ({
@@ -173,4 +175,9 @@ export const purchaseOrderItemsRelations = relations(purchaseOrderItems, ({ one 
 
 export const expensesRelations = relations(expenses, ({ one }) => ({
   branch: one(branches, { fields: [expenses.branchId], references: [branches.id] }),
+}));
+
+export const cashDropsRelations = relations(cashDrops, ({ one }) => ({
+  branch: one(branches, { fields: [cashDrops.branchId], references: [branches.id] }),
+  staff: one(staff, { fields: [cashDrops.staffId], references: [staff.id] }),
 }));

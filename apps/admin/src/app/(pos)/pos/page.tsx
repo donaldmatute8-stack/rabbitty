@@ -98,6 +98,37 @@ export default function PosPage() {
   const { data: menuItems } = trpc.pos.getMenuItems.useQuery({}, { retry: false });
   const { data: tables } = trpc.pos.getTables.useQuery(undefined, { retry: false });
   const { data: ticketContext } = trpc.printing.getTicketData.useQuery(undefined, { retry: false });
+  const { data: cashStatus, refetch: refetchCashStatus } = trpc.cashDrops.getStatus.useQuery({}, { refetchInterval: 30000 });
+
+  const [cashDropAmount, setCashDropAmount] = useState("");
+  const [cashDropNotes, setCashDropNotes] = useState("");
+
+  const createCashDropMutation = trpc.cashDrops.createDrop.useMutation({
+    onSuccess: async (drop) => {
+      toast.success("Retiro de efectivo registrado con éxito");
+      if (btConnected && isBluetoothConnected()) {
+        try {
+          toast.info("Imprimiendo comprobante de retiro...");
+          const payload = await generateEscPosTicketPayload({
+            isCashDrop: true,
+            amount: drop.amount,
+            notes: drop.notes,
+            ...ticketContext
+          }, true);
+          await sendEscPosToBluetooth(payload);
+          toast.success("¡Ticket impreso!");
+        } catch (e: any) {
+          toast.error("Error al imprimir Bluetooth");
+        }
+      }
+      setCashDropAmount("");
+      setCashDropNotes("");
+      refetchCashStatus();
+    },
+    onError: (err) => {
+      toast.error(err.message || "Error al registrar retiro");
+    }
+  });
 
   // Auto-select first table when tables load if DINE_IN
   useEffect(() => {
@@ -136,31 +167,68 @@ export default function PosPage() {
     },
   });
 
-  const createPaymentIntentMutation = trpc.pos.createPaymentIntent.useMutation({
-    onError: (err) => {
-      toast.error(err.message || "Error al generar código QR de pago");
+  const createPaymentIntentMutation = {
+    mutateAsync: async (data: any) => {
+      // PHASE 3: Call the new API Server Domain directly
+      const response = await fetch("http://localhost:4000/payments.createIntent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          // tRPC v10 expects { 0: { ... } } wrapper for body
+          "0": {
+            amountMxn: data.totalAmount, // Assuming we pass total
+            tenantId: "restaurant_ABC",
+            idempotencyKey: `pos_${Date.now()}`
+          } 
+        })
+      });
+      if (!response.ok) throw new Error("Error al generar código QR de pago");
+      const resData = await response.json();
+      return resData[0].result.data; // Unpack tRPC response
     },
-  });
-
-  const { data: pollData } = trpc.pos.pollPaymentIntent.useQuery(
-    { paymentIntentId: qrPaymentModal?.intentId ?? "" },
-    {
-      enabled: !!qrPaymentModal,
-      refetchInterval: (query) => (query.state.data?.status === "PENDING_PAYMENT" ? 2000 : false),
+    onError: (err: any) => {
+      toast.error(err.message || "Error al generar código QR de pago");
     }
-  );
+  };
+
+  const [pollData, setPollData] = useState<any>(null);
+
+  // PHASE 3: Poll the new api-server for getIntent
+  useEffect(() => {
+    if (!qrPaymentModal) {
+      setPollData(null);
+      return;
+    }
+    const interval = setInterval(async () => {
+      try {
+        // tRPC v10 query format: /trpc/router.procedure?input=...
+        const inputStr = encodeURIComponent(JSON.stringify({ "0": { intentId: qrPaymentModal.intentId } }));
+        const res = await fetch(`http://localhost:4000/payments.getIntent?batch=1&input=${inputStr}`, {
+          headers: { "Authorization": "Bearer DEV_TOKEN" }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const intent = data[0].result.data;
+          setPollData(intent);
+        }
+      } catch (err) {
+        console.error("Polling error", err);
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [qrPaymentModal]);
 
   useEffect(() => {
-    if (pollData?.status === "PAYMENT_VERIFIED" && qrPaymentModal) {
+    if (pollData?.status === "SETTLED" && qrPaymentModal) {
       toast.success("¡Pago con Bunz verificado exitosamente!");
       const realOrderNumber = qrPaymentModal.intentId.slice(-4).toUpperCase();
       finalizeCheckout(realOrderNumber, "QR BUNZ");
       setQrPaymentModal(null);
-    } else if (pollData?.status === "EXPIRED" && qrPaymentModal) {
+    } else if (pollData?.expiresAt && new Date(pollData.expiresAt).getTime() < Date.now() && qrPaymentModal) {
       toast.error("El tiempo para pagar con Bunz ha expirado.");
       setQrPaymentModal(null);
     }
-  }, [pollData?.status]);
+  }, [pollData, qrPaymentModal]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -328,6 +396,53 @@ export default function PosPage() {
   return (
     <div className="flex h-screen w-full flex-col bg-gray-950 text-white overflow-hidden select-none font-sans">
       
+      {cashStatus?.requiresDrop && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/95 p-4 backdrop-blur-md">
+          <div className="w-full max-w-md bg-gray-800 rounded-2xl shadow-[0_0_50px_rgba(239,68,68,0.3)] border border-red-500/50 p-8 text-center">
+            <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-500/20 mb-4">
+              <span className="text-3xl">⚠️</span>
+            </div>
+            <h2 className="text-3xl font-black text-red-400 mb-2">Corte Requerido</h2>
+            <p className="text-gray-300 mb-6 text-lg">
+              Has alcanzado el límite de efectivo en caja (${cashStatus.threshold.toFixed(2)}). <br/><br/>
+              Efectivo actual: <b className="text-white text-xl">${cashStatus.currentCash.toFixed(2)}</b>
+            </p>
+            <div className="space-y-4 text-left">
+              <div>
+                <label className="block text-sm font-bold text-gray-400 mb-1">Monto a retirar *</label>
+                <input 
+                  type="number"
+                  value={cashDropAmount}
+                  onChange={e => setCashDropAmount(e.target.value)}
+                  className="w-full bg-black border border-white/10 rounded-xl p-4 text-xl text-white focus:outline-none focus:border-red-500"
+                  placeholder="Ej. 3000"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-400 mb-1">Notas / Entregado a</label>
+                <input 
+                  type="text"
+                  value={cashDropNotes}
+                  onChange={e => setCashDropNotes(e.target.value)}
+                  className="w-full bg-black border border-white/10 rounded-xl p-4 text-xl text-white focus:outline-none focus:border-red-500"
+                  placeholder="Gerente en turno"
+                />
+              </div>
+              <button
+                onClick={() => {
+                  if (Number(cashDropAmount) <= 0) return toast.error("Monto inválido");
+                  createCashDropMutation.mutate({ amount: Number(cashDropAmount), notes: cashDropNotes });
+                }}
+                disabled={createCashDropMutation.isPending}
+                className="w-full mt-4 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-bold py-4 rounded-xl text-xl shadow-lg shadow-red-500/20 transition-all active:scale-95 disabled:opacity-50"
+              >
+                {createCashDropMutation.isPending ? "Procesando..." : "Registrar Retiro y Continuar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Top Header ── */}
       <header className="flex h-[88px] shrink-0 items-center justify-between bg-black/60 backdrop-blur-2xl px-6 border-b border-white/5 relative z-20">
         <div className="flex items-center gap-6">
