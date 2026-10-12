@@ -8,9 +8,14 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "cap:sync": "cap sync",
+    "cap:ios": "cap open ios",
+    "cap:android": "cap open android"
   },
   "dependencies": {
+    "@capacitor-community/bluetooth-le": "^8.3.0",
+    "@capacitor/core": "^8.5.3",
     "@rabbitty/api": "workspace:*",
     "@rabbitty/auth": "workspace:*",
     "@rabbitty/database-core": "workspace:*",
@@ -32,6 +37,9 @@
     "sonner": "^2.0.7"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/cli": "^8.5.3",
+    "@capacitor/ios": "^8.5.3",
     "@rabbitty/config": "workspace:*",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",

@@ -29,6 +29,8 @@ apps/*/.next/
 packages/*/dist/
 apps/*/dist/
 dist/
+out/
+apps/*/out/
 .turbo/
 
 # Env files

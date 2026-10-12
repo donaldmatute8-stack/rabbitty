@@ -4,6 +4,7 @@ import { signIn } from "next-auth/react";
 import { useState, useEffect } from "react";
 import { Mail, QrCode, Sparkles, UserCheck, Clock } from "lucide-react";
 import RabbittyCode from "@/components/ui/RabbittyCode";
+import { resolveApiUrl } from "@/lib/api-config";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -14,7 +15,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     // Generar sesión QR para login
-    fetch("/api/auth/qr/generate", { method: "POST" })
+    fetch(resolveApiUrl("/api/auth/qr/generate"), { method: "POST" })
       .then((res) => res.json())
       .then((data) => {
         if (data.success && data.qrToken) {
@@ -42,7 +43,7 @@ export default function LoginPage() {
   useEffect(() => {
     if (!sessionId) return;
     const interval = setInterval(() => {
-      fetch(`/api/auth/qr/poll?sessionId=${sessionId}`)
+      fetch(resolveApiUrl(`/api/auth/qr/poll?sessionId=${sessionId}`))
         .then((r) => r.json())
         .then((data) => {
           if (data.authenticated && data.user) {
