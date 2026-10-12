@@ -262,76 +262,22 @@ export default function AffiliateProfilePage() {
         pointerEvents: 'none' // The wrapper is invisible to clicks
       }}>
         <button 
-          onClick={async () => {
-            try {
-              const mod = await import('@twa-dev/sdk');
-              const app = mod.default;
-              
-              const processScan = async (fiatAmount: number) => {
-                try {
-                  const res = await fetch('/api/transaction/spend', { // Registra ticket de consumo y mint de Bunz
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                      initData: app.initData, 
-                      businessId: affiliate.id,
-                      fiatAmount
-                    })
-                  });
-                  
-                  const data = await res.json();
-                  if (data.success) {
-                    if (app.closeScanQrPopup) {
-                      try { app.closeScanQrPopup(); } catch(e) {}
-                    }
-                    showToast(`¡Felicidades! Acabas de ganar +${data.bunzEarned} Bunz.`, 'success');
-                  } else {
-                    showToast(`Ticket Rechazado: ${data.error}`, 'error');
-                  }
-                } catch (e) {
-                  showToast("Error al procesar el ticket.", 'error');
-                }
-              };
-
-              try {
-                app.showScanQrPopup({ text: "Escanea tu ticket de compra" }, (qrText: string) => {
-                  const parsed = parseInt(qrText, 10);
-                  if (!isNaN(parsed) && parsed > 0) {
-                    processScan(parsed);
-                  } else {
-                    showToast('Código QR inválido. Escanea el ticket de compra.', 'error');
-                  }
-                  return true;
-                });
-              } catch (e) {
-                console.warn("QR Scanner not supported, falling back to mock input");
-                const mockAmount = window.prompt(`Escáner no soportado. Ingresa el monto de tu consumo en ${affiliate.name}:`);
-                if (mockAmount) {
-                  const parsed = parseInt(mockAmount, 10);
-                  if (!isNaN(parsed) && parsed > 0) {
-                    processScan(parsed);
-                  } else {
-                    showToast('Monto inválido.', 'error');
-                  }
-                }
-              }
-            } catch (err) {
-              console.error(err);
-            }
+          onClick={() => {
+            router.push('/scan');
           }}
           style={{
-          width: '100%',
-          background: '#111', color: '#fff',
-          padding: 20, borderRadius: 24,
-          border: 'none',
-          fontSize: 16, fontWeight: 900,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
-          boxShadow: '0 12px 32px rgba(0,0,0,0.2)',
-          cursor: 'pointer',
-          pointerEvents: 'auto' // Button is clickable
-        }}>
+            width: '100%',
+            background: '#111', color: '#fff',
+            padding: 20, borderRadius: 24,
+            border: 'none',
+            fontSize: 16, fontWeight: 900,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
+            boxShadow: '0 12px 32px rgba(0,0,0,0.2)',
+            cursor: 'pointer',
+            pointerEvents: 'auto'
+          }}>
           <Tag size={20} />
-          Escanear ticket y ganar +{affiliate.rewardPercentage}%
+          Escanear en caja y ganar +{affiliate.rewardPercentage}%
         </button>
       </div>
 

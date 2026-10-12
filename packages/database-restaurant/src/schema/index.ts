@@ -412,12 +412,17 @@ export const aiStrategies = pgTable("ai_strategies", {
 
 export const paymentIntents = pgTable("payment_intents", {
   id: id(),
-  orderId: fkId("orderId").references(() => orders.id),
+  orderId: fkIdOpt("orderId").references(() => orders.id),
   merchantId: fkId("merchantId").references(() => branches.id),
+  creatorSubjectId: text("creatorSubjectId"),
+  payerSubjectId: text("payerSubjectId"),
   amountMxn: real("amountMxn").notNull(),
   bunzAmount: real("bunzAmount").notNull(),
+  currency: text("currency").default("MXN").notNull(),
   status: text("status").default("PENDING_PAYMENT").notNull(),
+  idempotencyKey: text("idempotencyKey").unique(),
   expiresAt: timestamp("expiresAt").notNull(),
+  paidAt: timestamp("paidAt"),
   ...timestamps,
 });
 
@@ -427,5 +432,71 @@ export const cashDrops = pgTable("cash_drops", {
   staffId: fkIdOpt("staffId").references(() => staff.id),
   amount: real("amount").notNull(),
   notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow(),
+});
+
+export const ledgerEntries = pgTable("ledger_entries", {
+  id: id(),
+  branchId: fkIdOpt("branchId").references(() => branches.id),
+  payerSubjectId: text("payerSubjectId").notNull(),
+  payeeSubjectId: text("payeeSubjectId").notNull(),
+  amount: real("amount").notNull(),
+  currency: text("currency").default("BUNZ").notNull(),
+  type: text("type").notNull(), // EARN, SPEND, TRANSFER, MINT, BURN, REFUND, ALLOCATION
+  referenceId: text("referenceId"), // e.g. PaymentIntent ID or Order ID
+  idempotencyKey: text("idempotencyKey").notNull().unique(),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("createdAt").defaultNow(),
+});
+
+export const distributionDestinations = pgTable("distribution_destinations", {
+  id: id(),
+  branchId: fkIdOpt("branchId").references(() => branches.id),
+  name: text("name").notNull(),
+  type: text("type").default("FOUNDATION").notNull(), // FOUNDATION, SAVINGS, PARTNER, EXTERNAL_WALLET, INTERNAL_ACCOUNT
+  accountIdentifier: text("accountIdentifier"),
+  description: text("description"),
+  isActive: boolean("isActive").default(true).notNull(),
+  ...timestamps,
+});
+
+export const distributionRules = pgTable("distribution_rules", {
+  id: id(),
+  branchId: fkId("branchId").references(() => branches.id),
+  destinationId: fkId("destinationId").references(() => distributionDestinations.id),
+  name: text("name").notNull(),
+  allocationType: text("allocationType").default("PERCENTAGE").notNull(), // PERCENTAGE, FIXED_PER_TX, FIXED_PER_ITEM
+  allocationValue: real("allocationValue").notNull(),
+  triggerEvent: text("triggerEvent").default("PAYMENT_SETTLED").notNull(),
+  priority: integer("priority").default(0).notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  ...timestamps,
+});
+
+export const distributionAllocations = pgTable("distribution_allocations", {
+  id: id(),
+  paymentIntentId: fkIdOpt("paymentIntentId").references(() => paymentIntents.id),
+  orderId: fkIdOpt("orderId").references(() => orders.id),
+  branchId: fkId("branchId").references(() => branches.id),
+  ruleId: fkId("ruleId").references(() => distributionRules.id),
+  destinationId: fkId("destinationId").references(() => distributionDestinations.id),
+  amountMxn: real("amountMxn").notNull(),
+  status: text("status").default("ALLOCATED").notNull(),
+  ...timestamps,
+});
+
+export const settlementOperations = pgTable("settlement_operations", {
+  id: id(),
+  allocationId: fkIdOpt("allocationId").references(() => distributionAllocations.id),
+  ledgerEntryId: fkIdOpt("ledgerEntryId").references(() => ledgerEntries.id),
+  destinationId: fkId("destinationId").references(() => distributionDestinations.id),
+  amount: real("amount").notNull(),
+  currency: text("currency").default("MXN").notNull(),
+  provider: text("provider").default("INTERNAL").notNull(), // INTERNAL, BLOCKCHAIN, SPEI
+  status: text("status").default("PENDING").notNull(), // PENDING, PROCESSING, SETTLED, FAILED
+  txHash: text("txHash"),
+  failureReason: text("failureReason"),
+  retryCount: integer("retryCount").default(0).notNull(),
+  settledAt: timestamp("settledAt"),
   createdAt: timestamp("createdAt").defaultNow(),
 });
