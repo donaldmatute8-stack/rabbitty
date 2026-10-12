@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { users, ownedBusinesses, transactions } from '@/db/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { parseTelegramUser, validateTelegramInitData } from '@/lib/telegramAuth';
+import { recordLedgerTransaction } from '@/lib/ledgerHelper';
 
 export async function POST(req: NextRequest) {
   try {
     const { initData, businessId, bunzCost, title } = await req.json();
 
-    if (!initData || !businessId || !title || bunzCost === undefined) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    if (!initData || !businessId || !title || bunzCost === undefined || bunzCost <= 0) {
+      return NextResponse.json({ error: 'Missing required fields or invalid amount' }, { status: 400 });
     }
 
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -38,30 +39,68 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Business not found' }, { status: 404 });
     }
 
-    // Deduct Bunz atomically
-    const [deducted] = await db
-      .update(users)
-      .set({ totalBunzEarned: sql`${users.totalBunzEarned} - ${bunzCost}` })
-      .where(and(eq(users.id, user.id), sql`${users.totalBunzEarned} >= ${bunzCost}`))
-      .returning();
+    // Atomic SQL transaction with pessimistic row lock and authoritative Ledger entry
+    const result = await db.transaction(async (tx) => {
+      const [lockedUser] = await tx
+        .select()
+        .from(users)
+        .where(eq(users.id, user.id))
+        .for('update');
 
-    if (!deducted) {
-      return NextResponse.json({ error: 'Insufficient Bunz' }, { status: 400 });
+      if (!lockedUser) {
+        throw new Error('USER_NOT_FOUND');
+      }
+
+      const available = (lockedUser.totalBunzEarned ?? 0) - (lockedUser.totalBunzSpent ?? 0);
+      if (available < bunzCost) {
+        throw new Error('INSUFFICIENT_FUNDS');
+      }
+
+      // Record spending in users table
+      const [updatedUser] = await tx
+        .update(users)
+        .set({ totalBunzSpent: sql`COALESCE(${users.totalBunzSpent}, 0) + ${bunzCost}` })
+        .where(eq(users.id, lockedUser.id))
+        .returning();
+
+      // Insert transaction audit
+      const [appTx] = await tx
+        .insert(transactions)
+        .values({
+          userId: user.id,
+          businessId,
+          fiatAmount: 0,
+          bunzMinted: -bunzCost,
+          status: 'REDEEMED',
+          errorMessage: title,
+        })
+        .returning();
+
+      // Record authoritative Ledger entry
+      const idempotencyKey = `rdm_${appTx.id}_${Date.now()}`;
+      await recordLedgerTransaction(
+        {
+          payerSubjectId: user.telegramId || user.id,
+          payeeSubjectId: business.id,
+          amount: bunzCost,
+          type: 'SPEND',
+          referenceId: appTx.id,
+          idempotencyKey,
+          metadata: { title, businessId },
+        },
+        tx
+      );
+
+      const newBalance = (updatedUser.totalBunzEarned ?? 0) - (updatedUser.totalBunzSpent ?? 0);
+      return { tx: appTx, newBalance };
+    });
+
+    return NextResponse.json({ success: true, transaction: result.tx, newBalance: result.newBalance });
+  } catch (error: any) {
+    if (error?.message === 'INSUFFICIENT_FUNDS') {
+      return NextResponse.json({ error: 'Saldo insuficiente de Bunz' }, { status: 400 });
     }
-
-    // Insert transaction representing the redemption
-    const [tx] = await db.insert(transactions).values({
-      userId: user.id,
-      businessId,
-      fiatAmount: 0,
-      bunzMinted: -bunzCost,
-      status: 'REDEEMED',
-      errorMessage: title,
-    }).returning();
-
-    return NextResponse.json({ success: true, transaction: tx, newBalance: deducted.totalBunzEarned });
-  } catch (error) {
     console.error('Redeem Error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: error?.message || 'Internal server error' }, { status: 500 });
   }
 }

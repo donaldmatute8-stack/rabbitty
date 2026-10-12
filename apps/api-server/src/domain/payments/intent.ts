@@ -92,21 +92,55 @@ export class PaymentIntentService {
     const intentId = `pi_${crypto.randomUUID()}`;
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 min TTL
 
-    const [inserted] = await restaurantDb
-      .insert(paymentIntents)
-      .values({
-        id: intentId,
-        orderId: params.orderId,
-        merchantId: params.tenantId,
-        creatorSubjectId: params.creatorSubjectId,
-        amountMxn: params.amountMxn,
-        bunzAmount: requiredBunz,
-        currency: "MXN",
-        status: "PENDING_PAYMENT",
-        idempotencyKey: params.idempotencyKey,
-        expiresAt,
-      })
-      .returning();
+    let inserted;
+    try {
+      const [row] = await restaurantDb
+        .insert(paymentIntents)
+        .values({
+          id: intentId,
+          orderId: params.orderId,
+          merchantId: params.tenantId,
+          creatorSubjectId: params.creatorSubjectId,
+          amountMxn: params.amountMxn,
+          bunzAmount: requiredBunz,
+          currency: "MXN",
+          status: "PENDING_PAYMENT",
+          idempotencyKey: params.idempotencyKey,
+          expiresAt,
+        })
+        .onConflictDoNothing({ target: paymentIntents.idempotencyKey })
+        .returning();
+      inserted = row;
+    } catch {
+      // In case of conflict fallback
+    }
+
+    if (!inserted) {
+      const [winning] = await restaurantDb
+        .select()
+        .from(paymentIntents)
+        .where(eq(paymentIntents.idempotencyKey, params.idempotencyKey))
+        .limit(1);
+
+      if (winning) {
+        return {
+          id: winning.id,
+          tenantId: winning.merchantId,
+          orderId: winning.orderId || undefined,
+          creatorSubjectId: winning.creatorSubjectId || params.creatorSubjectId,
+          payerSubjectId: winning.payerSubjectId || undefined,
+          amountMxn: winning.amountMxn,
+          bunzAmount: winning.bunzAmount,
+          currency: winning.currency,
+          status: winning.status as PaymentIntentStatus,
+          idempotencyKey: winning.idempotencyKey || params.idempotencyKey,
+          expiresAt: winning.expiresAt,
+          createdAt: winning.createdAt || new Date(),
+          paidAt: winning.paidAt || undefined,
+        };
+      }
+      throw new Error("FAILED_TO_CREATE_INTENT");
+    }
 
     return {
       id: inserted.id,
@@ -302,7 +336,30 @@ export class PaymentIntentService {
         }
       }
 
-      // 6. Mark intent SETTLED and update orders + payments (within SAME transaction)
+      // 6. Issue Authoritative Cashback / Reward to customer on settlement
+      if (payerSubjectId && payerSubjectId !== "SYSTEM") {
+        const rewardAmount = Math.round(intent.amountMxn * 0.20); // 20% standard cashback
+        if (rewardAmount > 0) {
+          await tx
+            .update(users)
+            .set({ totalBunzEarned: sql`COALESCE(${users.totalBunzEarned}, 0) + ${rewardAmount}` })
+            .where(eq(users.telegramId, payerSubjectId));
+
+          await tx.insert(ledgerEntries).values({
+            branchId: intent.merchantId,
+            payerSubjectId: intent.merchantId || "SYSTEM",
+            payeeSubjectId: payerSubjectId,
+            amount: rewardAmount,
+            currency: "BUNZ",
+            type: "EARN",
+            referenceId: intent.id,
+            idempotencyKey: `cbk_${intent.id}_${payerSubjectId}`,
+            metadata: { orderId: intent.orderId, amountMxn: intent.amountMxn, reason: "CASHBACK_PAYMENT" },
+          });
+        }
+      }
+
+      // 7. Mark intent SETTLED and update orders + payments (within SAME transaction)
       const paidAt = new Date();
       await tx
         .update(paymentIntents)

@@ -4,6 +4,7 @@ import { users, ownedBusinesses, reservations } from '@/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { processReferralAndNotifications } from '@/lib/referralLogic';
 import { awardHops, evaluateHatTricks } from '@/lib/gamificationLogic';
+import { recordLedgerTransaction } from '@/lib/ledgerHelper';
 
 export async function POST(req: Request) {
   try {
@@ -33,23 +34,59 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Business not found' }, { status: 404 });
     }
 
-    // Deduct Bunz atómicamente (race-condition safe)
-    const [deducted] = await db.update(users)
-      .set({ totalBunzEarned: sql`${users.totalBunzEarned} - ${bunzCost}` })
-      .where(and(eq(users.id, user.id), sql`${users.totalBunzEarned} >= ${bunzCost}`))
-      .returning();
-    if (!deducted) {
-      return NextResponse.json({ error: 'Insufficient Bunz' }, { status: 400 });
-    }
+    // Atomic SQL transaction with pessimistic row lock and authoritative Ledger entry
+    const reservation = await db.transaction(async (tx) => {
+      const [lockedUser] = await tx
+        .select()
+        .from(users)
+        .where(eq(users.id, user.id))
+        .for('update');
 
-    // Create reservation
-    const [reservation] = await db.insert(reservations).values({
-      userId: user.id,
-      businessId: business.id,
-      title: offerTitle,
-      bunzCost: bunzCost,
-      status: "PENDING"
-    }).returning();
+      if (!lockedUser) {
+        throw new Error('USER_NOT_FOUND');
+      }
+
+      const available = (lockedUser.totalBunzEarned ?? 0) - (lockedUser.totalBunzSpent ?? 0);
+      if (available < bunzCost) {
+        throw new Error('INSUFFICIENT_BUNZ');
+      }
+
+      // Record spending
+      await tx
+        .update(users)
+        .set({ totalBunzSpent: sql`COALESCE(${users.totalBunzSpent}, 0) + ${bunzCost}` })
+        .where(eq(users.id, lockedUser.id));
+
+      // Create reservation
+      const [resRow] = await tx
+        .insert(reservations)
+        .values({
+          userId: user.id,
+          businessId: business.id,
+          title: offerTitle,
+          bunzCost: bunzCost,
+          status: "PENDING",
+        })
+        .returning();
+
+      // Record authoritative Ledger entry
+      const idempotencyKey = `res_ord_${resRow.id}_${Date.now()}`;
+      await recordLedgerTransaction(
+        {
+          branchId: business.id,
+          payerSubjectId: user.telegramId || user.id,
+          payeeSubjectId: business.id,
+          amount: bunzCost,
+          type: "SPEND",
+          referenceId: resRow.id,
+          idempotencyKey,
+          metadata: { offerTitle, businessId: business.id },
+        },
+        tx
+      );
+
+      return resRow;
+    });
 
     // Trigger referral and notifications (SPEND event)
     await processReferralAndNotifications(user.id, 'SPEND');
