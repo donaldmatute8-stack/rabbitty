@@ -68,12 +68,13 @@ export async function POST(req: Request) {
     }
 
     if (startParam && startParam.startsWith('claim_')) {
-      const claimId = startParam.replace('claim_', ''); // UUID sin guiones
+      const claimId = startParam.replace('claim_', ''); // UUID sin guiones o ticket orderNumber
       
-      // Buscar el negocio usando sql helper de drizzle para el WHERE
-      const { sql: drizzleSql } = require('drizzle-orm');
-      const { ownedBusinesses } = require('@/db/schema');
+      const { sql: drizzleSql, and } = require('drizzle-orm');
+      const { ownedBusinesses, pendingVaults, ledgerEntries } = require('@/db/schema');
+      const { recordLedgerTransaction } = require('@/lib/ledgerHelper');
       
+      // 1. Buscar si corresponde a un reclamo de negocio afiliado
       const [business] = await db
         .select({ id: ownedBusinesses.id })
         .from(ownedBusinesses)
@@ -82,20 +83,77 @@ export async function POST(req: Request) {
 
       if (business) {
         const bId = business.id;
-        
-        // Actualizar el negocio asignándole el ownerId
         await db.execute(
           drizzleSql`UPDATE "ownedBusinesses" SET "ownerId" = ${user.id} WHERE id = ${bId}`
         );
 
-        // Actualizar el rol del usuario a AFFILIATE si no lo es ya
         if (user.role !== 'AFFILIATE' && user.role !== 'ADMIN') {
           await db.execute(
             drizzleSql`UPDATE "users" SET "role" = 'AFFILIATE' WHERE id = ${user.id}`
           );
         }
-        
         console.log(`[Claim Business] Negocio ${bId} asignado al usuario ${user.id}`);
+      } else {
+        // 2. Reclamo de ticket térmico físico (QR del POS)
+        const idempotencyKey = `claim_ticket_${claimId}`;
+        const [existingClaim] = await db
+          .select()
+          .from(ledgerEntries)
+          .where(eq(ledgerEntries.idempotencyKey, idempotencyKey))
+          .limit(1);
+
+        if (!existingClaim) {
+          // Buscar si hay una bóveda temporal vinculada al número de orden
+          const [vault] = await db
+            .select()
+            .from(pendingVaults)
+            .where(
+              and(
+                eq(pendingVaults.orderId, claimId),
+                eq(pendingVaults.status, 'PENDING')
+              )
+            )
+            .limit(1);
+
+          const bunzToAward = vault?.bunzAmount || 20; // Monto de bóveda o recompensa estándar
+          const branchId = vault?.businessId || null;
+
+          await db.transaction(async (tx: any) => {
+            const [lockedUser] = await tx
+              .select()
+              .from(users)
+              .where(eq(users.id, user.id))
+              .for('update');
+
+            if (lockedUser) {
+              await tx
+                .update(users)
+                .set({ totalBunzEarned: drizzleSql`COALESCE(${users.totalBunzEarned}, 0) + ${bunzToAward}` })
+                .where(eq(users.id, lockedUser.id));
+
+              if (vault) {
+                await tx
+                  .update(pendingVaults)
+                  .set({ status: 'CLAIMED' })
+                  .where(eq(pendingVaults.id, vault.id));
+              }
+
+              await recordLedgerTransaction(
+                {
+                  branchId,
+                  payerSubjectId: branchId || 'SYSTEM',
+                  payeeSubjectId: user.telegramId || user.id,
+                  amount: bunzToAward,
+                  type: 'EARN',
+                  referenceId: claimId,
+                  idempotencyKey,
+                  metadata: { orderNumber: claimId, reason: 'TICKET_QR_CLAIM' },
+                },
+                tx
+              );
+            }
+          });
+        }
       }
     }
 

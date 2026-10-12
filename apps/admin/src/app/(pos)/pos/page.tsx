@@ -166,15 +166,24 @@ export default function PosPage() {
 
   const API_SERVER_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
+  const getPosAuthToken = () => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("rabbitty_pos_token") || localStorage.getItem("rabbitty_auth_token");
+      if (stored) return stored;
+    }
+    return process.env.NEXT_PUBLIC_POS_API_SECRET || "DEV_TOKEN";
+  };
+
   const createPaymentIntentMutation = {
     mutateAsync: async (data: any) => {
       // Authority: API Server Domain creates payment intent
       const branchId = ticketContext?.branch?.id || "default_branch";
+      const token = getPosAuthToken();
       const response = await fetch(`${API_SERVER_URL}/payments.createIntent?batch=1`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "Authorization": "Bearer DEV_TOKEN",
+          "Authorization": `Bearer ${token}`,
           "x-tenant-id": branchId
         },
         body: JSON.stringify({ 
@@ -206,8 +215,9 @@ export default function PosPage() {
     const interval = setInterval(async () => {
       try {
         const inputStr = encodeURIComponent(JSON.stringify({ "0": { intentId: qrPaymentModal.intentId } }));
+        const token = getPosAuthToken();
         const res = await fetch(`${API_SERVER_URL}/payments.getIntent?batch=1&input=${inputStr}`, {
-          headers: { "Authorization": "Bearer DEV_TOKEN" }
+          headers: { "Authorization": `Bearer ${token}` }
         });
         if (res.ok) {
           const data = await res.json();

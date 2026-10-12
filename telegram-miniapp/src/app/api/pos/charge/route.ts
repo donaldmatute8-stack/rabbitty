@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { users, transactions } from '@/db/schema';
 import { eq, or, and, gte, sql } from 'drizzle-orm';
+import { recordLedgerTransaction } from '@/lib/ledgerHelper';
 import crypto from 'crypto';
 
 const DAILY_SPEND_CAP = parseInt(process.env.DAILY_SPEND_CAP || '500', 10);
@@ -71,22 +72,50 @@ export async function POST(request: Request) {
        // Assuming pos always sends it. We will just allow it to honor the restaurant.
     }
 
-    // Update user balances atomically (spent + debt)
-    await db.update(users)
-      .set({ 
-        totalBunzSpent: sql`total_bunz_spent + ${bunzToSpendNormally}`,
-        pendingDebtBunz: sql`COALESCE(pending_debt_bunz, 0) + ${deficit}`
-      })
-      .where(eq(users.id, user.id));
+    // Update user balances atomically (spent + debt) and write to Ledger
+    await db.transaction(async (tx) => {
+      const [lockedUser] = await tx
+        .select()
+        .from(users)
+        .where(eq(users.id, user.id))
+        .for('update');
 
-    await db.insert(transactions).values({
-      id: crypto.randomUUID(),
-      userId: user.id,
-      businessId: business_id || 'unknown',
-      fiatAmount: -amount_usd,
-      bunzMinted: -bunzRequired,
-      status: 'CHARGED',
-      txHash: `pos_${order_id}`,
+      if (!lockedUser) {
+        throw new Error('USER_NOT_FOUND');
+      }
+
+      await tx.update(users)
+        .set({ 
+          totalBunzSpent: sql`COALESCE(${users.totalBunzSpent}, 0) + ${bunzToSpendNormally}`,
+          pendingDebtBunz: sql`COALESCE(${users.pendingDebtBunz}, 0) + ${deficit}`
+        })
+        .where(eq(users.id, lockedUser.id));
+
+      const txId = crypto.randomUUID();
+      await tx.insert(transactions).values({
+        id: txId,
+        userId: user.id,
+        businessId: business_id || 'unknown',
+        fiatAmount: -amount_usd,
+        bunzMinted: -bunzRequired,
+        status: 'CHARGED',
+        txHash: `pos_${order_id}`,
+      });
+
+      const idempotencyKey = `pos_chg_${order_id || txId}_${Date.now()}`;
+      await recordLedgerTransaction(
+        {
+          branchId: business_id || null,
+          payerSubjectId: user.telegramId || user.id,
+          payeeSubjectId: business_id || 'POS',
+          amount: bunzRequired,
+          type: 'SPEND',
+          referenceId: order_id || txId,
+          idempotencyKey,
+          metadata: { orderId: order_id, amountUsd: amount_usd },
+        },
+        tx
+      );
     });
 
     return NextResponse.json({ 

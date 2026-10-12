@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { users, ownedBusinesses, reservations } from '@/db/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
+import { recordLedgerTransaction } from '@/lib/ledgerHelper';
 
 export async function POST(req: NextRequest) {
   try {
     const { telegramId, businessId, title, bunzCost } = await req.json();
 
-    if (!telegramId || !businessId || !title || bunzCost === undefined) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    if (!telegramId || !businessId || !title || bunzCost === undefined || bunzCost <= 0) {
+      return NextResponse.json({ error: 'Missing required fields or invalid amount' }, { status: 400 });
     }
 
     const user = await db.query.users.findFirst({
@@ -27,28 +28,65 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Business not found' }, { status: 404 });
     }
 
-    // Deduct Bunz atomically
-    const [deducted] = await db
-      .update(users)
-      .set({ totalBunzEarned: sql`${users.totalBunzEarned} - ${bunzCost}` })
-      .where(and(eq(users.id, user.id), sql`${users.totalBunzEarned} >= ${bunzCost}`))
-      .returning();
+    // Atomic SQL transaction with pessimistic row lock and authoritative Ledger entry
+    const reservation = await db.transaction(async (tx) => {
+      const [lockedUser] = await tx
+        .select()
+        .from(users)
+        .where(eq(users.id, user.id))
+        .for('update');
 
-    if (!deducted) {
-      return NextResponse.json({ error: 'Insufficient Bunz' }, { status: 400 });
-    }
+      if (!lockedUser) {
+        throw new Error('USER_NOT_FOUND');
+      }
 
-    const [reservation] = await db.insert(reservations).values({
-      userId: user.id,
-      businessId,
-      title,
-      bunzCost,
-      status: 'PENDING',
-    }).returning();
+      const available = (lockedUser.totalBunzEarned ?? 0) - (lockedUser.totalBunzSpent ?? 0);
+      if (available < bunzCost) {
+        throw new Error('INSUFFICIENT_BUNZ');
+      }
+
+      // Record spending
+      await tx
+        .update(users)
+        .set({ totalBunzSpent: sql`COALESCE(${users.totalBunzSpent}, 0) + ${bunzCost}` })
+        .where(eq(users.id, lockedUser.id));
+
+      const [resRow] = await tx
+        .insert(reservations)
+        .values({
+          userId: user.id,
+          businessId,
+          title,
+          bunzCost,
+          status: 'PENDING',
+        })
+        .returning();
+
+      // Record authoritative Ledger entry
+      const idempotencyKey = `res_${resRow.id}_${Date.now()}`;
+      await recordLedgerTransaction(
+        {
+          branchId: business.id,
+          payerSubjectId: user.telegramId || user.id,
+          payeeSubjectId: business.id,
+          amount: bunzCost,
+          type: 'SPEND',
+          referenceId: resRow.id,
+          idempotencyKey,
+          metadata: { title, businessId },
+        },
+        tx
+      );
+
+      return resRow;
+    });
 
     return NextResponse.json({ success: true, reservation });
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.message === 'INSUFFICIENT_BUNZ') {
+      return NextResponse.json({ error: 'Saldo insuficiente de Bunz' }, { status: 400 });
+    }
     console.error('Reserve Error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: error?.message || 'Internal server error' }, { status: 500 });
   }
 }

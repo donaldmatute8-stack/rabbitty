@@ -6,6 +6,7 @@ import { processReferralAndNotifications } from '@/lib/referralLogic';
 import { awardHops, evaluateHatTricks } from '@/lib/gamificationLogic';
 import { sendToOracle } from '@/lib/oracle-client';
 import { parseTelegramUser, validateTelegramInitData } from '@/lib/telegramAuth';
+import { recordLedgerTransaction } from '@/lib/ledgerHelper';
 import crypto from 'crypto';
 import { z } from 'zod';
 
@@ -108,26 +109,58 @@ export async function POST(req: NextRequest) {
     });
     const isNewBusiness = !previousTransaction;
 
-    // Insert transaction record
-    await db.insert(transactions).values({
-      userId: customer.id,
-      businessId: business.id,
-      fiatAmount,
-      bunzMinted: bunzReward,
-      status: "MINTED",
+    // Atomic SQL transaction with pessimistic row lock and authoritative Ledger entry
+    await db.transaction(async (tx) => {
+      // Row lock on customer
+      const [lockedCustomer] = await tx
+        .select()
+        .from(users)
+        .where(eq(users.id, customer.id))
+        .for('update');
+
+      if (!lockedCustomer) {
+        throw new Error('CUSTOMER_NOT_FOUND');
+      }
+
+      // Insert transaction record
+      const [appTx] = await tx
+        .insert(transactions)
+        .values({
+          userId: customer.id,
+          businessId: business.id,
+          fiatAmount,
+          bunzMinted: bunzReward,
+          status: "MINTED",
+        })
+        .returning();
+
+      // Update customer balance
+      await tx.update(users)
+        .set({ totalBunzEarned: sql`COALESCE(${users.totalBunzEarned}, 0) + ${bunzReward}` })
+        .where(eq(users.id, lockedCustomer.id));
+
+      // Deduct from business credit limit
+      if (business.creditLimit > 0) {
+        await tx.update(ownedBusinesses)
+          .set({ creditUsed: sql`${ownedBusinesses.creditUsed} + ${bunzReward}` })
+          .where(eq(ownedBusinesses.id, business.id));
+      }
+
+      // Record authoritative Ledger entry
+      const idempotencyKey = `mnt_${appTx.id}_${Date.now()}`;
+      await recordLedgerTransaction(
+        {
+          payerSubjectId: business.id,
+          payeeSubjectId: customer.telegramId || customer.id,
+          amount: bunzReward,
+          type: "EARN",
+          referenceId: appTx.id,
+          idempotencyKey,
+          metadata: { fiatAmount, businessId: business.id },
+        },
+        tx
+      );
     });
-
-    // Update customer balance atómicamente
-    await db.update(users)
-      .set({ totalBunzEarned: sql`COALESCE(${users.totalBunzEarned}, 0) + ${bunzReward}` })
-      .where(eq(users.id, customer.id));
-
-    // Deduct from business credit limit
-    if (business.creditLimit > 0) {
-      await db.update(ownedBusinesses)
-        .set({ creditUsed: sql`${ownedBusinesses.creditUsed} + ${bunzReward}` })
-        .where(eq(ownedBusinesses.id, business.id));
-    }
 
     // Trigger referral and notifications (EARN event)
     await processReferralAndNotifications(customer.id, 'EARN');

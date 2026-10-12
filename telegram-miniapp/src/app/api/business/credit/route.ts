@@ -3,6 +3,7 @@ import { db } from '@/db';
 import { users, ownedBusinesses, transactions } from '@/db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { parseTelegramUser, validateTelegramInitData } from '@/lib/telegramAuth';
+import { recordLedgerTransaction } from '@/lib/ledgerHelper';
 
 export async function POST(req: NextRequest) {
   try {
@@ -38,26 +39,56 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Business not found' }, { status: 404 });
     }
 
-    // Add Bunz atomically
-    const [credited] = await db
-      .update(users)
-      .set({ totalBunzEarned: sql`COALESCE(${users.totalBunzEarned}, 0) + ${bunzAmount}` })
-      .where(eq(users.id, user.id))
-      .returning();
+    // Atomic SQL transaction with row lock and authoritative Ledger entry
+    const result = await db.transaction(async (tx) => {
+      const [lockedUser] = await tx
+        .select()
+        .from(users)
+        .where(eq(users.id, user.id))
+        .for('update');
 
-    // Insert transaction representing the credit
-    const [tx] = await db.insert(transactions).values({
-      userId: user.id,
-      businessId,
-      fiatAmount: 0,
-      bunzMinted: bunzAmount,
-      status: 'MINTED',
-      errorMessage: title, // Storing reason here as it's the closest field for memos
-    }).returning();
+      if (!lockedUser) {
+        throw new Error('USER_NOT_FOUND');
+      }
 
-    return NextResponse.json({ success: true, transaction: tx, newBalance: credited.totalBunzEarned });
-  } catch (error) {
+      const [credited] = await tx
+        .update(users)
+        .set({ totalBunzEarned: sql`COALESCE(${users.totalBunzEarned}, 0) + ${bunzAmount}` })
+        .where(eq(users.id, lockedUser.id))
+        .returning();
+
+      const [appTx] = await tx
+        .insert(transactions)
+        .values({
+          userId: user.id,
+          businessId,
+          fiatAmount: 0,
+          bunzMinted: bunzAmount,
+          status: 'MINTED',
+          errorMessage: title,
+        })
+        .returning();
+
+      const idempotencyKey = `crd_${appTx.id}_${Date.now()}`;
+      await recordLedgerTransaction(
+        {
+          payerSubjectId: 'SYSTEM',
+          payeeSubjectId: user.telegramId || user.id,
+          amount: bunzAmount,
+          type: 'MINT',
+          referenceId: appTx.id,
+          idempotencyKey,
+          metadata: { title, businessId },
+        },
+        tx
+      );
+
+      return { tx: appTx, newBalance: credited.totalBunzEarned };
+    });
+
+    return NextResponse.json({ success: true, transaction: result.tx, newBalance: result.newBalance });
+  } catch (error: any) {
     console.error('Credit Error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: error?.message || 'Internal server error' }, { status: 500 });
   }
 }

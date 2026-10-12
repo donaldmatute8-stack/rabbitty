@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { users, pendingVaults, transactions, ownedBusinesses } from "@/db/schema";
 import { eq, and, gte, sql, or } from "drizzle-orm";
+import { recordLedgerTransaction } from "@/lib/ledgerHelper";
 import crypto from "crypto";
 
 export async function POST(request: Request) {
@@ -99,21 +100,49 @@ export async function POST(request: Request) {
         remainingMint -= payoff;
       }
 
-      // Atomic update using PostgreSQL SQL expressions to prevent race conditions
-      await db.update(users)
-        .set({ 
-          totalBunzEarned: sql`COALESCE(total_bunz_earned, 0) + ${remainingMint}`,
-          pendingDebtBunz: sql`GREATEST(0, COALESCE(pending_debt_bunz, 0) - ${payoff})`
-        })
-        .where(eq(users.id, existingUser.id));
+      // Atomic SQL transaction with pessimistic row lock and authoritative Ledger entry
+      await db.transaction(async (tx) => {
+        const [lockedUser] = await tx
+          .select()
+          .from(users)
+          .where(eq(users.id, existingUser.id))
+          .for('update');
 
-      await db.insert(transactions).values({
-        id: crypto.randomUUID(),
-        userId: existingUser.id,
-        businessId: businessId,
-        fiatAmount: amount_usd,
-        bunzMinted: bunzToMint,
-        status: 'MINTED',
+        if (!lockedUser) {
+          throw new Error('USER_NOT_FOUND');
+        }
+
+        await tx.update(users)
+          .set({ 
+            totalBunzEarned: sql`COALESCE(${users.totalBunzEarned}, 0) + ${remainingMint}`,
+            pendingDebtBunz: sql`GREATEST(0, COALESCE(${users.pendingDebtBunz}, 0) - ${payoff})`
+          })
+          .where(eq(users.id, lockedUser.id));
+
+        const txId = crypto.randomUUID();
+        await tx.insert(transactions).values({
+          id: txId,
+          userId: existingUser.id,
+          businessId: businessId,
+          fiatAmount: amount_usd,
+          bunzMinted: bunzToMint,
+          status: 'MINTED',
+        });
+
+        const idempotencyKey = `pos_rwd_${order_id || txId}_${Date.now()}`;
+        await recordLedgerTransaction(
+          {
+            branchId: businessId !== 'unknown' ? businessId : null,
+            payerSubjectId: businessId !== 'unknown' ? businessId : 'POS',
+            payeeSubjectId: existingUser.telegramId || existingUser.id,
+            amount: bunzToMint,
+            type: 'EARN',
+            referenceId: order_id || txId,
+            idempotencyKey,
+            metadata: { orderId: order_id, amountUsd: amount_usd },
+          },
+          tx
+        );
       });
 
       return NextResponse.json({ 
