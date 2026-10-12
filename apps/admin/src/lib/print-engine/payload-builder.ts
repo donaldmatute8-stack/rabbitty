@@ -222,7 +222,7 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
     }
   }
 
-  addText("🐰 POWERED BY RABBITTY OS\nrabbitty.me\n\n\n\n");
+  addText("[ RABBITTY OS ]\nrabbitty.me\n\n\n\n");
 
   // Flat all chunks into one Uint8Array
   const totalLength = chunks.reduce((acc, curr) => acc + curr.length, 0);
