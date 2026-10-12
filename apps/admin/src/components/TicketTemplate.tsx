@@ -39,7 +39,8 @@ export interface TicketData {
   cashGiven?: number;
   change?: number;
   currency?: string;
-  bunzCashbackRate?: number;
+  bunzCashbackRate?: number; // Kept for legacy compatibility
+  estimatedBunz?: number;
 }
 
 export function TicketTemplate({
@@ -59,8 +60,10 @@ export function TicketTemplate({
   // Si no se provee subtotal o tax explícito, calcular base estándar
   const calculatedSubtotal = data.subtotal ?? (data.total / (1 + taxRate));
   const calculatedTax = data.tax ?? (data.total - calculatedSubtotal);
-  const bunzRate = data.bunzCashbackRate ?? 20;
-  const estimatedBunz = Math.round(data.total * (bunzRate / 100));
+  
+  // Si no viene estimatedBunz explícito del backend, calcular usando bunzCashbackRate (o default 20%)
+  const fallbackCashbackRate = data.bunzCashbackRate ?? 20;
+  const estimatedBunz = data.estimatedBunz ?? Math.round((data.total || 0) * (fallbackCashbackRate / 100));
 
   const is58mm = paperWidth === "58mm";
 

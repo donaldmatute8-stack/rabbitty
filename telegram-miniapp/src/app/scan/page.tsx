@@ -16,7 +16,16 @@ export default function ScanPage() {
   const { address } = useWallet();
   const { user } = useAuth();
   
-  const qrValue = address || user?.id || user?.telegramId;
+  const qrValue = user?.id || user?.telegramId || address;
+  const API_SERVER_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+
+  const getAuthHeader = async () => {
+    try {
+      const mod = await import('@twa-dev/sdk');
+      if (mod.default?.initData) return `tma ${mod.default.initData}`;
+    } catch {}
+    return "Bearer TMA_TOKEN";
+  };
   const [hasCamera, setHasCamera] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -43,14 +52,45 @@ export default function ScanPage() {
       await html5QrCode.start(
         { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 250, height: 250 } },
-        (decodedText) => {
+        async (decodedText: string) => {
           import('@twa-dev/sdk').then((mod) => {
             mod.default.HapticFeedback.notificationOccurred('success');
           }).catch(()=>{});
-          setResult(decodedText);
+
+          // Extract intent ID and resolve it
+          let intentId = decodedText;
+          if (decodedText.includes('pay_pi_')) {
+            intentId = 'pi_' + decodedText.split('pay_pi_')[1];
+          } else if (decodedText.includes('pi_')) {
+            intentId = 'pi_' + decodedText.split('pi_')[1];
+          }
+
+          setScanning(false);
           if (scannerRef.current) {
             scannerRef.current.stop().catch(()=>{});
           }
+
+          // Resolve intent
+          const authHeader = await getAuthHeader();
+          const inputStr = encodeURIComponent(JSON.stringify({ "0": { intentId } }));
+          fetch(`${API_SERVER_URL}/payments.getIntent?batch=1&input=${inputStr}`, {
+            headers: { "Authorization": authHeader }
+          })
+          .then(res => res.json())
+          .then(data => {
+            if (data[0] && data[0].result && data[0].result.data) {
+              setResult(data[0].result.data); // Store the full intent
+            } else {
+              alert("Intención de pago no encontrada o inválida.");
+              setResult(null);
+              startScanning();
+            }
+          })
+          .catch(() => {
+            alert("Error al contactar el servidor.");
+            setResult(null);
+            startScanning();
+          });
         },
         () => {}
       );
@@ -69,9 +109,9 @@ export default function ScanPage() {
   };
 
   useEffect(() => {
-    if (activeTab === 'scan' && hasCamera && !showManualInput) startScanning();
+    if (activeTab === 'scan' && hasCamera && !showManualInput && !result) startScanning();
     else stopScanning();
-  }, [activeTab, hasCamera, showManualInput]);
+  }, [activeTab, hasCamera, showManualInput, result]);
 
   return (
     <div className="page-wrap bg-[#111111] text-white relative overflow-hidden">
@@ -168,26 +208,74 @@ export default function ScanPage() {
                   initial={{ opacity: 0, y: 80 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 80 }}
                   className="absolute bottom-32 left-4 right-4 bg-white rounded-[28px] p-6 z-20 shadow-[0_20px_60px_rgba(0,0,0,0.3)] border border-[#F0F0F0]"
                 >
-                  <p className="text-[#111] font-extrabold text-lg mb-[6px] flex items-center gap-2">
-                    <span className="w-[10px] h-[10px] rounded-full bg-[#10B981] inline-block" />
-                    ¡Código detectado!
+                  <p className="text-[#111] font-extrabold text-lg mb-[6px] flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <span className="w-[10px] h-[10px] rounded-full bg-[#10B981] inline-block" />
+                      Autorizar Pago
+                    </span>
+                    <span className="text-xl">${(result as any).amountMxn?.toFixed(2)} MXN</span>
                   </p>
-                  <p className="text-[#888] text-[13px] mb-5">{result}</p>
+                  
+                  <div className="bg-gray-100 rounded-xl p-3 mb-4">
+                    <p className="text-[#555] text-[13px]">
+                      <strong>Monto Bunz requerido:</strong> {(result as any).bunzAmount?.toFixed(2)} Bunz
+                    </p>
+                    <p className="text-[#555] text-[13px]">
+                      <strong>Establecimiento:</strong> {(result as any).tenantId}
+                    </p>
+                    <p className="text-[#555] text-[13px]">
+                      <strong>Estado:</strong> {(result as any).status}
+                    </p>
+                  </div>
+
                   <Button 
                     variant="primary" 
                     fullWidth 
-                    className="rounded-full border-0 font-extrabold"
-                    onClick={() => {
+                    className="rounded-full border-0 font-extrabold bg-[#E91E63] text-white"
+                    onClick={async () => {
+                      const intentObj = result as any;
+                      if (intentObj.status !== "PENDING_PAYMENT" && intentObj.status !== "CREATED") {
+                        alert(`El pago no puede ser procesado (estado: ${intentObj.status})`);
+                        return;
+                      }
+
                       import('@twa-dev/sdk').then((mod) => {
                         mod.default.HapticFeedback.notificationOccurred('success');
                       }).catch(()=>{});
-                      alert("Recompensa confirmada exitosamente");
-                      setResult(null);
-                      router.push('/');
+
+                      // Call approveIntent
+                      try {
+                        const authHeader = await getAuthHeader();
+                        const res = await fetch(`${API_SERVER_URL}/payments.approveIntent?batch=1`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json", "Authorization": authHeader },
+                          body: JSON.stringify({
+                            "0": { intentId: intentObj.id }
+                          })
+                        });
+                        
+                        if (!res.ok) {
+                          const errData = await res.json();
+                          throw new Error(errData[0]?.error?.message || "Error al aprobar pago");
+                        }
+                        
+                        alert("¡Pago aprobado y liquidado con éxito!");
+                        setResult(null);
+                        router.push('/');
+                      } catch (err: any) {
+                        alert(err.message);
+                      }
                     }}
                   >
-                    Confirmar recompensa
+                    Confirmar Pago (${(result as any).amountMxn?.toFixed(2)})
                   </Button>
+                  
+                  <button 
+                    onClick={() => { setResult(null); startScanning(); }}
+                    className="w-full mt-3 py-2 text-[#888] font-bold text-sm bg-transparent border-0 cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
                 </motion.div>
               )}
             </AnimatePresence>

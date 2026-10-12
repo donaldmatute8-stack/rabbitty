@@ -14,13 +14,11 @@
     "@rabbitty/database-core": "file:../packages/database-core",
     "@rabbitty/database-restaurant": "workspace:*",
     "@rabbitty/ui": "file:../packages/ui",
-    "@tonconnect/ui-react": "^2.4.4",
     "@twa-dev/sdk": "^8.0.2",
     "canvas-confetti": "^1.9.4",
     "clsx": "^2.1.1",
     "cobe": "^2.0.1",
     "drizzle-orm": "^0.45.2",
-    "ethers": "^6.16.0",
     "framer-motion": "^12.40.0",
     "html5-qrcode": "^2.3.8",
     "leaflet": "^1.9.4",
@@ -36,7 +34,6 @@
     "sonner": "^2.0.7",
     "swr": "^2.4.1",
     "tailwind-merge": "^3.6.0",
-    "thirdweb": "^5.120.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {

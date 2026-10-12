@@ -27,6 +27,11 @@ import {
   expenses,
   paymentIntents,
   cashDrops,
+  ledgerEntries,
+  distributionDestinations,
+  distributionRules,
+  distributionAllocations,
+  settlementOperations,
 } from "./index";
 
 export const restaurantsRelations = relations(restaurants, ({ many }) => ({
@@ -180,4 +185,43 @@ export const expensesRelations = relations(expenses, ({ one }) => ({
 export const cashDropsRelations = relations(cashDrops, ({ one }) => ({
   branch: one(branches, { fields: [cashDrops.branchId], references: [branches.id] }),
   staff: one(staff, { fields: [cashDrops.staffId], references: [staff.id] }),
+}));
+
+export const paymentIntentsRelations = relations(paymentIntents, ({ one, many }) => ({
+  order: one(orders, { fields: [paymentIntents.orderId], references: [orders.id] }),
+  branch: one(branches, { fields: [paymentIntents.merchantId], references: [branches.id] }),
+  allocations: many(distributionAllocations),
+}));
+
+export const ledgerEntriesRelations = relations(ledgerEntries, ({ one, many }) => ({
+  branch: one(branches, { fields: [ledgerEntries.branchId], references: [branches.id] }),
+  settlementOperations: many(settlementOperations),
+}));
+
+export const distributionDestinationsRelations = relations(distributionDestinations, ({ one, many }) => ({
+  branch: one(branches, { fields: [distributionDestinations.branchId], references: [branches.id] }),
+  rules: many(distributionRules),
+  allocations: many(distributionAllocations),
+  settlementOperations: many(settlementOperations),
+}));
+
+export const distributionRulesRelations = relations(distributionRules, ({ one, many }) => ({
+  branch: one(branches, { fields: [distributionRules.branchId], references: [branches.id] }),
+  destination: one(distributionDestinations, { fields: [distributionRules.destinationId], references: [distributionDestinations.id] }),
+  allocations: many(distributionAllocations),
+}));
+
+export const distributionAllocationsRelations = relations(distributionAllocations, ({ one, many }) => ({
+  paymentIntent: one(paymentIntents, { fields: [distributionAllocations.paymentIntentId], references: [paymentIntents.id] }),
+  order: one(orders, { fields: [distributionAllocations.orderId], references: [orders.id] }),
+  branch: one(branches, { fields: [distributionAllocations.branchId], references: [branches.id] }),
+  rule: one(distributionRules, { fields: [distributionAllocations.ruleId], references: [distributionRules.id] }),
+  destination: one(distributionDestinations, { fields: [distributionAllocations.destinationId], references: [distributionDestinations.id] }),
+  settlementOperations: many(settlementOperations),
+}));
+
+export const settlementOperationsRelations = relations(settlementOperations, ({ one }) => ({
+  allocation: one(distributionAllocations, { fields: [settlementOperations.allocationId], references: [distributionAllocations.id] }),
+  ledgerEntry: one(ledgerEntries, { fields: [settlementOperations.ledgerEntryId], references: [ledgerEntries.id] }),
+  destination: one(distributionDestinations, { fields: [settlementOperations.destinationId], references: [distributionDestinations.id] }),
 }));

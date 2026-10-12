@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
-import { TonConnectButton, useTonWallet, useTonConnectUI } from '@tonconnect/ui-react';
 import { ArrowUpRight, ArrowDownLeft, Copy, RefreshCw, X } from 'lucide-react';
 import { useWallet } from '@/contexts/WalletContext';
 import RabbittyCode from '@/components/ui/RabbittyCode';
@@ -18,8 +17,6 @@ interface Transaction {
 }
 
 export default function WalletPage() {
-  const wallet = useTonWallet();
-  const [tonConnectUI] = useTonConnectUI();
   const { balance, refreshBalance, address } = useWallet();
   const [history, setHistory] = useState<Transaction[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -57,8 +54,8 @@ export default function WalletPage() {
   };
 
   const handleCopy = () => {
-    if (wallet?.account.address) {
-      navigator.clipboard.writeText(wallet.account.address);
+    if (address) {
+      navigator.clipboard.writeText(address);
       alert('¡Dirección copiada!');
     }
   };
@@ -67,35 +64,8 @@ export default function WalletPage() {
     new Date(iso).toLocaleDateString('es-MX', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
   const handleSend = async () => {
-    if (!sendAddress || !sendAmount) {
-      alert('Ingresa una dirección y cantidad válida.');
-      return;
-    }
-    
-    import('@twa-dev/sdk').then((mod) => {
-      mod.default.HapticFeedback.impactOccurred('medium');
-    }).catch(()=>{});
-
-    try {
-      const nanoTon = Math.floor(parseFloat(sendAmount) * 1000000000).toString();
-      const transaction = {
-        validUntil: Math.floor(Date.now() / 1000) + 360,
-        messages: [
-          {
-            address: sendAddress,
-            amount: nanoTon,
-          }
-        ]
-      };
-      await tonConnectUI.sendTransaction(transaction);
-      alert('Transacción enviada a la red.');
-      setShowSend(false);
-      setSendAddress('');
-      setSendAmount('');
-    } catch (e) {
-      console.error(e);
-      alert('Transacción cancelada o fallida.');
-    }
+    alert('Función de envío en mantenimiento.');
+    setShowSend(false);
   };
 
   return (
@@ -119,9 +89,6 @@ export default function WalletPage() {
               </div>
               <span className="font-extrabold text-[11px] tracking-widest text-[rgba(255,255,255,0.85)]">RA WALLET</span>
             </div>
-            <div className="scale-90 origin-[right_center]">
-              <TonConnectButton className="my-ton-btn" />
-            </div>
           </div>
 
           {/* Balance */}
@@ -142,12 +109,12 @@ export default function WalletPage() {
           </div>
 
           {/* Address */}
-          {wallet ? (
+          {address ? (
             <div className="relative z-[1] bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.06)] rounded-[20px] p-4 flex items-center justify-between">
               <div className="overflow-hidden pr-4">
-                <p className="text-[rgba(255,255,255,0.4)] text-[9px] font-extrabold tracking-widest uppercase mb-1.5">Billetera Conectada (TON)</p>
+                <p className="text-[rgba(255,255,255,0.4)] text-[9px] font-extrabold tracking-widest uppercase mb-1.5">Billetera Conectada</p>
                 <p className="text-[rgba(255,255,255,0.85)] text-[13px] font-mono tracking-wide truncate">
-                  {wallet.account.address.substring(0, 8)}...{wallet.account.address.substring(wallet.account.address.length - 8)}
+                  {address.substring(0, 8)}...{address.substring(address.length - 8)}
                 </p>
               </div>
               <button onClick={handleCopy} className="p-3 bg-[rgba(255,255,255,0.08)] rounded-[14px] border border-[rgba(255,255,255,0.05)] cursor-pointer shrink-0">
@@ -156,7 +123,7 @@ export default function WalletPage() {
             </div>
           ) : (
             <div className="relative z-[1] bg-[rgba(233,30,99,0.1)] border border-[rgba(233,30,99,0.2)] rounded-[20px] p-4 text-[#F48FB1] text-xs leading-relaxed text-center font-medium">
-              Conecta tu billetera (Tonkeeper) arriba para transferir Bunz libremente por la red TON.
+              Tu cuenta está lista para transferir Bunz libremente.
             </div>
           )}
         </div>
@@ -165,9 +132,9 @@ export default function WalletPage() {
         <div className="flex justify-center gap-6">
           <button
             onClick={() => setShowReceive(true)}
-            disabled={!wallet}
+            disabled={!address}
             className="w-[140px] h-[140px] bg-white border border-[#F0F0F0] rounded-2xl p-4 flex flex-col items-center justify-center gap-4 shadow-[0_2px_12px_rgba(0,0,0,0.04)]"
-            style={{ cursor: wallet ? 'pointer' : 'not-allowed', opacity: wallet ? 1 : 0.5 }}
+            style={{ cursor: address ? 'pointer' : 'not-allowed', opacity: address ? 1 : 0.5 }}
           >
             <div className="w-12 h-12 rounded-full bg-[#EFF6FF] flex items-center justify-center">
               <ArrowDownLeft size={24} color={'#3B82F6'} strokeWidth={2.5} />
@@ -177,9 +144,9 @@ export default function WalletPage() {
 
           <button
             onClick={() => setShowSend(true)}
-            disabled={!wallet}
+            disabled={!address}
             className="w-[140px] h-[140px] bg-white border border-[#F0F0F0] rounded-2xl p-4 flex flex-col items-center justify-center gap-4 shadow-[0_2px_12px_rgba(0,0,0,0.04)]"
-            style={{ cursor: wallet ? 'pointer' : 'not-allowed', opacity: wallet ? 1 : 0.5 }}
+            style={{ cursor: address ? 'pointer' : 'not-allowed', opacity: address ? 1 : 0.5 }}
           >
             <div className="w-12 h-12 rounded-full bg-[#FFF0F5] flex items-center justify-center">
               <ArrowUpRight size={24} color={'#E91E63'} strokeWidth={2.5} />
@@ -249,11 +216,11 @@ export default function WalletPage() {
             </button>
             <h3 className="text-xl font-extrabold m-0 mb-4 text-center">Recibir (TON / Bunz)</h3>
             <div className="rounded-3xl p-4 text-center mb-5 flex justify-center bg-[#0C0618] border border-pink-500/30">
-              <RabbittyCode data={wallet?.account.address || address || 'rabbitty'} size={180} showCardFrame={false} />
+              <RabbittyCode data={address || 'rabbitty'} size={180} showCardFrame={false} />
             </div>
             <p className="text-[11px] font-extrabold text-[#AAA] uppercase mb-2 text-center">Tu Dirección TON</p>
             <div className="flex items-center justify-between bg-[#F0F0F0] p-3 rounded-xl">
-              <p className="text-xs font-mono m-0 truncate">{wallet?.account.address}</p>
+              <p className="text-xs font-mono m-0 truncate">{address}</p>
               <button onClick={handleCopy} className="bg-transparent border-0 cursor-pointer p-1">
                 <Copy size={16} color="#111" />
               </button>

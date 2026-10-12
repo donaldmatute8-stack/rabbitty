@@ -811,8 +811,10 @@ export const posRouter = router({
         await ctx.restaurantDb.update(dbSchema.paymentIntents).set({ status: "EXPIRED" })
           .where(eq(dbSchema.paymentIntents.id, intent.id));
         
-        await ctx.restaurantDb.update(orders).set({ status: "EXPIRED" })
-          .where(eq(orders.id, intent.orderId));
+        if (intent.orderId) {
+          await ctx.restaurantDb.update(orders).set({ status: "EXPIRED" })
+            .where(eq(orders.id, intent.orderId));
+        }
 
         return { status: "EXPIRED" };
       }

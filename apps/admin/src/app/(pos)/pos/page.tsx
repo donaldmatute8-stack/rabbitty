@@ -36,7 +36,7 @@ export default function PosPage() {
   const [btConnected, setBtConnected] = useState(false);
   const [btDeviceName, setBtDeviceName] = useState<string | null>(null);
   const [waPhone, setWaPhone] = useState("");
-  const [qrPaymentModal, setQrPaymentModal] = useState<{ intentId: string; amount: number; bunz: number; expiresAt: Date } | null>(null);
+  const [qrPaymentModal, setQrPaymentModal] = useState<{ intentId: string; amount: number; bunz: number; expiresAt: Date; orderId?: string } | null>(null);
 
   // Keep Screen Awake (WakeLock API) to prevent Bluetooth drop and keep POS active
   useEffect(() => {
@@ -167,24 +167,31 @@ export default function PosPage() {
     },
   });
 
+  const API_SERVER_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+
   const createPaymentIntentMutation = {
     mutateAsync: async (data: any) => {
-      // PHASE 3: Call the new API Server Domain directly
-      const response = await fetch("http://localhost:4000/payments.createIntent", {
+      // Authority: API Server Domain creates payment intent
+      const branchId = ticketContext?.branch?.id || "default_branch";
+      const response = await fetch(`${API_SERVER_URL}/payments.createIntent?batch=1`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": "Bearer DEV_TOKEN",
+          "x-tenant-id": branchId
+        },
         body: JSON.stringify({ 
-          // tRPC v10 expects { 0: { ... } } wrapper for body
           "0": {
-            amountMxn: data.totalAmount, // Assuming we pass total
-            tenantId: "restaurant_ABC",
-            idempotencyKey: `pos_${Date.now()}`
+            amountMxn: data.totalAmount,
+            tenantId: branchId,
+            orderId: data.orderId,
+            idempotencyKey: `pos_${Date.now()}_${Math.random().toString(36).substring(7)}`
           } 
         })
       });
       if (!response.ok) throw new Error("Error al generar código QR de pago");
       const resData = await response.json();
-      return resData[0].result.data; // Unpack tRPC response
+      return resData[0].result.data;
     },
     onError: (err: any) => {
       toast.error(err.message || "Error al generar código QR de pago");
@@ -193,7 +200,7 @@ export default function PosPage() {
 
   const [pollData, setPollData] = useState<any>(null);
 
-  // PHASE 3: Poll the new api-server for getIntent
+  // Poll the API server for payment resolution
   useEffect(() => {
     if (!qrPaymentModal) {
       setPollData(null);
@@ -201,9 +208,8 @@ export default function PosPage() {
     }
     const interval = setInterval(async () => {
       try {
-        // tRPC v10 query format: /trpc/router.procedure?input=...
         const inputStr = encodeURIComponent(JSON.stringify({ "0": { intentId: qrPaymentModal.intentId } }));
-        const res = await fetch(`http://localhost:4000/payments.getIntent?batch=1&input=${inputStr}`, {
+        const res = await fetch(`${API_SERVER_URL}/payments.getIntent?batch=1&input=${inputStr}`, {
           headers: { "Authorization": "Bearer DEV_TOKEN" }
         });
         if (res.ok) {
@@ -216,10 +222,20 @@ export default function PosPage() {
       }
     }, 2000);
     return () => clearInterval(interval);
-  }, [qrPaymentModal]);
+  }, [qrPaymentModal, API_SERVER_URL]);
 
   useEffect(() => {
     if (pollData?.status === "SETTLED" && qrPaymentModal) {
+      // Financial Integrity: Cross-verify that settled intent matches active order total
+      if (
+        (pollData.amountMxn && Math.abs(pollData.amountMxn - qrPaymentModal.amount) > 0.01) ||
+        (pollData.orderId && qrPaymentModal.orderId && pollData.orderId !== qrPaymentModal.orderId)
+      ) {
+        toast.error("El pago recibido no corresponde a la orden actual.");
+        setQrPaymentModal(null);
+        return;
+      }
+
       toast.success("¡Pago con Bunz verificado exitosamente!");
       const realOrderNumber = qrPaymentModal.intentId.slice(-4).toUpperCase();
       finalizeCheckout(realOrderNumber, "QR BUNZ");
@@ -355,6 +371,7 @@ export default function PosPage() {
         const result = await createPaymentIntentMutation.mutateAsync({
           tableId: selectedTableId || undefined,
           orderType: mappedOrderType,
+          totalAmount: total,
           items: cart.map((i) => ({
             menuItemId: i.menuItemId,
             quantity: i.quantity,
@@ -362,7 +379,7 @@ export default function PosPage() {
           })),
         });
         setQrPaymentModal({
-          intentId: result.paymentIntentId,
+          intentId: result.id || result.paymentIntentId,
           amount: total,
           bunz: result.bunzAmount,
           expiresAt: new Date(result.expiresAt)
@@ -1254,7 +1271,7 @@ export default function PosPage() {
             </div>
             
             <div className="bg-white p-4 rounded-2xl shadow-[0_0_40px_rgba(168,85,247,0.3)] border-4 border-purple-500 relative">
-              {pollData?.status === "PAYMENT_VERIFIED" ? (
+              {pollData?.status === "PAYMENT_VERIFIED" || pollData?.status === "SETTLED" ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm rounded-xl">
                   <CheckCircle2 className="w-16 h-16 text-emerald-500 mb-2" />
                   <span className="text-emerald-600 font-bold">¡Pago Verificado!</span>
@@ -1284,7 +1301,7 @@ export default function PosPage() {
                 variant="secondary" 
                 className="flex-1" 
                 onClick={() => setQrPaymentModal(null)}
-                disabled={pollData?.status === "PAYMENT_VERIFIED"}
+                disabled={pollData?.status === "PAYMENT_VERIFIED" || pollData?.status === "SETTLED"}
               >
                 Cancelar
               </Button>

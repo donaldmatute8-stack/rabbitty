@@ -6,18 +6,28 @@ import { AnonymousPrincipal, type Principal } from "./principal";
 export async function parseAuthHeader(authHeader?: string | null): Promise<Principal> {
   if (!authHeader) return AnonymousPrincipal;
 
-  if (authHeader.startsWith("Bearer ")) {
-    const principal = await authenticateBusiness(authHeader);
+  if (authHeader.startsWith("device_")) {
+    const principal = await authenticateDevice(authHeader);
     if (principal) return principal;
   }
 
-  if (authHeader.startsWith("tma ")) {
+  if (authHeader.startsWith("tma ") || authHeader.startsWith("Bearer TMA_TOKEN")) {
     const principal = await authenticateTelegram(authHeader);
     if (principal) return principal;
   }
 
-  if (authHeader.startsWith("device_")) {
-    const principal = await authenticateDevice(authHeader);
+  if (authHeader.startsWith("Bearer ")) {
+    const raw = authHeader.slice(7).trim();
+    if (raw.startsWith("device_")) {
+      const devPrincipal = await authenticateDevice(raw);
+      if (devPrincipal) return devPrincipal;
+    }
+
+    // Check if telegram initData was sent as Bearer
+    const tmaPrincipal = await authenticateTelegram(authHeader);
+    if (tmaPrincipal) return tmaPrincipal;
+
+    const principal = await authenticateBusiness(authHeader);
     if (principal) return principal;
   }
 
@@ -25,21 +35,23 @@ export async function parseAuthHeader(authHeader?: string | null): Promise<Princ
 }
 
 export async function resolveTenant(principal: Principal, requestedTenantId?: string | null): Promise<Principal> {
-  // If no specific tenant requested and principal already has one bound (e.g., Device), keep it.
   if (!requestedTenantId) return principal;
 
-  // TODO: In a real implementation, query DB to check if principal.subjectId 
-  // is a member of requestedTenantId and has capabilities within it.
+  // Simulated DB Membership check
+  // const membership = await db.membership.findFirst({ where: { userId: principal.subjectId, tenantId: requestedTenantId } });
   
-  // For the skeleton, we allow the request if the user is a MANAGER
-  if (principal.roles.includes("MANAGER") || principal.roles.includes("ADMIN")) {
-    return {
-      ...principal,
-      tenantId: requestedTenantId,
-    };
+  // For the skeleton, we allow the request if the user is a MANAGER or ADMIN globally
+  const hasAccess = principal.roles.includes("MANAGER") || principal.roles.includes("ADMIN");
+
+  if (!hasAccess) {
+    throw new Error("TENANT_ACCESS_DENIED");
   }
 
-  // If unauthorized for the requested tenant, we strip the tenant context.
-  // The actual router/procedure will throw a 403 when it requires a tenantId.
-  return principal;
+  return {
+    ...principal,
+    tenantId: requestedTenantId,
+    // In the future, tenant-scoped roles and capabilities would be mapped here
+    // roles: membership.roles,
+    // capabilities: membership.capabilities
+  };
 }

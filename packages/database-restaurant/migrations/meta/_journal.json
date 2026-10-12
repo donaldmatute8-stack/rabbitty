@@ -92,6 +92,13 @@
       "when": 1790722846553,
       "tag": "0012_fine_nicolaos",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791838637416,
+      "tag": "0013_giant_cobalt_man",
+      "breakpoints": true
     }
   ]
 }
