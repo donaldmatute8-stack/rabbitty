@@ -8,12 +8,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { TicketTemplate, TicketData } from "../../../components/TicketTemplate";
 import { 
-  connectBluetoothPrinter, 
-  isBluetoothConnected, 
-  disconnectBluetoothPrinter,
-  sendEscPosToBluetooth,
+  printEngine,
   generateEscPosTicketPayload
-} from "../../../lib/web-bluetooth";
+} from "../../../lib/print-engine";
 
 // Placeholder for missing images
 const PLACEHOLDER_IMG = "https://images.unsplash.com/photo-1544148103-0773bf10d330?q=80&w=1000&auto=format&fit=crop";
@@ -67,14 +64,14 @@ export default function PosPage() {
         wakeLock.release().catch(() => {});
       }
       // ONLY disconnect on full component unmount, not on re-renders
-      disconnectBluetoothPrinter();
+      printEngine.disconnect();
     };
   }, []); // <-- Empty array is CRITICAL so it doesn't run cleanup when btConnected changes
 
   const handleConnectBluetooth = async () => {
     try {
       toast.info("Buscando impresora Bluetooth POS-58 / MTP...");
-      const result = await connectBluetoothPrinter();
+      const result = await printEngine.connect();
       if (result.success) {
         setBtConnected(true);
         setBtDeviceName(result.deviceName);
@@ -88,7 +85,7 @@ export default function PosPage() {
   };
 
   const handleDisconnectBluetooth = async () => {
-    await disconnectBluetoothPrinter();
+    await printEngine.disconnect();
     setBtConnected(false);
     setBtDeviceName(null);
     toast.info("Impresora Bluetooth desconectada");
@@ -106,7 +103,7 @@ export default function PosPage() {
   const createCashDropMutation = trpc.cashDrops.createDrop.useMutation({
     onSuccess: async (drop) => {
       toast.success("Retiro de efectivo registrado con éxito");
-      if (btConnected && isBluetoothConnected()) {
+      if (btConnected && printEngine.isConnected()) {
         try {
           toast.info("Imprimiendo comprobante de retiro...");
           const payload = await generateEscPosTicketPayload({
@@ -115,7 +112,7 @@ export default function PosPage() {
             notes: drop.notes,
             ...ticketContext
           }, true);
-          await sendEscPosToBluetooth(payload);
+          await printEngine.print(payload);
           toast.success("¡Ticket impreso!");
         } catch (e: any) {
           toast.error("Error al imprimir Bluetooth");
@@ -334,11 +331,11 @@ export default function PosPage() {
     setReceiptModal(true);
 
     // Auto-print Bluetooth if connected
-    if (btConnected && isBluetoothConnected()) {
+    if (btConnected && printEngine.isConnected()) {
       try {
         toast.info("Imprimiendo ticket vía Bluetooth...");
         const payload = await generateEscPosTicketPayload(ticket, true);
-        await sendEscPosToBluetooth(payload);
+        await printEngine.print(payload);
         toast.success("¡Ticket impreso correctamente!");
       } catch (e: any) {
         toast.error("Error al imprimir Bluetooth: " + (e.message || ""));
