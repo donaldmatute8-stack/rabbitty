@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { users, pendingVaults, transactions, ownedBusinesses } from "@/db/schema";
 import { eq, and, gte, sql, or } from "drizzle-orm";
-import { recordLedgerTransaction } from "@/lib/ledgerHelper";
+import { recordLedgerTransaction, findLedgerEntry } from "@/lib/ledgerHelper";
 import crypto from "crypto";
 
 export async function POST(request: Request) {
@@ -22,6 +22,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing phone or amount_usd" }, { status: 400 });
     }
 
+    const idempotencyKey = `pos_rwd_${body.idempotency_key || body.idempotencyKey || order_id || crypto.randomUUID()}`;
+
     let rewardRate = 0.20;
     if (business_id) {
       const [business] = await db.select({ rewardPercentage: ownedBusinesses.rewardPercentage })
@@ -38,9 +40,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "Amount too low to generate Bunz" }, { status: 200 });
     }
 
+    // Replay guard: never double-reserve inventory or double-queue a vault on retry.
+    const replay = await findLedgerEntry(idempotencyKey);
+    if (replay) {
+      return NextResponse.json({ success: true, message: 'Reward already processed', bunz: replay.amount });
+    }
+    if (order_id) {
+      const [queued] = await db.select({ id: pendingVaults.id }).from(pendingVaults).where(eq(pendingVaults.orderId, order_id)).limit(1);
+      if (queued) {
+        return NextResponse.json({ success: true, message: 'Reward already queued' });
+      }
+    }
+
     // 2. Fetch Business Inventory (atomic update)
     let hasEnoughInventory = true;
-    let businessId = business_id || "unknown";
+    const businessId = business_id || "unknown";
     if (business_id) {
       const result = await db.update(ownedBusinesses)
         .set({ bunzBalance: sql`bunz_balance - ${bunzToMint}` })
@@ -71,6 +85,12 @@ export async function POST(request: Request) {
 
     if (!hasEnoughInventory) {
       // Business is out of Bunz, queue it as WAITING_BUSINESS_RECHARGE for BOTH existing and new users
+      if (order_id) {
+        const [existingVault] = await db.select().from(pendingVaults).where(eq(pendingVaults.orderId, order_id)).limit(1);
+        if (existingVault) {
+          return NextResponse.json({ success: true, message: 'Reward already queued', bunz: existingVault.bunzAmount, status: existingVault.status });
+        }
+      }
       await db.insert(pendingVaults).values({
         id: crypto.randomUUID(),
         phoneNumber: phone,
@@ -112,6 +132,11 @@ export async function POST(request: Request) {
           throw new Error('USER_NOT_FOUND');
         }
 
+        const prior = await findLedgerEntry(idempotencyKey, tx);
+        if (prior) {
+          return;
+        }
+
         await tx.update(users)
           .set({ 
             totalBunzEarned: sql`COALESCE(${users.totalBunzEarned}, 0) + ${remainingMint}`,
@@ -129,7 +154,6 @@ export async function POST(request: Request) {
           status: 'MINTED',
         });
 
-        const idempotencyKey = `pos_rwd_${order_id || txId}_${Date.now()}`;
         await recordLedgerTransaction(
           {
             branchId: businessId !== 'unknown' ? businessId : null,
@@ -154,6 +178,12 @@ export async function POST(request: Request) {
 
     } else {
       // 4b. New User: Create Temporary Vault
+      if (order_id) {
+        const [existingVault] = await db.select().from(pendingVaults).where(eq(pendingVaults.orderId, order_id)).limit(1);
+        if (existingVault) {
+          return NextResponse.json({ success: true, message: 'Bunz already saved to temporary vault', bunz: existingVault.bunzAmount, expiresAt: existingVault.expiresAt });
+        }
+      }
       await db.insert(pendingVaults).values({
         id: crypto.randomUUID(),
         phoneNumber: phone,

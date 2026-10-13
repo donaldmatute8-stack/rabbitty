@@ -2,18 +2,46 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { users, ownedBusinesses, reservations } from '@/db/schema';
 import { eq, sql } from 'drizzle-orm';
-import { recordLedgerTransaction } from '@/lib/ledgerHelper';
+import { recordLedgerTransaction, findLedgerEntry } from '@/lib/ledgerHelper';
+import { parseTelegramUser, validateTelegramInitData } from '@/lib/telegramAuth';
+import crypto from 'crypto';
 
 export async function POST(req: NextRequest) {
   try {
-    const { telegramId, businessId, title, bunzCost } = await req.json();
+    const { telegramId, businessId, title, bunzCost, initData, idempotencyKey: clientKey } = await req.json();
 
-    if (!telegramId || !businessId || !title || bunzCost === undefined || bunzCost <= 0) {
+    if ((!initData && !telegramId) || !businessId || !title || bunzCost === undefined || bunzCost <= 0) {
       return NextResponse.json({ error: 'Missing required fields or invalid amount' }, { status: 400 });
     }
 
+    const authHeader = req.headers.get('authorization');
+    const expectedSecret = process.env.RABBITTY_API_SECRET;
+    const serverAuthed = !!expectedSecret && authHeader === `Bearer ${expectedSecret}`;
+
+    let resolvedTelegramId: string | null = null;
+    if (serverAuthed) {
+      resolvedTelegramId = telegramId ? telegramId.toString() : null;
+    } else {
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      if (!initData) {
+        return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+      }
+      if (botToken && !validateTelegramInitData(initData, botToken)) {
+        return NextResponse.json({ error: 'Invalid Telegram authentication' }, { status: 401 });
+      }
+      const tUser = parseTelegramUser(initData);
+      if (!tUser?.id) {
+        return NextResponse.json({ error: 'Invalid user authentication' }, { status: 401 });
+      }
+      resolvedTelegramId = tUser.id.toString();
+    }
+
+    if (!resolvedTelegramId) {
+      return NextResponse.json({ error: 'Could not resolve user identity' }, { status: 401 });
+    }
+
     const user = await db.query.users.findFirst({
-      where: eq(users.telegramId, telegramId.toString()),
+      where: eq(users.telegramId, resolvedTelegramId),
     });
 
     if (!user) {
@@ -28,6 +56,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Business not found' }, { status: 404 });
     }
 
+    const idempotencyKey = `res_${clientKey || crypto.randomUUID()}`;
+
     // Atomic SQL transaction with pessimistic row lock and authoritative Ledger entry
     const reservation = await db.transaction(async (tx) => {
       const [lockedUser] = await tx
@@ -38,6 +68,11 @@ export async function POST(req: NextRequest) {
 
       if (!lockedUser) {
         throw new Error('USER_NOT_FOUND');
+      }
+
+      const prior = await findLedgerEntry(idempotencyKey, tx);
+      if (prior) {
+        return null;
       }
 
       const available = (lockedUser.totalBunzEarned ?? 0) - (lockedUser.totalBunzSpent ?? 0);
@@ -63,7 +98,6 @@ export async function POST(req: NextRequest) {
         .returning();
 
       // Record authoritative Ledger entry
-      const idempotencyKey = `res_${resRow.id}_${Date.now()}`;
       await recordLedgerTransaction(
         {
           branchId: business.id,
@@ -80,6 +114,10 @@ export async function POST(req: NextRequest) {
 
       return resRow;
     });
+
+    if (!reservation) {
+      return NextResponse.json({ success: true, message: 'Reserva ya procesada.' });
+    }
 
     return NextResponse.json({ success: true, reservation });
   } catch (error: any) {

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { users, transactions } from '@/db/schema';
 import { eq, or, and, gte, sql } from 'drizzle-orm';
-import { recordLedgerTransaction } from '@/lib/ledgerHelper';
+import { recordLedgerTransaction, findLedgerEntry } from '@/lib/ledgerHelper';
 import crypto from 'crypto';
 
 const DAILY_SPEND_CAP = parseInt(process.env.DAILY_SPEND_CAP || '500', 10);
@@ -38,17 +38,11 @@ export async function POST(request: Request) {
     }
 
     const bunzRequired = Math.ceil(amount_usd);
-    const availableBalance = Math.max(0, (user.totalBunzEarned ?? 0) - (user.totalBunzSpent ?? 0));
+    const preAvailable = Math.max(0, (user.totalBunzEarned ?? 0) - (user.totalBunzSpent ?? 0));
 
-    if (availableBalance < bunzRequired && !order_id) {
+    if (preAvailable < bunzRequired && !order_id) {
       return NextResponse.json({ error: 'Saldo insuficiente de Bunz' }, { status: 402 });
     }
-
-    let bunzToSpendNormally = Math.min(availableBalance, bunzRequired);
-    let deficit = bunzRequired - bunzToSpendNormally;
-
-    let newSpent = (user.totalBunzSpent ?? 0) + bunzToSpendNormally;
-    let newDebt = (user.pendingDebtBunz ?? 0) + deficit;
 
     // Daily spend cap check
     const today = new Date();
@@ -72,8 +66,11 @@ export async function POST(request: Request) {
        // Assuming pos always sends it. We will just allow it to honor the restaurant.
     }
 
+    // Stable idempotency key: prefer a client-supplied key, then the POS order id.
+    const idempotencyKey = `pos_chg_${body.idempotency_key || body.idempotencyKey || order_id || crypto.randomUUID()}`;
+
     // Update user balances atomically (spent + debt) and write to Ledger
-    await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const [lockedUser] = await tx
         .select()
         .from(users)
@@ -83,6 +80,21 @@ export async function POST(request: Request) {
       if (!lockedUser) {
         throw new Error('USER_NOT_FOUND');
       }
+
+      // Idempotent replay: a re-delivered request must not double-charge.
+      const prior = await findLedgerEntry(idempotencyKey, tx);
+      const availableBalance = Math.max(0, (lockedUser.totalBunzEarned ?? 0) - (lockedUser.totalBunzSpent ?? 0));
+      if (prior) {
+        return { balanceRemaining: availableBalance, idempotent: true };
+      }
+
+      // Authoritative balance is recomputed from the LOCKED row.
+      if (availableBalance < bunzRequired && !order_id) {
+        throw new Error('INSUFFICIENT_BUNZ');
+      }
+
+      const bunzToSpendNormally = Math.min(availableBalance, bunzRequired);
+      const deficit = bunzRequired - bunzToSpendNormally;
 
       await tx.update(users)
         .set({ 
@@ -102,7 +114,6 @@ export async function POST(request: Request) {
         txHash: `pos_${order_id}`,
       });
 
-      const idempotencyKey = `pos_chg_${order_id || txId}_${Date.now()}`;
       await recordLedgerTransaction(
         {
           branchId: business_id || null,
@@ -116,15 +127,20 @@ export async function POST(request: Request) {
         },
         tx
       );
+
+      return { balanceRemaining: availableBalance - bunzToSpendNormally, idempotent: false };
     });
 
     return NextResponse.json({ 
       success: true, 
       message: 'Pago procesado exitosamente via Bunz Wallet',
-      balance_remaining: availableBalance - bunzRequired
+      balance_remaining: result.balanceRemaining
     });
 
   } catch (error: any) {
+    if (error?.message === 'INSUFFICIENT_BUNZ') {
+      return NextResponse.json({ error: 'Saldo insuficiente de Bunz' }, { status: 402 });
+    }
     console.error('Error in /api/pos/charge:', error);
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }

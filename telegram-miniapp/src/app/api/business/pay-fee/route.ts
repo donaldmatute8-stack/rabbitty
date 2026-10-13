@@ -3,11 +3,11 @@ import { db } from '@/db';
 import { users, ownedBusinesses, systemSettings } from '@/db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { recordTreasuryEntry } from '@/lib/treasury';
-import { recordLedgerTransaction } from '@/lib/ledgerHelper';
+import { recordLedgerTransaction, findLedgerEntry } from '@/lib/ledgerHelper';
 
 export async function POST(req: Request) {
   try {
-    const { telegramId, businessId } = await req.json();
+    const { telegramId, businessId, idempotencyKey: clientKey } = await req.json();
 
     if (!telegramId || !businessId) {
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
@@ -31,6 +31,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, message: 'No fee required' });
     }
 
+    const idempotencyKey = `fee_${clientKey || `${businessId}_${feeAmount}`}`;
+
     // Atomic SQL transaction with row lock and authoritative Ledger entry
     await db.transaction(async (tx) => {
       const [business] = await tx
@@ -41,6 +43,16 @@ export async function POST(req: Request) {
 
       if (!business) {
         throw new Error('BUSINESS_NOT_FOUND');
+      }
+
+      // Only the business owner or a platform admin may pay the business fee.
+      if (business.ownerId !== user.id && user.role !== 'ADMIN') {
+        throw new Error('NOT_AUTHORIZED');
+      }
+
+      const prior = await findLedgerEntry(idempotencyKey, tx);
+      if (prior) {
+        return;
       }
 
       if ((business.bunzBalance || 0) < feeAmount) {
@@ -54,7 +66,6 @@ export async function POST(req: Request) {
         .where(eq(ownedBusinesses.id, business.id));
 
       // Record in authoritative Ledger
-      const idempotencyKey = `fee_${business.id}_${Date.now()}`;
       await recordLedgerTransaction(
         {
           branchId: business.id,
@@ -69,14 +80,14 @@ export async function POST(req: Request) {
         tx
       );
 
-      // Record in treasury log
+      // Record in treasury log (inside the same transaction)
       await recordTreasuryEntry({
         concept: 'Cuota de registro',
         amount: feeAmount,
         type: 'fee',
         referenceId: business.id,
         notes: `Pago de cuota por ${business.name} (${business.package || 'Sin paquete'})`,
-      });
+      }, tx);
     });
 
     return NextResponse.json({
@@ -89,6 +100,9 @@ export async function POST(req: Request) {
       return NextResponse.json({
         error: 'Saldo insuficiente de Bunz para pagar la cuota.',
       }, { status: 400 });
+    }
+    if (error?.message === 'NOT_AUTHORIZED') {
+      return NextResponse.json({ error: 'No autorizado para pagar la cuota de este negocio.' }, { status: 403 });
     }
     console.error('Pay Fee Error:', error);
     return NextResponse.json({ error: error?.message || 'Internal server error' }, { status: 500 });

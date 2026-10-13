@@ -4,19 +4,49 @@ import { users, ownedBusinesses, reservations } from '@/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { processReferralAndNotifications } from '@/lib/referralLogic';
 import { awardHops, evaluateHatTricks } from '@/lib/gamificationLogic';
-import { recordLedgerTransaction } from '@/lib/ledgerHelper';
+import { recordLedgerTransaction, findLedgerEntry } from '@/lib/ledgerHelper';
+import { parseTelegramUser, validateTelegramInitData } from '@/lib/telegramAuth';
+import crypto from 'crypto';
 
 export async function POST(req: Request) {
   try {
-    const { telegramId, businessName, offerTitle, bunzCost } = await req.json();
+    const { telegramId, businessName, offerTitle, bunzCost, initData, idempotencyKey: clientKey } = await req.json();
 
-    if (!telegramId || !businessName || !offerTitle || bunzCost === undefined) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    if ((!initData && !telegramId) || !businessName || !offerTitle || bunzCost === undefined || typeof bunzCost !== 'number' || bunzCost <= 0) {
+      return NextResponse.json({ error: 'Missing required fields or invalid bunzCost' }, { status: 400 });
+    }
+
+    // Server-to-server callers authenticate with the shared Bearer secret and may
+    // pass telegramId directly. Browser callers must prove identity via Telegram initData.
+    const authHeader = req.headers.get('authorization');
+    const expectedSecret = process.env.RABBITTY_API_SECRET;
+    const serverAuthed = !!expectedSecret && authHeader === `Bearer ${expectedSecret}`;
+
+    let resolvedTelegramId: string | null = null;
+    if (serverAuthed) {
+      resolvedTelegramId = telegramId ? telegramId.toString() : null;
+    } else {
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      if (!initData) {
+        return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+      }
+      if (botToken && !validateTelegramInitData(initData, botToken)) {
+        return NextResponse.json({ error: 'Invalid Telegram authentication' }, { status: 401 });
+      }
+      const tUser = parseTelegramUser(initData);
+      if (!tUser?.id) {
+        return NextResponse.json({ error: 'Invalid user authentication' }, { status: 401 });
+      }
+      resolvedTelegramId = tUser.id.toString();
+    }
+
+    if (!resolvedTelegramId) {
+      return NextResponse.json({ error: 'Could not resolve user identity' }, { status: 401 });
     }
 
     // Find User
     const user = await db.query.users.findFirst({
-      where: eq(users.telegramId, telegramId)
+      where: eq(users.telegramId, resolvedTelegramId)
     });
 
     if (!user) {
@@ -25,7 +55,7 @@ export async function POST(req: Request) {
 
     // Find Business by name (since the mock API returns businessName)
     // In a fully normalized system, it would return businessId, but we will find by name for now.
-    let business = await db.query.ownedBusinesses.findFirst({
+    const business = await db.query.ownedBusinesses.findFirst({
       where: eq(ownedBusinesses.name, businessName)
     });
 
@@ -33,6 +63,8 @@ export async function POST(req: Request) {
     if (!business) {
       return NextResponse.json({ error: 'Business not found' }, { status: 404 });
     }
+
+    const idempotencyKey = `res_ord_${clientKey || crypto.randomUUID()}`;
 
     // Atomic SQL transaction with pessimistic row lock and authoritative Ledger entry
     const reservation = await db.transaction(async (tx) => {
@@ -44,6 +76,11 @@ export async function POST(req: Request) {
 
       if (!lockedUser) {
         throw new Error('USER_NOT_FOUND');
+      }
+
+      const prior = await findLedgerEntry(idempotencyKey, tx);
+      if (prior) {
+        return null;
       }
 
       const available = (lockedUser.totalBunzEarned ?? 0) - (lockedUser.totalBunzSpent ?? 0);
@@ -70,7 +107,6 @@ export async function POST(req: Request) {
         .returning();
 
       // Record authoritative Ledger entry
-      const idempotencyKey = `res_ord_${resRow.id}_${Date.now()}`;
       await recordLedgerTransaction(
         {
           branchId: business.id,
@@ -87,6 +123,10 @@ export async function POST(req: Request) {
 
       return resRow;
     });
+
+    if (!reservation) {
+      return NextResponse.json({ success: true, message: 'Reserva ya procesada.' });
+    }
 
     // Trigger referral and notifications (SPEND event)
     await processReferralAndNotifications(user.id, 'SPEND');

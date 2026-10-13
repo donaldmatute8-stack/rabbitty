@@ -6,7 +6,7 @@ import { processReferralAndNotifications } from '@/lib/referralLogic';
 import { awardHops, evaluateHatTricks } from '@/lib/gamificationLogic';
 import { sendToOracle } from '@/lib/oracle-client';
 import { parseTelegramUser, validateTelegramInitData } from '@/lib/telegramAuth';
-import { recordLedgerTransaction } from '@/lib/ledgerHelper';
+import { recordLedgerTransaction, findLedgerEntry } from '@/lib/ledgerHelper';
 import crypto from 'crypto';
 import { z } from 'zod';
 
@@ -19,13 +19,13 @@ const mintSchema = z.object({
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const result = mintSchema.safeParse(body);
+    const parsed = mintSchema.safeParse(body);
     
-    if (!result.success) {
-      return NextResponse.json({ error: "Datos de entrada inválidos.", details: result.error.format() }, { status: 400 });
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Datos de entrada inválidos.", details: parsed.error.format() }, { status: 400 });
     }
     
-    const { telegramId, businessId, fiatAmount } = result.data;
+    const { telegramId, businessId, fiatAmount } = parsed.data;
 
     const business = await db.query.ownedBusinesses.findFirst({
       where: eq(ownedBusinesses.id, businessId)
@@ -109,8 +109,13 @@ export async function POST(req: NextRequest) {
     });
     const isNewBusiness = !previousTransaction;
 
+    const clientKey = typeof body.idempotency_key === 'string'
+      ? body.idempotency_key
+      : (typeof body.idempotencyKey === 'string' ? body.idempotencyKey : undefined);
+    const idempotencyKey = `mnt_${clientKey || crypto.randomUUID()}`;
+
     // Atomic SQL transaction with pessimistic row lock and authoritative Ledger entry
-    await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       // Row lock on customer
       const [lockedCustomer] = await tx
         .select()
@@ -120,6 +125,12 @@ export async function POST(req: NextRequest) {
 
       if (!lockedCustomer) {
         throw new Error('CUSTOMER_NOT_FOUND');
+      }
+
+      // Idempotent replay: do not double-mint on a re-delivered request.
+      const prior = await findLedgerEntry(idempotencyKey, tx);
+      if (prior) {
+        return { idempotent: true };
       }
 
       // Insert transaction record
@@ -147,7 +158,6 @@ export async function POST(req: NextRequest) {
       }
 
       // Record authoritative Ledger entry
-      const idempotencyKey = `mnt_${appTx.id}_${Date.now()}`;
       await recordLedgerTransaction(
         {
           payerSubjectId: business.id,
@@ -160,7 +170,17 @@ export async function POST(req: NextRequest) {
         },
         tx
       );
+
+      return { idempotent: false };
     });
+
+    if (result.idempotent) {
+      return NextResponse.json({
+        success: true,
+        message: "Recompensa ya otorgada previamente.",
+        bunzRewarded: bunzReward
+      });
+    }
 
     // Trigger referral and notifications (EARN event)
     await processReferralAndNotifications(customer.id, 'EARN');

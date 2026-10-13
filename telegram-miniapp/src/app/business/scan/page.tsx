@@ -54,7 +54,8 @@ export default function BusinessScanPage() {
           telegramId: scannedAddress, // The customer's scanned ID/telegramId/wallet
           businessId: business.id,     // The merchant's business ID
           fiatAmount: Number(fiatAmount),
-          initData
+          initData,
+          idempotencyKey: crypto.randomUUID()
         })
       });
       

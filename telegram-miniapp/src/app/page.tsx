@@ -97,14 +97,24 @@ export default function FeedPage() {
     }
     setPurchasing(true);
     try {
+      let initData = '';
+      try {
+        const mod = await import('@twa-dev/sdk');
+        initData = mod.default?.initData || '';
+      } catch {}
+      if (!initData) {
+        showToast('No se pudo verificar tu identidad de Telegram.', 'error');
+        return;
+      }
       const res = await fetch('/api/reservations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          telegramId: user?.telegramId, 
+          initData,
           businessName, 
           offerTitle, 
-          bunzCost 
+          bunzCost,
+          idempotencyKey: crypto.randomUUID(),
         }),
       });
       const data = await res.json();

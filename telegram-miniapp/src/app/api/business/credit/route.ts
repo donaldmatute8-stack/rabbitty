@@ -3,11 +3,11 @@ import { db } from '@/db';
 import { users, ownedBusinesses, transactions } from '@/db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { parseTelegramUser, validateTelegramInitData } from '@/lib/telegramAuth';
-import { recordLedgerTransaction } from '@/lib/ledgerHelper';
+import { recordLedgerTransaction, findLedgerEntry } from '@/lib/ledgerHelper';
 
 export async function POST(req: NextRequest) {
   try {
-    const { initData, businessId, bunzAmount, title } = await req.json();
+    const { initData, businessId, bunzAmount, title, idempotencyKey: clientKey } = await req.json();
 
     if (!initData || !businessId || !title || bunzAmount === undefined || bunzAmount <= 0) {
       return NextResponse.json({ error: 'Missing required fields or invalid amount' }, { status: 400 });
@@ -39,6 +39,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Business not found' }, { status: 404 });
     }
 
+    // SYSTEM mints are a platform-admin primitive. No user (not even a business
+    // owner) may mint to their own wallet through this endpoint.
+    if (user.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'No autorizado para emitir crédito' }, { status: 403 });
+    }
+
+    const idempotencyKey = `crd_${clientKey || `${businessId}_${user.id}_${bunzAmount}`}`;
+
     // Atomic SQL transaction with row lock and authoritative Ledger entry
     const result = await db.transaction(async (tx) => {
       const [lockedUser] = await tx
@@ -49,6 +57,11 @@ export async function POST(req: NextRequest) {
 
       if (!lockedUser) {
         throw new Error('USER_NOT_FOUND');
+      }
+
+      const prior = await findLedgerEntry(idempotencyKey, tx);
+      if (prior) {
+        return { tx: null, newBalance: lockedUser.totalBunzEarned, idempotent: true };
       }
 
       const [credited] = await tx
@@ -69,7 +82,6 @@ export async function POST(req: NextRequest) {
         })
         .returning();
 
-      const idempotencyKey = `crd_${appTx.id}_${Date.now()}`;
       await recordLedgerTransaction(
         {
           payerSubjectId: 'SYSTEM',
