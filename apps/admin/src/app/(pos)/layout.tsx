@@ -2,6 +2,7 @@
 import React, { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { trpc } from "../../lib/trpc-client";
+import { initAppLifecycleHandlers } from "../../lib/print-engine";
 
 export default function PosLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -17,6 +18,11 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
       router.replace("/login");
     }
   }, [isLoading, error, profile, router]);
+
+  useEffect(() => {
+    const cleanup = initAppLifecycleHandlers();
+    return () => cleanup();
+  }, []);
 
   if (isLoading) return <div className="h-screen w-screen bg-black" />;
   if (!profile) return null;

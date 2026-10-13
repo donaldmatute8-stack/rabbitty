@@ -21,6 +21,24 @@ export interface PrinterDiagnostics {
   recommendation: string;
 }
 
+export interface QueuedTicket {
+  id: string;
+  title: string;
+  data: any;
+  is58mm: boolean;
+  timestamp: number;
+  status: "PENDING" | "PRINTING" | "FAILED";
+  attempts: number;
+  error?: string;
+}
+
+export interface PrintEngineState {
+  connected: boolean;
+  device: PrintDevice | null;
+  queueCount: number;
+  activeTransportId: string | null;
+}
+
 export interface PrintTransport {
   readonly id: string;
   readonly name: string;
@@ -30,7 +48,9 @@ export interface PrintTransport {
   isConnected(): boolean;
   getConnectedDevice(): PrintDevice | null;
 
-  connect(): Promise<{ success: boolean; device?: PrintDevice; error?: string }>;
+  connect(deviceId?: string): Promise<{ success: boolean; device?: PrintDevice; error?: string }>;
   disconnect(): Promise<void>;
   print(data: Uint8Array): Promise<boolean>;
+  onDisconnect?(cb: () => void): () => void;
+  listPairedDevices?(): Promise<PrintDevice[]>;
 }

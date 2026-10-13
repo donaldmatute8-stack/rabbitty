@@ -10,11 +10,15 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "cap:sync": "cap sync",
+    "cap:build": "next build && cap sync",
     "cap:ios": "cap open ios",
-    "cap:android": "cap open android"
+    "cap:android": "cap open android",
+    "cap:run:android": "cap run android",
+    "cap:run:ios": "cap run ios"
   },
   "dependencies": {
     "@capacitor-community/bluetooth-le": "^8.3.0",
+    "@capacitor/app": "^8.1.2",
     "@capacitor/core": "^8.5.3",
     "@rabbitty/api": "workspace:*",
     "@rabbitty/auth": "workspace:*",

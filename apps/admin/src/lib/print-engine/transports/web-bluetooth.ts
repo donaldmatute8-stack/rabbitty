@@ -15,6 +15,7 @@ export class WebBluetoothTransport implements PrintTransport {
 
   private activeDevice: any = null;
   private activeCharacteristic: any = null;
+  private disconnectListeners: Array<() => void> = [];
 
   isSupported(): boolean {
     if (typeof window === "undefined" || typeof navigator === "undefined") return false;
@@ -39,6 +40,23 @@ export class WebBluetoothTransport implements PrintTransport {
     };
   }
 
+  onDisconnect(cb: () => void): () => void {
+    this.disconnectListeners.push(cb);
+    return () => {
+      this.disconnectListeners = this.disconnectListeners.filter((l) => l !== cb);
+    };
+  }
+
+  private notifyDisconnect(): void {
+    for (const l of this.disconnectListeners) {
+      try {
+        l();
+      } catch (e) {
+        console.error("Error in WebBluetoothTransport disconnect listener:", e);
+      }
+    }
+  }
+
   async connect(): Promise<{ success: boolean; device?: PrintDevice; error?: string }> {
     if (!this.isSupported()) {
       const isSecure =
@@ -60,10 +78,30 @@ export class WebBluetoothTransport implements PrintTransport {
     }
 
     try {
-      const device = await (navigator as any).bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: BLE_PRINTER_SERVICES,
-      });
+      let device: any;
+      try {
+        // First try filtering for thermal printer services and common POS prefixes
+        device = await (navigator as any).bluetooth.requestDevice({
+          filters: [
+            ...BLE_PRINTER_SERVICES.map((s) => ({ services: [s] })),
+            { namePrefix: "POS" },
+            { namePrefix: "Printer" },
+            { namePrefix: "MTP" },
+            { namePrefix: "RPP" },
+            { namePrefix: "ZJ" },
+          ],
+          optionalServices: BLE_PRINTER_SERVICES,
+        });
+      } catch (filterErr: any) {
+        if (filterErr.name === "NotFoundError" || filterErr.name === "AbortError" || filterErr.message?.toLowerCase().includes("cancel")) {
+          throw filterErr;
+        }
+        // Fallback to accepting all devices if the printer advertises custom names without services in adv packet
+        device = await (navigator as any).bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: BLE_PRINTER_SERVICES,
+        });
+      }
 
       const server = await device.gatt.connect();
 
@@ -98,6 +136,7 @@ export class WebBluetoothTransport implements PrintTransport {
       device.addEventListener("gattserverdisconnected", () => {
         this.activeDevice = null;
         this.activeCharacteristic = null;
+        this.notifyDisconnect();
       });
 
       const printDevice: PrintDevice = {
