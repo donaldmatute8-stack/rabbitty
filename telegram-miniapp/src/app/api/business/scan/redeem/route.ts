@@ -3,11 +3,12 @@ import { db } from '@/db';
 import { users, ownedBusinesses, transactions } from '@/db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { parseTelegramUser, validateTelegramInitData } from '@/lib/telegramAuth';
-import { recordLedgerTransaction } from '@/lib/ledgerHelper';
+import { recordLedgerTransaction, findLedgerEntry } from '@/lib/ledgerHelper';
+import crypto from 'crypto';
 
 export async function POST(req: NextRequest) {
   try {
-    const { initData, businessId, bunzCost, title } = await req.json();
+    const { initData, businessId, bunzCost, title, idempotencyKey: clientKey } = await req.json();
 
     if (!initData || !businessId || !title || bunzCost === undefined || bunzCost <= 0) {
       return NextResponse.json({ error: 'Missing required fields or invalid amount' }, { status: 400 });
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Atomic SQL transaction with pessimistic row lock and authoritative Ledger entry
+    const idempotencyKey = `rdm_${clientKey || crypto.randomUUID()}`;
     const result = await db.transaction(async (tx) => {
       const [lockedUser] = await tx
         .select()
@@ -49,6 +51,12 @@ export async function POST(req: NextRequest) {
 
       if (!lockedUser) {
         throw new Error('USER_NOT_FOUND');
+      }
+
+      const prior = await findLedgerEntry(idempotencyKey, tx);
+      if (prior) {
+        const balance = (lockedUser.totalBunzEarned ?? 0) - (lockedUser.totalBunzSpent ?? 0);
+        return { tx: null, newBalance: balance, idempotent: true };
       }
 
       const available = (lockedUser.totalBunzEarned ?? 0) - (lockedUser.totalBunzSpent ?? 0);
@@ -77,7 +85,6 @@ export async function POST(req: NextRequest) {
         .returning();
 
       // Record authoritative Ledger entry
-      const idempotencyKey = `rdm_${appTx.id}_${Date.now()}`;
       await recordLedgerTransaction(
         {
           payerSubjectId: user.telegramId || user.id,
@@ -92,7 +99,7 @@ export async function POST(req: NextRequest) {
       );
 
       const newBalance = (updatedUser.totalBunzEarned ?? 0) - (updatedUser.totalBunzSpent ?? 0);
-      return { tx: appTx, newBalance };
+      return { tx: appTx, newBalance, idempotent: false };
     });
 
     return NextResponse.json({ success: true, transaction: result.tx, newBalance: result.newBalance });

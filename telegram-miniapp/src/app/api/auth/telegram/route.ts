@@ -71,52 +71,50 @@ export async function POST(req: Request) {
       const claimId = startParam.replace('claim_', ''); // UUID sin guiones o ticket orderNumber
       
       const { sql: drizzleSql, and } = require('drizzle-orm');
-      const { ownedBusinesses, pendingVaults, ledgerEntries } = require('@/db/schema');
-      const { recordLedgerTransaction } = require('@/lib/ledgerHelper');
+      const { ownedBusinesses, pendingVaults } = require('@/db/schema');
+      const { recordLedgerTransaction, findLedgerEntry } = require('@/lib/ledgerHelper');
       
       // 1. Buscar si corresponde a un reclamo de negocio afiliado
       const [business] = await db
-        .select({ id: ownedBusinesses.id })
+        .select({ id: ownedBusinesses.id, ownerId: ownedBusinesses.ownerId })
         .from(ownedBusinesses)
         .where(eq(drizzleSql`REPLACE(${ownedBusinesses.id}::text, '-', '')`, claimId))
         .limit(1);
 
       if (business) {
         const bId = business.id;
-        await db.execute(
-          drizzleSql`UPDATE "ownedBusinesses" SET "ownerId" = ${user.id} WHERE id = ${bId}`
-        );
-
-        if (user.role !== 'AFFILIATE' && user.role !== 'ADMIN') {
+        // Ownership transfer is a privileged operation. A public start-param must
+        // never reassign an arbitrary business; only an ADMIN may transfer ownership.
+        if (business.ownerId !== user.id) {
+          if (user.role !== 'ADMIN') {
+            return NextResponse.json({ error: 'No autorizado para reclamar este negocio' }, { status: 403 });
+          }
           await db.execute(
-            drizzleSql`UPDATE "users" SET "role" = 'AFFILIATE' WHERE id = ${user.id}`
+            drizzleSql`UPDATE "ownedBusinesses" SET "ownerId" = ${user.id} WHERE id = ${bId}`
           );
+          console.log(`[Claim Business] Negocio ${bId} transferido por admin ${user.id}`);
         }
-        console.log(`[Claim Business] Negocio ${bId} asignado al usuario ${user.id}`);
       } else {
         // 2. Reclamo de ticket térmico físico (QR del POS)
         const idempotencyKey = `claim_ticket_${claimId}`;
-        const [existingClaim] = await db
+
+        // Buscar si hay una bóveda temporal vinculada al número de orden
+        const [vault] = await db
           .select()
-          .from(ledgerEntries)
-          .where(eq(ledgerEntries.idempotencyKey, idempotencyKey))
+          .from(pendingVaults)
+          .where(
+            and(
+              eq(pendingVaults.orderId, claimId),
+              eq(pendingVaults.status, 'PENDING')
+            )
+          )
           .limit(1);
 
-        if (!existingClaim) {
-          // Buscar si hay una bóveda temporal vinculada al número de orden
-          const [vault] = await db
-            .select()
-            .from(pendingVaults)
-            .where(
-              and(
-                eq(pendingVaults.orderId, claimId),
-                eq(pendingVaults.status, 'PENDING')
-              )
-            )
-            .limit(1);
-
-          const bunzToAward = vault?.bunzAmount || 20; // Monto de bóveda o recompensa estándar
-          const branchId = vault?.businessId || null;
+        // A ticket only represents the funds in an existing vault. Without a matching
+        // PENDING vault there is nothing to award (no implicit free-mint fallback).
+        if (vault) {
+          const bunzToAward = vault.bunzAmount;
+          const branchId = vault.businessId || null;
 
           await db.transaction(async (tx: any) => {
             const [lockedUser] = await tx
@@ -125,33 +123,34 @@ export async function POST(req: Request) {
               .where(eq(users.id, user.id))
               .for('update');
 
-            if (lockedUser) {
-              await tx
-                .update(users)
-                .set({ totalBunzEarned: drizzleSql`COALESCE(${users.totalBunzEarned}, 0) + ${bunzToAward}` })
-                .where(eq(users.id, lockedUser.id));
+            if (!lockedUser) return;
 
-              if (vault) {
-                await tx
-                  .update(pendingVaults)
-                  .set({ status: 'CLAIMED' })
-                  .where(eq(pendingVaults.id, vault.id));
-              }
+            const prior = await findLedgerEntry(idempotencyKey, tx);
+            if (prior) return;
 
-              await recordLedgerTransaction(
-                {
-                  branchId,
-                  payerSubjectId: branchId || 'SYSTEM',
-                  payeeSubjectId: user.telegramId || user.id,
-                  amount: bunzToAward,
-                  type: 'EARN',
-                  referenceId: claimId,
-                  idempotencyKey,
-                  metadata: { orderNumber: claimId, reason: 'TICKET_QR_CLAIM' },
-                },
-                tx
-              );
-            }
+            await tx
+              .update(users)
+              .set({ totalBunzEarned: drizzleSql`COALESCE(${users.totalBunzEarned}, 0) + ${bunzToAward}` })
+              .where(eq(users.id, lockedUser.id));
+
+            await tx
+              .update(pendingVaults)
+              .set({ status: 'CLAIMED' })
+              .where(eq(pendingVaults.id, vault.id));
+
+            await recordLedgerTransaction(
+              {
+                branchId,
+                payerSubjectId: branchId || 'SYSTEM',
+                payeeSubjectId: user.telegramId || user.id,
+                amount: bunzToAward,
+                type: 'EARN',
+                referenceId: claimId,
+                idempotencyKey,
+                metadata: { orderNumber: claimId, reason: 'TICKET_QR_CLAIM' },
+              },
+              tx
+            );
           });
         }
       }

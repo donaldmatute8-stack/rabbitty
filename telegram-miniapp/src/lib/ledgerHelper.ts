@@ -1,6 +1,8 @@
 import { db } from "@/db";
-import { users, ledgerEntries } from "@/db/schema";
+import { ledgerEntries } from "@/db/schema";
 import { eq } from "drizzle-orm";
+
+type Executor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export interface RecordTransactionParams {
   branchId?: string | null;
@@ -10,28 +12,32 @@ export interface RecordTransactionParams {
   type: "EARN" | "SPEND" | "TRANSFER" | "MINT" | "BURN" | "REFUND" | "ALLOCATION";
   referenceId?: string | null;
   idempotencyKey: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 /**
- * Records a transaction in the authoritative Ledger table (`ledger_entries`)
- * ensuring complete auditability and consistency across all operations.
+ * Looks up an existing ledger entry by its idempotency key.
+ * Used to short-circuit replays before mutating balances.
  */
-export async function recordLedgerTransaction(params: RecordTransactionParams, tx?: any) {
-  const executor = tx || db;
-
-  // 1. Idempotency check
+export async function findLedgerEntry(idempotencyKey: string, tx?: Executor) {
+  const executor = (tx || db) as typeof db;
   const [existing] = await executor
     .select()
     .from(ledgerEntries)
-    .where(eq(ledgerEntries.idempotencyKey, params.idempotencyKey))
+    .where(eq(ledgerEntries.idempotencyKey, idempotencyKey))
     .limit(1);
+  return existing ?? null;
+}
 
-  if (existing) {
-    return existing;
-  }
+/**
+ * Records a transaction in the authoritative Ledger table (`ledger_entries`).
+ * The insert is conflict-safe: a concurrent/replayed write with the same
+ * idempotency key never produces a duplicate row (enforced by the unique
+ * constraint on `idempotencyKey`); the existing entry is returned instead.
+ */
+export async function recordLedgerTransaction(params: RecordTransactionParams, tx?: Executor) {
+  const executor = (tx || db) as typeof db;
 
-  // 2. Insert into ledger_entries
   const [entry] = await executor
     .insert(ledgerEntries)
     .values({
@@ -45,7 +51,10 @@ export async function recordLedgerTransaction(params: RecordTransactionParams, t
       idempotencyKey: params.idempotencyKey,
       metadata: params.metadata || null,
     })
+    .onConflictDoNothing({ target: ledgerEntries.idempotencyKey })
     .returning();
 
-  return entry;
+  if (entry) return entry;
+
+  return findLedgerEntry(params.idempotencyKey, tx);
 }

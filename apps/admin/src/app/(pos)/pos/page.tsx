@@ -171,7 +171,8 @@ export default function PosPage() {
       const stored = localStorage.getItem("rabbitty_pos_token") || localStorage.getItem("rabbitty_auth_token");
       if (stored) return stored;
     }
-    return process.env.NEXT_PUBLIC_POS_API_SECRET || "DEV_TOKEN";
+    if (process.env.NODE_ENV !== "production") return "DEV_TOKEN";
+    throw new Error("No POS auth token available. Inicia sesión nuevamente.");
   };
 
   const createPaymentIntentMutation = {
@@ -191,7 +192,7 @@ export default function PosPage() {
             amountMxn: data.totalAmount,
             tenantId: branchId,
             orderId: data.orderId,
-            idempotencyKey: `pos_${Date.now()}_${Math.random().toString(36).substring(7)}`
+            idempotencyKey: data.orderId ? `pos_${data.orderId}` : `pos_${crypto.randomUUID()}`
           } 
         })
       });
