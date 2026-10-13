@@ -32,8 +32,30 @@ export default function PosPage() {
   const [paidTicketData, setPaidTicketData] = useState<TicketData | null>(null);
   const [btConnected, setBtConnected] = useState(false);
   const [btDeviceName, setBtDeviceName] = useState<string | null>(null);
+  const [queueCount, setQueueCount] = useState(0);
   const [waPhone, setWaPhone] = useState("");
   const [qrPaymentModal, setQrPaymentModal] = useState<{ intentId: string; amount: number; bunz: number; expiresAt: Date; orderId?: string } | null>(null);
+
+  // Subscribe to PrintEngine state (connections, auto-reconnects, queue changes)
+  useEffect(() => {
+    const unsubState = printEngine.onStateChange((state) => {
+      setBtConnected(state.connected);
+      setBtDeviceName(state.device?.name || null);
+      setQueueCount(state.queueCount);
+    });
+
+    const unsubQueue = printEngine.onQueueChange((q) => {
+      setQueueCount(q.length);
+    });
+
+    // Auto-reconnect to last printer on mount
+    printEngine.reconnect().catch(() => {});
+
+    return () => {
+      unsubState();
+      unsubQueue();
+    };
+  }, []);
 
   // Keep Screen Awake (WakeLock API) to prevent Bluetooth drop and keep POS active
   useEffect(() => {
@@ -63,8 +85,6 @@ export default function PosPage() {
       if (wakeLock !== null) {
         wakeLock.release().catch(() => {});
       }
-      // ONLY disconnect on full component unmount, not on re-renders
-      printEngine.disconnect();
     };
   }, []); // <-- Empty array is CRITICAL so it doesn't run cleanup when btConnected changes
 
@@ -73,8 +93,6 @@ export default function PosPage() {
       toast.info("Buscando impresora Bluetooth POS-58 / MTP...");
       const result = await printEngine.connect();
       if (result.success) {
-        setBtConnected(true);
-        setBtDeviceName(result.deviceName);
         toast.success(`🐰 ¡Impresora ${result.deviceName} vinculada con éxito!`);
       } else {
         toast.error(result.error || "No se pudo emparejar");
@@ -86,9 +104,22 @@ export default function PosPage() {
 
   const handleDisconnectBluetooth = async () => {
     await printEngine.disconnect();
-    setBtConnected(false);
-    setBtDeviceName(null);
     toast.info("Impresora Bluetooth desconectada");
+  };
+
+  const handleFlushQueue = async () => {
+    if (!printEngine.isConnected()) {
+      toast.error("Conecta una impresora para imprimir la cola pendiente.");
+      return;
+    }
+    toast.info("Imprimiendo tickets pendientes en cola...");
+    const { printed, failed } = await printEngine.flushQueue();
+    if (printed > 0) {
+      toast.success(`🐰 Se imprimieron ${printed} tickets exitosamente.`);
+    }
+    if (failed > 0) {
+      toast.warning(`${failed} tickets fallaron y continúan en cola.`);
+    }
   };
 
   const { data: categories } = trpc.pos.getCategories.useQuery(undefined, { retry: false });
@@ -103,20 +134,17 @@ export default function PosPage() {
   const createCashDropMutation = trpc.cashDrops.createDrop.useMutation({
     onSuccess: async (drop) => {
       toast.success("Retiro de efectivo registrado con éxito");
-      if (btConnected && printEngine.isConnected()) {
-        try {
-          toast.info("Imprimiendo comprobante de retiro...");
-          const payload = await generateEscPosTicketPayload({
-            isCashDrop: true,
-            amount: drop.amount,
-            notes: drop.notes,
-            ...ticketContext
-          }, true);
-          await printEngine.print(payload);
-          toast.success("¡Ticket impreso!");
-        } catch (e: any) {
-          toast.error("Error al imprimir Bluetooth");
-        }
+      const dropTicket = {
+        isCashDrop: true,
+        amount: drop.amount,
+        notes: drop.notes,
+        ...ticketContext,
+      };
+      const res = await printEngine.printTicket(dropTicket, true);
+      if (res.success) {
+        toast.success("¡Ticket de retiro impreso!");
+      } else if (res.queued) {
+        toast.info(res.error || "Comprobante guardado en cola de impresión.");
       }
       setCashDropAmount("");
       setCashDropNotes("");
@@ -341,16 +369,12 @@ export default function PosPage() {
     setPaidTicketData(ticket);
     setReceiptModal(true);
 
-    // Auto-print Bluetooth if connected
-    if (btConnected && printEngine.isConnected()) {
-      try {
-        toast.info("Imprimiendo ticket vía Bluetooth...");
-        const payload = await generateEscPosTicketPayload(ticket, true);
-        await printEngine.print(payload);
-        toast.success("¡Ticket impreso correctamente!");
-      } catch (e: any) {
-        toast.error("Error al imprimir Bluetooth: " + (e.message || ""));
-      }
+    // Resilient ticket printing (prints live if connected, or enqueues if disconnected / failed)
+    const printResult = await printEngine.printTicket(ticket, true);
+    if (printResult.success) {
+      toast.success("¡Ticket impreso correctamente!");
+    } else if (printResult.queued) {
+      toast.info(printResult.error || "Ticket guardado en cola para impresión automática.");
     }
 
     setCart([]);
@@ -507,6 +531,18 @@ export default function PosPage() {
             >
               <Bluetooth className="h-4 w-4" />
               <span className="hidden md:inline">Vincular Printer</span>
+            </button>
+          )}
+
+          {/* Pending Offline Tickets Queue Indicator */}
+          {queueCount > 0 && (
+            <button
+              onClick={handleFlushQueue}
+              className="flex items-center gap-1.5 rounded-xl bg-amber-500/20 px-3 py-2 border border-amber-500/40 text-amber-300 text-xs font-bold hover:bg-amber-500/30 transition-all cursor-pointer animate-pulse"
+              title={`${queueCount} ticket(s) en cola. Toca para imprimir ahora.`}
+            >
+              <span className="h-2 w-2 rounded-full bg-amber-400" />
+              <span>Cola ({queueCount})</span>
             </button>
           )}
         </div>

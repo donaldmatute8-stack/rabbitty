@@ -18,6 +18,7 @@ export class NativeBLETransport implements PrintTransport {
   private writeServiceUuid: string | null = null;
   private writeCharacteristicUuid: string | null = null;
   private isInitialized = false;
+  private disconnectListeners: Array<() => void> = [];
 
   isSupported(): boolean {
     if (typeof window === "undefined") return false;
@@ -33,6 +34,23 @@ export class NativeBLETransport implements PrintTransport {
     return this.connectedDevice;
   }
 
+  onDisconnect(cb: () => void): () => void {
+    this.disconnectListeners.push(cb);
+    return () => {
+      this.disconnectListeners = this.disconnectListeners.filter((l) => l !== cb);
+    };
+  }
+
+  private notifyDisconnect(): void {
+    for (const l of this.disconnectListeners) {
+      try {
+        l();
+      } catch (e) {
+        console.error("Error in NativeBLETransport disconnect listener:", e);
+      }
+    }
+  }
+
   private async ensureInitialized(): Promise<void> {
     if (!this.isInitialized) {
       await BleClient.initialize();
@@ -40,7 +58,7 @@ export class NativeBLETransport implements PrintTransport {
     }
   }
 
-  async connect(): Promise<{ success: boolean; device?: PrintDevice; error?: string }> {
+  async connect(targetDeviceId?: string): Promise<{ success: boolean; device?: PrintDevice; error?: string }> {
     if (!this.isSupported()) {
       return {
         success: false,
@@ -51,25 +69,37 @@ export class NativeBLETransport implements PrintTransport {
     try {
       await this.ensureInitialized();
 
-      // Prompt native BLE device selector dialog
-      const device = await BleClient.requestDevice({
-        services: BLE_PRINTER_SERVICES,
-        optionalServices: BLE_PRINTER_SERVICES,
-      });
+      let deviceId: string;
+      let deviceName: string;
 
-      if (!device || !device.deviceId) {
-        return { success: false, error: "No se seleccionó ningún dispositivo." };
+      if (targetDeviceId) {
+        // Direct reconnection to known device without opening picker modal
+        deviceId = targetDeviceId;
+        deviceName = "Rabbitty POS Printer";
+      } else {
+        // Prompt native BLE device selector dialog
+        const device = await BleClient.requestDevice({
+          services: BLE_PRINTER_SERVICES,
+          optionalServices: BLE_PRINTER_SERVICES,
+        });
+
+        if (!device || !device.deviceId) {
+          return { success: false, error: "No se seleccionó ningún dispositivo." };
+        }
+        deviceId = device.deviceId;
+        deviceName = device.name || "Rabbitty POS Printer";
       }
 
       // Connect to GATT server
-      await BleClient.connect(device.deviceId, () => {
+      await BleClient.connect(deviceId, () => {
         this.connectedDevice = null;
         this.writeServiceUuid = null;
         this.writeCharacteristicUuid = null;
+        this.notifyDisconnect();
       });
 
       // Discover services and find write characteristic
-      const services = await BleClient.getServices(device.deviceId);
+      const services = await BleClient.getServices(deviceId);
       let foundService: string | null = null;
       let foundChar: string | null = null;
 
@@ -85,7 +115,7 @@ export class NativeBLETransport implements PrintTransport {
       }
 
       if (!foundService || !foundChar) {
-        await BleClient.disconnect(device.deviceId).catch(() => {});
+        await BleClient.disconnect(deviceId).catch(() => {});
         return {
           success: false,
           error: "No se encontró canal de escritura ESC/POS compatible en este dispositivo BLE.",
@@ -95,8 +125,8 @@ export class NativeBLETransport implements PrintTransport {
       this.writeServiceUuid = foundService;
       this.writeCharacteristicUuid = foundChar;
       this.connectedDevice = {
-        id: device.deviceId,
-        name: device.name || "Rabbitty POS Printer",
+        id: deviceId,
+        name: deviceName,
         type: "BLE",
       };
 
@@ -124,6 +154,7 @@ export class NativeBLETransport implements PrintTransport {
       this.connectedDevice = null;
       this.writeServiceUuid = null;
       this.writeCharacteristicUuid = null;
+      this.notifyDisconnect();
     }
   }
 
