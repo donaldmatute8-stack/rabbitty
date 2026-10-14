@@ -38,7 +38,8 @@ export default function SignupPage() {
         setLastName(app.initDataUnsafe.user.last_name || '');
         setUsername(app.initDataUnsafe.user.username || '');
       } else {
-        setTelegramId('dev_user_123');
+        router.replace('/login');
+        return;
       }
 
       // Check Biometrics Support

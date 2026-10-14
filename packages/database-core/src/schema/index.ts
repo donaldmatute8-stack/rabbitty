@@ -1,7 +1,7 @@
 import { pgTable, text, integer, real, timestamp, boolean, uuid } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
-const id = () => uuid("id").defaultRandom().primaryKey();
+const id = () => uuid("id").defaultRandom().$defaultFn(() => crypto.randomUUID()).primaryKey();
 const fkId = (field: string) => uuid(field).notNull();
 const fkIdOpt = (field: string) => uuid(field);
 const timestamps = {
@@ -11,7 +11,7 @@ const timestamps = {
 
 export const users = pgTable("users", {
   id: id(),
-  telegramId: text("telegramId").notNull().unique(),
+  telegramId: text("telegramId").unique(),
   username: text("username"),
   phoneNumber: text("phoneNumber").unique(),
   firstName: text("firstName"),

@@ -14,12 +14,12 @@ export async function POST(req: NextRequest) {
     }
 
     const effectiveWallet = tonWalletAddress || smart_wallet_address || null;
-    const effectiveId = telegramId || `email_${crypto.createHash("md5").update(email).digest("hex")}`;
+    const effectiveTelegramId = telegramId || null;
 
-    // Check if user exists by telegramId, email, or wallet
+    // Check if user exists by telegramId or email
     let existingUser = null;
-    if (telegramId) {
-      existingUser = await db.query.users.findFirst({ where: eq(users.telegramId, telegramId) });
+    if (effectiveTelegramId) {
+      existingUser = await db.query.users.findFirst({ where: eq(users.telegramId, effectiveTelegramId) });
     } else if (email) {
       existingUser = await db.query.users.findFirst({ where: eq(users.email, email) });
     }
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     }
 
     const [user] = await db.insert(users).values({
-      telegramId: effectiveId,
+      telegramId: effectiveTelegramId,
       firstName: firstName || null,
       lastName: lastName || null,
       username: username || null,

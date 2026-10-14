@@ -11,6 +11,8 @@ import Button from '@/components/ui/Button';
 import { useWallet } from '@/contexts/WalletContext';
 import { useAuth } from '@/features/auth/AuthProvider';
 
+import { PlatformBridge } from '@/lib/platform';
+
 export default function ScanPage() {
   const router = useRouter();
   const { address } = useWallet();
@@ -21,9 +23,13 @@ export default function ScanPage() {
 
   const getAuthHeader = async () => {
     try {
-      const mod = await import('@twa-dev/sdk');
-      if (mod.default?.initData) return `tma ${mod.default.initData}`;
+      if (PlatformBridge.isTelegram()) {
+        const mod = await import('@twa-dev/sdk');
+        if (mod.default?.initData) return `tma ${mod.default.initData}`;
+      }
     } catch {}
+    const token = await PlatformBridge.getSessionToken();
+    if (token) return `Bearer ${token}`;
     return "Bearer TMA_TOKEN";
   };
   const [hasCamera, setHasCamera] = useState(false);

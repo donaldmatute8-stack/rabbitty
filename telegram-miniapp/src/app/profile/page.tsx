@@ -32,7 +32,7 @@ const DEFAULT_GRADIENT = '#E91E63';
 
 export default function ProfilePage() {
   const { address } = useWallet();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { showToast } = useToast();
   const [isScrolled, setIsScrolled] = useState(false);
   const [tapCount, setTapCount] = useState(0);
@@ -288,6 +288,14 @@ export default function ProfilePage() {
             <svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="M1 1l5 5-5 5" stroke="#CCC" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </Link>
         ))}
+
+        <button
+          onClick={logout}
+          className="w-full mt-6 flex items-center justify-center gap-2 py-3.5 rounded-[14px] bg-rose-500/10 text-rose-500 border border-rose-500/20 font-bold text-sm cursor-pointer active:scale-[0.98] transition-transform"
+        >
+          <span>🚪</span>
+          <span>Cerrar Sesión</span>
+        </button>
       </div>
     </ProfileSubpageLayout>
     {/* ADMIN PANEL OVERLAY */}
