@@ -181,3 +181,24 @@ export function getRabbitterLevelUpEmailTemplate(userName: string, levelName: st
   return wrapInRabbittyEmailLayout(`Multiplica tus Bunz x${multiplier} ⚡`, userName, content);
 }
 
+// Plantilla para Código de Verificación OTP (App Nativa y Web)
+export function getOtpEmailTemplate(code: string) {
+  const content = `
+    <div style="background: rgba(244,63,94,0.06); border-radius: 18px; padding: 24px; margin-bottom: 24px; border: 1px solid rgba(244,63,94,0.25); text-align: center;">
+      <p style="font-size: 15px; line-height: 1.6; color: #E2E8F0; margin: 0 0 16px 0;">
+        Usa el siguiente código de 6 dígitos para acceder de forma segura a tu cuenta de Rabbitty:
+      </p>
+      
+      <div style="display: inline-block; background: #0A0314; border: 2px solid #F43F5E; border-radius: 16px; padding: 16px 36px; margin: 12px 0 20px 0; box-shadow: 0 0 30px rgba(244,63,94,0.35);">
+        <span style="font-size: 36px; font-weight: 900; letter-spacing: 0.25em; color: #FFFFFF; font-family: monospace;">${code}</span>
+      </div>
+
+      <p style="font-size: 13px; color: #94A3B8; margin: 0;">
+        ⏱️ Este código expirará en <strong>10 minutos</strong>. Si no solicitaste este acceso, puedes ignorar este mensaje.
+      </p>
+    </div>
+  `;
+  return wrapInRabbittyEmailLayout('Tu Código de Acceso 🔑', 'Inicio de Sesión Seguro Rabbitty', content);
+}
+
+

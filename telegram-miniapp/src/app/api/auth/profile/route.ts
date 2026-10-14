@@ -1,21 +1,52 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { users, referrals } from "@/db/schema";
-import { and, eq, sql } from "drizzle-orm";
+import { users, referrals, webSessions } from "@/db/schema";
+import { and, eq, gt, sql } from "drizzle-orm";
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const telegramId = searchParams.get("telegramId");
     const wallet = searchParams.get("wallet");
+    const userId = searchParams.get("userId");
 
-    if (!telegramId && !wallet) {
+    // Check Authorization header for native/web session token
+    let sessionUserId: string | null = null;
+    const authHeader = req.headers.get("authorization");
+    const customHeader = req.headers.get("x-session-token");
+    let token: string | null = null;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      token = authHeader.replace("Bearer ", "").trim();
+    } else if (customHeader) {
+      token = customHeader.trim();
+    }
+
+    if (token) {
+      const session = await db.query.webSessions.findFirst({
+        where: and(
+          eq(webSessions.jwtToken, token),
+          gt(webSessions.expiresAt, new Date())
+        ),
+      });
+      if (session && session.userId) {
+        sessionUserId = session.userId;
+      }
+    }
+
+    const effectiveUserId = sessionUserId || userId;
+
+    if (!telegramId && !wallet && !effectiveUserId) {
       return NextResponse.json({ error: "Missing identifier" }, { status: 400 });
     }
 
     // Fetch profile and join with levels
     let profile = null;
-    if (telegramId) {
+    if (effectiveUserId) {
+      profile = await db.query.users.findFirst({
+        where: eq(users.id, effectiveUserId),
+        with: { level: true },
+      });
+    } else if (telegramId) {
       profile = await db.query.users.findFirst({
         where: eq(users.telegramId, telegramId),
         with: { level: true },

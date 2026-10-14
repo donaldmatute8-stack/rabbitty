@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { validateTelegramInitData, parseTelegramUser } from '@/lib/telegramAuth';
 import { db } from '@/db';
-import { users, referrals } from '@/db/schema';
+import { users, referrals, webSessions } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+import crypto from 'crypto';
 
 export async function POST(req: Request) {
   try {
@@ -156,9 +157,19 @@ export async function POST(req: Request) {
       }
     }
 
+    // Generate revocable session token for omnichannel compatibility
+    const sessionToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+    await db.insert(webSessions).values({
+      jwtToken: sessionToken,
+      userId: user.id,
+      expiresAt,
+    });
+
     return NextResponse.json({ 
       success: true,
       isNewUser,
+      sessionToken,
       user: {
         id: user.id,
         telegramId: user.telegramId,
