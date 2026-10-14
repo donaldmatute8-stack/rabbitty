@@ -217,7 +217,7 @@ export default function FeedPage() {
 
   return (
     <div
-      className="page-wrap pb-28"
+      className="page-wrap pb-16"
       style={{ background: isDark ? '#000000' : '#FAFAFA', color: isDark ? '#fff' : '#111', transition: 'background 0.5s' }}
     >
       {/* Sticky header */}
@@ -227,7 +227,7 @@ export default function FeedPage() {
         borderBottom: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid #F0F0F0',
         transition: 'all 0.3s',
       }}>
-        <div style={{ height: 'calc(var(--safe-top) + 50px)' }} />
+        <div style={{ height: 'max(var(--safe-top, 0px), 8px)' }} />
         {/* Nuevo Custom Header (Buenos días, Bunz) */}
         <div className="flex items-center justify-between px-5 pt-4 pb-2">
           <Link href="/profile" className="flex items-center gap-3 no-underline">
@@ -404,7 +404,7 @@ export default function FeedPage() {
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }}
               className="fixed left-0 right-0 bottom-0 z-10 overflow-hidden bg-black"
-              style={{ top: 'calc(var(--safe-top, 0px) + 120px)' }}
+              style={{ top: 'calc(max(var(--safe-top, 0px), 8px) + 104px)' }}
             >
               {/* Holographic Toggle */}
               <div className="absolute z-[2000] flex bg-white/5 backdrop-blur-[10px] rounded-full border border-white/10 p-1" style={{ top: 70, right: 72 }}>
@@ -459,7 +459,7 @@ export default function FeedPage() {
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
       `}} />
 
-      <BottomNav />
+      <BottomNav isDark={isDark} />
     </div>
   );
 }

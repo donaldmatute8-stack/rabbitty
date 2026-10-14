@@ -14,12 +14,20 @@ export default function ScanError({
       <p className="text-sm text-[#888] mb-6 max-w-xs leading-relaxed">
         No pudimos acceder a la cámara. Verifica los permisos o ingresa el código manualmente.
       </p>
-      <button
-        onClick={reset}
-        className="bg-[#E91E63] text-white font-bold text-sm px-8 py-3 rounded-full active:scale-95 transition-transform"
-      >
-        Reintentar
-      </button>
+      <div className="flex flex-col gap-3 w-full max-w-xs">
+        <button
+          onClick={reset}
+          className="bg-[#E91E63] text-white font-bold text-sm px-8 py-3 rounded-full active:scale-95 transition-transform border-0 cursor-pointer"
+        >
+          Reintentar
+        </button>
+        <button
+          onClick={() => { window.location.href = '/'; }}
+          className="bg-white/10 text-white font-bold text-sm px-8 py-3 rounded-full active:scale-95 transition-transform border-0 cursor-pointer"
+        >
+          Volver al Inicio
+        </button>
+      </div>
     </div>
   );
 }

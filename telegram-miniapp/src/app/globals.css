@@ -43,7 +43,7 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  padding-bottom: 80px; /* Space for bottom nav */
+  padding-bottom: 72px; /* Space for bottom nav */
 }
 
 
