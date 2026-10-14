@@ -66,5 +66,7 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Rabbitty requiere acceso a la cámara para escanear tu Rabbitty Code y tickets de recompensa Bunz.</string>
 </dict>
 </plist>
