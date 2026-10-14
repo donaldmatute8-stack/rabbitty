@@ -8,18 +8,19 @@
   --rabbitty-pink: #E91E63;
   --rabbitty-pink-light: #FF4081;
   --rabbitty-pink-dark: #C2185B;
+  --rabbitty-pink-muted: rgba(233, 30, 99, 0.4);
   
   /* Backgrounds */
-  --bg-primary: #FFFFFF;
-  --bg-elevated: #FFFFFF;
-  --bg-pressed: #F5F5F5;
-  --bg-subtle: #FAFAFA;
+  --bg-primary: #0A0A0A;
+  --bg-elevated: #161616;
+  --bg-pressed: #222222;
+  --bg-subtle: #111111;
   
   /* Text Colors */
-  --text-primary: #111111;
-  --text-secondary: #666666;
-  --text-muted: #8A8A8A;
-  --text-inverse: #FFFFFF;
+  --text-primary: #FFFFFF;
+  --text-secondary: #AAAAAA;
+  --text-muted: #777777;
+  --text-inverse: #111111;
   
   /* Semantic Colors */
   --success: #4CAF50;
@@ -28,8 +29,8 @@
   --info: #2196F3;
   
   /* Borders */
-  --border-subtle: #F0F0F0;
-  --border-default: #E0E0E0;
+  --border-subtle: #222222;
+  --border-default: #333333;
   --border-focus: #E91E63;
   
   /* Shadows (muy sutiles) */
