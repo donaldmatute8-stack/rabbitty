@@ -1,36 +1,54 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { verificationTokens } from '@/db/schema';
-import { eq, or } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
+import crypto from 'crypto';
 import { sendEmail, getOtpEmailTemplate } from '@/lib/email';
+import { rateLimit, getClientIp, hashOtp } from '@/lib/otp';
+
+const EMAIL_RESEND_COOLDOWN_MS = 60 * 1000;
+const IP_SEND_LIMIT = 10;
+const IP_SEND_WINDOW_MS = 15 * 60 * 1000;
+
+const OTP_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(req: NextRequest) {
   try {
+    const ipCheck = rateLimit(`otp_send_ip:${getClientIp(req)}`, IP_SEND_LIMIT, IP_SEND_WINDOW_MS);
+    if (!ipCheck.ok) {
+      return NextResponse.json(
+        { error: `Demasiadas solicitudes. Intenta de nuevo en ${ipCheck.retryAfterSec} segundos.` },
+        { status: 429, headers: { 'Retry-After': String(ipCheck.retryAfterSec) } }
+      );
+    }
+
     const body = await req.json();
     const email = body?.email?.toLowerCase()?.trim();
 
-    if (!email || !email.includes('@')) {
+    if (!email || !OTP_REGEX.test(email)) {
       return NextResponse.json({ error: 'Por favor ingresa un correo electrónico válido' }, { status: 400 });
     }
 
-    // Generate cryptographically sound 6-digit OTP
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    const emailCheck = rateLimit(`otp_send_email:${email}`, 1, EMAIL_RESEND_COOLDOWN_MS);
+    if (!emailCheck.ok) {
+      return NextResponse.json(
+        { error: `Ya se envió un código. Solicita uno nuevo en ${emailCheck.retryAfterSec} segundos.` },
+        { status: 429, headers: { 'Retry-After': String(emailCheck.retryAfterSec) } }
+      );
+    }
 
-    // Remove any existing tokens for this email identifier or duplicate code
-    await db.delete(verificationTokens).where(or(
-      eq(verificationTokens.identifier, email),
-      eq(verificationTokens.token, code)
-    ));
+    const code = crypto.randomInt(100000, 1000000).toString();
+    const tokenHash = hashOtp(email, code);
+    const expires = new Date(Date.now() + 10 * 60 * 1000);
 
-    // Store new token
+    await db.delete(verificationTokens).where(eq(verificationTokens.identifier, email));
+
     await db.insert(verificationTokens).values({
       identifier: email,
-      token: code,
+      token: tokenHash,
       expires,
     });
 
-    // Send email with custom Rabbitty layout
     const emailResult = await sendEmail({
       to: email,
       subject: `🔑 ${code} es tu código de acceso Rabbitty`,
