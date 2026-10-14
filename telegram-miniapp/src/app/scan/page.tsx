@@ -5,18 +5,18 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Keyboard, QrCode } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Html5Qrcode } from 'html5-qrcode';
+import { QRCodeSVG } from 'qrcode.react';
 import BottomNav from '@/components/BottomNav';
 import Button from '@/components/ui/Button';
 import { useWallet } from '@/contexts/WalletContext';
 import { useAuth } from '@/features/auth/AuthProvider';
-import RabbittyCode from '@/components/ui/RabbittyCode';
 
 export default function ScanPage() {
   const router = useRouter();
   const { address } = useWallet();
   const { user } = useAuth();
   
-  const qrValue = user?.id || user?.telegramId || address;
+  const qrValue = user?.id || user?.telegramId || address || 'rabbitty_guest';
   const API_SERVER_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
   const getAuthHeader = async () => {
@@ -32,8 +32,8 @@ export default function ScanPage() {
   const [manualCode, setManualCode] = useState('');
   const [showManualInput, setShowManualInput] = useState(false);
   const [activeTab, setActiveTab] = useState<'scan' | 'my-code'>('scan');
-  const [scanner, setScanner] = useState<Html5Qrcode | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const isTransitioningRef = useRef(false);
 
   useEffect(() => {
     import('@twa-dev/sdk').then((mod) => {
@@ -44,11 +44,33 @@ export default function ScanPage() {
     if (typeof navigator !== 'undefined' && navigator.mediaDevices) setHasCamera(true);
   }, []);
 
-  const startScanning = async () => {
+  const stopScanning = async () => {
+    const inst = scannerRef.current;
+    if (!inst || isTransitioningRef.current) return;
+    isTransitioningRef.current = true;
     try {
+      if (inst.isScanning) {
+        await inst.stop();
+      }
+    } catch {}
+    try {
+      inst.clear();
+    } catch {}
+    scannerRef.current = null;
+    setScanning(false);
+    isTransitioningRef.current = false;
+  };
+
+  const startScanning = async () => {
+    if (isTransitioningRef.current || scannerRef.current?.isScanning) return;
+    const el = document.getElementById("qr-reader");
+    if (!el) return;
+
+    try {
+      isTransitioningRef.current = true;
       const html5QrCode = new Html5Qrcode("qr-reader");
       scannerRef.current = html5QrCode;
-      setScanner(html5QrCode);
+      
       await html5QrCode.start(
         { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 250, height: 250 } },
@@ -66,9 +88,7 @@ export default function ScanPage() {
           }
 
           setScanning(false);
-          if (scannerRef.current) {
-            scannerRef.current.stop().catch(()=>{});
-          }
+          await stopScanning();
 
           // Resolve intent
           const authHeader = await getAuthHeader();
@@ -94,32 +114,36 @@ export default function ScanPage() {
         },
         () => {}
       );
-      setScanning(true); setShowManualInput(false);
-    } catch { setHasCamera(false); }
-  };
-
-  const stopScanning = () => {
-    if (scannerRef.current) {
-      scannerRef.current.stop().catch(()=>{});
-      scannerRef.current.clear();
-      scannerRef.current = null;
-      setScanner(null);
+      setScanning(true);
+      setShowManualInput(false);
+    } catch {
+      setHasCamera(false);
+    } finally {
+      isTransitioningRef.current = false;
     }
-    setScanning(false); setResult(null);
   };
 
   useEffect(() => {
-    if (activeTab === 'scan' && hasCamera && !showManualInput && !result) startScanning();
-    else stopScanning();
+    if (activeTab === 'scan' && hasCamera && !showManualInput && !result) {
+      startScanning();
+    } else {
+      stopScanning();
+    }
+    return () => {
+      stopScanning();
+    };
   }, [activeTab, hasCamera, showManualInput, result]);
 
   return (
-    <div className="page-wrap bg-[#111111] text-white relative overflow-hidden">
+    <div className="page-wrap bg-[#111111] text-white relative overflow-hidden min-h-dvh">
       {/* Background glow */}
       <div className="absolute inset-0 pointer-events-none z-0 bg-[radial-gradient(ellipse_at_50%_40%,rgba(233,30,99,0.06)_0%,transparent_65%)]" />
 
-      {/* Header */}
-      <div className="absolute inset-x-0 z-50 px-4 flex flex-col items-center gap-4" style={{ top: 'calc(max(var(--safe-top, 0px), 50px) + 56px)' }}>
+      {/* Header with natural top padding */}
+      <div 
+        className="absolute inset-x-0 z-50 px-4 flex flex-col items-center gap-4" 
+        style={{ top: 'calc(var(--safe-top, 0px) + 16px)' }}
+      >
         <div className="flex items-center justify-between w-full">
           <button
             onClick={() => router.back()}
@@ -150,22 +174,47 @@ export default function ScanPage() {
         </div>
       </div>
 
-      <div className="relative flex-1 w-full h-full pb-24 flex flex-col items-center justify-center z-10" style={{ paddingTop: 'calc(max(var(--safe-top, 0px), 50px) + 140px)' }}>
+      {/* Persistent qr-reader container in DOM to prevent lifecycle unmount crash */}
+      <div 
+        id="qr-reader" 
+        className={`absolute inset-0 w-full h-full object-cover [&>video]:object-cover [&>video]:w-full [&>video]:h-full ${activeTab === 'scan' && hasCamera && !showManualInput ? 'block' : 'hidden'}`} 
+      />
+
+      <div 
+        className="relative flex-1 w-full h-full pb-24 flex flex-col items-center justify-center z-10" 
+        style={{ paddingTop: 'calc(var(--safe-top, 0px) + 110px)' }}
+      >
 
         {/* My Code tab */}
         {activeTab === 'my-code' && (
-          <div className="flex flex-col items-center justify-center w-full px-4 py-2">
-            <div className="text-center mb-8">
-              <p className="text-white/70 text-xs leading-relaxed m-0 max-w-[260px]">Muestra este código en caja para acumular Bunz por tu consumo.</p>
+          <div className="flex flex-col items-center justify-center w-full px-4 py-2 z-20">
+            <div className="text-center mb-6">
+              <span className="text-[11px] font-black uppercase tracking-[2px] text-[#E91E63] block mb-1">Mi Identificador Rabbitty</span>
+              <p className="text-white/70 text-xs leading-relaxed m-0 max-w-[280px]">Muestra este código en caja para acumular Bunz o autorizar consumo.</p>
             </div>
-            <div className="flex items-center justify-center w-full pt-8 pb-4">
-              {qrValue ? (
-                <RabbittyCode data={qrValue} size={180} showCardFrame={true} />
-              ) : (
-                <div className="w-[180px] h-[180px] bg-white/[0.03] flex items-center justify-center rounded-xl border-2 border-dashed border-white/10">
-                  <span className="text-white/40 text-xs font-bold">Cargando...</span>
-                </div>
-              )}
+            <div className="bg-white p-6 rounded-[32px] shadow-[0_16px_48px_rgba(233,30,99,0.3)] flex flex-col items-center">
+              <QRCodeSVG
+                value={String(qrValue || 'rabbitty_guest')}
+                size={210}
+                level="H"
+                includeMargin={false}
+                imageSettings={{
+                  src: "/logo_conejo.png",
+                  x: undefined,
+                  y: undefined,
+                  height: 38,
+                  width: 32,
+                  excavate: true,
+                }}
+              />
+              <div className="mt-4 pt-3 border-t border-gray-100 w-full text-center">
+                <span className="text-xs font-black tracking-[1.5px] text-[#111] uppercase block">
+                  {user?.firstName ? user.firstName : 'Miembro Rabbitty'}
+                </span>
+                <span className="text-[10px] text-gray-400 font-mono tracking-wider block mt-0.5">
+                  ID: {String(qrValue || '').slice(0, 16)}
+                </span>
+              </div>
             </div>
           </div>
         )}
@@ -173,7 +222,6 @@ export default function ScanPage() {
         {/* Camera scan tab */}
         {activeTab === 'scan' && hasCamera && !showManualInput && (
           <>
-            <div id="qr-reader" className="absolute inset-0 w-full h-full object-cover [&>video]:object-cover [&>video]:w-full [&>video]:h-full" />
             <div className="absolute inset-0 bg-black/45 z-0" />
 
             {/* QR Frame */}

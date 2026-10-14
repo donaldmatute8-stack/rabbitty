@@ -7,10 +7,11 @@ interface RabbittyCodeProps {
   className?: string;
 }
 
-function hashString(str: string): number {
+function hashString(str: any): number {
+  const safeStr = typeof str === 'string' ? str : String(str || 'rabbitty');
   let hash = 0;
-  for (let i = 0; i < (str || 'rabbitty').length; i++) {
-    hash = (hash << 5) - hash + (str || 'rabbitty').charCodeAt(i);
+  for (let i = 0; i < safeStr.length; i++) {
+    hash = (hash << 5) - hash + safeStr.charCodeAt(i);
     hash |= 0;
   }
   return Math.abs(hash);

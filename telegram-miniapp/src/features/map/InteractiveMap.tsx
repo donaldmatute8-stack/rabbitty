@@ -134,9 +134,11 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
       attributionControl: false,
     });
 
-    // Dark CartoDB Layer
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19, opacity: 0.92,
+    // Dark OSM Layer (100% gratis, sin API key ni marcas de agua)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors',
+      className: 'osm-dark-tile',
     }).addTo(map);
 
     // Add destination marker (from affiliate 'Llegar')
@@ -426,12 +428,14 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
               )}
             </div>
           </div>
-          <style dangerouslySetInnerHTML={{__html: `
-            @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-            .leaflet-tile-pane { filter: grayscale(100%) contrast(1.2) brightness(0.7) !important; }
-          `}} />
         </div>
       )}
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .osm-dark-tile, .leaflet-tile-pane { 
+          filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) !important; 
+        }
+      `}} />
     </div>
   );
 }

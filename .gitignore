@@ -13,6 +13,7 @@ git-push-all.sh
 ROADMAP-V2.md
 ROADMAP-NATIVE-POS.md
 NATIVE_APP_GUIDE.md
+STORE_LISTING_METADATA.md
 
 # Rabbit Bot runtime
 rabbit-bot/.env
