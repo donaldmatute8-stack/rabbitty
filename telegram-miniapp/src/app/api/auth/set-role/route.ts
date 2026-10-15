@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { parseTelegramUser, validateTelegramInitData } from "@/lib/telegramAuth";
+import { getAuthenticatedUser } from "@/lib/serverAuth";
 import { z } from "zod";
 
 const bodySchema = z.object({
@@ -22,6 +23,21 @@ export async function PATCH(req: NextRequest) {
 
     const { role, initData } = parsed.data;
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
+
+    // Prefer the authenticated session (web/native/Telegram).
+    const caller = await getAuthenticatedUser(req);
+    if (caller) {
+      const [user] = await db
+        .update(users)
+        .set({ role })
+        .where(eq(users.id, caller.id))
+        .returning();
+
+      if (!user) {
+        return NextResponse.json({ error: "User not found" }, { status: 404 });
+      }
+      return NextResponse.json({ user }, { status: 200 });
+    }
 
     let telegramId: string | null = null;
 

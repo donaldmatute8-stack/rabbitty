@@ -3,13 +3,22 @@ import { db } from '@/db';
 import { webSessions } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import crypto from 'crypto';
+import { getAuthenticatedUser } from '@/lib/serverAuth';
 
 export async function POST(req: Request) {
   try {
-    const { qrToken, userId } = await req.json();
+    const caller = await getAuthenticatedUser(req);
+    if (!caller) {
+      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    }
 
-    if (!qrToken || !userId) {
-      return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
+    const body = await req.json();
+    const { qrToken } = body;
+
+    const userId = caller.id;
+
+    if (!qrToken) {
+      return NextResponse.json({ error: 'Parámetros faltantes' }, { status: 400 });
     }
 
     const tokenHash = crypto.createHash('sha256').update(qrToken).digest('hex');
@@ -31,7 +40,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'QR code already used' }, { status: 400 });
     }
 
-    // Vincular la sesión al usuario que la escaneó
+    // Vincular la sesión al usuario verificado que la escaneó
     await db.update(webSessions)
       .set({ userId })
       .where(eq(webSessions.id, session.id));
@@ -42,3 +51,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+

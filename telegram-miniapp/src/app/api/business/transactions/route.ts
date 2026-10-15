@@ -2,20 +2,33 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { transactions, users, ownedBusinesses } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
+import { getAuthenticatedUser } from "@/lib/serverAuth";
 
 export async function GET(req: Request) {
   try {
-    const { searchParams } = new URL(req.url);
-    const telegramId = searchParams.get("telegramId");
-    const businessId = searchParams.get("businessId");
-
-    if (!telegramId && !businessId) {
-      return NextResponse.json({ error: "Missing identifier" }, { status: 400 });
+    const caller = await getAuthenticatedUser(req);
+    if (!caller) {
+      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
+
+    const { searchParams } = new URL(req.url);
+    const businessId = searchParams.get("businessId");
 
     let rows;
 
     if (businessId) {
+      const business = await db.query.ownedBusinesses.findFirst({
+        where: eq(ownedBusinesses.id, businessId),
+      });
+
+      if (!business) {
+        return NextResponse.json({ error: "Business not found" }, { status: 404 });
+      }
+
+      if (business.ownerId !== caller.id && caller.role !== 'ADMIN') {
+        return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+      }
+
       rows = await db
         .select({
           id: transactions.id,
@@ -33,12 +46,8 @@ export async function GET(req: Request) {
         .orderBy(desc(transactions.createdAt))
         .limit(20);
     } else {
-      // Find business by owner telegramId
-      const owner = await db.query.users.findFirst({ where: eq(users.telegramId, telegramId!) });
-      if (!owner) return NextResponse.json({ error: "User not found" }, { status: 404 });
-
       const business = await db.query.ownedBusinesses.findFirst({
-        where: eq(ownedBusinesses.ownerId, owner.id)
+        where: eq(ownedBusinesses.ownerId, caller.id)
       });
       if (!business) return NextResponse.json({ error: "Business not found" }, { status: 404 });
 

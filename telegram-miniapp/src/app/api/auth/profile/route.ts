@@ -5,13 +5,8 @@ import { and, eq, gt, sql } from "drizzle-orm";
 
 export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const telegramId = searchParams.get("telegramId");
-    const wallet = searchParams.get("wallet");
-    const userId = searchParams.get("userId");
-
-    // Check Authorization header for native/web session token
-    let sessionUserId: string | null = null;
+    // Solo se puede consultar el perfil propio, autenticado con session token.
+    // No se acepta telegramId/userId/wallet por query (evita IDOR).
     const authHeader = req.headers.get("authorization");
     const customHeader = req.headers.get("x-session-token");
     let token: string | null = null;
@@ -21,52 +16,37 @@ export async function GET(req: NextRequest) {
       token = customHeader.trim();
     }
 
-    if (token) {
-      const session = await db.query.webSessions.findFirst({
-        where: and(
-          eq(webSessions.jwtToken, token),
-          gt(webSessions.expiresAt, new Date())
-        ),
-      });
-      if (session && session.userId) {
-        sessionUserId = session.userId;
-      }
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const effectiveUserId = sessionUserId || userId;
+    const session = await db.query.webSessions.findFirst({
+      where: and(
+        eq(webSessions.jwtToken, token),
+        gt(webSessions.expiresAt, new Date())
+      ),
+    });
 
-    if (!telegramId && !wallet && !effectiveUserId) {
-      return NextResponse.json({ error: "Missing identifier" }, { status: 400 });
+    if (!session || !session.userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Fetch profile and join with levels
-    let profile = null;
-    if (effectiveUserId) {
-      profile = await db.query.users.findFirst({
-        where: eq(users.id, effectiveUserId),
-        with: { level: true },
-      });
-    } else if (telegramId) {
-      profile = await db.query.users.findFirst({
-        where: eq(users.telegramId, telegramId),
-        with: { level: true },
-      });
-    } else if (wallet) {
-      profile = await db.query.users.findFirst({
-        where: eq(users.tonWalletAddress, wallet),
-        with: { level: true },
-      });
+    const profile = await db.query.users.findFirst({
+      where: eq(users.id, session.userId),
+      with: { level: true },
+    });
+
+    if (!profile) {
+      return NextResponse.json({ error: "Profile not found" }, { status: 404 });
     }
 
     // Calculate pending referral bunz
     let pendingBunz = 0;
-    if (profile) {
-      const result = await db.select({
-        total: sql<number>`COALESCE(SUM(${referrals.rewardAmount}), 0)`,
-      }).from(referrals)
-        .where(and(eq(referrals.inviterId, profile.id), eq(referrals.status, "PENDING")));
-      pendingBunz = result[0]?.total ?? 0;
-    }
+    const result = await db.select({
+      total: sql<number>`COALESCE(SUM(${referrals.rewardAmount}), 0)`,
+    }).from(referrals)
+      .where(and(eq(referrals.inviterId, profile.id), eq(referrals.status, "PENDING")));
+    pendingBunz = result[0]?.total ?? 0;
 
     return NextResponse.json({ profile: { ...profile, pendingBunz } }, { status: 200 });
   } catch (error) {

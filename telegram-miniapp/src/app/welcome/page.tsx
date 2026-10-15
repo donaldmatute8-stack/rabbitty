@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
+import { PlatformBridge } from '@/lib/platform';
 
 export default function WelcomePage() {
   const router = useRouter();
@@ -15,10 +16,11 @@ export default function WelcomePage() {
       const app = mod.default;
       const initData = typeof window !== 'undefined' ? app.initData : '';
       const targetRole = role === "RABBITTER" ? "USER" : "AFFILIATE";
+      const headers = await PlatformBridge.getAuthHeaders();
 
       await fetch('/api/auth/set-role', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({ role: targetRole, initData }),
       });
 

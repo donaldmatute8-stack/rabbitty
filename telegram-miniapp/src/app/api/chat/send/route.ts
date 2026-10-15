@@ -1,15 +1,35 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { messages } from '@/db/schema';
+import { messages, conversations } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+import { getAuthenticatedUser } from '@/lib/serverAuth';
 
 export async function POST(req: Request) {
   try {
-    const { conversationId, senderId, targetId, content } = await req.json();
+    const caller = await getAuthenticatedUser(req);
+    if (!caller) {
+      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    }
 
-    if (!conversationId || !senderId || !content) {
+    const { conversationId, targetId, content } = await req.json();
+
+    if (!conversationId || !content) {
       return NextResponse.json({ error: 'Faltan parámetros' }, { status: 400 });
     }
+
+    const conversation = await db.query.conversations.findFirst({
+      where: eq(conversations.id, conversationId),
+    });
+
+    if (!conversation) {
+      return NextResponse.json({ error: 'Conversación no encontrada' }, { status: 404 });
+    }
+
+    if (conversation.participant1 !== caller.id && conversation.participant2 !== caller.id) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+    }
+
+    const senderId = caller.id;
 
     // 1. Guardar el mensaje del usuario
     const [userMessage] = await db.insert(messages).values({

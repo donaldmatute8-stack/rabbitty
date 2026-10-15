@@ -1,24 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { users, notifications } from "@/db/schema";
+import { notifications } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
+import { getAuthenticatedUser } from "@/lib/serverAuth";
 
 export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const telegramId = searchParams.get("telegramId") || searchParams.get("userId");
-
-    if (!telegramId) {
-      return NextResponse.json({ success: true, notifications: [] });
+    const caller = await getAuthenticatedUser(req);
+    if (!caller) {
+      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    const user = await db.query.users.findFirst({ where: eq(users.telegramId, telegramId) });
-    if (!user) {
-      return NextResponse.json({ success: true, notifications: [] });
-    }
+    const targetUserId = caller.id;
 
     const rows = await db.query.notifications.findMany({
-      where: eq(notifications.userId, user.id),
+      where: eq(notifications.userId, targetUserId),
       orderBy: [desc(notifications.createdAt)],
       limit: 50,
     });
@@ -26,16 +22,22 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ success: true, notifications: rows });
   } catch (error) {
     console.error("[NOTIFICATIONS_GET]", error);
-    return NextResponse.json({ success: true, notifications: [] });
+    return NextResponse.json({ error: "Error al obtener notificaciones" }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { userId, title, message, type } = body;
+    const caller = await getAuthenticatedUser(req);
+    if (!caller) {
+      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    }
 
-    if (!userId || !title || !message) {
+    const body = await req.json();
+    const { title, message, type } = body;
+    const userId = caller.id;
+
+    if (!title || !message) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 

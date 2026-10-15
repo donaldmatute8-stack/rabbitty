@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import QRScanner from '@/features/transactions/QRScanner';
 import { toast } from 'sonner';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { PlatformBridge } from '@/lib/platform';
 
 export default function BusinessScanPage() {
   const { user } = useAuth();
@@ -15,8 +16,9 @@ export default function BusinessScanPage() {
   const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
-    if (user?.telegramId) {
-      fetch(`/api/business?telegramId=${user.telegramId}`)
+    if (user?.id) {
+      PlatformBridge.getAuthHeaders()
+        .then(headers => fetch(`/api/business`, { headers }))
         .then(res => res.json())
         .then(data => {
           if (data.success && data.business) {
@@ -46,10 +48,11 @@ export default function BusinessScanPage() {
       const mod = await import('@twa-dev/sdk');
       const app = mod.default;
       const initData = typeof window !== 'undefined' ? app.initData : '';
+      const headers = await PlatformBridge.getAuthHeaders();
 
       const res = await fetch('/api/business/scan/mint', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           telegramId: scannedAddress, // The customer's scanned ID/telegramId/wallet
           businessId: business.id,     // The merchant's business ID

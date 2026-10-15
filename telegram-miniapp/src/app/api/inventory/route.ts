@@ -1,24 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { users, reservations, ownedBusinesses } from "@/db/schema";
+import { reservations } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { getAuthenticatedUser } from "@/lib/serverAuth";
 
 export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const telegramId = searchParams.get("telegramId");
-    const wallet = searchParams.get("wallet");
-
-    let user;
-    if (telegramId) {
-      user = await db.query.users.findFirst({ where: eq(users.telegramId, telegramId) });
-    } else if (wallet) {
-      user = await db.query.users.findFirst({ where: eq(users.tonWalletAddress, wallet) });
+    const caller = await getAuthenticatedUser(req);
+    if (!caller) {
+      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    if (!user) {
-      return NextResponse.json({ success: true, coupons: [], reservations: [] });
-    }
+    const user = caller;
 
     const userReservations = await db.query.reservations.findMany({
       where: eq(reservations.userId, user.id),

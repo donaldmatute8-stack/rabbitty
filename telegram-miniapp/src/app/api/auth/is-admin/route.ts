@@ -1,14 +1,13 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/db';
-import { users } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { getAuthenticatedUser } from '@/lib/serverAuth';
 
-const ADMIN_TELEGRAM_IDS = (process.env.ADMIN_TELEGRAM_IDS || '798431743').split(',');
+const ADMIN_TELEGRAM_IDS = (process.env.ADMIN_TELEGRAM_IDS || '798431743').split(',').map((id) => id.trim());
 
 export async function GET(req: Request) {
-  const telegramId = new URL(req.url).searchParams.get('telegramId');
-  if (!telegramId) {
+  const caller = await getAuthenticatedUser(req);
+  if (!caller) {
     return NextResponse.json({ isAdmin: false });
   }
-  return NextResponse.json({ isAdmin: ADMIN_TELEGRAM_IDS.includes(telegramId) });
+  const telegramId = caller.telegramId ? caller.telegramId.toString() : '';
+  return NextResponse.json({ isAdmin: !!telegramId && ADMIN_TELEGRAM_IDS.includes(telegramId) });
 }

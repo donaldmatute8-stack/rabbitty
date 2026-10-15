@@ -7,6 +7,7 @@ import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import EmptyState from '@/components/ui/EmptyState';
 import { useWallet } from '@/contexts/WalletContext';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { PlatformBridge } from '@/lib/platform';
 
 const FILTERS = ["Todos", "Ganado", "Gastado", "Comida", "Fitness", "Tecnología"];
 
@@ -29,7 +30,7 @@ export default function HistoryPage() {
   const { user } = useAuth();
 
   useEffect(() => {
-    if (user?.telegramId) {
+    if (user?.id) {
       fetchHistory();
     } else {
       setLoading(false);
@@ -37,9 +38,10 @@ export default function HistoryPage() {
   }, [user]);
 
   const fetchHistory = async () => {
-    if (!user?.telegramId) return;
+    if (!user?.id) return;
     try {
-      const res = await fetch(`/api/history?telegramId=${encodeURIComponent(user.telegramId)}`);
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch(`/api/history`, { headers });
       const data = await res.json();
       if (data.success) {
         setTransactions(data.history);
@@ -89,28 +91,28 @@ export default function HistoryPage() {
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex-1 border border-[#F0F0F0] rounded-[14px] px-[14px] py-[12px]"
+            className="flex-1 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-[14px] px-[14px] py-[12px]"
           >
             <div className="flex items-center gap-[6px] mb-[4px]">
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v6m0 0l-3-3m3 3l3-3" stroke="#4CAF50" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
               <span className="text-[12px] text-[#4CAF50] font-semibold">Ganado</span>
             </div>
-            <span className="text-[24px] font-extrabold text-[#111]">{totalEarned}</span>
-            <span className="text-[13px] text-[#AAA] ml-[4px]">bunz</span>
+            <span className="text-[24px] font-extrabold text-[var(--text-primary)]">{totalEarned}</span>
+            <span className="text-[13px] text-[var(--text-muted)] ml-[4px]">bunz</span>
           </motion.div>
           
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="flex-1 border border-[#F0F0F0] rounded-[14px] px-[14px] py-[12px]"
+            className="flex-1 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-[14px] px-[14px] py-[12px]"
           >
             <div className="flex items-center gap-[6px] mb-[4px]">
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 13V7m0 0l-3 3m3-3l3 3" stroke="#E91E63" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
               <span className="text-[12px] text-[#E91E63] font-semibold">Gastado</span>
             </div>
-            <span className="text-[24px] font-extrabold text-[#111]">{totalSpent}</span>
-            <span className="text-[13px] text-[#AAA] ml-[4px]">bunz</span>
+            <span className="text-[24px] font-extrabold text-[var(--text-primary)]">{totalSpent}</span>
+            <span className="text-[13px] text-[var(--text-muted)] ml-[4px]">bunz</span>
           </motion.div>
         </div>
 
@@ -120,10 +122,10 @@ export default function HistoryPage() {
             <button 
               key={f} 
               onClick={() => setActiveFilter(f)}
-              className="shrink-0 px-[14px] py-[7px] rounded-[100px] border-none text-[13px] font-semibold cursor-pointer"
+              className="shrink-0 px-[14px] py-[7px] rounded-[100px] border border-white/5 text-[13px] font-semibold cursor-pointer"
               style={{ 
-                backgroundColor: activeFilter === f ? "#111" : "#F0F0F0", 
-                color: activeFilter === f ? "#fff" : "#666", 
+                backgroundColor: activeFilter === f ? "var(--rabbitty-pink)" : "var(--bg-elevated)", 
+                color: activeFilter === f ? "#fff" : "var(--text-muted)", 
                 fontFamily: "var(--font-family-base)",
                 transition: "all 0.2s"
               }}
@@ -146,23 +148,23 @@ export default function HistoryPage() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
-                className="flex items-center justify-between bg-white p-[16px] rounded-[16px] border border-[#F0F0F0]"
+                className="flex items-center justify-between bg-[var(--bg-elevated)] p-[16px] rounded-[16px] border border-[var(--border-subtle)]"
               >
                 <div className="flex items-center gap-[14px]">
                   <div className="w-[44px] h-[44px] rounded-[12px] flex items-center justify-center text-[22px]"
-                    style={{ backgroundColor: tx.type === 'earned' ? "#E8FFE8" : "#FFF0F0" }}
+                    style={{ backgroundColor: tx.type === 'earned' ? "rgba(76, 175, 80, 0.15)" : "rgba(233, 30, 99, 0.15)" }}
                   >
                     {tx.icon}
                   </div>
                   <div>
-                    <h4 className="m-0 text-[16px] font-bold text-[#111]">{tx.name}</h4>
-                    <p className="m-0 text-[13px] text-[#8A8A8A] mt-[2px]">
+                    <h4 className="m-0 text-[16px] font-bold text-[var(--text-primary)]">{tx.name}</h4>
+                    <p className="m-0 text-[13px] text-[var(--text-muted)] mt-[2px]">
                       {tx.category} — {new Date(tx.date).toLocaleDateString()}
                     </p>
                   </div>
                 </div>
                 <div className="flex flex-col items-end">
-                  <span className="text-[16px] font-extrabold" style={{ color: tx.type === 'earned' ? "#4CAF50" : "#111" }}>
+                  <span className="text-[16px] font-extrabold" style={{ color: tx.type === 'earned' ? "#4CAF50" : "var(--text-primary)" }}>
                     {tx.amount}
                   </span>
                   <span className="text-[11px] text-[#AAA] font-semibold">bunz</span>

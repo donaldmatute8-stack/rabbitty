@@ -17,6 +17,7 @@ import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/contexts/ToastContext';
 import { PlatformBridge } from '@/lib/platform';
+import MembershipCard from '@/components/ui/MembershipCard';
 
 const InteractiveMap = dynamic(() => import('@/features/map/InteractiveMap'), {
   ssr: false,
@@ -87,7 +88,8 @@ export default function FeedPage() {
   const [userLng, setUserLng] = useState<number | null>(null);
   const [locationLoaded, setLocationLoaded] = useState(false);
 
-  const isDark = activeTab === 'Freehands';
+  const isDark = true;
+  const bunzBalance = (user?.totalBunzEarned || 0) - (user?.totalBunzSpent || 0);
 
   const [greeting, setGreeting] = useState('Buenos días,');
 
@@ -99,24 +101,21 @@ export default function FeedPage() {
   }, []);
 
   const handleSpend = async (offerId: string, bunzCost: number, businessName: string, offerTitle: string) => {
-    if (user && user.totalBunzEarned < bunzCost) {
+    if (user && bunzBalance < bunzCost) {
       showToast('No tienes suficientes Bunz para adquirir esta oferta.', 'error');
       return;
     }
     setPurchasing(true);
     try {
+      const headers = await PlatformBridge.getAuthHeaders();
       let initData = '';
       try {
         const mod = await import('@twa-dev/sdk');
         initData = mod.default?.initData || '';
       } catch {}
-      if (!initData) {
-        showToast('No se pudo verificar tu identidad de Telegram.', 'error');
-        return;
-      }
       const res = await fetch('/api/reservations', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           initData,
           businessName, 
@@ -226,7 +225,7 @@ export default function FeedPage() {
   return (
     <div
       className="page-wrap pb-16"
-      style={{ background: isDark ? '#000000' : '#FAFAFA', color: isDark ? '#fff' : '#111', transition: 'background 0.5s' }}
+      style={{ background: isDark ? 'var(--bg-primary)' : '#FAFAFA', color: isDark ? '#fff' : '#111', transition: 'background 0.5s' }}
     >
       {/* Sticky header */}
       <div className="sticky top-0 z-[60]" style={{
@@ -249,7 +248,7 @@ export default function FeedPage() {
           </Link>
           <div className="flex items-center gap-2.5">
             <div className="px-3 py-[6px] rounded-full flex items-baseline gap-1" style={{ background: isDark ? 'rgba(255,255,255,0.08)' : '#F4F4F4', border: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid #EBEBEB' }}>
-              <span className="text-[15px] font-black" style={{ color: isDark ? '#fff' : '#111' }}>{(user?.totalBunzEarned || 0).toLocaleString()}</span>
+              <span className="text-[15px] font-black" style={{ color: isDark ? '#fff' : '#111' }}>{bunzBalance.toLocaleString()}</span>
               <span className="text-[11px] font-black text-[#E91E63]">BUNZ</span>
             </div>
             
@@ -292,16 +291,21 @@ export default function FeedPage() {
       </div>
 
       <main className="flex-1 w-full max-w-[600px] mx-auto" style={{ paddingLeft: isDark ? 0 : 16, paddingRight: isDark ? 0 : 16 }}>
-        <div className="pt-6">
+        <div className="pt-4">
 
           {/* ── bunz'in tab ── */}
           {activeTab === "bunz'in" && (
             <>
+              {/* Digital Pass / Membership Card */}
+              <div className="px-1">
+                <MembershipCard user={user} levelName={user?.level?.name || '1'} isDark={isDark} />
+              </div>
+
               {!loading && postsWithDistance.length > 0 && (
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="flex-1 h-px bg-[#EBEBEB]" />
-                  <span className="text-[11px] font-black text-[#CCC] tracking-[0.5px]">CERCA DE TI</span>
-                  <div className="flex-1 h-px bg-[#EBEBEB]" />
+                <div className="flex items-center gap-3 mb-4 mt-2">
+                  <div className="flex-1 h-px bg-[#222]" />
+                  <span className="text-[11px] font-black text-[#888] tracking-[0.5px]">COMERCIOS CERCA DE TI</span>
+                  <div className="flex-1 h-px bg-[#222]" />
                 </div>
               )}
               {loading ? (
@@ -336,20 +340,20 @@ export default function FeedPage() {
               {/* Search */}
               <div className="relative mb-5">
                 <svg className="absolute left-4 top-1/2 -translate-y-1/2" width="15" height="15" viewBox="0 0 16 16" fill="none">
-                  <circle cx="7" cy="7" r="5.5" stroke="#BBB" strokeWidth="1.5" />
-                  <path d="M11 11L14 14" stroke="#BBB" strokeWidth="1.5" strokeLinecap="round" />
+                  <circle cx="7" cy="7" r="5.5" stroke="#666" strokeWidth="1.5" />
+                  <path d="M11 11L14 14" stroke="#666" strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
                 <input
                   placeholder="Buscar negocios..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-[#F2F2F2] border-none rounded-full py-3 px-4 pl-10 text-sm text-[#111] outline-none box-border"
+                  className="w-full bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-full py-3 px-4 pl-10 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none box-border"
                   style={{ fontFamily: 'var(--font-family-base)' }}
                 />
               </div>
 
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-[17px] font-black text-[#111] m-0">Ofertas Disponibles</h2>
+                <h2 className="text-[17px] font-black text-[var(--text-primary)] m-0">Ofertas Disponibles</h2>
                 {offers.length > 0 && (
                   <span className="text-xs font-bold text-[#E91E63]">
                     {offers.filter(o => o.isAvailable).length} activas
@@ -360,9 +364,9 @@ export default function FeedPage() {
               {loading ? (
                 <SkeletonCard />
               ) : offers.length === 0 ? (
-                <div className="bg-white rounded-[20px] p-6 text-center border-2 border-dashed border-[#E8E8E8]">
-                  <p className="font-bold text-[#888] mb-1">No hay ofertas disponibles</p>
-                  <p className="text-xs text-[#BBB] m-0">Los negocios subirán certificados de regalo pronto.</p>
+                <div className="bg-[var(--bg-elevated)] rounded-[20px] p-6 text-center border-2 border-dashed border-[var(--border-subtle)]">
+                  <p className="font-bold text-[var(--text-secondary)] mb-1">No hay ofertas disponibles</p>
+                  <p className="text-xs text-[var(--text-muted)] m-0">Los negocios subirán certificados de regalo pronto.</p>
                 </div>
               ) : (
                 <div className="flex flex-col gap-4">
@@ -375,32 +379,32 @@ export default function FeedPage() {
                     .map((o) => (
                       <div
                         key={o.id}
-                        className="bg-white rounded-[22px] overflow-hidden border border-[#F0F0F0] shadow-[0_2px_12px_rgba(0,0,0,0.04)] relative"
+                        className="bg-[var(--bg-elevated)] rounded-[22px] overflow-hidden border border-[var(--border-subtle)] shadow-[0_2px_12px_rgba(0,0,0,0.3)] relative"
                         style={{ opacity: o.isAvailable ? 1 : 0.55, filter: o.isAvailable ? 'none' : 'grayscale(1)' }}
                       >
                         {/* Ticket notch */}
-                        <div className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 w-5 h-5 bg-[#FAFAFA] rounded-full border border-[#F0F0F0]" />
-                        <div className="absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 w-5 h-5 bg-[#FAFAFA] rounded-full border border-[#F0F0F0]" />
+                        <div className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 w-5 h-5 bg-[var(--bg-primary)] rounded-full border border-[var(--border-subtle)]" />
+                        <div className="absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 w-5 h-5 bg-[var(--bg-primary)] rounded-full border border-[var(--border-subtle)]" />
 
                         <div className="p-5">
                           <div className="flex items-start gap-4 mb-4">
                             {o.image ? (
-                              <img src={o.image} alt={o.title} className="w-14 h-14 rounded-[16px] object-cover shrink-0 shadow-[0_2px_8px_rgba(0,0,0,0.1)]" />
+                              <img src={o.image} alt={o.title} className="w-14 h-14 rounded-[16px] object-cover shrink-0 shadow-[0_2px_8px_rgba(0,0,0,0.4)]" />
                             ) : (
-                              <div className="w-14 h-14 rounded-[16px] bg-[#F8F8F8] border border-[#F0F0F0] flex items-center justify-center text-2xl shrink-0">🏪</div>
+                              <div className="w-14 h-14 rounded-[16px] bg-[var(--bg-pressed)] border border-[var(--border-subtle)] flex items-center justify-center text-2xl shrink-0">🏪</div>
                             )}
                             <div className="flex-1 min-w-0">
                               <p className="text-[10px] font-black text-[#E91E63] tracking-[0.5px] uppercase mb-1">{o.businessName}</p>
-                              <p className="font-black text-[#111] text-base leading-[1.2] mb-1">{o.title}</p>
-                              <p className="text-xs text-[#999] leading-[1.5] m-0 line-clamp-2">{o.description}</p>
+                              <p className="font-black text-[var(--text-primary)] text-base leading-[1.2] mb-1">{o.title}</p>
+                              <p className="text-xs text-[var(--text-muted)] leading-[1.5] m-0 line-clamp-2">{o.description}</p>
                             </div>
                           </div>
 
-                          <div className="flex items-center justify-between pt-4 border-t border-dashed border-[#EBEBEB]">
+                          <div className="flex items-center justify-between pt-4 border-t border-dashed border-[var(--border-subtle)]">
                             <div>
-                              <p className="text-[9px] font-black text-[#BBB] tracking-[0.5px] uppercase mb-[2px]">Costo</p>
+                              <p className="text-[9px] font-black text-[var(--text-muted)] tracking-[0.5px] uppercase mb-[2px]">Costo</p>
                               <div className="flex items-baseline gap-1">
-                                <span className="text-[22px] font-black text-[#111]">{o.bunzCost}</span>
+                                <span className="text-[22px] font-black text-[var(--text-primary)]">{o.bunzCost}</span>
                                 <span className="text-[13px] font-bold text-[#E91E63]">bunz</span>
                               </div>
                             </div>
@@ -409,8 +413,8 @@ export default function FeedPage() {
                               onClick={() => handleSpend(o.id, o.bunzCost, o.businessName, o.title)}
                               className="text-[13px] font-black px-5 py-[10px] rounded-full border-none"
                               style={{
-                                background: o.isAvailable && !purchasing ? '#111' : '#E0E0E0',
-                                color: o.isAvailable && !purchasing ? '#fff' : '#999',
+                                background: o.isAvailable && !purchasing ? '#E91E63' : '#222',
+                                color: o.isAvailable && !purchasing ? '#fff' : '#666',
                                 cursor: o.isAvailable && !purchasing ? 'pointer' : 'not-allowed',
                               }}
                             >

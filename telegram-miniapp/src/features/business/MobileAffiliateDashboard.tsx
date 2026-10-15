@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { QrCode, Inbox, Check, X } from 'lucide-react';
 import RabbittyCode from '@/components/ui/RabbittyCode';
+import { PlatformBridge } from '@/lib/platform';
 
 interface MobileAffiliateDashboardProps {
   business: any;
   telegramId?: string;
 }
 
-export default function MobileAffiliateDashboard({ business, telegramId }: MobileAffiliateDashboardProps) {
+export default function MobileAffiliateDashboard({ business }: MobileAffiliateDashboardProps) {
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<'analytics' | 'clients' | 'settings' | null>(null);
   const [rewardRate, setRewardRate] = useState(business?.rewardPercentage || 21);
@@ -21,13 +22,13 @@ export default function MobileAffiliateDashboard({ business, telegramId }: Mobil
   const [clientList, setClientList] = useState<any[]>([]);
 
   const saveRewardRate = async () => {
-    if (!telegramId) return;
     setSavingRate(true);
     try {
+      const headers = await PlatformBridge.getAuthHeaders();
       await fetch('/api/business', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ telegramId, rewardPercentage: rewardRate }),
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rewardPercentage: rewardRate }),
       });
     } catch {}
     setSavingRate(false);
@@ -35,7 +36,8 @@ export default function MobileAffiliateDashboard({ business, telegramId }: Mobil
 
   useEffect(() => {
     if (business?.ownerId) {
-      fetch(`/api/reservations?ownerId=${business.ownerId}`)
+      PlatformBridge.getAuthHeaders()
+        .then(headers => fetch(`/api/reservations`, { headers }))
         .then(res => res.json())
         .then(data => {
           if (data.success) setReservations(data.reservations || []);
@@ -46,7 +48,8 @@ export default function MobileAffiliateDashboard({ business, telegramId }: Mobil
 
   useEffect(() => {
     if (business?.id) {
-      fetch(`/api/business/transactions?businessId=${business.id}`)
+      PlatformBridge.getAuthHeaders()
+        .then(headers => fetch(`/api/business/transactions?businessId=${business.id}`, { headers }))
         .then(r => r.json())
         .then((data: any) => {
           if (data.success) {
@@ -63,9 +66,10 @@ export default function MobileAffiliateDashboard({ business, telegramId }: Mobil
 
   const handleReservationStatus = async (id: string, status: string) => {
     try {
+      const headers = await PlatformBridge.getAuthHeaders();
       const res = await fetch(`/api/reservations/${id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({ status })
       });
       const data = await res.json();

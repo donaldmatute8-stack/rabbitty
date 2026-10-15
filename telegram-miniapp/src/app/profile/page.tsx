@@ -7,6 +7,7 @@ import { HelpCircle } from 'lucide-react';
 import { useWallet } from '@/contexts/WalletContext';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useToast } from '@/contexts/ToastContext';
+import { PlatformBridge } from '@/lib/platform';
 import BottomNav from '@/components/BottomNav';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import AdminPanel from '@/features/admin/AdminPanel';
@@ -44,8 +45,9 @@ export default function ProfilePage() {
   const [hasBusiness, setHasBusiness] = useState(false);
 
   useEffect(() => {
-    if (user?.telegramId) {
-      fetch(`/api/business?telegramId=${user.telegramId}`)
+    if (user?.id) {
+      PlatformBridge.getAuthHeaders()
+        .then(headers => fetch(`/api/business`, { headers }))
         .then(r => r.json())
         .then(d => {
           if (d.success && d.business) {
@@ -57,11 +59,12 @@ export default function ProfilePage() {
   }, [user]);
 
   const handleAvatarTap = async () => {
-    if (!user?.telegramId) {
+    if (!user?.id) {
       showToast('Identidad NFT (Próximamente)', 'info');
       return;
     }
-    const res = await fetch(`/api/auth/is-admin?telegramId=${user.telegramId}`);
+    const headers = await PlatformBridge.getAuthHeaders();
+    const res = await fetch(`/api/auth/is-admin`, { headers });
     const { isAdmin } = await res.json();
     if (isAdmin) {
       const newCount = tapCount + 1;
@@ -89,7 +92,8 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (user?.id) {
-      fetch(`/api/gamification?userId=${user.id}`)
+      PlatformBridge.getAuthHeaders()
+        .then(headers => fetch(`/api/gamification`, { headers }))
         .then(r => r.json())
         .then((data: any) => {
           if (data.level?.requiredHops) {
@@ -122,8 +126,8 @@ export default function ProfilePage() {
         )}
       </motion.div>
       <div className="flex-1">
-        <p className="text-lg font-extrabold text-[#111] mb-0 leading-[1.1]">{user?.firstName || 'Rabbiter'}</p>
-        <p className="text-[13px] text-[#AAA] m-0">
+        <p className="text-lg font-extrabold text-[var(--text-primary)] mb-0 leading-[1.1]">{user?.firstName || 'Rabbiter'}</p>
+        <p className="text-[13px] text-[var(--text-muted)] m-0">
           <span className="font-extrabold text-[#E91E63] mr-1.5">Lvl. {levelName}</span>
           @{user?.username || 'explorador'}
         </p>
@@ -137,15 +141,15 @@ export default function ProfilePage() {
 
         <div className="pb-4">
           {/* HOPS PROGRESS BAR */}
-          <div className="mb-5 bg-[#FAFAFA] rounded-[14px] p-4 border border-[#F0F0F0]">
+          <div className="mb-5 bg-[var(--bg-elevated)] rounded-[14px] p-4 border border-[var(--border-subtle)]">
             <div className="flex justify-between items-end mb-2">
               <div>
-                <p className="text-[11px] font-extrabold text-[#AAA] uppercase tracking-[0.5px] m-0 mb-0.5">PROGRESO DE MADRIGUERA</p>
-                <p className="text-[15px] font-extrabold text-[#111] m-0">{(user as any)?.hops || 0} <span className="text-[#E91E63]">Hops</span></p>
+                <p className="text-[11px] font-extrabold text-[var(--text-muted)] uppercase tracking-[0.5px] m-0 mb-0.5">PROGRESO DE MADRIGUERA</p>
+                <p className="text-[15px] font-extrabold text-[var(--text-primary)] m-0">{(user as any)?.hops || 0} <span className="text-[#E91E63]">Hops</span></p>
               </div>
-              <p className="text-xs font-bold text-[#888] m-0">{(user as any)?.hops >= 5000 ? 'MAX' : `Siguiente: ${nextLevelHops} Hops`}</p>
+              <p className="text-xs font-bold text-[var(--text-muted)] m-0">{(user as any)?.hops >= 5000 ? 'MAX' : `Siguiente: ${nextLevelHops} Hops`}</p>
             </div>
-            <div className="h-2 bg-[#EAEAEA] rounded-[100px] overflow-hidden">
+            <div className="h-2 bg-[var(--bg-pressed)] rounded-[100px] overflow-hidden">
               <motion.div 
                 initial={{ width: 0 }} 
                 animate={{ width: `${Math.min((((user as any)?.hops || 0) / nextLevelHops) * 100, 100)}%` }} 
@@ -161,19 +165,19 @@ export default function ProfilePage() {
           transition={{ delay: 0.1 }}
           className="flex gap-3 mb-4"
         >
-          <div className="flex-1 border border-[#F0F0F0] rounded-[14px] px-4 py-3.5">
+          <div className="flex-1 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-[14px] px-4 py-3.5">
             <div className="flex items-center gap-1.5 mb-1.5">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="#E91E63" strokeWidth="1.5" /><path d="M5 8l2 2 4-4" stroke="#E91E63" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </div>
-            <p className="text-[26px] font-extrabold text-[#111] tracking-[-0.5px]">{(user?.totalBunzEarned || 0).toLocaleString()}</p>
-            <p className="text-xs text-[#AAA] mt-0.5">bunz ganados</p>
+            <p className="text-[26px] font-extrabold text-[var(--text-primary)] tracking-[-0.5px]">{(user?.totalBunzEarned || 0).toLocaleString()}</p>
+            <p className="text-xs text-[var(--text-muted)] mt-0.5">bunz ganados</p>
           </div>
-          <div className="flex-1 border border-[#F0F0F0] rounded-[14px] px-4 py-3.5">
+          <div className="flex-1 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-[14px] px-4 py-3.5">
             <div className="flex items-center gap-1.5 mb-1.5">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 13L6 3L10 10L12 6L14 13" stroke="#E91E63" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </div>
-            <p className="text-[26px] font-extrabold text-[#111] tracking-[-0.5px]">{user?.visitedBusinesses ?? 0}</p>
-            <p className="text-xs text-[#AAA] mt-0.5">Negocios visitados</p>
+            <p className="text-[26px] font-extrabold text-[var(--text-primary)] tracking-[-0.5px]">{user?.visitedBusinesses ?? 0}</p>
+            <p className="text-xs text-[var(--text-muted)] mt-0.5">Negocios visitados</p>
           </div>
         </motion.div>
 
@@ -185,10 +189,10 @@ export default function ProfilePage() {
         >
           {(user?.role === 'AFFILIATE' || hasBusiness) ? (
             <>
-              <Link href="/business" className="flex items-center justify-between bg-[#111] rounded-[14px] p-4 mb-2.5 no-underline active:scale-[0.98] transition-transform shadow-lg">
+              <Link href="/business" className="flex items-center justify-between bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-[14px] p-4 mb-2.5 no-underline active:scale-[0.98] transition-transform shadow-lg">
                 <div>
-                  <p className="text-sm font-extrabold text-white mb-0.5">Portal de Negocio Afiliado</p>
-                  <p className="text-[11px] text-[#888] m-0">Gestiona tu negocio y tasa de Bunz</p>
+                  <p className="text-sm font-extrabold text-[var(--text-primary)] mb-0.5">Portal de Negocio Afiliado</p>
+                  <p className="text-[11px] text-[var(--text-muted)] m-0">Gestiona tu negocio y tasa de Bunz</p>
                 </div>
                 <div className="w-11 h-6 rounded-xl bg-[#E91E63] p-0.5 flex justify-end">
                   <div className="w-5 h-5 rounded-[10px] bg-white shadow-[0_2px_4px_rgba(0,0,0,0.2)]" />
@@ -212,10 +216,11 @@ export default function ProfilePage() {
                       }
 
                       try {
+                        const headers = await PlatformBridge.getAuthHeaders();
                         const res = await fetch('/api/auth/qr/scan', {
                           method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ qrToken, userId: user?.id })
+                          headers: { ...headers, 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ qrToken })
                         });
                         const data = await res.json();
                         if (data.success) {
@@ -233,23 +238,23 @@ export default function ProfilePage() {
                     return true;
                   });
                 }}
-                className="block w-full text-left bg-[#111] rounded-[14px] px-4 py-3 mb-2.5 cursor-pointer active:scale-[0.98] transition-transform"
+                className="block w-full text-left bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-[14px] px-4 py-3 mb-2.5 cursor-pointer active:scale-[0.98] transition-transform"
               >
-                <p className="text-[13px] font-extrabold text-white mb-0.5">📸 Escanear QR de PC (Login Mágico)</p>
-                <p className="text-[11px] text-white/60 m-0">Inicia sesión en tu dashboard web</p>
+                <p className="text-[13px] font-extrabold text-[var(--text-primary)] mb-0.5">📸 Escanear QR de PC (Login Mágico)</p>
+                <p className="text-[11px] text-[var(--text-muted)] m-0">Inicia sesión en tu dashboard web</p>
               </button>
             </>
           ) : (
-            <Link href="/business" className="block bg-[#111] rounded-[14px] px-4 py-3 mb-2.5 flex-col gap-0.5 no-underline active:scale-[0.98] transition-transform">
-              <p className="text-[13px] font-bold text-white mb-0.5">¿Tienes un negocio?</p>
-              <p className="text-[11px] text-[#888] m-0">Afíliate y otorga bunz</p>
+            <Link href="/business" className="block bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-[14px] px-4 py-3 mb-2.5 flex-col gap-0.5 no-underline active:scale-[0.98] transition-transform">
+              <p className="text-[13px] font-bold text-[var(--text-primary)] mb-0.5">¿Tienes un negocio?</p>
+              <p className="text-[11px] text-[var(--text-muted)] m-0">Afíliate y otorga bunz</p>
             </Link>
           )}
-          <button onClick={() => setShowBunzGuide(true)} className="w-full flex items-center gap-2 bg-[#111] rounded-[14px] px-4 py-3 mb-2.5 cursor-pointer active:scale-[0.98] transition-transform border-none text-left">
-            <HelpCircle size={16} color="rgba(255,255,255,0.4)" />
+          <button onClick={() => setShowBunzGuide(true)} className="w-full flex items-center gap-2 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-[14px] px-4 py-3 mb-2.5 cursor-pointer active:scale-[0.98] transition-transform text-left">
+            <HelpCircle size={16} className="text-[var(--text-muted)]" />
             <div>
-              <p className="text-[13px] font-bold text-white mb-0.5">¿Cómo funciona la economía Bunz?</p>
-              <p className="text-[11px] text-[#888] m-0">Guía para negocios afiliados</p>
+              <p className="text-[13px] font-bold text-[var(--text-primary)] mb-0.5">¿Cómo funciona la economía Bunz?</p>
+              <p className="text-[11px] text-[var(--text-muted)] m-0">Guía para negocios afiliados</p>
             </div>
           </button>
 
@@ -272,20 +277,20 @@ export default function ProfilePage() {
       </div>
 
       <div>
-        <p className="text-[11px] font-bold text-[#AAA] tracking-[0.8px] mb-1 mt-1">CONFIGURACIÓN</p>
+        <p className="text-[11px] font-bold text-[var(--text-muted)] tracking-[0.8px] mb-1 mt-1">CONFIGURACIÓN</p>
         {MENU_ITEMS.map((item, i) => (
           <Link
             href={item.href}
             key={item.label}
-            style={{ borderBottom: i < MENU_ITEMS.length - 1 ? "1px solid #F4F4F4" : "none" }}
+            style={{ borderBottom: i < MENU_ITEMS.length - 1 ? "1px solid var(--border-subtle)" : "none" }}
             className="flex items-center gap-3.5 py-[15px] cursor-pointer no-underline active:opacity-60 transition-opacity"
           >
             <span className="text-xl w-6 text-center">{item.icon}</span>
-            <span className="flex-1 text-[15px] text-[#111]">{item.label}</span>
+            <span className="flex-1 text-[15px] text-[var(--text-primary)]">{item.label}</span>
             {item.badge && (
               <span className="bg-[#E91E63] text-white text-[11px] font-bold rounded-full w-5 h-5 flex items-center justify-center">{item.badge}</span>
             )}
-            <svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="M1 1l5 5-5 5" stroke="#CCC" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            <svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="M1 1l5 5-5 5" stroke="currentColor" className="text-[var(--text-muted)]" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </Link>
         ))}
 

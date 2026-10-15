@@ -95,10 +95,11 @@ export default function ScanPage() {
             setScanning(false);
             await stopScanning();
             try {
+              const headers = await PlatformBridge.getAuthHeaders();
               const res = await fetch('/api/auth/qr/scan', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ qrToken, userId: user?.id })
+                headers: { ...headers, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ qrToken })
               });
               const data = await res.json();
               if (data.success) {

@@ -4,18 +4,33 @@ import { users, ownedBusinesses, systemSettings } from '@/db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { recordTreasuryEntry } from '@/lib/treasury';
 import { recordLedgerTransaction, findLedgerEntry } from '@/lib/ledgerHelper';
+import { getAuthenticatedUser } from '@/lib/serverAuth';
 
 export async function POST(req: Request) {
   try {
     const { telegramId, businessId, idempotencyKey: clientKey } = await req.json();
 
-    if (!telegramId || !businessId) {
+    if (!businessId) {
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
     }
 
-    const user = await db.query.users.findFirst({
-      where: eq(users.telegramId, telegramId.toString()),
-    });
+    // Resolve the caller: authenticated session first, or the server-to-server
+    // shared secret (which may pass telegramId directly). A raw client-supplied
+    // telegramId is never trusted on its own.
+    const caller = await getAuthenticatedUser(req);
+    const authHeader = req.headers.get('authorization');
+    const expectedSecret = process.env.RABBITTY_API_SECRET;
+    const serverAuthed = !!expectedSecret && authHeader === `Bearer ${expectedSecret}`;
+
+    let user;
+
+    if (caller) {
+      user = await db.query.users.findFirst({ where: eq(users.id, caller.id) });
+    } else if (serverAuthed && telegramId) {
+      user = await db.query.users.findFirst({ where: eq(users.telegramId, telegramId.toString()) });
+    } else {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });

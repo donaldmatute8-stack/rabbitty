@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import BusinessSetupForm from '@/features/business/BusinessSetupForm';
 import MobileAffiliateDashboard from '@/features/business/MobileAffiliateDashboard';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { PlatformBridge } from '@/lib/platform';
 
 export default function BusinessPage() {
   const { user } = useAuth();
@@ -23,8 +24,8 @@ export default function BusinessPage() {
 
   const fetchBusiness = async () => {
     try {
-      const queryParam = user.id ? `userId=${user.id}` : `telegramId=${user.telegramId}`;
-      const res = await fetch(`/api/business?${queryParam}`);
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch(`/api/business`, { headers });
       const data = await res.json();
       if (data.success && data.business) {
         setBusiness(data.business);
@@ -40,9 +41,10 @@ export default function BusinessPage() {
     if (!user) return;
     setSubmitting(true);
     try {
+      const headers = await PlatformBridge.getAuthHeaders();
       const res = await fetch('/api/business', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           initData: initDataRef.current,
           ...formData

@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
         .select({ id: users.id, email: users.email, phoneNumber: users.phoneNumber })
         .from(users)
         .where(
-          sql`regexp_replace(${users.phoneNumber}, '\\D', '', 'g') LIKE ${'%' + last10}`
+          sql`regexp_replace(COALESCE(${users.phoneNumber}, ''), '\\D', '', 'g') LIKE ${'%' + last10}`
         )
         .limit(1);
 

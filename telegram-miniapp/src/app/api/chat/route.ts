@@ -2,15 +2,16 @@ import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { conversations, messages, users, ownedBusinesses } from '@/db/schema';
 import { eq, or, desc } from 'drizzle-orm';
+import { getAuthenticatedUser } from '@/lib/serverAuth';
 
 export async function GET(req: Request) {
   try {
-    const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('userId');
-
-    if (!userId) {
-      return NextResponse.json({ error: 'Faltan parámetros' }, { status: 400 });
+    const caller = await getAuthenticatedUser(req);
+    if (!caller) {
+      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
+
+    const userId = caller.id;
 
     // Get all conversations where the user is a participant
     const userConversations = await db.query.conversations.findMany({
