@@ -1,6 +1,6 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
-const serverUrl = process.env.CAPACITOR_SERVER_URL || "http://localhost:3000";
+const serverUrl = process.env.CAPACITOR_SERVER_URL || "https://admin.rabbitty.me";
 
 const config: CapacitorConfig = {
   appId: "com.rabbitty.pos",
@@ -8,9 +8,9 @@ const config: CapacitorConfig = {
   webDir: "out",
   server: {
     url: serverUrl,
-    cleartext: true,
-    androidScheme: "http",
-    iosScheme: "http",
+    cleartext: serverUrl.startsWith("http://"),
+    androidScheme: "https",
+    iosScheme: "https",
   },
   plugins: {
     SplashScreen: {
