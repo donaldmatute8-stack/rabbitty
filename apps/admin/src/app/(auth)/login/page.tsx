@@ -227,18 +227,18 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* LADO DERECHO: FORMULARIO CORREO */}
+        {/* LADO DERECHO: FORMULARIO CORREO Y OTP */}
         <div className="flex flex-col justify-center space-y-6 p-2">
           <div className="text-center md:text-left space-y-2">
             <img
               src="/Ra.png"
               alt="Rabbitty Logo"
-              className="h-20 w-20 object-contain drop-shadow-[0_0_15px_rgba(236,72,153,0.4)] mx-auto md:mx-0"
+              className="h-28 w-28 object-contain drop-shadow-[0_0_20px_rgba(236,72,153,0.5)] mx-auto md:mx-0"
             />
             <h1 className="text-2xl font-black tracking-tight text-white">
               Rabbitty Admin
             </h1>
-            <p className="text-gray-400 text-xs font-medium">O bien, ingresa con tu correo registrado</p>
+            <p className="text-gray-400 text-xs font-medium">Ingresa con tu correo registrado o código OTP</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -291,7 +291,15 @@ export default function LoginPage() {
               type="submit"
               className="flex h-12 w-full items-center justify-center rounded-2xl bg-gradient-to-r from-pink-500 to-pink-600 font-bold text-white transition-all hover:scale-[1.02] active:scale-95 shadow-[0_4px_14px_rgba(236,72,153,0.39)] cursor-pointer"
             >
-              Enviar enlace por Correo
+              Enviar código o enlace
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSent(true)}
+              className="w-full text-center text-xs text-pink-400/80 hover:text-pink-300 font-semibold transition-all pt-1 cursor-pointer"
+            >
+              ¿Ya tienes un código OTP? Ingresar código directamente →
             </button>
           </form>
 
