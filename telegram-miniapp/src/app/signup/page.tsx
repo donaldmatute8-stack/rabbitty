@@ -28,7 +28,11 @@ export default function SignupPage() {
 
     // 1. If we have a logged-in user session (Native iOS or Web)
     if (user) {
-      if (user.firstName) setFirstName(user.firstName);
+      // Already onboarded → never re-run identity setup
+      if (user.firstName) {
+        router.replace('/');
+        return;
+      }
       if (user.lastName) setLastName(user.lastName);
       if (user.username && !user.username.startsWith('user_')) setUsername(user.username);
       return;

@@ -1,17 +1,19 @@
 'use client';
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from 'next/navigation';
 import { useAuth } from "@/features/auth/AuthProvider";
+import PhoneAuthFlow from "@/features/auth/PhoneAuthFlow";
 
 import { DottedGlowBackground } from "@/components/ui/dotted-glow-background";
 
 export default function OnboardingPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
+  const [flow, setFlow] = useState<'register' | 'login' | null>(null);
 
-  // If already authenticated, redirect straight to app Home
+  // Active session opens the app directly (unless they logged out)
   useEffect(() => {
     if (!authLoading && user) {
       if (!user.firstName) {
@@ -24,14 +26,10 @@ export default function OnboardingPage() {
     }
   }, [user, authLoading, router]);
 
-  const handleStart = () => {
-    // Uber/WhatsApp style: register mode
-    router.push('/login?mode=register');
-  };
-
-  const handleLogin = () => {
-    router.push('/login?mode=login');
-  };
+  // Phone-first onboarding: the celular step lives inside the onboarding route
+  if (flow) {
+    return <PhoneAuthFlow mode={flow} onBack={() => setFlow(null)} />;
+  }
 
   return (
     <div
@@ -70,7 +68,7 @@ export default function OnboardingPage() {
           speedMax={1.6}
           speedScale={1}
         />
-        
+
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -90,7 +88,7 @@ export default function OnboardingPage() {
         style={{ backgroundColor: "var(--bg-subtle)" }}
       >
         <motion.button
-          onClick={handleStart}
+          onClick={() => setFlow('register')}
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           whileHover={{ scale: 1.02 }}
@@ -120,7 +118,7 @@ export default function OnboardingPage() {
         >
           Already have an account?{" "}
           <span
-            onClick={handleLogin}
+            onClick={() => setFlow('login')}
             className="active:opacity-70 transition-opacity font-medium cursor-pointer"
             style={{ color: "var(--rabbitty-pink)" }}
           >

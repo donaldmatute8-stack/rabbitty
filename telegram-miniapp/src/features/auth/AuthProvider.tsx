@@ -148,7 +148,18 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     checkAuth();
   }, [checkAuth]);
 
-  if (loading || (!user && !PUBLIC_ROUTES.includes(pathname))) {
+  // Identity gate: a member must complete their name/username before entering the app.
+  // New users (created via OTP) are routed to the identity setup, even if they reopen the app.
+  useEffect(() => {
+    if (loading || !user) return;
+    if (!user.firstName && pathname !== '/signup') {
+      router.replace('/signup?setup=1');
+    }
+  }, [user, loading, pathname, router]);
+
+  const needsIdentity = !!user && !user.firstName && pathname !== '/signup';
+
+  if (loading || (!user && !PUBLIC_ROUTES.includes(pathname)) || needsIdentity) {
     return (
       <div style={{ display: 'flex', height: '100vh', width: '100%', alignItems: 'center', justifyContent: 'center', background: '#0A0A0A' }}>
         <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid #333', borderTopColor: '#E91E63', animation: 'spin 1s linear infinite' }} />
