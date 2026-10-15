@@ -15,8 +15,13 @@ export default function LoginPage() {
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [recentEmails, setRecentEmails] = useState<string[]>([]);
+  const [isLocalDev, setIsLocalDev] = useState(false);
 
   useEffect(() => {
+    // Solo activar bypass en desarrollo local (nunca en producción ni en Vercel)
+    if (process.env.NODE_ENV === "development" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")) {
+      setIsLocalDev(true);
+    }
     // Generar sesión QR para login
     fetch(resolveApiUrl("/api/auth/qr/generate"), { method: "POST" })
       .then((res) => res.json())
@@ -303,10 +308,11 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") && (
+          {isLocalDev && (
             <div className="pt-4 border-t border-white/5 space-y-2">
               <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest text-center md:text-left">Desarrollo Local</p>
               <button
+                type="button"
                 onClick={handleQuickLogin}
                 className="flex h-10 w-full items-center justify-center rounded-xl border border-pink-500/20 bg-pink-500/10 text-pink-400 font-bold hover:bg-pink-500/20 hover:text-white transition-all cursor-pointer text-xs shadow-[0_0_15px_rgba(236,72,153,0.05)]"
               >
