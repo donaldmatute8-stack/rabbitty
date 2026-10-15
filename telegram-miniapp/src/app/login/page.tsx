@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { PlatformBridge } from '@/lib/platform';
 import { useAuth } from '@/features/auth/AuthProvider';
 
@@ -25,7 +25,9 @@ const COUNTRIES: CountryCode[] = [
 
 export default function LoginPage() {
   const router = useRouter();
-  const { checkAuth } = useAuth();
+  const searchParams = useSearchParams();
+  const isRegisterMode = searchParams.get('mode') === 'register';
+  const { user, loading: authLoading, checkAuth } = useAuth();
 
   const [step, setStep] = useState<'input' | 'otp'>('input');
   const [inputVal, setInputVal] = useState('');
@@ -43,6 +45,19 @@ export default function LoginPage() {
   const [isLocalDev, setIsLocalDev] = useState(false);
 
   const otpInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-redirect if already logged in
+  useEffect(() => {
+    if (!authLoading && user) {
+      if (!user.firstName) {
+        router.replace('/signup?setup=1');
+      } else if (user.role === 'AFFILIATE') {
+        router.replace('/business');
+      } else {
+        router.replace('/');
+      }
+    }
+  }, [user, authLoading, router]);
 
   // Determinar si lo que escribe parece teléfono
   const isPhoneNumber = (() => {
@@ -310,11 +325,15 @@ export default function LoginPage() {
           className="text-[34px] font-extrabold tracking-[-0.5px] leading-[1.15] mb-2"
           style={{ color: 'var(--text-primary)' }}
         >
-          {step === 'input' ? 'Bienvenido a Rabbitty' : 'Introduce tu Código'}
+          {step === 'input' 
+            ? (isRegisterMode ? 'Comienza en Rabbitty' : 'Bienvenido a Rabbitty') 
+            : 'Introduce tu Código'}
         </h1>
         <p className="text-[14px] leading-relaxed text-neutral-400">
           {step === 'input'
-            ? 'Ingresa tu número celular o correo para iniciar sesión de forma rápida y segura.'
+            ? (isRegisterMode 
+                ? 'Ingresa tu número celular o correo para crear tu cuenta y ganar bunz.' 
+                : 'Ingresa tu número celular o correo para iniciar sesión de forma rápida y segura.')
             : message || 'Introduce el código de 6 dígitos que te enviamos.'}
         </p>
       </motion.div>
