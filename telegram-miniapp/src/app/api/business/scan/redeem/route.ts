@@ -102,6 +102,33 @@ export async function POST(req: NextRequest) {
       return { tx: appTx, newBalance, idempotent: false };
     });
 
+    // Notify business owner via Telegram Bot
+    if (botToken && business.ownerId) {
+      try {
+        const owner = await db.query.users.findFirst({ where: eq(users.id, business.ownerId) });
+        if (owner?.telegramId) {
+          const redeemMsg =
+            `🎁 *¡Canje Realizado en Caja! - ${business.name}*\n\n` +
+            `Un cliente canjeó: *${title}*\n` +
+            `Bunz deducidos: *${bunzCost.toLocaleString()} Bunz*\n` +
+            `Cliente: ${user.firstName || user.username || 'Rabbitter'}\n\n` +
+            `_Verifica el beneficio entregado al cliente._`;
+
+          await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: owner.telegramId,
+              text: redeemMsg,
+              parse_mode: 'Markdown',
+            }),
+          });
+        }
+      } catch (notifyErr) {
+        console.error('[REDEEM_NOTIFY_ERROR]', notifyErr);
+      }
+    }
+
     return NextResponse.json({ success: true, transaction: result.tx, newBalance: result.newBalance });
   } catch (error: any) {
     if (error?.message === 'INSUFFICIENT_FUNDS') {

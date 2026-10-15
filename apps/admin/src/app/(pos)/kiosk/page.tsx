@@ -51,6 +51,20 @@ export default function KioskPage() {
         <div className="absolute inset-0 bg-cover bg-center opacity-40 transition-transform duration-[10s] group-hover:scale-110" style={{ backgroundImage: `url(${BG_VIDEO_PLACEHOLDER})` }} />
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent" />
         
+        <div className="absolute top-6 left-6 z-30">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              window.location.href = "/";
+            }}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-black/60 hover:bg-black/90 border border-white/20 text-gray-300 hover:text-white text-xs font-bold backdrop-blur-xl transition-all cursor-pointer shadow-lg active:scale-95"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Volver al Panel
+          </button>
+        </div>
+
         <div className="relative z-10 flex flex-col items-center text-center px-12">
           <div className="h-40 w-40 rounded-[2.5rem] bg-gradient-to-br from-purple-500 via-pink-500 to-rose-500 flex items-center justify-center mb-10 shadow-[0_0_80px_rgba(236,72,153,0.5)] transform transition-transform duration-500 group-hover:-translate-y-4">
             <span className="font-black text-8xl text-white">R</span>

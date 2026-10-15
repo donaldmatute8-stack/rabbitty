@@ -11,14 +11,14 @@ export default function AppOpener() {
     const hasSeenOpener = sessionStorage.getItem('rabbitty_opener_shown');
     if (!hasSeenOpener) {
       setShowOpener(true);
+      sessionStorage.setItem('rabbitty_opener_shown', 'true');
       // Allow animation to play, then remove from DOM
       setTimeout(() => {
         setIsRemoving(true);
         setTimeout(() => {
           setShowOpener(false);
-          sessionStorage.setItem('rabbitty_opener_shown', 'true');
-        }, 1200); // Wait for exit animation
-      }, 3500); // Duration of the hold
+        }, 800); // Wait for exit animation
+      }, 1600); // Duration of the hold
     }
   }, []);
 
@@ -31,12 +31,17 @@ export default function AppOpener() {
         tg.expand();
 
         const updateSafeInsets = () => {
-          const topInset = tg.safeAreaInsets?.top || 0;
-          const isFs = tg.isFullscreen || false;
-          // The Telegram native Close (X) and Menu (...) buttons float at the top.
-          // They take up about 44-50px. We must add this to the device notch (topInset) to clear them completely.
-          const finalTop = topInset + 50;
-          document.documentElement.style.setProperty('--tg-safe-top-adjusted', `${finalTop}px`);
+          const isTelegram = tg && (tg.initData || tg.initDataUnsafe?.user?.id);
+          if (isTelegram) {
+            const topInset = tg.safeAreaInsets?.top || 0;
+            // The Telegram native Close (X) and Menu (...) buttons float at the top.
+            // They take up about 44-50px. We must add this to the device notch (topInset) to clear them completely in Telegram.
+            const finalTop = topInset + 50;
+            document.documentElement.style.setProperty('--tg-safe-top-adjusted', `${finalTop}px`);
+          } else {
+            // Native app / mobile browser: do NOT inject artificial Telegram margins
+            document.documentElement.style.setProperty('--tg-safe-top-adjusted', '0px');
+          }
         };
 
         if (tg.setHeaderColor) tg.setHeaderColor('#FFFFFF');

@@ -27,12 +27,12 @@ function getDb() {
 }
 
 const DB_SCHEMA = `Tablas en PostgreSQL (Neon):
-- users: id (uuid), telegram_id (text), username (text), role (USER/AFFILIATE/ADMIN/RABBITTER), total_bunz_earned (numeric), level_id (int), hops (int), created_at
-- owned_businesses: id (uuid), owner_id (uuid FK users), name (text), category (text), description (text), reward_percentage (numeric), status (text), address (text), lat (float), lng (float), created_at
-- transactions: id (uuid), user_id (uuid FK), business_id (uuid FK), fiat_amount (numeric), bunz_minted (numeric), status (PENDING/MINTED/FAILED), created_at
-- levels: id (int), name (text), required_hops (int), bunz_multiplier (numeric)
+- users: "id" (uuid), "telegramId" (text), "username" (text), "role" (USER/AFFILIATE/ADMIN/RABBITTER), "totalBunzEarned" (integer), "totalBunzSpent" (integer), "levelId" (text), "hops" (integer), "createdAt"
+- "ownedBusinesses": "id" (uuid), "ownerId" (uuid FK users), "name" (text), "category" (text), "description" (text), "rewardPercentage" (integer), "status" (text), "address" (text), "lat" (real), "lng" (real), "createdAt"
+- "transactions": "id" (uuid), "userId" (uuid FK), "businessId" (uuid FK), "fiatAmount" (real), "bunzMinted" (integer), "status" (PENDING/MINTED/FAILED), "createdAt"
+- "levels": "id" (text), "name" (text), "requiredHops" (integer), "bunzMultiplier" (real)
 
-Solo consultas SELECT. NUNCA INSERT, UPDATE, DELETE.`;
+Solo consultas SELECT con comillas dobles en nombres camelCase. NUNCA INSERT, UPDATE, DELETE.`;
 
 function safeLog(text) {
   return String(text).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "").slice(0, 200);
@@ -91,14 +91,15 @@ function loadKnowledge() {
 
 const USER_HELP = `🐰 *Hola! Soy Rabbit Bot, el asistente de Rabbitty.*
 
-Puedes preguntarme lo que quieras sobre:
-• Cómo funciona Rabbitty
-• Cómo ser Rabbitter (Nodo de zona)
-• Cómo afiliar tu negocio
-• Recompensas y bunz
-• Soporte técnico
+*Comandos rápidos disponibles:*
+• \`/saldo\` — Consulta tus Bunz acumulados, equivalencia y nivel
+• \`/cerca\` — Descubre negocios afiliados cerca de ti
+• \`/login\` — Enlace de acceso directo a tu cuenta (un solo toque)
+• \`/qr\` — Tu código Rabbitty para acumular o canjear Bunz
+• \`/corte\` — (Comercios) Resumen de Bunz otorgados en el día
+• \`/ayuda\` — Ver esta lista de comandos
 
-Solo escríbeme tu duda y te ayudo al instante. 🚀`;
+O pregúntame directamente cualquier duda que tengas sobre Rabbitty, tus recompensas o tu negocio. 🚀`;
 
 const TEAM_HELP = `🐰 *Rabbit Bot - Comandos del equipo*
 
@@ -152,6 +153,226 @@ async function processUpdate(update) {
   if (["/start", "/help", "/ayuda", "/comandos"].includes(text)) {
     const help = isTeam ? TEAM_HELP : USER_HELP;
     await fetch(`${API}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: uid, text: help, parse_mode: "Markdown" }) });
+    return;
+  }
+
+  // ── COMANDO /saldo (Para Rabbitters y Usuarios) ──
+  if (text === "/saldo" || text === "/balance") {
+    const db = getDb();
+    if (!db) {
+      await fetch(`${API}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: uid, text: "❌ Servicio temporalmente no disponible." }) });
+      return;
+    }
+    try {
+      const { rows } = await db.query(
+        `SELECT u.id, u.username, u.role, COALESCE(u."totalBunzEarned" - u."totalBunzSpent", 0) as balance, l.name as level_name, l."bunzMultiplier" as bunz_multiplier
+         FROM users u
+         LEFT JOIN levels l ON l.id = u."levelId"
+         WHERE u."telegramId" = $1 LIMIT 1`,
+        [String(uid)]
+      );
+      if (rows.length === 0) {
+        await fetch(`${API}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: uid,
+            text: "🐰 Aún no tienes una cuenta activa en Rabbitty.\n\nUsa `/login` o abre la aplicación para registrarte y empezar a ganar Bunz.",
+            parse_mode: "Markdown"
+          })
+        });
+        return;
+      }
+      const user = rows[0];
+      const balanceNum = parseFloat(user.balance) || 0;
+      const mxnEquivalent = (balanceNum * 0.10).toFixed(2); // Ejemplo 1 Bunz = $0.10 MXN
+      const response =
+        `🐰 *Tu Saldo Rabbitty*\n\n` +
+        `👤 *Usuario:* @${user.username || username || 'Rabbitter'}\n` +
+        `🎖️ *Nivel:* ${user.level_name || 'Iniciado'} (${user.bunz_multiplier || '1.0'}x Multiplicador)\n` +
+        `💰 *Bunz disponibles:* *${balanceNum.toLocaleString()} BUNZ*\n` +
+        `💵 *Equivalencia est.:* ~$${mxnEquivalent} MXN\n\n` +
+        `_¡Visita comercios afiliados y muestra tu código QR para acumular más!_`;
+
+      await fetch(`${API}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: uid, text: response, parse_mode: "Markdown" })
+      });
+      return;
+    } catch (dbErr) {
+      console.error("[BOT SALDO ERROR]", dbErr);
+    }
+  }
+
+  // ── COMANDO /cerca (Descubrir Negocios) ──
+  if (text === "/cerca" || text === "/negocios") {
+    const db = getDb();
+    if (db) {
+      try {
+        const { rows } = await db.query(
+          `SELECT name, category, address, "rewardPercentage" as reward_percentage
+           FROM "ownedBusinesses"
+           WHERE status = 'APPROVED'
+           ORDER BY "rewardPercentage" DESC
+           LIMIT 5`
+        );
+        if (rows.length === 0) {
+          await fetch(`${API}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chat_id: uid, text: "🐰 Próximamente se sumarán nuevos negocios afiliados en tu zona." })
+          });
+          return;
+        }
+        let listText = "📍 *Negocios afiliados con mayor recompensa:*\n\n";
+        rows.forEach((b, i) => {
+          listText += `${i + 1}. *${b.name}* (${b.category || 'Comercio'})\n` +
+                      `   🎁 Recompensa: *${b.reward_percentage}% Bunz*\n` +
+                      `   📌 ${b.address || 'Ubicación céntrica'}\n\n`;
+        });
+        listText += `_Abre la app de Rabbitty para verlos en el mapa interactivo._ 🗺️`;
+
+        await fetch(`${API}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: uid, text: listText, parse_mode: "Markdown" })
+        });
+        return;
+      } catch (err) {
+        console.error("[BOT CERCA ERROR]", err);
+      }
+    }
+  }
+
+  // ── COMANDO /corte (Para Comercios Afiliados) ──
+  if (text === "/corte") {
+    const db = getDb();
+    if (db) {
+      try {
+        const { rows: ownerRows } = await db.query(
+          `SELECT ob.id, ob.name, ob."rewardPercentage" as reward_percentage
+           FROM "ownedBusinesses" ob
+           JOIN users u ON u.id = ob."ownerId"
+           WHERE u."telegramId" = $1 LIMIT 1`,
+          [String(uid)]
+        );
+        if (ownerRows.length === 0) {
+          await fetch(`${API}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: uid,
+              text: "⚠️ Tu cuenta de Telegram no está vinculada a un negocio registrado. Si eres dueño, asocia tu Telegram en tu panel de administración.",
+              parse_mode: "Markdown"
+            })
+          });
+          return;
+        }
+        const b = ownerRows[0];
+        const { rows: txRows } = await db.query(
+          `SELECT COUNT(*) as count, COALESCE(SUM("bunzMinted"), 0) as total_bunz, COALESCE(SUM("fiatAmount"), 0) as total_fiat
+           FROM "transactions"
+           WHERE "businessId" = $1 AND "createdAt" >= CURRENT_DATE`,
+          [b.id]
+        );
+        const stats = txRows[0] || { count: 0, total_bunz: 0, total_fiat: 0 };
+        const corteMsg =
+          `📊 *Corte del Día - ${b.name}*\n\n` +
+          `📅 *Fecha:* ${new Date().toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}\n` +
+          `🧾 *Transacciones hoy:* ${stats.count}\n` +
+          `💰 *Total Venta Validada:* $${parseFloat(stats.total_fiat).toLocaleString()} MXN\n` +
+          `🐰 *Bunz Entregados:* ${parseFloat(stats.total_bunz).toLocaleString()} BUNZ\n\n` +
+          `_Corte generado automáticamente por Rabbitty Bot._`;
+
+        await fetch(`${API}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: uid, text: corteMsg, parse_mode: "Markdown" })
+        });
+        return;
+      } catch (err) {
+        console.error("[BOT CORTE ERROR]", err);
+      }
+    }
+  }
+
+  // ── COMANDO /login (Magic Link instantáneo) ──
+  if (text === "/login") {
+    const db = getDb();
+    if (db) {
+      try {
+        const { rows } = await db.query(
+          `SELECT id, role FROM users WHERE "telegramId" = $1 LIMIT 1`,
+          [String(uid)]
+        );
+        if (rows.length === 0) {
+          await fetch(`${API}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: uid,
+              text: "🐰 Abre la app de Rabbitty por primera vez para inicializar tu cuenta.",
+              reply_markup: {
+                inline_keyboard: [[{ text: "🚀 Abrir Rabbitty", url: "https://t.me/Rabbittyme_bot/app" }]]
+              }
+            })
+          });
+          return;
+        }
+        const user = rows[0];
+        const crypto = await import("crypto");
+        const token = crypto.randomBytes(32).toString("hex");
+        const sid = crypto.randomUUID();
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+
+        await db.query(
+          `INSERT INTO "webSessions" (id, "jwtToken", "userId", "expiresAt")
+           VALUES ($1, $2, $3, $4)`,
+          [sid, token, user.id, expiresAt]
+        );
+
+        const isAdmin = user.role === "ADMIN" || user.role === "AFFILIATE";
+        const loginUrl = isAdmin
+          ? `https://admin.rabbitty.me/magic?token=${token}&sid=${sid}`
+          : `https://app.rabbitty.me/magic-link?token=${token}&sid=${sid}`;
+
+        await fetch(`${API}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: uid,
+            text: `🔑 *Enlace de Inicio Rápido*\n\nHaz clic en el botón para ingresar inmediatamente sin contraseña (válido por 15 minutos):`,
+            parse_mode: "Markdown",
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: "⚡ Iniciar Sesión en Rabbitty", url: loginUrl }]
+              ]
+            }
+          })
+        });
+        return;
+      } catch (err) {
+        console.error("[BOT LOGIN ERROR]", err);
+      }
+    }
+  }
+
+  // ── COMANDO /qr (Código personal para acumular) ──
+  if (text === "/qr") {
+    await fetch(`${API}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: uid,
+        text: `🐰 *Tu Código Rabbitty*\n\nAbre la aplicación para mostrar tu código holográfico animado en la pestaña *Escanear ➔ Mi Código*.`,
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "🐰 Ver Mi RabbittyCode", url: "https://t.me/Rabbittyme_bot/app?startapp=mycode" }]
+          ]
+        }
+      })
+    });
     return;
   }
 

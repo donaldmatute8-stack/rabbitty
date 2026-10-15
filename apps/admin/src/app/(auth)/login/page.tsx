@@ -253,19 +253,16 @@ export default function LoginPage() {
                   setOtpLoading(true);
                   setOtpError("");
                   try {
-                    const res = await signIn("email-token", {
+                    // Al omitir redirect: false, NextAuth realiza un POST HTTP nativo
+                    // con respuesta 302 Redirect. Esto garantiza que WKWebView en iPad/iOS
+                    // persista las cookies HttpOnly de sesión antes de que el navegador cambie de página.
+                    await signIn("email-token", {
                       email: targetDisplay,
                       token: otpCode,
-                      redirect: false,
+                      callbackUrl: "/",
                     });
-                    if (res?.ok) {
-                      window.location.href = "/";
-                    } else {
-                      setOtpError("Código no válido o expirado.");
-                    }
                   } catch {
                     setOtpError("Error al verificar código.");
-                  } finally {
                     setOtpLoading(false);
                   }
                 }}

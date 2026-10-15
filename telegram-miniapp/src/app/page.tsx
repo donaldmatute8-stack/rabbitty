@@ -16,6 +16,7 @@ import { Globe3D } from '@/components/ui/3d-globe';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/contexts/ToastContext';
+import { PlatformBridge } from '@/lib/platform';
 
 const InteractiveMap = dynamic(() => import('@/features/map/InteractiveMap'), {
   ssr: false,
@@ -64,7 +65,14 @@ function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
 
 export default function FeedPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState("bunz'in");
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get('tab');
+      if (tab && TABS.includes(tab)) return tab;
+    }
+    return "bunz'in";
+  });
   const [posts, setPosts] = useState<FeedItem[]>([]);
   const [offers, setOffers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -226,10 +234,10 @@ export default function FeedPage() {
         backdropFilter: isDark ? 'blur(20px)' : 'none',
         borderBottom: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid #F0F0F0',
         transition: 'all 0.3s',
+        paddingTop: 'var(--safe-top, 0px)',
       }}>
-        <div style={{ height: 'max(var(--safe-top, 0px), 8px)' }} />
         {/* Nuevo Custom Header (Buenos días, Bunz) */}
-        <div className="flex items-center justify-between px-5 pt-4 pb-2">
+        <div className="flex items-center justify-between px-5 pt-2 pb-2">
           <Link href="/profile" className="flex items-center gap-3 no-underline">
             <div className="w-11 h-11 rounded-full overflow-hidden" style={{ background: isDark ? '#1A1A2E' : '#F0F0F0', border: isDark ? '1px solid rgba(255,255,255,0.1)' : 'none' }}>
               <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${user?.firstName || 'Rabbitty'}&backgroundColor=E91E63`} alt={user?.firstName || 'User'} className="w-full h-full" />
@@ -407,7 +415,10 @@ export default function FeedPage() {
               style={{ top: 'calc(max(var(--safe-top, 0px), 8px) + 104px)' }}
             >
               {/* Holographic Toggle */}
-              <div className="absolute z-[2000] flex bg-white/5 backdrop-blur-[10px] rounded-full border border-white/10 p-1" style={{ top: 70, right: 72 }}>
+              <div 
+                className="absolute z-[2000] flex bg-white/5 backdrop-blur-[10px] rounded-full border border-white/10 p-1" 
+                style={{ top: PlatformBridge.isTelegram() ? 70 : 14, right: 64 }}
+              >
                 <button
                   onClick={() => setMapMode('globe')}
                   className="px-3 py-[4px] rounded-full text-[11px] font-bold border-none cursor-pointer"

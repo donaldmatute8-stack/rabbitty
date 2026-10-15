@@ -46,15 +46,15 @@ export default function RabbittyCode({ data, size = 260, showCardFrame = true, c
   }, [seed]);
 
   return (
-    <div className={`relative inline-flex flex-col items-center justify-center ${className}`} style={{ width: size, height: showCardFrame ? size * 1.8 : size }}>
+    <div className={`relative inline-flex flex-col items-center justify-center ${className}`} style={{ width: size, height: showCardFrame ? size * 1.5 : size }}>
       {showCardFrame && (
         <>
-          {/* Top Neon Bunny Geometry - Exact Vector Image match Rabbitty_vector.png */}
-          <div className="absolute -top-16 z-30 pointer-events-none drop-shadow-[0_0_20px_rgba(244,63,94,0.95)]">
+          {/* Top Neon Bunny Geometry - Crown of the Card */}
+          <div className="absolute -top-10 z-30 pointer-events-none drop-shadow-[0_0_16px_rgba(244,63,94,0.9)]">
             <img 
               src="/Rabbitty_vector.png" 
               alt="Rabbitty Vector" 
-              className="w-[110px] h-[130px] object-contain filter drop-shadow-[0_0_12px_#F43F5E]" 
+              className="w-[84px] h-[98px] object-contain filter drop-shadow-[0_0_10px_#F43F5E]" 
             />
           </div>
 

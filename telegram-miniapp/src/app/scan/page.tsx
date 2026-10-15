@@ -3,9 +3,10 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Keyboard, QrCode } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Html5Qrcode } from 'html5-qrcode';
 import { QRCodeSVG } from 'qrcode.react';
+import RabbittyCode from '@/components/ui/RabbittyCode';
 import BottomNav from '@/components/BottomNav';
 import Button from '@/components/ui/Button';
 import { useWallet } from '@/contexts/WalletContext';
@@ -15,6 +16,9 @@ import { PlatformBridge } from '@/lib/platform';
 
 export default function ScanPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialTab = searchParams.get('tab') === 'my-code' ? 'my-code' : 'scan';
+
   const { address } = useWallet();
   const { user } = useAuth();
   
@@ -37,7 +41,7 @@ export default function ScanPage() {
   const [result, setResult] = useState<string | null>(null);
   const [manualCode, setManualCode] = useState('');
   const [showManualInput, setShowManualInput] = useState(false);
-  const [activeTab, setActiveTab] = useState<'scan' | 'my-code'>('scan');
+  const [activeTab, setActiveTab] = useState<'scan' | 'my-code'>(initialTab);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isTransitioningRef = useRef(false);
 
@@ -169,15 +173,17 @@ export default function ScanPage() {
   }, [activeTab, hasCamera, showManualInput, result]);
 
   return (
-    <div className="page-wrap bg-[#111111] text-white relative overflow-hidden min-h-dvh">
-      {/* Background glow */}
-      <div className="absolute inset-0 pointer-events-none z-0 bg-[radial-gradient(ellipse_at_50%_40%,rgba(233,30,99,0.06)_0%,transparent_65%)]" />
+    <div 
+      className={`page-wrap ${activeTab === 'scan' ? 'bg-black' : 'bg-[#111111]'} text-white relative min-h-dvh flex flex-col justify-between transition-colors duration-200`} 
+      style={{ paddingTop: 'calc(var(--safe-top, 0px) + 8px)' }}
+    >
+      {/* Background glow only on my-code tab */}
+      {activeTab === 'my-code' && (
+        <div className="absolute inset-0 pointer-events-none z-0 bg-[radial-gradient(ellipse_at_50%_40%,rgba(233,30,99,0.06)_0%,transparent_65%)]" />
+      )}
 
-      {/* Header with natural top padding */}
-      <div 
-        className="absolute inset-x-0 z-50 px-4 flex flex-col items-center gap-4" 
-        style={{ top: 'calc(var(--safe-top, 0px) + 16px)' }}
-      >
+      {/* Header bar */}
+      <div className="relative z-50 px-4 w-full flex flex-col items-center gap-3">
         <div className="flex items-center justify-between w-full">
           <button
             onClick={() => router.back()}
@@ -214,38 +220,28 @@ export default function ScanPage() {
         className={`absolute inset-0 w-full h-full object-cover [&>video]:object-cover [&>video]:w-full [&>video]:h-full ${activeTab === 'scan' && hasCamera && !showManualInput ? 'block' : 'hidden'}`} 
       />
 
-      <div 
-        className="relative flex-1 w-full h-full pb-24 flex flex-col items-center justify-center z-10" 
-        style={{ paddingTop: 'calc(var(--safe-top, 0px) + 110px)' }}
-      >
+      {/* Main Content Area with generous vertical breathing room */}
+      <div className="relative flex-1 w-full flex flex-col items-center justify-center z-10 px-4 py-6">
 
-        {/* My Code tab */}
+        {/* My Code tab - Official Rabbitty Code Hologram */}
         {activeTab === 'my-code' && (
-          <div className="flex flex-col items-center justify-center w-full px-4 py-2 z-20">
-            <div className="text-center mb-6">
+          <div className="flex flex-col items-center justify-center w-full max-w-[340px] z-20">
+            <div className="text-center mb-6 px-2">
               <span className="text-[11px] font-black uppercase tracking-[2px] text-[#E91E63] block mb-1">Mi Identificador Rabbitty</span>
-              <p className="text-white/70 text-xs leading-relaxed m-0 max-w-[280px]">Muestra este código en caja para acumular Bunz o autorizar consumo.</p>
+              <p className="text-white/60 text-xs leading-relaxed m-0">Muestra este código en caja para acumular Bunz o autorizar consumo.</p>
             </div>
-            <div className="bg-white p-6 rounded-[32px] shadow-[0_16px_48px_rgba(233,30,99,0.3)] flex flex-col items-center">
-              <QRCodeSVG
-                value={String(qrValue || 'rabbitty_guest')}
-                size={210}
-                level="H"
-                includeMargin={false}
-                imageSettings={{
-                  src: "/logo_conejo.png",
-                  x: undefined,
-                  y: undefined,
-                  height: 38,
-                  width: 32,
-                  excavate: true,
-                }}
+            
+            <div className="flex flex-col items-center justify-center pt-8">
+              <RabbittyCode 
+                data={String(qrValue || 'rabbitty_guest')} 
+                size={195} 
+                showCardFrame={true} 
               />
-              <div className="mt-4 pt-3 border-t border-gray-100 w-full text-center">
-                <span className="text-xs font-black tracking-[1.5px] text-[#111] uppercase block">
+              <div className="mt-3 text-center">
+                <span className="text-sm font-black tracking-[1.5px] text-white uppercase block">
                   {user?.firstName ? user.firstName : 'Miembro Rabbitty'}
                 </span>
-                <span className="text-[10px] text-gray-400 font-mono tracking-wider block mt-0.5">
+                <span className="text-[11px] text-gray-400 font-mono tracking-wider block mt-0.5">
                   ID: {String(qrValue || '').slice(0, 16)}
                 </span>
               </div>
@@ -254,12 +250,12 @@ export default function ScanPage() {
         )}
 
         {/* Camera scan tab */}
-        {activeTab === 'scan' && hasCamera && !showManualInput && (
-          <>
+        {activeTab === 'scan' && (
+          <div className="flex-1 w-full flex flex-col items-center justify-center relative">
             <div className="absolute inset-0 bg-black/45 z-0" />
 
-            {/* QR Frame */}
-            <div className="relative z-10 w-[240px] h-[240px]">
+            {/* QR Frame - Neon Target */}
+            <div className="relative z-10 w-[240px] h-[240px] mb-6">
               <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="w-full h-full relative">
                 {[['top','left'],['top','right'],['bottom','left'],['bottom','right']].map(([v,h]) => (
                   <div key={`${v}${h}`} style={{
@@ -280,15 +276,57 @@ export default function ScanPage() {
               </motion.div>
             </div>
 
-            <p className="absolute bottom-[160px] text-center text-[13px] text-white/50 z-10 w-full px-8 pointer-events-none">
+            <p className="text-center text-[13px] text-white/60 z-10 px-8 pointer-events-none mb-6">
               Alinea el código QR dentro del recuadro
             </p>
+
+            {/* Ingreso manual abajo de la cámara */}
+            <div className="w-full max-w-[320px] px-4 z-20">
+              <button
+                type="button"
+                onClick={() => setShowManualInput(!showManualInput)}
+                className="w-full py-3 px-4 bg-white/10 hover:bg-white/15 backdrop-blur-xl border border-white/15 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold text-white transition-colors cursor-pointer"
+              >
+                <Keyboard size={16} />
+                <span>{showManualInput ? 'Ocultar ingreso manual' : '¿No puedes escanear? Escribe el código'}</span>
+              </button>
+
+              <AnimatePresence>
+                {showManualInput && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="mt-3 flex flex-col gap-2 overflow-hidden"
+                  >
+                    <input
+                      type="text"
+                      placeholder="Código de 8 dígitos..."
+                      value={manualCode}
+                      onChange={e => setManualCode(e.target.value.toUpperCase())}
+                      className="w-full bg-black/70 border border-white/20 rounded-xl px-4 py-3 text-white text-center font-mono font-bold text-base tracking-[2px] outline-none"
+                    />
+                    <button
+                      onClick={() => {
+                        if (!manualCode.trim()) return;
+                        alert(`Código ${manualCode} verificado exitosamente`);
+                        setManualCode('');
+                        router.push('/');
+                      }}
+                      className="w-full bg-[#E91E63] text-white font-extrabold text-xs py-3 rounded-xl border-0 cursor-pointer shadow-lg shadow-[#E91E63]/30"
+                    >
+                      Verificar código
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
 
             <AnimatePresence>
               {result && (
                 <motion.div
                   initial={{ opacity: 0, y: 80 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 80 }}
-                  className="absolute bottom-32 left-4 right-4 bg-white rounded-[28px] p-6 z-20 shadow-[0_20px_60px_rgba(0,0,0,0.3)] border border-[#F0F0F0]"
+                  className="absolute bottom-32 left-4 right-4 bg-white rounded-[28px] p-6 z-30 shadow-[0_20px_60px_rgba(0,0,0,0.3)] border border-[#F0F0F0]"
                 >
                   <p className="text-[#111] font-extrabold text-lg mb-[6px] flex items-center justify-between">
                     <span className="flex items-center gap-2">
@@ -325,7 +363,6 @@ export default function ScanPage() {
                         mod.default.HapticFeedback.notificationOccurred('success');
                       }).catch(()=>{});
 
-                      // Call approveIntent
                       try {
                         const authHeader = await getAuthHeader();
                         const res = await fetch(`${API_SERVER_URL}/payments.approveIntent?batch=1`, {
@@ -361,43 +398,7 @@ export default function ScanPage() {
                 </motion.div>
               )}
             </AnimatePresence>
-          </>
-        )}
-
-        {/* Manual code tab */}
-        {activeTab === 'scan' && (!hasCamera || showManualInput) && (
-          <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
-            className="text-center px-6 w-full max-w-[360px] z-10">
-            <div className="w-20 h-20 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mx-auto mb-6">
-              <QrCode size={40} color="rgba(255,255,255,0.6)" strokeWidth={1.5} />
-            </div>
-            <p className="text-xl font-extrabold text-white mb-2">Ingresar código</p>
-            <p className="text-[13px] text-white/45 mb-6 leading-[1.6]">
-              Introduce el código de 8 dígitos del ticket o proporcionado por el comercio.
-            </p>
-            <div className="flex flex-col gap-3">
-              <input
-                type="text"
-                placeholder="Escribe el código aquí..."
-                value={manualCode}
-                onChange={e => setManualCode(e.target.value.toUpperCase())}
-                className="w-full bg-white/[0.08] border border-white/10 rounded-[20px] px-5 py-4 text-white text-center font-extrabold text-lg tracking-[4px] outline-none box-border"
-              />
-              <button 
-                onClick={() => {
-                  import('@twa-dev/sdk').then((mod) => {
-                    mod.default.HapticFeedback.notificationOccurred('success');
-                  }).catch(()=>{});
-                  alert(`Código ${manualCode} verificado exitosamente`);
-                  setManualCode('');
-                  router.push('/');
-                }}
-                className="w-full bg-[#E91E63] text-white font-extrabold text-[15px] py-4 rounded-full border-0 cursor-pointer shadow-[0_6px_20px_rgba(233,30,99,0.4)]"
-              >
-                Verificar código
-              </button>
-            </div>
-          </motion.div>
+          </div>
         )}
 
       </div>

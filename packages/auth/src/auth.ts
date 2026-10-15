@@ -6,11 +6,13 @@ import { getCoreDb } from "@rabbitty/api/db";
 import { verificationTokens, users } from "@rabbitty/database-core";
 import { eq, sql } from "drizzle-orm";
 
-if (!process.env.AUTH_URL || process.env.AUTH_URL.includes("localhost")) {
-  process.env.AUTH_URL = "https://admin.rabbitty.me";
-}
-if (!process.env.NEXTAUTH_URL || process.env.NEXTAUTH_URL.includes("localhost")) {
-  process.env.NEXTAUTH_URL = "https://admin.rabbitty.me";
+if (process.env.NODE_ENV === "production") {
+  if (!process.env.AUTH_URL || process.env.AUTH_URL.includes("localhost")) {
+    process.env.AUTH_URL = "https://admin.rabbitty.me";
+  }
+  if (!process.env.NEXTAUTH_URL || process.env.NEXTAUTH_URL.includes("localhost")) {
+    process.env.NEXTAUTH_URL = "https://admin.rabbitty.me";
+  }
 }
 
 // DB-backed admin user store (for email/magic link authentication)
@@ -352,19 +354,51 @@ const authResult = NextAuth({
           // 3. Verify email or identifier matches
           const credClean = (credentials.email as string).trim().toLowerCase();
           const storedClean = stored.identifier.trim().toLowerCase();
-          const isDirectMatch = storedClean === credClean;
+          let isMatch = storedClean === credClean;
           
           let resolvedEmail = stored.identifier;
 
-          if (!isDirectMatch) {
-            // Check if stored identifier is phone or credClean is phone and maps to the other
+          if (!isMatch) {
             const credDigits = credClean.replace(/\D/g, "");
             const storedDigits = storedClean.replace(/\D/g, "");
-            const isPhoneMatch = credDigits.length >= 8 && storedDigits.length >= 8 && (
-              credDigits.endsWith(storedDigits.slice(-10)) || storedDigits.endsWith(credDigits.slice(-10))
-            );
 
-            if (!isPhoneMatch) {
+            // Comparación de dígitos telefónicos si ambos son números
+            if (
+              credDigits.length >= 8 &&
+              storedDigits.length >= 8 &&
+              (credDigits.endsWith(storedDigits.slice(-10)) || storedDigits.endsWith(credDigits.slice(-10)))
+            ) {
+              isMatch = true;
+            } else if (credDigits.length >= 8) {
+              // El usuario envió un teléfono pero el token se guardó con su correo (o viceversa)
+              const [userByPhone] = await db
+                .select({ id: users.id, email: users.email })
+                .from(users)
+                .where(sql`regexp_replace(${users.phoneNumber}, '\\D', '', 'g') LIKE ${'%' + credDigits.slice(-10)}`)
+                .limit(1);
+
+              if (userByPhone && userByPhone.email?.toLowerCase() === storedClean) {
+                isMatch = true;
+                resolvedEmail = userByPhone.email;
+              }
+            } else if (storedDigits.length >= 8) {
+              // El token se guardó con teléfono y el usuario envió correo
+              const [userByEmail] = await db
+                .select({ id: users.id, phoneNumber: users.phoneNumber })
+                .from(users)
+                .where(eq(users.email, credClean))
+                .limit(1);
+
+              if (userByEmail && userByEmail.phoneNumber) {
+                const userPhoneDigits = userByEmail.phoneNumber.replace(/\D/g, "");
+                if (userPhoneDigits.endsWith(storedDigits.slice(-10))) {
+                  isMatch = true;
+                  resolvedEmail = credClean;
+                }
+              }
+            }
+
+            if (!isMatch) {
               console.warn("[email-token] Email mismatch", stored.identifier, credentials.email);
               return null;
             }
@@ -423,8 +457,11 @@ const authResult = NextAuth({
       async authorize(credentials) {
         if (!credentials?.token || !credentials?.sid) return null;
 
-        const DEFAULT_NEON_URL = "postgresql://neondb_owner:npg_ltE02YwbyAaP@ep-delicate-violet-ap6izh0k-pooler.c-7.us-east-1.aws.neon.tech/neondb?sslmode=require";
-        const coreDbUrl = process.env.CORE_DATABASE_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL || DEFAULT_NEON_URL;
+        const coreDbUrl = process.env.CORE_DATABASE_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL;
+        if (!coreDbUrl) {
+          console.error("[magic-link] CORE_DATABASE_URL or DATABASE_URL is not set.");
+          return null;
+        }
 
         try {
           const { default: pg } = await import("pg");

@@ -37,11 +37,11 @@ export default function BottomNav({ isDark }: BottomNavProps = {}) {
 
         {/* Home / Feed */}
         <Link href="/" className="flex items-center justify-center w-12 h-12">
-          <div className="w-[44px] h-[44px] flex items-center justify-center">
+          <div className="w-[46px] h-[46px] flex items-center justify-center">
             <img
               src="/Ra.png"
               alt="Ra"
-              className="w-full h-full object-contain"
+              className="w-full h-full object-contain scale-[1.38] transition-transform"
               style={{
                 filter: isFeed 
                   ? 'none' 

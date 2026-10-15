@@ -198,6 +198,60 @@ export async function POST(req: NextRequest) {
       receiptHash,
     });
 
+    // Telegram Bot Push Notification (EARN Event)
+    const activeBotToken = process.env.TELEGRAM_BOT_TOKEN;
+    if (activeBotToken) {
+      if (customer.telegramId) {
+        try {
+          const earnMsg =
+            `🎉 *¡Ganaste ${bunzReward.toLocaleString()} Bunz!* 🐰\n\n` +
+            `Tu consumo de *$${fiatAmount.toLocaleString()} MXN* en *${business.name}* ha sido validado exitosamente.\n\n` +
+            `_¡Sigue acumulando Bunz y sube de nivel en la comunidad!_`;
+
+          await fetch(`https://api.telegram.org/bot${activeBotToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: customer.telegramId,
+              text: earnMsg,
+              parse_mode: 'Markdown',
+            }),
+          });
+        } catch (tgErr) {
+          console.error('[TG_NOTIFICATION_ERROR]', tgErr);
+        }
+      }
+
+      // Check if business credit limit is running low (< 15% remaining)
+      if (business.creditLimit > 0) {
+        const remainingCredit = business.creditLimit - ((business.creditUsed || 0) + bunzReward);
+        const ratio = remainingCredit / business.creditLimit;
+        if (ratio <= 0.15 && business.ownerId) {
+          try {
+            const owner = await db.query.users.findFirst({ where: eq(users.id, business.ownerId) });
+            if (owner?.telegramId) {
+              const alertMsg =
+                `⚠️ *Alerta de Bunz Bajos - ${business.name}*\n\n` +
+                `Te quedan solo *${remainingCredit.toLocaleString()} Bunz* disponibles para recompensar a tus clientes.\n\n` +
+                `Ingresa a tu panel de administración para recargar y seguir entregando beneficios.`;
+
+              await fetch(`https://api.telegram.org/bot${activeBotToken}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  chat_id: owner.telegramId,
+                  text: alertMsg,
+                  parse_mode: 'Markdown',
+                }),
+              });
+            }
+          } catch (creditAlertErr) {
+            console.error('[CREDIT_ALERT_ERROR]', creditAlertErr);
+          }
+        }
+      }
+    }
+
     return NextResponse.json({
       success: true,
       message: "Recompensa otorgada exitosamente.",
