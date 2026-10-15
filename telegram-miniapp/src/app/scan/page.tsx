@@ -85,7 +85,35 @@ export default function ScanPage() {
             mod.default.HapticFeedback.notificationOccurred('success');
           }).catch(()=>{});
 
-          // Extract intent ID and resolve it
+          // 1. Check if it is a QR Login for PC/Admin
+          if (decodedText.includes('qrlogin_')) {
+            const qrToken = decodedText.split('qrlogin_')[1].split('&')[0].split('?')[0];
+            setScanning(false);
+            await stopScanning();
+            try {
+              const res = await fetch('/api/auth/qr/scan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ qrToken, userId: user?.id })
+              });
+              const data = await res.json();
+              if (data.success) {
+                alert("¡Inicio de sesión exitoso en la PC! 🪄");
+                router.push('/profile');
+                return;
+              } else {
+                alert("Error de inicio de sesión QR: " + (data.error || 'Token inválido'));
+                startScanning();
+                return;
+              }
+            } catch {
+              alert("Error de conexión al validar el QR.");
+              startScanning();
+              return;
+            }
+          }
+
+          // 2. Extract intent ID and resolve it (POS Payment)
           let intentId = decodedText;
           if (decodedText.includes('pay_pi_')) {
             intentId = 'pi_' + decodedText.split('pay_pi_')[1];

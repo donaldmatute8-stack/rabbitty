@@ -9,6 +9,9 @@ import { resolveApiUrl } from "@/lib/api-config";
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpError, setOtpError] = useState("");
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [recentEmails, setRecentEmails] = useState<string[]>([]);
@@ -84,15 +87,95 @@ export default function LoginPage() {
         <div className="absolute top-[-10%] right-[-10%] h-[500px] w-[500px] rounded-full bg-pink-500/10 blur-[120px] pointer-events-none" />
         <div className="absolute bottom-[-10%] left-[-10%] h-[500px] w-[500px] rounded-full bg-purple-500/10 blur-[120px] pointer-events-none" />
 
-        <div className="relative z-10 w-full max-w-md rounded-3xl border border-white/5 bg-white/5 p-8 text-center shadow-2xl backdrop-blur-xl space-y-6">
+        <div className="relative z-10 w-full max-w-md rounded-3xl border border-white/10 bg-white/5 p-8 text-center shadow-2xl backdrop-blur-xl space-y-6">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.15)] animate-bounce-slow">
             <Mail className="h-8 w-8" />
           </div>
+
           <div className="space-y-2">
             <h1 className="text-2xl font-black text-white">Revisa tu correo</h1>
             <p className="text-sm text-gray-400 leading-relaxed">
-              Te hemos enviado un enlace mágico de acceso a <strong className="text-white font-semibold">{email}</strong>. Haz clic en el enlace para entrar.
+              Te hemos enviado un enlace de acceso a <strong className="text-white font-semibold">{email}</strong>.
             </p>
+          </div>
+
+          {/* Opción de ingreso de código de 6 dígitos OTP */}
+          <div className="pt-2 pb-1 space-y-3 border-y border-white/5 py-4">
+            <span className="text-[11px] font-semibold text-gray-300 uppercase tracking-wider block">
+              O ingresa tu código de 6 dígitos:
+            </span>
+            <div className="flex gap-2 justify-center">
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                placeholder="123456"
+                value={otpCode}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, "").slice(0, 6);
+                  setOtpCode(val);
+                  setOtpError("");
+                }}
+                className="w-44 h-12 text-center text-xl font-mono font-bold tracking-[0.25em] bg-black/40 border border-white/20 rounded-xl focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 text-white outline-none"
+              />
+              <button
+                type="button"
+                disabled={otpCode.length !== 6 || otpLoading}
+                onClick={async () => {
+                  if (otpCode.length !== 6) return;
+                  setOtpLoading(true);
+                  setOtpError("");
+                  try {
+                    const res = await signIn("email-token", {
+                      email,
+                      token: otpCode,
+                      redirect: false,
+                    });
+                    if (res?.ok) {
+                      window.location.href = "/";
+                    } else {
+                      setOtpError("Código no válido o expirado.");
+                    }
+                  } catch (e) {
+                    setOtpError("Error al verificar código.");
+                  } finally {
+                    setOtpLoading(false);
+                  }
+                }}
+                className="px-5 h-12 rounded-xl bg-pink-500 font-bold text-xs text-white hover:bg-pink-600 active:scale-95 disabled:opacity-40 disabled:pointer-events-none transition-all shadow-[0_0_15px_rgba(236,72,153,0.3)] cursor-pointer"
+              >
+                {otpLoading ? "..." : "Entrar"}
+              </button>
+            </div>
+            {otpError && (
+              <p className="text-[11px] text-rose-400 font-medium">{otpError}</p>
+            )}
+          </div>
+
+          {/* Acciones: Volver o Reenviar */}
+          <div className="pt-1 space-y-2.5">
+            <button
+              type="button"
+              onClick={async () => {
+                await signIn("resend", { email, redirect: false });
+              }}
+              className="w-full py-2.5 rounded-2xl bg-pink-500/10 border border-pink-500/20 text-pink-300 text-xs font-bold hover:bg-pink-500/20 transition-all cursor-pointer"
+            >
+              Reenviar correo con código
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSent(false);
+                setOtpCode("");
+                setOtpError("");
+              }}
+              className="w-full py-2 rounded-2xl border border-white/10 bg-white/5 text-gray-400 text-xs font-bold hover:bg-white/10 hover:text-white transition-all cursor-pointer flex items-center justify-center gap-2"
+            >
+              ← Usar otro correo o Escanear QR
+            </button>
           </div>
         </div>
       </div>
