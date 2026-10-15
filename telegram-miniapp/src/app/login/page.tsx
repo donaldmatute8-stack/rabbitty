@@ -233,11 +233,11 @@ export default function LoginPage() {
         }
         await checkAuth();
 
-        if (data.user?.role === 'AFFILIATE') {
-          router.replace('/business');
-        } else if (data.isNewUser || !data.user?.firstName) {
-          // Send to onboarding profile setup to complete name and profile
+        if (data.isNewUser || !data.user?.firstName) {
+          // Send to onboarding profile setup to complete name and identity first
           router.replace('/signup?setup=1');
+        } else if (data.user?.role === 'AFFILIATE') {
+          router.replace('/business');
         } else {
           router.replace('/');
         }

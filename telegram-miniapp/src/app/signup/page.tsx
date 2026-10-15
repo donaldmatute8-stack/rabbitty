@@ -39,7 +39,6 @@ export default function SignupPage() {
       if (user.firstName) setFirstName(user.firstName);
       if (user.lastName) setLastName(user.lastName);
       if (user.username && !user.username.startsWith('user_')) setUsername(user.username);
-      setBiometricsSupported(PlatformBridge.isNative() || typeof window !== 'undefined' && 'PublicKeyCredential' in window);
       return;
     }
 
@@ -57,7 +56,7 @@ export default function SignupPage() {
           return;
         }
 
-        // Check Biometrics Support
+        // Check Biometrics Support for Telegram
         if (app.BiometricManager && app.BiometricManager.isInited) {
           setBiometricsSupported(app.BiometricManager.isBiometricAvailable);
         } else if (app.BiometricManager) {
@@ -73,37 +72,40 @@ export default function SignupPage() {
     PlatformBridge.getSessionToken().then((token) => {
       if (!token) {
         router.replace('/login');
-      } else {
-        setBiometricsSupported(true);
       }
     });
-  }, [user]);
+  }, [user, router]);
 
   useEffect(() => {
     // Auto focus on step change
-    if (step === 1 || step === 2) {
+    if (step >= 1 && step <= 3) {
       setTimeout(() => inputRef.current?.focus(), 300);
     }
   }, [step]);
 
   const handleRequestBiometrics = async () => {
     try {
-      const mod = await import('@twa-dev/sdk');
-      const app = mod.default;
+      if (PlatformBridge.isTelegram()) {
+        const mod = await import('@twa-dev/sdk');
+        const app = mod.default;
 
-      if (!app.BiometricManager.isBiometricAvailable) {
-        setStep(4);
-        return;
-      }
-
-      app.BiometricManager.requestAccess({ reason: 'Protege tus Bunz con Face ID' }, (granted) => {
-        if (granted) {
-          setBiometricsEnabled(true);
-          showToast('Biométricos activados exitosamente 🔒', 'success');
+        if (!app.BiometricManager?.isBiometricAvailable) {
+          setStep(4);
+          return;
         }
+
+        app.BiometricManager.requestAccess({ reason: 'Protege tus Bunz' }, (granted) => {
+          if (granted) {
+            setBiometricsEnabled(true);
+            showToast('Biométricos activados en Telegram 🔒', 'success');
+          }
+          setStep(4);
+        });
+      } else {
+        // Native / Web: Advance to next step directly
         setStep(4);
-      });
-    } catch (e) {
+      }
+    } catch {
       setStep(4);
     }
   };
@@ -112,14 +114,20 @@ export default function SignupPage() {
     setLoading(true);
     try {
       const token = await PlatformBridge.getSessionToken();
+      let initData = '';
+      if (PlatformBridge.isTelegram()) {
+        try {
+          const mod = await import('@twa-dev/sdk');
+          initData = mod.default?.initData || '';
+        } catch {}
+      }
+
       const payload = {
-        telegramId,
         firstName: firstName.trim(),
         lastName: lastName.trim(),
-        username: username.trim() || undefined,
+        username: username.trim().replace(/^@/, '') || undefined,
         tonWalletAddress: skipWallet ? null : address,
-        biometricsEnabled,
-        userId: user?.id,
+        initData: initData || undefined,
       };
 
       const res = await fetch('/api/auth/register', {
@@ -140,7 +148,7 @@ export default function SignupPage() {
         setError(data.error);
         await PlatformBridge.hapticFeedback('error');
       }
-    } catch (e) {
+    } catch {
       setError('Error de conexión');
       await PlatformBridge.hapticFeedback('error');
     } finally {
@@ -154,7 +162,7 @@ export default function SignupPage() {
     }
   };
 
-  const totalSteps = 4;
+  const totalSteps = 3;
 
   const [showInfo, setShowInfo] = useState(false);
 
@@ -207,76 +215,56 @@ export default function SignupPage() {
             </motion.div>
           )}
 
-          {/* STEP 2: LAST NAME */}
+          {/* STEP 2: LAST NAME & USERNAME */}
           {step === 2 && (
             <motion.div key="s2" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -30 }} transition={{ duration: 0.4, ease: "easeOut" }} className="flex flex-col">
               <span className="font-bold mb-4 tracking-widest text-sm" style={{ color: "var(--rabbitty-pink)" }}>IDENTIDAD (2/2)</span>
-              <h1 className="text-4xl md:text-5xl font-black text-white mb-8 tracking-tight leading-tight">
-                ¿Y tus apellidos?
+              <h1 className="text-3xl md:text-4xl font-black text-white mb-6 tracking-tight leading-tight">
+                Tus apellidos y usuario
               </h1>
 
-              <input
-                ref={inputRef}
-                value={lastName}
-                onChange={e => setLastName(e.target.value)}
-                onKeyDown={e => handleKeyDown(e, 3)}
-                placeholder="Tus apellidos"
-                autoFocus
-                className="w-full bg-transparent border-b-2 border-white/20 text-3xl pb-4 outline-none transition-colors placeholder:text-white/20"
-                style={{ borderColor: lastName ? "var(--rabbitty-pink)" : "rgba(255,255,255,0.2)" }}
-              />
+              <div className="flex flex-col gap-6">
+                <div>
+                  <label className="text-xs uppercase tracking-wider text-white/40 block mb-2 font-bold">Apellidos</label>
+                  <input
+                    ref={inputRef}
+                    value={lastName}
+                    onChange={e => setLastName(e.target.value)}
+                    placeholder="Tus apellidos"
+                    autoFocus
+                    className="w-full bg-transparent border-b-2 border-white/20 text-2xl pb-3 outline-none transition-colors placeholder:text-white/20"
+                    style={{ borderColor: lastName ? "var(--rabbitty-pink)" : "rgba(255,255,255,0.2)" }}
+                  />
+                </div>
 
-              <div className="mt-[60px]">
+                <div>
+                  <label className="text-xs uppercase tracking-wider text-white/40 block mb-2 font-bold">Nombre de usuario (@)</label>
+                  <div className="flex items-center border-b-2 border-white/20 pb-3 transition-colors" style={{ borderColor: username ? "var(--rabbitty-pink)" : "rgba(255,255,255,0.2)" }}>
+                    <span className="text-xl text-[var(--rabbitty-pink)] font-black mr-1">@</span>
+                    <input
+                      value={username}
+                      onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                      onKeyDown={e => handleKeyDown(e, 3)}
+                      placeholder="usuario_rabbitty"
+                      className="w-full bg-transparent text-xl outline-none placeholder:text-white/20"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-10">
                 <button
                   onClick={() => setStep(3)}
                   className="w-full text-black font-black flex items-center justify-center gap-3 active:scale-95 transition-transform bg-white text-base py-[17px] rounded-full border-none cursor-pointer shadow-[0_4px_15px_rgba(255,255,255,0.1)] font-[var(--font-family-base)]"
                 >
-                  Confirmar Identidad <span className="text-xl">✓</span>
+                  Confirmar Perfil <span className="text-xl">✓</span>
                 </button>
               </div>
             </motion.div>
           )}
 
-          {/* STEP 3: BIOMETRICS */}
+          {/* STEP 3: WALLET */}
           {step === 3 && (
-            <motion.div key="s3" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -30 }} transition={{ duration: 0.4, ease: "easeOut" }} className="flex flex-col">
-              <div className="w-20 h-20 bg-blue-500/20 text-blue-400 rounded-3xl flex items-center justify-center mb-8 text-4xl border border-blue-500/30 mx-auto">
-                🛡️
-              </div>
-              <h1 className="text-4xl md:text-5xl font-black text-white mb-6 tracking-tight leading-tight text-center">
-                Protege tus Bunz
-              </h1>
-              <p className="text-white/60 text-lg mb-16 leading-relaxed text-center">
-                Activa <span className="text-white font-bold">Face ID</span> o Touch ID. Así nadie más podrá reclamar tus recompensas ni robar tu billetera.
-              </p>
-
-              <div className="flex flex-col gap-4 mt-auto">
-                {biometricsSupported ? (
-                  <button
-                    onClick={handleRequestBiometrics}
-                    className="w-full text-white font-black active:scale-95 transition-transform shadow-[0_4px_15px_rgba(59,130,246,0.3)] bg-[#3B82F6] text-base py-[17px] rounded-full border-none cursor-pointer font-[var(--font-family-base)]"
-                  >
-                    Activar Face ID
-                  </button>
-                ) : (
-                  <div
-                    className="bg-orange-500/10 rounded-2xl border border-orange-500/30 text-orange-400 text-xs font-medium mb-2 text-center my-[10px] px-[10px] py-[14px] leading-[1.6]"
-                  >
-                    Tu dispositivo actual no soporta biométricos o no diste permisos a Telegram.
-                  </div>
-                )}
-                <button
-                  onClick={() => setStep(4)}
-                  className="w-full text-white/60 font-bold active:scale-95 transition-transform bg-[rgba(255,255,255,0.05)] text-base py-[17px] rounded-full border border-white/10 cursor-pointer font-[var(--font-family-base)]"
-                >
-                  Saltar por ahora
-                </button>
-              </div>
-            </motion.div>
-          )}
-
-          {/* STEP 4: WALLET */}
-          {step === 4 && (
             <motion.div key="s4" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -30 }} transition={{ duration: 0.4, ease: "easeOut" }} className="flex flex-col">
               <div className="w-20 h-20 bg-pink-500/20 text-pink-400 rounded-3xl flex items-center justify-center mb-8 text-4xl border border-pink-500/30 shadow-[0_0_40px_rgba(233,30,99,0.2)] mx-auto">
                 💎
