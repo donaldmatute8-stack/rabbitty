@@ -6,10 +6,14 @@ import { useRouter } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
 import { useToast } from '@/contexts/ToastContext';
 
+import { PlatformBridge } from '@/lib/platform';
+import { useAuth } from '@/features/auth/AuthProvider';
+
 export default function SignupPage() {
   const router = useRouter();
   const { address, connect } = useWallet();
   const { showToast } = useToast();
+  const { user, checkAuth } = useAuth();
 
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -29,29 +33,51 @@ export default function SignupPage() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Load Telegram Data
-    import('@twa-dev/sdk').then((mod) => {
-      const app = mod.default;
-      if (app.initDataUnsafe?.user) {
-        setTelegramId(app.initDataUnsafe.user.id.toString());
-        setFirstName(app.initDataUnsafe.user.first_name || '');
-        setLastName(app.initDataUnsafe.user.last_name || '');
-        setUsername(app.initDataUnsafe.user.username || '');
-      } else {
-        router.replace('/login');
-        return;
-      }
+    // 1. If we have a logged-in user session (Native iOS or Web)
+    if (user) {
+      if (user.telegramId) setTelegramId(String(user.telegramId));
+      if (user.firstName) setFirstName(user.firstName);
+      if (user.lastName) setLastName(user.lastName);
+      if (user.username && !user.username.startsWith('user_')) setUsername(user.username);
+      setBiometricsSupported(PlatformBridge.isNative() || typeof window !== 'undefined' && 'PublicKeyCredential' in window);
+      return;
+    }
 
-      // Check Biometrics Support
-      if (app.BiometricManager && app.BiometricManager.isInited) {
-        setBiometricsSupported(app.BiometricManager.isBiometricAvailable);
-      } else if (app.BiometricManager) {
-        app.BiometricManager.init(() => {
+    // 2. Load Telegram Data if in Telegram
+    if (PlatformBridge.isTelegram()) {
+      import('@twa-dev/sdk').then((mod) => {
+        const app = mod.default;
+        if (app.initDataUnsafe?.user) {
+          setTelegramId(app.initDataUnsafe.user.id.toString());
+          setFirstName(app.initDataUnsafe.user.first_name || '');
+          setLastName(app.initDataUnsafe.user.last_name || '');
+          setUsername(app.initDataUnsafe.user.username || '');
+        } else {
+          router.replace('/login');
+          return;
+        }
+
+        // Check Biometrics Support
+        if (app.BiometricManager && app.BiometricManager.isInited) {
           setBiometricsSupported(app.BiometricManager.isBiometricAvailable);
-        });
+        } else if (app.BiometricManager) {
+          app.BiometricManager.init(() => {
+            setBiometricsSupported(app.BiometricManager.isBiometricAvailable);
+          });
+        }
+      });
+      return;
+    }
+
+    // 3. Check if stored session exists for native
+    PlatformBridge.getSessionToken().then((token) => {
+      if (!token) {
+        router.replace('/login');
+      } else {
+        setBiometricsSupported(true);
       }
     });
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     // Auto focus on step change
@@ -85,29 +111,38 @@ export default function SignupPage() {
   const finalizeRegistration = async (skipWallet = false) => {
     setLoading(true);
     try {
+      const token = await PlatformBridge.getSessionToken();
       const payload = {
         telegramId,
-        firstName,
-        lastName,
-        username,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        username: username.trim() || undefined,
         tonWalletAddress: skipWallet ? null : address,
-        biometricsEnabled
+        biometricsEnabled,
+        userId: user?.id,
       };
 
       const res = await fetch('/api/auth/register', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
       if (data.success) {
-        window.location.href = '/'; // Hard refresh to Feed
+        await PlatformBridge.hapticFeedback('success');
+        await checkAuth();
+        router.replace('/');
       } else {
         setError(data.error);
+        await PlatformBridge.hapticFeedback('error');
       }
     } catch (e) {
       setError('Error de conexión');
+      await PlatformBridge.hapticFeedback('error');
     } finally {
       setLoading(false);
     }

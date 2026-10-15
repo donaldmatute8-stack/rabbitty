@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import BottomNav from '@/components/BottomNav';
+import { PlatformBridge } from '@/lib/platform';
 
 interface LayoutProps {
   title: React.ReactNode;
@@ -33,7 +34,11 @@ export default function ProfileSubpageLayout({ title, children, showBack = true 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, position: 'relative', zIndex: 1 }}>
             {showBack && (
               <button
-                onClick={() => router.back()}
+                onClick={() => {
+                  PlatformBridge.hapticFeedback('light');
+                  router.back();
+                }}
+                className="active:scale-90 transition-transform"
                 style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px 8px 8px 0' }}
               >
                 <svg width="10" height="18" viewBox="0 0 10 18" fill="none">
