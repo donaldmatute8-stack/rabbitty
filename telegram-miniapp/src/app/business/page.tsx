@@ -23,7 +23,8 @@ export default function BusinessPage() {
 
   const fetchBusiness = async () => {
     try {
-      const res = await fetch(`/api/business?telegramId=${user.telegramId}`);
+      const queryParam = user.id ? `userId=${user.id}` : `telegramId=${user.telegramId}`;
+      const res = await fetch(`/api/business?${queryParam}`);
       const data = await res.json();
       if (data.success && data.business) {
         setBusiness(data.business);

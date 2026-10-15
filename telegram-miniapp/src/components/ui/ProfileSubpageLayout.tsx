@@ -15,8 +15,6 @@ export default function ProfileSubpageLayout({ title, children, showBack = true 
 
   return (
     <div className="page-wrap" style={{ background: '#F8F8F8', fontFamily: 'var(--font-family-base)', paddingBottom: 100 }}>
-      <div style={{ height: 'var(--safe-top)' }} />
-
       <main style={{ width: '100%', maxWidth: 600, margin: '0 auto', paddingLeft: 16, paddingRight: 16 }}>
 
         {/* Header */}
@@ -25,9 +23,9 @@ export default function ProfileSubpageLayout({ title, children, showBack = true 
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          margin: '0 -16px 24px',
-          height: 'calc(100px + var(--safe-top))',
-          padding: 'var(--safe-top) 20px 0',
+          margin: '0 -16px 20px',
+          height: 'calc(64px + var(--safe-top, 0px))',
+          padding: 'calc(var(--safe-top, 0px) + 8px) 20px 12px',
           background: '#fff',
           borderBottom: '1px solid #F0F0F0',
           overflow: 'hidden',

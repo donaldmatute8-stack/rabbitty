@@ -45,13 +45,18 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const wallet = searchParams.get('wallet');
     const telegramId = searchParams.get('telegramId');
+    const userId = searchParams.get('userId');
 
-    if (!wallet && !telegramId) {
+    if (!wallet && !telegramId && !userId) {
       return NextResponse.json({ error: 'Missing identifier' }, { status: 400 });
     }
 
     let user;
-    if (telegramId) {
+    if (userId) {
+      user = await db.query.users.findFirst({
+        where: eq(users.id, userId)
+      });
+    } else if (telegramId) {
       user = await db.query.users.findFirst({
         where: eq(users.telegramId, telegramId)
       });
@@ -149,17 +154,30 @@ export async function POST(req: Request) {
     if (TELEGRAM_BOT_TOKEN) {
       for (const adminId of ADMIN_TELEGRAM_IDS) {
         try {
+          const payload: any = {
+            chat_id: adminId.trim(),
+            text: `🆕 *Nuevo negocio registrado*\n\n*${name}*\n${category} — ${address}\nPaquete: ${selectedPackage || 'Sin paquete'} (${parsedCredit.toLocaleString()} Bunz)\nReward: ${parsedReward}%\nDueño: ${owner.firstName || '?'} (@${owner.username || '?'})\n\nEstado: ${isGoogleVerified ? '✅ Aprobado (Google)' : '⏳ Pendiente de verificación'}`,
+            parse_mode: 'Markdown',
+            disable_web_page_preview: true,
+          };
+
+          if (!isGoogleVerified) {
+            payload.reply_markup = {
+              inline_keyboard: [
+                [
+                  { text: "✅ Aprobar Negocio", callback_data: `approve_biz_${business.id}` },
+                  { text: "❌ Rechazar", callback_data: `reject_biz_${business.id}` },
+                ]
+              ]
+            };
+          }
+
           await fetch(
             `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                chat_id: adminId.trim(),
-                text: `🆕 *Nuevo negocio registrado*\n\n*${name}*\n${category} — ${address}\nPaquete: ${selectedPackage || 'Sin paquete'} (${parsedCredit.toLocaleString()} Bunz)\nReward: ${parsedReward}%\nDueño: ${owner.firstName || '?'} (@${owner.username || '?'})\n\nEstado: ${isGoogleVerified ? '✅ Aprobado (Google)' : '⏳ Pendiente de verificación'}`,
-                parse_mode: 'Markdown',
-                disable_web_page_preview: true,
-              }),
+              body: JSON.stringify(payload),
             }
           );
         } catch {}

@@ -24,6 +24,11 @@ body {
 .safe-top { padding-top: var(--safe-top); }
 .safe-bottom { padding-bottom: var(--safe-bottom); }
 
+/* Dark mode OpenStreetMap styling for Freehands tab */
+.osm-dark-tile {
+  filter: brightness(0.65) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.75) !important;
+}
+
 /* Scrollbar hide */
 ::-webkit-scrollbar { width: 0; height: 0; }
 

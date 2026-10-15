@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Crosshair } from 'lucide-react';
+import { PlatformBridge } from '@/lib/platform';
 
 interface InteractiveMapProps {
   businesses: any[];
@@ -134,11 +135,10 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
       attributionControl: false,
     });
 
-    // Dark OSM Layer (100% gratis, sin API key ni marcas de agua)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap contributors',
-      className: 'osm-dark-tile',
+    // Stadia Alidade Smooth Dark: mapa oscuro minimalista sin ruido (calles limpias y negocios Rabbitty destacados)
+    L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png', {
+      maxZoom: 20,
+      opacity: 0.94,
     }).addTo(map);
 
     // Add destination marker (from affiliate 'Llegar')
@@ -235,8 +235,7 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
           z-index: 0;
           mix-blend-mode: screen;
         }
-        .leaflet-container { background: #000000 !important; }
-        .leaflet-tile-pane { filter: saturate(0.5) brightness(0.9); }
+        .leaflet-container { background: #0b0b14 !important; }
       `}} />
 
       {/* Hex grid overlay */}
@@ -252,7 +251,7 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
 
       {/* Mode Filters (Todos / bunz'in / Stock) - Collapsible Div */}
       {showAllFilters ? (
-        <div style={{ position: 'absolute', bottom: selected ? 260 : 120, left: 16, right: 16, zIndex: 2000, display: 'flex', flexDirection: 'column', gap: 10, transition: 'bottom 0.3s' }}>
+        <div style={{ position: 'absolute', bottom: selected ? 260 : (PlatformBridge.isTelegram() ? 120 : 80), left: 16, right: 16, zIndex: 2000, display: 'flex', flexDirection: 'column', gap: 10, transition: 'bottom 0.3s' }}>
           
           {/* Toggle Filters Row */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -360,7 +359,7 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
       )}
 
       {/* Top Left Stack: Afiliados and Bunz */}
-      <div style={{ position: 'absolute', top: 70, left: 16, zIndex: 2000, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+      <div style={{ position: 'absolute', top: PlatformBridge.isTelegram() ? 70 : 14, left: 16, zIndex: 2000, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
         <div style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', color: '#fff', padding: '4px 10px', borderRadius: 999, fontSize: 10, fontWeight: 800, border: '1px solid rgba(255,255,255,0.1)' }}>
           🔴 {filteredBusinesses.length} afiliados
         </div>
@@ -379,7 +378,7 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
             mapInst.current.panTo([userLat, userLng], { animate: true, duration: 1 });
           }
         }}
-        style={{ position: 'absolute', top: 70, right: 16, zIndex: 2000, width: 40, height: 40, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', cursor: 'pointer' }}
+        style={{ position: 'absolute', top: PlatformBridge.isTelegram() ? 70 : 14, right: 16, zIndex: 2000, width: 36, height: 36, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', cursor: 'pointer' }}
       >
         <Crosshair size={18} />
       </button>
@@ -432,9 +431,6 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
       )}
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        .osm-dark-tile, .leaflet-tile-pane { 
-          filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) !important; 
-        }
       `}} />
     </div>
   );

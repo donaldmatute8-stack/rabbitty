@@ -8,7 +8,9 @@ import { CommandMenu } from "./CommandMenu";
 import { SandboxBanner } from "./SandboxBanner";
 import { trpc } from "../lib/trpc-client";
 import Link from "next/link";
-import { TerminalSquare, TabletSmartphone } from "lucide-react";
+import { TerminalSquare, TabletSmartphone, Smartphone } from "lucide-react";
+import { Capacitor } from "@capacitor/core";
+import { ScannerPairModal } from "./ScannerPairModal";
 
 const SidebarContext = createContext<{
   isCollapsed: boolean;
@@ -28,6 +30,18 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
   const pathname = usePathname();
   // On tablet (<lg), sidebar starts collapsed (hidden). On desktop, expanded.
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isNativeApp, setIsNativeApp] = useState(false);
+  const [pairModalOpen, setPairModalOpen] = useState(false);
+
+  useEffect(() => {
+    // Si corre en Capacitor nativo (iOS / Android / Desktop nativo) o standalone PWA
+    const isCapNative = Capacitor.isNativePlatform();
+    const isStandalone = typeof window !== "undefined" && (
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (window.navigator as any).standalone === true
+    );
+    setIsNativeApp(isCapNative || isStandalone);
+  }, []);
   const [branchId, setBranchId] = useState("b1");
   const [twoFaChecked, setTwoFaChecked] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
@@ -164,23 +178,33 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                 <CommandMenu />
               </div>
               <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                <button
+                  onClick={() => setPairModalOpen(true)}
+                  className="flex items-center gap-2 rounded-xl bg-pink-500/10 px-3 py-2 text-xs font-bold text-pink-400 hover:bg-pink-500/20 active:scale-95 transition-all border border-pink-500/20 cursor-pointer"
+                  title="Vincular teléfono móvil como terminal de escaneo"
+                >
+                  <Smartphone className="h-4 w-4 shrink-0 text-pink-400" />
+                  <span className="hidden sm:inline whitespace-nowrap">Vincular Celular</span>
+                </button>
                 <Link
                   href="/pos"
-                  target="_blank"
-                  className="hidden md:flex items-center gap-2 rounded-xl bg-cyan-500/10 px-3 py-2 text-xs font-bold text-cyan-400 hover:bg-cyan-500/20 transition-all border border-cyan-500/20"
+                  target={isNativeApp ? undefined : "_blank"}
+                  rel={isNativeApp ? undefined : "noopener noreferrer"}
+                  className="flex items-center gap-2 rounded-xl bg-cyan-500/10 px-3 py-2 text-xs font-bold text-cyan-400 hover:bg-cyan-500/20 active:scale-95 transition-all border border-cyan-500/20"
                 >
-                  <TerminalSquare className="h-4 w-4" />
-                  <span>Caja POS</span>
+                  <TerminalSquare className="h-4 w-4 shrink-0" />
+                  <span className="hidden sm:inline whitespace-nowrap">Caja POS</span>
                 </Link>
                 <Link
                   href="/kiosk"
-                  target="_blank"
-                  className="hidden lg:flex items-center gap-2 rounded-xl bg-purple-500/10 px-3 py-2 text-xs font-bold text-purple-400 hover:bg-purple-500/20 transition-all border border-purple-500/20"
+                  target={isNativeApp ? undefined : "_blank"}
+                  rel={isNativeApp ? undefined : "noopener noreferrer"}
+                  className="flex items-center gap-2 rounded-xl bg-purple-500/10 px-3 py-2 text-xs font-bold text-purple-400 hover:bg-purple-500/20 active:scale-95 transition-all border border-purple-500/20"
                 >
-                  <TabletSmartphone className="h-4 w-4" />
-                  <span>Kiosko iPad</span>
+                  <TabletSmartphone className="h-4 w-4 shrink-0" />
+                  <span className="hidden sm:inline whitespace-nowrap">Kiosko</span>
                 </Link>
-                <div className="w-px h-6 bg-white/10 mx-1 hidden md:block" />
+                <div className="w-px h-6 bg-white/10 mx-1 hidden sm:block" />
                 <BranchSelector />
               </div>
             </header>
@@ -191,6 +215,11 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                 {children}
               </div>
             </main>
+
+            <ScannerPairModal
+              isOpen={pairModalOpen}
+              onClose={() => setPairModalOpen(false)}
+            />
           </div>
         </div>
       </SidebarContext.Provider>

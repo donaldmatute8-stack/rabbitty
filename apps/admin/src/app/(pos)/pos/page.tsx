@@ -495,7 +495,7 @@ export default function PosPage() {
       {/* ── Top Header ── */}
       <header className="flex h-[88px] shrink-0 items-center justify-between bg-black/60 backdrop-blur-2xl px-6 border-b border-white/5 relative z-20">
         <div className="flex items-center gap-6">
-          <Link href="/table-layout" className="flex items-center gap-3 rounded-2xl bg-white/5 p-2 pr-6 border border-white/5 hover:bg-white/10 hover:border-white/20 transition-all cursor-pointer shadow-lg active:scale-95">
+          <Link href="/" className="flex items-center gap-3 rounded-2xl bg-white/5 p-2 pr-6 border border-white/5 hover:bg-white/10 hover:border-white/20 transition-all cursor-pointer shadow-lg active:scale-95">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 shadow-[0_0_20px_rgba(6,182,212,0.5)]">
               <ChevronLeft className="h-6 w-6 text-white" />
             </div>

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   const secretToken = process.env.TELEGRAM_WEBHOOK_SECRET_TOKEN;
-  if (secretToken && req.headers.get("X-Telegram-Bot-Api-Secret-Token") !== secretToken) {
+  if (!secretToken || req.headers.get("X-Telegram-Bot-Api-Secret-Token") !== secretToken) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -121,6 +121,149 @@ export async function POST(req: NextRequest) {
 
         const resData = await res.json();
         console.log("sendMessage response:", resData);
+      }
+    }
+
+    // ── TELEGRAM INLINE CALLBACK QUERIES (APROBACIONES REMOTAS) ──
+    if (update.callback_query) {
+      const cb = update.callback_query;
+      const data = cb.data;
+      const fromId = String(cb.from?.id);
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      const ADMIN_TELEGRAM_IDS = (process.env.ADMIN_TELEGRAM_IDS || "").split(",").map(id => id.trim()).filter(Boolean);
+
+      if (data && (data.startsWith("approve_biz_") || data.startsWith("reject_biz_"))) {
+        const isApprovedAction = data.startsWith("approve_biz_");
+        const businessId = isApprovedAction ? data.replace("approve_biz_", "") : data.replace("reject_biz_", "");
+
+        if (!ADMIN_TELEGRAM_IDS.includes(fromId)) {
+          if (botToken) {
+            await fetch(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                callback_query_id: cb.id,
+                text: "⛔ No tienes permisos de administrador para realizar esta acción.",
+                show_alert: true,
+              }),
+            });
+          }
+          return NextResponse.json({ ok: true });
+        }
+
+        try {
+          const { db } = await import("@/db");
+          const { ownedBusinesses, users, webSessions } = await import("@/db/schema");
+          const { eq } = await import("drizzle-orm");
+          const crypto = await import("crypto");
+
+          const [business] = await db.select().from(ownedBusinesses).where(eq(ownedBusinesses.id, businessId));
+
+          if (!business) {
+            if (botToken) {
+              await fetch(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  callback_query_id: cb.id,
+                  text: "❌ Negocio no encontrado.",
+                  show_alert: true,
+                }),
+              });
+            }
+            return NextResponse.json({ ok: true });
+          }
+
+          const newStatus = isApprovedAction ? "APPROVED" : "REJECTED";
+          await db.update(ownedBusinesses)
+            .set({
+              status: newStatus,
+              verificationMethod: "telegram_remote_approve",
+              verificationData: JSON.stringify({
+                verifiedAt: new Date().toISOString(),
+                approvedByTelegramId: fromId,
+              }),
+            })
+            .where(eq(ownedBusinesses.id, businessId));
+
+          // Notificar al dueño
+          const [owner] = await db.select().from(users).where(eq(users.id, business.ownerId));
+
+          if (isApprovedAction) {
+            // Actualizar rol del usuario si era USER
+            if (owner && owner.role === "USER") {
+              await db.update(users).set({ role: "AFFILIATE" }).where(eq(users.id, owner.id));
+            }
+
+            // Generar magic link de acceso al Admin Dashboard
+            let magicUrl = "https://admin.rabbitty.me/login";
+            if (owner?.id) {
+              const qrToken = crypto.randomBytes(32).toString("hex");
+              const tokenHash = crypto.createHash("sha256").update(qrToken).digest("hex");
+              const [session] = await db.insert(webSessions).values({
+                id: crypto.randomUUID(),
+                jwtToken: tokenHash,
+                userId: owner.id,
+                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+              }).returning();
+              magicUrl = `https://admin.rabbitty.me/magic?token=${qrToken}&sid=${session.id}`;
+            }
+
+            if (owner?.telegramId && botToken) {
+              const msg =
+                `🎉 *¡Felicidades! Tu negocio ${business.name} ha sido APROBADO.*\n\n` +
+                `Ya estás activo en Rabbitty. Tus clientes pueden escanear y ganar Bunz en tu establecimiento.\n\n` +
+                `🔗 *Panel de Administración:*\n` +
+                `https://admin.rabbitty.me/login\n\n` +
+                `🔑 *Tu enlace mágico de 1 solo clic:*\n` +
+                `${magicUrl}\n\n` +
+                `🐰 — Rabbitty Team`;
+              await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chat_id: owner.telegramId, text: msg, parse_mode: "Markdown", disable_web_page_preview: true }),
+              });
+            }
+          } else {
+            if (owner?.telegramId && botToken) {
+              const msg = `❌ *Solicitud de Negocio no aprobada para ${business.name}*\n\nTu registro ha sido revisado y no cumple con los requisitos actuales. Contacta a soporte para más detalles.`;
+              await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chat_id: owner.telegramId, text: msg, parse_mode: "Markdown" }),
+              });
+            }
+          }
+
+          if (botToken) {
+            await fetch(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                callback_query_id: cb.id,
+                text: isApprovedAction ? `✅ Negocio "${business.name}" aprobado exitosamente.` : `❌ Negocio "${business.name}" rechazado.`,
+              }),
+            });
+
+            // Actualizar el mensaje original del chat para mostrar el veredicto
+            if (cb.message?.chat?.id && cb.message?.message_id) {
+              const statusEmoji = isApprovedAction ? "✅ APROBADO" : "❌ RECHAZADO";
+              await fetch(`https://api.telegram.org/bot${botToken}/editMessageText`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: cb.message.chat.id,
+                  message_id: cb.message.message_id,
+                  text: `${cb.message.text}\n\n━━━━━━━━━━━━━━━━━━━━\n📌 *Dictamen:* ${statusEmoji} por @${cb.from?.username || fromId}`,
+                  parse_mode: "Markdown",
+                }),
+              });
+            }
+          }
+        } catch (approveErr) {
+          console.error("Error processing telegram business approval callback:", approveErr);
+        }
+        return NextResponse.json({ ok: true });
       }
     }
 

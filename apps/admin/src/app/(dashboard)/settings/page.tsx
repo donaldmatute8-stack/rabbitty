@@ -12,6 +12,7 @@ import {
   Sparkles, BookUser, Receipt, Lock, Hash, AlertTriangle, ShieldCheck
 } from "lucide-react";
 import { cn } from "@rabbitty/ui";
+import { ScannerPairModal } from "../../../components/ScannerPairModal";
 
 // ─────────────────────────────────────────────────────────────────
 // BUSINESS TYPE DEFINITIONS
@@ -242,6 +243,7 @@ export default function SettingsPage() {
   // Form states
   const [editing, setEditing] = useState<string | null>(null);
   const [adminPinInput, setAdminPinInput] = useState("");
+  const [pairModalOpen, setPairModalOpen] = useState(false);
   const [form, setForm] = useState({ name: "", taxRate: 0, defaultRewardRate: 20, acceptsBunz: true, happyHourStart: "", happyHourEnd: "", happyHourRewardRate: 40, cashDropEnabled: false, cashDropThreshold: 3000 });
   const [email, setEmail] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
@@ -856,6 +858,36 @@ export default function SettingsPage() {
               </div>
             </Card>
 
+            {/* MOBILE SCANNER PAIRING (OMNICANAL) */}
+            <Card className="p-6 border border-pink-500/20 bg-gradient-to-br from-pink-500/5 via-white/5 to-purple-500/5 backdrop-blur-md">
+              <div className="mb-5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-pink-500/10 border border-pink-500/20 text-pink-400 shrink-0">
+                    <Smartphone className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-white text-base">Terminal Móvil / Scanner de Negocio</h3>
+                    <p className="text-xs text-gray-400">Vincula tu smartphone (iOS / Android) para escanear y validar Bunz</p>
+                  </div>
+                </div>
+                <Badge variant="success" className="text-[10px]">Omnicanal</Badge>
+              </div>
+              <div className="space-y-4">
+                <p className="text-sm text-gray-300 leading-relaxed">
+                  Genera un código QR de un solo uso o enlace directo para que cualquier teléfono celular de tu equipo opere como terminal de caja o validador sin compartir contraseñas ni correos personales.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                  <Button
+                    onClick={() => setPairModalOpen(true)}
+                    className="flex items-center justify-center gap-2 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white font-bold py-2.5 px-5 rounded-xl shadow-lg shadow-pink-500/20 transition-all cursor-pointer"
+                  >
+                    <QrCode className="h-4 w-4" />
+                    <span>Generar Código QR de Vinculación</span>
+                  </Button>
+                </div>
+              </div>
+            </Card>
+
             {/* TRUSTED SESSIONS */}
             <Card className="p-6 border border-white/5 bg-white/5 backdrop-blur-md">
               <div className="mb-5 flex items-center gap-3">
@@ -898,6 +930,11 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
+
+      <ScannerPairModal
+        isOpen={pairModalOpen}
+        onClose={() => setPairModalOpen(false)}
+      />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { users, webSessions, verificationTokens } from '@/db/schema';
-import { and, eq, gt } from 'drizzle-orm';
+import { and, eq, gt, or, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 import { rateLimit, retryAfterSec, checkOnly, registerHit, resetLimit, getClientIp, hashOtp } from '@/lib/otp';
 
@@ -23,11 +23,37 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const email = body?.email?.toLowerCase()?.trim();
+    const rawInput = (body?.input || body?.email || '').trim();
     const code = body?.code?.trim();
 
-    if (!email || !code || !/^\d{6}$/.test(code)) {
-      return NextResponse.json({ error: 'Email y código de 6 dígitos son obligatorios' }, { status: 400 });
+    if (!rawInput || !code || !/^\d{6}$/.test(code)) {
+      return NextResponse.json({ error: 'Identificador y código de 6 dígitos son obligatorios' }, { status: 400 });
+    }
+
+    let email = '';
+    let phone: string | null = null;
+    const isEmail = rawInput.includes('@');
+
+    if (isEmail) {
+      email = rawInput.toLowerCase();
+    } else {
+      const digitsOnly = rawInput.replace(/\D/g, '');
+      phone = rawInput.startsWith('+') ? rawInput : `+${digitsOnly}`;
+
+      const last10 = digitsOnly.slice(-10);
+      const [matchedUser] = await db
+        .select({ id: users.id, email: users.email, phoneNumber: users.phoneNumber })
+        .from(users)
+        .where(
+          sql`regexp_replace(${users.phoneNumber}, '\\D', '', 'g') LIKE ${'%' + last10}`
+        )
+        .limit(1);
+
+      if (matchedUser && matchedUser.email) {
+        email = matchedUser.email;
+      } else {
+        email = `${digitsOnly}@phone.rabbitty.me`;
+      }
     }
 
     const failKey = `otp_verify_fail:${email}`;
@@ -39,14 +65,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const tokenHash = hashOtp(email, code);
+    const tokenHashEmail = hashOtp(email, code);
+    const tokenHashRaw = hashOtp(rawInput, code);
 
-    // Atomic consume: the delete itself verifies the token, so it can never be
-    // redeemed twice even under concurrent requests.
+    // Atomic consume: delete matching token
     const deleted = await db.delete(verificationTokens).where(
       and(
-        eq(verificationTokens.identifier, email),
-        eq(verificationTokens.token, tokenHash),
+        or(
+          eq(verificationTokens.identifier, email),
+          eq(verificationTokens.identifier, rawInput),
+          phone ? eq(verificationTokens.identifier, phone) : sql`false`
+        ),
+        or(
+          eq(verificationTokens.token, tokenHashEmail),
+          eq(verificationTokens.token, tokenHashRaw),
+          eq(verificationTokens.token, code)
+        ),
         gt(verificationTokens.expires, new Date())
       )
     ).returning();
@@ -58,9 +92,25 @@ export async function POST(req: NextRequest) {
 
     resetLimit(failKey);
 
-    const user = await db.query.users.findFirst({
+    // Buscar usuario por email o teléfono
+    let user = await db.query.users.findFirst({
       where: eq(users.email, email),
     });
+
+    if (!user && phone) {
+      const digitsOnly = rawInput.replace(/\D/g, '');
+      const last10 = digitsOnly.slice(-10);
+      const [matchedUser] = await db
+        .select()
+        .from(users)
+        .where(
+          sql`regexp_replace(${users.phoneNumber}, '\\D', '', 'g') LIKE ${'%' + last10}`
+        )
+        .limit(1);
+      if (matchedUser) {
+        user = matchedUser as any;
+      }
+    }
 
     const isNewUser = !user;
 
@@ -69,7 +119,8 @@ export async function POST(req: NextRequest) {
       (
         await db.insert(users).values({
           email,
-          username: email.split('@')[0],
+          phoneNumber: phone,
+          username: isEmail ? email.split('@')[0] : `user_${rawInput.replace(/\D/g, '').slice(-6)}`,
           totalBunzEarned: 0,
           totalBunzSpent: 0,
           role: 'USER',
