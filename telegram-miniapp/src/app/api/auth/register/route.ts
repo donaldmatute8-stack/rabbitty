@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { users, webSessions } from "@/db/schema";
-import { and, eq, gt, or } from "drizzle-orm";
-import crypto from "crypto";
+import { and, eq, gt } from "drizzle-orm";
+import { validateTelegramInitData, parseTelegramUser } from "@/lib/telegramAuth";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { telegramId, email, firstName, lastName, username, tonWalletAddress, smart_wallet_address, userId } = body;
+    const { firstName, lastName, username, tonWalletAddress, smart_wallet_address, initData } = body;
 
-    // Check Authorization header for native/web session token
-    let sessionUserId: string | null = null;
+    // 1. Authenticate via Bearer Session Token (Native iOS / Web)
+    let authenticatedUserId: string | null = null;
     const authHeader = req.headers.get("authorization");
     let token: string | null = null;
     if (authHeader && authHeader.startsWith("Bearer ")) {
@@ -24,54 +24,50 @@ export async function POST(req: NextRequest) {
         ),
       });
       if (session?.userId) {
-        sessionUserId = session.userId;
+        authenticatedUserId = session.userId;
       }
     }
 
-    const effectiveUserId = sessionUserId || userId;
+    // 2. Or Authenticate via Cryptographic Telegram HMAC if provided
+    let verifiedTelegramId: string | null = null;
+    if (!authenticatedUserId && initData) {
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      if (botToken && validateTelegramInitData(initData, botToken)) {
+        const tUser = parseTelegramUser(initData);
+        if (tUser?.id) {
+          verifiedTelegramId = tUser.id.toString();
+        }
+      }
+    }
 
-    if (!telegramId && !email && !effectiveUserId) {
-      return NextResponse.json({ error: "Missing identifier" }, { status: 400 });
+    // Must have at least one verified identity mechanism
+    if (!authenticatedUserId && !verifiedTelegramId) {
+      return NextResponse.json({ error: "No autorizado. Token de sesión o initData inválido." }, { status: 401 });
     }
 
     const effectiveWallet = tonWalletAddress || smart_wallet_address || null;
-    const effectiveTelegramId = telegramId || null;
 
-    // Check if user exists by id, telegramId or email
+    // Find authenticated user
     let existingUser = null;
-    if (effectiveUserId) {
-      existingUser = await db.query.users.findFirst({ where: eq(users.id, effectiveUserId) });
-    } else if (effectiveTelegramId) {
-      existingUser = await db.query.users.findFirst({ where: eq(users.telegramId, effectiveTelegramId) });
-    } else if (email) {
-      existingUser = await db.query.users.findFirst({ where: eq(users.email, email) });
-    }
-    if (!existingUser && effectiveWallet) {
-      existingUser = await db.query.users.findFirst({ where: eq(users.tonWalletAddress, effectiveWallet) });
+    if (authenticatedUserId) {
+      existingUser = await db.query.users.findFirst({ where: eq(users.id, authenticatedUserId) });
+    } else if (verifiedTelegramId) {
+      existingUser = await db.query.users.findFirst({ where: eq(users.telegramId, verifiedTelegramId) });
     }
 
-    if (existingUser) {
-      const [updated] = await db.update(users).set({
-        firstName: firstName ?? existingUser.firstName,
-        lastName: lastName ?? existingUser.lastName,
-        username: username ?? existingUser.username,
-        email: email ?? existingUser.email,
-        tonWalletAddress: effectiveWallet ?? existingUser.tonWalletAddress,
-        updatedAt: new Date(),
-      }).where(eq(users.id, existingUser.id)).returning();
-      return NextResponse.json({ success: true, user: updated }, { status: 200 });
+    if (!existingUser) {
+      return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
     }
 
-    const [user] = await db.insert(users).values({
-      telegramId: effectiveTelegramId,
-      firstName: firstName || null,
-      lastName: lastName || null,
-      username: username || null,
-      email: email || null,
-      tonWalletAddress: effectiveWallet,
-    }).returning();
+    const [updated] = await db.update(users).set({
+      firstName: firstName !== undefined ? firstName : existingUser.firstName,
+      lastName: lastName !== undefined ? lastName : existingUser.lastName,
+      username: username !== undefined ? username : existingUser.username,
+      tonWalletAddress: effectiveWallet ?? existingUser.tonWalletAddress,
+      updatedAt: new Date(),
+    }).where(eq(users.id, existingUser.id)).returning();
 
-    return NextResponse.json({ success: true, user }, { status: 200 });
+    return NextResponse.json({ success: true, user: updated }, { status: 200 });
   } catch (error) {
     console.error("[REGISTER_USER]", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

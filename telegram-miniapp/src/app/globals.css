@@ -21,8 +21,9 @@ body {
   -webkit-touch-callout: none;
 }
 
-input, textarea {
-  user-select: auto;
+input, textarea, [contenteditable="true"], .selectable, code, pre, .font-mono {
+  user-select: text;
+  -webkit-user-select: text;
   -webkit-touch-callout: default;
 }
 
