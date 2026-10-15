@@ -194,15 +194,15 @@ export default function LoginPage() {
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-pink-500/10 border border-pink-500/20 text-pink-400 text-xs font-bold uppercase tracking-wider">
             <Sparkles className="w-3.5 h-3.5" /> Acceso Rápido 1-Clic
           </div>
-          <h2 className="text-xl font-black text-white">Escanea con tu MiniApp</h2>
+          <h2 className="text-xl font-black text-white">Escanea con tu App</h2>
           <p className="text-xs text-gray-400 max-w-xs leading-relaxed">
-            Abre la app de Rabbitty en Telegram, ve a <strong className="text-white">Perfil ➔ Escanear PC</strong> y apunta tu cámara a este código.
+            Abre tu app de <strong className="text-white">Rabbitty</strong> en tu celular, ve a <strong className="text-white">Perfil ➔ Escanear</strong> y apunta tu cámara a este código.
           </p>
 
           <div className="p-4 bg-white/5 border border-pink-500/30 rounded-2xl shadow-[0_0_30px_rgba(236,72,153,0.15)] relative min-w-[212px] min-h-[212px] flex items-center justify-center">
             {qrToken ? (
               <RabbittyCode
-                data={`https://t.me/Rabbittyme_bot/app?startapp=qrlogin_${qrToken}`}
+                data={`https://app.rabbitty.me/scan?qrlogin_${qrToken}`}
                 size={180}
                 showCardFrame={false}
               />
