@@ -1,20 +1,36 @@
 'use client';
 
+import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from 'next/navigation';
+import { useAuth } from "@/features/auth/AuthProvider";
 
 import { DottedGlowBackground } from "@/components/ui/dotted-glow-background";
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
+
+  // If already authenticated, redirect straight to app Home
+  useEffect(() => {
+    if (!authLoading && user) {
+      if (!user.firstName) {
+        router.replace('/signup?setup=1');
+      } else if (user.role === 'AFFILIATE') {
+        router.replace('/business');
+      } else {
+        router.replace('/');
+      }
+    }
+  }, [user, authLoading, router]);
 
   const handleStart = () => {
-    // Enviar a login para verificar teléfono/email; una vez verificado pasa a /signup para su nombre y @username
-    router.push('/login');
+    // Uber/WhatsApp style: register mode
+    router.push('/login?mode=register');
   };
 
   const handleLogin = () => {
-    router.push('/login');
+    router.push('/login?mode=login');
   };
 
   return (
