@@ -4,6 +4,7 @@ import { users, webSessions, verificationTokens } from '@/db/schema';
 import { and, eq, gt, or, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 import { rateLimit, retryAfterSec, checkOnly, registerHit, resetLimit, getClientIp, hashOtp } from '@/lib/otp';
+import { resolveUniqueUsername } from '@/lib/username';
 
 const VERIFY_IP_LIMIT = 30;
 const VERIFY_IP_WINDOW_MS = 15 * 60 * 1000;
@@ -114,18 +115,19 @@ export async function POST(req: NextRequest) {
 
     const isNewUser = !user;
 
-    const resolvedUser =
-      user ??
-      (
-        await db.insert(users).values({
-          email,
-          phoneNumber: phone,
-          username: isEmail ? email.split('@')[0] : `user_${rawInput.replace(/\D/g, '').slice(-6)}`,
-          totalBunzEarned: 0,
-          totalBunzSpent: 0,
-          role: 'USER',
-        }).returning()
-      )[0];
+    let resolvedUser = user;
+    if (!resolvedUser) {
+      const usernameBase = isEmail ? email.split('@')[0] : `user_${rawInput.replace(/\D/g, '').slice(-6)}`;
+      const username = await resolveUniqueUsername(usernameBase);
+      [resolvedUser] = await db.insert(users).values({
+        email,
+        phoneNumber: phone,
+        username,
+        totalBunzEarned: 0,
+        totalBunzSpent: 0,
+        role: 'USER',
+      }).returning();
+    }
 
     const sessionToken = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);

@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { useWallet } from '@/contexts/WalletContext';
-import { useToast } from '@/contexts/ToastContext';
 
 import { PlatformBridge } from '@/lib/platform';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -12,7 +11,6 @@ import { useAuth } from '@/features/auth/AuthProvider';
 export default function SignupPage() {
   const router = useRouter();
   const { address, connect } = useWallet();
-  const { showToast } = useToast();
   const { user, checkAuth } = useAuth();
 
   const [step, setStep] = useState(1);
@@ -20,14 +18,9 @@ export default function SignupPage() {
   const [error, setError] = useState('');
 
   // User Data
-  const [telegramId, setTelegramId] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [username, setUsername] = useState('');
-
-  // Biometrics
-  const [biometricsEnabled, setBiometricsEnabled] = useState(false);
-  const [biometricsSupported, setBiometricsSupported] = useState(false);
 
   // Focus refs
   const inputRef = useRef<HTMLInputElement>(null);
@@ -35,7 +28,6 @@ export default function SignupPage() {
   useEffect(() => {
     // 1. If we have a logged-in user session (Native iOS or Web)
     if (user) {
-      if (user.telegramId) setTelegramId(String(user.telegramId));
       if (user.firstName) setFirstName(user.firstName);
       if (user.lastName) setLastName(user.lastName);
       if (user.username && !user.username.startsWith('user_')) setUsername(user.username);
@@ -47,22 +39,11 @@ export default function SignupPage() {
       import('@twa-dev/sdk').then((mod) => {
         const app = mod.default;
         if (app.initDataUnsafe?.user) {
-          setTelegramId(app.initDataUnsafe.user.id.toString());
           setFirstName(app.initDataUnsafe.user.first_name || '');
           setLastName(app.initDataUnsafe.user.last_name || '');
           setUsername(app.initDataUnsafe.user.username || '');
         } else {
           router.replace('/login');
-          return;
-        }
-
-        // Check Biometrics Support for Telegram
-        if (app.BiometricManager && app.BiometricManager.isInited) {
-          setBiometricsSupported(app.BiometricManager.isBiometricAvailable);
-        } else if (app.BiometricManager) {
-          app.BiometricManager.init(() => {
-            setBiometricsSupported(app.BiometricManager.isBiometricAvailable);
-          });
         }
       });
       return;
@@ -82,33 +63,6 @@ export default function SignupPage() {
       setTimeout(() => inputRef.current?.focus(), 300);
     }
   }, [step]);
-
-  const handleRequestBiometrics = async () => {
-    try {
-      if (PlatformBridge.isTelegram()) {
-        const mod = await import('@twa-dev/sdk');
-        const app = mod.default;
-
-        if (!app.BiometricManager?.isBiometricAvailable) {
-          setStep(4);
-          return;
-        }
-
-        app.BiometricManager.requestAccess({ reason: 'Protege tus Bunz' }, (granted) => {
-          if (granted) {
-            setBiometricsEnabled(true);
-            showToast('Biométricos activados en Telegram 🔒', 'success');
-          }
-          setStep(4);
-        });
-      } else {
-        // Native / Web: Advance to next step directly
-        setStep(4);
-      }
-    } catch {
-      setStep(4);
-    }
-  };
 
   const finalizeRegistration = async (skipWallet = false) => {
     setLoading(true);
@@ -146,6 +100,7 @@ export default function SignupPage() {
         router.replace('/');
       } else {
         setError(data.error);
+        if (res.status === 409 || res.status === 400) setStep(2);
         await PlatformBridge.hapticFeedback('error');
       }
     } catch {
@@ -229,7 +184,7 @@ export default function SignupPage() {
                   <input
                     ref={inputRef}
                     value={lastName}
-                    onChange={e => setLastName(e.target.value)}
+                    onChange={e => { setLastName(e.target.value); setError(''); }}
                     placeholder="Tus apellidos"
                     autoFocus
                     className="w-full bg-transparent border-b-2 border-white/20 text-2xl pb-3 outline-none transition-colors placeholder:text-white/20"
@@ -243,19 +198,23 @@ export default function SignupPage() {
                     <span className="text-xl text-[var(--rabbitty-pink)] font-black mr-1">@</span>
                     <input
                       value={username}
-                      onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                      onChange={e => { setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '')); setError(''); }}
                       onKeyDown={e => handleKeyDown(e, 3)}
                       placeholder="usuario_rabbitty"
                       className="w-full bg-transparent text-xl outline-none placeholder:text-white/20"
                     />
                   </div>
+                  <p className="text-xs text-white/30 mt-2">Mínimo 3 caracteres. Letras minúsculas, números y guion bajo.</p>
                 </div>
               </div>
 
+              {error && <p className="text-red-400 text-sm mt-6 font-medium bg-red-500/10 p-4 rounded-xl border border-red-500/20">{error}</p>}
+
               <div className="mt-10">
                 <button
+                  disabled={username.trim().length < 3}
                   onClick={() => setStep(3)}
-                  className="w-full text-black font-black flex items-center justify-center gap-3 active:scale-95 transition-transform bg-white text-base py-[17px] rounded-full border-none cursor-pointer shadow-[0_4px_15px_rgba(255,255,255,0.1)] font-[var(--font-family-base)]"
+                  className="w-full text-black font-black flex items-center justify-center gap-3 active:scale-95 transition-transform disabled:opacity-30 bg-white text-base py-[17px] rounded-full border-none cursor-pointer shadow-[0_4px_15px_rgba(255,255,255,0.1)] font-[var(--font-family-base)]"
                 >
                   Confirmar Perfil <span className="text-xl">✓</span>
                 </button>

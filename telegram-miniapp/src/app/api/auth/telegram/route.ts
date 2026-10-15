@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { validateTelegramInitData, parseTelegramUser } from '@/lib/telegramAuth';
+import { resolveUniqueUsername } from '@/lib/username';
 import { db } from '@/db';
 import { users, referrals, webSessions } from '@/db/schema';
 import { eq } from 'drizzle-orm';
@@ -39,15 +40,16 @@ export async function POST(req: Request) {
     const isNewUser = !user;
 
     if (!user) {
+      const username = tUser.username ? await resolveUniqueUsername(tUser.username) : null;
       const [newUser] = await db.insert(users).values({
         telegramId,
-        username: tUser.username || null,
+        username,
         firstName: tUser.first_name || null,
         lastName: tUser.last_name || null,
         totalBunzEarned: 0
       }).returning();
       user = newUser;
-    } // <-- Missing brace added here
+    }
 
     if (startParam && startParam.startsWith('ref_') && isNewUser) {
       const inviterTelegramId = startParam.replace('ref_', '');
