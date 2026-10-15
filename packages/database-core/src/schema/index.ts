@@ -12,7 +12,7 @@ const timestamps = {
 export const users = pgTable("users", {
   id: id(),
   telegramId: text("telegramId").unique(),
-  username: text("username"),
+  username: text("username").unique(),
   phoneNumber: text("phoneNumber").unique(),
   firstName: text("firstName"),
   lastName: text("lastName"),
