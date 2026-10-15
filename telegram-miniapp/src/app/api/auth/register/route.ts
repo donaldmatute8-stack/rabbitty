@@ -1,24 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { users } from "@/db/schema";
-import { eq, or } from "drizzle-orm";
+import { users, webSessions } from "@/db/schema";
+import { and, eq, gt, or } from "drizzle-orm";
 import crypto from "crypto";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { telegramId, email, firstName, lastName, username, tonWalletAddress, smart_wallet_address } = body;
+    const { telegramId, email, firstName, lastName, username, tonWalletAddress, smart_wallet_address, userId } = body;
 
-    if (!telegramId && !email) {
-      return NextResponse.json({ error: "Missing telegramId or email" }, { status: 400 });
+    // Check Authorization header for native/web session token
+    let sessionUserId: string | null = null;
+    const authHeader = req.headers.get("authorization");
+    let token: string | null = null;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      token = authHeader.replace("Bearer ", "").trim();
+    }
+    if (token) {
+      const session = await db.query.webSessions.findFirst({
+        where: and(
+          eq(webSessions.jwtToken, token),
+          gt(webSessions.expiresAt, new Date())
+        ),
+      });
+      if (session?.userId) {
+        sessionUserId = session.userId;
+      }
+    }
+
+    const effectiveUserId = sessionUserId || userId;
+
+    if (!telegramId && !email && !effectiveUserId) {
+      return NextResponse.json({ error: "Missing identifier" }, { status: 400 });
     }
 
     const effectiveWallet = tonWalletAddress || smart_wallet_address || null;
     const effectiveTelegramId = telegramId || null;
 
-    // Check if user exists by telegramId or email
+    // Check if user exists by id, telegramId or email
     let existingUser = null;
-    if (effectiveTelegramId) {
+    if (effectiveUserId) {
+      existingUser = await db.query.users.findFirst({ where: eq(users.id, effectiveUserId) });
+    } else if (effectiveTelegramId) {
       existingUser = await db.query.users.findFirst({ where: eq(users.telegramId, effectiveTelegramId) });
     } else if (email) {
       existingUser = await db.query.users.findFirst({ where: eq(users.email, email) });

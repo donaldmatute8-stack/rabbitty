@@ -235,6 +235,9 @@ export default function LoginPage() {
 
         if (data.user?.role === 'AFFILIATE') {
           router.replace('/business');
+        } else if (data.isNewUser || !data.user?.firstName) {
+          // Send to onboarding profile setup to complete name and profile
+          router.replace('/signup?setup=1');
         } else {
           router.replace('/');
         }

@@ -254,13 +254,23 @@ export default function FeedPage() {
             </div>
             
             {/* Notification Bell */}
-            <Link href="/notifications" className="relative w-9 h-9 rounded-full flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.04)]" style={{ background: isDark ? 'rgba(255,255,255,0.05)' : '#fff', border: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid #F0F0F0' }}>
+            <Link 
+              href="/notifications" 
+              onClick={() => PlatformBridge.hapticFeedback('light')}
+              className="relative w-9 h-9 rounded-full flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.04)] active:scale-95 transition-transform" 
+              style={{ background: isDark ? 'rgba(255,255,255,0.05)' : '#fff', border: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid #F0F0F0' }}
+            >
               <Bell size={18} color={isDark ? '#fff' : '#111'} strokeWidth={2.5} />
               {/* Unread indicator dot */}
               <div className="absolute top-2 right-[9px] w-[6px] h-[6px] bg-[#E91E63] rounded-full" style={{ border: `1.5px solid ${isDark ? '#000' : '#fff'}` }} />
             </Link>
 
-            <Link href="/scan" className="w-9 h-9 rounded-full flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.04)]" style={{ background: isDark ? 'rgba(255,255,255,0.05)' : '#fff', border: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid #F0F0F0' }}>
+            <Link 
+              href="/scan" 
+              onClick={() => PlatformBridge.hapticFeedback('medium')}
+              className="w-9 h-9 rounded-full flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.04)] active:scale-95 transition-transform" 
+              style={{ background: isDark ? 'rgba(255,255,255,0.05)' : '#fff', border: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid #F0F0F0' }}
+            >
               <img 
                 src="/logo_conejo.png" 
                 alt="Scan" 
@@ -270,7 +280,15 @@ export default function FeedPage() {
             </Link>
           </div>
         </div>
-        <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} isDark={isDark} />
+        <Tabs 
+          tabs={TABS} 
+          activeTab={activeTab} 
+          onChange={(tab) => {
+            PlatformBridge.hapticFeedback('light');
+            setActiveTab(tab);
+          }} 
+          isDark={isDark} 
+        />
       </div>
 
       <main className="flex-1 w-full max-w-[600px] mx-auto" style={{ paddingLeft: isDark ? 0 : 16, paddingRight: isDark ? 0 : 16 }}>

@@ -72,9 +72,11 @@
   --radius-xl: 24px;
   --radius-full: 9999px;
   
-  /* Safe Areas */
-  --safe-top: var(--tg-safe-top-adjusted, env(safe-area-inset-top, 0px));
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* Safe Areas (Native iOS & Telegram) */
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--tg-safe-top-adjusted, 0px));
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
 }
 
 /* ========================================
