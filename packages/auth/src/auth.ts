@@ -3,8 +3,8 @@ import Resend from "next-auth/providers/resend";
 import Credentials from "next-auth/providers/credentials";
 import crypto, { createHash } from "crypto";
 import { getCoreDb } from "@rabbitty/api/db";
-import { verificationTokens } from "@rabbitty/database-core";
-import { eq } from "drizzle-orm";
+import { verificationTokens, users } from "@rabbitty/database-core";
+import { eq, sql } from "drizzle-orm";
 
 if (!process.env.AUTH_URL || process.env.AUTH_URL.includes("localhost")) {
   process.env.AUTH_URL = "https://admin.rabbitty.me";
@@ -349,14 +349,44 @@ const authResult = NextAuth({
             return null;
           }
 
-          // 3. Verify email matches
-          if (stored.identifier.toLowerCase() !== (credentials.email as string).toLowerCase()) {
-            console.warn("[email-token] Email mismatch", stored.identifier, credentials.email);
-            return null;
+          // 3. Verify email or identifier matches
+          const credClean = (credentials.email as string).trim().toLowerCase();
+          const storedClean = stored.identifier.trim().toLowerCase();
+          const isDirectMatch = storedClean === credClean;
+          
+          let resolvedEmail = stored.identifier;
+
+          if (!isDirectMatch) {
+            // Check if stored identifier is phone or credClean is phone and maps to the other
+            const credDigits = credClean.replace(/\D/g, "");
+            const storedDigits = storedClean.replace(/\D/g, "");
+            const isPhoneMatch = credDigits.length >= 8 && storedDigits.length >= 8 && (
+              credDigits.endsWith(storedDigits.slice(-10)) || storedDigits.endsWith(credDigits.slice(-10))
+            );
+
+            if (!isPhoneMatch) {
+              console.warn("[email-token] Email mismatch", stored.identifier, credentials.email);
+              return null;
+            }
           }
 
           // 4. Consume token (single-use)
           await db.delete(verificationTokens).where(eq(verificationTokens.token, credentials.token as string));
+
+          // If identifier has @, use it for adminAuthUsers; otherwise find email from users table
+          if (!resolvedEmail.includes("@")) {
+            const digits = resolvedEmail.replace(/\D/g, "");
+            const [u] = await db
+              .select({ email: users.email })
+              .from(users)
+              .where(sql`regexp_replace(${users.phoneNumber}, '\\D', '', 'g') LIKE ${'%' + digits.slice(-10)}`)
+              .limit(1);
+            if (u && u.email) {
+              resolvedEmail = u.email;
+            } else {
+              resolvedEmail = `${digits}@phone.rabbitty.me`;
+            }
+          }
 
           // 5. Upsert user and return
           const pool = await getPool();
@@ -364,11 +394,11 @@ const authResult = NextAuth({
             `INSERT INTO "adminAuthUsers" ("id", "email", "emailVerified")
              VALUES (gen_random_uuid()::text, $1, NOW())
              ON CONFLICT ("email") DO UPDATE SET "emailVerified" = NOW()`,
-            [stored.identifier]
+            [resolvedEmail]
           );
           const res = await pool.query(
             `SELECT "id", "email" FROM "adminAuthUsers" WHERE "email" = $1`,
-            [stored.identifier]
+            [resolvedEmail]
           );
           await pool.end();
 

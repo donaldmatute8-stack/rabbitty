@@ -2,26 +2,76 @@
 
 import { signIn } from "next-auth/react";
 import { useState, useEffect } from "react";
-import { Mail, QrCode, Sparkles, UserCheck, Clock } from "lucide-react";
+import { Mail, Phone, QrCode, Sparkles, UserCheck, Clock, ChevronDown, Check } from "lucide-react";
 import RabbittyCode from "@/components/ui/RabbittyCode";
 import { resolveApiUrl } from "@/lib/api-config";
 
+interface CountryCode {
+  code: string;
+  dialCode: string;
+  flag: string;
+  name: string;
+}
+
+const COUNTRIES: CountryCode[] = [
+  { code: "MX", dialCode: "+52", flag: "🇲🇽", name: "México" },
+  { code: "US", dialCode: "+1", flag: "🇺🇸", name: "EE.UU. / Canadá" },
+  { code: "ES", dialCode: "+34", flag: "🇪🇸", name: "España" },
+  { code: "CO", dialCode: "+57", flag: "🇨🇴", name: "Colombia" },
+  { code: "AR", dialCode: "+54", flag: "🇦🇷", name: "Argentina" },
+  { code: "CL", dialCode: "+56", flag: "🇨🇱", name: "Chile" },
+  { code: "PE", dialCode: "+51", flag: "🇵🇪", name: "Perú" },
+];
+
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
+  const [inputVal, setInputVal] = useState("");
+  const [selectedCountry, setSelectedCountry] = useState<CountryCode>(COUNTRIES[0]);
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [sent, setSent] = useState(false);
+  const [sentMode, setSentMode] = useState<"email" | "phone">("email");
+  const [targetDisplay, setTargetDisplay] = useState("");
+  const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
+
   const [otpCode, setOtpCode] = useState("");
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError] = useState("");
+  const [submitLoading, setSubmitLoading] = useState(false);
+
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [recentEmails, setRecentEmails] = useState<string[]>([]);
   const [isLocalDev, setIsLocalDev] = useState(false);
 
+  // Determinar si lo que el usuario está escribiendo parece un número de teléfono
+  const isPhoneNumber = (() => {
+    const trimmed = inputVal.trim();
+    if (!trimmed) return false;
+    if (trimmed.includes("@")) return false;
+    // Si contiene sólo dígitos, espacios, guiones o empieza con +
+    return /^[\d\s\-\+\(\)]+$/.test(trimmed) && trimmed.replace(/\D/g, "").length >= 1;
+  })();
+
+  // Autodetectar país si el usuario escribe prefijo internacional
+  useEffect(() => {
+    const trimmed = inputVal.trim();
+    if (trimmed.startsWith("+52")) setSelectedCountry(COUNTRIES.find((c) => c.code === "MX")!);
+    else if (trimmed.startsWith("+1")) setSelectedCountry(COUNTRIES.find((c) => c.code === "US")!);
+    else if (trimmed.startsWith("+34")) setSelectedCountry(COUNTRIES.find((c) => c.code === "ES")!);
+    else if (trimmed.startsWith("+57")) setSelectedCountry(COUNTRIES.find((c) => c.code === "CO")!);
+    else if (trimmed.startsWith("+54")) setSelectedCountry(COUNTRIES.find((c) => c.code === "AR")!);
+    else if (trimmed.startsWith("+56")) setSelectedCountry(COUNTRIES.find((c) => c.code === "CL")!);
+    else if (trimmed.startsWith("+51")) setSelectedCountry(COUNTRIES.find((c) => c.code === "PE")!);
+  }, [inputVal]);
+
   useEffect(() => {
     // Solo activar bypass en desarrollo local (nunca en producción ni en Vercel)
-    if (process.env.NODE_ENV === "development" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")) {
+    if (
+      process.env.NODE_ENV === "development" &&
+      (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+    ) {
       setIsLocalDev(true);
     }
+
     // Generar sesión QR para login
     fetch(resolveApiUrl("/api/auth/qr/generate"), { method: "POST" })
       .then((res) => res.json())
@@ -40,7 +90,7 @@ export default function LoginPage() {
         const parsed: string[] = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
           setRecentEmails(parsed);
-          setEmail(parsed[0]); // Autocompletar con el último correo usado
+          setInputVal(parsed[0]);
         }
       }
     } catch {
@@ -74,11 +124,78 @@ export default function LoginPage() {
     }
   };
 
+  const getCanonicalRecipient = () => {
+    const trimmed = inputVal.trim();
+    if (trimmed.includes("@")) {
+      return trimmed.toLowerCase();
+    }
+    // Es teléfono
+    if (trimmed.startsWith("+")) {
+      return trimmed;
+    }
+    // Agregar prefijo de país seleccionado si no lo tiene
+    const cleanDigits = trimmed.replace(/\D/g, "");
+    const dialDigits = selectedCountry.dialCode.replace(/\D/g, "");
+    if (cleanDigits.startsWith(dialDigits)) {
+      return `+${cleanDigits}`;
+    }
+    return `${selectedCountry.dialCode}${cleanDigits}`;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    saveRecentEmail(email);
-    await signIn("resend", { email, redirect: false });
-    setSent(true);
+    if (!inputVal.trim()) return;
+
+    setSubmitLoading(true);
+    setOtpError("");
+    setDevOtpHint(null);
+
+    const recipient = getCanonicalRecipient();
+    const isEmail = recipient.includes("@");
+
+    if (isEmail) {
+      saveRecentEmail(recipient);
+    }
+
+    try {
+      // Usar nuestro endpoint /api/auth/otp/send para generar el token de 6 dígitos
+      const res = await fetch("/api/auth/otp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input: recipient }),
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setSentMode(data.mode || (isEmail ? "email" : "phone"));
+        setTargetDisplay(recipient);
+        if (data.otpCode) {
+          setDevOtpHint(data.otpCode);
+        }
+        setSent(true);
+      } else {
+        // Fallback a NextAuth signIn("resend") si el endpoint reporta error
+        if (isEmail) {
+          await signIn("resend", { email: recipient, redirect: false });
+          setSentMode("email");
+          setTargetDisplay(recipient);
+          setSent(true);
+        } else {
+          setOtpError(data.error || "No pudimos enviar el código. Revisa el número ingresado.");
+        }
+      }
+    } catch {
+      if (isEmail) {
+        await signIn("resend", { email: recipient, redirect: false });
+        setSentMode("email");
+        setTargetDisplay(recipient);
+        setSent(true);
+      } else {
+        setOtpError("Error al procesar la solicitud. Intenta nuevamente.");
+      }
+    } finally {
+      setSubmitLoading(false);
+    }
   };
 
   const handleQuickLogin = async () => {
@@ -86,6 +203,8 @@ export default function LoginPage() {
   };
 
   if (sent) {
+    const isPhone = sentMode === "phone";
+
     return (
       <div className="relative flex min-h-screen items-center justify-center bg-black text-white overflow-hidden p-4">
         {/* Blurry decorative background blobs */}
@@ -94,20 +213,22 @@ export default function LoginPage() {
 
         <div className="relative z-10 w-full max-w-md rounded-3xl border border-white/10 bg-white/5 p-8 text-center shadow-2xl backdrop-blur-xl space-y-6">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.15)] animate-bounce-slow">
-            <Mail className="h-8 w-8" />
+            {isPhone ? <Phone className="h-8 w-8" /> : <Mail className="h-8 w-8" />}
           </div>
 
           <div className="space-y-2">
-            <h1 className="text-2xl font-black text-white">Revisa tu correo</h1>
+            <h1 className="text-2xl font-black text-white">
+              {isPhone ? "Revisa tu teléfono" : "Revisa tu correo"}
+            </h1>
             <p className="text-sm text-gray-400 leading-relaxed">
-              Te hemos enviado un enlace de acceso a <strong className="text-white font-semibold">{email}</strong>.
+              Te hemos enviado un código de acceso a <strong className="text-white font-semibold">{targetDisplay}</strong>.
             </p>
           </div>
 
-          {/* Opción de ingreso de código de 6 dígitos OTP */}
-          <div className="pt-2 pb-1 space-y-3 border-y border-white/5 py-4">
-            <span className="text-[11px] font-semibold text-gray-300 uppercase tracking-wider block">
-              O ingresa tu código de 6 dígitos:
+          {/* Opción de ingreso de código de 6 dígitos OTP con margen generoso */}
+          <div className="mt-8 mb-6 pt-5 pb-5 space-y-4 border-y border-white/10">
+            <span className="text-[12px] font-bold text-gray-300 uppercase tracking-wider block">
+              Ingresa tu código de 6 dígitos:
             </span>
             <div className="flex gap-2 justify-center">
               <input
@@ -122,7 +243,7 @@ export default function LoginPage() {
                   setOtpCode(val);
                   setOtpError("");
                 }}
-                className="w-44 h-12 text-center text-xl font-mono font-bold tracking-[0.25em] bg-black/40 border border-white/20 rounded-xl focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 text-white outline-none"
+                className="w-48 h-13 text-center text-2xl font-mono font-bold tracking-[0.28em] bg-black/50 border border-white/20 rounded-xl focus:border-pink-500 focus:ring-2 focus:ring-pink-500/25 text-white outline-none shadow-inner transition-all"
               />
               <button
                 type="button"
@@ -133,7 +254,7 @@ export default function LoginPage() {
                   setOtpError("");
                   try {
                     const res = await signIn("email-token", {
-                      email,
+                      email: targetDisplay,
                       token: otpCode,
                       redirect: false,
                     });
@@ -142,32 +263,57 @@ export default function LoginPage() {
                     } else {
                       setOtpError("Código no válido o expirado.");
                     }
-                  } catch (e) {
+                  } catch {
                     setOtpError("Error al verificar código.");
                   } finally {
                     setOtpLoading(false);
                   }
                 }}
-                className="px-5 h-12 rounded-xl bg-pink-500 font-bold text-xs text-white hover:bg-pink-600 active:scale-95 disabled:opacity-40 disabled:pointer-events-none transition-all shadow-[0_0_15px_rgba(236,72,153,0.3)] cursor-pointer"
+                className="px-6 h-13 rounded-xl bg-pink-500 font-bold text-sm text-white hover:bg-pink-600 active:scale-95 disabled:opacity-40 disabled:pointer-events-none transition-all shadow-[0_0_15px_rgba(236,72,153,0.3)] cursor-pointer"
               >
                 {otpLoading ? "..." : "Entrar"}
               </button>
             </div>
             {otpError && (
-              <p className="text-[11px] text-rose-400 font-medium">{otpError}</p>
+              <p className="text-xs text-rose-400 font-medium pt-1">{otpError}</p>
+            )}
+
+            {/* Hint en desarrollo local para pruebas rápidas */}
+            {isLocalDev && devOtpHint && (
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => setOtpCode(devOtpHint)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-pink-500/15 border border-pink-500/30 text-pink-300 text-[11px] font-mono font-bold hover:bg-pink-500/25 transition-all cursor-pointer"
+                >
+                  <Sparkles className="w-3 h-3 text-pink-400" />
+                  Auto-llenar OTP de prueba: {devOtpHint}
+                </button>
+              </div>
             )}
           </div>
 
           {/* Acciones: Volver o Reenviar */}
-          <div className="pt-1 space-y-2.5">
+          <div className="pt-2 space-y-3">
             <button
               type="button"
               onClick={async () => {
-                await signIn("resend", { email, redirect: false });
+                setOtpError("");
+                try {
+                  const res = await fetch("/api/auth/otp/send", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ input: targetDisplay }),
+                  });
+                  const data = await res.json();
+                  if (data.otpCode) setDevOtpHint(data.otpCode);
+                } catch {
+                  // ignore
+                }
               }}
-              className="w-full py-2.5 rounded-2xl bg-pink-500/10 border border-pink-500/20 text-pink-300 text-xs font-bold hover:bg-pink-500/20 transition-all cursor-pointer"
+              className="w-full py-3 rounded-2xl bg-pink-500/10 border border-pink-500/20 text-pink-300 text-xs font-bold hover:bg-pink-500/20 transition-all cursor-pointer"
             >
-              Reenviar correo con código
+              Reenviar código
             </button>
 
             <button
@@ -176,10 +322,11 @@ export default function LoginPage() {
                 setSent(false);
                 setOtpCode("");
                 setOtpError("");
+                setDevOtpHint(null);
               }}
-              className="w-full py-2 rounded-2xl border border-white/10 bg-white/5 text-gray-400 text-xs font-bold hover:bg-white/10 hover:text-white transition-all cursor-pointer flex items-center justify-center gap-2"
+              className="w-full py-2.5 rounded-2xl border border-white/10 bg-white/5 text-gray-400 text-xs font-bold hover:bg-white/10 hover:text-white transition-all cursor-pointer flex items-center justify-center gap-2"
             >
-              ← Usar otro correo o Escanear QR
+              ← Usar otro número/correo o Escanear QR
             </button>
           </div>
         </div>
@@ -232,7 +379,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* LADO DERECHO: FORMULARIO CORREO Y OTP */}
+        {/* LADO DERECHO: FORMULARIO CORREO / TELÉFONO Y OTP */}
         <div className="flex flex-col justify-center space-y-6 p-2">
           <div className="text-center md:text-left space-y-2">
             <img
@@ -243,28 +390,84 @@ export default function LoginPage() {
             <h1 className="text-2xl font-black tracking-tight text-white">
               Rabbitty Admin
             </h1>
-            <p className="text-gray-400 text-xs font-medium">Ingresa con tu correo registrado o código OTP</p>
+            <p className="text-gray-400 text-xs font-medium">
+              Ingresa con tu correo registrado o número celular con código OTP
+            </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <label htmlFor="email" className="sr-only">Correo electrónico o número celular</label>
-              <input
-                id="email"
-                name="email"
-                type="text"
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-                placeholder="tu@correo.com / número celular"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm text-white placeholder-gray-500 outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 transition-all duration-300"
-              />
+              <label htmlFor="loginInput" className="sr-only">Correo electrónico o número celular</label>
+
+              <div className="relative flex items-center">
+                {/* Indicador / Selector de País animado si se detecta número telefónico */}
+                {isPhoneNumber && (
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowCountryPicker(!showCountryPicker)}
+                      className="h-12 pl-3.5 pr-2 mr-2 flex items-center gap-1.5 rounded-2xl border border-pink-500/30 bg-pink-500/10 text-white hover:bg-pink-500/20 transition-all cursor-pointer shadow-[0_0_12px_rgba(236,72,153,0.15)] animate-in fade-in zoom-in-95 duration-200"
+                    >
+                      <span className="text-base">{selectedCountry.flag}</span>
+                      <span className="text-xs font-bold text-pink-300 font-mono">{selectedCountry.dialCode}</span>
+                      <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                    </button>
+
+                    {/* Menú Desplegable de Países */}
+                    {showCountryPicker && (
+                      <div className="absolute left-0 bottom-full mb-2 z-50 w-60 rounded-2xl border border-white/15 bg-[#121218] p-1.5 shadow-2xl backdrop-blur-2xl space-y-1">
+                        <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                          Selecciona tu país
+                        </div>
+                        {COUNTRIES.map((country) => (
+                          <button
+                            key={country.code}
+                            type="button"
+                            onClick={() => {
+                              setSelectedCountry(country);
+                              setShowCountryPicker(false);
+                            }}
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
+                              selectedCountry.code === country.code
+                                ? "bg-pink-500/20 text-pink-300"
+                                : "text-gray-300 hover:bg-white/5 hover:text-white"
+                            }`}
+                          >
+                            <span className="flex items-center gap-2">
+                              <span>{country.flag}</span>
+                              <span>{country.name}</span>
+                            </span>
+                            <span className="font-mono text-xs text-gray-400 flex items-center gap-1">
+                              {country.dialCode}
+                              {selectedCountry.code === country.code && <Check className="w-3 h-3 text-pink-400" />}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <input
+                  id="loginInput"
+                  name="loginInput"
+                  type="text"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  placeholder="tu@correo.com / número celular"
+                  value={inputVal}
+                  onChange={(e) => {
+                    setInputVal(e.target.value);
+                    setOtpError("");
+                  }}
+                  required
+                  className="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm text-white placeholder-gray-500 outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 transition-all duration-300"
+                />
+              </div>
 
               {/* Detección de Correos Recientes */}
-              {recentEmails.length > 0 && (
+              {!isPhoneNumber && recentEmails.length > 0 && (
                 <div className="space-y-1.5 pt-1">
                   <span className="flex items-center gap-1 text-[10px] font-semibold text-gray-400">
                     <Clock className="w-3 h-3 text-pink-400" /> Usados recientemente:
@@ -274,9 +477,9 @@ export default function LoginPage() {
                       <button
                         key={savedEmail}
                         type="button"
-                        onClick={() => setEmail(savedEmail)}
+                        onClick={() => setInputVal(savedEmail)}
                         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer ${
-                          email === savedEmail
+                          inputVal === savedEmail
                             ? "bg-pink-500/20 border border-pink-500/40 text-pink-300 shadow-[0_0_12px_rgba(236,72,153,0.2)]"
                             : "bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 hover:text-white"
                         }`}
@@ -292,14 +495,19 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              className="flex h-12 w-full items-center justify-center rounded-2xl bg-gradient-to-r from-pink-500 to-pink-600 font-bold text-white transition-all hover:scale-[1.02] active:scale-95 shadow-[0_4px_14px_rgba(236,72,153,0.39)] cursor-pointer"
+              disabled={submitLoading || !inputVal.trim()}
+              className="flex h-12 w-full items-center justify-center rounded-2xl bg-gradient-to-r from-pink-500 to-pink-600 font-bold text-white transition-all hover:scale-[1.02] active:scale-95 shadow-[0_4px_14px_rgba(236,72,153,0.39)] cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
             >
-              Enviar código o enlace
+              {submitLoading ? "Enviando..." : "Enviar código o enlace"}
             </button>
 
             <button
               type="button"
-              onClick={() => setSent(true)}
+              onClick={() => {
+                setTargetDisplay(inputVal.trim() ? getCanonicalRecipient() : "tu cuenta");
+                setSentMode(isPhoneNumber ? "phone" : "email");
+                setSent(true);
+              }}
               className="w-full text-center text-xs text-pink-400/80 hover:text-pink-300 font-semibold transition-all pt-1 cursor-pointer"
             >
               ¿Ya tienes un código OTP? Ingresar código directamente →
