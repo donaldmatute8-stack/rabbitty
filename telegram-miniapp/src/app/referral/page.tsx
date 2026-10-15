@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Share2, Copy, CheckCircle2, Trophy } from 'lucide-react';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { PlatformBridge } from '@/lib/platform';
 
 const LEVEL_NAMES: Record<string, string> = {
   '1': 'Bronce', '2': 'Plata', '3': 'Oro', '4': 'Rubí', '5': 'Diamante',
@@ -16,7 +17,8 @@ export default function ReferralPage() {
 
   useEffect(() => {
     if (user?.id) {
-      fetch(`/api/gamification?userId=${user.id}`)
+      PlatformBridge.getAuthHeaders()
+        .then(headers => fetch(`/api/gamification`, { headers }))
         .then(r => r.json())
         .then((data: any) => {
           if (data?.level?.name) setLevelName(data.level.name);

@@ -3,14 +3,20 @@ import { db } from '@/db';
 import { conversations, messages } from '@/db/schema';
 import { and, eq, or, asc } from 'drizzle-orm';
 import { users, ownedBusinesses } from '@/db/schema';
+import { getAuthenticatedUser } from '@/lib/serverAuth';
 
 export async function GET(req: Request) {
   try {
+    const caller = await getAuthenticatedUser(req);
+    if (!caller) {
+      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('userId');
+    const userId = caller.id;
     const targetId = searchParams.get('targetId');
 
-    if (!userId || !targetId) {
+    if (!targetId) {
       return NextResponse.json({ error: 'Faltan parámetros' }, { status: 400 });
     }
 
@@ -38,7 +44,7 @@ export async function GET(req: Request) {
     }
 
     // Find the conversation between these two
-    let conversation = await db.query.conversations.findFirst({
+    const conversation = await db.query.conversations.findFirst({
       where: or(
         and(eq(conversations.participant1, userId), eq(conversations.participant2, targetId)),
         and(eq(conversations.participant1, targetId), eq(conversations.participant2, userId))

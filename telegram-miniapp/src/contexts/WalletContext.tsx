@@ -1,6 +1,7 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useAuth } from '@/features/auth/AuthProvider';
 
 interface WalletContextType {
   address: string | null;
@@ -21,21 +22,33 @@ const WalletContext = createContext<WalletContextType>({
 });
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
+  const { user, checkAuth } = useAuth();
   const [address, setAddress] = useState<string | null>(null);
   const [balance, setBalance] = useState('0');
 
+  useEffect(() => {
+    if (user) {
+      setAddress(user.tonWalletAddress || null);
+      setBalance((((user.totalBunzEarned || 0) - (user.totalBunzSpent || 0))).toString());
+    } else {
+      setAddress(null);
+      setBalance('0');
+    }
+  }, [user]);
+
   const connect = async () => {
-    // Identity is managed authoritatively by Telegram Auth and API Server session
-    setAddress('connected');
+    if (user?.tonWalletAddress) {
+      setAddress(user.tonWalletAddress);
+    }
   };
 
   const disconnect = async () => {
     setAddress(null);
   };
 
-  const refreshBalance = async () => {
-    // Balance is authoritatively fetched from server via AuthProvider/tRPC
-  };
+  const refreshBalance = useCallback(async () => {
+    await checkAuth();
+  }, [checkAuth]);
 
   return (
     <WalletContext.Provider value={{

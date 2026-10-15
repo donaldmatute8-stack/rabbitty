@@ -3,30 +3,33 @@
 import { useEffect, useState } from 'react';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import EmptyState from '@/components/ui/EmptyState';
-import { useWallet } from '@/contexts/WalletContext';
+import { useAuth } from '@/features/auth/AuthProvider';
+import { PlatformBridge } from '@/lib/platform';
 import { QRCodeSVG } from 'qrcode.react';
 
 export default function InventoryPage() {
-  const { address } = useWallet();
+  const { user } = useAuth();
   const [coupons, setCoupons] = useState<any[]>([]);
   const [reservations, setReservations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (address) {
+    if (user?.id) {
       fetchInventory();
     } else {
       setLoading(false);
     }
-  }, [address]);
+  }, [user]);
 
   const fetchInventory = async () => {
     try {
-      const res = await fetch(`/api/inventory?wallet=${address}`);
+      const headers = await PlatformBridge.getAuthHeaders();
+
+      const res = await fetch(`/api/inventory`, { headers });
       const data = await res.json();
       if (data.success) {
-        setCoupons(data.coupons);
-        setReservations(data.reservations);
+        setCoupons(data.coupons || []);
+        setReservations(data.reservations || []);
       }
     } catch (err) {
       console.error(err);

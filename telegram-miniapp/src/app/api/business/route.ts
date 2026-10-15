@@ -3,30 +3,45 @@ import { db } from '@/db';
 import { users, ownedBusinesses } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { parseTelegramUser, validateTelegramInitData } from '@/lib/telegramAuth';
+import { getAuthenticatedUser } from '@/lib/serverAuth';
 
 const ADMIN_TELEGRAM_IDS = (process.env.ADMIN_TELEGRAM_IDS || '798431743').split(',');
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
 export async function PATCH(req: Request) {
   try {
+    const caller = await getAuthenticatedUser(req);
+    if (!caller) {
+      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    }
+
     const body = await req.json();
-    const { telegramId, rewardPercentage } = body;
+    const { rewardPercentage, businessId } = body;
 
-    if (!telegramId || rewardPercentage === undefined) {
-      return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+    if (rewardPercentage === undefined) {
+      return NextResponse.json({ error: 'Missing rewardPercentage' }, { status: 400 });
     }
 
-    const user = await db.query.users.findFirst({
-      where: eq(users.telegramId, telegramId.toString()),
-    });
+    const ownerId = caller.id;
 
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    // Verify ownership
+    let business = null;
+    if (businessId) {
+      business = await db.query.ownedBusinesses.findFirst({
+        where: eq(ownedBusinesses.id, businessId),
+      });
+      if (business && business.ownerId !== ownerId && caller.role !== 'ADMIN') {
+        return NextResponse.json({ error: 'No autorizado para editar este negocio' }, { status: 403 });
+      }
     }
+
+    const whereClause = businessId
+      ? eq(ownedBusinesses.id, businessId)
+      : eq(ownedBusinesses.ownerId, ownerId);
 
     const [updated] = await db.update(ownedBusinesses)
       .set({ rewardPercentage: parseInt(rewardPercentage) })
-      .where(eq(ownedBusinesses.ownerId, user.id))
+      .where(whereClause)
       .returning();
 
     if (!updated) {
@@ -42,36 +57,13 @@ export async function PATCH(req: Request) {
 
 export async function GET(req: Request) {
   try {
-    const { searchParams } = new URL(req.url);
-    const wallet = searchParams.get('wallet');
-    const telegramId = searchParams.get('telegramId');
-    const userId = searchParams.get('userId');
-
-    if (!wallet && !telegramId && !userId) {
-      return NextResponse.json({ error: 'Missing identifier' }, { status: 400 });
-    }
-
-    let user;
-    if (userId) {
-      user = await db.query.users.findFirst({
-        where: eq(users.id, userId)
-      });
-    } else if (telegramId) {
-      user = await db.query.users.findFirst({
-        where: eq(users.telegramId, telegramId)
-      });
-    } else if (wallet) {
-      user = await db.query.users.findFirst({
-        where: eq(users.tonWalletAddress, wallet)
-      });
-    }
-
-    if (!user) {
-      return NextResponse.json({ success: true, business: null });
+    const caller = await getAuthenticatedUser(req);
+    if (!caller) {
+      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
     const business = await db.query.ownedBusinesses.findFirst({
-      where: eq(ownedBusinesses.ownerId, user.id)
+      where: eq(ownedBusinesses.ownerId, caller.id)
     });
 
     return NextResponse.json({ success: true, business });
@@ -83,6 +75,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    const caller = await getAuthenticatedUser(req);
     const body = await req.json();
     const { 
       name, description, category, address, 
@@ -92,27 +85,25 @@ export async function POST(req: Request) {
       lng: manualLng,
     } = body;
 
-    // Validate initData
-    if (!initData) {
-      return NextResponse.json({ error: 'Missing authentication' }, { status: 401 });
+    // Resolve owner: prefer authenticated caller, fall back to Telegram initData.
+    let owner = null;
+
+    if (caller) {
+      owner = await db.query.users.findFirst({ where: eq(users.id, caller.id) });
     }
+
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
-    if (botToken && !validateTelegramInitData(initData, botToken)) {
-      return NextResponse.json({ error: 'Invalid authentication' }, { status: 401 });
+    if (!owner && initData && botToken && validateTelegramInitData(initData, botToken)) {
+      const tUser = parseTelegramUser(initData);
+      if (tUser && tUser.id) {
+        owner = await db.query.users.findFirst({
+          where: eq(users.telegramId, tUser.id.toString())
+        });
+      }
     }
-
-    const tUser = parseTelegramUser(initData);
-    if (!tUser || !tUser.id) {
-      return NextResponse.json({ error: 'Invalid user data' }, { status: 401 });
-    }
-
-    // Only allow real users as owners
-    const owner = await db.query.users.findFirst({
-      where: eq(users.telegramId, tUser.id.toString())
-    });
 
     if (!owner) {
-      return NextResponse.json({ error: 'User not registered. Please start the bot first.' }, { status: 400 });
+      return NextResponse.json({ error: 'Missing authentication' }, { status: 401 });
     }
 
     const lat = manualLat ?? (19.4326 + (Math.random() - 0.5) * 0.05);

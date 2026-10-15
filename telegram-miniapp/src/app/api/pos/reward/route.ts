@@ -57,7 +57,7 @@ export async function POST(request: Request) {
     const businessId = business_id || "unknown";
     if (business_id) {
       const result = await db.update(ownedBusinesses)
-        .set({ bunzBalance: sql`bunz_balance - ${bunzToMint}` })
+        .set({ bunzBalance: sql`"bunzBalance" - ${bunzToMint}` })
         .where(
           and(
             eq(ownedBusinesses.id, business_id),

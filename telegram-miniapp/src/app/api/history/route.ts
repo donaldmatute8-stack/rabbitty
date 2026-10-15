@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { transactions, ownedBusinesses } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
+import { getAuthenticatedUser } from "@/lib/serverAuth";
 
 export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const telegramId = searchParams.get("telegramId");
-
-    if (!telegramId) {
-      return NextResponse.json({ error: "Missing telegramId" }, { status: 400 });
+    const caller = await getAuthenticatedUser(req);
+    if (!caller) {
+      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    // Get user's transactions joined with business info
+    const targetUserId = caller.id;
+
+    // Get user's transactions joined with business info, strictly filtered by userId
     const rows = await db
       .select({
         id: transactions.id,
@@ -25,7 +26,12 @@ export async function GET(req: NextRequest) {
       })
       .from(transactions)
       .innerJoin(ownedBusinesses, eq(transactions.businessId, ownedBusinesses.id))
-      .where(eq(transactions.status, "MINTED"))
+      .where(
+        and(
+          eq(transactions.userId, targetUserId),
+          eq(transactions.status, "MINTED")
+        )
+      )
       .orderBy(desc(transactions.createdAt))
       .limit(50);
 

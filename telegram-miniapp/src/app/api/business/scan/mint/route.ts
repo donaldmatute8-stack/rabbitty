@@ -7,6 +7,7 @@ import { awardHops, evaluateHatTricks } from '@/lib/gamificationLogic';
 import { sendToOracle } from '@/lib/oracle-client';
 import { parseTelegramUser, validateTelegramInitData } from '@/lib/telegramAuth';
 import { recordLedgerTransaction, findLedgerEntry } from '@/lib/ledgerHelper';
+import { getAuthenticatedUser } from '@/lib/serverAuth';
 import crypto from 'crypto';
 import { z } from 'zod';
 
@@ -42,28 +43,31 @@ export async function POST(req: NextRequest) {
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
 
     if (!serverAuthed) {
-      const initData = typeof body.initData === "string" ? body.initData : "";
-      let callerUserId: string | null = null;
+      const sessionCaller = await getAuthenticatedUser(req);
+      let callerUserId: string | null = sessionCaller?.id ?? null;
 
-      if (initData && botToken) {
-        if (!validateTelegramInitData(initData, botToken)) {
-          return NextResponse.json({ error: "Credenciales de Telegram inválidas." }, { status: 401 });
+      if (!callerUserId) {
+        const initData = typeof body.initData === "string" ? body.initData : "";
+        if (initData && botToken) {
+          if (!validateTelegramInitData(initData, botToken)) {
+            return NextResponse.json({ error: "Credenciales de Telegram inválidas." }, { status: 401 });
+          }
+          const tgUser = parseTelegramUser(initData);
+          if (tgUser?.id) {
+            const caller = await db.query.users.findFirst({ where: eq(users.telegramId, tgUser.id.toString()) });
+            if (caller) callerUserId = caller.id;
+          }
+        } else {
+          return NextResponse.json({ error: "Autenticación requerida." }, { status: 401 });
         }
-        const tgUser = parseTelegramUser(initData);
-        if (tgUser?.id) {
-          const caller = await db.query.users.findFirst({ where: eq(users.telegramId, tgUser.id.toString()) });
-          if (caller) callerUserId = caller.id;
-        }
-      } else if (!initData && botToken) {
-        return NextResponse.json({ error: "Autenticación requerida." }, { status: 401 });
       }
 
-      if (callerUserId) {
-        if (business.ownerId !== callerUserId) {
-          return NextResponse.json({ error: "No autorizado para operar este negocio." }, { status: 403 });
-        }
-      } else if (botToken) {
-        return NextResponse.json({ error: "No autorizado: identidad no registrada." }, { status: 403 });
+      if (!callerUserId) {
+        return NextResponse.json({ error: "No autorizado: identidad no registrada." }, { status: 401 });
+      }
+
+      if (business.ownerId !== callerUserId) {
+        return NextResponse.json({ error: "No autorizado para operar este negocio." }, { status: 403 });
       }
     }
 

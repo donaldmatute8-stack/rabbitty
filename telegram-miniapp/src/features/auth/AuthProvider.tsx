@@ -26,7 +26,7 @@ const AuthContext = createContext<AuthContextType>({
 
 export const useAuth = () => useContext(AuthContext);
 
-const PUBLIC_ROUTES = ['/onboarding', '/signup', '/login', '/welcome', '/privacy'];
+const PUBLIC_ROUTES = ['/onboarding', '/signup', '/login', '/welcome', '/privacy', '/magic-link'];
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<any>(null);
@@ -55,26 +55,24 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
             });
             const tgData = await tgRes.json();
             if (tgData.success && tgData.user) {
-              // Fetch full profile (with levels, balances, etc.)
-              const profRes = await fetch(`/api/auth/profile?telegramId=${tgData.user.telegramId}`);
-              const profData = await profRes.json();
-              const fullProfile = profData.profile || tgData.user;
-              setUser(fullProfile);
+              let fullProfile = tgData.user;
               if (tgData.sessionToken) {
                 setSessionToken(tgData.sessionToken);
                 await PlatformBridge.setSessionToken(tgData.sessionToken);
+                // Fetch full profile (with levels, balances, etc.) using the session token
+                try {
+                  const profRes = await fetch('/api/auth/session', {
+                    headers: { 'Authorization': `Bearer ${tgData.sessionToken}` },
+                  });
+                  if (profRes.ok) {
+                    const profData = await profRes.json();
+                    if (profData?.profile) fullProfile = profData.profile;
+                  }
+                } catch (profErr) {
+                  console.warn('[AuthProvider] Could not fetch full profile:', profErr);
+                }
               }
-              return;
-            }
-          }
-
-          // Fallback if initData is raw unsafe during dev
-          const tgId = app.initDataUnsafe?.user?.id?.toString();
-          if (tgId) {
-            const res = await fetch(`/api/auth/profile?telegramId=${tgId}`);
-            const data = await res.json();
-            if (data.profile) {
-              setUser(data.profile);
+              setUser(fullProfile);
               return;
             }
           }

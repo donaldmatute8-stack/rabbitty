@@ -1,30 +1,35 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { users, ownedBusinesses, reservations } from '@/db/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, inArray } from 'drizzle-orm';
 import { processReferralAndNotifications } from '@/lib/referralLogic';
 import { awardHops, evaluateHatTricks } from '@/lib/gamificationLogic';
 import { recordLedgerTransaction, findLedgerEntry } from '@/lib/ledgerHelper';
 import { parseTelegramUser, validateTelegramInitData } from '@/lib/telegramAuth';
+import { getAuthenticatedUser } from '@/lib/serverAuth';
 import crypto from 'crypto';
 
 export async function POST(req: Request) {
   try {
     const { telegramId, businessName, offerTitle, bunzCost, initData, idempotencyKey: clientKey } = await req.json();
 
-    if ((!initData && !telegramId) || !businessName || !offerTitle || bunzCost === undefined || typeof bunzCost !== 'number' || bunzCost <= 0) {
+    if (!businessName || !offerTitle || bunzCost === undefined || typeof bunzCost !== 'number' || bunzCost <= 0) {
       return NextResponse.json({ error: 'Missing required fields or invalid bunzCost' }, { status: 400 });
     }
 
-    // Server-to-server callers authenticate with the shared Bearer secret and may
-    // pass telegramId directly. Browser callers must prove identity via Telegram initData.
+    // Resolve the caller: authenticated session, Telegram initData HMAC, or the
+    // server-to-server shared secret (which may pass telegramId directly).
     const authHeader = req.headers.get('authorization');
     const expectedSecret = process.env.RABBITTY_API_SECRET;
     const serverAuthed = !!expectedSecret && authHeader === `Bearer ${expectedSecret}`;
+    const caller = await getAuthenticatedUser(req);
 
-    let resolvedTelegramId: string | null = null;
-    if (serverAuthed) {
-      resolvedTelegramId = telegramId ? telegramId.toString() : null;
+    let user = null;
+
+    if (caller) {
+      user = await db.query.users.findFirst({ where: eq(users.id, caller.id) });
+    } else if (serverAuthed && telegramId) {
+      user = await db.query.users.findFirst({ where: eq(users.telegramId, telegramId.toString()) });
     } else {
       const botToken = process.env.TELEGRAM_BOT_TOKEN;
       if (!initData) {
@@ -37,17 +42,8 @@ export async function POST(req: Request) {
       if (!tUser?.id) {
         return NextResponse.json({ error: 'Invalid user authentication' }, { status: 401 });
       }
-      resolvedTelegramId = tUser.id.toString();
+      user = await db.query.users.findFirst({ where: eq(users.telegramId, tUser.id.toString()) });
     }
-
-    if (!resolvedTelegramId) {
-      return NextResponse.json({ error: 'Could not resolve user identity' }, { status: 401 });
-    }
-
-    // Find User
-    const user = await db.query.users.findFirst({
-      where: eq(users.telegramId, resolvedTelegramId)
-    });
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -67,7 +63,7 @@ export async function POST(req: Request) {
     const idempotencyKey = `res_ord_${clientKey || crypto.randomUUID()}`;
 
     // Atomic SQL transaction with pessimistic row lock and authoritative Ledger entry
-    const reservation = await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const [lockedUser] = await tx
         .select()
         .from(users)
@@ -80,13 +76,19 @@ export async function POST(req: Request) {
 
       const prior = await findLedgerEntry(idempotencyKey, tx);
       if (prior) {
-        return null;
+        return { reservation: null, isNewBusiness: false };
       }
 
       const available = (lockedUser.totalBunzEarned ?? 0) - (lockedUser.totalBunzSpent ?? 0);
       if (available < bunzCost) {
         throw new Error('INSUFFICIENT_BUNZ');
       }
+
+      // Determine if this is the user's first reservation at this business (before insert)
+      const previousReservation = await tx.query.reservations.findFirst({
+        where: and(eq(reservations.userId, user.id), eq(reservations.businessId, business.id))
+      });
+      const isNewBusiness = !previousReservation;
 
       // Record spending
       await tx
@@ -121,27 +123,21 @@ export async function POST(req: Request) {
         tx
       );
 
-      return resRow;
+      return { reservation: resRow, isNewBusiness };
     });
 
-    if (!reservation) {
+    if (!result.reservation) {
       return NextResponse.json({ success: true, message: 'Reserva ya procesada.' });
     }
 
     // Trigger referral and notifications (SPEND event)
     await processReferralAndNotifications(user.id, 'SPEND');
 
-    // Determine if it's a new business for the user
-    const previousReservation = await db.query.reservations.findFirst({
-      where: and(eq(reservations.userId, user.id), eq(reservations.businessId, business.id))
-    });
-    const isNewBusiness = !previousReservation;
-
     // Gamification Engine
-    await awardHops(user.id, isNewBusiness);
+    await awardHops(user.id, result.isNewBusiness);
     await evaluateHatTricks(user.id, { type: 'RESERVATIONS', value: 1, category: business.category });
 
-    return NextResponse.json({ success: true, reservation });
+    return NextResponse.json({ success: true, reservation: result.reservation });
   } catch (error) {
     console.error('Reservation API Error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -150,12 +146,12 @@ export async function POST(req: Request) {
 
 export async function GET(req: Request) {
   try {
-    const { searchParams } = new URL(req.url);
-    const ownerId = searchParams.get('ownerId');
-
-    if (!ownerId) {
-      return NextResponse.json({ error: 'Missing ownerId' }, { status: 400 });
+    const caller = await getAuthenticatedUser(req);
+    if (!caller) {
+      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
+
+    const ownerId = caller.id;
 
     // Find businesses owned by this user
     const userBusinesses = await db.query.ownedBusinesses.findMany({
@@ -168,16 +164,13 @@ export async function GET(req: Request) {
 
     const businessIds = userBusinesses.map(b => b.id);
 
-    // Drizzle doesn't have a simple IN clause via query builder without `inArray`, so we just filter manually or use eq in a loop if few.
-    // Let's use standard query
-    const res = await db.query.reservations.findMany({
+    const filteredReservations = await db.query.reservations.findMany({
+      where: inArray(reservations.businessId, businessIds),
       with: {
         user: true,
         business: true
       }
     });
-
-    const filteredReservations = res.filter(r => businessIds.includes(r.businessId));
 
     return NextResponse.json({ success: true, reservations: filteredReservations });
   } catch (error) {

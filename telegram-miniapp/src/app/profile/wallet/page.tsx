@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import { ArrowUpRight, ArrowDownLeft, Copy, RefreshCw, X } from 'lucide-react';
 import { useWallet } from '@/contexts/WalletContext';
+import { PlatformBridge } from '@/lib/platform';
 import RabbittyCode from '@/components/ui/RabbittyCode';
 
 interface Transaction {
@@ -36,7 +37,8 @@ export default function WalletPage() {
     if (!address) return;
     setHistoryLoading(true);
     try {
-      const res = await fetch(`/api/history?wallet=${address}`);
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch(`/api/history`, { headers });
       const data = await res.json();
       if (data.success) setHistory(data.history.slice(0, 5));
     } catch (err) {

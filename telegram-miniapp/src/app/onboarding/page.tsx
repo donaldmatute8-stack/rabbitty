@@ -9,7 +9,8 @@ export default function OnboardingPage() {
   const router = useRouter();
 
   const handleStart = () => {
-    router.push('/signup');
+    // Enviar a login para verificar teléfono/email; una vez verificado pasa a /signup para su nombre y @username
+    router.push('/login');
   };
 
   const handleLogin = () => {

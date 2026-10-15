@@ -409,14 +409,6 @@ export default function LoginPage() {
               >
                 {loading ? 'Enviando código…' : isPhoneNumber ? 'Continuar con Celular 📱' : 'Continuar con Código 🔑'}
               </button>
-
-              <button
-                type="button"
-                className="bg-none border-none text-sm font-medium cursor-pointer text-neutral-400 hover:text-white pt-2"
-                onClick={() => router.push('/signup')}
-              >
-                ¿Nuevo en Rabbitty? <span className="font-semibold text-[#E91E63]">Crea tu cuenta</span>
-              </button>
             </div>
           </motion.div>
         ) : (

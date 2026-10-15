@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import { PlatformBridge } from '@/lib/platform';
 
 type Message = {
   id: string;
@@ -30,11 +31,14 @@ export default function ChatRoomPage() {
 
   useEffect(() => {
     if (!user) return;
+    const currentUserId = user.id;
+    if (!currentUserId) return;
     
     // Fetch History
     const fetchHistory = async () => {
       try {
-        const res = await fetch(`/api/chat/history?userId=${user.telegramId}&targetId=${targetId}`);
+        const headers = await PlatformBridge.getAuthHeaders();
+        const res = await fetch(`/api/chat/history?targetId=${encodeURIComponent(String(targetId))}`, { headers });
         const data = await res.json();
         if (data.success) {
           setConversationId(data.conversationId);
@@ -52,8 +56,9 @@ export default function ChatRoomPage() {
     fetchHistory();
 
     // Polling for real-time updates (MVP)
-    const interval = setInterval(() => {
-      fetch(`/api/chat/history?userId=${user.telegramId}&targetId=${targetId}`)
+    const interval = setInterval(async () => {
+      const headers = await PlatformBridge.getAuthHeaders();
+      fetch(`/api/chat/history?targetId=${encodeURIComponent(String(targetId))}`, { headers })
         .then(res => res.json())
         .then(data => {
           if (data.success && data.messages) {
@@ -81,19 +86,19 @@ export default function ChatRoomPage() {
     // Add optimistic message
     const optimisticMsg: Message = {
       id: Date.now().toString(),
-      senderId: user.telegramId,
+      senderId: user.id,
       content,
       createdAt: new Date().toISOString()
     };
     setMessages(prev => [...prev, optimisticMsg]);
 
     try {
+      const headers = await PlatformBridge.getAuthHeaders();
       const res = await fetch('/api/chat/send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           conversationId,
-          senderId: user.telegramId,
           targetId,
           content
         })
@@ -186,7 +191,7 @@ export default function ChatRoomPage() {
           </div>
         ) : (
           messages.map((msg, idx) => {
-            const isMe = msg.senderId === user?.telegramId;
+            const isMe = msg.senderId === user?.id;
             return (
               <motion.div 
                 initial={{ opacity: 0, y: 10 }}

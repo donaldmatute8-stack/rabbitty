@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/features/auth/AuthProvider';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import { useToast } from '@/contexts/ToastContext';
+import { PlatformBridge } from '@/lib/platform';
 
 export default function GamificationPage() {
   const { user } = useAuth();
@@ -16,7 +17,8 @@ export default function GamificationPage() {
 
   useEffect(() => {
     if (user?.id) {
-      fetch(`/api/gamification?userId=${user.id}`)
+      PlatformBridge.getAuthHeaders()
+        .then(headers => fetch(`/api/gamification`, { headers }))
         .then(res => res.json())
         .then(d => {
           if (d.success) setData(d);

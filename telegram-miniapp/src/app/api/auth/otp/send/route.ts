@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
     let email = '';
     let phone: string | null = null;
     let mode: 'email' | 'phone' = 'email';
+    let telegramId: string | null = null;
 
     const isEmail = rawInput.includes('@');
 
@@ -48,10 +49,10 @@ export async function POST(req: NextRequest) {
       // Buscar si el usuario existe por teléfono o los últimos 10 dígitos
       const last10 = digitsOnly.slice(-10);
       const [matchedUser] = await db
-        .select({ id: users.id, email: users.email, phoneNumber: users.phoneNumber })
+        .select({ id: users.id, email: users.email, phoneNumber: users.phoneNumber, telegramId: users.telegramId })
         .from(users)
         .where(
-          sql`regexp_replace(${users.phoneNumber}, '\\D', '', 'g') LIKE ${'%' + last10}`
+          sql`regexp_replace(COALESCE(${users.phoneNumber}, ''), '\\D', '', 'g') LIKE ${'%' + last10}`
         )
         .limit(1);
 
@@ -60,6 +61,7 @@ export async function POST(req: NextRequest) {
       } else {
         email = `${digitsOnly}@phone.rabbitty.me`;
       }
+      if (matchedUser?.telegramId) telegramId = matchedUser.telegramId;
     }
 
     const emailCheck = rateLimit(`otp_send_target:${rawInput}`, 1, EMAIL_RESEND_COOLDOWN_MS);
@@ -71,7 +73,7 @@ export async function POST(req: NextRequest) {
     }
 
     const code = crypto.randomInt(100000, 1000000).toString();
-    const expires = new Date(Date.now() + 15 * 60 * 1000);
+    const expires = new Date(Date.now() + 10 * 60 * 1000);
 
     // Borrar tokens previos para email, rawInput o teléfono
     await db.delete(verificationTokens).where(
@@ -82,19 +84,20 @@ export async function POST(req: NextRequest) {
       )
     );
 
-    // Guardar tokens (hasheados y directos para compatibilidad)
-    const tokenHash = hashOtp(email, code);
+    // Guardar tokens con hash único por identifier+code para evitar colisión de PK en verificationTokens.token
+    const tokenHashEmail = hashOtp(email, code);
     await db.insert(verificationTokens).values({
       identifier: email,
-      token: tokenHash,
+      token: tokenHashEmail,
       expires,
     });
 
     if (rawInput !== email) {
       try {
+        const tokenHashRaw = hashOtp(rawInput, code);
         await db.insert(verificationTokens).values({
           identifier: rawInput,
-          token: tokenHash,
+          token: tokenHashRaw,
           expires,
         });
       } catch {}
@@ -102,40 +105,91 @@ export async function POST(req: NextRequest) {
 
     if (phone && phone !== rawInput && phone !== email) {
       try {
+        const tokenHashPhone = hashOtp(phone, code);
         await db.insert(verificationTokens).values({
           identifier: phone,
-          token: tokenHash,
+          token: tokenHashPhone,
           expires,
         });
       } catch {}
     }
 
-    console.log(`[MINIAPP OTP GENERATED] Mode: ${mode} | Target: ${rawInput} | Email: ${email} | OTP: ${code}`);
+    console.log(`[MINIAPP OTP GENERATED] Mode: ${mode} | Target: ${rawInput} | Code: ${code.slice(0, 2)}****`);
 
-    // Si es un correo real, despachar email de notificación
-    if (isEmail && !email.endsWith('@phone.rabbitty.me')) {
+    // Entregar el código por el canal disponible: email real o bot de Telegram.
+    const isGenericPhoneEmail = email.endsWith('@phone.rabbitty.me');
+    let delivered = false;
+    let deliveryChannel: 'email' | 'telegram' | 'dev' = 'dev';
+
+    if (!isGenericPhoneEmail) {
       const emailResult = await sendEmail({
         to: email,
         subject: `🔑 ${code} es tu código de acceso Rabbitty`,
         html: getOtpEmailTemplate(code),
       });
-
-      if (!emailResult.ok) {
-        console.warn('[OTP SEND] Could not dispatch email, but token saved. Details:', emailResult.error);
+      if (emailResult.ok) {
+        delivered = true;
+        deliveryChannel = 'email';
+      } else {
+        console.error('[OTP SEND] Email dispatch failed:', emailResult.error);
+      }
+    } else if (telegramId) {
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      if (botToken) {
+        try {
+          const botRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: telegramId,
+              text: `🔑 Tu código de acceso Rabbitty es: ${code}\n\nExpira en 10 minutos. No lo compartas con nadie.`,
+            }),
+          });
+          if (botRes.ok) {
+            delivered = true;
+            deliveryChannel = 'telegram';
+          } else {
+            console.error('[OTP SEND] Telegram dispatch failed:', botRes.status);
+          }
+        } catch (botErr) {
+          console.error('[OTP SEND] Telegram dispatch error:', botErr);
+        }
       }
     }
 
     const isDev = process.env.NODE_ENV === 'development';
+    if (isDev && !delivered) {
+      delivered = true;
+      deliveryChannel = 'dev';
+    }
+
+    if (!delivered) {
+      // Sin canal de entrega: limpiar tokens para no dejar códigos huérfanos.
+      await db.delete(verificationTokens).where(
+        or(
+          eq(verificationTokens.identifier, email),
+          eq(verificationTokens.identifier, rawInput),
+          phone ? eq(verificationTokens.identifier, phone) : sql`false`
+        )
+      );
+      return NextResponse.json(
+        { error: 'No podemos enviar el código a ese número todavía. Inicia sesión con tu correo electrónico o vincúlalo desde Telegram.' },
+        { status: 502 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
       mode,
       target: rawInput,
       resolvedEmail: email,
+      channel: deliveryChannel,
       otpCode: isDev ? code : undefined,
-      message: mode === 'phone'
-        ? `Código generado para ${rawInput}`
-        : `Enviamos un código de 6 dígitos a ${email}`,
+      message: deliveryChannel === 'telegram'
+        ? `Enviamos un código de 6 dígitos a tu Telegram vinculado`
+        : mode === 'phone'
+          ? `Enviamos un código de 6 dígitos al correo asociado a ${rawInput}`
+          : `Enviamos un código de 6 dígitos a ${email}`,
     });
   } catch (error) {
     console.error('[OTP SEND ERROR]', error);

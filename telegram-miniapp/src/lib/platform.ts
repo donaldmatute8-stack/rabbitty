@@ -118,6 +118,28 @@ export const PlatformBridge = {
     }
   },
 
+  /**
+   * Auth headers for API calls. Sends the persistent session token (native/web)
+   * and the Telegram WebApp initData so the server can verify the caller either way.
+   */
+  async getAuthHeaders(): Promise<Record<string, string>> {
+    const headers: Record<string, string> = {};
+
+    try {
+      const token = await this.getSessionToken();
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+    } catch (e) {
+      // ignore
+    }
+
+    if (typeof window !== 'undefined') {
+      const tg = (window as any).Telegram?.WebApp;
+      if (tg?.initData) headers['X-Init-Data'] = tg.initData;
+    }
+
+    return headers;
+  },
+
   async setSessionToken(token: string): Promise<void> {
     if (typeof window === 'undefined') return;
 

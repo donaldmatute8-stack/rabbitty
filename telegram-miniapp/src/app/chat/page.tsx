@@ -6,14 +6,18 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import useSWR from 'swr';
 import { BusinessCardSkeleton } from '@/components/ui/Skeleton';
+import { PlatformBridge } from '@/lib/platform';
 
-const fetcher = (url: string) => fetch(url).then(res => res.json());
+const fetcher = async (url: string) => {
+  const headers = await PlatformBridge.getAuthHeaders();
+  return fetch(url, { headers }).then(res => res.json());
+};
 
 export default function ChatInboxPage() {
   const { user } = useAuth();
   
   const { data, error, isLoading } = useSWR(
-    user?.id ? `/api/chat?userId=${user.id}` : null,
+    user?.id ? `/api/chat` : null,
     fetcher,
     { refreshInterval: 5000 }
   );

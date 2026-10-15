@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { LogOut, Users, Receipt, Store, Settings, TrendingUp } from 'lucide-react';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { PlatformBridge } from '@/lib/platform';
 
 export default function BusinessPortal() {
   const { user } = useAuth();
@@ -12,35 +13,35 @@ export default function BusinessPortal() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user?.telegramId) return;
-    Promise.all([
-      fetch(`/api/business?telegramId=${user.telegramId}`).then(r => r.json()),
-    ])
-    .then(([bizData]) => {
-      if (bizData.success && bizData.business) {
-        const biz = bizData.business;
-        // Guardamos el negocio en el estado local para poder leer el status
-        setBusinessState(biz);
-        fetch(`/api/business/transactions?businessId=${biz.id}`)
-          .then(r => r.json())
-          .then((txData: any) => {
-            if (txData.success) {
-              const txs = txData.transactions || [];
-              const uniqueClients = new Set(txs.map((t: any) => t.userId));
-              const totalBunz = txs.reduce((sum: number, t: any) => sum + (t.bunzMinted || 0), 0);
-              setStats({
-                clients: uniqueClients.size,
-                tickets: txs.length,
-                bunz: totalBunz,
-                visits: txs.length,
-              });
-            }
-          })
-          .catch(() => {});
+    if (!user?.id) return;
+    const load = async () => {
+      try {
+        const headers = await PlatformBridge.getAuthHeaders();
+        const bizData = await fetch(`/api/business`, { headers }).then(r => r.json());
+        if (bizData.success && bizData.business) {
+          const biz = bizData.business;
+          setBusinessState(biz);
+          const txData = await fetch(`/api/business/transactions?businessId=${biz.id}`, { headers }).then(r => r.json());
+          if (txData.success) {
+            const txs = txData.transactions || [];
+            const uniqueClients = new Set(txs.map((t: any) => t.userId));
+            const totalBunz = txs.reduce((sum: number, t: any) => sum + (t.bunzMinted || 0), 0);
+            setStats({
+              clients: uniqueClients.size,
+              tickets: txs.length,
+              bunz: totalBunz,
+              visits: txs.length,
+            });
+          }
+        }
+      } catch {
+        // ignore
+      } finally {
+        setLoading(false);
       }
-    })
-    .finally(() => setLoading(false));
-  }, [user?.telegramId]);
+    };
+    load();
+  }, [user?.id]);
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans pb-20">
