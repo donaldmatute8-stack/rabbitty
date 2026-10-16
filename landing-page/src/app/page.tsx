@@ -4,40 +4,138 @@ import { useState, useEffect } from 'react';
 import { motion, Variants } from 'framer-motion';
 import { ArrowRight, Store, UserCircle2, Zap, Shield, Smartphone, QrCode, X, Clock, Salad, Truck, Receipt, Bell, Building2, DollarSign, Monitor, Gift, Award, Megaphone, Cake, BookOpen, HelpCircle } from 'lucide-react';
 import BunzGuide from '@/components/BunzGuide';
+import PricingPackagesSection, { PackagePlan, NicheData } from '@/components/PricingPackagesSection';
+
+const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || '5213312345678';
+
+type TrackingWindow = Window & {
+  gtag?: (...args: unknown[]) => void;
+  fbq?: (...args: unknown[]) => void;
+  dataLayer?: unknown[];
+};
+
+const fireConversion = (event: string, params: Record<string, unknown> = {}) => {
+  if (typeof window === 'undefined') return;
+  const w = window as TrackingWindow;
+  w.dataLayer = w.dataLayer || [];
+  w.dataLayer.push({ event, ...params });
+  w.gtag?.('event', event, params);
+  w.fbq?.('track', event === 'Lead' ? 'Lead' : 'SubmitApplication', params);
+};
+
+const EMPTY_FORM = {
+  negocio: '', tipo: '', paquete: '', periodicidad: 'yearly',
+  nombre: '', telefono: '', email: '', ubicacion: '', como_supo: '', mensaje: '',
+  packageCode: '', packageName: '', nicheId: '', nicheName: '',
+  billingPeriod: 'yearly', setupBunz: 0, initialVaultBunz: 0,
+  lat: null as number | null, lng: null as number | null,
+  utm_source: '', utm_medium: '', utm_campaign: '', utm_content: '', utm_term: '',
+  referrer: '', website: '', _ts: 0,
+};
 
 export default function LandingPage() {
   const [showSmartContractModal, setShowSmartContractModal] = useState(false);
   const [showWhitepaperModal, setShowWhitepaperModal] = useState(false);
   const [showBunzGuide, setShowBunzGuide] = useState(false);
   const [showApplyForm, setShowApplyForm] = useState(false);
+  const [selectedPlanInfo, setSelectedPlanInfo] = useState<{ planName: string; setupBunz: number; billing: string } | null>(null);
   const [formStep, setFormStep] = useState(0);
-  const [formData, setFormData] = useState({
-    negocio: '', tipo: '', nombre: '', telefono: '', email: '', ubicacion: '', como_supo: '', mensaje: ''
-  });
+  const [formData, setFormData] = useState({ ...EMPTY_FORM });
   const [formSubmitted, setFormSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [geoStatus, setGeoStatus] = useState<'idle' | 'asking' | 'ok' | 'denied'>('idle');
 
   const handleFormChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  const requestGeo = () => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      setGeoStatus('denied');
+      return;
+    }
+    setGeoStatus('asking');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setFormData(prev => ({ ...prev, lat: pos.coords.latitude, lng: pos.coords.longitude }));
+        setGeoStatus('ok');
+      },
+      () => setGeoStatus('denied'),
+      { timeout: 8000, maximumAge: 60000 }
+    );
+  };
+
   const handleFormSubmit = async () => {
+    setSubmitting(true);
+    setSubmitError('');
+
+    const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+    const payload = {
+      ...formData,
+      utm_source: params.get('utm_source') || '',
+      utm_medium: params.get('utm_medium') || '',
+      utm_campaign: params.get('utm_campaign') || '',
+      utm_content: params.get('utm_content') || '',
+      utm_term: params.get('utm_term') || '',
+      referrer: typeof document !== 'undefined' ? document.referrer : '',
+    };
+
     try {
-      await fetch('/api/apply', {
+      const res = await fetch('/api/apply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payload),
       });
-    } catch {}
-    setFormSubmitted(true);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.ok) {
+        setSubmitError('No pudimos registrar tu solicitud. Revisa tus datos e inténtalo de nuevo o escríbenos por WhatsApp.');
+        setSubmitting(false);
+        return;
+      }
+      fireConversion('Lead', { niche: formData.nicheId, package: formData.packageCode, value: formData.setupBunz });
+      fireConversion('SubmitApplication', { niche: formData.nicheId, package: formData.packageCode });
+      setFormSubmitted(true);
+    } catch {
+      setSubmitError('Error de conexión. Revisa tu internet e inténtalo de nuevo.');
+    }
+    setSubmitting(false);
   };
 
   const resetForm = () => {
     setFormStep(0);
-    setFormData({ negocio: '', tipo: '', nombre: '', telefono: '', email: '', ubicacion: '', como_supo: '', mensaje: '' });
+    setFormData({ ...EMPTY_FORM });
+    setSelectedPlanInfo(null);
     setFormSubmitted(false);
+    setSubmitError('');
+    setGeoStatus('idle');
     setShowApplyForm(false);
   };
 
+  const handleSelectPlan = (plan: PackagePlan, niche: NicheData, billingPeriod: 'monthly' | 'yearly') => {
+    setSelectedPlanInfo({
+      planName: plan.name,
+      setupBunz: plan.setupBunz,
+      billing: billingPeriod === 'yearly' ? 'Membresía Anual (48,000 BUNZ/año)' : 'Membresía Mensual (5,000 BUNZ/mes)',
+    });
+    setFormData(prev => ({
+      ...prev,
+      tipo: niche.name,
+      paquete: `${plan.name} (${plan.setupBunz.toLocaleString()} BUNZ)`,
+      periodicidad: billingPeriod,
+      packageCode: plan.id,
+      packageName: plan.name,
+      nicheId: niche.id,
+      nicheName: niche.name,
+      setupBunz: plan.setupBunz,
+      initialVaultBunz: plan.initialVaultBunz,
+      billingPeriod,
+      _ts: Date.now(),
+    }));
+    setFormStep(0);
+    setSubmitError('');
+    setShowApplyForm(true);
+  };
   // Typewriter effect state
   const businessTypes = ['restaurante', 'cafetería', 'barbería', 'gimnasio', 'tienda'];
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
@@ -138,6 +236,7 @@ export default function LandingPage() {
         <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-white/70">
           <a href="#rabbitters" className="hover:text-white transition-colors">Rabbitters</a>
           <a href="#affiliates" className="hover:text-white transition-colors">Negocios</a>
+          <a href="#paquetes" className="text-pink-400 hover:text-pink-300 font-extrabold transition-colors">Paquetes</a>
           <a href="#bunz" className="hover:text-white transition-colors">Economía</a>
         </nav>
         <div className="flex items-center gap-4">
@@ -368,17 +467,20 @@ export default function LandingPage() {
           </div>
 
           <div className="text-center mt-12">
-            <button onClick={() => { setShowApplyForm(true); setFormStep(0); }} className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-gradient-to-r from-pink-600 to-blue-600 hover:from-pink-500 hover:to-blue-500 text-white font-bold text-lg transition-all shadow-[0_0_30px_rgba(233,30,99,0.2)] cursor-pointer">
-              Solicitar Acceso <ArrowRight size={20} />
-            </button>
+            <a href="#paquetes" className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-gradient-to-r from-pink-600 to-blue-600 hover:from-pink-500 hover:to-blue-500 text-white font-bold text-lg transition-all shadow-[0_0_30px_rgba(233,30,99,0.2)] cursor-pointer no-underline">
+              Ver Paquetes de Iniciación <ArrowRight size={20} />
+            </a>
             <div className="mt-4">
-              <button onClick={() => setShowBunzGuide(true)} className="text-white/40 hover:text-white/70 text-sm transition-all cursor-pointer inline-flex items-center gap-1.5">
+              <button onClick={() => setShowBunzGuide(true)} className="text-white/40 hover:text-white/70 text-sm transition-all cursor-pointer inline-flex items-center gap-1.5 border-none bg-transparent">
                 <HelpCircle size={14} /> ¿Cómo funciona la economía Bunz?
               </button>
             </div>
           </div>
         </div>
       </section>
+
+      {/* DYNAMIC PRICING AND PACKAGES SECTION BY NICHE */}
+      <PricingPackagesSection onSelectPlan={handleSelectPlan} />
 
       {/* NAV SECTION: BUNZ ECONOMY */}
       <section id="bunz" className="relative z-10 py-32 px-6">
@@ -442,7 +544,7 @@ export default function LandingPage() {
           <div className="bg-[#0D0D1A] border border-white/10 rounded-3xl w-full max-w-lg relative overflow-hidden shadow-[0_0_60px_rgba(233,30,99,0.15)]">
             {/* Progress bar */}
             <div className="h-1 bg-white/5">
-              <div className="h-full bg-gradient-to-r from-pink-600 to-blue-600 transition-all duration-500" style={{ width: `${((formStep + 1) / 5) * 100}%` }} />
+              <div className="h-full bg-gradient-to-r from-pink-600 to-blue-600 transition-all duration-500" style={{ width: `${((formStep + 1) / 4) * 100}%` }} />
             </div>
             <button onClick={resetForm} className="absolute top-4 right-4 text-white/50 hover:text-white z-10">
               <X size={24} />
@@ -450,8 +552,31 @@ export default function LandingPage() {
 
             {!formSubmitted ? (
               <div className="p-8">
+                {/* Selected Plan Summary Banner */}
+                {selectedPlanInfo && (
+                  <div className="mb-4 p-3 rounded-2xl bg-gradient-to-r from-pink-500/10 via-purple-500/10 to-transparent border border-pink-500/30 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-black text-pink-400 uppercase tracking-widest block">Paquete Seleccionado</span>
+                      <span className="text-sm font-black text-white">{selectedPlanInfo.planName}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[11px] font-black text-white">{selectedPlanInfo.setupBunz.toLocaleString()} BUNZ</span>
+                      <span className="text-[9px] text-white/50 block">{selectedPlanInfo.billing}</span>
+                    </div>
+                  </div>
+                )}
+
                 {/* Step indicator */}
-                <div className="text-xs font-bold text-white/30 mb-2 tracking-widest uppercase">Paso {formStep + 1} de 5</div>
+                <div className="text-xs font-bold text-white/30 mb-2 tracking-widest uppercase">Paso {formStep + 1} de 4</div>
+
+                {/* Honeypot anti-spam (invisible) */}
+                <input type="text" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true"
+                  value={formData.website} onChange={(e) => handleFormChange('website', e.target.value)}
+                  className="absolute -left-[9999px] h-0 w-0 opacity-0" />
+
+                {submitError && (
+                  <div className="mb-4 p-3 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs font-bold">{submitError}</div>
+                )}
 
                 {/* Step 1: Business name */}
                 {formStep === 0 && (
@@ -472,24 +597,8 @@ export default function LandingPage() {
                   </motion.div>
                 )}
 
-                {/* Step 2: Business type */}
+                {/* Step 2: Contact info */}
                 {formStep === 1 && (
-                  <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
-                    <h3 className="text-2xl font-black">¿Qué tipo de negocio eres?</h3>
-                    <p className="text-white/50">Selecciona la categoría que mejor describa tu negocio.</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      {['Restaurante', 'Cafetería', 'Barbería', 'Gimnasio', 'Tienda', 'Bar/Club', 'Salón de Belleza', 'Otro'].map((t) => (
-                        <button key={t} onClick={() => { handleFormChange('tipo', t); setFormStep(2); }}
-                          className={`p-4 rounded-2xl border text-left font-bold transition-all cursor-pointer ${formData.tipo === t ? 'border-pink-500 bg-pink-500/10 text-pink-400' : 'border-white/10 bg-white/5 text-white/70 hover:bg-white/[0.08]'}`}>
-                          {t}
-                        </button>
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
-
-                {/* Step 3: Contact info */}
-                {formStep === 2 && (
                   <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5">
                     <h3 className="text-2xl font-black">Tus datos de contacto</h3>
                     <p className="text-white/50">Para que podamos comunicarnos contigo.</p>
@@ -500,8 +609,8 @@ export default function LandingPage() {
                     <input type="email" placeholder="Correo electrónico" value={formData.email} onChange={(e) => handleFormChange('email', e.target.value)}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-lg font-medium text-white placeholder:text-white/20 focus:outline-none focus:border-pink-500/50 transition-all" />
                     <div className="flex justify-between">
-                      <button onClick={() => setFormStep(1)} className="text-white/50 hover:text-white font-bold transition-all cursor-pointer">← Atrás</button>
-                      <button onClick={() => (formData.nombre || formData.telefono) && setFormStep(3)} disabled={!formData.nombre && !formData.telefono}
+                      <button onClick={() => setFormStep(0)} className="text-white/50 hover:text-white font-bold transition-all cursor-pointer">← Atrás</button>
+                      <button onClick={() => (formData.telefono || formData.email) && setFormStep(2)} disabled={!formData.telefono && !formData.email}
                         className="px-8 py-3 rounded-full bg-gradient-to-r from-pink-600 to-blue-600 text-white font-bold disabled:opacity-30 transition-all cursor-pointer">
                         Siguiente <ArrowRight size={18} className="inline ml-1" />
                       </button>
@@ -509,25 +618,35 @@ export default function LandingPage() {
                   </motion.div>
                 )}
 
-                {/* Step 4: Location */}
-                {formStep === 3 && (
+                {/* Step 3: Location */}
+                {formStep === 2 && (
                   <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
                     <h3 className="text-2xl font-black">¿Dónde estás ubicado?</h3>
-                    <p className="text-white/50">Ciudad, estado o colonia donde operas.</p>
+                    <p className="text-white/50">Ciudad, estado o colonia donde operas. Esto nos ayuda a ubicarte en el mapa.</p>
                     <input type="text" placeholder="Ej: Guadalajara, Jalisco" value={formData.ubicacion} onChange={(e) => handleFormChange('ubicacion', e.target.value)}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-lg font-medium text-white placeholder:text-white/20 focus:outline-none focus:border-pink-500/50 transition-all"
-                      autoFocus onKeyDown={(e) => e.key === 'Enter' && setFormStep(4)} />
+                      autoFocus onKeyDown={(e) => e.key === 'Enter' && setFormStep(3)} />
+                    <button type="button" onClick={requestGeo} disabled={geoStatus === 'asking'}
+                      className="w-full px-5 py-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white/70 text-sm font-bold transition-all cursor-pointer disabled:opacity-50">
+                      {geoStatus === 'ok'
+                        ? '✅ Ubicación exacta capturada'
+                        : geoStatus === 'asking'
+                          ? 'Obteniendo ubicación…'
+                          : geoStatus === 'denied'
+                            ? '📍 Compartir mi ubicación exacta (permiso denegado)'
+                            : '📍 Usar mi ubicación exacta (opcional)'}
+                    </button>
                     <div className="flex justify-between">
-                      <button onClick={() => setFormStep(2)} className="text-white/50 hover:text-white font-bold transition-all cursor-pointer">← Atrás</button>
-                      <button onClick={() => setFormStep(4)} className="px-8 py-3 rounded-full bg-gradient-to-r from-pink-600 to-blue-600 text-white font-bold transition-all cursor-pointer">
+                      <button onClick={() => setFormStep(1)} className="text-white/50 hover:text-white font-bold transition-all cursor-pointer">← Atrás</button>
+                      <button onClick={() => setFormStep(3)} className="px-8 py-3 rounded-full bg-gradient-to-r from-pink-600 to-blue-600 text-white font-bold transition-all cursor-pointer">
                         Siguiente <ArrowRight size={18} className="inline ml-1" />
                       </button>
                     </div>
                   </motion.div>
                 )}
 
-                {/* Step 5: Final details */}
-                {formStep === 4 && (
+                {/* Step 4: Final details */}
+                {formStep === 3 && (
                   <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5">
                     <h3 className="text-2xl font-black">Casi listo 🎉</h3>
                     <p className="text-white/50">¿Cómo te enteraste de Rabbitty? ¿Algo más que quieras agregar?</p>
@@ -535,11 +654,12 @@ export default function LandingPage() {
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-lg font-medium text-white placeholder:text-white/20 focus:outline-none focus:border-pink-500/50 transition-all" />
                     <textarea placeholder="Mensaje o comentario adicional..." value={formData.mensaje} onChange={(e) => handleFormChange('mensaje', e.target.value)} rows={3}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-lg font-medium text-white placeholder:text-white/20 focus:outline-none focus:border-pink-500/50 transition-all resize-none" />
+                    <p className="text-[10px] text-white/30 leading-relaxed">Al enviar aceptas que Rabbitty te contacte por WhatsApp, teléfono o correo para dar seguimiento a tu solicitud.</p>
                     <div className="flex justify-between">
-                      <button onClick={() => setFormStep(3)} className="text-white/50 hover:text-white font-bold transition-all cursor-pointer">← Atrás</button>
-                      <button onClick={handleFormSubmit} disabled={!formData.negocio}
+                      <button onClick={() => setFormStep(2)} className="text-white/50 hover:text-white font-bold transition-all cursor-pointer">← Atrás</button>
+                      <button onClick={handleFormSubmit} disabled={!formData.negocio || submitting}
                         className="px-8 py-3 rounded-full bg-gradient-to-r from-green-500 to-blue-600 text-white font-bold hover:scale-105 transition-all cursor-pointer disabled:opacity-30">
-                        Enviar Solicitud 🚀
+                        {submitting ? 'Enviando…' : 'Enviar Solicitud 🚀'}
                       </button>
                     </div>
                   </motion.div>
@@ -548,11 +668,28 @@ export default function LandingPage() {
             ) : (
               <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="p-8 text-center space-y-6">
                 <div className="text-6xl">🎉</div>
-                <h3 className="text-3xl font-black">¡Solicitud Enviada!</h3>
-                <p className="text-white/50 text-lg">Gracias por tu interés en Rabbitty. Nuestro equipo se pondrá en contacto contigo pronto para coordinar los siguientes pasos.</p>
-                <button onClick={resetForm} className="px-8 py-3 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold transition-all cursor-pointer">
-                  Cerrar
-                </button>
+                <h3 className="text-3xl font-black">¡Solicitud Registrada!</h3>
+                <p className="text-white/60 text-sm leading-relaxed max-w-sm mx-auto">
+                  Tu negocio <strong>{`"${formData.negocio}"`}</strong> y paquete <strong>{`"${formData.packageName || formData.paquete || 'Personalizado'}"`}</strong> han sido registrados en la red Rabbitty.
+                </p>
+                <div className="pt-2 flex flex-col gap-3">
+                  <a
+                    href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
+                      `¡Hola Rabbitty! Acabo de registrar a "${formData.negocio}" desde la web para el paquete "${formData.packageName || formData.paquete || 'Personalizado'}". Me gustaría agendar mi deploy demo.`
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => fireConversion('Contact', { niche: formData.nicheId, package: formData.packageCode })}
+                    className="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm transition-all shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 no-underline cursor-pointer"
+                  >
+                    <span>💬</span>
+                    <span>Agilizar por WhatsApp Directo</span>
+                  </a>
+
+                  <button onClick={resetForm} className="w-full py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white/70 hover:text-white font-bold text-xs transition-all cursor-pointer border-none">
+                    Cerrar
+                  </button>
+                </div>
               </motion.div>
             )}
           </div>

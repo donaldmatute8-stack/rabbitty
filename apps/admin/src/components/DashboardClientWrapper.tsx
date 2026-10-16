@@ -8,7 +8,7 @@ import { CommandMenu } from "./CommandMenu";
 import { SandboxBanner } from "./SandboxBanner";
 import { trpc } from "../lib/trpc-client";
 import Link from "next/link";
-import { TerminalSquare, TabletSmartphone, Smartphone } from "lucide-react";
+import { TerminalSquare, TabletSmartphone, Smartphone, MessageSquare, X } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
 import { ScannerPairModal } from "./ScannerPairModal";
 
@@ -42,6 +42,10 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
     );
     setIsNativeApp(isCapNative || isStandalone);
   }, []);
+  const [chatDrawerOpen, setChatDrawerOpen] = useState(false);
+  const [activeCustomerChat, setActiveCustomerChat] = useState<string | null>(null);
+  const [chatReply, setChatReply] = useState("");
+
   const [branchId, setBranchId] = useState("b1");
   const [twoFaChecked, setTwoFaChecked] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
@@ -77,6 +81,37 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
   const { data: profile } = trpc.admin.getProfile.useQuery(undefined, {
     retry: false,
     staleTime: 5 * 60 * 1000,
+  });
+
+  const {
+    data: conversations,
+    isLoading: conversationsLoading,
+    refetch: refetchConversations,
+  } = trpc.customerChat.listConversations.useQuery(undefined, {
+    enabled: chatDrawerOpen,
+    refetchInterval: chatDrawerOpen ? 8000 : false,
+    retry: false,
+  });
+
+  const {
+    data: thread,
+    isLoading: threadLoading,
+    refetch: refetchThread,
+  } = trpc.customerChat.getMessages.useQuery(
+    { conversationId: activeCustomerChat ?? "" },
+    {
+      enabled: !!activeCustomerChat,
+      refetchInterval: activeCustomerChat ? 5000 : false,
+      retry: false,
+    }
+  );
+
+  const sendMessage = trpc.customerChat.sendMessage.useMutation({
+    onSuccess: () => {
+      setChatReply("");
+      refetchThread();
+      refetchConversations();
+    },
   });
 
   useEffect(() => {
@@ -179,6 +214,18 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
               </div>
               <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                 <button
+                  onClick={() => setChatDrawerOpen(true)}
+                  className="relative flex items-center gap-2 rounded-xl bg-pink-500/10 px-3 py-2 text-xs font-bold text-pink-400 hover:bg-pink-500/20 active:scale-95 transition-all border border-pink-500/20 cursor-pointer"
+                  title="Mensajes de clientes B2C"
+                >
+                  <MessageSquare className="h-4 w-4 shrink-0 text-pink-400" />
+                  <span className="hidden sm:inline whitespace-nowrap">Chats Clientes</span>
+                  <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-pink-500"></span>
+                  </span>
+                </button>
+                <button
                   onClick={() => setPairModalOpen(true)}
                   className="flex items-center gap-2 rounded-xl bg-pink-500/10 px-3 py-2 text-xs font-bold text-pink-400 hover:bg-pink-500/20 active:scale-95 transition-all border border-pink-500/20 cursor-pointer"
                   title="Vincular teléfono móvil como terminal de escaneo"
@@ -215,6 +262,138 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                 {children}
               </div>
             </main>
+
+            {/* Slide-over Customer Chat Drawer (B2C) */}
+            {chatDrawerOpen && (
+              <div className="fixed inset-0 z-50 flex justify-end">
+                {/* Backdrop */}
+                <div 
+                  className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+                  onClick={() => setChatDrawerOpen(false)}
+                />
+
+                {/* Panel lateral */}
+                <aside className="relative z-50 w-full max-w-md h-full bg-[#111113] border-l border-white/10 flex flex-col shadow-2xl animate-in slide-in-from-right duration-300">
+                  {/* Header */}
+                  <div className="flex items-center justify-between p-4 border-b border-white/10">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-full bg-pink-500/20 border border-pink-500/40 flex items-center justify-center text-pink-400">
+                        <MessageSquare className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-white m-0">Atención a Clientes (B2C)</h3>
+                        <p className="text-[11px] text-gray-400 m-0">Mensajes de usuarios de la MiniApp</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setChatDrawerOpen(false)}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors border-0 bg-transparent cursor-pointer"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* Body: Customer Conversations List or Thread */}
+                  <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                    {!activeCustomerChat && (
+                      <>
+                        {conversationsLoading && (
+                          <p className="text-xs text-gray-400 text-center py-6">Cargando conversaciones…</p>
+                        )}
+                        {!conversationsLoading && (!conversations || conversations.length === 0) && (
+                          <div className="text-center py-10 px-4">
+                            <p className="text-xs text-gray-400 m-0">
+                              Aún no hay mensajes de clientes.
+                            </p>
+                            <p className="text-[11px] text-gray-500 mt-2 m-0">
+                              Cuando un usuario te escriba desde la MiniApp, aparecerá aquí.
+                            </p>
+                          </div>
+                        )}
+                        {conversations?.map((conv) => (
+                          <div
+                            key={conv.id}
+                            onClick={() => setActiveCustomerChat(conv.id)}
+                            className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-pink-500/40 transition-all cursor-pointer"
+                          >
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-xs font-bold text-white">{conv.customerName}</span>
+                              <span className="text-[10px] text-gray-500">
+                                {conv.lastMessageAt ? new Date(conv.lastMessageAt).toLocaleString("es-MX", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-pink-400 mb-1 m-0">{conv.businessName}</p>
+                            <p className="text-xs text-gray-300 m-0 line-clamp-2">{conv.lastMessage || "Sin mensajes"}</p>
+                          </div>
+                        ))}
+                      </>
+                    )}
+
+                    {activeCustomerChat && (
+                      <>
+                        <button
+                          onClick={() => {
+                            setActiveCustomerChat(null);
+                            setChatReply("");
+                          }}
+                          className="text-[11px] text-gray-400 hover:text-white bg-transparent border-0 cursor-pointer p-0 mb-2"
+                        >
+                          ← Volver a conversaciones
+                        </button>
+
+                        {threadLoading && (
+                          <p className="text-xs text-gray-400 text-center py-6">Cargando mensajes…</p>
+                        )}
+
+                        {thread?.messages.map((msg) => {
+                          const mine = msg.senderId === thread.businessId;
+                          return (
+                            <div key={msg.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                              <div className={`max-w-[80%] rounded-2xl px-3.5 py-2 ${mine ? "bg-pink-600 text-white" : "bg-white/[0.06] text-gray-100 border border-white/10"}`}>
+                                <p className="text-xs m-0 whitespace-pre-wrap break-words">{msg.content}</p>
+                                <span className={`text-[9px] mt-1 block ${mine ? "text-pink-100/80" : "text-gray-500"}`}>
+                                  {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" }) : ""}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
+                  </div>
+
+                  {/* Quick Reply Bar */}
+                  {activeCustomerChat && (
+                    <div className="p-3 border-t border-white/10 bg-black/40">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          placeholder="Responder al cliente..."
+                          value={chatReply}
+                          onChange={(e) => setChatReply(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && chatReply.trim() && !sendMessage.isPending) {
+                              sendMessage.mutate({ conversationId: activeCustomerChat, content: chatReply.trim() });
+                            }
+                          }}
+                          className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 outline-none focus:border-pink-500"
+                        />
+                        <button
+                          onClick={() => {
+                            if (!chatReply.trim() || sendMessage.isPending) return;
+                            sendMessage.mutate({ conversationId: activeCustomerChat, content: chatReply.trim() });
+                          }}
+                          disabled={sendMessage.isPending}
+                          className="bg-pink-600 hover:bg-pink-500 disabled:opacity-50 text-white font-bold text-xs px-3.5 py-2 rounded-xl border-none cursor-pointer active:scale-95 transition-transform"
+                        >
+                          {sendMessage.isPending ? "..." : "Enviar"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </aside>
+              </div>
+            )}
 
             <ScannerPairModal
               isOpen={pairModalOpen}

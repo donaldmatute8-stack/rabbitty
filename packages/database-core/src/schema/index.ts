@@ -1,4 +1,4 @@
-import { pgTable, text, integer, real, timestamp, boolean, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, real, timestamp, boolean, uuid, jsonb } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
 const id = () => uuid("id").defaultRandom().$defaultFn(() => crypto.randomUUID()).primaryKey();
@@ -182,6 +182,9 @@ export const conversations = pgTable("conversations", {
   id: id(),
   participant1: text("participant1").notNull(),
   participant2: text("participant2").notNull(),
+  participant1TypingAt: timestamp("participant1TypingAt"),
+  participant2TypingAt: timestamp("participant2TypingAt"),
+  lastMessageAt: timestamp("lastMessageAt").defaultNow(),
   createdAt: timestamp("createdAt").defaultNow(),
   updatedAt: timestamp("updatedAt").defaultNow(),
 });
@@ -191,6 +194,9 @@ export const messages = pgTable("messages", {
   conversationId: fkId("conversationId").references(() => conversations.id, { onDelete: "cascade" }),
   senderId: text("senderId").notNull(),
   content: text("content").notNull(),
+  type: text("type").default("TEXT").notNull(),
+  metadata: jsonb("metadata"),
+  readAt: timestamp("readAt"),
   createdAt: timestamp("createdAt").defaultNow(),
 });
 

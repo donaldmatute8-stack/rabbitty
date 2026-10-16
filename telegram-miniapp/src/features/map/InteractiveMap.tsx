@@ -7,27 +7,50 @@ import 'leaflet/dist/leaflet.css';
 import { Crosshair } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
 
+export interface MapBusiness {
+  id: string;
+  name?: string;
+  user?: string;
+  category?: string;
+  device?: string;
+  address?: string;
+  lat?: string | number | null;
+  lng?: string | number | null;
+  rewardPercentage?: number;
+  reward_percentage?: number;
+  acceptsBunz?: boolean;
+  accepts_bunz?: boolean;
+  givesBunz?: boolean;
+  gives_bunz?: boolean;
+  distance?: number;
+  image?: string;
+  imageUrl?: string;
+  logoUrl?: string;
+}
+
 interface InteractiveMapProps {
-  businesses: any[];
+  businesses: MapBusiness[];
   userLat?: number | null;
   userLng?: number | null;
 }
 
-const RARITY: any = {
+const RARITY = {
   common:    { color:"#7EC8E3", label:"Común",      ring:"#7EC8E355" },
   rare:      { color:"#B57BEE", label:"Raro",       ring:"#B57BEE55" },
   epic:      { color:"#FF4D8D", label:"Épico",      ring:"#FF4D8D66" },
   legendary: { color:"#FFD166", label:"Legendario", ring:"#FFD16666" },
-};
+} as const;
 
-function getRarity(bunz: number) {
+type RarityKey = keyof typeof RARITY;
+
+function getRarity(bunz: number): RarityKey {
   if (bunz >= 15) return "legendary"; // Adjusted for realistic percentages (15%+)
   if (bunz >= 10) return "epic";
   if (bunz >= 5)  return "rare";
   return "common";
 }
 
-function getIcon(category: string) {
+function getIcon(category?: string) {
   const cat = category?.toLowerCase() || '';
   if (cat.includes('caf')) return '☕';
   if (cat.includes('restaurante') || cat.includes('comida') || cat.includes('pizz')) return '🍕';
@@ -37,7 +60,7 @@ function getIcon(category: string) {
   return '🛍️';
 }
 
-function markerHTML(a: any, selected: boolean) {
+function markerHTML(a: MapBusiness, selected: boolean) {
   const rw = a.rewardPercentage || a.reward_percentage || 0;
   const isStockOnly = (a.acceptsBunz || a.accepts_bunz) && !(a.givesBunz || a.gives_bunz);
   const r = isStockOnly ? { color: "#E91E63", label: "Stock" } : RARITY[getRarity(rw)];
@@ -78,9 +101,9 @@ function userMarkerHTML() {
 
 export default function InteractiveMap({ businesses, userLat, userLng }: InteractiveMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
-  const mapInst = useRef<any>(null);
-  const layerGroup = useRef<any>(null);
-  const [selected, setSelected] = useState<any>(null);
+  const mapInst = useRef<L.Map | null>(null);
+  const layerGroup = useRef<L.LayerGroup | null>(null);
+  const [selected, setSelected] = useState<MapBusiness | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>('Todos');
   const [activeRarity, setActiveRarity] = useState<string>('ALL');
   const [activeMode, setActiveMode] = useState<string>('Todos');
@@ -122,8 +145,8 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
     if (!mapRef.current || mapInst.current) return;
     
     // Default to first business location if no user location, else fallback to Monterrey
-    const fallbackLat = businesses.length > 0 && businesses[0].lat ? parseFloat(businesses[0].lat) : 25.7275;
-    const fallbackLng = businesses.length > 0 && businesses[0].lng ? parseFloat(businesses[0].lng) : -100.312;
+    const fallbackLat = businesses.length > 0 && businesses[0].lat ? Number(businesses[0].lat) : 25.7275;
+    const fallbackLng = businesses.length > 0 && businesses[0].lng ? Number(businesses[0].lng) : -100.312;
 
     const centerLat = userLat != null ? userLat : fallbackLat;
     const centerLng = userLng != null ? userLng : fallbackLng;
@@ -132,13 +155,15 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
       center: [centerLat, centerLng],
       zoom: 15,
       zoomControl: false,
-      attributionControl: false,
+      attributionControl: true,
     });
 
-    // Stadia Alidade Smooth Dark: mapa oscuro minimalista sin ruido (calles limpias y negocios Rabbitty destacados)
-    L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png', {
+    // CartoDB Dark Matter: mapas oscuros limpios, de alta velocidad y gratuitos sin requerir API keys
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       maxZoom: 20,
-      opacity: 0.94,
+      subdomains: 'abcd',
+      opacity: 0.95,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
     }).addTo(map);
 
     // Add destination marker (from affiliate 'Llegar')
@@ -171,19 +196,21 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
 
   // Render Business Markers
   useEffect(() => {
-    if (!mapInst.current || !layerGroup.current) return;
-    layerGroup.current.clearLayers();
+    const map = mapInst.current;
+    const group = layerGroup.current;
+    if (!map || !group) return;
+    group.clearLayers();
 
     filteredBusinesses.forEach(b => {
       if (!b.lat || !b.lng) return;
-      const lat = parseFloat(b.lat);
-      const lng = parseFloat(b.lng);
+      const lat = Number(b.lat);
+      const lng = Number(b.lng);
 
       const isStockOnly = (b.acceptsBunz || b.accepts_bunz) && !(b.givesBunz || b.gives_bunz);
       const rw = b.rewardPercentage || b.reward_percentage || 0;
       const r = isStockOnly ? { color: "#E91E63", label: "Stock" } : RARITY[getRarity(rw)];
       const isSel = selected?.id === b.id;
-      
+
       // Radius of influence
       L.circle([lat, lng], {
         radius: isSel ? 100 : 70,
@@ -191,18 +218,18 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
         fillOpacity: isSel ? 0.12 : 0.06,
         weight: isSel ? 1.5 : 1,
         dashArray: isSel ? undefined : '4 6',
-      }).addTo(layerGroup.current);
+      }).addTo(group);
 
       const icon = L.divIcon({ html: markerHTML(b, isSel), className:'', iconSize:[64,80], iconAnchor:[32,80] });
       L.marker([lat, lng], { icon, zIndexOffset: isSel ? 1500 : 800 })
-        .addTo(layerGroup.current)
-        .on('click', (e: any) => {
-          L.DomEvent.stopPropagation(e);
-          setSelected((prev: any) => prev?.id === b.id ? null : b);
-          mapInst.current?.panTo([lat - 0.0018, lng], { animate:true, duration:0.5 });
+        .addTo(group)
+        .on('click', (e: L.LeafletMouseEvent) => {
+          L.DomEvent.stopPropagation(e.originalEvent);
+          setSelected((prev) => prev?.id === b.id ? null : b);
+          map.panTo([lat - 0.0018, lng], { animate:true, duration:0.5 });
         });
     });
-  }, [filteredBusinesses, selected]); // FIx: Add filteredBusinesses instead of just businesses
+  }, [filteredBusinesses, selected]);
 
   return (
     <div className="w-full h-full relative bg-[#0D0D1A]">
@@ -251,7 +278,7 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
 
       {/* Mode Filters (Todos / bunz'in / Stock) - Collapsible Div */}
       {showAllFilters ? (
-        <div style={{ position: 'absolute', bottom: selected ? 260 : (PlatformBridge.isTelegram() ? 120 : 80), left: 16, right: 16, zIndex: 2000, display: 'flex', flexDirection: 'column', gap: 10, transition: 'bottom 0.3s' }}>
+        <div style={{ position: 'absolute', bottom: selected ? 230 : (PlatformBridge.isTelegram() ? 40 : 24), left: 16, right: 16, zIndex: 2000, display: 'flex', flexDirection: 'column', gap: 10, transition: 'bottom 0.3s' }}>
           
           {/* Toggle Filters Row */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

@@ -1,0 +1,569 @@
+import { db } from '@/db';
+import { messages, ownedBusinesses, users, levels } from '@/db/schema';
+import { eq } from 'drizzle-orm';
+
+type BusinessRow = typeof ownedBusinesses.$inferSelect;
+type MessageRow = typeof messages.$inferSelect;
+import { isBusinessOpen } from '@/lib/chat';
+
+export interface BusinessCardMetadata {
+  businessId: string;
+  businessName: string;
+  category?: string;
+  address?: string;
+  rewardPercentage?: number;
+  acceptsBunz?: boolean;
+  logoUrl?: string | null;
+}
+
+export interface BusinessOption {
+  businessId: string;
+  businessName: string;
+  category?: string;
+  address?: string;
+  distanceKm?: number | null;
+  openNow?: boolean | null;
+  rewardPercentage?: number;
+  acceptsBunz?: boolean;
+  logoUrl?: string | null;
+}
+
+export interface OrderItem {
+  name: string;
+  qty: number;
+  notes?: string;
+}
+
+export interface OrderDraft {
+  businessId: string;
+  businessName: string;
+  items: OrderItem[];
+  totalBunz?: number;
+  notes?: string;
+  step: 'SELECT_ITEMS' | 'CONFIRM' | 'SENT';
+}
+
+export interface BunzyReply {
+  content: string;
+  type: 'TEXT' | 'CARD' | 'OPTIONS';
+  metadata: BusinessCardMetadata | null;
+  suggestions: string[];
+  options?: BusinessOption[];
+  orderDraft?: OrderDraft | null;
+}
+
+export interface BunzyInput {
+  userId: string;
+  conversationId: string;
+  content: string;
+  lat?: number | null;
+  lng?: number | null;
+}
+
+const STOPWORDS = new Set([
+  'que', 'con', 'para', 'por', 'los', 'las', 'una', 'uno', 'unos', 'unas', 'del', 'esta', 'este',
+  'como', 'donde', 'cuando', 'hola', 'quiero', 'podria', 'puedes', 'tienes', 'hay', 'algo', 'muy',
+  'mas', 'pero', 'sin', 'sobre', 'cerca', 'aqui', 'alli', 'busco', 'recomienda', 'dame', 'ver',
+]);
+
+function tokenize(text: string): string[] {
+  return (text || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .split(/[^a-z0-9ñ]+/)
+    .filter((t) => t.length > 2 && !STOPWORDS.has(t));
+}
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+function normalizeText(text: string): string {
+  return (text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function rankBusinesses(
+  businesses: BusinessRow[],
+  content: string,
+  lat?: number | null,
+  lng?: number | null,
+): BusinessRow[] {
+  const tokens = tokenize(content);
+  const nc = normalizeText(content);
+  const wantsNearby = /cerca|nearby|aqui|aqui mismo|mi zona|caminando|ahorita/.test(nc);
+  return [...businesses]
+    .map((b) => {
+      const hay = normalizeText(`${b.name} ${b.category} ${b.description || ''}`);
+      let score = 0;
+      for (const t of tokens) if (hay.includes(t)) score += 6;
+      if (b.acceptsBunz) score += 1;
+      if (typeof lat === 'number' && typeof lng === 'number') {
+        const d = haversineKm(lat, lng, b.lat, b.lng);
+        score += Math.max(0, 24 - d / 0.5);
+        if (wantsNearby) score += Math.max(0, 30 - d);
+      }
+      if (isBusinessOpen(b) && wantsNearby) score += 8;
+      return { b, score };
+    })
+    .sort((x, y) => y.score - x.score)
+    .map((r) => r.b);
+}
+
+function businessLine(b: BusinessRow, lat?: number | null, lng?: number | null): string {
+  let distanceText = '';
+  if (typeof lat === 'number' && typeof lng === 'number') {
+    const d = haversineKm(lat, lng, b.lat, b.lng);
+    distanceText = ` | Distancia: ${d < 1 ? `${Math.round(d * 1000)} m` : `${d.toFixed(1)} km`}`;
+  }
+  return `- "${b.name}" | Cat: ${b.category} | Dir: ${b.address} | Recompensa: ${b.rewardPercentage}% bunz | Acepta Bunz: ${
+    b.acceptsBunz ? 'Sí' : 'No'
+  } | ID: ${b.id}${b.description ? ` | Info: ${b.description}` : ''}${distanceText}`;
+}
+
+// function formatDistanceKm(d: number): string {
+//   return d < 1 ? `${Math.round(d * 1000)} m` : `${d.toFixed(1)} km`;
+// }
+
+function mapToOptions(businesses: BusinessRow[], lat?: number | null, lng?: number | null): BusinessOption[] {
+  return businesses.map((b) => {
+    let distanceKm: number | null = null;
+    if (typeof lat === 'number' && typeof lng === 'number') {
+      distanceKm = Number(haversineKm(lat, lng, b.lat, b.lng).toFixed(2));
+    }
+    return {
+      businessId: b.id,
+      businessName: b.name,
+      category: b.category,
+      address: b.address,
+      distanceKm,
+      openNow: isBusinessOpen(b),
+      rewardPercentage: b.rewardPercentage,
+      acceptsBunz: b.acceptsBunz,
+      logoUrl: b.logoUrl ?? null,
+    };
+  });
+}
+
+function buildDirectory(businesses: BusinessRow[], lat?: number | null, lng?: number | null): string {
+  return businesses.map((b) => `- ${businessLine(b, lat, lng)}`).join('\n');
+}
+
+function businessCardFromText(text: string, businesses: BusinessRow[]): BusinessCardMetadata | null {
+  const match = /\[COMERCIO_ACTION id="([^"]+)" name="([^"]+)"\]/.exec(text);
+  if (match) {
+    const business = businesses.find((b) => b.id === match[1]);
+    return {
+      businessId: match[1],
+      businessName: match[2],
+      category: business?.category,
+      address: business?.address,
+      rewardPercentage: business?.rewardPercentage,
+      acceptsBunz: business?.acceptsBunz,
+      logoUrl: business?.logoUrl ?? null,
+    };
+  }
+  return null;
+}
+
+function suggestionsFor(content: string, hasBusiness: boolean, multiple = false): string[] {
+  const t = normalizeText(content);
+  if (hasBusiness && multiple) return ['Reservar', 'Pedir por Bunzy', 'Darme contacto'];
+  if (hasBusiness) return ['Cómo llego 🗺️', 'Reservar mesa', 'Ver otras opciones'];
+  if (/bunz|ganar|recompens/.test(t)) return ['¿Cómo gano bunz?', 'Negocios cerca de mí', 'Canjear mis bunz'];
+  if (/comer|cafe|rest|bar|antoj/.test(t)) return ['Cafés cerca ☕', 'Restaurantes 🍽️', 'Postres 🍰'];
+  if (/pizza|pizzas|taco|tacos|hamburg|comida/.test(t)) return ['Usar mi ubicación', 'Buscar por dirección', 'Ver todos'];
+  return ['Recomiéndame un lugar', '¿Cómo gano bunz?', 'Ver el mapa Freehands'];
+}
+
+interface BunzyContext {
+  user: {
+    firstName: string | null;
+    balance: number;
+    hops: number;
+    levelName: string | null;
+    multiplier: number;
+  } | null;
+  businesses: BusinessRow[];
+  allBusinesses: BusinessRow[];
+}
+
+async function loadContext(input: BunzyInput): Promise<BunzyContext> {
+  const allBusinesses = await db.query.ownedBusinesses
+    .findMany({ where: eq(ownedBusinesses.status, 'VERIFIED'), limit: 60 })
+    .catch(() => [] as BusinessRow[]);
+
+  const ranked = rankBusinesses(allBusinesses, input.content, input.lat, input.lng).slice(0, 5);
+
+  const userRow = await db.query.users
+    .findFirst({
+      where: eq(users.id, input.userId),
+      columns: { firstName: true, totalBunzEarned: true, totalBunzSpent: true, hops: true, levelId: true },
+    })
+    .catch(() => undefined);
+
+  let levelName: string | null = null;
+  let multiplier = 1;
+  if (userRow?.levelId) {
+    const level = await db.query.levels.findFirst({ where: eq(levels.id, userRow.levelId) }).catch(() => undefined);
+    levelName = level?.name ?? null;
+    multiplier = level?.bunzMultiplier ?? 1;
+  }
+
+  return {
+    user: userRow
+      ? {
+          firstName: userRow.firstName,
+          balance: (userRow.totalBunzEarned || 0) - (userRow.totalBunzSpent || 0),
+          hops: userRow.hops || 0,
+          levelName,
+          multiplier,
+        }
+      : null,
+    businesses: ranked,
+    allBusinesses,
+  };
+}
+
+function buildSystemPrompt(ctx: BunzyContext, lat?: number | null, lng?: number | null): string {
+  const userLine = ctx.user
+    ? `DATOS DEL USUARIO: se llama ${ctx.user.firstName || 'Rabbitter'}, tiene ${ctx.user.balance} bunz disponibles, ${ctx.user.hops} hops${ctx.user.levelName ? `, nivel "${ctx.user.levelName}" (x${ctx.user.multiplier} bunz)` : ''}.`
+    : 'DATOS DEL USUARIO: no disponibles.';
+
+  const locationLine =
+    typeof lat === 'number' && typeof lng === 'number'
+      ? 'El usuario compartió su ubicación; prioriza negocios más cercanos.'
+      : 'El usuario no compartió ubicación; no inventes distancias.';
+
+  return `Eres Bunzy 🐰, el concierge oficial, hiperconectado y carismático de Rabbitty.
+Tu misión es guiar al usuario a los mejores lugares (cafés, restaurantes, bares, fitness), ayudar a reservar, a pedir por ti o dar contacto, y explicar cómo acumular bunz.
+Hablas con un tono mexicano moderno, amigable, fresco y directo ("¡Qué onda!", "¡De lujo!"). Siempre escribe "bunz" en minúsculas.
+${userLine}
+${locationLine}
+
+NEGOCIOS RABBITTY RELEVANTES PARA ESTA CONSULTA:
+${buildDirectory(ctx.businesses, lat, lng) || '(No hay comercios afiliados cargados actualmente)'}
+
+REGLAS DE UBICACIÓN:
+- Si pregunta por "cerca", "ahorita", "aquí", "mi zona", "caminando" o recomendaciones geolocalizadas Y NO hay ubicación (${typeof lat==='number'&&typeof lng==='number'?'SÍ tiene':'NO tiene'}), NO busques con coordenadas. Pregunta ÚNICAMENTE: "¿Quieres que use tu ubicación actual o buscas para otro lugar (dirección, colonia o referencia)?"
+- Si responde "otro lugar", "otra zona", "para otro lado", "en ..." menciona dirección/colonia → pide esa dirección/colonia clara y búscala por texto. No inventes coords.
+- Si dice "usa mi ubicación", "mi ubicación", "sí usa mi ubicación" y aún no tiene → responde: "Toca el ícono 📍 para compartir tu ubicación y lo busco al instante."
+
+REGLAS DE PRESENTACIÓN:
+- Si hay 2 o más negocios: preséntalos NUMERADOS (máximo 3). Por cada uno: Nombre, Distancia (solo si hay ubicación o se dedujo zona), Estado (Abierto ahora / Cierra en X / Cerrado), % bunz. Sé natural y breve.
+- Tras lista numérica: "¿Cuál eliges? Puedo reservar, pedir por mí o darte su contacto."
+- Si hay 1 negocio muy claro: muéstralo directo + etiqueta [COMERCIO_ACTION id="{id}" name="{nombre}"] y ofrece esas 3 acciones.
+- Prioriza "Abierto ahora" cuando diga "ahorita".
+
+ACCIONES:
+- Cuando elija número ("la 1", "2", "primero") + acción ("reservar", "pedir", "quiero pedir", "dame contacto", "contacto") → responde acorde a ese comercio.
+- Para "dame el contacto" → nombre, dirección y, si existen, teléfono/WhatsApp. Si no existen, ofrece abrir chat directo con [COMERCIO_ACTION].
+- Para "pedir por Bunzy" → inicia pedido breve: "¿Qué quieres pedirle a {nombre}? Dame el platillo/cantidad o una breve descripción y lo preparo."
+- Para "reservar" → pregunta: "¿Para cuántas personas y a qué hora quieres reservar en {nombre}?"
+
+REGLAS GENERALES:
+1. Recomienda SOLAMENTE negocios del directorio anterior. Nunca inventes negocios, direcciones, tel/WhatsApp ni recompensas.
+2. Usa herramienta "buscar_negocios" solo si realmente faltan resultados. Puedes usar "buscar_negocios_cercanos" con soloAbiertosAhora=true cuando diga "ahorita".
+3. Si vas a mostrar UNA sola opción directa, agrega EXACTAMENTE esta etiqueta al final: [COMERCIO_ACTION id="{id_del_comercio}" name="{nombre_del_comercio}"]
+4. Sé breve (máx ~120 palabras), dinámico y útil. Usa emojis con moderación. Responde SIEMPRE en español.`;
+}
+
+type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
+
+async function loadHistory(conversationId: string): Promise<ChatMessage[]> {
+  const history = await db.query.messages
+    .findMany({
+      where: eq(messages.conversationId, conversationId),
+      orderBy: (messages, { asc }) => [asc(messages.createdAt)],
+      limit: 10,
+    })
+    .catch(() => [] as MessageRow[]);
+
+  return history.map((m) => ({
+    role: (m.senderId === 'bot' ? 'assistant' : 'user') as 'assistant' | 'user',
+    content: m.content,
+  }));
+}
+
+function heuristicReply(content: string, ctx: BunzyContext, lat?: number | null, lng?: number | null): BunzyReply {
+  const nc = normalizeText(content);
+  const wantsGeolocated = /cerca|ahorita|aqui|mi zona|caminando/.test(nc);
+
+  if (wantsGeolocated && !(typeof lat === 'number' && typeof lng === 'number')) {
+    return {
+      content: '¿Quieres que use tu ubicación actual o buscas para otro lugar (dirección, colonia o referencia)?',
+      type: 'TEXT',
+      metadata: null,
+      suggestions: ['Usar mi ubicación', 'Buscar por dirección', 'Ver todos'],
+      options: [],
+      orderDraft: null,
+    };
+  }
+
+  const matches = ctx.businesses.slice(0, 3);
+  if (matches.length >= 2) {
+    const lines = matches
+      .map((b, i) => {
+        let d = '';
+        if (typeof lat === 'number' && typeof lng === 'number') {
+          const dist = haversineKm(lat, lng, b.lat, b.lng);
+          d = ` · ${dist < 1 ? Math.round(dist * 1000) + ' m' : dist.toFixed(1) + ' km'}`;
+        }
+        const open = isBusinessOpen(b) ? 'Abierto ahora' : 'Cerrado';
+        return `${i + 1}. **${b.name}** (${b.category})${d} · ${open} · +${b.rewardPercentage}% bunz`;
+      })
+      .join('\n');
+    return {
+      content: `¡Qué onda! Te dejo ${matches.length} opciones:\n\n${lines}\n\n¿Cuál eliges? Puedo reservar, pedir por mí o darte su contacto.`,
+      type: 'OPTIONS',
+      metadata: null,
+      suggestions: suggestionsFor(content, true, true),
+      options: mapToOptions(matches, lat, lng),
+      orderDraft: null,
+    };
+  }
+
+  if (matches[0]) {
+    const matched = matches[0];
+    const balanceLine = ctx.user && ctx.user.balance > 0 ? `\n💰 Tienes ${ctx.user.balance} bunz listos para canjear.` : '';
+    let dline = '';
+    if (typeof lat === 'number' && typeof lng === 'number') {
+      const dist = haversineKm(lat, lng, matched.lat, matched.lng);
+      dline = ` | ${dist < 1 ? Math.round(dist * 1000) + ' m' : dist.toFixed(1) + ' km'}`;
+    }
+    return {
+      content:
+        `¡Qué onda! 🐰 Te recomiendo **${matched.name}** (${matched.category})${dline}.\n\n` +
+        `📍 Dirección: ${matched.address}\n` +
+        `🎁 Recompensa: **+${matched.rewardPercentage}% en bunz** con cada consumo.` +
+        balanceLine +
+        `\n\n¿Quieres reservar, pedir por mí o darte su contacto?👇\n` +
+        `[COMERCIO_ACTION id="${matched.id}" name="${matched.name}"]`,
+      type: 'TEXT',
+      metadata: null,
+      suggestions: suggestionsFor(content, true),
+      options: mapToOptions([matched], lat, lng),
+      orderDraft: null,
+    };
+  }
+
+  return {
+    content:
+      '¡Qué onda! 🐰 En Rabbitty puedes ganar y canjear bunz en nuestros comercios aliados. ' +
+      'Dime qué buscas (pizza, tacos, café...) y te doy opciones rápidas.',
+    type: 'TEXT',
+    metadata: null,
+    suggestions: suggestionsFor(content, false),
+    options: [],
+    orderDraft: null,
+  };
+}
+
+async function runOpenAI(
+  content: string,
+  ctx: BunzyContext,
+  history: ChatMessage[],
+  lat?: number | null,
+  lng?: number | null,
+): Promise<string | null> {
+  const OpenAI = (await import('openai')).default;
+  const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+    timeout: Number(process.env.OPENAI_TIMEOUT_MS) || 15000,
+    maxRetries: 1,
+  });
+
+  const tools = [
+    {
+      type: 'function' as const,
+      function: {
+        name: 'buscar_negocios',
+        description: 'Busca negocios afiliados de Rabbitty por categoría, nombre o tipo de comida.',
+        parameters: {
+          type: 'object',
+          properties: { consulta: { type: 'string', description: 'Qué busca el usuario' } },
+          required: ['consulta'],
+        },
+      },
+    },
+    {
+      type: 'function' as const,
+      function: {
+        name: 'buscar_negocios_cercanos',
+        description: 'Busca negocios cercanos con filtro por categoría. Prioriza abiertos ahora si soloAbiertosAhora=true.',
+        parameters: {
+          type: 'object',
+          properties: {
+            consulta: { type: 'string' },
+            categoria: { type: 'string' },
+            soloAbiertosAhora: { type: 'boolean', default: true },
+            max: { type: 'number', default: 3 },
+          },
+          required: ['consulta'],
+        },
+      },
+    },
+    {
+      type: 'function' as const,
+      function: {
+        name: 'obtener_contacto_comercio',
+        description: 'Devuelve contacto (teléfono/WhatsApp, dirección) de un comercio.',
+        parameters: {
+          type: 'object',
+          properties: { businessId: { type: 'string' } },
+          required: ['businessId'],
+        },
+      },
+    },
+    {
+      type: 'function' as const,
+      function: {
+        name: 'consultar_mis_bunz',
+        description: 'Devuelve el saldo de bunz, hops y nivel del usuario.',
+        parameters: { type: 'object', properties: {} },
+      },
+    },
+  ];
+
+  const conversationMessages: import('openai/resources/chat/completions').ChatCompletionMessageParam[] = [
+    { role: 'system', content: buildSystemPrompt(ctx, lat, lng) },
+    ...history,
+  ];
+
+  for (let round = 0; round < 2; round += 1) {
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: conversationMessages,
+      tools,
+      tool_choice: 'auto',
+      max_tokens: 350,
+      temperature: 0.7,
+    });
+
+    const choice = completion.choices[0]?.message;
+    if (!choice) return null;
+
+    if (choice.tool_calls && choice.tool_calls.length > 0) {
+      conversationMessages.push(choice);
+      for (const call of choice.tool_calls) {
+        let result = 'Sin resultados';
+        if (call.type === 'function' && call.function.name === 'buscar_negocios') {
+          try {
+            const args = JSON.parse(call.function.arguments || '{}') as { consulta?: string };
+            const found = rankBusinesses(ctx.allBusinesses, args.consulta || content, lat, lng).slice(0, 5);
+            result = buildDirectory(found, lat, lng) || 'Sin resultados';
+          } catch {
+            result = 'Sin resultados';
+          }
+        } else if (call.type === 'function' && call.function.name === 'buscar_negocios_cercanos') {
+          try {
+            const args = JSON.parse(call.function.arguments || '{}') as {
+              consulta?: string;
+              soloAbiertosAhora?: boolean;
+              max?: number;
+            };
+            let found = rankBusinesses(ctx.allBusinesses, args.consulta || content, lat, lng);
+            if (args.soloAbiertosAhora) found = found.filter((b) => isBusinessOpen(b));
+            const max = args.max ?? 3;
+            found = found.slice(0, max);
+            result = buildDirectory(found, lat, lng) || 'Sin resultados abiertos ahora';
+          } catch {
+            result = 'Sin resultados';
+          }
+        } else if (call.type === 'function' && call.function.name === 'obtener_contacto_comercio') {
+          try {
+            const args = JSON.parse(call.function.arguments || '{}') as { businessId?: string };
+            const b = ctx.allBusinesses.find((x) => x.id === args.businessId);
+            if (!b) result = 'No encontrado';
+            else {
+              const extra = b as BusinessRow & { phone?: string | null; whatsapp?: string | null };
+              const tel = extra.phone ?? extra.whatsapp ?? 'No registrado';
+              const wa = extra.whatsapp ?? 'No registrado';
+              result = `Comercio: ${b.name}\nDirección: ${b.address}\nTeléfono: ${tel}\nWhatsApp: ${wa}`;
+            }
+          } catch {
+            result = 'Sin resultados';
+          }
+        } else if (call.type === 'function' && call.function.name === 'consultar_mis_bunz') {
+          result = ctx.user
+            ? `Saldo: ${ctx.user.balance} bunz, hops: ${ctx.user.hops}, nivel: ${ctx.user.levelName || 'Base'}`
+            : 'Datos no disponibles';
+        }
+        conversationMessages.push({ role: 'tool', tool_call_id: call.id, content: result });
+      }
+      continue;
+    }
+
+    return choice.content?.trim() || null;
+  }
+
+  const last = conversationMessages[conversationMessages.length - 1];
+  return last && last.role === 'assistant' && typeof last.content === 'string' ? last.content : null;
+}
+
+async function runOllama(
+  ctx: BunzyContext,
+  history: ChatMessage[],
+  lat?: number | null,
+  lng?: number | null,
+): Promise<string | null> {
+  const OLLAMA_URL = process.env.OLLAMA_API_URL;
+  if (!OLLAMA_URL) return null;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), Number(process.env.OLLAMA_TIMEOUT_MS) || 25000);
+    const ollamaKey = process.env.OLLAMA_API_KEY;
+    const res = await fetch(OLLAMA_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(ollamaKey ? { Authorization: `Bearer ${ollamaKey}` } : {}),
+      },
+      body: JSON.stringify({
+        model: process.env.OLLAMA_MODEL || 'qwen2.5:7b',
+        messages: [{ role: 'system', content: buildSystemPrompt(ctx, lat, lng) }, ...history],
+        stream: false,
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+    const data = (await res.json()) as { message?: { content?: string } };
+    return data.message?.content?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function generateBunzyReply(input: BunzyInput): Promise<BunzyReply> {
+  const ctx = await loadContext(input);
+  const history = await loadHistory(input.conversationId);
+
+  let text: string | null = null;
+  if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'dummy_key_for_build') {
+    try {
+      text = await runOpenAI(input.content, ctx, history, input.lat, input.lng);
+    } catch (err) {
+      console.error('[Bunzy OpenAI Error]:', err);
+    }
+  }
+  if (!text) text = await runOllama(ctx, history, input.lat, input.lng);
+  const fallback = heuristicReply(input.content, ctx, input.lat, input.lng);
+  if (!text) return fallback;
+
+  const metadata = businessCardFromText(text, ctx.allBusinesses);
+  return {
+    content: text,
+    type: metadata ? 'CARD' : fallback.type,
+    metadata,
+    suggestions: suggestionsFor(input.content, Boolean(metadata)),
+    options: fallback.options,
+    orderDraft: fallback.orderDraft,
+  };
+}

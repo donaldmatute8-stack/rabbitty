@@ -69,50 +69,52 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
               boxShadow: '20px 0 60px rgba(0,0,0,0.5)',
             }}
           >
-            {/* Header: Avatar, Name & Username like X */}
-            <div className="px-5 pt-6 pb-4">
-              <div className="flex items-center justify-between mb-4">
-                <div className="w-[56px] h-[56px] rounded-full overflow-hidden p-0.5 border-2 border-[#E91E63] shrink-0" style={{ background: 'var(--bg-elevated)' }}>
-                  <img
-                    src={`https://api.dicebear.com/7.x/notionists/svg?seed=${user?.firstName || 'Rabbitty'}&backgroundColor=E91E63`}
-                    alt={user?.firstName || 'User'}
-                    className="w-full h-full rounded-full object-cover"
-                  />
+            {/* Header: Horizontal row (Avatar + Name/Handle + Bunz badge + Close) */}
+            <div className="px-4 pt-3.5 pb-2.5">
+              <div className="flex items-center justify-between gap-2.5">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="w-[42px] h-[42px] rounded-full overflow-hidden p-0.5 border-2 border-[#E91E63] shrink-0" style={{ background: 'var(--bg-elevated)' }}>
+                    <img
+                      src={`https://api.dicebear.com/7.x/notionists/svg?seed=${user?.firstName || 'Rabbitty'}&backgroundColor=E91E63`}
+                      alt={user?.firstName || 'User'}
+                      className="w-full h-full rounded-full object-cover"
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h2 className="text-[15px] font-black tracking-tight text-[var(--text-primary)] m-0 leading-tight truncate">
+                        {user?.firstName || 'Explorador'}
+                      </h2>
+                      <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(233, 30, 99, 0.12)', border: '1px solid rgba(233, 30, 99, 0.3)' }}>
+                        <span className="text-[11px] font-black text-[var(--text-primary)]">{bunzBalance.toLocaleString()}</span>
+                        <span className="text-[9px] font-black text-[#E91E63]">BUNZ</span>
+                      </div>
+                    </div>
+                    <p className="text-[12px] font-medium text-[var(--text-muted)] m-0 truncate">
+                      @{user?.username || 'explorador'}
+                    </p>
+                  </div>
                 </div>
+
                 <button
                   onClick={() => {
                     PlatformBridge.hapticFeedback('light');
                     onClose();
                   }}
                   aria-label="Cerrar"
-                  className="w-8 h-8 rounded-full flex items-center justify-center active:scale-90 transition-transform cursor-pointer border-none"
+                  className="w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition-transform cursor-pointer border-none shrink-0"
                   style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
                 >
-                  <X size={16} />
+                  <X size={15} />
                 </button>
-              </div>
-
-              <div>
-                <h2 className="text-[19px] font-black tracking-tight text-[var(--text-primary)] m-0 leading-tight">
-                  {user?.firstName || 'Explorador'}
-                </h2>
-                <p className="text-[13px] font-medium text-[var(--text-muted)] m-0 mt-0.5">
-                  @{user?.username || 'explorador'}
-                </p>
-              </div>
-
-              {/* Bunz Pill */}
-              <div className="mt-3.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full" style={{ background: 'rgba(233, 30, 99, 0.12)', border: '1px solid rgba(233, 30, 99, 0.3)' }}>
-                <span className="text-[13px] font-black text-[var(--text-primary)]">{bunzBalance.toLocaleString()}</span>
-                <span className="text-[10px] font-black text-[#E91E63] tracking-wide">BUNZ</span>
               </div>
             </div>
 
             {/* Divider */}
-            <div className="h-px w-full bg-[var(--border-subtle)] my-1" />
+            <div className="h-px w-full bg-[var(--border-subtle)]" />
 
-            {/* Scrollable Navigation Items */}
-            <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
+            {/* Navigation Items (Compact & balanced) */}
+            <div className="flex-1 overflow-y-auto px-2.5 py-1.5 space-y-0.5">
               {ACCOUNT_SECTIONS.map((item) => (
                 <Link
                   key={item.href}
@@ -121,10 +123,10 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                     PlatformBridge.hapticFeedback('light');
                     onClose();
                   }}
-                  className="flex items-center gap-4 px-4 py-3 rounded-2xl no-underline active:bg-[var(--bg-pressed)] transition-colors"
+                  className="flex items-center gap-3 px-3 py-2 rounded-xl no-underline active:bg-[var(--bg-pressed)] transition-colors"
                 >
-                  <span className="text-xl w-6 text-center">{item.icon}</span>
-                  <span className="flex-1 text-[16px] font-bold text-[var(--text-primary)]">{item.label}</span>
+                  <span className="text-base w-5 text-center">{item.icon}</span>
+                  <span className="flex-1 text-[14px] font-bold text-[var(--text-primary)]">{item.label}</span>
                 </Link>
               ))}
 
@@ -135,14 +137,14 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                     PlatformBridge.hapticFeedback('light');
                     onClose();
                   }}
-                  className="flex items-center gap-4 px-4 py-3 rounded-2xl no-underline active:bg-[var(--bg-pressed)] transition-colors"
+                  className="flex items-center gap-3 px-3 py-2 rounded-xl no-underline active:bg-[var(--bg-pressed)] transition-colors"
                 >
-                  <span className="text-xl w-6 text-center">🏪</span>
-                  <span className="flex-1 text-[16px] font-bold text-[var(--text-primary)]">Portal Comercio</span>
+                  <span className="text-base w-5 text-center">🏪</span>
+                  <span className="flex-1 text-[14px] font-bold text-[var(--text-primary)]">Portal Comercio</span>
                 </Link>
               )}
 
-              <div className="h-px w-full bg-[var(--border-subtle)] my-3" />
+              <div className="h-px w-full bg-[var(--border-subtle)] my-1" />
 
               {SETTINGS_SECTIONS.map((item) => (
                 <Link
@@ -152,20 +154,17 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                     PlatformBridge.hapticFeedback('light');
                     onClose();
                   }}
-                  className="flex items-center gap-4 px-4 py-2.5 rounded-2xl no-underline active:bg-[var(--bg-pressed)] transition-colors"
+                  className="flex items-center gap-3 px-3 py-1.5 rounded-xl no-underline active:bg-[var(--bg-pressed)] transition-colors"
                 >
-                  <span className="text-lg w-6 text-center">{item.icon}</span>
-                  <span className="flex-1 text-[15px] font-semibold text-[var(--text-secondary)]">{item.label}</span>
+                  <span className="text-sm w-5 text-center">{item.icon}</span>
+                  <span className="flex-1 text-[13px] font-semibold text-[var(--text-secondary)]">{item.label}</span>
                 </Link>
               ))}
             </div>
 
             {/* Bottom: Appearance Dark/Light Toggle + Logout */}
-            <div className="px-5 pb-5 pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-              <div className="mb-3">
-                <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-2 px-1">Tema</span>
-                <ThemeToggle />
-              </div>
+            <div className="px-3.5 pb-4 pt-2 space-y-2" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+              <ThemeToggle />
 
               <button
                 onClick={() => {
@@ -173,9 +172,9 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                   onClose();
                   logout();
                 }}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-rose-500/10 text-rose-500 border border-rose-500/20 font-bold text-sm cursor-pointer active:scale-[0.98] transition-transform"
+                className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-rose-500/10 text-rose-500 border border-rose-500/20 font-bold text-[12px] cursor-pointer active:scale-[0.98] transition-transform"
               >
-                <span>🚪</span>
+                <span className="text-sm">🚪</span>
                 <span>Cerrar Sesión</span>
               </button>
             </div>

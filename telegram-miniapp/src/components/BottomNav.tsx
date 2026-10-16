@@ -4,9 +4,15 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { MessageCircle, ScanLine } from 'lucide-react';
+import useSWR from 'swr';
 
 import { PlatformBridge } from '@/lib/platform';
 import { useTheme } from '@/contexts/ThemeContext';
+
+const unreadFetcher = async (url: string) => {
+  const headers = await PlatformBridge.getAuthHeaders();
+  return fetch(url, { headers }).then((res) => res.json());
+};
 
 interface BottomNavProps {
   isDark?: boolean;
@@ -19,6 +25,12 @@ export default function BottomNav({ isDark }: BottomNavProps = {}) {
   const accumulatedDelta = useRef(0);
 
   const { isDark: themeIsDark } = useTheme();
+
+  const { data: unreadData } = useSWR<{ totalUnread?: number }>('/api/chat/unread', unreadFetcher, {
+    refreshInterval: 15000,
+    revalidateOnFocus: true,
+  });
+  const unreadCount = unreadData?.totalUnread || 0;
 
   const isFeed = pathname === '/';
   const isDiscover = pathname === '/chat';
@@ -120,8 +132,16 @@ export default function BottomNav({ isDark }: BottomNavProps = {}) {
           </Link>
 
           {/* Chat / Mensajes */}
-          <Link href="/chat" onClick={handleTabPress} className="flex items-center justify-center w-12 h-12 active:scale-90 transition-all" style={{ color: getColor(isDiscover) }}>
+          <Link href="/chat" onClick={handleTabPress} className="relative flex items-center justify-center w-12 h-12 active:scale-90 transition-all" style={{ color: getColor(isDiscover) }}>
             <MessageCircle className="w-[25px] h-[25px]" strokeWidth={2.2} />
+            {unreadCount > 0 && (
+              <span
+                className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center text-[10px] font-black text-white"
+                style={{ background: '#E91E63', boxShadow: '0 0 10px rgba(233,30,99,0.5)' }}
+              >
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
           </Link>
 
           {/* Scan */}
