@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { trpc } from "../../../lib/trpc-client";
-import { cn } from "@rabbitty/ui";
+import { cn, useWakeLock } from "@rabbitty/ui";
 import { ShoppingBag, ChevronRight, CheckCircle2, ChevronLeft, Minus, Plus, Scan, X, QrCode } from "lucide-react";
 
 const PLACEHOLDER_IMG = "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?q=80&w=1000&auto=format&fit=crop";
@@ -13,6 +13,40 @@ export default function KioskPage() {
   const [cart, setCart] = useState<any[]>([]);
   const [view, setView] = useState<"welcome" | "menu" | "checkout" | "qr_payment" | "success">("welcome");
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
+
+  // Keep screen awake (WakeLock API) for iPad / Kiosk stands
+  useWakeLock();
+
+  // Idle Timer (90 seconds auto-reset to welcome screen if abandoned)
+  const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const resetIdleTimer = useCallback(() => {
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    if (view !== "welcome") {
+      idleTimerRef.current = setTimeout(() => {
+        setCart([]);
+        setSelectedItem(null);
+        setView("welcome");
+      }, 90_000); // 90 seconds
+    }
+  }, [view]);
+
+  useEffect(() => {
+    resetIdleTimer();
+    const handleUserInteraction = () => resetIdleTimer();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") resetIdleTimer();
+    };
+    window.addEventListener("pointerdown", handleUserInteraction);
+    window.addEventListener("keydown", handleUserInteraction);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      window.removeEventListener("pointerdown", handleUserInteraction);
+      window.removeEventListener("keydown", handleUserInteraction);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [resetIdleTimer]);
 
   const { data: categories } = trpc.pos.getCategories.useQuery(undefined, { retry: false });
   const { data: menuItems } = trpc.pos.getMenuItems.useQuery({}, { retry: false });
@@ -26,6 +60,7 @@ export default function KioskPage() {
   }, [menuItems, activeCategory, categories]);
 
   const addToCart = (item: any) => {
+    resetIdleTimer();
     setCart((prev) => {
       const existing = prev.find((i) => i.menuItemId === item.id);
       if (existing) {
@@ -42,7 +77,7 @@ export default function KioskPage() {
   if (view === "welcome") {
     return (
       <div 
-        className="flex h-screen w-full flex-col items-center justify-center bg-gray-950 text-white select-none cursor-pointer relative overflow-hidden group"
+        className="flex h-[100dvh] w-full flex-col items-center justify-center bg-gray-950 text-white select-none cursor-pointer relative overflow-hidden group"
         onClick={() => {
           if (categories && categories.length > 0) setActiveCategory(categories[0].id);
           setView("menu");
@@ -85,7 +120,7 @@ export default function KioskPage() {
   // 2. SUCCESS SCREEN
   if (view === "success") {
     return (
-      <div className="flex h-screen w-full flex-col items-center justify-center bg-gray-950 text-white select-none relative overflow-hidden">
+      <div className="flex h-[100dvh] w-full flex-col items-center justify-center bg-gray-950 text-white select-none relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-purple-500/20 via-black to-pink-500/20" />
         
         <div className="relative z-10 flex flex-col items-center text-center px-12 max-w-3xl">
@@ -112,7 +147,7 @@ export default function KioskPage() {
   // 3. QR PAYMENT SCREEN
   if (view === "qr_payment") {
     return (
-      <div className="flex h-screen w-full flex-col items-center justify-center bg-gray-950 text-white select-none relative overflow-hidden">
+      <div className="flex h-[100dvh] w-full flex-col items-center justify-center bg-gray-950 text-white select-none relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-tr from-purple-900/30 to-black" />
         
         {/* Header */}
@@ -151,7 +186,7 @@ export default function KioskPage() {
 
   // 4. MAIN MENU & CHECKOUT
   return (
-    <div className="flex h-screen w-full flex-col bg-gray-950 text-white font-sans overflow-hidden select-none">
+    <div className="flex h-[100dvh] w-full flex-col bg-gray-950 text-white font-sans overflow-hidden select-none">
       
       {/* ── Immersive Header ── */}
       <header className="flex h-28 shrink-0 items-center justify-between px-10 bg-black/40 backdrop-blur-3xl border-b border-white/5 z-20 shadow-xl">

@@ -1,6 +1,6 @@
 export default function Loading() {
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-[100dvh] flex-col">
       <div className="h-16 animate-pulse bg-white/5" />
       <div className="flex flex-1 gap-4 p-6">
         <div className="h-full w-64 animate-pulse rounded-2xl bg-white/5" />

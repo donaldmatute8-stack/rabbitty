@@ -11,7 +11,7 @@ export default function KdsSettingsPage() {
   const [slaWarning, setSlaWarning] = useState(10);
 
   return (
-    <div className="flex h-screen flex-col bg-[#0A0A0A]">
+    <div className="flex h-[100dvh] flex-col bg-[#0A0A0A]">
       <header className="flex items-center gap-3 border-b border-white/10 px-6 py-4">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-600 text-lg font-black">R</div>
         <h1 className="text-xl font-bold text-white">Configuración de Cocina</h1>
