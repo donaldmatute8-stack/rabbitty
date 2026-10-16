@@ -49,6 +49,10 @@ export default function PhoneAuthFlow({ mode, onBack }: PhoneAuthFlowProps) {
 
   const otpInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [step]);
+
   // Auto-redirect if already logged in (active session opens the app directly)
   useEffect(() => {
     if (!authLoading && user) {
@@ -142,7 +146,11 @@ export default function PhoneAuthFlow({ mode, onBack }: PhoneAuthFlowProps) {
 
   useEffect(() => {
     if (step === 'otp') {
-      setTimeout(() => otpInputRef.current?.focus(), 300);
+      const t = setTimeout(() => {
+        otpInputRef.current?.focus({ preventScroll: true });
+        window.scrollTo(0, 0);
+      }, 300);
+      return () => clearTimeout(t);
     }
   }, [step]);
 
@@ -307,10 +315,11 @@ export default function PhoneAuthFlow({ mode, onBack }: PhoneAuthFlowProps) {
 
   return (
     <div
-      className="min-h-[100dvh] flex flex-col pt-14 px-7 pb-10"
+      className="min-h-[100dvh] flex flex-col px-7 pb-10"
       style={{
         fontFamily: 'var(--font-family-base)',
         backgroundColor: 'var(--bg-primary)',
+        paddingTop: 'calc(var(--safe-top, 0px) + 24px)',
       }}
     >
       {/* Back button */}
@@ -411,7 +420,6 @@ export default function PhoneAuthFlow({ mode, onBack }: PhoneAuthFlowProps) {
                     onChange={(e) => setInputVal(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSendOtp()}
                     className="flex-1 bg-neutral-900/80 border border-neutral-800 focus:border-[#E91E63] rounded-2xl px-5 py-4 text-[17px] text-white outline-none transition-all placeholder:text-neutral-600 shadow-inner"
-                    autoFocus
                   />
                 </div>
               </div>
