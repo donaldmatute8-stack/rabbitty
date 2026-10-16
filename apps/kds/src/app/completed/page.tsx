@@ -27,7 +27,7 @@ export default function CompletedOrdersPage() {
   }, [orders, todayStr]);
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-[100dvh] flex-col">
       <header className="flex items-center justify-between border-b border-white/10 px-6 py-4">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-600 text-lg font-black">

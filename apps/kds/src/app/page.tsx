@@ -1,7 +1,7 @@
 "use client";
 
 import { trpc } from "../lib/trpc-client";
-import { cn } from "@rabbitty/ui";
+import { cn, useWakeLock } from "@rabbitty/ui";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { ChefHat, Timer, CheckCircle2, UtensilsCrossed, Bell } from "lucide-react";
 import { useSound } from "../hooks/useSound";
@@ -28,6 +28,9 @@ export default function KdsPage() {
   const [activeTab, setActiveTab] = useState<"all" | "PENDING" | "IN_PROGRESS" | "READY">("all");
   const prevCountRef = useRef(0);
   const { play } = useSound();
+
+  // Screen WakeLock for Kitchen Display tablets / iPads
+  useWakeLock();
 
   useEffect(() => {
     const es = new EventSource("/api/sse");
@@ -67,7 +70,7 @@ export default function KdsPage() {
   const hasPending = counts.PENDING > 0 || counts.READY > 0;
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-[100dvh] flex-col">
       <header className="flex items-center justify-between border-b border-white/10 px-6 py-4">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-600 text-lg font-black">
@@ -175,31 +178,31 @@ export default function KdsPage() {
                           <p className="mt-1 text-xs text-yellow-400/80">Nota: {item.notes}</p>
                         )}
                         {config.next && (
-                          <div className="mt-2 flex gap-2">
+                          <div className="mt-3 flex gap-2">
                             {config.next === "IN_PROGRESS" && (
                               <button
                                 onClick={() => handleStatus(order.id, item, "IN_PROGRESS")}
-                                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-yellow-600/30 py-1.5 text-xs font-semibold text-yellow-400 transition-colors hover:bg-yellow-600/50"
+                                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-yellow-600/30 py-3 text-sm font-bold text-yellow-400 transition-colors hover:bg-yellow-600/50 active:scale-95"
                               >
-                                <Timer className="h-3 w-3" />
+                                <Timer className="h-4 w-4" />
                                 Aceptar
                               </button>
                             )}
                             {config.next === "READY" && (
                               <button
                                 onClick={() => handleStatus(order.id, item, "READY")}
-                                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-blue-600/30 py-1.5 text-xs font-semibold text-blue-400 transition-colors hover:bg-blue-600/50"
+                                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600/30 py-3 text-sm font-bold text-blue-400 transition-colors hover:bg-blue-600/50 active:scale-95"
                               >
-                                <CheckCircle2 className="h-3 w-3" />
+                                <CheckCircle2 className="h-4 w-4" />
                                 Listo
                               </button>
                             )}
                             {config.next === "SERVED" && (
                               <button
                                 onClick={() => handleStatus(order.id, item, "SERVED")}
-                                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-green-600/30 py-1.5 text-xs font-semibold text-green-400 transition-colors hover:bg-green-600/50"
+                                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-green-600/30 py-3 text-sm font-bold text-green-400 transition-colors hover:bg-green-600/50 active:scale-95"
                               >
-                                <UtensilsCrossed className="h-3 w-3" />
+                                <UtensilsCrossed className="h-4 w-4" />
                                 Servir
                               </button>
                             )}

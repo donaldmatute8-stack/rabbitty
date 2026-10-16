@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { trpc } from "../../../lib/trpc-client";
-import { Button, Dialog, Input, toast, cn } from "@rabbitty/ui";
+import { Button, Dialog, Input, toast, cn, useWakeLock } from "@rabbitty/ui";
 import { Clock, Wifi, Search, User, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, Table2, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -15,8 +15,26 @@ import {
 // Placeholder for missing images
 const PLACEHOLDER_IMG = "https://images.unsplash.com/photo-1544148103-0773bf10d330?q=80&w=1000&auto=format&fit=crop";
 
-export default function PosPage() {
+function PosClock() {
   const [time, setTime] = useState("");
+
+  useEffect(() => {
+    const tick = () =>
+      setTime(new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" }));
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/5 border border-white/10">
+      <Clock className="h-5 w-5 text-gray-400" />
+      <span className="text-xl font-bold tracking-wider">{time}</span>
+    </div>
+  );
+}
+
+export default function PosPage() {
   const [activeCategory, setActiveCategory] = useState<string | null>("ALL");
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<any[]>([]);
@@ -58,35 +76,7 @@ export default function PosPage() {
   }, []);
 
   // Keep Screen Awake (WakeLock API) to prevent Bluetooth drop and keep POS active
-  useEffect(() => {
-    let wakeLock: any = null;
-
-    const requestWakeLock = async () => {
-      try {
-        if ("wakeLock" in navigator) {
-          wakeLock = await (navigator as any).wakeLock.request("screen");
-        }
-      } catch (err) {
-        // Ignored
-      }
-    };
-
-    requestWakeLock();
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        requestWakeLock();
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      if (wakeLock !== null) {
-        wakeLock.release().catch(() => {});
-      }
-    };
-  }, []); // <-- Empty array is CRITICAL so it doesn't run cleanup when btConnected changes
+  useWakeLock();
 
   const handleConnectBluetooth = async () => {
     try {
@@ -282,13 +272,6 @@ export default function PosPage() {
     }
   }, [pollData, qrPaymentModal]);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTime(new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" }));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
   // Removed the useEffect that overrides activeCategory to the first category so "ALL" works.
 
   const filteredItems = useMemo(() => {
@@ -443,7 +426,7 @@ export default function PosPage() {
   };
 
   return (
-    <div className="flex h-screen w-full flex-col bg-gray-950 text-white overflow-hidden select-none font-sans">
+    <div className="flex h-[100dvh] w-full flex-col bg-gray-950 text-white overflow-hidden select-none font-sans">
       
       {cashStatus?.requiresDrop && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/95 p-4 backdrop-blur-md">
@@ -562,10 +545,7 @@ export default function PosPage() {
             </div>
           </div>
           
-          <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/5 border border-white/10">
-            <Clock className="h-5 w-5 text-gray-400" />
-            <span className="text-xl font-bold tracking-wider">{time}</span>
-          </div>
+          <PosClock />
           
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-pink-500/20 to-purple-500/20 border border-pink-500/30 text-pink-400 shadow-[inset_0_0_20px_rgba(236,72,153,0.2)]">
             <User className="h-6 w-6" />
@@ -731,7 +711,7 @@ export default function PosPage() {
                 }} 
                 disabled={cart.length === 0}
                 title="Vaciar orden actual"
-                className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white border border-red-500/20 transition-all active:scale-95 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white border border-red-500/20 transition-all active:scale-95 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -746,7 +726,7 @@ export default function PosPage() {
                   setSelectedTableId(null);
                 }}
                 className={cn(
-                  "flex items-center justify-center gap-1 py-1.5 rounded-lg text-[11px] font-black transition-all cursor-pointer",
+                  "flex items-center justify-center gap-1 min-h-[44px] py-2 rounded-lg text-xs font-black transition-all cursor-pointer",
                   orderType === "COUNTER"
                     ? "bg-amber-500 text-gray-950 shadow-md"
                     : "text-gray-400 hover:text-white hover:bg-white/5"
@@ -764,7 +744,7 @@ export default function PosPage() {
                   }
                 }}
                 className={cn(
-                  "flex items-center justify-center gap-1 py-1.5 rounded-lg text-[11px] font-black transition-all cursor-pointer",
+                  "flex items-center justify-center gap-1 min-h-[44px] py-2 rounded-lg text-xs font-black transition-all cursor-pointer",
                   orderType === "DINE_IN"
                     ? "bg-cyan-500 text-gray-950 shadow-md"
                     : "text-gray-400 hover:text-white hover:bg-white/5"
@@ -780,7 +760,7 @@ export default function PosPage() {
                   setSelectedTableId(null);
                 }}
                 className={cn(
-                  "flex items-center justify-center gap-1 py-1.5 rounded-lg text-[11px] font-black transition-all cursor-pointer",
+                  "flex items-center justify-center gap-1 min-h-[44px] py-2 rounded-lg text-xs font-black transition-all cursor-pointer",
                   orderType === "TAKEAWAY"
                     ? "bg-purple-500 text-white shadow-md"
                     : "text-gray-400 hover:text-white hover:bg-white/5"
@@ -796,7 +776,7 @@ export default function PosPage() {
                   setSelectedTableId(null);
                 }}
                 className={cn(
-                  "flex items-center justify-center gap-1 py-1.5 rounded-lg text-[11px] font-black transition-all cursor-pointer",
+                  "flex items-center justify-center gap-1 min-h-[44px] py-2 rounded-lg text-xs font-black transition-all cursor-pointer",
                   orderType === "DELIVERY"
                     ? "bg-emerald-500 text-gray-950 shadow-md"
                     : "text-gray-400 hover:text-white hover:bg-white/5"
@@ -829,7 +809,7 @@ export default function PosPage() {
                       setManagerPin("");
                     }}
                     title="Eliminar artículo (Requiere PIN)"
-                    className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white border border-red-500/20 transition-all active:scale-90 cursor-pointer"
+                    className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white border border-red-500/20 transition-all active:scale-90 cursor-pointer"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -844,7 +824,7 @@ export default function PosPage() {
                         setManagerPin("");
                       }}
                       title="Disminuir / Eliminar (Requiere PIN)"
-                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-gray-400 hover:bg-red-500 hover:text-white transition-all active:scale-90 cursor-pointer"
+                      className="flex h-11 w-11 items-center justify-center rounded-lg bg-white/5 text-gray-400 hover:bg-red-500 hover:text-white transition-all active:scale-90 cursor-pointer"
                     >
                       <Minus className="h-4 w-4" />
                     </button>
@@ -852,7 +832,7 @@ export default function PosPage() {
                     <button
                       type="button"
                       onClick={() => updateQuantity(item.id, 1)}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-white hover:bg-cyan-500 hover:text-black transition-all active:scale-90 cursor-pointer"
+                      className="flex h-11 w-11 items-center justify-center rounded-lg bg-white/5 text-white hover:bg-cyan-500 hover:text-black transition-all active:scale-90 cursor-pointer"
                     >
                       <Plus className="h-4 w-4" />
                     </button>

@@ -5,6 +5,16 @@
 html, body {
   overflow-x: hidden;
   max-width: 100%;
+  overscroll-behavior: none;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button, a, input, select, textarea, [role="button"] {
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
 }
 
 body {

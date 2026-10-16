@@ -6,7 +6,7 @@
     "watchPatterns": ["*", "apps/**", "packages/**", "rabbit-bot/**", "backend-oracle/**"]
   },
   "deploy": {
-    "startCommand": "sh -c 'APP=${RAILWAY_SERVICE_NAME#rabbitty-} && case \"$APP\" in bot) node rabbit-bot/dm-server.js ;; oracle) node backend-oracle/server.js ;; *) cd apps/$APP && npx next start ;; esac'",
+    "startCommand": "sh -c 'APP=${RAILWAY_SERVICE_NAME#rabbitty-} && case \"$APP\" in bot) node rabbit-bot/dm-server.js ;; oracle) node backend-oracle/server.js ;; *) cd apps/$APP && npx next start -H 0.0.0.0 -p ${PORT:-8080} ;; esac'",
     "restartPolicyType": "ON_FAILURE"
   }
 }
