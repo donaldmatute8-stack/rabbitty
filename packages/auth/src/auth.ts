@@ -16,10 +16,14 @@ if (process.env.NODE_ENV === "production") {
 }
 
 // DB-backed admin user store (for email/magic link authentication)
-const NEON_URL = process.env.CORE_DATABASE_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL
-  || "postgresql://neondb_owner:npg_ltE02YwbyAaP@ep-delicate-violet-ap6izh0k-pooler.c-7.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require";
+const NEON_URL = process.env.CORE_DATABASE_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL;
 
 async function getPool() {
+  if (!NEON_URL) {
+    throw new Error(
+      "[Auth] Database URL not configured: set CORE_DATABASE_URL (or DATABASE_URL / POSTGRES_URL)."
+    );
+  }
   const { default: pg } = await import("pg");
   const { Pool } = pg;
   return new Pool({ connectionString: NEON_URL, max: 3 });
