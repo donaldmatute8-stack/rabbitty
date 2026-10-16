@@ -1,6 +1,7 @@
 'use client';
 
 import { ChevronLeft } from 'lucide-react';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface HeaderProps {
   onBack?: () => void;
@@ -9,7 +10,9 @@ interface HeaderProps {
   isDark?: boolean;
 }
 
-export default function Header({ onBack, showBack, isScrolled = false, isDark = false }: HeaderProps) {
+export default function Header({ onBack, showBack, isScrolled = false, isDark: isDarkProp }: HeaderProps) {
+  const { isDark: themeIsDark } = useTheme();
+  const isDark = isDarkProp ?? themeIsDark;
   return (
     <header
       className={`relative flex items-center justify-between px-4 transition-all duration-500 ${isDark ? 'bg-transparent text-white' : 'bg-white text-[#111111]'}`}

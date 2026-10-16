@@ -37,7 +37,7 @@ export async function GET(req: Request) {
       let isBot = false;
 
       if (otherId === 'bot') {
-        otherName = 'Rabbit Bot';
+        otherName = 'Bunzy 🐰';
         isBot = true;
       } else {
         // Podría ser un usuario o un negocio
@@ -72,7 +72,22 @@ export async function GET(req: Request) {
       };
     }));
 
-    return NextResponse.json({ success: true, conversations: enrichedConversations });
+    // Si aún no existe conversación con Bunzy, agregarla anclada al inicio
+    const hasBot = enrichedConversations.some(c => c.isBot);
+    const finalConversations = hasBot ? enrichedConversations : [
+      {
+        id: 'bunzy-initial',
+        targetId: 'bot',
+        targetName: 'Bunzy 🐰',
+        targetAvatar: null,
+        isBot: true,
+        lastMessage: '¡Qué onda! Soy Bunzy, tu concierge de Rabbitty. ¿Qué spot o recompensa buscas hoy?',
+        lastMessageTime: new Date().toISOString(),
+      },
+      ...enrichedConversations,
+    ];
+
+    return NextResponse.json({ success: true, conversations: finalConversations });
   } catch (error) {
     console.error('Chat inbox error:', error);
     return NextResponse.json({ error: 'Error al obtener conversaciones' }, { status: 500 });

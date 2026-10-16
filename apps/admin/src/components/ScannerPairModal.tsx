@@ -13,12 +13,15 @@ interface ScannerPairModalProps {
 export function ScannerPairModal({ isOpen, onClose }: ScannerPairModalProps) {
   const [loading, setLoading] = useState(false);
   const [pairingUrl, setPairingUrl] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState<string>("");
   const [copied, setCopied] = useState(false);
   const [countdown, setCountdown] = useState<number>(900); // 15 mins
+  const [linked, setLinked] = useState(false);
 
   const fetchPairing = async () => {
     setLoading(true);
+    setLinked(false);
     try {
       const res = await fetch("/api/auth/pairing/generate", {
         method: "POST",
@@ -26,6 +29,7 @@ export function ScannerPairModal({ isOpen, onClose }: ScannerPairModalProps) {
       const data = await res.json();
       if (res.ok && data.success) {
         setPairingUrl(data.pairingUrl);
+        setSessionId(data.sessionId || null);
         setBusinessName(data.businessName || "Rabbitty Negocio");
         setCountdown(900);
       }
@@ -41,9 +45,36 @@ export function ScannerPairModal({ isOpen, onClose }: ScannerPairModalProps) {
       fetchPairing();
     } else {
       setPairingUrl(null);
+      setSessionId(null);
       setCopied(false);
+      setLinked(false);
     }
   }, [isOpen]);
+
+  // Mientras el modal está abierto, sondea si el móvil ya completó la vinculación.
+  useEffect(() => {
+    if (!isOpen || !sessionId || linked) return;
+    const poll = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/auth/pairing/status?sid=${encodeURIComponent(sessionId)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.status === "linked") {
+          setLinked(true);
+        }
+      } catch {
+        /* red intermitente: reintenta en el siguiente tick */
+      }
+    }, 2500);
+    return () => clearInterval(poll);
+  }, [isOpen, sessionId, linked]);
+
+  // Al vincularse, cierra solo tras un breve instante para que se vea el éxito.
+  useEffect(() => {
+    if (!linked) return;
+    const t = setTimeout(() => onClose(), 2600);
+    return () => clearTimeout(t);
+  }, [linked]);
 
   useEffect(() => {
     if (!isOpen || !pairingUrl) return;
@@ -111,6 +142,22 @@ export function ScannerPairModal({ isOpen, onClose }: ScannerPairModalProps) {
               <Loader2 className="h-10 w-10 animate-spin text-pink-400" />
               <p className="text-xs text-gray-400 font-medium">Generando código seguro...</p>
             </div>
+          ) : linked ? (
+            <div className="flex flex-col items-center space-y-4 w-full py-6">
+              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 shadow-[0_0_25px_rgba(16,185,129,0.35)]">
+                <ShieldCheck className="h-10 w-10" />
+              </div>
+              <div className="text-center space-y-1">
+                <h3 className="text-xl font-black text-white">¡Vinculado!</h3>
+                <p className="text-xs text-gray-300 px-6 leading-relaxed">
+                  El móvil ya es terminal de cobro de <strong className="text-pink-400">{businessName}</strong>.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 text-[11px] font-bold text-emerald-400">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <span>Cerrando…</span>
+              </div>
+            </div>
           ) : pairingUrl ? (
             <div className="flex flex-col items-center space-y-4 w-full">
               {/* QR Container */}
@@ -148,6 +195,12 @@ export function ScannerPairModal({ isOpen, onClose }: ScannerPairModalProps) {
               <p className="text-xs text-center text-gray-300 px-4 leading-relaxed">
                 Apunta con la cámara de tu iPhone o Android a este código para vincularte instantáneamente a <strong className="text-white">{businessName}</strong>.
               </p>
+
+              {/* Estado de vinculación en vivo */}
+              <div className="flex items-center gap-2 text-[11px] font-bold text-pink-400/90">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <span>Vinculando… espera</span>
+              </div>
 
               {/* Action Buttons */}
               <div className="grid grid-cols-2 gap-2 w-full pt-1">

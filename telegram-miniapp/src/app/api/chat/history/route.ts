@@ -24,7 +24,7 @@ export async function GET(req: Request) {
     let targetAvatar = null;
 
     if (targetId === 'bot') {
-      targetName = 'Rabbit Bot';
+      targetName = 'Bunzy 🐰';
     } else {
       const business = await db.query.ownedBusinesses.findFirst({
         where: eq(ownedBusinesses.id, targetId)
@@ -63,14 +63,14 @@ export async function GET(req: Request) {
         participant2: targetId,
       }).returning();
       
-      let initialMessages: any[] = [];
+      let initialMessages: (typeof messages.$inferSelect)[] = [];
       
       // If target is bot, optionally add an initial greeting
       if (targetId === 'bot') {
         const [greeting] = await db.insert(messages).values({
           conversationId: newConversation.id,
           senderId: 'bot',
-          content: '¡Hola! Soy Rabbit Bot 🐰. ¿En qué te puedo ayudar hoy?'
+          content: '¡Qué onda! Soy Bunzy 🐰, tu concierge oficial en Rabbitty. Dime qué se te antoja hoy o pregúntame cómo multiplicar tus bunz en los comercios de tu zona.'
         }).returning();
         initialMessages = [greeting];
       }

@@ -89,6 +89,21 @@ export default function ScanPage() {
             mod.default.HapticFeedback.notificationOccurred('success');
           }).catch(()=>{});
 
+          // 0. Enlace de vinculación del panel de negocio (iPad) → este teléfono
+          if (decodedText.includes('/magic-link') && decodedText.includes('token=') && decodedText.includes('sid=')) {
+            try {
+              const url = new URL(decodedText, window.location.origin);
+              const token = url.searchParams.get('token');
+              const sid = url.searchParams.get('sid');
+              if (token && sid) {
+                setScanning(false);
+                await stopScanning();
+                router.push(`/magic-link?token=${encodeURIComponent(token)}&sid=${encodeURIComponent(sid)}`);
+                return;
+              }
+            } catch {}
+          }
+
           // 1. Check if it is a QR Login for PC/Admin
           if (decodedText.includes('qrlogin_')) {
             const qrToken = decodedText.split('qrlogin_')[1].split('&')[0].split('?')[0];
@@ -218,7 +233,7 @@ export default function ScanPage() {
       {/* Persistent qr-reader container in DOM to prevent lifecycle unmount crash */}
       <div 
         id="qr-reader" 
-        className={`absolute inset-0 w-full h-full object-cover [&>video]:object-cover [&>video]:w-full [&>video]:h-full ${activeTab === 'scan' && hasCamera && !showManualInput ? 'block' : 'hidden'}`} 
+        className={`absolute inset-0 w-full h-full object-cover [&>video]:object-cover [&>video]:w-full [&>video]:h-full [&_#qr-shaded-region]:hidden ${activeTab === 'scan' && hasCamera && !showManualInput ? 'block' : 'hidden'}`} 
       />
 
       {/* Main Content Area with generous vertical breathing room */}

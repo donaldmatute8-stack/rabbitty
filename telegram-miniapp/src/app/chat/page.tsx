@@ -44,7 +44,8 @@ export default function ChatInboxPage() {
             <motion.div 
               whileHover={{ scale: 0.98 }}
               whileTap={{ scale: 0.95 }}
-              className="flex items-center gap-4 p-4 bg-white rounded-3xl border border-[#F0F0F0] shadow-[0_4px_12px_rgba(0,0,0,0.03)]"
+              className="flex items-center gap-4 p-4 rounded-3xl"
+              style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-sm)' }}
             >
               {conv.isBot ? (
                 <div className="size-14 rounded-full bg-[#E91E63] flex items-center justify-center text-2xl shadow-[0_0_16px_rgba(233,30,99,0.3)] shrink-0">🐰</div>
@@ -60,7 +61,7 @@ export default function ChatInboxPage() {
               
               <div className="flex-1 min-w-0">
                 <div className="flex justify-between items-center mb-1">
-                  <h3 className="m-0 font-black text-base text-[#111] truncate">
+                  <h3 className="m-0 font-black text-base truncate" style={{ color: 'var(--text-primary)' }}>
                     {conv.targetName}
                   </h3>
                   {conv.isBot && (
@@ -69,12 +70,12 @@ export default function ChatInboxPage() {
                     </span>
                   )}
                   {!conv.isBot && conv.lastMessageTime && (
-                    <span className="text-[11px] text-[#AAA] font-semibold">
+                    <span className="text-[11px] font-semibold" style={{ color: 'var(--text-muted)' }}>
                       {new Date(conv.lastMessageTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   )}
                 </div>
-                <p className="m-0 text-[13px] text-[#888] truncate">
+                <p className="m-0 text-[13px] truncate" style={{ color: 'var(--text-secondary)' }}>
                   {conv.lastMessage || 'Sin mensajes aún'}
                 </p>
               </div>

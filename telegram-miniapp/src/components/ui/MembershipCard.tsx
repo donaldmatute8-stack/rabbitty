@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { QrCode, Sparkles, ChevronRight, X, ShieldCheck } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
 import RabbittyCode from '@/components/ui/RabbittyCode';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface MembershipCardProps {
   user: any;
@@ -12,7 +13,9 @@ interface MembershipCardProps {
   isDark?: boolean;
 }
 
-export default function MembershipCard({ user, levelName = '1', isDark = true }: MembershipCardProps) {
+export default function MembershipCard({ user, levelName = '1', isDark: isDarkProp }: MembershipCardProps) {
+  const { isDark: themeIsDark } = useTheme();
+  const isDark = isDarkProp ?? themeIsDark;
   const [showQrModal, setShowQrModal] = useState(false);
 
   const bunzBalance = (user?.totalBunzEarned || 0) - (user?.totalBunzSpent || 0);

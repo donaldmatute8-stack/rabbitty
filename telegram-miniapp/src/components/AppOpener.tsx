@@ -44,9 +44,6 @@ export default function AppOpener() {
           }
         };
 
-        if (tg.setHeaderColor) tg.setHeaderColor('#FFFFFF');
-        if (tg.setBackgroundColor) tg.setBackgroundColor('#FFFFFF');
-
         if (tg.isVersionAtLeast && tg.isVersionAtLeast('7.7') && typeof tg.requestFullscreen === 'function') {
           try {
             tg.requestFullscreen();

@@ -79,8 +79,8 @@ export default function MagicLinkPage() {
               <div className="absolute inset-0 rounded-2xl animate-pulse bg-pink-500/10" />
             </div>
             <div className="space-y-1">
-              <h2 className="text-xl font-black text-white tracking-tight">Sincronizando Terminal...</h2>
-              <p className="text-xs text-gray-400">Vinculando con tu Panel de Administración</p>
+              <h2 className="text-xl font-black text-white tracking-tight">Vinculando… espera</h2>
+              <p className="text-xs text-gray-400">Sincronizando con tu Panel de Administración</p>
             </div>
           </div>
         )}

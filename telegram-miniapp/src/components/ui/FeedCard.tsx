@@ -7,14 +7,13 @@ interface FeedCardProps {
   id: string;
   user: string;
   device: string;
-  time: string;
   label: string;
   bunz: number;
   imageUrl?: string;
   index: number;
 }
 
-export default function FeedCard({ id, user, device, time, label, bunz, imageUrl, index }: FeedCardProps) {
+export default function FeedCard({ id, user, device, label, bunz, imageUrl, index }: FeedCardProps) {
   const router = useRouter();
 
   return (
@@ -28,13 +27,13 @@ export default function FeedCard({ id, user, device, time, label, bunz, imageUrl
         marginBottom: 16,
         overflow: 'hidden',
         borderRadius: 24,
-        background: '#fff',
-        border: '1px solid #F0F0F0',
-        boxShadow: '0 2px 16px rgba(0,0,0,0.05)',
+        background: 'var(--bg-elevated)',
+        border: '1px solid var(--border-subtle)',
+        boxShadow: 'var(--shadow-md)',
       }}
     >
       {/* Image */}
-      <div style={{ position: 'relative', width: '100%', aspectRatio: '4/3', overflow: 'hidden', background: '#F5F5F5' }}>
+      <div style={{ position: 'relative', width: '100%', aspectRatio: '4/3', overflow: 'hidden', background: 'var(--bg-pressed)' }}>
         {imageUrl ? (
           <img
             src={imageUrl}
@@ -45,7 +44,7 @@ export default function FeedCard({ id, user, device, time, label, bunz, imageUrl
         ) : (
           <div style={{
             position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'linear-gradient(135deg, #FFF0F5 0%, #FCE4EC 100%)',
+            background: 'linear-gradient(135deg, rgba(233,30,99,0.1) 0%, rgba(233,30,99,0.2) 100%)',
             fontSize: 48,
           }}>
             🏪
@@ -56,7 +55,7 @@ export default function FeedCard({ id, user, device, time, label, bunz, imageUrl
         {bunz > 0 && (
           <div style={{
             position: 'absolute', top: 12, right: 12,
-            background: '#E91E63', color: '#fff',
+            background: 'var(--rabbitty-pink)', color: '#fff',
             fontSize: 11, fontWeight: 900,
             padding: '6px 12px', borderRadius: 999,
             boxShadow: '0 4px 12px rgba(233,30,99,0.4)',
@@ -70,9 +69,11 @@ export default function FeedCard({ id, user, device, time, label, bunz, imageUrl
         {/* Label badge */}
         <div style={{
           position: 'absolute', top: 12, left: 12,
-          background: 'rgba(255,255,255,0.9)',
-          backdropFilter: 'blur(8px)',
-          fontSize: 11, fontWeight: 700, color: '#555',
+          background: 'rgba(10, 10, 14, 0.75)',
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          fontSize: 11, fontWeight: 700, color: '#FFFFFF',
           padding: '4px 10px', borderRadius: 999,
         }}>
           📍 {label}
@@ -82,17 +83,18 @@ export default function FeedCard({ id, user, device, time, label, bunz, imageUrl
       {/* Body */}
       <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ fontWeight: 900, color: '#111', fontSize: 17, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <p style={{ fontWeight: 900, color: 'var(--text-primary)', fontSize: 17, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {user}
           </p>
-          <p style={{ color: '#999', fontSize: 13, fontWeight: 500 }}>{device}</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: 13, fontWeight: 500 }}>{device}</p>
         </div>
         <button style={{
           flexShrink: 0,
-          background: '#111', color: '#fff',
+          background: 'var(--rabbitty-pink)', color: '#fff',
           fontSize: 12, fontWeight: 700,
-          padding: '10px 16px', borderRadius: 999,
+          padding: '10px 18px', borderRadius: 999,
           border: 'none', cursor: 'pointer',
+          boxShadow: '0 2px 10px rgba(233,30,99,0.3)',
         }}>
           Ver oferta
         </button>

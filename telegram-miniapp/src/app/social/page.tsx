@@ -60,12 +60,12 @@ export default function SocialPage() {
   };
 
   return (
-    <div className="page-wrap pb-28 bg-white">
+    <div className="page-wrap pb-28" style={{ background: 'var(--bg-primary)' }}>
       <div style={{ height: 'var(--safe-top)' }} />
       <Header showBack={true} isScrolled={false} />
 
       <main className="flex-1 w-full max-w-[600px] mx-auto px-4 pt-2">
-        <h1 className="text-2xl font-normal text-[#111] mb-6 px-1">Social</h1>
+        <h1 className="text-2xl font-normal mb-6 px-1" style={{ color: 'var(--text-primary)' }}>Social</h1>
 
         {loading && <p className="text-center text-[#8A8A8A] py-8">Cargando...</p>}
 
@@ -80,7 +80,8 @@ export default function SocialPage() {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.08 }}
-              className="bg-white border border-[#F0F0F0] rounded-3xl overflow-hidden shadow-[0_4px_16px_rgba(0,0,0,0.02)]"
+              className="rounded-3xl overflow-hidden"
+              style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-md)' }}
             >
               <div className="p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -92,20 +93,20 @@ export default function SocialPage() {
                     )}
                   </div>
                   <div>
-                    <p className="font-normal text-[#111] text-[15px]">{item.user || item.device}</p>
-                    <p className="text-[12px] text-[#8A8A8A] font-light">{item.category}</p>
+                    <p className="font-normal text-[15px]" style={{ color: 'var(--text-primary)' }}>{item.user || item.device}</p>
+                    <p className="text-[12px] font-light" style={{ color: 'var(--text-muted)' }}>{item.category}</p>
                   </div>
                 </div>
                 <button className="text-[#8A8A8A]">
-                  <MoreHorizontal className="w-5 h-5" strokeWidth={1.5} />
+                  <MoreHorizontal className="w-5 h-5" strokeWidth={1.5} style={{ color: 'var(--text-muted)' }} />
                 </button>
               </div>
 
-              <div className="relative aspect-[4/3] bg-gray-50 overflow-hidden">
+              <div className="relative aspect-[4/3] overflow-hidden" style={{ background: 'var(--bg-subtle)' }}>
                 {item.imageUrl ? (
                   <img src={item.imageUrl} alt={item.label} className="w-full h-full object-cover" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-[#8A8A8A] text-sm">Sin imagen</div>
+                  <div className="w-full h-full flex items-center justify-center text-sm" style={{ color: 'var(--text-muted)' }}>Sin imagen</div>
                 )}
                 <div className="absolute top-4 left-4 bg-black/60 backdrop-blur-md rounded-lg px-3 py-1.5 border border-white/10">
                   <span className="text-[11px] font-semibold text-white tracking-wide">+{item.bunz} bunz</span>
@@ -128,9 +129,9 @@ export default function SocialPage() {
                   </button>
                 </div>
 
-                <p className="text-[14px] text-[#111] leading-relaxed font-light">
+                <p className="text-[14px] leading-relaxed font-light" style={{ color: 'var(--text-primary)' }}>
                   <span className="font-normal mr-1.5">{item.user || item.device}</span>
-                  ofrece <span className="text-[#E91E63] font-medium">+{item.reward_percentage}%</span> en bunz por consumo en <span className="font-normal">{item.label || item.category}</span>.
+                  ofrece <span className="text-[#E91E63] font-medium">+{item.reward_percentage}%</span> en bunz por consumo en <span className="font-normal" style={{ color: 'var(--text-primary)' }}>{item.label || item.category}</span>.
                 </p>
               </div>
             </motion.div>
