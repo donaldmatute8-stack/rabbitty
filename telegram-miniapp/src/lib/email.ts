@@ -52,14 +52,14 @@ export function wrapInRabbittyEmailLayout(title: string, subtitle: string, bodyC
       <body style="margin: 0; padding: 20px; background-color: #05020A; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #FFFFFF;">
         <div style="max-width: 580px; margin: 0 auto; background: linear-gradient(180deg, #130725 0%, #0A0314 100%); border-radius: 28px; border: 1px solid rgba(244, 63, 94, 0.35); overflow: hidden; box-shadow: 0 0 50px rgba(233, 30, 99, 0.25);">
           
-          <!-- HEADER CON LOGO OFICIAL CONEJO NEÓN -->
-          <div style="background: linear-gradient(135deg, rgba(244, 63, 94, 0.15), rgba(168, 85, 247, 0.15)); padding: 32px 24px; text-align: center; border-bottom: 1px solid rgba(255, 255, 255, 0.08);">
-            <div style="display: inline-block; width: 68px; height: 68px; background: #0A0314; border-radius: 22px; border: 1.5px solid #F43F5E; text-align: center; margin-bottom: 12px; box-shadow: 0 0 25px rgba(244, 63, 94, 0.45); overflow: hidden; padding: 6px;">
-              <img src="https://rabbitty.me/logo_conejo.png" alt="Rabbitty Conejo Logo" style="width: 100%; height: 100%; object-fit: contain; display: block;" />
+          <!-- HEADER CON LOGO OFICIAL CONEJO NEÓN (Idéntico a App Store / iOS) -->
+          <div style="background: linear-gradient(135deg, rgba(244, 63, 94, 0.15), rgba(168, 85, 247, 0.15)); padding: 28px 16px; text-align: center; border-bottom: 1px solid rgba(255, 255, 255, 0.08);">
+            <div style="display: inline-block; width: 72px; height: 72px; background: #0A0314; border-radius: 18px; border: 1.5px solid rgba(244, 63, 94, 0.6); text-align: center; margin-bottom: 12px; box-shadow: 0 0 25px rgba(244, 63, 94, 0.4); overflow: hidden; vertical-align: middle;">
+              <img src="https://app.rabbitty.me/app_icon.png" alt="Rabbitty Logo" style="width: 72px; height: 72px; display: block; border-radius: 16px;" width="72" height="72" />
             </div>
-            <h2 style="margin: 0; font-size: 13px; font-weight: 900; letter-spacing: 0.35em; color: #FFFFFF; text-transform: uppercase;">RABBITTY PROTOCOL</h2>
-            <h1 style="margin: 8px 0 0 0; font-size: 22px; font-weight: 800; color: #F43F5E;">${title}</h1>
-            ${subtitle ? `<p style="margin: 6px 0 0 0; font-size: 13px; color: #C084FC;">${subtitle}</p>` : ''}
+            <h2 style="margin: 0; font-size: 12px; font-weight: 900; letter-spacing: 0.3em; color: #FFFFFF; text-transform: uppercase;">RABBITTY PROTOCOL</h2>
+            <h1 style="margin: 6px 0 0 0; font-size: 20px; font-weight: 800; color: #F43F5E;">${title}</h1>
+            ${subtitle ? `<p style="margin: 4px 0 0 0; font-size: 13px; color: #C084FC;">${subtitle}</p>` : ''}
           </div>
 
           <!-- CUERPO PRINCIPAL DEL MENSAJE -->
@@ -184,16 +184,21 @@ export function getRabbitterLevelUpEmailTemplate(userName: string, levelName: st
 // Plantilla para Código de Verificación OTP (App Nativa y Web)
 export function getOtpEmailTemplate(code: string) {
   const content = `
-    <div style="background: rgba(244,63,94,0.06); border-radius: 18px; padding: 24px; margin-bottom: 24px; border: 1px solid rgba(244,63,94,0.25); text-align: center;">
-      <p style="font-size: 15px; line-height: 1.6; color: #E2E8F0; margin: 0 0 16px 0;">
+    <div style="background: rgba(244,63,94,0.06); border-radius: 18px; padding: 24px 16px; margin-bottom: 24px; border: 1px solid rgba(244,63,94,0.25); text-align: center;">
+      <p style="font-size: 15px; line-height: 1.6; color: #E2E8F0; margin: 0 0 18px 0;">
         Usa el siguiente código de 6 dígitos para acceder de forma segura a tu cuenta de Rabbitty:
       </p>
       
-      <div style="display: inline-block; background: #0A0314; border: 2px solid #F43F5E; border-radius: 16px; padding: 16px 36px; margin: 12px 0 20px 0; box-shadow: 0 0 30px rgba(244,63,94,0.35);">
-        <span style="font-size: 36px; font-weight: 900; letter-spacing: 0.25em; color: #FFFFFF; font-family: monospace;">${code}</span>
-      </div>
+      <!-- CONTENEDOR DEL CÓDIGO RESPONSIVE (Web y Mobile) -->
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin: 0 auto 20px auto; max-width: 100%;">
+        <tr>
+          <td align="center" style="background: #0A0314; border: 2px solid #F43F5E; border-radius: 16px; padding: 14px 24px; box-shadow: 0 0 30px rgba(244,63,94,0.35);">
+            <span style="font-size: 28px; font-weight: 900; letter-spacing: 6px; color: #FFFFFF; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, monospace; display: inline-block; white-space: nowrap;">${code}</span>
+          </td>
+        </tr>
+      </table>
 
-      <p style="font-size: 13px; color: #94A3B8; margin: 0;">
+      <p style="font-size: 13px; color: #94A3B8; margin: 0; line-height: 1.5;">
         ⏱️ Este código expirará en <strong>10 minutos</strong>. Si no solicitaste este acceso, puedes ignorar este mensaje.
       </p>
     </div>
