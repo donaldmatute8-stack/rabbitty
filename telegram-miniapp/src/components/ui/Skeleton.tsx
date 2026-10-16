@@ -13,7 +13,7 @@ export default function Skeleton({
   height,
   className = ''
 }: SkeletonProps) {
-  const baseStyles = 'animate-pulse bg-gray-200 rounded';
+  const baseStyles = 'animate-pulse bg-[var(--bg-pressed)] rounded';
   
   const variants = {
     text: 'h-4 w-full rounded',
@@ -32,7 +32,7 @@ export default function Skeleton({
 // Preset skeletons
 export function SkeletonCard() {
   return (
-    <div className="bg-white rounded-[16px] overflow-hidden mx-4 mb-4 p-0">
+    <div className="bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-[24px] overflow-hidden mx-1 mb-4 p-0">
       <Skeleton variant="rectangular" height="200px" className="rounded-none" />
       <div className="p-4 space-y-2">
         <Skeleton variant="text" width="60%" />
@@ -44,7 +44,7 @@ export function SkeletonCard() {
 
 export function BusinessCardSkeleton() {
   return (
-    <div className="flex items-center gap-4 p-4 bg-white rounded-md mx-4 mb-3">
+    <div className="flex items-center gap-4 p-4 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-2xl mx-1 mb-3">
       <Skeleton variant="circular" width="56px" height="56px" />
       <div className="flex-1 space-y-2">
         <Skeleton variant="text" width="70%" />

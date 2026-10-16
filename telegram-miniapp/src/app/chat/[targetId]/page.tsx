@@ -118,7 +118,7 @@ export default function ChatRoomPage() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: '#F8F8F8', fontFamily: 'var(--font-family-base)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: 'var(--bg-primary)', fontFamily: 'var(--font-family-base)' }}>
       
       {/* Header Fijo */}
       <header style={{
@@ -128,16 +128,16 @@ export default function ChatRoomPage() {
         display: 'flex',
         alignItems: 'center',
         padding: 'calc(max(env(safe-area-inset-top), 84px) + 8px) 20px 16px',
-        background: '#fff',
-        borderBottom: '1px solid #F0F0F0',
+        background: 'var(--bg-elevated)',
+        borderBottom: '1px solid var(--border-subtle)',
         gap: '16px'
       }}>
         <button 
           onClick={() => router.back()} 
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px 8px 8px 0' }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px 8px 8px 0', color: 'var(--text-primary)' }}
         >
           <svg width="10" height="18" viewBox="0 0 10 18" fill="none">
-            <path d="M9 1L1 9L9 17" stroke="#111" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M9 1L1 9L9 17" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
         
@@ -146,7 +146,7 @@ export default function ChatRoomPage() {
             width: '44px',
             height: '44px',
             borderRadius: '50%',
-            background: isBot ? 'var(--rabbitty-pink)' : '#F5F5F5',
+            background: isBot ? 'var(--rabbitty-pink)' : 'var(--bg-pressed)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -159,11 +159,11 @@ export default function ChatRoomPage() {
             )}
           </div>
           <div>
-            <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#111', margin: 0, lineHeight: 1.2 }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)', margin: 0, lineHeight: 1.2 }}>
               {targetName}
             </h2>
             <span style={{ fontSize: '13px', color: '#4CAF50', fontWeight: 600 }}>
-              {isBot ? 'IA en línea' : 'En línea'}
+              {isBot ? 'Bunzy IA en línea' : 'En línea'}
             </span>
           </div>
         </div>
@@ -206,11 +206,11 @@ export default function ChatRoomPage() {
                 <div style={{
                   maxWidth: '85%',
                   padding: '12px 16px',
-                  backgroundColor: isMe ? 'var(--rabbitty-pink)' : '#FFFFFF',
-                  color: isMe ? '#FFFFFF' : '#111111',
+                  backgroundColor: isMe ? 'var(--rabbitty-pink)' : 'var(--bg-elevated)',
+                  color: isMe ? '#FFFFFF' : 'var(--text-primary)',
                   borderRadius: isMe ? '20px 20px 4px 20px' : '20px 20px 20px 4px',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-                  border: isMe ? 'none' : '1px solid #EAEAEA'
+                  boxShadow: 'var(--shadow-sm)',
+                  border: isMe ? 'none' : '1px solid var(--border-subtle)'
                 }}>
                   <p style={{ 
                     fontSize: '15px', 
@@ -238,14 +238,14 @@ export default function ChatRoomPage() {
         {sending && isBot && (
           <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
             <div style={{
-              backgroundColor: '#FFFFFF',
+              backgroundColor: 'var(--bg-elevated)',
               borderRadius: '20px 20px 20px 4px',
-              padding: '16px',
+              padding: '14px 18px',
               display: 'flex',
               gap: '6px',
               alignItems: 'center',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-              border: '1px solid #EAEAEA'
+              boxShadow: 'var(--shadow-sm)',
+              border: '1px solid var(--border-subtle)'
             }}>
               <span className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: 'var(--rabbitty-pink)' }} />
               <span className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: 'var(--rabbitty-pink)', animationDelay: '0.1s' }} />
@@ -258,39 +258,39 @@ export default function ChatRoomPage() {
 
       {/* Input de Texto */}
       <footer style={{
-        padding: '16px 20px',
-        paddingBottom: 'calc(env(safe-area-inset-bottom, 20px) + 16px)',
-        backgroundColor: '#FFFFFF',
-        borderTop: '1px solid #F0F0F0'
+        padding: '14px 18px',
+        paddingBottom: 'calc(env(safe-area-inset-bottom, 20px) + 14px)',
+        backgroundColor: 'var(--bg-elevated)',
+        borderTop: '1px solid var(--border-subtle)'
       }}>
         <form onSubmit={handleSend} style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Escribe un mensaje..."
+            placeholder="Pregúntale a Bunzy o escribe un mensaje..."
             style={{
               flex: 1,
-              backgroundColor: '#F8F8F8',
-              border: '1px solid #EAEAEA',
+              backgroundColor: 'var(--bg-pressed)',
+              border: '1px solid var(--border-subtle)',
               borderRadius: '100px',
-              padding: '14px 20px',
+              padding: '12px 18px',
               fontSize: '15px',
-              color: '#111',
+              color: 'var(--text-primary)',
               outline: 'none',
               transition: 'border-color 0.2s',
             }}
             onFocus={(e) => e.target.style.borderColor = 'var(--rabbitty-pink)'}
-            onBlur={(e) => e.target.style.borderColor = '#EAEAEA'}
+            onBlur={(e) => e.target.style.borderColor = 'var(--border-subtle)'}
           />
           <button 
             type="submit" 
             disabled={!input.trim() || sending}
             style={{
-              width: '48px',
-              height: '48px',
-              backgroundColor: (!input.trim() || sending) ? '#EAEAEA' : 'var(--rabbitty-pink)',
-              color: (!input.trim() || sending) ? '#A0A0A0' : '#FFFFFF',
+              width: '44px',
+              height: '44px',
+              backgroundColor: (!input.trim() || sending) ? 'var(--bg-pressed)' : 'var(--rabbitty-pink)',
+              color: (!input.trim() || sending) ? 'var(--text-muted)' : '#FFFFFF',
               borderRadius: '50%',
               display: 'flex',
               alignItems: 'center',
@@ -298,7 +298,7 @@ export default function ChatRoomPage() {
               border: 'none',
               cursor: (!input.trim() || sending) ? 'not-allowed' : 'pointer',
               transition: 'all 0.2s ease',
-              boxShadow: (!input.trim() || sending) ? 'none' : '0 4px 12px rgba(233, 30, 99, 0.3)'
+              boxShadow: (!input.trim() || sending) ? 'none' : '0 4px 12px rgba(233, 30, 99, 0.35)'
             }}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: 'translateX(-1px) translateY(1px)' }}>

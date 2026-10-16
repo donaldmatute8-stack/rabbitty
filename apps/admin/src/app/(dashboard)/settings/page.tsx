@@ -714,14 +714,14 @@ export default function SettingsPage() {
                       : "⚠️ Es crítico configurar este PIN antes de operar para prevenir fraude y autorizar eliminaciones o cancelaciones de comandas."}
                   </p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <input
                     type="password"
                     maxLength={4}
                     placeholder="••••"
                     value={adminPinInput}
                     onChange={(e) => setAdminPinInput(e.target.value.replace(/\D/g, ""))}
-                    className="flex-1 rounded-xl border border-white/10 bg-black/50 p-3 text-center text-2xl tracking-[0.5em] text-white focus:border-pink-500 focus:ring-1 focus:ring-pink-500 outline-none"
+                    className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/50 p-3 text-center text-2xl tracking-[0.5em] text-white focus:border-pink-500 focus:ring-1 focus:ring-pink-500 outline-none"
                   />
                   <Button
                     onClick={() => {
@@ -730,7 +730,7 @@ export default function SettingsPage() {
                       }
                     }}
                     disabled={setAdminPinMutation.isPending || adminPinInput.length !== 4}
-                    className="shrink-0"
+                    className="shrink-0 whitespace-nowrap"
                   >
                     {setAdminPinMutation.isPending ? "Guardando..." : adminPinQuery.data?.hasAdminPin ? "Actualizar PIN" : "Guardar PIN"}
                   </Button>

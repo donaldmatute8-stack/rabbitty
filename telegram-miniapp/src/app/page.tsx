@@ -1,15 +1,14 @@
 'use client';
 
-import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback, useSyncExternalStore } from 'react';
 import { motion } from 'framer-motion';
-import { ScanLine, Bell } from 'lucide-react';
+import { Bell } from 'lucide-react';
 import Link from 'next/link';
 import BottomNav from '@/components/BottomNav';
 import Tabs from '@/components/ui/Tabs';
 import FeedCard from '@/components/ui/FeedCard';
 import EmptyState from '@/components/ui/EmptyState';
 import { SkeletonCard } from '@/components/ui/Skeleton';
-import { useWallet } from '@/contexts/WalletContext';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { Globe3D } from '@/components/ui/3d-globe';
 import dynamic from 'next/dynamic';
@@ -17,11 +16,14 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/contexts/ToastContext';
 import { PlatformBridge } from '@/lib/platform';
 import MembershipCard from '@/components/ui/MembershipCard';
+import ProfileDrawer from '@/components/ProfileDrawer';
+import { useTheme } from '@/contexts/ThemeContext';
+import RabbittyContourLoader from '@/components/ui/RabbittyContourLoader';
 
 const InteractiveMap = dynamic(() => import('@/features/map/InteractiveMap'), {
   ssr: false,
   loading: () => (
-    <div className="h-full w-full bg-[#0D0D1A] flex items-center justify-center">
+    <div className="h-full w-full bg-[var(--bg-primary)] flex items-center justify-center">
       <div className="flex flex-col items-center gap-3">
         <div className="w-8 h-8 rounded-full" style={{ border: '2px solid rgba(233,30,99,0.3)', borderTopColor: '#E91E63', animation: 'spin 0.8s linear infinite' }} />
         <p className="text-xs font-semibold" style={{ color: 'rgba(255,255,255,0.4)' }}>Cargando Mapa...</p>
@@ -46,6 +48,16 @@ interface FeedItem {
   endTime?: string;
   lat?: number;
   lng?: number;
+}
+
+interface Offer {
+  id: string;
+  title: string;
+  description?: string;
+  image?: string;
+  businessName: string;
+  bunzCost: number;
+  isAvailable: boolean;
 }
 
 const TABS = ["bunz'in", 'Stock', 'Freehands'];
@@ -74,30 +86,31 @@ export default function FeedPage() {
     return "bunz'in";
   });
   const [posts, setPosts] = useState<FeedItem[]>([]);
-  const [offers, setOffers] = useState<any[]>([]);
+  const [offers, setOffers] = useState<Offer[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [purchasing, setPurchasing] = useState(false);
   const [mapMode, setMapMode] = useState<'globe' | 'flat'>('flat');
   const { showToast } = useToast();
 
-  const { address, balance } = useWallet();
   const { user } = useAuth();
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
-  const [locationLoaded, setLocationLoaded] = useState(false);
 
-  const isDark = true;
+  const { isDark } = useTheme();
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const bunzBalance = (user?.totalBunzEarned || 0) - (user?.totalBunzSpent || 0);
 
-  const [greeting, setGreeting] = useState('Buenos días,');
-
-  useEffect(() => {
-    const hour = new Date().getHours();
-    if (hour >= 5 && hour < 12) setGreeting('Buenos días,');
-    else if (hour >= 12 && hour < 19) setGreeting('Buenas tardes,');
-    else setGreeting('Buenas noches,');
-  }, []);
+  const greeting = useSyncExternalStore(
+    () => () => {},
+    () => {
+      const hour = new Date().getHours();
+      if (hour >= 5 && hour < 12) return 'Buenos días,';
+      if (hour >= 12 && hour < 19) return 'Buenas tardes,';
+      return 'Buenas noches,';
+    },
+    () => 'Buenos días,'
+  );
 
   const handleSpend = async (offerId: string, bunzCost: number, businessName: string, offerTitle: string) => {
     if (user && bunzBalance < bunzCost) {
@@ -140,21 +153,17 @@ export default function FeedPage() {
   useEffect(() => {
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => { setUserLat(pos.coords.latitude); setUserLng(pos.coords.longitude); setLocationLoaded(true); },
-        () => setLocationLoaded(true),
+        (pos) => { setUserLat(pos.coords.latitude); setUserLng(pos.coords.longitude); },
+        () => {},
         { enableHighAccuracy: true, timeout: 5000 }
       );
-    } else setLocationLoaded(true);
+    }
   }, []);
 
   useEffect(() => {
     import('@twa-dev/sdk').then((mod) => {
       const app = mod.default;
       app.ready(); app.expand();
-      try {
-        app.setBackgroundColor(isDark ? '#0D0D1A' : '#FAFAFA');
-        app.setHeaderColor(isDark ? '#0A0A14' : '#FFFFFF');
-      } catch {}
 
       // --- DEEP LINKING (SEO Public Landing Pages) ---
       const startParam = app.initDataUnsafe?.start_param;
@@ -184,7 +193,7 @@ export default function FeedPage() {
         .catch(err => console.error("Error en auth:", err));
       }
     });
-  }, [isDark]);
+  }, [router]);
 
   const postsWithDistance = useMemo(() => {
     if (!userLat || !userLng) return posts;
@@ -223,7 +232,7 @@ export default function FeedPage() {
   }, [activeTab]);
 
   useEffect(() => {
-    fetchFeedData();
+    queueMicrotask(() => { fetchFeedData(); });
   }, [fetchFeedData]);
 
   useEffect(() => {
@@ -270,31 +279,38 @@ export default function FeedPage() {
   return (
     <div
       className="page-wrap pb-16"
-      style={{ background: isDark ? 'var(--bg-primary)' : '#FAFAFA', color: isDark ? '#fff' : '#111', transition: 'background 0.5s' }}
+      style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)', transition: 'background 0.5s' }}
     >
       {/* HEADER COMPLETO INICIAL: Se desplaza naturalmente con el scroll (ya no está fixed/sticky constante) */}
       <div
         className="w-full relative z-[40]"
         style={{
-          background: isDark ? 'rgba(0,0,0,0.95)' : '#fff',
-          borderBottom: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid #F0F0F0',
+          background: 'var(--bg-primary)',
+          borderBottom: '1px solid var(--border-subtle)',
           paddingTop: 'var(--safe-top, 0px)',
         }}
       >
         {/* Fila Perfil / Saludo + Bunz + Bell + Scan */}
         <div className="flex items-center justify-between px-5 pt-2 pb-2">
-          <Link href="/profile" className="flex items-center gap-3 no-underline">
-            <div className="w-11 h-11 rounded-full overflow-hidden" style={{ background: isDark ? '#1A1A2E' : '#F0F0F0', border: isDark ? '1px solid rgba(255,255,255,0.1)' : 'none' }}>
+          <button
+            type="button"
+            onClick={() => {
+              PlatformBridge.hapticFeedback('light');
+              setDrawerOpen(true);
+            }}
+            className="flex items-center gap-3 bg-transparent border-none cursor-pointer p-0 text-left active:scale-[0.98] transition-transform"
+          >
+            <div className="w-11 h-11 rounded-full overflow-hidden" style={{ background: 'var(--bg-pressed)', border: '1px solid var(--border-subtle)' }}>
               <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${user?.firstName || 'Rabbitty'}&backgroundColor=E91E63`} alt={user?.firstName || 'User'} className="w-full h-full" />
             </div>
             <div>
-              <p className="text-[11px] font-extrabold uppercase tracking-[0.5px] mb-[2px]" style={{ color: isDark ? 'rgba(255,255,255,0.5)' : '#888' }}>{greeting}</p>
-              <h1 className="text-[19px] font-black tracking-[-0.5px] m-0" style={{ color: isDark ? '#fff' : '#111' }}>{user?.firstName || 'Explorador'}</h1>
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.5px] mb-[2px]" style={{ color: 'var(--text-muted)' }}>{greeting}</p>
+              <h1 className="text-[19px] font-black tracking-[-0.5px] m-0" style={{ color: 'var(--text-primary)' }}>{user?.firstName || 'Explorador'}</h1>
             </div>
-          </Link>
+          </button>
           <div className="flex items-center gap-2.5">
-            <div className="px-3 py-[6px] rounded-full flex items-baseline gap-1" style={{ background: isDark ? 'rgba(255,255,255,0.08)' : '#F4F4F4', border: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid #EBEBEB' }}>
-              <span className="text-[15px] font-black" style={{ color: isDark ? '#fff' : '#111' }}>{bunzBalance.toLocaleString()}</span>
+            <div className="px-3 py-[6px] rounded-full flex items-baseline gap-1" style={{ background: 'var(--bg-pressed)', border: '1px solid var(--border-subtle)' }}>
+              <span className="text-[15px] font-black" style={{ color: 'var(--text-primary)' }}>{bunzBalance.toLocaleString()}</span>
               <span className="text-[11px] font-black text-[#E91E63]">BUNZ</span>
             </div>
             
@@ -303,17 +319,17 @@ export default function FeedPage() {
               href="/notifications" 
               onClick={() => PlatformBridge.hapticFeedback('light')}
               className="relative w-9 h-9 rounded-full flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.04)] active:scale-95 transition-transform" 
-              style={{ background: isDark ? 'rgba(255,255,255,0.05)' : '#fff', border: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid #F0F0F0' }}
+              style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
             >
-              <Bell size={18} color={isDark ? '#fff' : '#111'} strokeWidth={2.5} />
-              <div className="absolute top-2 right-[9px] w-[6px] h-[6px] bg-[#E91E63] rounded-full" style={{ border: `1.5px solid ${isDark ? '#000' : '#fff'}` }} />
+              <Bell size={18} strokeWidth={2.5} style={{ color: 'var(--text-primary)' }} />
+              <div className="absolute top-2 right-[9px] w-[6px] h-[6px] bg-[#E91E63] rounded-full" style={{ border: '1.5px solid var(--bg-elevated)' }} />
             </Link>
 
             <Link 
               href="/scan" 
               onClick={() => PlatformBridge.hapticFeedback('medium')}
               className="w-9 h-9 rounded-full flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.04)] active:scale-95 transition-transform" 
-              style={{ background: isDark ? 'rgba(255,255,255,0.05)' : '#fff', border: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid #F0F0F0' }}
+              style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
             >
               <img 
                 src="/logo_conejo.png" 
@@ -341,10 +357,10 @@ export default function FeedPage() {
         className="fixed top-0 left-0 right-0 z-[80] transition-all duration-300 ease-out select-none"
         style={{
           transform: showMinimalHeader ? 'translateY(0)' : 'translateY(-110%)',
-          background: isDark ? 'rgba(10, 10, 14, 0.88)' : 'rgba(255, 255, 255, 0.94)',
+          background: 'var(--glass-bg)',
           backdropFilter: 'blur(24px)',
           WebkitBackdropFilter: 'blur(24px)',
-          borderBottom: isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid rgba(0, 0, 0, 0.06)',
+          borderBottom: '1px solid var(--glass-border)',
           paddingTop: 'var(--safe-top, 0px)',
           boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
         }}
@@ -364,7 +380,7 @@ export default function FeedPage() {
                   className="relative py-1.5 px-2.5 rounded-full text-[13px] font-bold tracking-tight transition-all active:scale-95 whitespace-nowrap"
                   style={{
                     background: isActive ? 'rgba(233, 30, 99, 0.18)' : 'transparent',
-                    color: isActive ? '#E91E63' : (isDark ? 'rgba(255,255,255,0.6)' : '#666'),
+                    color: isActive ? '#E91E63' : 'var(--text-secondary)',
                     border: isActive ? '1px solid rgba(233, 30, 99, 0.35)' : '1px solid transparent',
                   }}
                 >
@@ -380,9 +396,9 @@ export default function FeedPage() {
               href="/notifications" 
               onClick={() => PlatformBridge.hapticFeedback('light')}
               className="relative w-8 h-8 rounded-full flex items-center justify-center active:scale-95 transition-transform" 
-              style={{ background: isDark ? 'rgba(255,255,255,0.08)' : '#F0F0F0' }}
+              style={{ background: 'var(--bg-pressed)' }}
             >
-              <Bell size={16} color={isDark ? '#fff' : '#111'} strokeWidth={2.3} />
+              <Bell size={16} strokeWidth={2.3} style={{ color: 'var(--text-primary)' }} />
               <div className="absolute top-1.5 right-[7px] w-[5px] h-[5px] bg-[#E91E63] rounded-full" />
             </Link>
 
@@ -390,7 +406,7 @@ export default function FeedPage() {
               href="/scan" 
               onClick={() => PlatformBridge.hapticFeedback('medium')}
               className="w-8 h-8 rounded-full flex items-center justify-center active:scale-95 transition-transform" 
-              style={{ background: isDark ? 'rgba(255,255,255,0.08)' : '#F0F0F0' }}
+              style={{ background: 'var(--bg-pressed)' }}
             >
               <img 
                 src="/logo_conejo.png" 
@@ -409,6 +425,12 @@ export default function FeedPage() {
           {/* ── bunz'in tab ── */}
           {activeTab === "bunz'in" && (
             <>
+              {loading && (
+                <div className="mb-2">
+                  <RabbittyContourLoader size={54} label="Actualizando comercios..." />
+                </div>
+              )}
+
               {/* Digital Pass / Membership Card */}
               <div className="px-1">
                 <MembershipCard user={user} levelName={user?.level?.name || '1'} isDark={isDark} />
@@ -416,9 +438,9 @@ export default function FeedPage() {
 
               {!loading && postsWithDistance.length > 0 && (
                 <div className="flex items-center gap-3 mb-4 mt-2">
-                  <div className="flex-1 h-px bg-[#222]" />
-                  <span className="text-[11px] font-black text-[#888] tracking-[0.5px]">COMERCIOS CERCA DE TI</span>
-                  <div className="flex-1 h-px bg-[#222]" />
+                  <div className="flex-1 h-px bg-[var(--border-subtle)]" />
+                  <span className="text-[11px] font-black text-[var(--text-muted)] tracking-[0.5px]">COMERCIOS CERCA DE TI</span>
+                  <div className="flex-1 h-px bg-[var(--border-subtle)]" />
                 </div>
               )}
               {loading ? (
@@ -430,7 +452,6 @@ export default function FeedPage() {
                     id={post.id}
                     user={post.user}
                     device={post.device}
-                    time={post.time}
                     label={post.distance ? `${post.distance}km` : post.label}
                     bunz={post.reward_percentage}
                     imageUrl={post.imageUrl}
@@ -452,9 +473,9 @@ export default function FeedPage() {
             <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}>
               {/* Search */}
               <div className="relative mb-5">
-                <svg className="absolute left-4 top-1/2 -translate-y-1/2" width="15" height="15" viewBox="0 0 16 16" fill="none">
-                  <circle cx="7" cy="7" r="5.5" stroke="#666" strokeWidth="1.5" />
-                  <path d="M11 11L14 14" stroke="#666" strokeWidth="1.5" strokeLinecap="round" />
+                <svg className="absolute left-4 top-1/2 -translate-y-1/2" width="15" height="15" viewBox="0 0 16 16" fill="none" style={{ color: 'var(--text-muted)' }}>
+                  <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.5" />
+                  <path d="M11 11L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
                 <input
                   placeholder="Buscar negocios..."
@@ -526,8 +547,8 @@ export default function FeedPage() {
                               onClick={() => handleSpend(o.id, o.bunzCost, o.businessName, o.title)}
                               className="text-[13px] font-black px-5 py-[10px] rounded-full border-none"
                               style={{
-                                background: o.isAvailable && !purchasing ? '#E91E63' : '#222',
-                                color: o.isAvailable && !purchasing ? '#fff' : '#666',
+                                background: o.isAvailable && !purchasing ? '#E91E63' : 'var(--bg-pressed)',
+                                color: o.isAvailable && !purchasing ? '#fff' : 'var(--text-muted)',
                                 cursor: o.isAvailable && !purchasing ? 'pointer' : 'not-allowed',
                               }}
                             >
@@ -606,6 +627,7 @@ export default function FeedPage() {
       `}} />
 
       <BottomNav isDark={isDark} />
+      <ProfileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </div>
   );
 }

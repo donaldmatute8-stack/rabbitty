@@ -56,12 +56,18 @@ export async function POST(req: Request) {
       const OLLAMA_KEY = process.env.OLLAMA_API_KEY || '';
 
       const messagesForOllama = [
-        { role: 'system', content: 'Eres Rabbit Bot, el asistente amigable y conciso de la app Rabbitty. Hablas español de forma natural, entusiasta y usas emojis de conejos 🐰 o zanahorias 🥕. Ayudas a los usuarios a entender cómo ganar bunz visitando negocios afiliados. Importante: escribe siempre "bunz" en minúscula, ya que es nuestra economía interna (solo usa mayúsculas si te refieres explícitamente a la criptomoneda en la blockchain).' },
-        ...history.map((msg: any) => ({
+        { role: 'system', content: 'Eres Bunzy 🐰, el concierge inteligente, carismático y astuto de Rabbitty. Tienes una personalidad urbana, amigable y conocedora de los mejores spots (restaurantes, cafés, bares, fitness y tiendas). Hablas en español mexicano moderno y relajado ("¡Qué onda!", "¡De lujo!"). Ayudas a los usuarios a descubrir comercios, entender cómo acumular y canjear bunz (siempre escribe "bunz" en minúscula) y subir de nivel en su madriguera con hops. Si te preguntan qué comer o a dónde ir, recomiéndales explorar la sección de comercios afiliados y activar sus recompensas escaneando el Rabbitty QR.' },
+        ...history.map((msg) => ({
           role: msg.senderId === 'bot' ? 'assistant' : 'user',
           content: msg.content
         }))
       ];
+
+      const timeoutMs = Number(process.env.OLLAMA_TIMEOUT_MS) || 25000;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+      let botText: string | null = null;
 
       try {
         const ollamaRes = await fetch(OLLAMA_URL, {
@@ -74,25 +80,29 @@ export async function POST(req: Request) {
             model: OLLAMA_MODEL,
             messages: messagesForOllama,
             stream: false
-          })
+          }),
+          signal: controller.signal
         });
 
         if (ollamaRes.ok) {
           const data = await ollamaRes.json();
-          const botText = data.message?.content || 'Hubo un error al pensar 🐰';
-          
-          const [newBotResponse] = await db.insert(messages).values({
-            conversationId,
-            senderId: 'bot',
-            content: botText
-          }).returning();
-          botResponse = newBotResponse;
+          botText = data.message?.content?.trim() || null;
         } else {
           console.error("Ollama API Error:", await ollamaRes.text());
         }
       } catch (ollamaErr) {
         console.error('Error conectando a Ollama:', ollamaErr);
+      } finally {
+        clearTimeout(timeout);
       }
+
+      // Fallback: si Ollama falla o expira, Bunzy igual responde para no dejar el hilo mudo
+      const [newBotResponse] = await db.insert(messages).values({
+        conversationId,
+        senderId: 'bot',
+        content: botText || '¡Qué onda! Se me cruzaron los cables un momento 🐰⚡. Intenta de nuevo en un ratito.'
+      }).returning();
+      botResponse = newBotResponse;
     }
 
     return NextResponse.json({ 

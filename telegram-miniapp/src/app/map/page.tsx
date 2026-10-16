@@ -67,7 +67,7 @@ function MapPageInner() {
     : businesses.filter(b => b.category?.toLowerCase().includes(activeFilter.replace('s', '').toLowerCase()));
 
   return (
-    <div className="page-wrap pb-28 bg-white">
+    <div className="page-wrap pb-28" style={{ background: 'var(--bg-primary)' }}>
       <div style={{ height: 'var(--safe-top)' }} />
       <Header />
 
@@ -80,7 +80,8 @@ function MapPageInner() {
           initial={{ y: 100 }}
           animate={{ y: showList ? 0 : 300 }}
           transition={{ type: 'spring', damping: 25 }}
-          className="bg-white rounded-t-3xl shadow-[0_-4px_20px_rgba(0,0,0,0.1)]"
+            className="rounded-t-3xl shadow-[0_-4px_20px_rgba(0,0,0,0.1)]"
+            style={{ background: 'var(--bg-primary)' }}
         >
           <div className="flex justify-center pt-3 pb-2">
             <div className="w-12 h-1 bg-gray-300 rounded-full" />
@@ -92,7 +93,8 @@ function MapPageInner() {
               <input
                 type="text"
                 placeholder="Buscar negocios..."
-                className="w-full bg-[#F5F5F5] rounded-xl pl-12 pr-4 py-3 text-[15px] text-[#111] placeholder-[#8A8A8A] focus:outline-none focus:ring-2 focus:ring-[#E91E63]/20"
+                className="w-full rounded-xl pl-12 pr-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-[var(--border-focus)]/20"
+                style={{ background: 'var(--bg-elevated)', color: 'var(--text-primary)', border: '1px solid var(--border-subtle)' }}
               />
             </div>
 
@@ -102,7 +104,7 @@ function MapPageInner() {
                   key={filter}
                   onClick={() => setActiveFilter(filter)}
                   className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                    activeFilter === filter ? 'bg-[#111] text-white' : 'bg-[#F5F5F5] text-[#8A8A8A]'
+                    activeFilter === filter ? 'bg-[#111] text-white' : ''
                   }`}
                 >
                   {filter}
@@ -122,7 +124,8 @@ function MapPageInner() {
               <Link
                 key={business.id}
                 href={`/affiliate/${business.id}`}
-                className="flex items-center gap-4 bg-[#F5F5F5] rounded-xl p-4 no-underline active:scale-[0.98] transition-transform"
+                className="flex items-center gap-4 rounded-xl p-4 no-underline active:scale-[0.98] transition-transform"
+                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
               >
                 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#E91E63] to-[#C2185B] flex items-center justify-center text-white text-lg font-bold shrink-0">
                   {business.name[0]}

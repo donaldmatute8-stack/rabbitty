@@ -15,6 +15,14 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_CHAIN_ID: process.env.NEXT_PUBLIC_CHAIN_ID || '11155111',
   },
   async headers() {
+    const isDev = process.env.NODE_ENV !== "production";
+    const scriptSrc = [
+      "'self'",
+      ...(isDev ? ["'unsafe-eval'"] : []),
+      "'unsafe-inline'",
+      "https://telegram.org",
+      "https://*.telegram.org",
+    ].join(" ");
     return [
       {
         source: "/(.*)",
@@ -28,7 +36,7 @@ const nextConfig: NextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://telegram.org https://*.telegram.org",
+              `script-src ${scriptSrc}`,
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https:",
               "font-src 'self' data:",

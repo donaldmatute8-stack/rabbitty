@@ -3,9 +3,10 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { MessageCircle, ScanLine, User } from 'lucide-react';
+import { MessageCircle, ScanLine } from 'lucide-react';
 
 import { PlatformBridge } from '@/lib/platform';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface BottomNavProps {
   isDark?: boolean;
@@ -17,19 +18,19 @@ export default function BottomNav({ isDark }: BottomNavProps = {}) {
   const lastScrollY = useRef(0);
   const accumulatedDelta = useRef(0);
 
+  const { isDark: themeIsDark } = useTheme();
+
   const isFeed = pathname === '/';
   const isDiscover = pathname === '/chat';
   const isScan = pathname === '/scan';
-  const isProfile = pathname === '/profile' || pathname === '/business';
 
-  const effectiveDark = isDark !== undefined ? isDark : isScan;
+  const effectiveDark = isDark ?? themeIsDark;
+
+  // Scan page requires persistent controls (derived, not set in an effect)
+  const navVisible = isScan || isVisible;
 
   useEffect(() => {
-    // Scan page requires persistent controls
-    if (isScan) {
-      setIsVisible(true);
-      return;
-    }
+    if (isScan) return;
 
     const handleScroll = () => {
       const currentScrollY = window.scrollY || document.documentElement.scrollTop || 0;
@@ -77,7 +78,7 @@ export default function BottomNav({ isDark }: BottomNavProps = {}) {
     <div
       className="fixed bottom-0 left-0 right-0 z-[100] pointer-events-none flex justify-center px-4 transition-transform duration-300 ease-out"
       style={{
-        transform: isVisible ? 'translateY(0)' : 'translateY(120%)',
+        transform: navVisible ? 'translateY(0)' : 'translateY(120%)',
         paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)',
       }}
     >
@@ -126,11 +127,6 @@ export default function BottomNav({ isDark }: BottomNavProps = {}) {
           {/* Scan */}
           <Link href="/scan" onClick={handleTabPress} className="flex items-center justify-center w-12 h-12 active:scale-90 transition-all" style={{ color: getColor(isScan) }}>
             <ScanLine className="w-[25px] h-[25px]" strokeWidth={2.2} />
-          </Link>
-
-          {/* Profile */}
-          <Link href="/profile" onClick={handleTabPress} className="flex items-center justify-center w-12 h-12 active:scale-90 transition-all" style={{ color: getColor(isProfile) }}>
-            <User className="w-[25px] h-[25px]" strokeWidth={2.2} />
           </Link>
 
         </div>

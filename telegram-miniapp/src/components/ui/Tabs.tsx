@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface TabsProps {
   tabs: string[];
@@ -10,7 +11,9 @@ interface TabsProps {
   isDark?: boolean;
 }
 
-export default function Tabs({ tabs, activeTab, onChange, isScrolled = false, isDark = false }: TabsProps) {
+export default function Tabs({ tabs, activeTab, onChange, isScrolled = false, isDark: isDarkProp }: TabsProps) {
+  const { isDark: themeIsDark } = useTheme();
+  const isDark = isDarkProp ?? themeIsDark;
   return (
     <nav
       className={`flex w-full pt-2 px-0 transition-colors duration-500 ${isDark ? 'bg-transparent' : 'bg-white'}`}
