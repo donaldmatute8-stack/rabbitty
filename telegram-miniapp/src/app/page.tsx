@@ -1,11 +1,10 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { ScanLine, Bell } from 'lucide-react';
 import Link from 'next/link';
 import BottomNav from '@/components/BottomNav';
-import Header from '@/components/ui/Header';
 import Tabs from '@/components/ui/Tabs';
 import FeedCard from '@/components/ui/FeedCard';
 import EmptyState from '@/components/ui/EmptyState';
@@ -198,44 +197,91 @@ export default function FeedPage() {
     });
   }, [posts, userLat, userLng]);
 
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        if (activeTab === "bunz'in" || activeTab === 'Freehands') {
-          const res = await fetch('/api/feed');
-          const data = await res.json();
-          if (data.success) {
-            setPosts(data.data);
-          }
-        } else if (activeTab === 'Stock') {
-          const res = await fetch('/api/offers');
-          const { success, offers: o } = await res.json();
-          if (success) setOffers(o);
+  const [showMinimalHeader, setShowMinimalHeader] = useState(false);
+  const lastTopScrollY = useRef(0);
+  const topDeltaAcc = useRef(0);
+
+  const fetchFeedData = useCallback(async () => {
+    setLoading(true);
+    try {
+      if (activeTab === "bunz'in" || activeTab === 'Freehands') {
+        const res = await fetch('/api/feed');
+        const data = await res.json();
+        if (data.success) {
+          setPosts(data.data);
         }
-      } catch (err) {
-        console.error('[Feed] data fetch error:', err);
-      } finally {
-        setLoading(false);
+      } else if (activeTab === 'Stock') {
+        const res = await fetch('/api/offers');
+        const { success, offers: o } = await res.json();
+        if (success) setOffers(o);
       }
-    };
-    loadData();
+    } catch (err) {
+      console.error('[Feed] data fetch error:', err);
+    } finally {
+      setLoading(false);
+    }
   }, [activeTab]);
+
+  useEffect(() => {
+    fetchFeedData();
+  }, [fetchFeedData]);
+
+  useEffect(() => {
+    const handleRefresh = () => {
+      fetchFeedData();
+    };
+    window.addEventListener('rabbitty:refresh-feed', handleRefresh);
+    return () => window.removeEventListener('rabbitty:refresh-feed', handleRefresh);
+  }, [fetchFeedData]);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentY = window.scrollY || document.documentElement.scrollTop || 0;
+      const diff = currentY - lastTopScrollY.current;
+
+      // Si estamos muy arriba (en la zona del header inicial o tarjeta), ocultar la barra minimalista flotante
+      if (currentY < 90) {
+        setShowMinimalHeader(false);
+        topDeltaAcc.current = 0;
+        lastTopScrollY.current = currentY;
+        return;
+      }
+
+      // Si hacemos scroll hacia abajo -> que todo permanezca oculto
+      if (diff > 8) {
+        topDeltaAcc.current += diff;
+        if (topDeltaAcc.current > 20) {
+          setShowMinimalHeader(false);
+          topDeltaAcc.current = 0;
+        }
+      } else if (diff < -8) {
+        // Si hacemos scroll hacia arriba -> mostrar la barra minimalista ajustada
+        topDeltaAcc.current = 0;
+        setShowMinimalHeader(true);
+      }
+
+      lastTopScrollY.current = currentY;
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   return (
     <div
       className="page-wrap pb-16"
       style={{ background: isDark ? 'var(--bg-primary)' : '#FAFAFA', color: isDark ? '#fff' : '#111', transition: 'background 0.5s' }}
     >
-      {/* Sticky header */}
-      <div className="sticky top-0 z-[60]" style={{
-        background: isDark ? 'rgba(0,0,0,0.9)' : '#fff',
-        backdropFilter: isDark ? 'blur(20px)' : 'none',
-        borderBottom: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid #F0F0F0',
-        transition: 'all 0.3s',
-        paddingTop: 'var(--safe-top, 0px)',
-      }}>
-        {/* Nuevo Custom Header (Buenos días, Bunz) */}
+      {/* HEADER COMPLETO INICIAL: Se desplaza naturalmente con el scroll (ya no está fixed/sticky constante) */}
+      <div
+        className="w-full relative z-[40]"
+        style={{
+          background: isDark ? 'rgba(0,0,0,0.95)' : '#fff',
+          borderBottom: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid #F0F0F0',
+          paddingTop: 'var(--safe-top, 0px)',
+        }}
+      >
+        {/* Fila Perfil / Saludo + Bunz + Bell + Scan */}
         <div className="flex items-center justify-between px-5 pt-2 pb-2">
           <Link href="/profile" className="flex items-center gap-3 no-underline">
             <div className="w-11 h-11 rounded-full overflow-hidden" style={{ background: isDark ? '#1A1A2E' : '#F0F0F0', border: isDark ? '1px solid rgba(255,255,255,0.1)' : 'none' }}>
@@ -260,7 +306,6 @@ export default function FeedPage() {
               style={{ background: isDark ? 'rgba(255,255,255,0.05)' : '#fff', border: isDark ? '1px solid rgba(255,255,255,0.05)' : '1px solid #F0F0F0' }}
             >
               <Bell size={18} color={isDark ? '#fff' : '#111'} strokeWidth={2.5} />
-              {/* Unread indicator dot */}
               <div className="absolute top-2 right-[9px] w-[6px] h-[6px] bg-[#E91E63] rounded-full" style={{ border: `1.5px solid ${isDark ? '#000' : '#fff'}` }} />
             </Link>
 
@@ -288,6 +333,74 @@ export default function FeedPage() {
           }} 
           isDark={isDark} 
         />
+      </div>
+
+      {/* NAVBAR SUPERIOR MINIMALISTA FLOTANTE (ESTILO FACEBOOK):
+          Aparece solo al hacer scroll hacia arriba y permanece oculto al bajar */}
+      <div
+        className="fixed top-0 left-0 right-0 z-[80] transition-all duration-300 ease-out select-none"
+        style={{
+          transform: showMinimalHeader ? 'translateY(0)' : 'translateY(-110%)',
+          background: isDark ? 'rgba(10, 10, 14, 0.88)' : 'rgba(255, 255, 255, 0.94)',
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
+          borderBottom: isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid rgba(0, 0, 0, 0.06)',
+          paddingTop: 'var(--safe-top, 0px)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
+        }}
+      >
+        <div className="flex items-center justify-between max-w-[600px] mx-auto px-4 py-2">
+          {/* 3/4 Horizontal: Los 3 menús compactos (bunz'in, Stock, Freehands) */}
+          <div className="flex items-center gap-1.5 w-[75%] pr-2">
+            {TABS.map((tab) => {
+              const isActive = activeTab === tab;
+              return (
+                <button
+                  key={tab}
+                  onClick={() => {
+                    PlatformBridge.hapticFeedback('light');
+                    setActiveTab(tab);
+                  }}
+                  className="relative py-1.5 px-2.5 rounded-full text-[13px] font-bold tracking-tight transition-all active:scale-95 whitespace-nowrap"
+                  style={{
+                    background: isActive ? 'rgba(233, 30, 99, 0.18)' : 'transparent',
+                    color: isActive ? '#E91E63' : (isDark ? 'rgba(255,255,255,0.6)' : '#666'),
+                    border: isActive ? '1px solid rgba(233, 30, 99, 0.35)' : '1px solid transparent',
+                  }}
+                >
+                  {tab}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* 1/4 Horizontal: Iconos de Notificaciones + Mini Conejo Scan */}
+          <div className="flex items-center justify-end gap-2 w-[25%]">
+            <Link 
+              href="/notifications" 
+              onClick={() => PlatformBridge.hapticFeedback('light')}
+              className="relative w-8 h-8 rounded-full flex items-center justify-center active:scale-95 transition-transform" 
+              style={{ background: isDark ? 'rgba(255,255,255,0.08)' : '#F0F0F0' }}
+            >
+              <Bell size={16} color={isDark ? '#fff' : '#111'} strokeWidth={2.3} />
+              <div className="absolute top-1.5 right-[7px] w-[5px] h-[5px] bg-[#E91E63] rounded-full" />
+            </Link>
+
+            <Link 
+              href="/scan" 
+              onClick={() => PlatformBridge.hapticFeedback('medium')}
+              className="w-8 h-8 rounded-full flex items-center justify-center active:scale-95 transition-transform" 
+              style={{ background: isDark ? 'rgba(255,255,255,0.08)' : '#F0F0F0' }}
+            >
+              <img 
+                src="/logo_conejo.png" 
+                alt="Scan" 
+                className="w-3.5 h-4 object-contain"
+                style={{ filter: isDark ? 'grayscale(100%) brightness(10)' : 'grayscale(100%) brightness(0)' }} 
+              />
+            </Link>
+          </div>
+        </div>
       </div>
 
       <main className="flex-1 w-full max-w-[600px] mx-auto" style={{ paddingLeft: isDark ? 0 : 16, paddingRight: isDark ? 0 : 16 }}>

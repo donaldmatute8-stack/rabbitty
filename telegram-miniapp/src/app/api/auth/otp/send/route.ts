@@ -178,17 +178,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const maskedEmail = email.replace(/^(.)(.*)(@.*)$/, (_, first, middle, domain) => `${first}***${domain}`);
+
     return NextResponse.json({
       success: true,
       mode,
       target: rawInput,
-      resolvedEmail: email,
+      resolvedEmail: maskedEmail,
       channel: deliveryChannel,
       otpCode: isDev ? code : undefined,
       message: deliveryChannel === 'telegram'
         ? `Enviamos un código de 6 dígitos a tu Telegram vinculado`
         : mode === 'phone'
-          ? `Enviamos un código de 6 dígitos al correo asociado a ${rawInput}`
+          ? `Enviamos un código de 6 dígitos a tu correo vinculado (${maskedEmail})`
           : `Enviamos un código de 6 dígitos a ${email}`,
     });
   } catch (error) {

@@ -213,9 +213,13 @@ export default function PhoneAuthFlow({ mode, onBack }: PhoneAuthFlowProps) {
         }
         setStep('otp');
         setMessage(
-          data.mode === 'phone'
-            ? `Enviamos un código de 6 dígitos a tu celular ${recipient}`
-            : `Enviamos un código de 6 dígitos a ${recipient}`
+          data.message || (
+            data.channel === 'email' && data.mode === 'phone'
+              ? `Enviamos un código de 6 dígitos a tu correo vinculado`
+              : data.mode === 'phone'
+                ? `Enviamos un código de 6 dígitos a tu celular ${recipient}`
+                : `Enviamos un código de 6 dígitos a ${recipient}`
+          )
         );
         await PlatformBridge.hapticFeedback('medium');
       } else {
