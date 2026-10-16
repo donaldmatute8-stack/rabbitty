@@ -290,24 +290,48 @@ export default function FeedPage() {
           paddingTop: 'var(--safe-top, 0px)',
         }}
       >
-        {/* Fila Perfil / Saludo + Bunz + Bell + Scan */}
+        {/* Fila Perfil / Saludo + Bunz + Bell + Scan (o Flecha de volver en modo Freehands) */}
         <div className="flex items-center justify-between px-5 pt-2 pb-2">
-          <button
-            type="button"
-            onClick={() => {
-              PlatformBridge.hapticFeedback('light');
-              setDrawerOpen(true);
-            }}
-            className="flex items-center gap-3 bg-transparent border-none cursor-pointer p-0 text-left active:scale-[0.98] transition-transform"
-          >
-            <div className="w-11 h-11 rounded-full overflow-hidden" style={{ background: 'var(--bg-pressed)', border: '1px solid var(--border-subtle)' }}>
-              <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${user?.firstName || 'Rabbitty'}&backgroundColor=E91E63`} alt={user?.firstName || 'User'} className="w-full h-full" />
+          {activeTab === 'Freehands' ? (
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  PlatformBridge.hapticFeedback('light');
+                  setActiveTab("bunz'in");
+                }}
+                className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
+                style={{ background: 'var(--bg-pressed)', color: 'var(--text-primary)' }}
+                aria-label="Volver al feed"
+              >
+                <svg width="10" height="18" viewBox="0 0 10 18" fill="none">
+                  <path d="M9 1L1 9L9 17" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-[1.5px] text-[#E91E63] block">Explorar Mapa</span>
+                <h1 className="text-[17px] font-black m-0 leading-tight" style={{ color: 'var(--text-primary)' }}>Freehands</h1>
+              </div>
             </div>
-            <div>
-              <p className="text-[11px] font-extrabold uppercase tracking-[0.5px] mb-[2px]" style={{ color: 'var(--text-muted)' }}>{greeting}</p>
-              <h1 className="text-[19px] font-black tracking-[-0.5px] m-0" style={{ color: 'var(--text-primary)' }}>{user?.firstName || 'Explorador'}</h1>
-            </div>
-          </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                PlatformBridge.hapticFeedback('light');
+                setDrawerOpen(true);
+              }}
+              className="flex items-center gap-3 bg-transparent border-none cursor-pointer p-0 text-left active:scale-[0.98] transition-transform"
+            >
+              <div className="w-11 h-11 rounded-full overflow-hidden" style={{ background: 'var(--bg-pressed)', border: '1px solid var(--border-subtle)' }}>
+                <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${user?.firstName || 'Rabbitty'}&backgroundColor=E91E63`} alt={user?.firstName || 'User'} className="w-full h-full" />
+              </div>
+              <div>
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.5px] mb-[2px]" style={{ color: 'var(--text-muted)' }}>{greeting}</p>
+                <h1 className="text-[19px] font-black tracking-[-0.5px] m-0" style={{ color: 'var(--text-primary)' }}>{user?.firstName || 'Explorador'}</h1>
+              </div>
+            </button>
+          )}
+
           <div className="flex items-center gap-2.5">
             <div className="px-3 py-[6px] rounded-full flex items-baseline gap-1" style={{ background: 'var(--bg-pressed)', border: '1px solid var(--border-subtle)' }}>
               <span className="text-[15px] font-black" style={{ color: 'var(--text-primary)' }}>{bunzBalance.toLocaleString()}</span>
@@ -340,19 +364,23 @@ export default function FeedPage() {
             </Link>
           </div>
         </div>
-        <Tabs 
-          tabs={TABS} 
-          activeTab={activeTab} 
-          onChange={(tab) => {
-            PlatformBridge.hapticFeedback('light');
-            setActiveTab(tab);
-          }} 
-          isDark={isDark} 
-        />
+
+        {activeTab !== 'Freehands' && (
+          <Tabs 
+            tabs={TABS} 
+            activeTab={activeTab} 
+            onChange={(tab) => {
+              PlatformBridge.hapticFeedback('light');
+              setActiveTab(tab);
+            }} 
+            isDark={isDark} 
+          />
+        )}
       </div>
 
       {/* NAVBAR SUPERIOR MINIMALISTA FLOTANTE (ESTILO FACEBOOK):
           Aparece solo al hacer scroll hacia arriba y permanece oculto al bajar */}
+      {activeTab !== 'Freehands' && (
       <div
         className="fixed top-0 left-0 right-0 z-[80] transition-all duration-300 ease-out select-none"
         style={{
@@ -418,6 +446,7 @@ export default function FeedPage() {
           </div>
         </div>
       </div>
+      )}
 
       <main className="flex-1 w-full max-w-[600px] mx-auto" style={{ paddingLeft: isDark ? 0 : 16, paddingRight: isDark ? 0 : 16 }}>
         <div className="pt-4">
@@ -568,7 +597,7 @@ export default function FeedPage() {
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }}
               className="fixed left-0 right-0 bottom-0 z-10 overflow-hidden bg-black"
-              style={{ top: 'calc(max(var(--safe-top, 0px), 8px) + 104px)' }}
+              style={{ top: 'calc(max(var(--safe-top, 0px), 8px) + 56px)' }}
             >
               {/* Holographic Toggle */}
               <div 
@@ -626,7 +655,7 @@ export default function FeedPage() {
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
       `}} />
 
-      <BottomNav isDark={isDark} />
+      {activeTab !== 'Freehands' && <BottomNav isDark={isDark} />}
       <ProfileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </div>
   );

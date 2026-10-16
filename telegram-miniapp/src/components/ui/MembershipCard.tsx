@@ -61,21 +61,21 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
         {/* Top Header inside Card */}
         <div className="flex items-center justify-between mb-4 relative z-10">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-black/40 border border-white/10 flex items-center justify-center p-1 backdrop-blur-md">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center p-1 backdrop-blur-md ${isDark ? 'bg-black/40 border border-white/10' : 'bg-pink-500/10 border border-pink-500/20'}`}>
               <img src="/logo_conejo.png" alt="Rabbitty" className="w-full h-full object-contain filter drop-shadow-[0_0_8px_rgba(233,30,99,0.8)]" />
             </div>
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] font-black uppercase tracking-[1.5px] text-[#E91E63]">RABBITTY PASS</span>
-                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-white/10 text-white/80 border border-white/10">
+                <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${isDark ? 'bg-white/10 text-white/80 border border-white/10' : 'bg-slate-900/5 text-slate-800 border border-slate-900/10'}`}>
                   Lvl. {levelName}
                 </span>
               </div>
-              <p className="text-xs font-bold text-white/50 m-0 leading-tight">{username}</p>
+              <p className={`text-xs font-bold m-0 leading-tight ${isDark ? 'text-white/50' : 'text-slate-500'}`}>{username}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1 text-[11px] font-extrabold text-[#E91E63] bg-[#E91E63]/10 px-2.5 py-1 rounded-full border border-[#E91E63]/25">
+          <div className={`flex items-center gap-1 text-[11px] font-extrabold text-[#E91E63] px-2.5 py-1 rounded-full border ${isDark ? 'bg-[#E91E63]/10 border-[#E91E63]/25' : 'bg-[#E91E63]/15 border-[#E91E63]/30'}`}>
             <Sparkles size={12} />
             <span>Digital Club</span>
           </div>
@@ -83,9 +83,9 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
 
         {/* Middle: Bunz Balance Display */}
         <div className="my-2 relative z-10">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-white/45 block mb-0.5">Saldo acumulado</span>
+          <span className={`text-[11px] font-bold uppercase tracking-wider block mb-0.5 ${isDark ? 'text-white/45' : 'text-slate-500'}`}>Saldo acumulado</span>
           <div className="flex items-baseline gap-2">
-            <span className="text-4xl font-black text-white tracking-tight">
+            <span className={`text-4xl font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
               {bunzBalance.toLocaleString()}
             </span>
             <span className="text-lg font-black text-[#E91E63] tracking-wide">BUNZ</span>
@@ -93,15 +93,15 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
         </div>
 
         {/* Bottom Bar: Member info and CTA to show barcode */}
-        <div className="flex items-center justify-between pt-3 border-t border-white/10 relative z-10 mt-3">
+        <div className={`flex items-center justify-between pt-3 border-t relative z-10 mt-3 ${isDark ? 'border-white/10' : 'border-slate-200'}`}>
           <div className="truncate max-w-[200px]">
-            <p className="text-[13px] font-extrabold text-white truncate m-0">{memberName}</p>
-            <p className="text-[10px] text-white/40 font-mono m-0">ID: {String(qrIdentifier).slice(0, 14)}...</p>
+            <p className={`text-[13px] font-extrabold truncate m-0 ${isDark ? 'text-white' : 'text-slate-900'}`}>{memberName}</p>
+            <p className={`text-[10px] font-mono m-0 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>ID: {String(qrIdentifier).slice(0, 14)}...</p>
           </div>
 
           <button
             type="button"
-            className="flex items-center gap-1.5 bg-[#E91E63] hover:bg-[#D81B60] active:scale-95 text-white text-xs font-black px-3.5 py-2 rounded-full shadow-[0_4px_14px_rgba(233,30,99,0.4)] transition-all cursor-pointer border-none"
+            className="flex items-center gap-1.5 bg-[#E91E63] hover:bg-[#D81B60] active:scale-95 text-white text-xs font-black px-3.5 py-2 rounded-full shadow-[0_4px_14px_rgba(233,30,99,0.35)] transition-all cursor-pointer border-none"
           >
             <QrCode size={14} />
             <span>Ver QR</span>

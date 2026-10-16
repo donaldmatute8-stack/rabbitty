@@ -1,8 +1,19 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { messages, conversations } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { messages, conversations, ownedBusinesses } from '@/db/schema';
+import { and, desc, eq, gte } from 'drizzle-orm';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
+import {
+  getOwnedBusinessIds,
+  resolveConversationAccess,
+  resolveTelegramRecipient,
+  notifyChatRecipient,
+  isBusinessOpen,
+  formatBusinessHours,
+} from '@/lib/chat';
+import { generateBunzyReply } from '@/lib/bunzy';
+
+const AUTO_REPLY_WINDOW_MS = 6 * 60 * 60 * 1000;
 
 export async function POST(req: Request) {
   try {
@@ -11,106 +22,128 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
-    const { conversationId, targetId, content } = await req.json();
+    const body = (await req.json()) as {
+      conversationId?: string;
+      targetId?: string;
+      content?: string;
+      lat?: number | null;
+      lng?: number | null;
+    };
 
-    if (!conversationId || !content) {
+    const content = (body.content || '').trim();
+    if (!body.conversationId || !content) {
       return NextResponse.json({ error: 'Faltan parámetros' }, { status: 400 });
     }
 
     const conversation = await db.query.conversations.findFirst({
-      where: eq(conversations.id, conversationId),
+      where: eq(conversations.id, body.conversationId),
     });
-
     if (!conversation) {
       return NextResponse.json({ error: 'Conversación no encontrada' }, { status: 404 });
     }
 
-    if (conversation.participant1 !== caller.id && conversation.participant2 !== caller.id) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+    const businessIds = await getOwnedBusinessIds(caller.id);
+    const access = resolveConversationAccess(conversation, caller.id, businessIds);
+    if (!access) {
+      return NextResponse.json({ error: 'Sin acceso a esta conversación' }, { status: 403 });
     }
 
-    const senderId = caller.id;
+    const senderId = access.myParticipantId;
+    const otherId = access.otherParticipantId;
+    const now = new Date();
 
-    // 1. Guardar el mensaje del usuario
-    const [userMessage] = await db.insert(messages).values({
-      conversationId,
-      senderId,
-      content,
-    }).returning();
+    const [userMessage] = await db
+      .insert(messages)
+      .values({ conversationId: conversation.id, senderId, content, type: 'TEXT' })
+      .returning();
 
-    let botResponse = null;
+    await db
+      .update(conversations)
+      .set({ lastMessageAt: now, updatedAt: now })
+      .where(eq(conversations.id, conversation.id))
+      .catch(() => {});
 
-    // 2. Si el target es el BOT, procesamos con Ollama
-    if (targetId === 'bot') {
-      // Obtener el historial reciente para dar contexto al LLM
-      const history = await db.query.messages.findMany({
-        where: eq(messages.conversationId, conversationId),
-        orderBy: (messages, { asc }) => [asc(messages.createdAt)],
-        limit: 10 // últimos 10 mensajes
+    if (otherId === 'bot') {
+      const reply = await generateBunzyReply({
+        userId: caller.id,
+        conversationId: conversation.id,
+        content,
+        lat: body.lat ?? null,
+        lng: body.lng ?? null,
       });
 
-      // Formatear para Ollama (formato estándar OpenAI chat completions si es compatible, o nativo de Ollama)
-      // Asumimos API compatible con OpenAI para facilidad, o API nativa de Ollama
-      const OLLAMA_URL = process.env.OLLAMA_API_URL || 'http://localhost:11434/api/chat';
-      const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5:7b';
-      const OLLAMA_KEY = process.env.OLLAMA_API_KEY || '';
+      const [botMessage] = await db
+        .insert(messages)
+        .values({
+          conversationId: conversation.id,
+          senderId: 'bot',
+          content: reply.content,
+          type: reply.type,
+          metadata: reply.metadata,
+        })
+        .returning();
 
-      const messagesForOllama = [
-        { role: 'system', content: 'Eres Bunzy 🐰, el concierge inteligente, carismático y astuto de Rabbitty. Tienes una personalidad urbana, amigable y conocedora de los mejores spots (restaurantes, cafés, bares, fitness y tiendas). Hablas en español mexicano moderno y relajado ("¡Qué onda!", "¡De lujo!"). Ayudas a los usuarios a descubrir comercios, entender cómo acumular y canjear bunz (siempre escribe "bunz" en minúscula) y subir de nivel en su madriguera con hops. Si te preguntan qué comer o a dónde ir, recomiéndales explorar la sección de comercios afiliados y activar sus recompensas escaneando el Rabbitty QR.' },
-        ...history.map((msg) => ({
-          role: msg.senderId === 'bot' ? 'assistant' : 'user',
-          content: msg.content
-        }))
-      ];
+      await db
+        .update(conversations)
+        .set({ lastMessageAt: new Date(), updatedAt: new Date() })
+        .where(eq(conversations.id, conversation.id))
+        .catch(() => {});
 
-      const timeoutMs = Number(process.env.OLLAMA_TIMEOUT_MS) || 25000;
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-      let botText: string | null = null;
-
-      try {
-        const ollamaRes = await fetch(OLLAMA_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(OLLAMA_KEY ? { 'Authorization': `Bearer ${OLLAMA_KEY}` } : {})
-          },
-          body: JSON.stringify({
-            model: OLLAMA_MODEL,
-            messages: messagesForOllama,
-            stream: false
-          }),
-          signal: controller.signal
-        });
-
-        if (ollamaRes.ok) {
-          const data = await ollamaRes.json();
-          botText = data.message?.content?.trim() || null;
-        } else {
-          console.error("Ollama API Error:", await ollamaRes.text());
-        }
-      } catch (ollamaErr) {
-        console.error('Error conectando a Ollama:', ollamaErr);
-      } finally {
-        clearTimeout(timeout);
-      }
-
-      // Fallback: si Ollama falla o expira, Bunzy igual responde para no dejar el hilo mudo
-      const [newBotResponse] = await db.insert(messages).values({
-        conversationId,
-        senderId: 'bot',
-        content: botText || '¡Qué onda! Se me cruzaron los cables un momento 🐰⚡. Intenta de nuevo en un ratito.'
-      }).returning();
-      botResponse = newBotResponse;
+      return NextResponse.json({ success: true, message: userMessage, botResponse: botMessage, suggestions: reply.suggestions });
     }
 
-    return NextResponse.json({ 
-      success: true, 
-      message: userMessage,
-      botResponse 
+    const senderName = (await resolveTelegramRecipient(senderId)).displayName;
+    const recipient = await resolveTelegramRecipient(otherId);
+
+    let autoReply: typeof messages.$inferSelect | null = null;
+
+    const otherBusiness = await db.query.ownedBusinesses
+      .findFirst({ where: eq(ownedBusinesses.id, otherId) })
+      .catch(() => undefined);
+
+    if (otherBusiness && !access.isBusinessInbox && !isBusinessOpen(otherBusiness)) {
+      const recentAutoReply = await db.query.messages
+        .findFirst({
+          where: and(
+            eq(messages.conversationId, conversation.id),
+            eq(messages.type, 'AUTO_REPLY'),
+            gte(messages.createdAt, new Date(now.getTime() - AUTO_REPLY_WINDOW_MS)),
+          ),
+          orderBy: [desc(messages.createdAt)],
+        })
+        .catch(() => undefined);
+
+      if (!recentAutoReply) {
+        const autoContent =
+          `¡Gracias por escribir a ${otherBusiness.name}! 🐰 En este momento estamos fuera de horario ` +
+          `(${formatBusinessHours(otherBusiness)}). Te responderemos en cuanto abramos. Mientras tanto, ` +
+          `puedes explorar sus recompensas en Rabbitty.`;
+        const [inserted] = await db
+          .insert(messages)
+          .values({
+            conversationId: conversation.id,
+            senderId: otherId,
+            content: autoContent,
+            type: 'AUTO_REPLY',
+          })
+          .returning();
+        autoReply = inserted;
+        await db
+          .update(conversations)
+          .set({ lastMessageAt: new Date(), updatedAt: new Date() })
+          .where(eq(conversations.id, conversation.id))
+          .catch(() => {});
+      }
+    }
+
+    await notifyChatRecipient({
+      recipientUserId: recipient.userId,
+      recipientTelegramId: recipient.telegramId,
+      senderName,
+      preview: content,
     });
 
+    return NextResponse.json({ success: true, message: userMessage, autoReply, suggestions: [] });
   } catch (error) {
     console.error('Chat send error:', error);
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });

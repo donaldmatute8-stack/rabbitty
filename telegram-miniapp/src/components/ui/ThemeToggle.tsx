@@ -17,8 +17,8 @@ export default function ThemeToggle() {
     <div
       role="radiogroup"
       aria-label="Tema de la aplicación"
-      className="flex items-center gap-1 p-1 rounded-[14px]"
-      style={{ background: 'var(--bg-pressed)', border: '1px solid var(--border-subtle)' }}
+      className="flex items-center gap-1 p-0.5 rounded-xl"
+      style={{ background: 'transparent', border: '1px solid var(--border-subtle)' }}
     >
       {OPTIONS.map(({ value, label, Icon }) => {
         const isActive = theme === value;
@@ -32,14 +32,14 @@ export default function ThemeToggle() {
               PlatformBridge.hapticFeedback('light');
               setTheme(value);
             }}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-[11px] text-[13px] font-bold transition-all active:scale-[0.97] cursor-pointer border-none"
+            className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[12px] font-bold transition-all active:scale-[0.97] cursor-pointer border-none"
             style={{
               background: isActive ? 'var(--bg-elevated)' : 'transparent',
               color: isActive ? 'var(--text-primary)' : 'var(--text-muted)',
               boxShadow: isActive ? 'var(--shadow-sm)' : 'none',
             }}
           >
-            <Icon size={15} strokeWidth={2.4} color={isActive ? '#E91E63' : 'currentColor'} />
+            <Icon size={13} strokeWidth={2.4} color={isActive ? '#E91E63' : 'currentColor'} />
             <span>{label}</span>
           </button>
         );

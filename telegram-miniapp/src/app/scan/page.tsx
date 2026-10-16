@@ -230,14 +230,8 @@ export default function ScanPage() {
         </div>
       </div>
 
-      {/* Persistent qr-reader container in DOM to prevent lifecycle unmount crash */}
-      <div 
-        id="qr-reader" 
-        className={`absolute inset-0 w-full h-full object-cover [&>video]:object-cover [&>video]:w-full [&>video]:h-full [&_#qr-shaded-region]:hidden ${activeTab === 'scan' && hasCamera && !showManualInput ? 'block' : 'hidden'}`} 
-      />
-
-      {/* Main Content Area with generous vertical breathing room */}
-      <div className="relative flex-1 w-full flex flex-col items-center justify-center z-10 px-4 py-6">
+      {/* Main Content Area */}
+      <div className="relative flex-1 w-full flex flex-col items-center justify-center z-10 px-4 py-4">
 
         {/* My Code tab - Official Rabbitty Code Hologram */}
         {activeTab === 'my-code' && (
@@ -267,29 +261,44 @@ export default function ScanPage() {
 
         {/* Camera scan tab */}
         {activeTab === 'scan' && (
-          <div className="flex-1 w-full flex flex-col items-center justify-center relative">
-            <div className="absolute inset-0 bg-black/45 z-0" />
+          <div className="w-full flex flex-col items-center justify-center relative">
 
-            {/* QR Frame - Neon Target */}
-            <div className="relative z-10 w-[240px] h-[240px] mb-6">
-              <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="w-full h-full relative">
+            {/* QR Viewfinder Container: Camera Video is rendered strictly INSIDE this frame */}
+            <div className="relative w-[280px] h-[280px] rounded-[28px] overflow-hidden bg-black/90 border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.8)] mb-6 flex items-center justify-center">
+              
+              {/* Persistent qr-reader container in DOM strictly contained inside the viewfinder */}
+              <div 
+                id="qr-reader" 
+                className={`absolute inset-0 w-full h-full [&>video]:object-cover [&>video]:w-full [&>video]:h-full [&_#qr-shaded-region]:hidden ${hasCamera && !showManualInput ? 'block' : 'hidden'}`} 
+              />
+
+              {/* Neon Corners Overlay */}
+              <div className="absolute inset-0 pointer-events-none z-20">
                 {[['top','left'],['top','right'],['bottom','left'],['bottom','right']].map(([v,h]) => (
                   <div key={`${v}${h}`} style={{
-                    position: 'absolute', [v]: 0, [h]: 0, width: 32, height: 32,
+                    position: 'absolute', [v]: 8, [h]: 8, width: 32, height: 32,
                     borderTop: v === 'top' ? '3.5px solid #E91E63' : 'none',
                     borderBottom: v === 'bottom' ? '3.5px solid #E91E63' : 'none',
                     borderLeft: h === 'left' ? '3.5px solid #E91E63' : 'none',
                     borderRight: h === 'right' ? '3.5px solid #E91E63' : 'none',
-                    borderRadius: v==='top'&&h==='left'?'12px 0 0 0':v==='top'&&h==='right'?'0 12px 0 0':v==='bottom'&&h==='left'?'0 0 0 12px':'0 0 12px 0',
-                    boxShadow: `${h==='left'?'-':''}2px ${v==='top'?'-':''}2px 12px rgba(233,30,99,0.5)`,
+                    borderRadius: v==='top'&&h==='left'?'10px 0 0 0':v==='top'&&h==='right'?'0 10px 0 0':v==='bottom'&&h==='left'?'0 0 0 10px':'0 0 10px 0',
+                    boxShadow: `${h==='left'?'-':''}2px ${v==='top'?'-':''}2px 14px rgba(233,30,99,0.7)`,
                   }} />
                 ))}
+
+                {/* Laser animation inside frame */}
                 <motion.div
-                  animate={{ top: ['2%', '96%', '2%'] }}
+                  animate={{ top: ['4%', '94%', '4%'] }}
                   transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
-                  className="absolute left-1 right-1 h-0.5 bg-[#E91E63] shadow-[0_0_14px_#E91E63]"
+                  className="absolute left-3 right-3 h-0.5 bg-[#E91E63] shadow-[0_0_14px_#E91E63]"
                 />
-              </motion.div>
+              </div>
+
+              {!hasCamera && (
+                <div className="z-30 text-center p-4">
+                  <p className="text-xs text-white/50">Cámara no disponible o permiso denegado</p>
+                </div>
+              )}
             </div>
 
             <p className="text-center text-[13px] text-white/60 z-10 px-8 pointer-events-none mb-6">
