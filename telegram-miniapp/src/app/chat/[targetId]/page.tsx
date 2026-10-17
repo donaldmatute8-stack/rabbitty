@@ -5,8 +5,11 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { PlatformBridge } from '@/lib/platform';
+import { useTheme } from '@/contexts/ThemeContext';
+import { BottomSheet } from '@/components/ui/BottomSheet';
 
 interface BusinessCard {
+  kind?: 'BUSINESS';
   businessId: string;
   businessName: string;
   category?: string;
@@ -14,7 +17,39 @@ interface BusinessCard {
   rewardPercentage?: number;
   acceptsBunz?: boolean;
   logoUrl?: string | null;
+  lat?: number;
+  lng?: number;
 }
+
+interface BusinessOption {
+  businessId: string;
+  businessName: string;
+  category?: string;
+  address?: string;
+  distanceKm?: number | null;
+  openNow?: boolean | null;
+  rewardPercentage?: number;
+  acceptsBunz?: boolean;
+  logoUrl?: string | null;
+  lat?: number;
+  lng?: number;
+}
+
+interface OrderDraft {
+  kind?: 'ORDER';
+  orderId?: string;
+  businessId: string;
+  businessName: string;
+  items: string[];
+  notes?: string;
+  status?: string;
+}
+
+type MessageMetadata =
+  | BusinessCard
+  | { kind: 'OPTIONS'; options: BusinessOption[] }
+  | OrderDraft
+  | { kind: 'LOCATION'; lat: number; lng: number; label?: string };
 
 type Message = {
   id: string;
@@ -22,7 +57,7 @@ type Message = {
   content: string;
   createdAt: string;
   type?: string;
-  metadata?: BusinessCard | null;
+  metadata?: MessageMetadata | null;
   readAt?: string | null;
 };
 
@@ -48,6 +83,19 @@ interface SendResponse {
 
 const BUSINESS_TEMPLATES = ['¿A qué hora abren?', '📍 Ubicación exacta', 'Ver menú', '¿Tienen lugar?'];
 const TYPING_WINDOW_MS = 5000;
+
+function previewMapTileUrl(lat: number, lng: number, dark: boolean, zoom = 16): string {  const n = 2 ** zoom;
+  const x = Math.floor(((lng + 180) / 360) * n);
+  const latRad = (lat * Math.PI) / 180;
+  const y = Math.floor(((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n);
+  return dark
+    ? `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/${zoom}/${y}/${x}`
+    : `https://tile.openstreetmap.org/${zoom}/${x}/${y}.png`;
+}
+
+function cleanOrEmpty(text: string): string {
+  return text.replace(/\[COMERCIO_ACTION id="[^"]+" name="[^"]+"\]/g, '').trim();
+}
 
 function CheckTicks({ read }: { read: boolean }) {
   return (
@@ -76,6 +124,11 @@ export default function ChatRoomPage() {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showTyping, setShowTyping] = useState(false);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [orderTarget, setOrderTarget] = useState<{ businessId: string; businessName: string } | null>(null);
+  const [orderItems, setOrderItems] = useState('');
+  const [orderNotes, setOrderNotes] = useState('');
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const conversationIdRef = useRef<string | null>(null);
@@ -171,25 +224,36 @@ export default function ChatRoomPage() {
       .catch(() => {});
   };
 
-  const requestLocation = () => {
-    if (!navigator.geolocation) return;
+  const shareLocation = () => {
+    if (!navigator.geolocation || !conversationId) return;
+    PlatformBridge.hapticFeedback('light');
     navigator.geolocation.getCurrentPosition(
-      (pos) => setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      (pos) => {
+        const c = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setCoords(c);
+        sendMessage('📍 Ubicación compartida', c, 'LOCATION');
+      },
       () => {},
       { timeout: 6000 },
     );
   };
 
-  const sendMessage = async (raw: string, explicitCoords?: { lat: number; lng: number } | null) => {
+  const sendMessage = async (
+    raw: string,
+    explicitCoords?: { lat: number; lng: number } | null,
+    msgType?: string,
+  ) => {
     const content = raw.trim();
     if (!content || !conversationId || !user || sending) return;
 
-    if (/usar mi ubicacion|compartir ubicacion/i.test(content) && !coords && !explicitCoords && navigator.geolocation) {
+    const isLoc = msgType === 'LOCATION';
+
+    if (!isLoc && /usar mi ubicacion|compartir ubicacion/i.test(content) && !coords && !explicitCoords && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const newCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           setCoords(newCoords);
-          sendMessage('Usar mi ubicación', newCoords);
+          sendMessage('📍 Ubicación compartida', newCoords, 'LOCATION');
         },
         () => {
           // Si no dio permiso o falló, enviar de todos modos
@@ -211,7 +275,8 @@ export default function ChatRoomPage() {
       senderId: myParticipantId || user.id,
       content,
       createdAt: new Date().toISOString(),
-      type: 'TEXT',
+      type: isLoc ? 'LOCATION' : 'TEXT',
+      metadata: isLoc && explicitCoords ? { kind: 'LOCATION', lat: explicitCoords.lat, lng: explicitCoords.lng } : null,
     };
     setMessages((prev) => [...prev, optimistic]);
 
@@ -224,6 +289,7 @@ export default function ChatRoomPage() {
           conversationId,
           targetId,
           content,
+          type: isLoc ? 'LOCATION' : 'TEXT',
           lat: explicitCoords?.lat ?? coords?.lat ?? null,
           lng: explicitCoords?.lng ?? coords?.lng ?? null,
         }),
@@ -246,17 +312,232 @@ export default function ChatRoomPage() {
     }
   };
 
+  const submitOrder = async () => {
+    if (!orderTarget || !orderItems.trim() || sending) return;
+    setSending(true);
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch('/api/chat/order', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessId: orderTarget.businessId, items: orderItems, notes: orderNotes }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        PlatformBridge.hapticFeedback('success');
+        const target = orderTarget;
+        setOrderTarget(null);
+        setOrderItems('');
+        setOrderNotes('');
+        router.push(`/chat/${target.businessId}`);
+      }
+    } catch (err) {
+      console.error('Error enviando pedido', err);
+    } finally {
+      setSending(false);
+    }
+  };
+
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     sendMessage(input);
   };
 
-  const renderContent = (msg: Message) => {
-    const card: BusinessCard | null =
-      msg.metadata && typeof msg.metadata === 'object' && 'businessId' in msg.metadata ? msg.metadata : null;
-    const legacy = /\[COMERCIO_ACTION id="([^"]+)" name="([^"]+)"\]/.exec(msg.content);
-    const cleanText = msg.content.replace(/\[COMERCIO_ACTION id="[^"]+" name="[^"]+"\]/g, '').trim();
+  const openOrder = (opt: { businessId: string; businessName: string }) => {
+    PlatformBridge.hapticFeedback('medium');
+    setOrderItems('');
+    setOrderNotes('');
+    setOrderTarget(opt);
+  };
 
+  const renderBusinessCard = (target: { id: string; name: string; meta: BusinessCard | null }) => (
+    <div
+      style={{
+        marginTop: '10px',
+        borderRadius: '16px',
+        overflow: 'hidden',
+        border: '1px solid var(--border-subtle)',
+        background: 'var(--bg-pressed)',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px' }}>
+        <div
+          style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: '12px',
+            overflow: 'hidden',
+            flexShrink: 0,
+            background: '#E91E63',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {target.meta?.logoUrl ? (
+            <img src={target.meta.logoUrl} alt={target.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : (
+            <span style={{ fontSize: '18px' }}>🏪</span>
+          )}
+        </div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <p style={{ margin: 0, fontWeight: 800, fontSize: '14px', color: 'var(--text-primary)' }}>{target.name}</p>
+          {target.meta && (
+            <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>
+              {[target.meta.category, target.meta.address].filter(Boolean).join(' · ')}
+            </p>
+          )}
+          {target.meta?.rewardPercentage != null && (
+            <p style={{ margin: 0, fontSize: '12px', fontWeight: 700, color: '#E91E63' }}>
+              🎁 +{target.meta.rewardPercentage}% en bunz
+            </p>
+          )}
+        </div>
+      </div>
+      <div style={{ display: 'flex', borderTop: '1px solid var(--border-subtle)' }}>
+        <button
+          onClick={() => {
+            PlatformBridge.hapticFeedback('medium');
+            router.push(`/chat/${target.id}`);
+          }}
+          style={{ flex: 1, border: 'none', background: '#E91E63', color: '#FFF', fontWeight: 800, fontSize: '13px', padding: '11px', cursor: 'pointer' }}
+        >
+          💬 Chatear
+        </button>
+        {target.meta?.businessId && (
+          <button
+            onClick={() => openOrder({ businessId: target.id, businessName: target.name })}
+            style={{ flex: 1, border: 'none', borderLeft: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-primary)', fontWeight: 800, fontSize: '13px', padding: '11px', cursor: 'pointer' }}
+          >
+            🛒 Pedir
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderOptions = (options: BusinessOption[]) => (
+    <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      {options.map((o) => {
+        const metaLine = [
+          o.category,
+          o.distanceKm != null ? `${o.distanceKm.toFixed(1)} km` : null,
+          o.openNow === false ? 'Cerrado' : o.openNow === true ? 'Abierto' : null,
+          o.rewardPercentage != null ? `+${o.rewardPercentage}% bunz` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ');
+        return (
+          <div
+            key={o.businessId}
+            style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 10px', borderRadius: '14px', border: '1px solid var(--border-subtle)', background: 'var(--bg-pressed)' }}
+          >
+            <button
+              onClick={() => {
+                PlatformBridge.hapticFeedback('light');
+                router.push(`/chat/${o.businessId}`);
+              }}
+              style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}
+            >
+              <div style={{ width: '36px', height: '36px', borderRadius: '10px', overflow: 'hidden', flexShrink: 0, background: '#E91E63', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {o.logoUrl ? <img src={o.logoUrl} alt={o.businessName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: '16px' }}>🏪</span>}
+              </div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <p style={{ margin: 0, fontWeight: 800, fontSize: '13.5px', color: 'inherit' }}>{o.businessName}</p>
+                {metaLine && <p style={{ margin: 0, fontSize: '11.5px', opacity: 0.8 }}>{metaLine}</p>}
+              </div>
+            </button>
+            {o.acceptsBunz !== false && (
+              <button
+                onClick={() => openOrder({ businessId: o.businessId, businessName: o.businessName })}
+                style={{ flexShrink: 0, border: 'none', background: 'rgba(233,30,99,0.15)', color: '#E91E63', fontWeight: 800, fontSize: '12px', padding: '8px 12px', borderRadius: '999px', cursor: 'pointer' }}
+              >
+                🛒 Pedir
+              </button>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const renderLocation = ({ lat, lng }: { lat: number; lng: number }) => (
+    <div style={{ borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--border-subtle)', background: 'var(--bg-pressed)' }}>
+      <div
+        style={{
+          position: 'relative',
+          height: '140px',
+          background: `url(${previewMapTileUrl(lat, lng, isDark)}) center/cover`,
+        }}
+      >
+        <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '30px', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.5))' }}>
+          📍
+        </span>
+      </div>
+      <button
+        onClick={() => {
+          PlatformBridge.hapticFeedback('light');
+          router.push(`/map?lat=${lat}&lng=${lng}`);
+        }}
+        style={{ width: '100%', border: 'none', background: 'transparent', color: 'var(--text-primary)', fontWeight: 800, fontSize: '13px', padding: '11px', cursor: 'pointer' }}
+      >
+        🗺️ Ver en el mapa
+      </button>
+    </div>
+  );
+
+  const renderOrder = (draft: OrderDraft) => (
+    <div style={{ marginTop: '10px', borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--border-subtle)', background: 'var(--bg-pressed)' }}>
+      <div style={{ padding: '10px 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <span style={{ fontSize: '18px' }}>🛒</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ margin: 0, fontWeight: 800, fontSize: '14px', color: 'var(--text-primary)' }}>Pedido a {draft.businessName}</p>
+          {draft.status && (
+            <p style={{ margin: 0, fontSize: '11px', fontWeight: 700, color: '#E91E63', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              {draft.status === 'SENT' ? 'Enviado' : draft.status}
+            </p>
+          )}
+        </div>
+      </div>
+      <div style={{ padding: '0 12px 12px', borderTop: '1px solid var(--border-subtle)', paddingTop: '10px' }}>
+        {(draft.items || []).map((it, i) => (
+          <p key={i} style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>• {it}</p>
+        ))}
+        {draft.notes && (
+          <p style={{ margin: '8px 0 0', fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>📝 {draft.notes}</p>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderContent = (msg: Message) => {
+    const meta: MessageMetadata | null =
+      msg.metadata && typeof msg.metadata === 'object' ? msg.metadata : null;
+
+    if (meta && 'kind' in meta && meta.kind === 'LOCATION' && typeof meta.lat === 'number' && typeof meta.lng === 'number') {
+      return renderLocation(meta);
+    }
+    if (meta && 'kind' in meta && meta.kind === 'OPTIONS') {
+      return (
+        <>
+          {cleanOrEmpty(msg.content) && (
+            <p style={{ fontSize: '15px', lineHeight: '1.5', margin: 0, whiteSpace: 'pre-wrap' }}>{cleanOrEmpty(msg.content)}</p>
+          )}
+          {renderOptions(meta.options)}
+        </>
+      );
+    }
+    if (meta && 'kind' in meta && meta.kind === 'ORDER') {
+      return (
+        <>
+          {renderOrder(meta)}
+        </>
+      );
+    }
+
+    const legacy = /\[COMERCIO_ACTION id="([^"]+)" name="([^"]+)"\]/.exec(msg.content);
+    const cleanText = cleanOrEmpty(msg.content);
+    const card = meta && 'businessId' in meta ? (meta as BusinessCard) : null;
     const target = card
       ? { id: card.businessId, name: card.businessName, meta: card }
       : legacy
@@ -268,71 +549,7 @@ export default function ChatRoomPage() {
         {cleanText && (
           <p style={{ fontSize: '15px', lineHeight: '1.5', margin: 0, whiteSpace: 'pre-wrap' }}>{cleanText}</p>
         )}
-
-        {target && (
-          <div
-            style={{
-              marginTop: cleanText ? '10px' : 0,
-              borderRadius: '16px',
-              overflow: 'hidden',
-              border: '1px solid var(--border-subtle)',
-              background: 'var(--bg-pressed)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px' }}>
-              <div
-                style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '12px',
-                  overflow: 'hidden',
-                  flexShrink: 0,
-                  background: '#E91E63',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                {target.meta?.logoUrl ? (
-                  <img src={target.meta.logoUrl} alt={target.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                ) : (
-                  <span style={{ fontSize: '18px' }}>🏪</span>
-                )}
-              </div>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <p style={{ margin: 0, fontWeight: 800, fontSize: '14px', color: 'var(--text-primary)' }}>{target.name}</p>
-                {target.meta && (
-                  <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    {[target.meta.category, target.meta.address].filter(Boolean).join(' · ')}
-                  </p>
-                )}
-                {target.meta?.rewardPercentage != null && (
-                  <p style={{ margin: 0, fontSize: '12px', fontWeight: 700, color: '#E91E63' }}>
-                    🎁 +{target.meta.rewardPercentage}% en bunz
-                  </p>
-                )}
-              </div>
-            </div>
-            <button
-              onClick={() => {
-                PlatformBridge.hapticFeedback('medium');
-                router.push(`/chat/${target.id}`);
-              }}
-              style={{
-                width: '100%',
-                border: 'none',
-                background: '#E91E63',
-                color: '#FFF',
-                fontWeight: 800,
-                fontSize: '13px',
-                padding: '11px',
-                cursor: 'pointer',
-              }}
-            >
-              💬 Chatear con {target.name}
-            </button>
-          </div>
-        )}
+        {target && renderBusinessCard(target)}
       </>
     );
   };
@@ -542,26 +759,24 @@ export default function ChatRoomPage() {
         )}
 
         <form onSubmit={handleSend} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          {isBot && (
-            <button
-              type="button"
-              onClick={requestLocation}
-              title="Compartir ubicación"
-              style={{
-                width: '44px',
-                height: '44px',
-                borderRadius: '50%',
-                border: 'none',
-                background: coords ? 'rgba(233,30,99,0.15)' : 'var(--bg-pressed)',
-                color: coords ? '#E91E63' : 'var(--text-muted)',
-                fontSize: '18px',
-                cursor: 'pointer',
-                flexShrink: 0,
-              }}
-            >
-              📍
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={shareLocation}
+            title="Compartir ubicación"
+            style={{
+              width: '44px',
+              height: '44px',
+              borderRadius: '50%',
+              border: 'none',
+              background: coords ? 'rgba(233,30,99,0.15)' : 'var(--bg-pressed)',
+              color: coords ? '#E91E63' : 'var(--text-muted)',
+              fontSize: '18px',
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >
+            📍
+          </button>
           <input
             type="text"
             value={input}
@@ -608,6 +823,75 @@ export default function ChatRoomPage() {
           </button>
         </form>
       </footer>
+
+      <BottomSheet
+        isOpen={Boolean(orderTarget)}
+        onClose={() => setOrderTarget(null)}
+        title={orderTarget ? `Pedir a ${orderTarget.businessName}` : 'Nuevo pedido'}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-muted)', marginBottom: '6px' }}>
+              ¿Qué quieres pedir?
+            </label>
+            <textarea
+              value={orderItems}
+              onChange={(e) => setOrderItems(e.target.value)}
+              rows={4}
+              placeholder={'1x Café americano\n2x Croissant'}
+              style={{
+                width: '100%',
+                resize: 'none',
+                backgroundColor: 'var(--bg-pressed)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: '14px',
+                padding: '12px 14px',
+                fontSize: '15px',
+                color: 'var(--text-primary)',
+                outline: 'none',
+              }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-muted)', marginBottom: '6px' }}>
+              Notas (opcional)
+            </label>
+            <input
+              value={orderNotes}
+              onChange={(e) => setOrderNotes(e.target.value)}
+              placeholder="Sin azúcar, para llevar…"
+              style={{
+                width: '100%',
+                backgroundColor: 'var(--bg-pressed)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: '14px',
+                padding: '12px 14px',
+                fontSize: '15px',
+                color: 'var(--text-primary)',
+                outline: 'none',
+              }}
+            />
+          </div>
+          <button
+            onClick={submitOrder}
+            disabled={!orderItems.trim() || sending}
+            style={{
+              width: '100%',
+              border: 'none',
+              borderRadius: '100px',
+              padding: '14px',
+              fontSize: '15px',
+              fontWeight: 800,
+              color: '#FFF',
+              backgroundColor: !orderItems.trim() || sending ? 'var(--bg-pressed)' : 'var(--rabbitty-pink)',
+              cursor: !orderItems.trim() || sending ? 'not-allowed' : 'pointer',
+              boxShadow: !orderItems.trim() || sending ? 'none' : '0 6px 16px rgba(233, 30, 99, 0.35)',
+            }}
+          >
+            {sending ? 'Enviando…' : '🛒 Enviar pedido'}
+          </button>
+        </div>
+      </BottomSheet>
     </div>
   );
 }

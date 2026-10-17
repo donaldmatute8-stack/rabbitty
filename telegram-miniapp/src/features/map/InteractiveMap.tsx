@@ -6,6 +6,16 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Crosshair } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
+import { useTheme } from '@/contexts/ThemeContext';
+
+// Keyless, no-watermark basemaps. Dark = Esri World Dark Gray Base (calles
+// mínimas, sin POIs ni etiquetas). Light = OSM estándar (blanco).
+const DARK_TILE_URL =
+  'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
+const DARK_TILE_ATTR = 'Tiles &copy; <a href="https://www.esri.com/">Esri</a>';
+const LIGHT_TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+const LIGHT_TILE_ATTR =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
 export interface MapBusiness {
   id: string;
@@ -103,6 +113,10 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInst = useRef<L.Map | null>(null);
   const layerGroup = useRef<L.LayerGroup | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const [mapReady, setMapReady] = useState(false);
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   const [selected, setSelected] = useState<MapBusiness | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>('Todos');
   const [activeRarity, setActiveRarity] = useState<string>('ALL');
@@ -158,13 +172,7 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
       attributionControl: true,
     });
 
-    // OpenStreetMap con filtro oscuro invertido nativo (.osm-dark-tile) sin requerir API keys ni sufrir marcas de agua
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      subdomains: ['a', 'b', 'c'],
-      className: 'osm-dark-tile',
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    }).addTo(map);
+    // Basemap se agrega/actualiza en el efecto dependiente del tema (dark/light).
 
     // Add destination marker (from affiliate 'Llegar')
     if (userLat != null && userLng != null) {
@@ -178,15 +186,34 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
 
     layerGroup.current = L.layerGroup().addTo(map);
     mapInst.current = map;
+    setMapReady(true);
     
     map.on('click', () => setSelected(null));
     
     return () => { 
       map.remove(); 
       mapInst.current = null; 
+      tileLayerRef.current = null;
+      setMapReady(false);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Initialize only once — don't re-init on coord change
+
+  // Basemap — se recrea cuando cambia el tema (dark = Esri gris oscuro, light = OSM)
+  useEffect(() => {
+    const map = mapInst.current;
+    if (!map || !mapReady) return;
+    if (tileLayerRef.current) {
+      map.removeLayer(tileLayerRef.current);
+      tileLayerRef.current = null;
+    }
+    const layer = isDark
+      ? L.tileLayer(DARK_TILE_URL, { maxZoom: 19, attribution: DARK_TILE_ATTR })
+      : L.tileLayer(LIGHT_TILE_URL, { maxZoom: 19, subdomains: ['a', 'b', 'c'], attribution: LIGHT_TILE_ATTR });
+    layer.addTo(map);
+    layer.bringToBack();
+    tileLayerRef.current = layer;
+  }, [isDark, mapReady]);
 
   // Pan to target location if coordinates come in after mount
   useEffect(() => {
@@ -232,7 +259,7 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
   }, [filteredBusinesses, selected]);
 
   return (
-    <div className="w-full h-full relative bg-[#0D0D1A]">
+    <div className="w-full h-full relative" style={{ background: 'var(--bg-subtle)' }}>
       <style dangerouslySetInnerHTML={{__html: `
         .rb-pulse {
           position: absolute;
@@ -262,7 +289,6 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
           z-index: 0;
           mix-blend-mode: screen;
         }
-        .leaflet-container { background: #0b0b14 !important; }
       `}} />
 
       {/* Hex grid overlay */}

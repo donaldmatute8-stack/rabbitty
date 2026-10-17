@@ -38,10 +38,17 @@ input, textarea, [contenteditable="true"], .selectable, code, pre, .font-mono {
   padding-right: var(--safe-right);
 }
 
-/* Dark mode OpenStreetMap styling for Freehands tab */
-.osm-dark-tile {
-  filter: brightness(0.65) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.75) !important;
+/* Leaflet container background adapts to the active theme */
+.leaflet-container {
+  background: var(--bg-subtle) !important;
+  font-family: var(--font-family-base);
 }
+.leaflet-control-attribution {
+  background: color-mix(in srgb, var(--bg-elevated) 80%, transparent) !important;
+  color: var(--text-muted) !important;
+  font-size: 9px !important;
+}
+.leaflet-control-attribution a { color: var(--text-secondary) !important; }
 
 /* Scrollbar hide */
 ::-webkit-scrollbar { width: 0; height: 0; }

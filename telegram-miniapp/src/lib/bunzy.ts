@@ -14,6 +14,8 @@ export interface BusinessCardMetadata {
   rewardPercentage?: number;
   acceptsBunz?: boolean;
   logoUrl?: string | null;
+  lat?: number;
+  lng?: number;
 }
 
 export interface BusinessOption {
@@ -26,6 +28,8 @@ export interface BusinessOption {
   rewardPercentage?: number;
   acceptsBunz?: boolean;
   logoUrl?: string | null;
+  lat?: number;
+  lng?: number;
 }
 
 export interface OrderItem {
@@ -147,6 +151,8 @@ function mapToOptions(businesses: BusinessRow[], lat?: number | null, lng?: numb
       rewardPercentage: b.rewardPercentage,
       acceptsBunz: b.acceptsBunz,
       logoUrl: b.logoUrl ?? null,
+      lat: b.lat ?? undefined,
+      lng: b.lng ?? undefined,
     };
   });
 }
@@ -167,6 +173,8 @@ function businessCardFromText(text: string, businesses: BusinessRow[]): Business
       rewardPercentage: business?.rewardPercentage,
       acceptsBunz: business?.acceptsBunz,
       logoUrl: business?.logoUrl ?? null,
+      lat: business?.lat ?? undefined,
+      lng: business?.lng ?? undefined,
     };
   }
   return null;
