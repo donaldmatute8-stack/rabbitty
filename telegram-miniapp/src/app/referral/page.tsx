@@ -34,8 +34,19 @@ export default function ReferralPage() {
     ? `https://t.me/Rabbittyme_bot/app?startapp=ref_${profile.telegramId}`
     : '';
 
+  const handleNativeShare = async () => {
+    if (!referralLink) return;
+    await PlatformBridge.share({
+      title: 'Únete a Rabbitty 🐰',
+      text: `¡Qué onda! Te invito a Rabbitty. Regístrate con mi enlace para desbloquear recompensas y multiplicar bunz en los mejores comercios:`,
+      url: referralLink,
+      dialogTitle: 'Invitar amigos a Rabbitty',
+    });
+  };
+
   const copyToClipboard = () => {
     if (referralLink) {
+      PlatformBridge.hapticFeedback('success');
       navigator.clipboard.writeText(referralLink);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -43,17 +54,21 @@ export default function ReferralPage() {
   };
 
   const shareOnTelegram = () => {
+    PlatformBridge.hapticFeedback('medium');
+    const url = encodeURIComponent(referralLink);
+    const text = encodeURIComponent('¡Únete a Rabbitty y descubre negocios con cashback en bunz!');
     // @ts-ignore
     if (window.Telegram?.WebApp?.openTelegramLink) {
-      const url = encodeURIComponent(referralLink);
-      const text = encodeURIComponent('¡Únete a Rabbitty y descubre negocios en la ciudad!');
       // @ts-ignore
       window.Telegram.WebApp.openTelegramLink(`https://t.me/share/url?url=${url}&text=${text}`);
+    } else {
+      window.open(`https://t.me/share/url?url=${url}&text=${text}`, '_blank');
     }
   };
 
   const shareOnWhatsApp = () => {
-    const text = encodeURIComponent(`¡Únete a Rabbitty y descubre negocios en la ciudad! ${referralLink}`);
+    PlatformBridge.hapticFeedback('medium');
+    const text = encodeURIComponent(`¡Únete a Rabbitty y descubre los mejores comercios de la ciudad! ${referralLink}`);
     window.open(`https://wa.me/?text=${text}`, '_blank');
   };
 
@@ -101,43 +116,57 @@ export default function ReferralPage() {
             </div>
 
             {/* Invite card */}
-            <div className="bg-white rounded-[28px] p-6 border border-[#F0F0F0] shadow-[0_2px_16px_rgba(0,0,0,0.04)] text-center">
-              <div className="w-16 h-16 bg-[#FFF0F5] rounded-[20px] flex items-center justify-center mx-auto mb-4 text-[28px]">👥</div>
-              <h2 className="text-[22px] font-black text-[#111] mb-2 tracking-[-0.5px]">Invita y Gana</h2>
-              <p className="text-[#888] text-[13px] leading-[1.6] mb-6">
+            <div className="bg-[#161022] rounded-[28px] p-6 border border-white/10 shadow-[0_12px_40px_rgba(0,0,0,0.35)] text-center">
+              <div className="w-16 h-16 bg-[#E91E63]/15 border border-[#E91E63]/25 rounded-[20px] flex items-center justify-center mx-auto mb-4 text-[28px]">👥</div>
+              <h2 className="text-[22px] font-black text-white mb-2 tracking-[-0.5px]">Invita y Gana</h2>
+              <p className="text-white/60 text-[13px] leading-[1.6] mb-6">
                 Obtén <span className="font-black text-[#E91E63]">50 Bunz</span> por cada amigo que invites,
                 una vez que realicen su primer consumo.
               </p>
 
               {/* Link box */}
-              <div className="bg-[#F8F8F8] border-2 border-dashed border-[#E8E8E8] rounded-[20px] p-4 flex flex-col gap-3 mb-4">
-                <p className="text-[9px] font-black text-[#BBB] tracking-[1.5px] uppercase m-0">Tu Link Único</p>
-                <div className="flex items-center justify-between gap-2 bg-white rounded-[14px] p-3 border border-[#F0F0F0] shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+              <div className="bg-black/25 border-2 border-dashed border-white/10 rounded-[20px] p-4 flex flex-col gap-3 mb-4">
+                <p className="text-[9px] font-black text-white/40 tracking-[1.5px] uppercase m-0">Tu Link Único</p>
+                <div className="flex items-center justify-between gap-2 bg-white/[0.06] rounded-[14px] p-3 border border-white/10">
                   <div>
                     <span className="text-[11px] font-black text-[#E91E63] uppercase tracking-[0.5px] block mb-1">TU CÓDIGO</span>
-                    <span className="text-2xl font-black text-[#111] font-mono">{profile?.telegramId || '------'}</span>
+                    <span className="text-2xl font-black text-white font-mono">{profile?.telegramId || '------'}</span>
                   </div>
                 <button
                   onClick={copyToClipboard}
                   disabled={!referralLink}
-                  className="w-12 h-12 rounded-full bg-white border border-[#F0F0F0] flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.05)]"
+                  className="w-12 h-12 rounded-full bg-white/10 border border-white/10 flex items-center justify-center"
                   style={{
                     cursor: referralLink ? 'pointer' : 'not-allowed',
-                    color: copied ? '#4CAF50' : '#111',
+                    color: copied ? '#4CAF50' : '#fff',
                   }}
                 >
                   {copied ? <CheckCircle2 size={20} /> : <Copy size={20} />}
                 </button>
               </div>
 
+              {/* Primary Native iOS/Android Share Button */}
+              <button
+                onClick={handleNativeShare}
+                disabled={!referralLink}
+                className="w-full font-black text-sm py-4 rounded-2xl border-0 flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 transition-all text-white"
+                style={{
+                  background: 'linear-gradient(135deg, #FF2E93 0%, #FF8A00 100%)',
+                  boxShadow: '0 8px 24px rgba(255, 46, 147, 0.4)',
+                }}
+              >
+                <Share2 size={18} />
+                <span>Compartir con Amigos (Native)</span>
+              </button>
+
               <div className="flex gap-3">
                 <button
                   onClick={shareOnTelegram}
                   disabled={!referralLink}
-                  className="flex-1 font-black text-[13px] py-3.5 rounded-[16px] border-0 flex items-center justify-center gap-2"
+                  className="flex-1 font-black text-[13px] py-3.5 rounded-[16px] border-0 flex items-center justify-center gap-2 active:scale-95 transition-transform"
                   style={{
-                    background: referralLink ? '#2AABEE' : '#E0E0E0',
-                    color: referralLink ? '#fff' : '#999',
+                    background: referralLink ? '#2AABEE' : 'rgba(255,255,255,0.08)',
+                    color: referralLink ? '#fff' : 'rgba(255,255,255,0.35)',
                     cursor: referralLink ? 'pointer' : 'not-allowed',
                     boxShadow: referralLink ? '0 4px 12px rgba(42,171,238,0.3)' : 'none',
                   }}
@@ -148,10 +177,10 @@ export default function ReferralPage() {
                 <button
                   onClick={shareOnWhatsApp}
                   disabled={!referralLink}
-                  className="flex-1 font-black text-[13px] py-3.5 rounded-[16px] border-0 flex items-center justify-center gap-2"
+                  className="flex-1 font-black text-[13px] py-3.5 rounded-[16px] border-0 flex items-center justify-center gap-2 active:scale-95 transition-transform"
                   style={{
-                    background: referralLink ? '#25D366' : '#E0E0E0',
-                    color: referralLink ? '#fff' : '#999',
+                    background: referralLink ? '#25D366' : 'rgba(255,255,255,0.08)',
+                    color: referralLink ? '#fff' : 'rgba(255,255,255,0.35)',
                     cursor: referralLink ? 'pointer' : 'not-allowed',
                     boxShadow: referralLink ? '0 4px 12px rgba(37,211,102,0.3)' : 'none',
                   }}

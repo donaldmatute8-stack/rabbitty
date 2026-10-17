@@ -40,44 +40,70 @@ export default function GamificationPage() {
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
           
           {/* Header Stats */}
-          <div className="bg-[#111] rounded-2xl p-5 mb-5 relative overflow-hidden">
-            <div className="absolute -top-5 -right-5 text-[100px] opacity-10">🐰</div>
+          <div className="bg-gradient-to-br from-[#1A1028] via-[#120D1A] to-[#0A0710] border border-white/10 rounded-2xl p-5 mb-5 relative overflow-hidden shadow-xl">
+            <div className="absolute -top-5 -right-5 text-[100px] opacity-10 select-none">🐰</div>
             
-            <p className="text-[#E91E63] font-black text-xs uppercase tracking-[1px] m-0 mb-1">Rango Actual</p>
-            <h2 className="text-white text-[24px] font-black m-0 mb-4">{data?.level?.name || 'Rabbitter Novato'}</h2>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[#E91E63] font-black text-xs uppercase tracking-[1.5px]">Rango de Explorador</span>
+              <span className="bg-[#E91E63]/20 border border-[#E91E63]/40 text-[#F48FB1] text-[10px] font-extrabold px-2 py-0.5 rounded-full">
+                Nivel {data?.level?.level || 1}
+              </span>
+            </div>
             
-            <div className="flex gap-3">
-              <div className="flex-1 bg-white/10 p-3 rounded-xl">
-                <p className="text-white/60 text-[11px] m-0 mb-1">Saltos (Hops)</p>
-                <p className="text-white text-lg font-extrabold m-0">{data?.hops || 0}</p>
+            <h2 className="text-white text-[26px] font-black m-0 mb-4 tracking-tight">{data?.level?.name || 'Rabbitter Novato'}</h2>
+            
+            {/* XP progress bar toward next rank */}
+            <div className="mb-4">
+              <div className="flex justify-between text-xs text-white/60 font-semibold mb-1.5">
+                <span>Progreso a siguiente rango</span>
+                <span className="text-white font-mono">{data?.hops || 0} / {data?.level?.nextLevelHops || 100} HOPS</span>
               </div>
-              <div className="flex-1 bg-white/10 p-3 rounded-xl">
-                <p className="text-white/60 text-[11px] m-0 mb-1">Bonus de Bunz</p>
-                <p className="text-[#E91E63] text-lg font-extrabold m-0">x{data?.level?.bunzMultiplier || '1.0'}</p>
+              <div className="h-2 bg-white/10 rounded-full overflow-hidden p-0.5 border border-white/5">
+                <div 
+                  className="h-full bg-gradient-to-r from-[#E91E63] to-[#FF4081] rounded-full transition-all duration-500 shadow-[0_0_10px_#E91E63]" 
+                  style={{ width: `${Math.min(((data?.hops || 0) / (data?.level?.nextLevelHops || 100)) * 100, 100)}%` }} 
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <div className="flex-1 bg-white/5 border border-white/10 p-3 rounded-xl">
+                <p className="text-white/50 text-[11px] font-semibold m-0 mb-1">Saltos (Hops)</p>
+                <p className="text-white text-xl font-extrabold m-0 tracking-tight">{data?.hops || 0}</p>
+              </div>
+              <div className="flex-1 bg-white/5 border border-white/10 p-3 rounded-xl">
+                <p className="text-white/50 text-[11px] font-semibold m-0 mb-1">Multiplicador Bunz</p>
+                <p className="text-[#E91E63] text-xl font-extrabold m-0 tracking-tight">x{data?.level?.bunzMultiplier || '1.0'}</p>
               </div>
             </div>
           </div>
 
           {/* Tabs */}
-          <div className="flex bg-[#F4F4F4] rounded-xl p-1 mb-5">
+          <div className="flex bg-[#161622] border border-white/10 rounded-xl p-1 mb-5">
             <button 
-              onClick={() => setActiveTab('MISSIONS')}
-              className="flex-1 py-[10px] border-none rounded-[10px] text-[13px] font-extrabold cursor-pointer"
+              onClick={() => {
+                PlatformBridge.hapticFeedback('light');
+                setActiveTab('MISSIONS');
+              }}
+              className="flex-1 py-[10px] border-none rounded-[10px] text-[13px] font-extrabold cursor-pointer transition-all"
               style={{
-                backgroundColor: activeTab === 'MISSIONS' ? '#fff' : 'transparent',
-                color: activeTab === 'MISSIONS' ? '#111' : '#888',
-                boxShadow: activeTab === 'MISSIONS' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
+                backgroundColor: activeTab === 'MISSIONS' ? '#E91E63' : 'transparent',
+                color: activeTab === 'MISSIONS' ? '#fff' : 'rgba(255,255,255,0.6)',
+                boxShadow: activeTab === 'MISSIONS' ? '0 2px 10px rgba(233,30,99,0.3)' : 'none',
               }}
             >
               Misiones
             </button>
             <button 
-              onClick={() => setActiveTab('BADGES')}
-              className="flex-1 py-[10px] border-none rounded-[10px] text-[13px] font-extrabold cursor-pointer"
+              onClick={() => {
+                PlatformBridge.hapticFeedback('light');
+                setActiveTab('BADGES');
+              }}
+              className="flex-1 py-[10px] border-none rounded-[10px] text-[13px] font-extrabold cursor-pointer transition-all"
               style={{
-                backgroundColor: activeTab === 'BADGES' ? '#fff' : 'transparent',
-                color: activeTab === 'BADGES' ? '#111' : '#888',
-                boxShadow: activeTab === 'BADGES' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
+                backgroundColor: activeTab === 'BADGES' ? '#E91E63' : 'transparent',
+                color: activeTab === 'BADGES' ? '#fff' : 'rgba(255,255,255,0.6)',
+                boxShadow: activeTab === 'BADGES' ? '0 2px 10px rgba(233,30,99,0.3)' : 'none',
               }}
             >
               Insignias
@@ -88,27 +114,31 @@ export default function GamificationPage() {
           {activeTab === 'MISSIONS' && (
             <div className="flex flex-col gap-3 pb-5">
               {data?.missions?.map((m: any) => (
-                <div key={m.id} className="bg-white border border-[#EAEAEA] rounded-[14px] p-4" style={{ opacity: m.isCompleted ? 0.6 : 1 }}>
+                <div key={m.id} className="bg-[#161622] border border-white/10 rounded-[16px] p-4 shadow-md transition-all" style={{ opacity: m.isCompleted ? 0.6 : 1 }}>
                   <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <h3 className="text-[15px] font-extrabold text-[#111] m-0 mb-1">{m.title}</h3>
-                      <p className="text-xs text-[#888] m-0 leading-[1.4]">{m.description}</p>
+                    <div className="pr-2">
+                      <h3 className="text-[15px] font-extrabold text-white m-0 mb-1">{m.title}</h3>
+                      <p className="text-xs text-white/60 m-0 leading-[1.4]">{m.description}</p>
                     </div>
                     {m.isCompleted ? (
-                      <div className="bg-[#4CAF50] text-white text-[10px] font-extrabold px-2 py-1 rounded-[6px]">COMPLETADA</div>
+                      <div className="bg-[#10B981]/20 border border-[#10B981]/40 text-[#34D399] text-[10px] font-extrabold px-2 py-1 rounded-[6px] shrink-0">
+                        COMPLETADA ✓
+                      </div>
                     ) : (
-                      <div className="bg-[#FFE8F0] text-[#E91E63] text-[10px] font-extrabold px-2 py-1 rounded-[6px]">+{m.rewardHops} HOPS</div>
+                      <div className="bg-[#E91E63]/15 border border-[#E91E63]/30 text-[#F472B6] text-[10px] font-extrabold px-2 py-1 rounded-[6px] shrink-0">
+                        +{m.rewardHops} HOPS
+                      </div>
                     )}
                   </div>
                   
                   {!m.isCompleted && (
                     <div className="mt-3">
-                      <div className="flex justify-between text-[11px] font-bold text-[#AAA] mb-1">
-                        <span>Progreso</span>
-                        <span>{m.progressValue} / {m.conditionTarget}</span>
+                      <div className="flex justify-between text-[11px] font-bold text-white/50 mb-1">
+                        <span>Progreso de objetivo</span>
+                        <span className="font-mono text-white/70">{m.progressValue} / {m.conditionTarget}</span>
                       </div>
-                      <div className="h-[6px] bg-[#F0F0F0] rounded-full overflow-hidden">
-                        <div className="h-full bg-[#E91E63] rounded-full" style={{ width: `${Math.min((m.progressValue / m.conditionTarget) * 100, 100)}%` }} />
+                      <div className="h-[6px] bg-white/10 rounded-full overflow-hidden">
+                        <div className="h-full bg-gradient-to-r from-[#E91E63] to-[#FF4081] rounded-full" style={{ width: `${Math.min((m.progressValue / m.conditionTarget) * 100, 100)}%` }} />
                       </div>
                     </div>
                   )}
@@ -121,9 +151,20 @@ export default function GamificationPage() {
           {activeTab === 'BADGES' && (
             <div className="grid grid-cols-3 gap-3 pb-5">
               {data?.achievements?.map((ach: any) => (
-                <div key={ach.id} className="bg-white border border-[#EAEAEA] rounded-[14px] px-2 py-4 flex flex-col items-center text-center" style={{ filter: ach.unlocked ? 'none' : 'grayscale(100%)', opacity: ach.unlocked ? 1 : 0.4 }}>
-                  <div className="text-[32px] mb-2">{ach.iconUrl}</div>
-                  <h4 className="text-[11px] font-extrabold text-[#111] m-0 mb-1 leading-[1.1]">{ach.name}</h4>
+                <div 
+                  key={ach.id} 
+                  className="bg-[#161622] border border-white/10 rounded-[16px] px-2 py-4 flex flex-col items-center text-center shadow-md"
+                  style={{ 
+                    filter: ach.unlocked ? 'none' : 'grayscale(100%)', 
+                    opacity: ach.unlocked ? 1 : 0.35,
+                    borderColor: ach.unlocked ? 'rgba(233,30,99,0.3)' : 'rgba(255,255,255,0.08)' 
+                  }}
+                >
+                  <div className="text-[36px] mb-2 drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)]">{ach.iconUrl}</div>
+                  <h4 className="text-[12px] font-extrabold text-white m-0 mb-1 leading-[1.2]">{ach.name}</h4>
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-white/40">
+                    {ach.unlocked ? 'Desbloqueado' : 'Bloqueado'}
+                  </span>
                 </div>
               ))}
             </div>

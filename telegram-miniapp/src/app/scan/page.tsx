@@ -89,6 +89,20 @@ export default function ScanPage() {
             mod.default.HapticFeedback.notificationOccurred('success');
           }).catch(()=>{});
 
+          // P2P payment link → prefill the Ra Wallet send flow
+          if (/^rabbitty:\/\/pay/i.test(decodedText.trim())) {
+            try {
+              const parsed = new URL(decodedText.trim());
+              const to = parsed.searchParams.get('to');
+              if (to) {
+                setScanning(false);
+                await stopScanning();
+                router.push(`/profile/wallet?to=${encodeURIComponent(to)}`);
+                return;
+              }
+            } catch {}
+          }
+
           // 0. Enlace de vinculación del panel de negocio (iPad) → este teléfono
           if (decodedText.includes('/magic-link') && decodedText.includes('token=') && decodedText.includes('sid=')) {
             try {

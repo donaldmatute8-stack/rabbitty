@@ -270,3 +270,12 @@ export const trustedSessions = pgTable("trustedSessions", {
   expiresAt: timestamp("expiresAt").notNull(),
   createdAt: timestamp("createdAt").defaultNow(),
 });
+
+export const pushDevices = pgTable("pushDevices", {
+  id: id(),
+  userId: fkId("userId").references(() => users.id, { onDelete: "cascade" }),
+  token: text("token").notNull().unique(),
+  platform: text("platform").default("unknown").notNull(), // 'ios' | 'android'
+  isActive: boolean("isActive").default(true).notNull(),
+  ...timestamps,
+});

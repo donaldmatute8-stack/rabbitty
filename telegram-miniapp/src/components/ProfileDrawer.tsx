@@ -36,7 +36,24 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+
+    // Lock the page behind the drawer so the home doesn't scroll through the
+    // faded overlay while the user scrolls inside the drawer.
+    const scrollY = window.scrollY;
+    const { overflow, position, top, width } = document.body.style;
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
+
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = overflow;
+      document.body.style.position = position;
+      document.body.style.top = top;
+      document.body.style.width = width;
+      window.scrollTo(0, scrollY);
+    };
   }, [open, onClose]);
 
   const bunzBalance = (user?.totalBunzEarned || 0) - (user?.totalBunzSpent || 0);
@@ -114,7 +131,7 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
             <div className="h-px w-full bg-[var(--border-subtle)]" />
 
             {/* Navigation Items (Compact & balanced) */}
-            <div className="flex-1 overflow-y-auto px-2.5 py-1.5 space-y-0.5">
+            <div className="flex-1 min-h-0 flex flex-col px-2.5 py-1.5 gap-0.5 overflow-hidden">
               {ACCOUNT_SECTIONS.map((item) => (
                 <Link
                   key={item.href}
@@ -123,7 +140,7 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                     PlatformBridge.hapticFeedback('light');
                     onClose();
                   }}
-                  className="flex items-center gap-3 px-3 py-2 rounded-xl no-underline active:bg-[var(--bg-pressed)] transition-colors"
+                  className="flex-1 min-h-0 flex items-center gap-3 px-3 rounded-xl no-underline active:bg-[var(--bg-pressed)] transition-colors"
                 >
                   <span className="text-base w-5 text-center">{item.icon}</span>
                   <span className="flex-1 text-[14px] font-bold text-[var(--text-primary)]">{item.label}</span>
@@ -137,14 +154,14 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                     PlatformBridge.hapticFeedback('light');
                     onClose();
                   }}
-                  className="flex items-center gap-3 px-3 py-2 rounded-xl no-underline active:bg-[var(--bg-pressed)] transition-colors"
+                  className="flex-1 min-h-0 flex items-center gap-3 px-3 rounded-xl no-underline active:bg-[var(--bg-pressed)] transition-colors"
                 >
                   <span className="text-base w-5 text-center">🏪</span>
                   <span className="flex-1 text-[14px] font-bold text-[var(--text-primary)]">Portal Comercio</span>
                 </Link>
               )}
 
-              <div className="h-px w-full bg-[var(--border-subtle)] my-1" />
+              <div className="h-px w-full shrink-0 bg-[var(--border-subtle)] my-1" />
 
               {SETTINGS_SECTIONS.map((item) => (
                 <Link
@@ -154,7 +171,7 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                     PlatformBridge.hapticFeedback('light');
                     onClose();
                   }}
-                  className="flex items-center gap-3 px-3 py-1.5 rounded-xl no-underline active:bg-[var(--bg-pressed)] transition-colors"
+                  className="flex-1 min-h-0 flex items-center gap-3 px-3 rounded-xl no-underline active:bg-[var(--bg-pressed)] transition-colors"
                 >
                   <span className="text-sm w-5 text-center">{item.icon}</span>
                   <span className="flex-1 text-[13px] font-semibold text-[var(--text-secondary)]">{item.label}</span>

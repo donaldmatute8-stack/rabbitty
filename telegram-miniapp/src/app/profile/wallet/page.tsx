@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import { ArrowUpRight, ArrowDownLeft, Copy, RefreshCw, X } from 'lucide-react';
 import { useWallet } from '@/contexts/WalletContext';
+import { useAuth } from '@/features/auth/AuthProvider';
 import { PlatformBridge } from '@/lib/platform';
-import RabbittyCode from '@/components/ui/RabbittyCode';
 
 interface Transaction {
   id: string;
@@ -19,6 +20,7 @@ interface Transaction {
 
 export default function WalletPage() {
   const { balance, refreshBalance, address } = useWallet();
+  const { user } = useAuth();
   const [history, setHistory] = useState<Transaction[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -26,12 +28,43 @@ export default function WalletPage() {
   // Modals state
   const [showReceive, setShowReceive] = useState(false);
   const [showSend, setShowSend] = useState(false);
-  const [sendAddress, setSendAddress] = useState('');
   const [sendAmount, setSendAmount] = useState('');
+
+  // Resolvable P2P handle: @username (preferred, human) or uuid id (always exists).
+  const payHandle = user?.username ? `@${user.username}` : (user?.id || '');
+  const payPayload = payHandle ? `rabbitty://pay?to=${encodeURIComponent(payHandle)}` : '';
+
+  const newIdempotencyKey = () =>
+    (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+      ? crypto.randomUUID()
+      : `k_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+  const openSend = (preset?: string) => {
+    PlatformBridge.hapticFeedback('light');
+    setIdempotencyKey(newIdempotencyKey());
+    if (preset) setSendRecipient(preset.replace(/^rabbitty:\/\/pay\?to=/, ''));
+    setShowSend(true);
+  };
 
   useEffect(() => {
     if (address) fetchHistory();
   }, [address]);
+
+  // Prefill P2P recipient when arrived from a scanned "rabbitty://pay?to=..." code.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const url = new URL(window.location.href);
+      const to = url.searchParams.get('to');
+      if (to) {
+        setIdempotencyKey(newIdempotencyKey());
+        setSendRecipient(decodeURIComponent(to));
+        setShowSend(true);
+        window.history.replaceState({}, '', '/profile/wallet');
+      }
+    } catch {}
+  }, []);
+
 
   const fetchHistory = async () => {
     if (!address) return;
@@ -65,9 +98,63 @@ export default function WalletPage() {
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleDateString('es-MX', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
+  const [sendRecipient, setSendRecipient] = useState('');
+  const [sendNote, setSendNote] = useState('');
+  const [sending, setSending] = useState(false);
+  const [idempotencyKey, setIdempotencyKey] = useState('');
+
   const handleSend = async () => {
-    alert('Función de envío en mantenimiento.');
-    setShowSend(false);
+    if (!sendRecipient.trim()) {
+      alert('Ingresa el @usuario o ID del destinatario');
+      return;
+    }
+    const amt = parseInt(sendAmount, 10);
+    if (isNaN(amt) || amt <= 0) {
+      alert('Ingresa una cantidad válida de Bunz');
+      return;
+    }
+    if (amt > parseInt(balance, 10)) {
+      alert('Saldo insuficiente de Bunz');
+      return;
+    }
+
+    setSending(true);
+    try {
+      await PlatformBridge.hapticFeedback('medium');
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch('/api/wallet/transfer', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...headers,
+        },
+        body: JSON.stringify({
+          recipient: sendRecipient.trim(),
+          amount: amt,
+          note: sendNote.trim(),
+          idempotencyKey: idempotencyKey || newIdempotencyKey(),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'No se pudo realizar la transferencia');
+      }
+
+      await PlatformBridge.hapticFeedback('success');
+      alert(`🎉 ¡Enviaste con éxito ${amt} BUNZ a ${data.data?.recipientName || sendRecipient}!`);
+      setShowSend(false);
+      setSendRecipient('');
+      setSendAmount('');
+      setSendNote('');
+      setIdempotencyKey('');
+      await handleRefresh();
+    } catch (err: any) {
+      await PlatformBridge.hapticFeedback('error');
+      alert(err.message || 'Error al enviar Bunz');
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -131,74 +218,77 @@ export default function WalletPage() {
         </div>
 
         {/* Action buttons */}
-        <div className="flex justify-center gap-6">
+        <div className="flex justify-center gap-4">
           <button
-            onClick={() => setShowReceive(true)}
+            onClick={() => {
+              PlatformBridge.hapticFeedback('light');
+              setShowReceive(true);
+            }}
             disabled={!address}
-            className="w-[140px] h-[140px] bg-white border border-[#F0F0F0] rounded-2xl p-4 flex flex-col items-center justify-center gap-4 shadow-[0_2px_12px_rgba(0,0,0,0.04)]"
+            className="flex-1 max-w-[170px] h-[130px] bg-[#161622] hover:bg-[#1C1C2B] border border-white/10 rounded-2xl p-4 flex flex-col items-center justify-center gap-3 shadow-[0_8px_20px_rgba(0,0,0,0.3)] transition-transform active:scale-95"
             style={{ cursor: address ? 'pointer' : 'not-allowed', opacity: address ? 1 : 0.5 }}
           >
-            <div className="w-12 h-12 rounded-full bg-[#EFF6FF] flex items-center justify-center">
-              <ArrowDownLeft size={24} color={'#3B82F6'} strokeWidth={2.5} />
+            <div className="w-12 h-12 rounded-full bg-[#3B82F6]/15 border border-[#3B82F6]/30 flex items-center justify-center">
+              <ArrowDownLeft size={22} color={'#60A5FA'} strokeWidth={2.5} />
             </div>
-            <span className="font-extrabold text-[#111] text-sm">Recibir</span>
+            <span className="font-extrabold text-white text-sm">Recibir</span>
           </button>
 
           <button
-            onClick={() => setShowSend(true)}
+            onClick={() => openSend()}
             disabled={!address}
-            className="w-[140px] h-[140px] bg-white border border-[#F0F0F0] rounded-2xl p-4 flex flex-col items-center justify-center gap-4 shadow-[0_2px_12px_rgba(0,0,0,0.04)]"
+            className="flex-1 max-w-[170px] h-[130px] bg-[#161622] hover:bg-[#1C1C2B] border border-white/10 rounded-2xl p-4 flex flex-col items-center justify-center gap-3 shadow-[0_8px_20px_rgba(0,0,0,0.3)] transition-transform active:scale-95"
             style={{ cursor: address ? 'pointer' : 'not-allowed', opacity: address ? 1 : 0.5 }}
           >
-            <div className="w-12 h-12 rounded-full bg-[#FFF0F5] flex items-center justify-center">
-              <ArrowUpRight size={24} color={'#E91E63'} strokeWidth={2.5} />
+            <div className="w-12 h-12 rounded-full bg-[#E91E63]/15 border border-[#E91E63]/30 flex items-center justify-center">
+              <ArrowUpRight size={22} color={'#E91E63'} strokeWidth={2.5} />
             </div>
-            <span className="font-extrabold text-[#111] text-sm">Enviar</span>
+            <span className="font-extrabold text-white text-sm">Enviar</span>
           </button>
         </div>
 
         {/* Transaction history */}
-        <div className="bg-white rounded-2xl border border-[#F0F0F0] p-5 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
-          <p className="font-extrabold text-[#111] text-[15px] mb-4">Últimas transacciones</p>
+        <div className="bg-[#161622] rounded-2xl border border-white/10 p-5 shadow-[0_4px_20px_rgba(0,0,0,0.25)]">
+          <p className="font-extrabold text-white text-[15px] mb-4">Últimas transacciones</p>
 
           {!address ? (
-            <p className="text-center text-[#CCC] text-[13px] py-4">Conecta tu billetera para ver el historial</p>
+            <p className="text-center text-white/40 text-[13px] py-4">Conecta tu billetera para ver el historial</p>
           ) : historyLoading ? (
             <div className="flex flex-col gap-3">
               {[1, 2, 3].map((_, i) => (
                 <div key={i} className="flex items-center justify-between py-2 animate-pulse">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-[14px] bg-[#F0F0F0]" />
+                    <div className="w-10 h-10 rounded-[14px] bg-white/5" />
                     <div className="flex flex-col gap-2">
-                      <div className="w-24 h-4 rounded bg-[#F0F0F0]" />
-                      <div className="w-16 h-3 rounded bg-[#F0F0F0]" />
+                      <div className="w-24 h-4 rounded bg-white/5" />
+                      <div className="w-16 h-3 rounded bg-white/5" />
                     </div>
                   </div>
-                  <div className="w-16 h-4 rounded bg-[#F0F0F0]" />
+                  <div className="w-16 h-4 rounded bg-white/5" />
                 </div>
               ))}
             </div>
           ) : history.length === 0 ? (
-            <p className="text-center text-[#CCC] text-[13px] py-4">Aún no tienes transacciones</p>
+            <p className="text-center text-white/40 text-[13px] py-4">Aún no tienes transacciones</p>
           ) : (
             <div className="flex flex-col">
               {history.map((tx, i) => (
                 <div key={tx.id} className="flex items-center justify-between" style={{
                   paddingTop: i === 0 ? 0 : 12, paddingBottom: i === history.length - 1 ? 0 : 12,
-                  borderBottom: i === history.length - 1 ? 'none' : '1px solid #F4F4F4',
+                  borderBottom: i === history.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.06)',
                 }}>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-[14px] text-lg flex items-center justify-center" style={{
-                      background: tx.type === 'earned' ? '#F0FDF4' : '#FFF0F5',
+                      background: tx.type === 'earned' ? 'rgba(16,185,129,0.15)' : 'rgba(233,30,99,0.15)',
                     }}>
                       {tx.icon}
                     </div>
                     <div>
-                      <p className="font-bold text-[#111] text-sm m-0 mb-0.5">{tx.name}</p>
-                      <p className="text-[#AAA] text-[11px] m-0">{formatDate(tx.date)}</p>
+                      <p className="font-bold text-white text-sm m-0 mb-0.5">{tx.name}</p>
+                      <p className="text-white/40 text-[11px] m-0">{formatDate(tx.date)}</p>
                     </div>
                   </div>
-                  <span className="font-extrabold text-[15px]" style={{ color: tx.type === 'earned' ? '#10B981' : '#E91E63' }}>
+                  <span className="font-extrabold text-[15px]" style={{ color: tx.type === 'earned' ? '#34D399' : '#F472B6' }}>
                     {tx.amount} bunz
                   </span>
                 </div>
@@ -211,20 +301,38 @@ export default function WalletPage() {
 
       {/* RECEIVE MODAL */}
       {showReceive && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[rgba(0,0,0,0.6)] backdrop-blur-[5px] p-5">
-          <div className="bg-white rounded-2xl w-full max-w-[400px] p-6 relative">
-            <button onClick={() => setShowReceive(false)} className="absolute top-4 right-4 bg-transparent border-0 cursor-pointer">
-              <X size={24} color="#888" />
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[rgba(0,0,0,0.7)] backdrop-blur-[8px] p-5">
+          <div className="bg-[#181824] border border-white/10 text-white rounded-2xl w-full max-w-[400px] p-6 relative shadow-2xl">
+            <button onClick={() => setShowReceive(false)} className="absolute top-4 right-4 bg-transparent border-0 cursor-pointer text-white/60 hover:text-white">
+              <X size={22} />
             </button>
-            <h3 className="text-xl font-extrabold m-0 mb-4 text-center">Recibir (TON / Bunz)</h3>
-            <div className="rounded-3xl p-4 text-center mb-5 flex justify-center bg-[#0C0618] border border-pink-500/30">
-              <RabbittyCode data={address || 'rabbitty'} size={180} showCardFrame={false} />
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-full bg-[#3B82F6]/20 flex items-center justify-center text-[#3B82F6]">
+                <ArrowDownLeft size={18} strokeWidth={2.5} />
+              </div>
+              <h3 className="text-xl font-extrabold m-0">Recibir Bunz</h3>
             </div>
-            <p className="text-[11px] font-extrabold text-[#AAA] uppercase mb-2 text-center">Tu Dirección TON</p>
-            <div className="flex items-center justify-between bg-[#F0F0F0] p-3 rounded-xl">
-              <p className="text-xs font-mono m-0 truncate">{address}</p>
-              <button onClick={handleCopy} className="bg-transparent border-0 cursor-pointer p-1">
-                <Copy size={16} color="#111" />
+            <p className="text-[13px] text-white/60 mb-4">Muestra este código para que te transfieran Bunz. Escanéalo desde la pestaña de escáner de Rabbitty.</p>
+            <div className="rounded-3xl p-4 text-center mb-5 flex justify-center bg-white border border-pink-500/30">
+              {payPayload ? (
+                <QRCodeSVG value={payPayload} size={180} level="M" bgColor="#ffffff" fgColor="#111111" />
+              ) : (
+                <span className="text-[#111] text-sm py-16">Inicia sesión para generar tu código</span>
+              )}
+            </div>
+            <p className="text-[11px] font-extrabold text-white/40 uppercase mb-2 text-center">Tu Identificador para recibir</p>
+            <div className="flex items-center justify-between bg-white/5 border border-white/10 p-3 rounded-xl">
+              <p className="text-xs font-mono m-0 truncate text-white/80">{payHandle || 'rabbitty_user'}</p>
+              <button
+                onClick={() => {
+                  if (payHandle) {
+                    navigator.clipboard.writeText(payHandle);
+                    alert(`¡${payHandle} copiado!`);
+                  }
+                }}
+                className="bg-white/10 hover:bg-white/20 border-0 cursor-pointer p-2 rounded-lg text-white"
+              >
+                <Copy size={16} />
               </button>
             </div>
           </div>
@@ -233,30 +341,49 @@ export default function WalletPage() {
 
       {/* SEND MODAL */}
       {showSend && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[rgba(0,0,0,0.6)] backdrop-blur-[5px] p-5">
-          <div className="bg-white rounded-2xl w-full max-w-[400px] p-6 relative">
-            <button onClick={() => setShowSend(false)} className="absolute top-4 right-4 bg-transparent border-0 cursor-pointer">
-              <X size={24} color="#888" />
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[rgba(0,0,0,0.7)] backdrop-blur-[8px] p-5">
+          <div className="bg-[#181824] border border-white/10 text-white rounded-2xl w-full max-w-[400px] p-6 relative shadow-2xl">
+            <button onClick={() => setShowSend(false)} className="absolute top-4 right-4 bg-transparent border-0 cursor-pointer text-white/60 hover:text-white">
+              <X size={22} />
             </button>
-            <h3 className="text-xl font-extrabold m-0 mb-4">Enviar TON</h3>
-            <p className="text-[13px] text-[#666] mb-5">Ingresa la dirección TON de destino y la cantidad.</p>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-full bg-[#E91E63]/20 flex items-center justify-center text-[#E91E63]">
+                <ArrowUpRight size={18} strokeWidth={2.5} />
+              </div>
+              <h3 className="text-xl font-extrabold m-0">Enviar Bunz P2P</h3>
+            </div>
+            <p className="text-[13px] text-white/60 mb-5">Transfiere Bunz instantáneamente a cualquier amigo o negocio sin comisiones.</p>
             
+            <label className="text-[11px] font-extrabold text-white/50 uppercase tracking-wider block mb-1.5">Destinatario</label>
             <input 
-              value={sendAddress} onChange={e => setSendAddress(e.target.value)} 
-              placeholder="Dirección TON del destinatario" 
-              className="w-full p-3.5 rounded-xl border border-[#CCC] mb-3 text-sm"
+              value={sendRecipient} onChange={e => setSendRecipient(e.target.value)} 
+              placeholder="@usuario o ID de usuario" 
+              className="w-full p-3.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/30 mb-4 text-sm focus:outline-none focus:border-[#E91E63]"
             />
+
+            <label className="text-[11px] font-extrabold text-white/50 uppercase tracking-wider block mb-1.5">Cantidad de Bunz</label>
+            <div className="relative mb-4">
+              <input 
+                type="number" value={sendAmount} onChange={e => setSendAmount(e.target.value)} 
+                placeholder="0" 
+                className="w-full p-3.5 pr-16 rounded-xl bg-white/5 border border-white/10 text-white font-extrabold placeholder-white/30 text-lg focus:outline-none focus:border-[#E91E63]"
+              />
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-[#E91E63]">BUNZ</span>
+            </div>
+
+            <label className="text-[11px] font-extrabold text-white/50 uppercase tracking-wider block mb-1.5">Mensaje o Nota (Opcional)</label>
             <input 
-              type="number" value={sendAmount} onChange={e => setSendAmount(e.target.value)} 
-              placeholder="Cantidad (ej: 0.5)" 
-              className="w-full p-3.5 rounded-xl border border-[#CCC] mb-6 text-sm"
+              value={sendNote} onChange={e => setSendNote(e.target.value)} 
+              placeholder="ej: ¡Gracias por los tacos! 🌮" 
+              className="w-full p-3.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/30 mb-6 text-sm focus:outline-none focus:border-[#E91E63]"
             />
             
             <button 
               onClick={handleSend}
-              className="w-full p-4 bg-[#E91E63] text-white border-0 rounded-[14px] font-extrabold text-[15px] cursor-pointer"
+              disabled={sending}
+              className="w-full p-4 bg-gradient-to-r from-[#E91E63] to-[#FF4081] text-white border-0 rounded-[14px] font-extrabold text-[15px] cursor-pointer shadow-lg shadow-[#E91E63]/30 disabled:opacity-50"
             >
-              Confirmar Envío
+              {sending ? 'Transfiriendo...' : 'Confirmar Envío de Bunz'}
             </button>
           </div>
         </div>

@@ -65,5 +65,9 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Rabbitty requiere acceso a la cámara para escanear tu Rabbitty Code y tickets de recompensa Bunz.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>
