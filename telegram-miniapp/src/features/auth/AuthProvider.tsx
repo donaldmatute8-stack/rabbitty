@@ -148,6 +148,24 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     checkAuth();
   }, [checkAuth]);
 
+  // Push Notifications native registration (iOS APNs / Android FCM)
+  useEffect(() => {
+    if (user?.id && PlatformBridge.isNative()) {
+      PlatformBridge.initPushNotifications({
+        onToken: (token) => {
+          // Persist push token to backend for targeting
+          PlatformBridge.getAuthHeaders().then((headers) => {
+            fetch('/api/notifications/push-token', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...headers },
+              body: JSON.stringify({ token, platform: PlatformBridge.getPlatform() }),
+            }).catch((err) => console.warn('[Push] Error syncing token:', err));
+          });
+        },
+      });
+    }
+  }, [user?.id]);
+
   // Identity gate: a member must complete their name/username before entering the app.
   // New users (created via OTP) are routed to the identity setup, even if they reopen the app.
   useEffect(() => {

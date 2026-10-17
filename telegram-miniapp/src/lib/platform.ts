@@ -184,4 +184,113 @@ export const PlatformBridge = {
       window.open(url, '_blank', 'noopener,noreferrer');
     }
   },
+
+  /**
+   * Universal Native Share (iOS / Android Native Sheet or Web Share API)
+   */
+  async share(options: { title?: string; text?: string; url?: string; dialogTitle?: string }): Promise<boolean> {
+    if (typeof window === 'undefined') return false;
+
+    try {
+      this.hapticFeedback('medium');
+      if (this.isNative()) {
+        const { Share } = await import('@capacitor/share');
+        await Share.share({
+          title: options.title || 'Rabbitty',
+          text: options.text || '',
+          url: options.url || '',
+          dialogTitle: options.dialogTitle || 'Compartir Rabbitty',
+        });
+        return true;
+      }
+
+      if (navigator.share) {
+        await navigator.share({
+          title: options.title || 'Rabbitty',
+          text: options.text || '',
+          url: options.url || '',
+        });
+        return true;
+      }
+
+      if (options.url) {
+        await navigator.clipboard.writeText(options.url);
+        return true;
+      }
+    } catch (e) {
+      const errName = e instanceof Error ? e.name : '';
+      if (errName !== 'AbortError') {
+        console.warn('[PlatformBridge] Share error:', e);
+      }
+    }
+    return false;
+  },
+
+  /**
+   * Initialize and request Native Push Notifications (iOS APNs / Android FCM).
+   * Resolves with the device token once the OS returns it, and routes inbound
+   * notifications through `onNotificationReceived`.
+   */
+  async initPushNotifications(handlers?: {
+    onToken?: (token: string) => void;
+    onNotificationReceived?: (notification: unknown) => void;
+  }): Promise<string | null> {
+    if (typeof window === 'undefined' || !this.isNative()) return null;
+
+    try {
+      const { PushNotifications } = await import('@capacitor/push-notifications');
+      let permStatus = await PushNotifications.checkPermissions();
+
+      if (permStatus.receive === 'prompt') {
+        permStatus = await PushNotifications.requestPermissions();
+      }
+
+      if (permStatus.receive !== 'granted') {
+        return null;
+      }
+
+      return await new Promise<string | null>((resolve) => {
+        let settled = false;
+        const finish = (value: string | null) => {
+          if (settled) return;
+          settled = true;
+          resolve(value);
+        };
+
+        PushNotifications.addListener('registration', (token) => {
+          const value = token?.value ?? null;
+          if (value) {
+            handlers?.onToken?.(value);
+            finish(value);
+          }
+        });
+
+        PushNotifications.addListener('registrationError', (err) => {
+          console.warn('[Push] Registration error:', err);
+          finish(null);
+        });
+
+        if (handlers?.onNotificationReceived) {
+          PushNotifications.addListener('pushNotificationReceived', (notification) => {
+            handlers.onNotificationReceived?.(notification);
+          });
+        }
+
+        // Kick off registration AFTER listeners are attached, otherwise the
+        // 'registration' event can fire before we are listening and the token
+        // would be dropped.
+        PushNotifications.register().catch((err) => {
+          console.warn('[Push] register() failed:', err);
+          finish(null);
+        });
+
+        // Safety net: never leave the caller hanging if the OS never answers.
+        setTimeout(() => finish(null), 15_000);
+      });
+    } catch (err) {
+      console.warn('[Push] initPushNotifications failed:', err);
+      return null;
+    }
+  },
 };
+
