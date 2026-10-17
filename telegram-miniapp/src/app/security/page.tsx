@@ -66,29 +66,31 @@ export default function SecurityPage() {
           </div>
         </div>
 
-        <h3 className="font-black text-[#111] text-[15px] mt-1 mx-1 mb-0 p-0">Características Clave</h3>
+        <h3 className="font-black text-white text-[15px] mt-2 mx-1 mb-0 p-0">Características Clave</h3>
 
         {/* Feature cards */}
-        {FEATURES.map((feat, i) => (
-          <div
-            key={i}
-            className="bg-white border border-[#F0F0F0] rounded-[24px] p-5 flex gap-4 items-start shadow-[0_2px_12px_rgba(0,0,0,0.04)]"
-          >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-6">
+          {FEATURES.map((feat, i) => (
             <div
-              className="w-[52px] h-[52px] rounded-[16px] flex shrink-0 items-center justify-center text-[24px] mt-0.5"
-              style={{ background: feat.bg }}
+              key={i}
+              className="bg-[#161622] border border-white/10 rounded-[22px] p-4 flex gap-4 items-start shadow-md"
             >
-              {feat.icon}
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <h4 className="font-black text-[#111] text-[15px] m-0">{feat.title}</h4>
-                <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: feat.color }} />
+              <div
+                className="w-[46px] h-[46px] rounded-[14px] flex shrink-0 items-center justify-center text-[22px] mt-0.5 border border-white/5"
+                style={{ background: 'rgba(255,255,255,0.06)' }}
+              >
+                {feat.icon}
               </div>
-              <p className="text-[#888] text-xs leading-[1.6] m-0">{feat.desc}</p>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <h4 className="font-black text-white text-[14px] m-0">{feat.title}</h4>
+                  <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: feat.color }} />
+                </div>
+                <p className="text-white/60 text-xs leading-[1.5] m-0">{feat.desc}</p>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
 
       </div>
     </ProfileSubpageLayout>

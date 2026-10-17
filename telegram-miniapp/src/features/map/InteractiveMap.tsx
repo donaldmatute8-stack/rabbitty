@@ -158,12 +158,12 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
       attributionControl: true,
     });
 
-    // CartoDB Dark Matter: mapas oscuros limpios, de alta velocidad y gratuitos sin requerir API keys
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 20,
-      subdomains: 'abcd',
-      opacity: 0.95,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    // OpenStreetMap con filtro oscuro invertido nativo (.osm-dark-tile) sin requerir API keys ni sufrir marcas de agua
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      subdomains: ['a', 'b', 'c'],
+      className: 'osm-dark-tile',
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(map);
 
     // Add destination marker (from affiliate 'Llegar')
@@ -412,46 +412,80 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
 
       {/* Selected Business Floating Card */}
       {selected && (
-        <div style={{ position: 'absolute', bottom: 180, left: 16, right: 16, zIndex: 2000 }}>
+        <div style={{ position: 'absolute', bottom: 170, left: 14, right: 14, zIndex: 2000, maxWidth: 440, margin: '0 auto' }}>
           <div 
             onClick={() => router.push(`/affiliate/${selected.id}`)}
             style={{ 
-              background: 'rgba(17, 17, 17, 0.95)', 
-              backdropFilter: 'blur(20px)', 
-              WebkitBackdropFilter: 'blur(20px)',
-              border: '1px solid rgba(255, 255, 255, 0.1)', 
+              background: 'rgba(20, 20, 30, 0.94)', 
+              backdropFilter: 'blur(24px)', 
+              WebkitBackdropFilter: 'blur(24px)',
+              border: '1px solid rgba(255, 255, 255, 0.14)', 
               borderRadius: 24, 
-              padding: 20, 
-              boxShadow: '0 20px 40px rgba(0,0,0,0.8)', 
+              padding: '16px 18px', 
+              boxShadow: '0 24px 48px -12px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(233, 30, 99, 0.15)', 
               display: 'flex', 
               alignItems: 'center', 
               gap: 16, 
               color: '#fff',
               animation: "slideUp 0.3s cubic-bezier(0.16,1,0.3,1)",
-              cursor: 'pointer'
+              cursor: 'pointer',
+              position: 'relative'
             }}
           >
-            <div style={{ width: 64, height: 64, borderRadius: 16, background: '#1A1A2E', overflow: 'hidden', flexShrink: 0, border: '1px solid rgba(255,255,255,0.05)' }}>
+            <div style={{ width: 68, height: 68, borderRadius: 18, background: '#12121E', overflow: 'hidden', flexShrink: 0, border: '1px solid rgba(255,255,255,0.1)' }}>
               {selected.imageUrl ? (
                 <img src={selected.imageUrl} alt={selected.user} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
-                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>{getIcon(selected.device)}</div>
+                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30 }}>{getIcon(selected.device)}</div>
               )}
             </div>
-            <div style={{ flex: 1 }}>
-              <h3 style={{ fontSize: 18, fontWeight: 900, color: '#fff', margin: '0 0 4px 0', lineHeight: 1.2 }}>{selected.name || selected.user}</h3>
-              <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', margin: '0 0 8px 0' }}>{selected.category || selected.device} • A {selected.distance || '1.2'}km de ti</p>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                <h3 style={{ fontSize: 17, fontWeight: 900, color: '#fff', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {selected.name || selected.user}
+                </h3>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelected(null);
+                  }}
+                  style={{
+                    background: 'rgba(255,255,255,0.1)',
+                    border: 'none',
+                    color: 'rgba(255,255,255,0.7)',
+                    width: 24,
+                    height: 24,
+                    borderRadius: '50%',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    fontWeight: 800,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', margin: '3px 0 8px 0', fontWeight: 600 }}>
+                {selected.category || selected.device} • A {selected.distance || '1.2'}km de ti
+              </p>
               
-              {(selected.givesBunz !== false) && (
-                <div style={{ background: 'rgba(233,30,99,0.15)', color: '#E91E63', fontWeight: 800, fontSize: 12, padding: '6px 12px', borderRadius: 8, display: 'inline-block', border: '1px solid rgba(233,30,99,0.3)', marginRight: 8 }}>
-                  Gana +{selected.reward_percentage || selected.rewardPercentage}% en Bunz
-                </div>
-              )}
-              {selected.acceptsBunz === true && (
-                <div style={{ background: 'rgba(76, 175, 80, 0.15)', color: '#4CAF50', fontWeight: 800, fontSize: 12, padding: '6px 12px', borderRadius: 8, display: 'inline-block', border: '1px solid rgba(76, 175, 80, 0.3)' }}>
-                  🎁 Stock Disponible
-                </div>
-              )}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {(selected.givesBunz !== false) && (
+                  <span style={{ background: 'rgba(233,30,99,0.18)', color: '#FF4081', fontWeight: 900, fontSize: 11, padding: '4px 10px', borderRadius: 999, border: '1px solid rgba(233,30,99,0.35)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <span>🎁</span> +{selected.reward_percentage || selected.rewardPercentage}% Bunz
+                  </span>
+                )}
+                {selected.acceptsBunz === true && (
+                  <span style={{ background: 'rgba(16, 185, 129, 0.18)', color: '#34D399', fontWeight: 900, fontSize: 11, padding: '4px 10px', borderRadius: 999, border: '1px solid rgba(16, 185, 129, 0.35)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <span>⚡</span> Stock Canjeable
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </div>

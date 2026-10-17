@@ -2,21 +2,43 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { ChevronLeft, MapPin, Clock, Tag, Navigation, Phone, Globe, MessageCircle } from 'lucide-react';
+import { ChevronLeft, MapPin, Clock, Tag, Navigation, Globe, MessageCircle } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
+import Image from 'next/image';
 import BottomNav from '@/components/BottomNav';
 import { useToast } from '@/contexts/ToastContext';
+import { PlatformBridge } from '@/lib/platform';
+
+interface AffiliateData {
+  id: string;
+  name: string;
+  category: string;
+  address: string;
+  distance?: string;
+  startTime?: string;
+  endTime?: string;
+  rewardPercentage: number;
+  description?: string;
+  gallery?: string;
+  website?: string;
+  webUrl?: string;
+  supportWhatsApp?: string;
+  phone?: string;
+  lat?: number | string;
+  lng?: number | string;
+  owner?: { phoneNumber?: string };
+}
 
 export default function AffiliateProfilePage() {
   const router = useRouter();
   const params = useParams();
   const id = params?.id as string;
   const { showToast } = useToast();
-  const [affiliate, setAffiliate] = useState<any>(null);
+  const [affiliate, setAffiliate] = useState<AffiliateData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showMapSelector, setShowMapSelector] = useState(false);
   const [showInAppBrowser, setShowInAppBrowser] = useState(false);
+  const [showMessageSelector, setShowMessageSelector] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -41,30 +63,30 @@ export default function AffiliateProfilePage() {
 
   if (loading) {
     return (
-      <div style={{ background: '#FAFAFA', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid #f3f3f3', borderTopColor: '#E91E63', animation: 'spin 1s linear infinite' }} />
+      <div style={{ background: '#0D0D15', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid rgba(255,255,255,0.1)', borderTopColor: '#E91E63', animation: 'spin 1s linear infinite' }} />
       </div>
     );
   }
 
   if (!affiliate) {
     return (
-      <div style={{ background: '#FAFAFA', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <p style={{ color: '#888', fontWeight: 600 }}>Negocio no encontrado.</p>
+      <div style={{ background: '#0D0D15', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <p style={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>Negocio no encontrado.</p>
       </div>
     );
   }
 
   // Parse gallery safely
-  let parsedGallery = [];
-  try { parsedGallery = affiliate.gallery ? JSON.parse(affiliate.gallery) : []; } catch(e){}
+  let parsedGallery: string[] = [];
+  try { parsedGallery = affiliate.gallery ? JSON.parse(affiliate.gallery) : []; } catch { /* ignore parse error */ }
   const coverImage = parsedGallery.length > 0 ? parsedGallery[0] : 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=800&q=80';
 
   const targetWebsite = affiliate.website || affiliate.webUrl || 'https://rabbitty.me';
   const formattedWebUrl = targetWebsite.startsWith('http') ? targetWebsite : `https://${targetWebsite}`;
 
   return (
-    <div style={{ background: '#FAFAFA', minHeight: '100vh', paddingBottom: 180, position: 'relative' }}>
+    <div style={{ background: '#0D0D15', minHeight: '100vh', paddingBottom: 180, position: 'relative' }}>
       {/* Floating Dynamic Header */}
       <div style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
@@ -100,7 +122,7 @@ export default function AffiliateProfilePage() {
 
       {/* Hero Image */}
       <div style={{ position: 'relative', width: '100%', height: 340 }}>
-        <img src={coverImage} alt={affiliate.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        <Image src={coverImage} alt={affiliate.name} fill unoptimized priority style={{ objectFit: 'cover' }} />
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 60%)' }} />
         
         {/* Floating Reward Badge on Hero */}
@@ -127,90 +149,79 @@ export default function AffiliateProfilePage() {
       {/* Content Card (Overlaps Image) */}
       <div style={{
         position: 'relative',
-        background: '#FAFAFA',
+        background: '#0D0D15',
         borderTopLeftRadius: 32,
         borderTopRightRadius: 32,
         marginTop: -32,
-        padding: '32px 24px',
+        padding: '32px 24px 120px',
         minHeight: 500,
-        boxShadow: '0 -4px 20px rgba(0,0,0,0.05)'
+        boxShadow: '0 -4px 20px rgba(0,0,0,0.5)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        borderBottom: 'none'
       }}>
         {/* Header Info */}
         <div style={{ marginBottom: 24 }}>
-          <h1 style={{ margin: '0 0 8px 0', fontSize: 32, fontWeight: 900, color: '#111', letterSpacing: '-1px', lineHeight: 1.1 }}>
+          <h1 style={{ margin: '0 0 8px 0', fontSize: 30, fontWeight: 900, color: '#FFFFFF', letterSpacing: '-1px', lineHeight: 1.1 }}>
             {affiliate.name}
           </h1>
-          <p style={{ margin: 0, fontSize: 15, color: '#E91E63', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1 }}>
+          <p style={{ margin: 0, fontSize: 13, color: '#E91E63', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1 }}>
             {affiliate.category}
           </p>
         </div>
 
         {/* Action Quick Links */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 32 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 32 }}>
           <motion.div
             whileTap={{ scale: 0.95 }}
             onClick={() => setShowMapSelector(true)}
-            style={{ background: '#fff', borderRadius: 20, padding: '12px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, border: '1px solid #F0F0F0', boxShadow: '0 2px 8px rgba(0,0,0,0.02)', cursor: 'pointer' }}
+            style={{ background: '#161622', borderRadius: 20, padding: '14px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', cursor: 'pointer' }}
           >
-            <div style={{ background: '#FFF0F5', padding: 10, borderRadius: 16, color: '#E91E63' }}><Navigation size={20} /></div>
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#111', textAlign: 'center' }}>Llegar</span>
+            <div style={{ background: 'rgba(233,30,99,0.15)', padding: 10, borderRadius: 16, color: '#E91E63' }}><Navigation size={20} /></div>
+            <span style={{ fontSize: 12, fontWeight: 800, color: '#FFFFFF', textAlign: 'center' }}>Llegar</span>
           </motion.div>
-
-          <Link href={`/chat/${affiliate.id}`} style={{ textDecoration: 'none' }}>
-            <motion.div whileTap={{ scale: 0.95 }} style={{ background: '#fff', borderRadius: 20, padding: '12px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, border: '1px solid #F0F0F0', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
-              <div style={{ background: '#FFF5F0', padding: 10, borderRadius: 16, color: '#F97316' }}><MessageCircle size={20} /></div>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#111', textAlign: 'center' }}>Mensaje</span>
-            </motion.div>
-          </Link>
 
           <motion.div
             whileTap={{ scale: 0.95 }}
-            onClick={() => {
-              if (affiliate.phone || affiliate.owner?.phoneNumber) {
-                window.location.href = `tel:${affiliate.phone || affiliate.owner.phoneNumber}`;
-              } else {
-                showToast('Número telefónico no disponible', 'info');
-              }
-            }}
-            style={{ background: '#fff', borderRadius: 20, padding: '12px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, border: '1px solid #F0F0F0', boxShadow: '0 2px 8px rgba(0,0,0,0.02)', cursor: 'pointer' }}
+            onClick={() => setShowMessageSelector(true)}
+            style={{ background: '#161622', borderRadius: 20, padding: '14px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', cursor: 'pointer' }}
           >
-            <div style={{ background: '#F0F4FF', padding: 10, borderRadius: 16, color: '#3B82F6' }}><Phone size={20} /></div>
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#111', textAlign: 'center' }}>Llamar</span>
+            <div style={{ background: 'rgba(249,115,22,0.15)', padding: 10, borderRadius: 16, color: '#F97316' }}><MessageCircle size={20} /></div>
+            <span style={{ fontSize: 12, fontWeight: 800, color: '#FFFFFF', textAlign: 'center' }}>Mensaje</span>
           </motion.div>
 
           <motion.div
             whileTap={{ scale: 0.95 }}
             onClick={() => setShowInAppBrowser(true)}
-            style={{ background: '#fff', borderRadius: 20, padding: '12px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, border: '1px solid #F0F0F0', boxShadow: '0 2px 8px rgba(0,0,0,0.02)', cursor: 'pointer' }}
+            style={{ background: '#161622', borderRadius: 20, padding: '14px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', cursor: 'pointer' }}
           >
-            <div style={{ background: '#F0FFF4', padding: 10, borderRadius: 16, color: '#10B981' }}><Globe size={20} /></div>
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#111', textAlign: 'center' }}>Web</span>
+            <div style={{ background: 'rgba(16,185,129,0.15)', padding: 10, borderRadius: 16, color: '#10B981' }}><Globe size={20} /></div>
+            <span style={{ fontSize: 12, fontWeight: 800, color: '#FFFFFF', textAlign: 'center' }}>Web</span>
           </motion.div>
         </div>
 
         {/* Info Grid */}
-        <div style={{ background: '#fff', borderRadius: 24, padding: 20, boxShadow: '0 4px 20px rgba(0,0,0,0.03)', border: '1px solid #F0F0F0', marginBottom: 24 }}>
+        <div style={{ background: '#161622', borderRadius: 24, padding: 20, boxShadow: '0 4px 20px rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.08)', marginBottom: 24 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 12, background: '#F8F8F8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666', flexShrink: 0 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 12, background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#E91E63', flexShrink: 0 }}>
               <MapPin size={18} />
             </div>
             <div>
-              <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: '#111' }}>{affiliate.address}</p>
-              <p style={{ margin: 0, fontSize: 13, color: '#888', marginTop: 2 }}>A {affiliate.distance || '1.0km'} de ti</p>
+              <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: '#FFFFFF' }}>{affiliate.address}</p>
+              <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>A {affiliate.distance || '1.0km'} de ti</p>
             </div>
           </div>
           
-          <div style={{ height: 1, background: '#F5F5F5', margin: '0 -20px 16px -20px' }} />
+          <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '0 -20px 16px -20px' }} />
 
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 12, background: '#F8F8F8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666', flexShrink: 0 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 12, background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10B981', flexShrink: 0 }}>
               <Clock size={18} />
             </div>
             <div>
-              <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: '#111', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: 6 }}>
                 Abierto Ahora <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#4CAF50' }} />
               </p>
-              <p style={{ margin: 0, fontSize: 13, color: '#888', marginTop: 2 }}>
+              <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
                 {affiliate.startTime} - {affiliate.endTime}
               </p>
             </div>
@@ -218,26 +229,26 @@ export default function AffiliateProfilePage() {
         </div>
 
         {/* Dynamic Rewards Schedule */}
-        <div style={{ background: 'linear-gradient(135deg, rgba(233,30,99,0.05) 0%, rgba(173,20,87,0.05) 100%)', borderRadius: 24, padding: 20, border: '1px solid rgba(233,30,99,0.1)', marginBottom: 24 }}>
-          <h3 style={{ margin: '0 0 12px 0', fontSize: 16, fontWeight: 900, color: '#E91E63', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ background: 'linear-gradient(135deg, rgba(233,30,99,0.12) 0%, rgba(173,20,87,0.08) 100%)', borderRadius: 24, padding: 20, border: '1px solid rgba(233,30,99,0.25)', marginBottom: 24 }}>
+          <h3 style={{ margin: '0 0 10px 0', fontSize: 16, fontWeight: 900, color: '#FF4081', display: 'flex', alignItems: 'center', gap: 6 }}>
             <Tag size={18} /> Happy Hour de Bunz
           </h3>
-          <p style={{ margin: 0, fontSize: 14, color: '#666', lineHeight: 1.5, fontWeight: 500 }}>
+          <p style={{ margin: 0, fontSize: 13, color: 'rgba(255,255,255,0.7)', lineHeight: 1.5, fontWeight: 500 }}>
             Escanea tu ticket durante estas horas para llevarte el <strong>+{affiliate.rewardPercentage}%</strong> del valor de tu compra en Bunz.
           </p>
           <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ background: '#E91E63', color: '#fff', fontSize: 12, fontWeight: 800, padding: '4px 10px', borderRadius: 100 }}>{affiliate.startTime} a {affiliate.endTime}</span>
+            <span style={{ background: '#E91E63', color: '#fff', fontSize: 12, fontWeight: 800, padding: '4px 12px', borderRadius: 100 }}>{affiliate.startTime} a {affiliate.endTime}</span>
           </div>
         </div>
 
-        {/* Gallery Slider (New Feature) */}
+        {/* Gallery Slider */}
         {parsedGallery.length > 0 && (
           <div style={{ marginBottom: 32 }}>
-            <h3 style={{ margin: '0 0 16px 0', fontSize: 18, fontWeight: 900, color: '#111' }}>Galería</h3>
+            <h3 style={{ margin: '0 0 16px 0', fontSize: 18, fontWeight: 900, color: '#FFFFFF' }}>Galería</h3>
             <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8, margin: '0 -20px', padding: '0 20px' }} className="scrollbar-hide">
               {parsedGallery.map((img: string, i: number) => (
-                <div key={i} style={{ width: 200, height: 140, borderRadius: 20, overflow: 'hidden', flexShrink: 0, border: '1px solid #F0F0F0', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                  <img src={img} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt={`Gallery ${i}`} />
+                <div key={i} style={{ position: 'relative', width: 200, height: 140, borderRadius: 20, overflow: 'hidden', flexShrink: 0, border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
+                  <Image src={img} fill unoptimized style={{ objectFit: 'cover' }} alt={`Gallery ${i}`} />
                 </div>
               ))}
             </div>
@@ -246,37 +257,42 @@ export default function AffiliateProfilePage() {
 
         {/* About */}
         <div style={{ marginBottom: 40 }}>
-          <h3 style={{ margin: '0 0 12px 0', fontSize: 18, fontWeight: 900, color: '#111' }}>Acerca de</h3>
-          <p style={{ margin: 0, fontSize: 15, color: '#666', lineHeight: 1.6 }}>
+          <h3 style={{ margin: '0 0 12px 0', fontSize: 18, fontWeight: 900, color: '#FFFFFF' }}>Acerca de</h3>
+          <p style={{ margin: 0, fontSize: 14, color: 'rgba(255,255,255,0.6)', lineHeight: 1.6 }}>
             {affiliate.description || 'Este negocio no ha agregado una descripción todavía.'}
           </p>
         </div>
       </div>
 
-      {/* Floating Bottom Action */}
+      {/* Floating Bottom Action (above BottomNav) */}
       <div style={{
-        position: 'fixed', bottom: 85, left: 0, right: 0,
-        background: 'linear-gradient(to top, rgba(255,255,255,1) 30%, rgba(255,255,255,0.9) 80%, rgba(255,255,255,0))',
-        padding: '32px 24px 16px',
+        position: 'fixed',
+        bottom: 'calc(max(env(safe-area-inset-bottom, 0px), 12px) + 72px)',
+        left: 0, right: 0,
+        padding: '0 20px',
         zIndex: 90,
-        pointerEvents: 'none' // The wrapper is invisible to clicks
+        pointerEvents: 'none'
       }}>
         <button 
           onClick={() => {
+            PlatformBridge.hapticFeedback('medium');
             router.push('/scan');
           }}
           style={{
             width: '100%',
-            background: '#111', color: '#fff',
-            padding: 20, borderRadius: 24,
+            maxWidth: 500,
+            margin: '0 auto',
+            background: 'linear-gradient(135deg, #E91E63 0%, #FF4081 100%)',
+            color: '#fff',
+            padding: '16px 20px', borderRadius: 22,
             border: 'none',
-            fontSize: 16, fontWeight: 900,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
-            boxShadow: '0 12px 32px rgba(0,0,0,0.2)',
+            fontSize: 15, fontWeight: 900,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+            boxShadow: '0 8px 28px rgba(233,30,99,0.4)',
             cursor: 'pointer',
             pointerEvents: 'auto'
           }}>
-          <Tag size={20} />
+          <Tag size={18} />
           Escanear en caja y ganar +{affiliate.rewardPercentage}%
         </button>
       </div>
@@ -337,6 +353,64 @@ export default function AffiliateProfilePage() {
                 style={{ background: 'linear-gradient(135deg, #E91E63, #8B5CF6)', color: '#fff', padding: '16px', borderRadius: 18, border: 'none', fontWeight: 900, fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, cursor: 'pointer', marginTop: 4 }}
               >
                 🚀 Ver en Mapa Neón Rabbitty
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* MODAL: Selector de Mensaje (In-App vs WhatsApp) */}
+      {showMessageSelector && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <motion.div 
+            initial={{ y: 200, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            style={{ background: '#161622', borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: '24px 20px 40px', width: '100%', maxWidth: 500, border: '1px solid rgba(255,255,255,0.1)' }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: '#fff' }}>Enviar mensaje</h3>
+                <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>Elige cómo comunicarte con {affiliate.name}</p>
+              </div>
+              <button onClick={() => setShowMessageSelector(false)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: '50%', cursor: 'pointer', fontWeight: 800 }}>✕</button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <button
+                onClick={() => {
+                  PlatformBridge.hapticFeedback('medium');
+                  setShowMessageSelector(false);
+                  router.push(`/chat/${affiliate.id}`);
+                }}
+                style={{ background: 'linear-gradient(135deg, #E91E63 0%, #FF4081 100%)', color: '#fff', padding: '16px', borderRadius: 20, border: 'none', fontWeight: 900, fontSize: 15, display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer', boxShadow: '0 8px 24px rgba(233,30,99,0.3)' }}
+              >
+                <div style={{ width: 36, height: 36, borderRadius: 12, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>💬</div>
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontSize: 15, fontWeight: 900 }}>Chat In-App Rabbitty</div>
+                  <div style={{ fontSize: 11, opacity: 0.8, fontWeight: 600 }}>Chatea directamente con el negocio dentro de la app</div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => {
+                  PlatformBridge.hapticFeedback('medium');
+                  setShowMessageSelector(false);
+                  const phone = affiliate.supportWhatsApp || affiliate.phone || affiliate.owner?.phoneNumber;
+                  if (phone) {
+                    const cleanPhone = phone.replace(/[^0-9]/g, '');
+                    const text = encodeURIComponent(`¡Hola ${affiliate.name}! Vi su perfil en Rabbitty y me gustaría información.`);
+                    window.open(`https://wa.me/${cleanPhone}?text=${text}`, '_blank');
+                  } else {
+                    showToast('WhatsApp directo no configurado por el comercio', 'info');
+                  }
+                }}
+                style={{ background: '#25D366', color: '#fff', padding: '16px', borderRadius: 20, border: 'none', fontWeight: 900, fontSize: 15, display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer', boxShadow: '0 8px 24px rgba(37,211,102,0.3)' }}
+              >
+                <div style={{ width: 36, height: 36, borderRadius: 12, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>📱</div>
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontSize: 15, fontWeight: 900 }}>WhatsApp Oficial</div>
+                  <div style={{ fontSize: 11, opacity: 0.8, fontWeight: 600 }}>Abrir conversación en WhatsApp</div>
+                </div>
               </button>
             </div>
           </motion.div>

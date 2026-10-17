@@ -293,20 +293,96 @@ async function loadHistory(conversationId: string): Promise<ChatMessage[]> {
 
 function heuristicReply(content: string, ctx: BunzyContext, lat?: number | null, lng?: number | null): BunzyReply {
   const nc = normalizeText(content);
-  const wantsGeolocated = /cerca|ahorita|aqui|mi zona|caminando/.test(nc);
 
-  if (wantsGeolocated && !(typeof lat === 'number' && typeof lng === 'number')) {
+  // 1. Pregunta sobre ganar bunz / qué son los bunz
+  if (/como gano bunz|que son los bunz|como ganar|ganar bunz|recompens|mis bunz/.test(nc)) {
+    const balanceInfo = ctx.user ? ` Actualmente tienes **${ctx.user.balance} bunz** disponibles.` : '';
     return {
-      content: '¿Quieres que use tu ubicación actual o buscas para otro lugar (dirección, colonia o referencia)?',
+      content:
+        `¡Qué onda! 🐰 Ganar bunz en Rabbitty es súper fácil:${balanceInfo}\n\n` +
+        `1️⃣ **Consume en Comercios Aliados**: Visita cualquiera de nuestros aliados y escanea tu ticket en caja con el botón **Escanear** para recibir desde el **10% hasta el 30%** de tu consumo de vuelta en bunz.\n` +
+        `2️⃣ **Invita Amigos (Share & Win)**: Comparte tu link en la sección Referidos y llévate bunz extra cada vez que tus amigos completen consumos.\n` +
+        `3️⃣ **Completa Misiones y Logros**: Revisa tu perfil en Insignias y Misiones para desbloquear recompensas adicionales.\n\n` +
+        `¿Te gustaría ver comercios aliados donde puedes ganar bunz ahorita?`,
       type: 'TEXT',
       metadata: null,
-      suggestions: ['Usar mi ubicación', 'Buscar por dirección', 'Ver todos'],
+      suggestions: ['Recomiéndame un lugar', 'Cafés cerca ☕', 'Ver mapa Freehands'],
       options: [],
       orderDraft: null,
     };
   }
 
-  const matches = ctx.businesses.slice(0, 3);
+  // 2. Click en sugerencia "Usar mi ubicación"
+  if (/usar mi ubicacion|mi ubicacion|compartir ubicacion/.test(nc)) {
+    if (typeof lat === 'number' && typeof lng === 'number') {
+      // Ya tiene ubicación, buscar los más cercanos
+      const near = rankBusinesses(ctx.allBusinesses, 'cerca', lat, lng).slice(0, 3);
+      if (near.length > 0) {
+        const lines = near
+          .map((b, i) => {
+            const dist = haversineKm(lat, lng, b.lat, b.lng);
+            const d = ` · ${dist < 1 ? Math.round(dist * 1000) + ' m' : dist.toFixed(1) + ' km'}`;
+            return `${i + 1}. **${b.name}** (${b.category})${d} · +${b.rewardPercentage}% bunz`;
+          })
+          .join('\n');
+        return {
+          content: `¡Listo! 📍 Detecté tu ubicación. Aquí tienes los lugares más cercanos a ti:\n\n${lines}\n\n¿A cuál te gustaría ir? Puedo darte el contacto o mostrarte cómo llegar.`,
+          type: 'OPTIONS',
+          metadata: null,
+          suggestions: ['Cómo llego 🗺️', 'Ver otros lugares', '¿Cómo gano bunz?'],
+          options: mapToOptions(near, lat, lng),
+          orderDraft: null,
+        };
+      }
+    }
+    return {
+      content: '¡De acuerdo! 📍 Toca el botón del pin **📍** en la barra inferior para compartir tu ubicación exacta y te muestro los lugares más cercanos al instante.',
+      type: 'TEXT',
+      metadata: null,
+      suggestions: ['Ver todos los comercios', 'Cafés cerca ☕', '¿Cómo gano bunz?'],
+      options: [],
+      orderDraft: null,
+    };
+  }
+
+  // 3. Click en "Ver todos" o "Buscar por dirección"
+  if (/ver todos|todos los comercios|buscar por direccion/.test(nc)) {
+    const top = ctx.allBusinesses.slice(0, 4);
+    const lines = top.map((b, i) => `${i + 1}. **${b.name}** (${b.category}) · +${b.rewardPercentage}% bunz`).join('\n');
+    return {
+      content: `¡Aquí tienes algunos de nuestros mejores comercios aliados! 🐰\n\n${lines}\n\n¿Quieres que te muestre los detalles de alguno o prefieres una categoría específica?`,
+      type: 'OPTIONS',
+      metadata: null,
+      suggestions: ['Cafés ☕', 'Restaurantes 🍽️', 'Bares 🍻'],
+      options: mapToOptions(top, lat, lng),
+      orderDraft: null,
+    };
+  }
+
+  // 4. Preguntas geolocalizadas sin coordenadas (solo preguntar si no hay coordenadas)
+  const wantsGeolocated = /cerca|ahorita|aqui|mi zona|caminando/.test(nc);
+  if (wantsGeolocated && !(typeof lat === 'number' && typeof lng === 'number')) {
+    // Si no tiene ubicación pero hay comercios en el directorio, mostrar los mejores y sugerir compartir ubicación
+    const featured = ctx.businesses.slice(0, 3);
+    if (featured.length > 0) {
+      const lines = featured
+        .map((b, i) => `${i + 1}. **${b.name}** (${b.category}) · +${b.rewardPercentage}% bunz`)
+        .join('\n');
+      return {
+        content:
+          `Para darte las distancias exactas a tu posición, toca el pin **📍** abajo para compartir tu ubicación.\n\n` +
+          `Mientras tanto, aquí te dejo opciones top en la ciudad:\n\n${lines}\n\n¿Te interesa alguna o buscas algo en particular?`,
+        type: 'OPTIONS',
+        metadata: null,
+        suggestions: ['Usar mi ubicación', 'Cafés ☕', '¿Cómo gano bunz?'],
+        options: mapToOptions(featured, lat, lng),
+        orderDraft: null,
+      };
+    }
+  }
+
+  // 5. Búsqueda de coincidencias en negocios
+  const matches = rankBusinesses(ctx.allBusinesses, content, lat, lng).slice(0, 3);
   if (matches.length >= 2) {
     const lines = matches
       .map((b, i) => {
@@ -320,7 +396,7 @@ function heuristicReply(content: string, ctx: BunzyContext, lat?: number | null,
       })
       .join('\n');
     return {
-      content: `¡Qué onda! Te dejo ${matches.length} opciones:\n\n${lines}\n\n¿Cuál eliges? Puedo reservar, pedir por mí o darte su contacto.`,
+      content: `¡Qué onda! Te encontré estas opciones:\n\n${lines}\n\n¿Cuál te late? Puedo ayudarte a llegar o darte su contacto.`,
       type: 'OPTIONS',
       metadata: null,
       suggestions: suggestionsFor(content, true, true),
@@ -331,7 +407,7 @@ function heuristicReply(content: string, ctx: BunzyContext, lat?: number | null,
 
   if (matches[0]) {
     const matched = matches[0];
-    const balanceLine = ctx.user && ctx.user.balance > 0 ? `\n💰 Tienes ${ctx.user.balance} bunz listos para canjear.` : '';
+    const balanceLine = ctx.user && ctx.user.balance > 0 ? `\n💰 Tienes **${ctx.user.balance} bunz** disponibles para canjear.` : '';
     let dline = '';
     if (typeof lat === 'number' && typeof lng === 'number') {
       const dist = haversineKm(lat, lng, matched.lat, matched.lng);
@@ -343,7 +419,7 @@ function heuristicReply(content: string, ctx: BunzyContext, lat?: number | null,
         `📍 Dirección: ${matched.address}\n` +
         `🎁 Recompensa: **+${matched.rewardPercentage}% en bunz** con cada consumo.` +
         balanceLine +
-        `\n\n¿Quieres reservar, pedir por mí o darte su contacto?👇\n` +
+        `\n\n¿Quieres ver su perfil completo o saber cómo llegar?👇\n` +
         `[COMERCIO_ACTION id="${matched.id}" name="${matched.name}"]`,
       type: 'TEXT',
       metadata: null,
@@ -355,8 +431,8 @@ function heuristicReply(content: string, ctx: BunzyContext, lat?: number | null,
 
   return {
     content:
-      '¡Qué onda! 🐰 En Rabbitty puedes ganar y canjear bunz en nuestros comercios aliados. ' +
-      'Dime qué buscas (pizza, tacos, café...) y te doy opciones rápidas.',
+      '¡Qué onda! 🐰 En Rabbitty ganas y canjeas bunz en nuestros comercios aliados. ' +
+      'Dime qué se te antoja (café, pizza, tacos, burger...) o pídeme una recomendación.',
     type: 'TEXT',
     metadata: null,
     suggestions: suggestionsFor(content, false),

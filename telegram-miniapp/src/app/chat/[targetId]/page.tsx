@@ -180,9 +180,25 @@ export default function ChatRoomPage() {
     );
   };
 
-  const sendMessage = async (raw: string) => {
+  const sendMessage = async (raw: string, explicitCoords?: { lat: number; lng: number } | null) => {
     const content = raw.trim();
     if (!content || !conversationId || !user || sending) return;
+
+    if (/usar mi ubicacion|compartir ubicacion/i.test(content) && !coords && !explicitCoords && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const newCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setCoords(newCoords);
+          sendMessage('Usar mi ubicación', newCoords);
+        },
+        () => {
+          // Si no dio permiso o falló, enviar de todos modos
+          sendMessage('Ver todos los comercios');
+        },
+        { timeout: 6000 }
+      );
+      return;
+    }
 
     setInput('');
     setSuggestions([]);
@@ -208,8 +224,8 @@ export default function ChatRoomPage() {
           conversationId,
           targetId,
           content,
-          lat: coords?.lat ?? null,
-          lng: coords?.lng ?? null,
+          lat: explicitCoords?.lat ?? coords?.lat ?? null,
+          lng: explicitCoords?.lng ?? coords?.lng ?? null,
         }),
       });
       const data: SendResponse = await res.json();

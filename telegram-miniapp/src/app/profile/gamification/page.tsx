@@ -1,36 +1,99 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
+import Image from 'next/image';
 import { useAuth } from '@/features/auth/AuthProvider';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import { useToast } from '@/contexts/ToastContext';
 import { PlatformBridge } from '@/lib/platform';
 
+interface LevelInfo {
+  level: number;
+  name: string;
+  nextLevelHops: number;
+  bunzMultiplier: number | string;
+}
+
+interface MissionItem {
+  id: string;
+  title: string;
+  description: string;
+  isCompleted: boolean;
+  rewardHops: number;
+  progressValue: number;
+  conditionTarget: number;
+}
+
+interface AchievementItem {
+  id: string;
+  name: string;
+  iconUrl?: string;
+  unlocked: boolean;
+}
+
+interface GamificationData {
+  hops: number;
+  level?: LevelInfo;
+  missions?: MissionItem[];
+  achievements?: AchievementItem[];
+}
+
+const ACHIEVEMENT_EMOJI: Record<string, string> = {
+  '/icons/first-visit.png': '🐰',
+  '/icons/collector.png': '🏅',
+  '/icons/bunz-master.png': '👑',
+};
+
+function AchievementIcon({ iconUrl, name }: { iconUrl?: string; name: string }) {
+  const [failed, setFailed] = useState(false);
+  const isPath = !!iconUrl && (iconUrl.startsWith('/') || iconUrl.startsWith('http'));
+
+  if (isPath && !failed) {
+    return (
+      <Image
+        src={iconUrl}
+        alt={name}
+        width={40}
+        height={40}
+        unoptimized
+        onError={() => setFailed(true)}
+        className="w-10 h-10 object-contain"
+      />
+    );
+  }
+
+  const emoji = !isPath && iconUrl ? iconUrl : (ACHIEVEMENT_EMOJI[iconUrl ?? ''] ?? '🏆');
+  return <span className="text-[32px]">{emoji}</span>;
+}
+
 export default function GamificationPage() {
   const { user } = useAuth();
   const { showToast } = useToast();
   
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<GamificationData | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'MISSIONS' | 'BADGES'>('MISSIONS');
 
+  const loadGamification = useCallback(() => {
+    if (!user?.id) return;
+    PlatformBridge.getAuthHeaders()
+      .then(headers => fetch(`/api/gamification`, { headers }))
+      .then(res => res.json())
+      .then(d => {
+        if (d.success) setData(d);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error(err);
+        setLoading(false);
+        showToast('Error cargando progreso', 'error');
+      });
+  }, [user?.id, showToast]);
+
   useEffect(() => {
-    if (user?.id) {
-      PlatformBridge.getAuthHeaders()
-        .then(headers => fetch(`/api/gamification`, { headers }))
-        .then(res => res.json())
-        .then(d => {
-          if (d.success) setData(d);
-          setLoading(false);
-        })
-        .catch(err => {
-          console.error(err);
-          setLoading(false);
-          showToast('Error cargando progreso', 'error');
-        });
-    }
-  }, [user]);
+    loadGamification();
+  }, [loadGamification]);
 
   return (
     <ProfileSubpageLayout title="Identidad y Logros" showBack={true}>
@@ -40,7 +103,7 @@ export default function GamificationPage() {
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
           
           {/* Header Stats */}
-          <div className="bg-gradient-to-br from-[#1A1028] via-[#120D1A] to-[#0A0710] border border-white/10 rounded-2xl p-5 mb-5 relative overflow-hidden shadow-xl">
+          <div className="bg-linear-to-br from-[#1A1028] via-[#120D1A] to-[#0A0710] border border-white/10 rounded-2xl p-5 mb-5 relative overflow-hidden shadow-xl">
             <div className="absolute -top-5 -right-5 text-[100px] opacity-10 select-none">🐰</div>
             
             <div className="flex items-center justify-between mb-2">
@@ -60,7 +123,7 @@ export default function GamificationPage() {
               </div>
               <div className="h-2 bg-white/10 rounded-full overflow-hidden p-0.5 border border-white/5">
                 <div 
-                  className="h-full bg-gradient-to-r from-[#E91E63] to-[#FF4081] rounded-full transition-all duration-500 shadow-[0_0_10px_#E91E63]" 
+                  className="h-full bg-linear-to-r from-[#E91E63] to-[#FF4081] rounded-full transition-all duration-500 shadow-[0_0_10px_#E91E63]" 
                   style={{ width: `${Math.min(((data?.hops || 0) / (data?.level?.nextLevelHops || 100)) * 100, 100)}%` }} 
                 />
               </div>
@@ -85,7 +148,7 @@ export default function GamificationPage() {
                 PlatformBridge.hapticFeedback('light');
                 setActiveTab('MISSIONS');
               }}
-              className="flex-1 py-[10px] border-none rounded-[10px] text-[13px] font-extrabold cursor-pointer transition-all"
+              className="flex-1 py-2.5 border-none rounded-[10px] text-[13px] font-extrabold cursor-pointer transition-all"
               style={{
                 backgroundColor: activeTab === 'MISSIONS' ? '#E91E63' : 'transparent',
                 color: activeTab === 'MISSIONS' ? '#fff' : 'rgba(255,255,255,0.6)',
@@ -99,7 +162,7 @@ export default function GamificationPage() {
                 PlatformBridge.hapticFeedback('light');
                 setActiveTab('BADGES');
               }}
-              className="flex-1 py-[10px] border-none rounded-[10px] text-[13px] font-extrabold cursor-pointer transition-all"
+              className="flex-1 py-2.5 border-none rounded-[10px] text-[13px] font-extrabold cursor-pointer transition-all"
               style={{
                 backgroundColor: activeTab === 'BADGES' ? '#E91E63' : 'transparent',
                 color: activeTab === 'BADGES' ? '#fff' : 'rgba(255,255,255,0.6)',
@@ -113,19 +176,19 @@ export default function GamificationPage() {
           {/* MISSIONS TAB */}
           {activeTab === 'MISSIONS' && (
             <div className="flex flex-col gap-3 pb-5">
-              {data?.missions?.map((m: any) => (
-                <div key={m.id} className="bg-[#161622] border border-white/10 rounded-[16px] p-4 shadow-md transition-all" style={{ opacity: m.isCompleted ? 0.6 : 1 }}>
+              {data?.missions?.map((m) => (
+                <div key={m.id} className="bg-[#161622] border border-white/10 rounded-2xl p-4 shadow-md transition-all" style={{ opacity: m.isCompleted ? 0.6 : 1 }}>
                   <div className="flex justify-between items-start mb-2">
                     <div className="pr-2">
                       <h3 className="text-[15px] font-extrabold text-white m-0 mb-1">{m.title}</h3>
                       <p className="text-xs text-white/60 m-0 leading-[1.4]">{m.description}</p>
                     </div>
                     {m.isCompleted ? (
-                      <div className="bg-[#10B981]/20 border border-[#10B981]/40 text-[#34D399] text-[10px] font-extrabold px-2 py-1 rounded-[6px] shrink-0">
+                      <div className="bg-[#10B981]/20 border border-[#10B981]/40 text-[#34D399] text-[10px] font-extrabold px-2 py-1 rounded-md shrink-0">
                         COMPLETADA ✓
                       </div>
                     ) : (
-                      <div className="bg-[#E91E63]/15 border border-[#E91E63]/30 text-[#F472B6] text-[10px] font-extrabold px-2 py-1 rounded-[6px] shrink-0">
+                      <div className="bg-[#E91E63]/15 border border-[#E91E63]/30 text-[#F472B6] text-[10px] font-extrabold px-2 py-1 rounded-md shrink-0">
                         +{m.rewardHops} HOPS
                       </div>
                     )}
@@ -137,8 +200,8 @@ export default function GamificationPage() {
                         <span>Progreso de objetivo</span>
                         <span className="font-mono text-white/70">{m.progressValue} / {m.conditionTarget}</span>
                       </div>
-                      <div className="h-[6px] bg-white/10 rounded-full overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-[#E91E63] to-[#FF4081] rounded-full" style={{ width: `${Math.min((m.progressValue / m.conditionTarget) * 100, 100)}%` }} />
+                      <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                        <div className="h-full bg-linear-to-r from-[#E91E63] to-[#FF4081] rounded-full" style={{ width: `${Math.min((m.progressValue / m.conditionTarget) * 100, 100)}%` }} />
                       </div>
                     </div>
                   )}
@@ -150,17 +213,19 @@ export default function GamificationPage() {
           {/* BADGES TAB */}
           {activeTab === 'BADGES' && (
             <div className="grid grid-cols-3 gap-3 pb-5">
-              {data?.achievements?.map((ach: any) => (
+              {data?.achievements?.map((ach) => (
                 <div 
                   key={ach.id} 
-                  className="bg-[#161622] border border-white/10 rounded-[16px] px-2 py-4 flex flex-col items-center text-center shadow-md"
+                  className="bg-[#161622] border border-white/10 rounded-2xl px-2 py-4 flex flex-col items-center text-center shadow-md"
                   style={{ 
                     filter: ach.unlocked ? 'none' : 'grayscale(100%)', 
                     opacity: ach.unlocked ? 1 : 0.35,
                     borderColor: ach.unlocked ? 'rgba(233,30,99,0.3)' : 'rgba(255,255,255,0.08)' 
                   }}
                 >
-                  <div className="text-[36px] mb-2 drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)]">{ach.iconUrl}</div>
+                  <div className="relative w-12 h-12 flex items-center justify-center mb-2 drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)]">
+                    <AchievementIcon iconUrl={ach.iconUrl} name={ach.name} />
+                  </div>
                   <h4 className="text-[12px] font-extrabold text-white m-0 mb-1 leading-[1.2]">{ach.name}</h4>
                   <span className="text-[9px] font-bold uppercase tracking-wider text-white/40">
                     {ach.unlocked ? 'Desbloqueado' : 'Bloqueado'}

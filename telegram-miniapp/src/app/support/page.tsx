@@ -56,12 +56,14 @@ export default function SupportHubPage() {
             <div key={idx} onClick={handleTelegramClick} className="no-underline cursor-pointer">
               <motion.div
                 whileTap={{ scale: 0.98 }}
-                className="bg-white rounded-[16px] p-5 flex items-center gap-4 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-[#F0F0F0]"
+                className="bg-[#161622] rounded-[18px] p-5 flex items-center gap-4 shadow-lg border border-white/10"
               >
-                <div className="text-[28px]">{link.icon}</div>
+                <div className="w-12 h-12 rounded-[14px] bg-white/5 border border-white/5 flex items-center justify-center text-[26px]">
+                  {link.icon}
+                </div>
                 <div className="flex-1">
-                  <h3 className="text-[16px] font-bold text-[#111] m-0 mb-1">{link.title}</h3>
-                  <p className="text-[13px] text-[#888] m-0">{link.desc}</p>
+                  <h3 className="text-[16px] font-bold text-white m-0 mb-1">{link.title}</h3>
+                  <p className="text-[13px] text-white/60 m-0">{link.desc}</p>
                 </div>
                 <div className="text-[#E91E63]">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -74,12 +76,14 @@ export default function SupportHubPage() {
           <Link key={idx} href={link.href} className="no-underline">
             <motion.div
               whileTap={{ scale: 0.98 }}
-              className="bg-white rounded-[16px] p-5 flex items-center gap-4 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-[#F0F0F0]"
+              className="bg-[#161622] rounded-[18px] p-5 flex items-center gap-4 shadow-lg border border-white/10"
             >
-              <div className="text-[28px]">{link.icon}</div>
+              <div className="w-12 h-12 rounded-[14px] bg-white/5 border border-white/5 flex items-center justify-center text-[26px]">
+                {link.icon}
+              </div>
               <div className="flex-1">
-                <h3 className="text-[16px] font-bold text-[#111] m-0 mb-1">{link.title}</h3>
-                <p className="text-[13px] text-[#888] m-0">{link.desc}</p>
+                <h3 className="text-[16px] font-bold text-white m-0 mb-1">{link.title}</h3>
+                <p className="text-[13px] text-white/60 m-0">{link.desc}</p>
               </div>
               <div className="text-[#E91E63]">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
