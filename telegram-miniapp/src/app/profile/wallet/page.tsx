@@ -224,9 +224,7 @@ export default function WalletPage() {
               PlatformBridge.hapticFeedback('light');
               setShowReceive(true);
             }}
-            disabled={!address}
-            className="flex-1 max-w-[170px] h-[130px] bg-[#161622] hover:bg-[#1C1C2B] border border-white/10 rounded-2xl p-4 flex flex-col items-center justify-center gap-3 shadow-[0_8px_20px_rgba(0,0,0,0.3)] transition-transform active:scale-95"
-            style={{ cursor: address ? 'pointer' : 'not-allowed', opacity: address ? 1 : 0.5 }}
+            className="flex-1 max-w-[170px] h-[130px] bg-[#161622] hover:bg-[#1C1C2B] border border-white/10 rounded-2xl p-4 flex flex-col items-center justify-center gap-3 shadow-[0_8px_20px_rgba(0,0,0,0.3)] transition-transform active:scale-95 cursor-pointer"
           >
             <div className="w-12 h-12 rounded-full bg-[#3B82F6]/15 border border-[#3B82F6]/30 flex items-center justify-center">
               <ArrowDownLeft size={22} color={'#60A5FA'} strokeWidth={2.5} />
@@ -236,9 +234,7 @@ export default function WalletPage() {
 
           <button
             onClick={() => openSend()}
-            disabled={!address}
-            className="flex-1 max-w-[170px] h-[130px] bg-[#161622] hover:bg-[#1C1C2B] border border-white/10 rounded-2xl p-4 flex flex-col items-center justify-center gap-3 shadow-[0_8px_20px_rgba(0,0,0,0.3)] transition-transform active:scale-95"
-            style={{ cursor: address ? 'pointer' : 'not-allowed', opacity: address ? 1 : 0.5 }}
+            className="flex-1 max-w-[170px] h-[130px] bg-[#161622] hover:bg-[#1C1C2B] border border-white/10 rounded-2xl p-4 flex flex-col items-center justify-center gap-3 shadow-[0_8px_20px_rgba(0,0,0,0.3)] transition-transform active:scale-95 cursor-pointer"
           >
             <div className="w-12 h-12 rounded-full bg-[#E91E63]/15 border border-[#E91E63]/30 flex items-center justify-center">
               <ArrowUpRight size={22} color={'#E91E63'} strokeWidth={2.5} />

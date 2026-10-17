@@ -326,11 +326,11 @@ export function Globe3D({ markers, onMarkerClick, onMarkerHover }: Globe3DProps)
       className="relative w-full h-full flex items-center justify-center overflow-hidden select-none bg-radial from-[#120D1E] via-[#0A0713] to-black"
       style={{ touchAction: "none", cursor: dragging ? "grabbing" : "grab" }}
     >
-      {/* Dynamic star/nebula background aura */}
+      {/* Smooth star/nebula background aura without harsh circular cut */}
       <div
-        className="absolute w-[460px] h-[460px] rounded-full pointer-events-none opacity-25"
+        className="absolute inset-0 pointer-events-none opacity-40"
         style={{
-          background: 'radial-gradient(circle, rgba(233,30,99,0.3) 0%, rgba(59,130,246,0.15) 50%, transparent 50%)',
+          background: 'radial-gradient(ellipse at center, rgba(233,30,99,0.18) 0%, rgba(99,102,241,0.1) 45%, transparent 75%)',
         }}
       />
 
@@ -400,13 +400,22 @@ export function Globe3D({ markers, onMarkerClick, onMarkerHover }: Globe3DProps)
         </div>
       )}
 
-      {/* Selected marker card */}
+      {/* Selected marker card - placed cleanly above the carousel */}
       {selectedMarker && (
-        <div className="absolute top-4 left-4 right-20 z-40 bg-black/85 backdrop-blur-lg border border-pink-500/30 rounded-2xl p-4 text-white shadow-2xl">
-          <p className="text-[10px] font-black text-[#E91E63] tracking-[1.5px] uppercase mb-1">Negocio</p>
-          <h3 className="text-lg font-black m-0 mb-1">{selectedMarker.label}</h3>
+        <div className="absolute bottom-20 left-4 right-4 z-40 max-w-sm mx-auto bg-black/90 backdrop-blur-xl border border-pink-500/40 rounded-2xl p-4 text-white shadow-2xl">
+          <div className="flex items-start justify-between gap-2 mb-1">
+            <span className="text-[10px] font-black text-[#E91E63] tracking-[1.5px] uppercase">Negocio Afiliado</span>
+            <button
+              type="button"
+              onClick={() => setSelectedMarker(null)}
+              className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 text-white/70 flex items-center justify-center text-xs font-bold border-0 cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+          <h3 className="text-base font-black m-0 mb-1 leading-snug">{selectedMarker.label}</h3>
           {typeof selectedMarker.bunzCost === 'number' && (
-            <p className="text-sm text-white/70 m-0">Desde {selectedMarker.bunzCost} BUNZ</p>
+            <p className="text-xs text-white/70 m-0">🎁 Recompensa: +{selectedMarker.bunzCost}% en BUNZ</p>
           )}
           <div className="flex gap-2 mt-3">
             <button
@@ -418,13 +427,6 @@ export function Globe3D({ markers, onMarkerClick, onMarkerHover }: Globe3DProps)
               className="flex-1 py-2 rounded-xl bg-[#E91E63] text-white text-xs font-black border-0 active:scale-95 transition-transform"
             >
               Ver negocio
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedMarker(null)}
-              className="px-4 py-2 rounded-xl bg-white/10 text-white/70 text-xs font-black border-0 active:scale-95 transition-transform"
-            >
-              Cerrar
             </button>
           </div>
         </div>

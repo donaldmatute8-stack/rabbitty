@@ -30,15 +30,18 @@ export default function ReferralPage() {
   const profile = user as any;
   const loading = !user;
 
+  // Telegram bot startapp referral link or web referral link fallback
+  const referralCode = profile?.username || profile?.telegramId || profile?.id || 'rabbitty';
   const referralLink = profile?.telegramId
     ? `https://t.me/Rabbittyme_bot/app?startapp=ref_${profile.telegramId}`
-    : '';
+    : `https://t.me/Rabbittyme_bot/app?startapp=ref_${referralCode}`;
 
   const handleNativeShare = async () => {
     if (!referralLink) return;
+    PlatformBridge.hapticFeedback('medium');
     await PlatformBridge.share({
       title: 'Únete a Rabbitty 🐰',
-      text: `¡Qué onda! Te invito a Rabbitty. Regístrate con mi enlace para desbloquear recompensas y multiplicar bunz en los mejores comercios:`,
+      text: `¡Qué onda! Te invito a Rabbitty. Regístrate con mi enlace para ganar bunz de bienvenida y multiplicarlos en tus lugares favoritos:`,
       url: referralLink,
       dialogTitle: 'Invitar amigos a Rabbitty',
     });
@@ -128,22 +131,21 @@ export default function ReferralPage() {
               <div className="bg-black/25 border-2 border-dashed border-white/10 rounded-[20px] p-4 flex flex-col gap-3 mb-4">
                 <p className="text-[9px] font-black text-white/40 tracking-[1.5px] uppercase m-0">Tu Link Único</p>
                 <div className="flex items-center justify-between gap-2 bg-white/[0.06] rounded-[14px] p-3 border border-white/10">
-                  <div>
+                  <div className="overflow-hidden text-left">
                     <span className="text-[11px] font-black text-[#E91E63] uppercase tracking-[0.5px] block mb-1">TU CÓDIGO</span>
-                    <span className="text-2xl font-black text-white font-mono">{profile?.telegramId || '------'}</span>
+                    <span className="text-xl font-black text-white font-mono truncate block">{referralCode}</span>
                   </div>
-                <button
-                  onClick={copyToClipboard}
-                  disabled={!referralLink}
-                  className="w-12 h-12 rounded-full bg-white/10 border border-white/10 flex items-center justify-center"
-                  style={{
-                    cursor: referralLink ? 'pointer' : 'not-allowed',
-                    color: copied ? '#4CAF50' : '#fff',
-                  }}
-                >
-                  {copied ? <CheckCircle2 size={20} /> : <Copy size={20} />}
-                </button>
-              </div>
+                  <button
+                    onClick={copyToClipboard}
+                    disabled={!referralLink}
+                    className="w-12 h-12 rounded-full bg-white/10 border border-white/10 flex items-center justify-center shrink-0 cursor-pointer"
+                    style={{
+                      color: copied ? '#4CAF50' : '#fff',
+                    }}
+                  >
+                    {copied ? <CheckCircle2 size={20} /> : <Copy size={20} />}
+                  </button>
+                </div>
 
               {/* Primary Native iOS/Android Share Button */}
               <button
