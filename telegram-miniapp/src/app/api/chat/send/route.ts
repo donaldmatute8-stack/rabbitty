@@ -26,6 +26,7 @@ export async function POST(req: Request) {
       conversationId?: string;
       targetId?: string;
       content?: string;
+      type?: string;
       lat?: number | null;
       lng?: number | null;
     };
@@ -52,9 +53,18 @@ export async function POST(req: Request) {
     const otherId = access.otherParticipantId;
     const now = new Date();
 
+    const hasCoords = typeof body.lat === 'number' && typeof body.lng === 'number';
+    const isLocation = body.type === 'LOCATION' && hasCoords;
+
     const [userMessage] = await db
       .insert(messages)
-      .values({ conversationId: conversation.id, senderId, content, type: 'TEXT' })
+      .values({
+        conversationId: conversation.id,
+        senderId,
+        content,
+        type: isLocation ? 'LOCATION' : 'TEXT',
+        metadata: isLocation ? { kind: 'LOCATION', lat: body.lat, lng: body.lng } : null,
+      })
       .returning();
 
     await db
@@ -67,10 +77,18 @@ export async function POST(req: Request) {
       const reply = await generateBunzyReply({
         userId: caller.id,
         conversationId: conversation.id,
-        content,
+        content: isLocation ? 'usar mi ubicación' : content,
         lat: body.lat ?? null,
         lng: body.lng ?? null,
       });
+
+      const botMetadata = reply.metadata
+        ? { kind: 'BUSINESS', ...reply.metadata }
+        : reply.options?.length
+          ? { kind: 'OPTIONS', options: reply.options }
+          : reply.orderDraft
+            ? { kind: 'ORDER', orderDraft: reply.orderDraft }
+            : null;
 
       const [botMessage] = await db
         .insert(messages)
@@ -79,7 +97,7 @@ export async function POST(req: Request) {
           senderId: 'bot',
           content: reply.content,
           type: reply.type,
-          metadata: reply.metadata,
+          metadata: botMetadata,
         })
         .returning();
 
@@ -89,7 +107,14 @@ export async function POST(req: Request) {
         .where(eq(conversations.id, conversation.id))
         .catch(() => {});
 
-      return NextResponse.json({ success: true, message: userMessage, botResponse: botMessage, suggestions: reply.suggestions });
+      return NextResponse.json({
+        success: true,
+        message: userMessage,
+        botResponse: botMessage,
+        suggestions: reply.suggestions,
+        options: reply.options ?? [],
+        orderDraft: reply.orderDraft ?? null,
+      });
     }
 
     const senderName = (await resolveTelegramRecipient(senderId)).displayName;
