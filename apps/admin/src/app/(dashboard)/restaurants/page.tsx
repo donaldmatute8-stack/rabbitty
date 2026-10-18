@@ -45,11 +45,11 @@ export default function RestaurantsPage() {
 
   return (
     <div className="space-y-8 pb-10">
-      <div className="relative overflow-hidden rounded-3xl border border-white/5 bg-gradient-to-br from-gray-900/60 to-black/80 p-8 shadow-2xl backdrop-blur-xl">
+      <div className="relative overflow-hidden rounded-3xl border border-white/5 bg-linear-to-br from-gray-900/60 to-black/80 p-8 shadow-2xl backdrop-blur-xl">
         <div className="absolute top-0 right-0 h-48 w-48 rounded-full bg-pink-500/10 blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-500">
+            <h1 className="text-4xl font-black tracking-tight text-transparent bg-clip-text bg-linear-to-r from-white via-gray-200 to-gray-500">
               Restaurantes y Afiliados
             </h1>
             <p className="text-gray-400 mt-2 text-sm font-medium">Gestiona solicitudes de afiliados y restaurantes en la red</p>
@@ -96,7 +96,7 @@ export default function RestaurantsPage() {
               {pendingBusinesses?.map((b) => (
                 <Card key={b.id} className="flex flex-col md:flex-row md:items-center justify-between p-6 border border-white/5 bg-white/5 backdrop-blur-md hover:border-white/10 transition-all gap-4">
                   <div className="flex items-start gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-pink-500/20 to-orange-500/20 border border-pink-500/30 text-xl font-black text-pink-400">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-linear-to-br from-pink-500/20 to-orange-500/20 border border-pink-500/30 text-xl font-black text-pink-400">
                       {b.name.charAt(0)}
                     </div>
                     <div>
