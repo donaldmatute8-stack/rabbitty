@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useToast } from '@/contexts/ToastContext';
@@ -14,7 +14,30 @@ function getInitData(): Promise<string> {
   }
   return initDataPromise;
 }
-async function adminHeaders(user: any, json = false): Promise<Record<string, string>> {
+interface AdminUserLike {
+  telegramId?: string | null;
+  id?: string;
+  [key: string]: unknown;
+}
+
+interface LevelItem {
+  id: string;
+  name: string;
+  requiredHops: number;
+  bunzMultiplier: number;
+}
+
+interface TrickItem {
+  id: string;
+  title: string;
+  description: string;
+  rewardHops: number | string;
+  rewardBunz: number | string;
+  conditionType?: string;
+  conditionTarget?: number | string;
+}
+
+async function adminHeaders(user: AdminUserLike | null, json = false): Promise<Record<string, string>> {
   const initData = await getInitData();
   return {
     ...(json ? { 'Content-Type': 'application/json' } : {}),
@@ -27,8 +50,8 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
   const { user } = useAuth();
   const { showToast } = useToast();
   
-  const [levels, setLevels] = useState<any[]>([]);
-  const [tricks, setTricks] = useState<any[]>([]);
+  const [levels, setLevels] = useState<LevelItem[]>([]);
+  const [tricks, setTricks] = useState<TrickItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNewTrickForm, setShowNewTrickForm] = useState(false);
   const [newTrick, setNewTrick] = useState({ title: '', description: '', rewardHops: '100', rewardBunz: '50', conditionType: 'TOTAL_VISITS', conditionTarget: '1' });
@@ -86,7 +109,7 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
       } else {
         showToast('Error al crear misión', 'error');
       }
-    } catch (e) {
+    } catch {
       showToast('Error de conexión', 'error');
     }
   };
@@ -129,7 +152,7 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
 
         <div style={{ marginBottom: 24 }}>
           <p style={{ fontSize: 13, color: '#666', lineHeight: 1.5 }}>
-            Bienvenido. Desde aquí puedes modificar la economía de Hops, Bunz y crear nuevos "Trucos del Sombrero" (Misiones) en tiempo real.
+            Bienvenido. Desde aquí puedes modificar la economía de Hops, Bunz y crear nuevos &ldquo;Trucos del Sombrero&rdquo; (Misiones) en tiempo real.
           </p>
         </div>
 
@@ -137,6 +160,12 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
         <div style={{ backgroundColor: '#FAFAFA', borderRadius: 14, padding: 16, border: '1px solid #EAEAEA', marginBottom: 16 }}>
           <h3 style={{ fontSize: 15, fontWeight: 800, color: '#111', margin: '0 0 12px 0' }}>📊 Métricas Omnicanal & Drip Campaigns</h3>
           <RoleMetricsSection />
+        </div>
+
+        {/* SECTION: LEDGER RECONCILIATION & INTEGRITY */}
+        <div style={{ backgroundColor: '#FAFAFA', borderRadius: 14, padding: 16, border: '1px solid #EAEAEA', marginBottom: 16 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 800, color: '#111', margin: '0 0 12px 0' }}>⚖️ Salud de la Economía & Ledger (Paso A)</h3>
+          <LedgerReconciliationSection />
         </div>
 
         {/* SECTION: BUSINESS APPROVALS */}
@@ -245,7 +274,7 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
           )}
 
           <div style={{ maxHeight: 200, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {tricks.slice(0, 5).map((t: any) => (
+            {tricks.slice(0, 5).map((t) => (
               <div key={t.id} style={{ backgroundColor: '#fff', padding: 10, borderRadius: 8, border: '1px solid #EEE' }}>
                 <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 800 }}>{t.title}</p>
                 <p style={{ margin: 0, fontSize: 11, color: '#888' }}>Recompensa: {t.rewardHops} Hops | {t.rewardBunz} Bunz</p>
@@ -260,7 +289,7 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
           <h3 style={{ fontSize: 15, fontWeight: 800, color: '#111', margin: '0 0 12px 0' }}>📈 Niveles y Multiplicadores</h3>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {loading ? <p>Cargando...</p> : levels.map((l: any) => (
+            {loading ? <p>Cargando...</p> : levels.map((l) => (
               <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff', border: '1px solid #EEE', borderRadius: 8, padding: 10 }}>
                 <div>
                   <p style={{ margin: '0 0 4px', fontSize: 12, fontWeight: 800 }}>{l.name}</p>
@@ -288,11 +317,20 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
+interface ScalingMetricItem {
+  key: string;
+  icon: string;
+  label: string;
+  value: number;
+  max: number;
+  unit: string;
+  pct: number;
+}
+
 function ScalingDashboard() {
-  const [metrics, setMetrics] = useState<any[]>([]);
+  const [metrics, setMetrics] = useState<ScalingMetricItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [alertSent, setAlertSent] = useState(false);
-  const { showToast } = useToast();
   const { user } = useAuth();
 
   useEffect(() => {
@@ -326,7 +364,7 @@ function ScalingDashboard() {
           🚨 Alerta enviada a @mardelbull
         </div>
       )}
-      {metrics.map((m: any) => (
+      {metrics.map((m) => (
         <div key={m.key}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
             <span style={{ fontSize: 12, fontWeight: 700, color: '#333' }}>{m.icon} {m.label}</span>
@@ -442,18 +480,50 @@ function GuideItem({ icon, title, desc, bullets }: { icon: string; title: string
   );
 }
 
+interface AdminBusinessItem {
+  id: string;
+  name: string;
+  category: string;
+  address?: string | null;
+  status: string;
+  rewardPercentage?: number;
+  package?: string | null;
+  creditLimit?: number;
+  creditUsed?: number;
+  lat?: number;
+  lng?: number;
+  logoUrl?: string | null;
+  gallery?: string | null;
+  verificationMethod?: string | null;
+  verificationData?: string | null;
+  activeDays?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  timezone?: string | null;
+  createdAt?: string | Date;
+  owner?: {
+    id: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    username?: string | null;
+    phoneNumber?: string | null;
+    telegramId?: string | null;
+  } | null;
+}
+
 function BusinessApprovals() {
-  const [businesses, setBusinesses] = useState<any[]>([]);
+  const [businesses, setBusinesses] = useState<AdminBusinessItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('PENDING');
   const { user } = useAuth();
   const { showToast } = useToast();
 
-  const fetchBusinesses = async () => {
+  const fetchBusinesses = useCallback(async () => {
     setLoading(true);
     try {
+      const headers = await adminHeaders(user);
       const res = await fetch(`/api/admin/business?t=${Date.now()}`, {
-        headers: await adminHeaders(user),
+        headers,
         cache: 'no-store'
       });
       const data = await res.json();
@@ -463,9 +533,26 @@ function BusinessApprovals() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
-  useEffect(() => { fetchBusinesses(); }, [user]);
+  useEffect(() => {
+    let active = true;
+    adminHeaders(user)
+      .then((headers) => fetch(`/api/admin/business?t=${Date.now()}`, { headers, cache: 'no-store' }))
+      .then((res) => res.json())
+      .then((data) => {
+        if (active && data.success) {
+          setBusinesses(data.businesses || []);
+        }
+      })
+      .catch((err) => console.error(err))
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [user]);
 
   const handleAction = async (businessId: string, status: string) => {
     try {
@@ -481,7 +568,7 @@ function BusinessApprovals() {
       } else {
         showToast('Error: ' + (data.error || 'desconocido'), 'error');
       }
-    } catch (e) {
+    } catch {
       showToast('Error de conexión', 'error');
     }
   };
@@ -502,15 +589,16 @@ function BusinessApprovals() {
 
   return (
     <div>
-      {/* Filtros Animados Segmentados */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 16, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'none' }}>
-        {filters.map(f => {
-          const isActive = filter === f.id;
-          return (
-            <button
-              key={f.id}
-              onClick={() => setFilter(f.id)}
-              style={{
+      {/* Filtros Animados Segmentados y botón Refrescar */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 4, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'none' }}>
+          {filters.map(f => {
+            const isActive = filter === f.id;
+            return (
+              <button
+                key={f.id}
+                onClick={() => setFilter(f.id)}
+                style={{
                 position: 'relative',
                 padding: '6px 14px',
                 borderRadius: 999,
@@ -542,6 +630,24 @@ function BusinessApprovals() {
             </button>
           );
         })}
+        </div>
+        <button
+          onClick={fetchBusinesses}
+          style={{
+            padding: '6px 12px',
+            borderRadius: 8,
+            border: '1px solid #DDD',
+            background: '#fff',
+            color: '#111',
+            fontSize: 11,
+            fontWeight: 700,
+            cursor: 'pointer',
+            marginLeft: 8,
+            flexShrink: 0,
+          }}
+        >
+          Actualizar
+        </button>
       </div>
 
       {loading && (
@@ -563,7 +669,7 @@ function BusinessApprovals() {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <AnimatePresence>
-          {filtered.slice(0, 25).map((b: any) => {
+          {filtered.slice(0, 25).map((b) => {
             const isPending = b.status === 'PENDING' || b.status === 'PENDING_VERIFICATION';
             const isReview = b.status === 'UNDER_REVIEW';
             const isApproved = b.status === 'APPROVED';
@@ -797,3 +903,188 @@ function RoleMetricsSection() {
     </div>
   );
 }
+
+interface ReconcileReportItem {
+  userId: string;
+  username: string;
+  cachedBalance: number;
+  ledgerEarned: number;
+  ledgerSpent: number;
+  ledgerNet: number;
+  discrepancy: number;
+  isBalanced: boolean;
+}
+
+interface ReconcileSummaryData {
+  totalUsersChecked: number;
+  balancedUsers: number;
+  discrepantUsers: number;
+  totalCachedCirculation: number;
+  totalLedgerCirculation: number;
+  systemDifference: number;
+  status: 'HEALTHY' | 'DEVIATION_DETECTED';
+  details: ReconcileReportItem[];
+}
+
+function LedgerReconciliationSection() {
+  const { user } = useAuth();
+  const { showToast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<ReconcileSummaryData | null>(null);
+  const [syncingUser, setSyncingUser] = useState<string | null>(null);
+
+  const fetchReconciliation = async () => {
+    setLoading(true);
+    try {
+      const headers = await adminHeaders(user);
+      const res = await fetch('/api/admin/reconcile', { headers });
+      const json = await res.json();
+      if (json.success && json.reconciliation) {
+        setData(json.reconciliation);
+      }
+    } catch {
+      showToast('Error al consultar reconciliación del ledger', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let active = true;
+    adminHeaders(user)
+      .then((headers) => fetch('/api/admin/reconcile', { headers }))
+      .then((res) => res.json())
+      .then((json) => {
+        if (active && json.success && json.reconciliation) {
+          setData(json.reconciliation);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
+  const handleSelfHeal = async (userId: string) => {
+    setSyncingUser(userId);
+    try {
+      const headers = await adminHeaders(user, true);
+      const res = await fetch('/api/admin/reconcile', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ userId, syncDirection: 'LEDGER_TO_CACHE' }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        showToast('Balance alineado con el Ledger autoritativo', 'success');
+        fetchReconciliation();
+      } else {
+        showToast(json.error || 'Error al reconciliar', 'error');
+      }
+    } catch {
+      showToast('Error de conexión', 'error');
+    } finally {
+      setSyncingUser(null);
+    }
+  };
+
+  if (loading) {
+    return <p style={{ fontSize: 12, color: '#888' }}>Auditando asientos del ledger...</p>;
+  }
+
+  const isHealthy = data?.status === 'HEALTHY';
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* Overview Cards */}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ flex: 1, backgroundColor: '#fff', padding: 10, borderRadius: 8, border: '1px solid #EEE', textAlign: 'center' }}>
+          <p style={{ margin: 0, fontSize: 16, fontWeight: 900, color: isHealthy ? '#22C55E' : '#EF4444' }}>
+            {isHealthy ? '✅ 100% SANO' : '⚠️ DESVIACIÓN'}
+          </p>
+          <p style={{ margin: 0, fontSize: 10, color: '#888', fontWeight: 700 }}>ESTADO DEL LEDGER</p>
+        </div>
+
+        <div style={{ flex: 1, backgroundColor: '#fff', padding: 10, borderRadius: 8, border: '1px solid #EEE', textAlign: 'center' }}>
+          <p style={{ margin: 0, fontSize: 16, fontWeight: 900, color: '#111' }}>
+            {(data?.totalLedgerCirculation || 0).toLocaleString()}
+          </p>
+          <p style={{ margin: 0, fontSize: 10, color: '#888', fontWeight: 700 }}>CIRCULACIÓN TOTAL BUNZ</p>
+        </div>
+      </div>
+
+      <div style={{ backgroundColor: '#fff', padding: 10, borderRadius: 8, border: '1px solid #EEE', fontSize: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <span style={{ fontWeight: 800, color: '#111' }}>Usuarios auditados: {data?.totalUsersChecked || 0}</span>
+          <button
+            onClick={fetchReconciliation}
+            style={{ background: '#111', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}
+          >
+            Re-auditar
+          </button>
+        </div>
+        <p style={{ margin: '0 0 4px', color: '#666' }}>
+          • Balances consistentes: <strong style={{ color: '#22C55E' }}>{data?.balancedUsers || 0}</strong>
+        </p>
+        <p style={{ margin: '0 0 6px', color: '#666' }}>
+          • Cuentas con discrepancia: <strong style={{ color: (data?.discrepantUsers || 0) > 0 ? '#EF4444' : '#22C55E' }}>{data?.discrepantUsers || 0}</strong>
+        </p>
+
+        {/* Details list for discrepant users or summary */}
+        {data?.details && data.details.length > 0 && (
+          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 180, overflowY: 'auto' }}>
+            {data.details.map((rep) => (
+              <div
+                key={rep.userId}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '6px 8px',
+                  borderRadius: 6,
+                  backgroundColor: rep.isBalanced ? '#F9F9F9' : '#FEF2F2',
+                  border: `1px solid ${rep.isBalanced ? '#EEE' : '#FECACA'}`,
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
+                  <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    @{rep.username}
+                  </p>
+                  <p style={{ margin: 0, fontSize: 10, color: '#666' }}>
+                    Caché: {rep.cachedBalance} | Ledger: {rep.ledgerNet}
+                  </p>
+                </div>
+
+                {!rep.isBalanced ? (
+                  <button
+                    disabled={syncingUser === rep.userId}
+                    onClick={() => handleSelfHeal(rep.userId)}
+                    style={{
+                      background: '#EF4444',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 4,
+                      padding: '4px 8px',
+                      fontSize: 10,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {syncingUser === rep.userId ? 'Alineando...' : 'Auto-sanar'}
+                  </button>
+                ) : (
+                  <span style={{ fontSize: 11, color: '#22C55E', fontWeight: 800 }}>✓ OK</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+

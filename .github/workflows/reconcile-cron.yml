@@ -1,0 +1,43 @@
+name: Rabbitty Economic Reconciliation Cron
+
+on:
+  schedule:
+    # Runs every 6 hours (00:00, 06:00, 12:00, 18:00 UTC)
+    - cron: '0 */6 * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+
+jobs:
+  reconcile-ledger:
+    name: Audit Economy & Reconcile Ledger
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Trigger Reconciliation Worker
+        run: |
+          APP_URL="${{ secrets.APP_URL || 'https://rabbitty.me' }}"
+          CRON_SECRET="${{ secrets.CRON_SECRET }}"
+          
+          echo "Executing reconciliation health check against $APP_URL..."
+          
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "$APP_URL/api/cron/reconcile" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Accept: application/json")
+          
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          
+          echo "HTTP Status: $HTTP_STATUS"
+          echo "Response: $BODY"
+          
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "::error::Reconciliation cron failed with HTTP $HTTP_STATUS"
+            exit 1
+          fi
+          
+          STATUS=$(echo "$BODY" | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
+          if [ "$STATUS" = "DEVIATION_DETECTED" ]; then
+            echo "::warning::Deviation detected in economy balances. Admin alert dispatched."
+          else
+            echo "Ledger reconciliation completed successfully: 100% HEALTHY."
+          fi
