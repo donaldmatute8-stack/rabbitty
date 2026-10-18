@@ -342,7 +342,6 @@ export function Globe3D({ markers, onMarkerClick, onMarkerHover }: Globe3DProps)
           height: Math.min(dimensions.width, dimensions.height) || '100%',
           maxWidth: '100%',
           maxHeight: '100%',
-          transform: 'translateY(12px)',
         }}
       />
 

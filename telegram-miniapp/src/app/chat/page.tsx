@@ -73,10 +73,28 @@ export default function ChatInboxPage() {
   const [revealedRight, setRevealedRight] = useState<string | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [dockerOrientation, setDockerOrientation] = useState<'vertical' | 'horizontal'>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('rabbitty_docker_orientation');
+        if (saved === 'vertical' || saved === 'horizontal') return saved;
+      } catch {}
+    }
+    return 'vertical';
+  });
   const [community, setCommunity] = useState<'chats' | string>('chats');
   const [search, setSearch] = useState('');
   const [pickedContacts, setPickedContacts] = useState<Array<{ name: string; tel: string }>>([]);
   const { showToast } = useToast();
+
+  const toggleDockerOrientation = () => {
+    PlatformBridge.hapticFeedback('medium');
+    const next = dockerOrientation === 'vertical' ? 'horizontal' : 'vertical';
+    setDockerOrientation(next);
+    try {
+      localStorage.setItem('rabbitty_docker_orientation', next);
+    } catch {}
+  };
 
   const allConversations = useMemo(
     () => (data?.conversations ?? []).filter((c) => !prefs[c.id]?.deleted),
@@ -176,79 +194,216 @@ export default function ChatInboxPage() {
     }
   };
 
+  const dockerItems = [
+    { id: 'chats', label: 'All', icon: <MessageCircle size={20} />, color: '#0088CC', isAll: true },
+    ...GROUPS.map((g) => ({
+      id: g.id,
+      label: g.badge || g.name.split(' ')[0],
+      icon: g.icon,
+      color: g.color,
+      fullName: g.name,
+    })),
+    { id: 'support', label: 'Ayuda', icon: '🛟', color: '#00BCD4', fullName: 'Soporte' },
+  ];
+
   return (
-    <>
+    <div className="relative min-h-screen overflow-x-hidden" style={{ background: 'var(--bg-primary)' }}>
+      {/* 1. Lateral Vertical Docker (Empuja contenido, sin backdrop fade, como en screenshots 2 y 3) */}
       <AnimatePresence>
-        {drawerOpen && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              onClick={() => setDrawerOpen(false)}
-              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(3px)', WebkitBackdropFilter: 'blur(3px)', zIndex: 210 }}
-            />
-            {/* Telegram Floating Vertical Docker Sidebar */}
-            <motion.aside
-              initial={{ x: -90, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: -90, opacity: 0 }}
-              transition={{ type: 'spring', damping: 26, stiffness: 320 }}
+        {drawerOpen && dockerOrientation === 'vertical' && (
+          <motion.aside
+            initial={{ x: -80, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: -80, opacity: 0 }}
+            transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+            style={{
+              position: 'fixed',
+              top: 'calc(var(--safe-top, 0px) + 54px)',
+              bottom: 'calc(18px + env(safe-area-inset-bottom))',
+              left: 10,
+              width: 70,
+              background: 'rgba(20, 20, 28, 0.96)',
+              backdropFilter: 'blur(24px)',
+              WebkitBackdropFilter: 'blur(24px)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              borderRadius: 22,
+              zIndex: 100,
+              padding: '10px 4px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 10,
+              overflowY: 'auto',
+              scrollbarWidth: 'none',
+              boxShadow: '0 16px 40px rgba(0,0,0,0.45)',
+            }}
+            className="hide-scrollbar"
+          >
+            {/* Docker Orientation Switch Button (Top header icon inside docker) */}
+            <button
+              type="button"
+              onClick={toggleDockerOrientation}
+              title="Cambiar orientación a horizontal"
+              aria-label="Cambiar a barra horizontal"
               style={{
-                position: 'fixed',
-                top: 'calc(var(--safe-top, 0px) + 54px)',
-                bottom: 'calc(18px + env(safe-area-inset-bottom))',
-                left: 12,
-                width: 74,
-                background: 'rgba(24, 24, 32, 0.94)',
-                backdropFilter: 'blur(24px)',
-                WebkitBackdropFilter: 'blur(24px)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: 24,
-                zIndex: 211,
-                padding: '12px 6px',
+                width: 44,
+                height: 30,
                 display: 'flex',
-                flexDirection: 'column',
                 alignItems: 'center',
-                gap: 12,
-                overflowY: 'auto',
-                scrollbarWidth: 'none',
-                boxShadow: '0 16px 40px rgba(0,0,0,0.6)',
+                justifyContent: 'center',
+                borderBottom: '1px solid rgba(255,255,255,0.08)',
+                background: 'transparent',
+                border: 'none',
+                paddingBottom: 6,
+                marginBottom: 2,
+                color: '#0088CC',
+                cursor: 'pointer',
               }}
-              className="hide-scrollbar"
+              className="active:scale-90 transition-transform"
             >
-              {/* Telegram Hub Header Icon */}
-              <div
+              <svg width="22" height="15" viewBox="0 0 24 16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                <rect x="1" y="1" width="22" height="14" rx="4" />
+                <path d="M7 1v14" />
+              </svg>
+            </button>
+
+            {dockerItems.map((item) => {
+              const active = community === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    PlatformBridge.hapticFeedback('light');
+                    setCommunity(item.id);
+                  }}
+                  style={{
+                    position: 'relative',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 3,
+                    width: '100%',
+                    padding: '3px 0',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {/* Active Indicator Bar (Left vertical stripe like Telegram) */}
+                  {active && (
+                    <motion.div
+                      layoutId="docker-active-pill"
+                      style={{
+                        position: 'absolute',
+                        left: -4,
+                        top: 4,
+                        bottom: 16,
+                        width: 4,
+                        borderRadius: '0 4px 4px 0',
+                        background: '#0088CC',
+                        boxShadow: '0 0 10px #0088CC',
+                      }}
+                    />
+                  )}
+                  <div
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: active ? 14 : 22,
+                      background: active ? (typeof item.icon === 'string' && item.icon === '#' ? '#0088CC' : item.color) : 'rgba(255,255,255,0.08)',
+                      color: active ? '#FFFFFF' : 'rgba(255,255,255,0.7)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: typeof item.icon === 'string' && item.icon.length === 1 ? 18 : 20,
+                      fontWeight: 900,
+                      transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+                      border: active ? '2px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.05)',
+                      boxShadow: active ? `0 4px 16px ${item.color}55` : 'none',
+                    }}
+                  >
+                    {item.icon}
+                  </div>
+                  <span
+                    style={{
+                      fontSize: 10,
+                      fontWeight: active ? 800 : 600,
+                      color: active ? '#FFFFFF' : 'rgba(255,255,255,0.5)',
+                      textAlign: 'center',
+                      lineHeight: 1.1,
+                      maxWidth: 60,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {item.label}
+                  </span>
+                </button>
+              );
+            })}
+          </motion.aside>
+        )}
+      </AnimatePresence>
+
+      {/* Main Container: Smoothly pushed laterally when vertical docker is open */}
+      <motion.div
+        animate={{
+          paddingLeft: drawerOpen && dockerOrientation === 'vertical' ? 76 : 0,
+        }}
+        transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+        style={{ width: '100%' }}
+      >
+        {/* Horizontal Docker Bar (Screenshot 2: Superior/Horizontal docker choice) */}
+        <AnimatePresence>
+          {drawerOpen && dockerOrientation === 'horizontal' && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              style={{
+                background: 'rgba(20, 20, 28, 0.95)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                padding: '6px 12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                overflowX: 'auto',
+                scrollbarWidth: 'none',
+              }}
+              className="hide-scrollbar sticky top-[calc(var(--safe-top,0)+52px)] z-30"
+            >
+              <button
+                type="button"
+                onClick={toggleDockerOrientation}
+                title="Cambiar orientación a vertical"
+                aria-label="Cambiar a lateral vertical"
                 style={{
-                  width: 44,
-                  height: 32,
+                  width: 34,
+                  height: 34,
+                  borderRadius: 10,
+                  background: 'rgba(255,255,255,0.08)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  color: '#0088CC',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  borderBottom: '1px solid rgba(255,255,255,0.08)',
-                  paddingBottom: 8,
-                  marginBottom: 2,
-                  color: 'rgba(255,255,255,0.4)',
+                  flexShrink: 0,
+                  cursor: 'pointer',
                 }}
+                className="active:scale-90 transition-transform"
               >
-                <svg width="22" height="16" viewBox="0 0 24 16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                <svg width="18" height="13" viewBox="0 0 24 16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
                   <rect x="1" y="1" width="22" height="14" rx="4" />
-                  <path d="M7 1v14" />
+                  <path d="M1 6h22" />
                 </svg>
-              </div>
+              </button>
 
-              {([
-                { id: 'chats', label: 'All', icon: <MessageCircle size={22} />, color: '#0088CC', isAll: true },
-                ...GROUPS.map((g) => ({
-                  id: g.id,
-                  label: g.badge || g.name.split(' ')[0],
-                  icon: g.icon,
-                  color: g.color,
-                  fullName: g.name,
-                })),
-                { id: 'support', label: 'Ayuda', icon: '🛟', color: '#00BCD4', fullName: 'Soporte' },
-              ]).map((item) => {
+              {dockerItems.map((item) => {
                 const active = community === item.id;
                 return (
                   <button
@@ -257,111 +412,63 @@ export default function ChatInboxPage() {
                     onClick={() => {
                       PlatformBridge.hapticFeedback('light');
                       setCommunity(item.id);
-                      setDrawerOpen(false);
                     }}
                     style={{
-                      position: 'relative',
                       display: 'flex',
-                      flexDirection: 'column',
                       alignItems: 'center',
-                      gap: 4,
-                      width: '100%',
-                      padding: '4px 0',
-                      background: 'transparent',
-                      border: 'none',
+                      gap: 6,
+                      padding: '5px 12px',
+                      borderRadius: 14,
+                      background: active ? 'rgba(0, 136, 204, 0.2)' : 'rgba(255,255,255,0.06)',
+                      border: active ? '1px solid #0088CC' : '1px solid rgba(255,255,255,0.06)',
+                      color: active ? '#0088CC' : 'rgba(255,255,255,0.8)',
+                      fontSize: 12,
+                      fontWeight: 800,
+                      flexShrink: 0,
                       cursor: 'pointer',
                     }}
+                    className="active:scale-95 transition-transform"
                   >
-                    {/* Active Indicator Bar (Left vertical stripe like Telegram) */}
-                    {active && (
-                      <motion.div
-                        layoutId="docker-active-pill"
-                        style={{
-                          position: 'absolute',
-                          left: -6,
-                          top: 4,
-                          bottom: 18,
-                          width: 4,
-                          borderRadius: '0 4px 4px 0',
-                          background: '#0088CC',
-                          boxShadow: '0 0 10px #0088CC',
-                        }}
-                      />
-                    )}
-                    <div
-                      style={{
-                        width: 46,
-                        height: 46,
-                        borderRadius: active ? 16 : 23,
-                        background: active ? (typeof item.icon === 'string' && item.icon === '#' ? '#0088CC' : item.color) : 'rgba(255,255,255,0.08)',
-                        color: active ? '#FFFFFF' : 'rgba(255,255,255,0.7)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: typeof item.icon === 'string' && item.icon.length === 1 ? 19 : 22,
-                        fontWeight: 900,
-                        transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
-                        border: active ? '2px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.05)',
-                        boxShadow: active ? `0 4px 16px ${item.color}55` : 'none',
-                      }}
-                    >
-                      {item.icon}
-                    </div>
-                    <span
-                      style={{
-                        fontSize: 10,
-                        fontWeight: active ? 800 : 600,
-                        color: active ? '#FFFFFF' : 'rgba(255,255,255,0.5)',
-                        textAlign: 'center',
-                        lineHeight: 1.1,
-                        maxWidth: 62,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {item.label}
-                    </span>
+                    <span style={{ fontSize: 14, display: 'flex', alignItems: 'center' }}>{item.icon}</span>
+                    <span>{item.label}</span>
                   </button>
                 );
               })}
-            </motion.aside>
-          </>
-        )}
-      </AnimatePresence>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-      <div>
-      <ProfileSubpageLayout
-      title={community === 'chats' ? 'Chats' : (GROUPS.find((g) => g.id === community)?.name || 'Chats')}
-      centerTitle
-      left={
-        <button
-          type="button"
-          onClick={() => {
-            PlatformBridge.hapticFeedback('light');
-            setDrawerOpen((v) => !v);
-          }}
-          aria-label="Comunidades"
-          style={{
-            width: 38,
-            height: 38,
-            borderRadius: '50%',
-            border: '1px solid var(--border-subtle)',
-            background: 'var(--bg-elevated)',
-            color: 'var(--text-primary)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-          }}
-        >
-          <svg width="18" height="14" viewBox="0 0 18 14" fill="none">
-            <path d="M1 3.5h16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-            <path d="M1 10.5h9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-          </svg>
-        </button>
-      }
-      right={
+        <ProfileSubpageLayout
+          title={community === 'chats' ? 'Chats' : (GROUPS.find((g) => g.id === community)?.name || 'Chats')}
+          centerTitle
+          left={
+            <button
+              type="button"
+              onClick={() => {
+                PlatformBridge.hapticFeedback('light');
+                setDrawerOpen((v) => !v);
+              }}
+              aria-label="Comunidades"
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: '50%',
+                border: '1px solid var(--border-subtle)',
+                background: drawerOpen ? 'var(--bg-pressed)' : 'var(--bg-elevated)',
+                color: drawerOpen ? '#0088CC' : 'var(--text-primary)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+              }}
+            >
+              <svg width="18" height="14" viewBox="0 0 18 14" fill="none">
+                <path d="M1 3.5h16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                <path d="M1 10.5h9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+              </svg>
+            </button>
+          }
+          right={
         <>
           <button
             type="button"
@@ -623,8 +730,8 @@ export default function ChatInboxPage() {
         );
       })()}
 
-      </ProfileSubpageLayout>
-      </div>
+        </ProfileSubpageLayout>
+      </motion.div>
 
       <BottomSheet isOpen={newOpen} onClose={() => setNewOpen(false)} title="Nuevo mensaje">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -743,7 +850,7 @@ export default function ChatInboxPage() {
           </div>
         </div>
       </BottomSheet>
-    </>
+    </div>
   );
 }
 

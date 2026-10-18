@@ -44,11 +44,8 @@ input, textarea, [contenteditable="true"], .selectable, code, pre, .font-mono {
   font-family: var(--font-family-base);
 }
 .leaflet-control-attribution {
-  background: color-mix(in srgb, var(--bg-elevated) 80%, transparent) !important;
-  color: var(--text-muted) !important;
-  font-size: 9px !important;
+  display: none !important;
 }
-.leaflet-control-attribution a { color: var(--text-secondary) !important; }
 
 /* Scrollbar hide */
 ::-webkit-scrollbar { width: 0; height: 0; }

@@ -4,10 +4,10 @@ import { db } from '@/db';
 import { ownedBusinesses } from '@/db/schema';
 import { desc, eq } from 'drizzle-orm';
 
-const parseSafeJson = (str: string | null | undefined, fallback: any = []) => {
+const parseSafeJson = <T>(str: string | null | undefined, fallback: T): T => {
   if (!str) return fallback;
   try {
-    return JSON.parse(str);
+    return JSON.parse(str) as T;
   } catch {
     return fallback;
   }
@@ -18,12 +18,12 @@ export async function GET() {
     const businesses = await db.select().from(ownedBusinesses)
       .where(eq(ownedBusinesses.status, 'APPROVED'))
       .orderBy(desc(ownedBusinesses.createdAt))
-      .limit(20);
+      .limit(100);
 
     const feedItems = businesses.map((b) => {
-      const parsedGallery = parseSafeJson(b.gallery);
+      const parsedGallery = parseSafeJson<string[]>(b.gallery, []);
       const imageUrl = parsedGallery.length > 0 ? parsedGallery[0] : 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=800&q=80';
-      const activeDays = parseSafeJson(b.activeDays, [1, 2, 3, 4, 5, 6, 7]);
+      const activeDays = parseSafeJson<number[]>(b.activeDays, [1, 2, 3, 4, 5, 6, 7]);
 
       return {
         id: b.id,
@@ -48,8 +48,9 @@ export async function GET() {
     });
 
     return NextResponse.json({ success: true, data: feedItems });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Feed API Error:', error);
-    return NextResponse.json({ error: 'Internal server error', message: error?.message || String(error) }, { status: 500 });
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: 'Internal server error', message }, { status: 500 });
   }
 }

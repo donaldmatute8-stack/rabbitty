@@ -66,13 +66,25 @@ export async function GET(req: Request) {
     let targetName = 'Usuario';
     let targetAvatar: string | null = null;
     let businessOpen: boolean | null = null;
+    let targetRole: 'BOT' | 'AFFILIATE' | 'RABBITTER' = 'RABBITTER';
+    let targetUsername: string | null = null;
+    let targetBio: string | null = null;
+    let targetCategory: string | null = null;
+    let targetBusinessId: string | null = null;
 
     if (otherId === 'bot') {
       targetName = 'Bunzy 🐰';
+      targetRole = 'BOT';
+      targetUsername = 'bunzy_concierge_bot';
+      targetBio = 'Concierge oficial de Rabbitty. Asistente con IA para descubrir ofertas, reservar mesas y maximizar recompensas Bunz.';
     } else {
       const business = await db.query.ownedBusinesses.findFirst({ where: eq(ownedBusinesses.id, otherId) });
       if (business) {
         targetName = business.name;
+        targetRole = 'AFFILIATE';
+        targetCategory = business.category || 'Negocio Afiliado';
+        targetBusinessId = business.id;
+        targetBio = business.description || `Comercio socio de Rabbitty en ${business.address || 'México'}. Recompensa hasta ${business.rewardPercentage || 0}% en Bunz.`;
         targetAvatar =
           business.logoUrl ||
           `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(business.name)}&backgroundColor=E91E63`;
@@ -81,6 +93,10 @@ export async function GET(req: Request) {
         const otherUser = await db.query.users.findFirst({ where: eq(users.id, otherId) });
         if (otherUser) {
           targetName = `${otherUser.firstName || 'Explorador'} ${otherUser.lastName || ''}`.trim();
+          targetUsername = otherUser.username || null;
+          targetRole = otherUser.role === 'AFFILIATE' ? 'AFFILIATE' : 'RABBITTER';
+          const userWithBio = otherUser as unknown as { bio?: string };
+          targetBio = userWithBio.bio || (otherUser.role === 'AFFILIATE' ? 'Comercio y Embajador oficial de Rabbitty.' : 'Miembro activo y explorador de la comunidad Rabbitty.');
           const seed = otherUser.username || otherUser.firstName || otherUser.id;
           const bg = otherUser.role === 'AFFILIATE' ? 'FF8A00' : 'E91E63';
           targetAvatar = `https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(seed)}&backgroundColor=${bg}`;
@@ -121,6 +137,11 @@ export async function GET(req: Request) {
       isBusinessInbox: access.isBusinessInbox,
       targetName,
       targetAvatar,
+      targetRole,
+      targetUsername,
+      targetBio,
+      targetCategory,
+      targetBusinessId,
       businessOpen,
       otherTypingAt: conversation[access.otherTypingColumn],
       messages: history,

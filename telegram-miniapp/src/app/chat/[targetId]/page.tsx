@@ -9,6 +9,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { QRCodeSVG } from 'qrcode.react';
 import { useToast } from '@/contexts/ToastContext';
+import { Bell, BellOff, Search, Ban, MoreHorizontal, Store, Bot, ExternalLink } from 'lucide-react';
 
 interface BusinessCard {
   kind?: 'BUSINESS';
@@ -95,6 +96,11 @@ interface HistoryResponse {
   isBusinessInbox?: boolean;
   targetName?: string;
   targetAvatar?: string | null;
+  targetRole?: 'BOT' | 'AFFILIATE' | 'RABBITTER';
+  targetUsername?: string | null;
+  targetBio?: string | null;
+  targetCategory?: string | null;
+  targetBusinessId?: string | null;
   businessOpen?: boolean | null;
   otherTypingAt?: string | null;
   messages?: Message[];
@@ -148,6 +154,13 @@ export default function ChatRoomPage() {
   const [sending, setSending] = useState(false);
   const [targetName, setTargetName] = useState('...');
   const [targetAvatar, setTargetAvatar] = useState<string | null>(null);
+  const [targetRole, setTargetRole] = useState<'BOT' | 'AFFILIATE' | 'RABBITTER'>('RABBITTER');
+  const [targetUsername, setTargetUsername] = useState<string | null>(null);
+  const [targetBio, setTargetBio] = useState<string | null>(null);
+  const [targetCategory, setTargetCategory] = useState<string | null>(null);
+  const [targetBusinessId, setTargetBusinessId] = useState<string | null>(null);
+  const [targetMuted, setTargetMuted] = useState(false);
+  const [targetBlocked, setTargetBlocked] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showTyping, setShowTyping] = useState(false);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -276,6 +289,11 @@ export default function ChatRoomPage() {
       if (typeof data.isBusinessInbox === 'boolean') setIsBusinessInbox(data.isBusinessInbox);
       if (data.targetName) setTargetName(data.targetName);
       if (data.targetAvatar !== undefined) setTargetAvatar(data.targetAvatar);
+      if (data.targetRole) setTargetRole(data.targetRole);
+      if (data.targetUsername !== undefined) setTargetUsername(data.targetUsername);
+      if (data.targetBio !== undefined) setTargetBio(data.targetBio);
+      if (data.targetCategory !== undefined) setTargetCategory(data.targetCategory);
+      if (data.targetBusinessId !== undefined) setTargetBusinessId(data.targetBusinessId);
       if (data.businessOpen !== undefined) setBusinessOpen(data.businessOpen);
       otherTypingAtRef.current = data.otherTypingAt ?? null;
       setMessages(data.messages || []);
@@ -1222,16 +1240,267 @@ export default function ChatRoomPage() {
         )}
       </header>
 
-      <BottomSheet isOpen={targetInfoOpen} onClose={() => setTargetInfoOpen(false)} title="Contacto">
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '4px 0 12px' }}>
-          <div style={{ width: 72, height: 72, borderRadius: '50%', background: isBot ? 'var(--rabbitty-pink)' : 'var(--bg-pressed)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
+      <BottomSheet isOpen={targetInfoOpen} onClose={() => setTargetInfoOpen(false)} title="Detalles del Perfil">
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, padding: '4px 0 20px' }}>
+          {/* Avatar with subtle glow */}
+          <div style={{ 
+            width: 84, 
+            height: 84, 
+            borderRadius: '50%', 
+            background: isBot ? 'var(--rabbitty-pink)' : 'var(--bg-elevated)', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            fontSize: 36, 
+            overflow: 'hidden', 
+            border: '2px solid var(--border-subtle)',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.18)'
+          }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             {isBot ? '🐰' : targetAvatar ? <img src={targetAvatar} alt={targetName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '💬'}
           </div>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: 'var(--text-primary)' }}>{targetName}</h3>
-          <span style={{ fontSize: 13, color: headerColor, fontWeight: 700 }}>
-            {showTyping && !isBot ? 'escribiendo…' : headerStatus}
-          </span>
+
+          {/* Name & Subtitle / Role Badge */}
+          <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+            <h3 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>
+              {targetName}
+            </h3>
+            <span style={{ 
+              fontSize: 11, 
+              fontWeight: 800, 
+              padding: '2px 8px', 
+              borderRadius: 99, 
+              background: targetRole === 'BOT' ? 'rgba(233,30,99,0.15)' : targetRole === 'AFFILIATE' ? 'rgba(255,138,0,0.15)' : 'var(--bg-elevated)',
+              color: targetRole === 'BOT' ? '#E91E63' : targetRole === 'AFFILIATE' ? '#FF8A00' : 'var(--text-secondary)',
+              border: '1px solid var(--border-subtle)'
+            }}>
+              {targetRole === 'BOT' ? '🤖 bot' : targetRole === 'AFFILIATE' ? '🏪 Afiliado Oficial' : '🐰 Rabbitter'}
+            </span>
+          </div>
+
+          {/* Action Row: Mute, Search, Block, More (Telegram screenshot 4) */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, width: '100%', marginTop: 6 }}>
+            {/* Mute */}
+            <button
+              type="button"
+              onClick={() => {
+                PlatformBridge.hapticFeedback('medium');
+                setTargetMuted(m => !m);
+                showToast(targetMuted ? 'Notificaciones activadas' : 'Chat silenciado', 'info');
+              }}
+              className="active:scale-95 transition-transform"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                padding: '12px 6px',
+                borderRadius: 16,
+                background: targetMuted ? 'rgba(233,30,99,0.15)' : 'var(--bg-elevated)',
+                border: '1px solid var(--border-subtle)',
+                color: targetMuted ? '#E91E63' : 'var(--text-primary)',
+                cursor: 'pointer',
+              }}
+            >
+              {targetMuted ? <BellOff size={20} /> : <Bell size={20} />}
+              <span style={{ fontSize: 11, fontWeight: 700 }}>{targetMuted ? 'unmute' : 'mute'}</span>
+            </button>
+
+            {/* Search */}
+            <button
+              type="button"
+              onClick={() => {
+                PlatformBridge.hapticFeedback('light');
+                setTargetInfoOpen(false);
+                showToast('Buscar en este chat', 'info');
+              }}
+              className="active:scale-95 transition-transform"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                padding: '12px 6px',
+                borderRadius: 16,
+                background: 'var(--bg-elevated)',
+                border: '1px solid var(--border-subtle)',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+              }}
+            >
+              <Search size={20} />
+              <span style={{ fontSize: 11, fontWeight: 700 }}>search</span>
+            </button>
+
+            {/* Block */}
+            <button
+              type="button"
+              onClick={() => {
+                PlatformBridge.hapticFeedback('warning');
+                setTargetBlocked(b => !b);
+                showToast(targetBlocked ? 'Usuario desbloqueado' : 'Usuario bloqueado', targetBlocked ? 'success' : 'error');
+              }}
+              className="active:scale-95 transition-transform"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                padding: '12px 6px',
+                borderRadius: 16,
+                background: targetBlocked ? 'rgba(244,67,54,0.15)' : 'var(--bg-elevated)',
+                border: '1px solid var(--border-subtle)',
+                color: targetBlocked ? '#F44336' : 'var(--text-primary)',
+                cursor: 'pointer',
+              }}
+            >
+              <Ban size={20} />
+              <span style={{ fontSize: 11, fontWeight: 700 }}>{targetBlocked ? 'unblock' : 'block'}</span>
+            </button>
+
+            {/* More */}
+            <button
+              type="button"
+              onClick={() => {
+                PlatformBridge.hapticFeedback('light');
+                if (navigator.share) {
+                  navigator.share({ title: targetName, text: `Chat con ${targetName} en Rabbitty`, url: window.location.href }).catch(() => {});
+                } else {
+                  showToast('Enlace copiado al portapapeles', 'success');
+                }
+              }}
+              className="active:scale-95 transition-transform"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                padding: '12px 6px',
+                borderRadius: 16,
+                background: 'var(--bg-elevated)',
+                border: '1px solid var(--border-subtle)',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+              }}
+            >
+              <MoreHorizontal size={20} />
+              <span style={{ fontSize: 11, fontWeight: 700 }}>more</span>
+            </button>
+          </div>
+
+          {/* Details Card (Username, About, Category) */}
+          <div style={{
+            width: '100%',
+            background: 'var(--bg-elevated)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 18,
+            padding: '14px 16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12,
+            boxShadow: 'var(--shadow-sm)'
+          }}>
+            {/* Username */}
+            <div>
+              <span style={{ display: 'block', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>
+                username
+              </span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: '#0088CC' }}>
+                @{targetUsername || (isBot ? 'bunzy_bot' : targetName.toLowerCase().replace(/\s+/g, '_'))}
+              </span>
+            </div>
+
+            <div style={{ height: 1, background: 'var(--border-subtle)' }} />
+
+            {/* About / Bio */}
+            <div>
+              <span style={{ display: 'block', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>
+                about
+              </span>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.45 }}>
+                {targetBio || 'Miembro de la comunidad Rabbitty. Participa, comparte y acumula Bunz en comercios afiliados.'}
+              </p>
+            </div>
+
+            {targetCategory && (
+              <>
+                <div style={{ height: 1, background: 'var(--border-subtle)' }} />
+                <div>
+                  <span style={{ display: 'block', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>
+                    categoría
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {targetCategory}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Role-Specific Action Button (Bot settings, Ir al Negocio, etc.) */}
+          {targetRole === 'BOT' ? (
+            <button
+              type="button"
+              onClick={() => {
+                PlatformBridge.hapticFeedback('medium');
+                setTargetInfoOpen(false);
+                setBunzyOpen(true);
+              }}
+              style={{
+                width: '100%',
+                padding: '14px 16px',
+                borderRadius: 16,
+                background: 'var(--bg-elevated)',
+                border: '1px solid var(--border-subtle)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(233,30,99,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Bot size={18} color="#E91E63" />
+                </div>
+                <span style={{ fontSize: 14, fontWeight: 800 }}>Bot Settings & Herramientas</span>
+              </div>
+              <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>›</span>
+            </button>
+          ) : targetRole === 'AFFILIATE' && targetBusinessId ? (
+            <button
+              type="button"
+              onClick={() => {
+                PlatformBridge.hapticFeedback('medium');
+                setTargetInfoOpen(false);
+                router.push(`/p/${targetBusinessId}`);
+              }}
+              style={{
+                width: '100%',
+                padding: '14px 16px',
+                borderRadius: 16,
+                background: 'var(--bg-elevated)',
+                border: '1px solid var(--border-subtle)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(255,138,0,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Store size={18} color="#FF8A00" />
+                </div>
+                <span style={{ fontSize: 14, fontWeight: 800 }}>Ver Perfil y Menú del Negocio</span>
+              </div>
+              <ExternalLink size={16} color="var(--text-muted)" />
+            </button>
+          ) : null}
         </div>
       </BottomSheet>
 
