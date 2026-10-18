@@ -616,7 +616,7 @@ export default function ChatRoomPage() {
 
   const pickRecorderMime = (): string => {
     if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') return '';
-    const candidates = ['audio/mp4', 'audio/mp4;codecs=mp4a.40.2', 'audio/webm;codecs=opus', 'audio/webm'];
+    const candidates = ['audio/mp4', 'audio/mp4;codecs=mp4a.40.2', 'audio/mpeg', 'audio/webm;codecs=opus', 'audio/webm'];
     for (const c of candidates) {
       try {
         if (MediaRecorder.isTypeSupported(c)) return c;
@@ -637,7 +637,7 @@ export default function ChatRoomPage() {
       const mime = pickRecorderMime();
       let mr: MediaRecorder;
       try {
-        mr = new MediaRecorder(stream, mime ? { mimeType: mime, audioBitsPerSecond: 24000 } : undefined);
+        mr = new MediaRecorder(stream, mime ? { mimeType: mime, audioBitsPerSecond: 16000 } : undefined);
       } catch {
         mr = new MediaRecorder(stream);
       }
@@ -661,7 +661,7 @@ export default function ChatRoomPage() {
             fr.onerror = () => reject(new Error('read-failed'));
             fr.readAsDataURL(blob);
           });
-          if (!dataUrl || dataUrl.length > 1_500_000) {
+          if (!dataUrl || dataUrl.length > 600_000) {
             PlatformBridge.hapticFeedback('error');
             showToast('Nota de voz demasiado larga', 'error');
             return;
