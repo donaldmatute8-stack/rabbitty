@@ -218,6 +218,8 @@ export default function ChatInboxPage() {
               {([
                 { id: 'chats', label: 'Chats', icon: null as string | null, color: 'var(--bg-pressed)' },
                 ...GROUPS.map((g) => ({ id: g.id, label: g.name, icon: g.icon as string | null, color: g.color })),
+                { id: 'support', label: 'Soporte', icon: '🛟', color: 'linear-gradient(135deg,#00BCD4 0%,#26C6DA 100%)' },
+                { id: 'promotions', label: 'Promociones', icon: '🎉', color: 'linear-gradient(135deg,#FF9800 0%,#FFB74D 100%)' },
               ]).map((item) => {
                 const active = community === item.id;
                 return (
@@ -465,7 +467,49 @@ export default function ChatInboxPage() {
 
       </div>
       ) : (() => {
-        const g = GROUPS.find((x) => x.id === community);
+        if (community === 'support') {
+          return (
+            <div className="flex flex-col items-center text-center gap-3 pt-8 pb-6">
+              <div style={{ width: 88, height: 88, borderRadius: '50%', background: 'linear-gradient(135deg,#00BCD4 0%,#26C6DA 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40 }}>🛟</div>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: 'var(--text-primary)' }}>Soporte Rabbitty</h2>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)', maxWidth: 280, lineHeight: 1.5 }}>Centro de tickets, seguimiento y soporte entre usuarios/admins.</p>
+              <button
+                type="button"
+                onClick={() => { PlatformBridge.hapticFeedback('medium'); window.location.href = '/support'; }}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-black text-sm"
+                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)', cursor: 'pointer' }}
+              >
+                Ir a Ayuda y Soporte
+              </button>
+              <button
+                type="button"
+                onClick={() => { PlatformBridge.hapticFeedback('light'); setCommunity('chats'); }}
+                className="text-xs font-black"
+                style={{ background: 'transparent', border: 'none', color: '#E91E63', cursor: 'pointer', padding: 6 }}
+              >
+                ← Volver a mis chats
+              </button>
+            </div>
+          );
+        }
+        if (community === 'promotions') {
+          return (
+            <div className="flex flex-col items-center text-center gap-3 pt-8 pb-6">
+              <div style={{ width: 88, height: 88, borderRadius: '50%', background: 'linear-gradient(135deg,#FF9800 0%,#FFB74D 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40 }}>🎉</div>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: 'var(--text-primary)' }}>Promociones</h2>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)', maxWidth: 280, lineHeight: 1.5 }}>Pronto: promociones, cupones y ofertas exclusivas para Rabbitters.</p>
+              <button
+                type="button"
+                onClick={() => { PlatformBridge.hapticFeedback('light'); setCommunity('chats'); }}
+                className="text-xs font-black"
+                style={{ background: 'transparent', border: 'none', color: '#E91E63', cursor: 'pointer', padding: 6 }}
+              >
+                ← Volver a mis chats
+              </button>
+            </div>
+          );
+        }
+                const g = GROUPS.find((x) => x.id === community);
         if (!g) return null;
         return (
           <div className="flex flex-col items-center text-center gap-3 pt-8 pb-6">

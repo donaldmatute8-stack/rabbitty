@@ -14,6 +14,7 @@ import BunzGuide from '@/features/business/BunzGuide';
 
 interface UserProfile {
   id?: string;
+  email?: string;
   firstName?: string;
   username?: string;
   hops?: number;
@@ -32,6 +33,7 @@ interface GamificationLevelResponse {
 const MENU_ITEMS = [
   { icon: "💳", label: "Mi Billetera", badge: null, href: '/profile/wallet' },
   { icon: "📜", label: "Historial de transacciones", badge: null, href: '/history' },
+  { icon: "🤝", label: "Afiliados", badge: null, href: '/affiliate' },
   { icon: "👥", label: "Programa de referidos", badge: null, href: '/referral' },
   { icon: "🔔", label: "Notificaciones", badge: null, href: '/notifications' },
   { icon: "🛡", label: "Seguridad y Privacidad", badge: null, href: '/security' },
@@ -73,24 +75,14 @@ export default function ProfilePage() {
     }
   }, [user]);
 
-  const handleAvatarTap = async () => {
-    if (!user?.id) {
-      showToast('Identidad NFT (Próximamente)', 'info');
+  const handleAvatarTap = () => {
+    const email = (user as any)?.email;
+    if (email === 'marco@rabbitty.me') {
+      setShowAdmin(true);
+      setTapCount(0);
       return;
     }
-    const headers = await PlatformBridge.getAuthHeaders();
-    const res = await fetch(`/api/auth/is-admin`, { headers });
-    const { isAdmin } = await res.json();
-    if (isAdmin) {
-      const newCount = tapCount + 1;
-      setTapCount(newCount);
-      if (newCount === 5) {
-        setShowAdmin(true);
-        setTapCount(0);
-      }
-    } else {
-      showToast('Identidad NFT (Próximamente)', 'info');
-    }
+    showToast('Identidad NFT (Próximamente)', 'info');
   };
 
   useEffect(() => {
