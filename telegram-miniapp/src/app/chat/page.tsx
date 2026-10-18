@@ -11,7 +11,9 @@ import useSWR from 'swr';
 import { BusinessCardSkeleton } from '@/components/ui/Skeleton';
 import { PlatformBridge } from '@/lib/platform';
 import { useConvPrefs, setPref, setOrder, type ConvPref } from '@/lib/convPrefs';
-import { Pencil, SquarePen, BellOff, Bell, Archive, ArchiveRestore, Trash2, Pin, PinOff, Search, X } from 'lucide-react';
+import { Pencil, SquarePen, BellOff, Bell, Archive, ArchiveRestore, Trash2, Pin, PinOff, Search, X, Menu, Users, Send, MessageCircle } from 'lucide-react';
+import { GROUPS, openTelegramLink } from '@/components/groups/GroupsStrip';
+import { openBunzy } from '@/lib/bunzyLaunch';
 
 type Conversation = {
   id: string;
@@ -68,7 +70,10 @@ export default function ChatInboxPage() {
   const [archived, setArchived] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [revealed, setRevealed] = useState<string | null>(null);
+  const [revealedRight, setRevealedRight] = useState<string | null>(null);
   const [newOpen, setNewOpen] = useState(false);
+  const [groupsOpen, setGroupsOpen] = useState(false);
+  const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
   const allConversations = useMemo(
@@ -110,13 +115,15 @@ export default function ChatInboxPage() {
   }, [allConversations]);
   const filteredContacts = contacts.filter((c) => c.targetName.toLowerCase().includes(search.trim().toLowerCase()));
 
-  const handleAction = (id: string, action: 'mute' | 'archive' | 'delete') => {
+  const handleAction = (id: string, action: 'mute' | 'archive' | 'delete' | 'pin') => {
     PlatformBridge.hapticFeedback('medium');
     const p = prefs[id] || {};
     if (action === 'mute') setPref(id, { muted: !p.muted });
     else if (action === 'archive') setPref(id, { archived: !p.archived });
+    else if (action === 'pin') setPref(id, { pinned: !p.pinned });
     else setPref(id, { deleted: true });
     setRevealed(null);
+    setRevealedRight(null);
   };
 
   const onReorder = (next: Conversation[]) => {
@@ -127,6 +134,31 @@ export default function ChatInboxPage() {
     <ProfileSubpageLayout
       title="Chats"
       centerTitle
+      left={
+        <button
+          type="button"
+          onClick={() => {
+            PlatformBridge.hapticFeedback('light');
+            setExpandedGroup(null);
+            setGroupsOpen(true);
+          }}
+          aria-label="Comunidad y grupos"
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: '50%',
+            border: '1px solid var(--border-subtle)',
+            background: 'var(--bg-elevated)',
+            color: 'var(--text-primary)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+          }}
+        >
+          <Menu size={18} strokeWidth={2.5} />
+        </button>
+      }
       right={
         <>
           <button
@@ -289,7 +321,9 @@ export default function ChatInboxPage() {
                 conv={conv}
                 pref={prefs[conv.id] || {}}
                 revealed={revealed === conv.id}
+                revealedRight={revealedRight === conv.id}
                 onReveal={setRevealed}
+                onRevealRight={setRevealedRight}
                 onAction={handleAction}
               />
             ))}
@@ -336,6 +370,81 @@ export default function ChatInboxPage() {
           </div>
         </div>
       </BottomSheet>
+
+      <BottomSheet isOpen={groupsOpen} onClose={() => { setGroupsOpen(false); setExpandedGroup(null); }} title="Comunidad">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Users size={18} style={{ color: 'var(--text-secondary)' }} />
+            <span style={{ fontSize: 14, fontWeight: 900, color: 'var(--text-primary)' }}>Grupos oficiales</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginLeft: 'auto' }}>Comunidad</span>
+          </div>
+
+          {GROUPS.map((g) => {
+            const expanded = expandedGroup === g.id;
+            return (
+              <div key={g.id} style={{ border: '1px solid var(--border-subtle)', borderRadius: 16, overflow: 'hidden' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    PlatformBridge.hapticFeedback('light');
+                    setExpandedGroup(expanded ? null : g.id);
+                  }}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '12px 14px',
+                    background: g.color,
+                    color: '#fff',
+                    border: 'none',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  <span style={{ fontSize: 22 }}>{g.icon}</span>
+                  <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
+                    <span style={{ fontWeight: 900, fontSize: 15 }}>{g.name}</span>
+                    <span style={{ fontSize: 12, opacity: 0.95 }}>{g.desc}</span>
+                  </span>
+                  <span style={{ opacity: 0.9, transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }}>→</span>
+                </button>
+
+                {expanded && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10, background: 'var(--bg-pressed)' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        PlatformBridge.hapticFeedback('medium');
+                        setGroupsOpen(false);
+                        setExpandedGroup(null);
+                        openTelegramLink(g.link);
+                      }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', cursor: 'pointer', fontWeight: 800, fontSize: 14, textAlign: 'left' }}
+                    >
+                      <Send size={16} style={{ color: '#229ED9', flexShrink: 0 }} />
+                      Abrir en Telegram
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        PlatformBridge.hapticFeedback('medium');
+                        setGroupsOpen(false);
+                        setExpandedGroup(null);
+                        openBunzy('Quisiera unirme al grupo ' + g.name);
+                      }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg,#E91E63 0%,#FF4081 100%)', color: '#fff', cursor: 'pointer', fontWeight: 800, fontSize: 14, textAlign: 'left' }}
+                    >
+                      <MessageCircle size={16} style={{ flexShrink: 0 }} />
+                      Preguntarle a Bunzy (en la app)
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </BottomSheet>
     </ProfileSubpageLayout>
   );
 }
@@ -344,33 +453,56 @@ function SwipeRow({
   conv,
   pref,
   revealed,
+  revealedRight,
   onReveal,
+  onRevealRight,
   onAction,
 }: {
   conv: Conversation;
   pref: ConvPref;
   revealed: boolean;
+  revealedRight: boolean;
   onReveal: (id: string | null) => void;
-  onAction: (id: string, action: 'mute' | 'archive' | 'delete') => void;
+  onRevealRight: (id: string | null) => void;
+  onAction: (id: string, action: 'mute' | 'archive' | 'delete' | 'pin') => void;
 }) {
   const x = useMotionValue(0);
 
   useEffect(() => {
-    animate(x, revealed ? -OPEN_WIDTH : 0, { type: 'spring', stiffness: 420, damping: 42 });
-  }, [revealed, x]);
+    const target = revealed ? -OPEN_WIDTH : revealedRight ? 80 : 0;
+    animate(x, target, { type: 'spring', stiffness: 420, damping: 42 });
+  }, [revealed, revealedRight, x]);
 
   const close = () => {
     onReveal(null);
+    onRevealRight(null);
     animate(x, 0, { type: 'spring', stiffness: 420, damping: 42 });
+  };
+
+  const togglePin = () => {
+    onAction(conv.id, 'pin');
+    close();
   };
 
   return (
     <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 24 }}>
-      <div style={{ position: 'absolute', inset: 0, display: 'flex', justifyContent: 'flex-end' }}>
-        <button type="button" onClick={() => onAction(conv.id, 'mute')} style={{ ...actionStyleBase, background: '#607D8B' }} aria-label={pref.muted ? 'Activar notificaciones' : 'Silenciar'}>
-          {pref.muted ? <Bell size={20} /> : <BellOff size={20} />}
-          <span style={actionLabelStyle}>{pref.muted ? 'Activar' : 'Silenciar'}</span>
-        </button>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'stretch' }}>
+        <div style={{ display: 'flex', alignItems: 'stretch' }}>
+          <button
+            type="button"
+            onClick={togglePin}
+            style={{ ...actionStyleBase, background: pref.pinned ? '#E91E63' : '#9C27B0', width: 80 }}
+            aria-label={pref.pinned ? 'Desfijar' : 'Fijar'}
+          >
+            {pref.pinned ? <PinOff size={20} /> : <Pin size={20} />}
+            <span style={actionLabelStyle}>{pref.pinned ? 'Desfijar' : 'Fijar'}</span>
+          </button>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'stretch' }}>
+          <button type="button" onClick={() => onAction(conv.id, 'mute')} style={{ ...actionStyleBase, background: '#607D8B' }} aria-label={pref.muted ? 'Activar notificaciones' : 'Silenciar'}>
+            {pref.muted ? <Bell size={20} /> : <BellOff size={20} />}
+            <span style={actionLabelStyle}>{pref.muted ? 'Activar' : 'Silenciar'}</span>
+          </button>
         <button type="button" onClick={() => onAction(conv.id, 'archive')} style={{ ...actionStyleBase, background: '#3F51B5' }} aria-label={pref.archived ? 'Desarchivar' : 'Archivar'}>
           {pref.archived ? <ArchiveRestore size={20} /> : <Archive size={20} />}
           <span style={actionLabelStyle}>{pref.archived ? 'Desarchivar' : 'Archivar'}</span>
@@ -379,18 +511,28 @@ function SwipeRow({
           <Trash2 size={20} />
           <span style={actionLabelStyle}>Eliminar</span>
         </button>
+        </div>
       </div>
 
       <motion.div
         style={{ x, position: 'relative', zIndex: 1, background: 'var(--bg-primary)' }}
         drag="x"
-        dragConstraints={{ left: -OPEN_WIDTH, right: 0 }}
+        dragConstraints={{ left: -OPEN_WIDTH, right: 80 }}
         dragElastic={0.06}
         dragDirectionLock
         onDragEnd={(_, info) => {
-          const shouldOpen = info.offset.x < -50 || info.velocity.x < -300;
-          onReveal(shouldOpen ? conv.id : null);
-          animate(x, shouldOpen ? -OPEN_WIDTH : 0, { type: 'spring', stiffness: 420, damping: 42 });
+          const dx = info.offset.x;
+          if (dx < -40) {
+            onReveal(conv.id);
+            onRevealRight(null);
+            animate(x, -OPEN_WIDTH, { type: 'spring', stiffness: 420, damping: 42 });
+          } else if (dx > 40) {
+            onRevealRight(conv.id);
+            onReveal(null);
+            animate(x, 80, { type: 'spring', stiffness: 420, damping: 42 });
+          } else {
+            close();
+          }
         }}
       >
         <Link

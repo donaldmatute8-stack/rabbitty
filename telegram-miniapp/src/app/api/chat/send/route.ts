@@ -22,13 +22,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
-    const body = (await req.json()) as {
+    const rawBody = await req.text();
+    if (rawBody.length > 3_000_000) {
+      return NextResponse.json({ error: 'Payload demasiado grande' }, { status: 413 });
+    }
+    const body = JSON.parse(rawBody) as {
       conversationId?: string;
       targetId?: string;
       content?: string;
       type?: string;
       lat?: number | null;
       lng?: number | null;
+      metadata?: Record<string, unknown> | null;
     };
 
     const content = (body.content || '').trim();
@@ -62,8 +67,10 @@ export async function POST(req: Request) {
         conversationId: conversation.id,
         senderId,
         content,
-        type: isLocation ? 'LOCATION' : 'TEXT',
-        metadata: isLocation ? { kind: 'LOCATION', lat: body.lat, lng: body.lng } : null,
+        type: isLocation ? 'LOCATION' : (body.type === 'VOICE' ? 'VOICE' : 'TEXT'),
+        metadata: isLocation
+          ? { kind: 'LOCATION', lat: body.lat, lng: body.lng }
+          : (body.metadata && typeof body.metadata === 'object' ? body.metadata : null),
       })
       .returning();
 

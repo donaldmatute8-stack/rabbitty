@@ -3,16 +3,15 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { PlatformBridge } from '@/lib/platform';
+import { openBunzy } from '@/lib/bunzyLaunch';
 
 const GROUP_LINK = 'https://t.me/rabbittyhub/3';
 
 export default function SupportHubPage() {
   const [groupOpen, setGroupOpen] = useState(false);
-  const router = useRouter();
 
   const links = [
     {
@@ -45,7 +44,7 @@ export default function SupportHubPage() {
   const openInApp = () => {
     PlatformBridge.hapticFeedback('medium');
     setGroupOpen(false);
-    router.push(`/chat/bot?prefill=${encodeURIComponent('Quisiera unirme al grupo de la comunidad')}`);
+    openBunzy('Quisiera unirme al grupo de la comunidad');
   };
 
   return (

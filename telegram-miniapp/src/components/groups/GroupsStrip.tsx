@@ -4,15 +4,15 @@ import { motion } from 'framer-motion';
 import { Users } from 'lucide-react';
 import { useState } from 'react';
 import { BottomSheet } from '@/components/ui/BottomSheet';
-import { useRouter } from 'next/navigation';
 import { PlatformBridge } from '@/lib/platform';
+import { openBunzy } from '@/lib/bunzyLaunch';
 
 interface TelegramWebApp {
   openTelegramLink?: (url: string) => void;
   openInvoice?: (url: string, cb: (status: string) => void) => void;
 }
 
-const GROUPS = [
+export const GROUPS = [
   {
     id: 'rabbitty-hub',
     name: 'Rabbitty Hub',
@@ -31,10 +31,22 @@ const GROUPS = [
   },
 ];
 
+export function openTelegramLink(link: string) {
+  try {
+    const webApp = (window as unknown as { Telegram?: { WebApp?: TelegramWebApp } }).Telegram?.WebApp;
+    if (webApp?.openTelegramLink) {
+      webApp.openTelegramLink(link);
+      return;
+    }
+  } catch {
+    // fallback abajo
+  }
+  window.location.href = link;
+}
+
 export default function GroupsStrip() {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState<typeof GROUPS[number] | null>(null);
-  const router = useRouter();
 
   const openChoice = (g: typeof GROUPS[number]) => {
     PlatformBridge.hapticFeedback('light');
@@ -46,21 +58,13 @@ export default function GroupsStrip() {
     if (!active) return;
     PlatformBridge.hapticFeedback('medium');
     setOpen(false);
-    try {
-      // Intentar abrir en Telegram WebApp
-      const webApp = (window as unknown as { Telegram?: { WebApp?: TelegramWebApp } }).Telegram?.WebApp;
-      if (webApp?.openTelegramLink) {
-        webApp.openTelegramLink(active.link);
-        return;
-      }
-    } catch {}
-    window.location.href = active.link;
+    openTelegramLink(active.link);
   };
 
   const openInApp = () => {
     PlatformBridge.hapticFeedback('medium');
     setOpen(false);
-    router.push(`/chat/bot?prefill=${encodeURIComponent('Quisiera unirme al grupo ' + (active?.name ?? 'Rabbitty'))}`);
+    openBunzy('Quisiera unirme al grupo ' + (active?.name ?? 'Rabbitty'));
   };
 
   return (

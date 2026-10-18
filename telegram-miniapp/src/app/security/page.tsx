@@ -1,6 +1,181 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
+
+const CRED_KEY = 'rabbitty_faceid_cred';
+
+function b64url(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let bin = '';
+  bytes.forEach((b) => { bin += String.fromCharCode(b); });
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function b64urlDecode(s: string): Uint8Array {
+  const norm = s.replace(/-/g, '+').replace(/_/g, '/');
+  const bin = atob(norm + '='.repeat((4 - (norm.length % 4)) % 4));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+function FaceIdCard() {
+  const [supported, setSupported] = useState<boolean | null>(null);
+  const [enabled, setEnabled] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    queueMicrotask(() => {
+      try {
+        if (alive) setEnabled(Boolean(localStorage.getItem(CRED_KEY)));
+      } catch {
+        // silencioso
+      }
+    });
+    if (typeof PublicKeyCredential !== 'undefined' && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
+      PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
+        .then((ok) => { if (alive) setSupported(ok); })
+        .catch(() => { if (alive) setSupported(false); });
+    } else {
+      queueMicrotask(() => { if (alive) setSupported(false); });
+    }
+    return () => { alive = false; };
+  }, []);
+
+  const enable = async () => {
+    if (busy || supported === false) return;
+    setBusy(true);
+    setFeedback(null);
+    try {
+      const challenge = crypto.getRandomValues(new Uint8Array(32));
+      const userId = crypto.getRandomValues(new Uint8Array(16));
+      const credential = (await navigator.credentials.create({
+        publicKey: {
+          challenge: challenge.buffer as ArrayBuffer,
+          rp: { name: 'Rabbitty' },
+          user: { id: userId.buffer as ArrayBuffer, name: `rabbitty-${b64url(userId.buffer).slice(0, 10)}`, displayName: 'Rabbitty User' },
+          pubKeyCredParams: [
+            { type: 'public-key', alg: -7 },
+            { type: 'public-key', alg: -257 },
+          ],
+          authenticatorSelection: { residentKey: 'preferred', userVerification: 'required' },
+          timeout: 60000,
+          attestation: 'none',
+        },
+      })) as PublicKeyCredential | null;
+      if (credential) {
+        localStorage.setItem(CRED_KEY, b64url(credential.rawId));
+        setEnabled(true);
+        setFeedback('✅ Face ID / Touch ID activado en este dispositivo.');
+      }
+    } catch {
+      setFeedback('❌ No se pudo activar. Intenta de nuevo.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const verify = async () => {
+    if (busy) return;
+    setBusy(true);
+    setFeedback(null);
+    try {
+      const rawId = localStorage.getItem(CRED_KEY);
+      if (!rawId) {
+        setFeedback('Activa primero la protección biométrica.');
+        return;
+      }
+      const challenge = crypto.getRandomValues(new Uint8Array(32));
+      const assertion = (await navigator.credentials.get({
+        publicKey: {
+          challenge: challenge.buffer as ArrayBuffer,
+          allowCredentials: [{ type: 'public-key', id: b64urlDecode(rawId).buffer as ArrayBuffer }],
+          userVerification: 'required',
+          timeout: 60000,
+        },
+      })) as PublicKeyCredential | null;
+      if (assertion) setFeedback('🔓 Verificación biométrica exitosa.');
+    } catch {
+      setFeedback('⚠️ Verificación fallida o cancelada.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disable = () => {
+    try { localStorage.removeItem(CRED_KEY); } catch { /* silencioso */ }
+    setEnabled(false);
+    setFeedback('Protección biométrica desactivada.');
+  };
+
+  return (
+    <div className="bg-[#161622] border border-white/10 rounded-[22px] p-4">
+      <div className="flex items-start gap-4">
+        <div className="w-[46px] h-[46px] rounded-[14px] flex shrink-0 items-center justify-center text-[22px] border border-white/5" style={{ background: 'rgba(255,255,255,0.06)' }}>
+          🫣
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <h4 className="font-black text-white text-[14px] m-0">Face ID / Touch ID</h4>
+            <span
+              className="text-[10px] font-black px-2 py-0.5 rounded-full"
+              style={{
+                background: enabled ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.08)',
+                color: enabled ? '#34D399' : 'rgba(255,255,255,0.5)',
+                border: `1px solid ${enabled ? 'rgba(16,185,129,0.35)' : 'rgba(255,255,255,0.1)'}`,
+              }}
+            >
+              {enabled ? 'ACTIVO' : 'INACTIVO'}
+            </span>
+          </div>
+          <p className="text-white/60 text-xs leading-[1.5] m-0 mb-3">
+            Bloqueo con biometría vía WebAuthn (Face ID / Touch ID). Tu clave biométrica nunca sale de tu dispositivo.
+          </p>
+          {supported === false && (
+            <p className="text-[11px] font-bold m-0 mb-2" style={{ color: '#F59E0B' }}>
+              ⚠️ Tu dispositivo/sesión no expone autenticador biométrico.
+            </p>
+          )}
+          <div className="flex gap-2 flex-wrap">
+            {!enabled ? (
+              <button
+                onClick={enable}
+                disabled={busy || supported === false}
+                className="rounded-full px-4 py-2 text-[12px] font-black border-none cursor-pointer disabled:opacity-50"
+                style={{ background: '#10B981', color: '#06281C' }}
+              >
+                {busy ? 'Activando…' : 'Activar Face ID'}
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={verify}
+                  disabled={busy}
+                  className="rounded-full px-4 py-2 text-[12px] font-black border-none cursor-pointer disabled:opacity-50"
+                  style={{ background: 'rgba(99,102,241,0.2)', color: '#A5B4FC', border: '1px solid rgba(99,102,241,0.4)' }}
+                >
+                  {busy ? 'Verificando…' : 'Probar ahora'}
+                </button>
+                <button
+                  onClick={disable}
+                  disabled={busy}
+                  className="rounded-full px-4 py-2 text-[12px] font-black border-none cursor-pointer disabled:opacity-50"
+                  style={{ background: 'rgba(211,47,47,0.15)', color: '#FCA5A5', border: '1px solid rgba(211,47,47,0.4)' }}
+                >
+                  Desactivar
+                </button>
+              </>
+            )}
+          </div>
+          {feedback && <p className="text-[11px] font-bold m-0 mt-2" style={{ color: 'rgba(255,255,255,0.7)' }}>{feedback}</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const FEATURES = [
   { icon: '🔑', color: '#10B981', bg: '#F0FDF4', title: 'Llaves Privadas',    desc: 'Tus llaves privadas de TON nunca tocan nuestros servidores. Se encriptan localmente en tu dispositivo con AES-256.' },
@@ -91,6 +266,9 @@ export default function SecurityPage() {
             </div>
           ))}
         </div>
+
+        <FaceIdCard />
+        <div className="h-4" />
 
       </div>
     </ProfileSubpageLayout>

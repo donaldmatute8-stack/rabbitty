@@ -38,18 +38,18 @@ export default function FAQPage() {
               width: '100%',
               padding: '16px 16px 16px 44px',
               borderRadius: 16,
-              border: '1px solid #E0E0E0',
+              border: '1px solid var(--border-default)',
               fontSize: 15,
               fontWeight: 500,
               fontFamily: 'var(--font-family-base)',
-              color: '#111',
-              background: '#fff',
+              color: 'var(--text-primary)',
+              background: 'var(--bg-elevated)',
               outline: 'none',
               boxShadow: '0 2px 12px rgba(0,0,0,0.02)',
               transition: 'border-color 0.2s',
             }}
             onFocus={(e) => e.target.style.borderColor = '#E91E63'}
-            onBlur={(e) => e.target.style.borderColor = '#E0E0E0'}
+            onBlur={(e) => e.target.style.borderColor = 'var(--border-default)'}
           />
         </div>
 
@@ -61,9 +61,9 @@ export default function FAQPage() {
                 <div 
                   key={idx} 
                   style={{ 
-                    background: '#FFFFFF', 
+                    background: 'var(--bg-elevated)', 
                     borderRadius: 16, 
-                    border: '1px solid #F0F0F0',
+                    border: '1px solid var(--border-subtle)',
                     overflow: 'hidden',
                     boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
                   }}
@@ -76,7 +76,7 @@ export default function FAQPage() {
                       cursor: 'pointer', textAlign: 'left'
                     }}
                   >
-                    <span style={{ fontSize: 15, fontWeight: 700, color: '#111', paddingRight: 16 }}>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', paddingRight: 16 }}>
                       {faq.q}
                     </span>
                     <motion.div 
@@ -96,7 +96,7 @@ export default function FAQPage() {
                         exit={{ height: 0, opacity: 0 }}
                         transition={{ duration: 0.3 }}
                       >
-                        <div style={{ padding: '0 20px 20px', fontSize: 14, color: '#666', lineHeight: 1.6 }}>
+                        <div style={{ padding: '0 20px 20px', fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
                           {faq.a}
                         </div>
                       </motion.div>
@@ -106,7 +106,7 @@ export default function FAQPage() {
               );
             })
           ) : (
-            <div style={{ padding: 40, textAlign: 'center', color: '#AAA' }}>
+            <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
               No se encontraron resultados.
             </div>
           )}
@@ -114,7 +114,7 @@ export default function FAQPage() {
 
         {/* Fallback a Telegram Bot */}
         <div style={{ marginTop: 32, textAlign: 'center', padding: 20 }}>
-          <p style={{ fontSize: 14, color: '#666', marginBottom: 12 }}>¿Aún no encuentras lo que buscas?</p>
+          <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 12 }}>¿Aún no encuentras lo que buscas?</p>
           <Link href="https://t.me/rabbittybot_bot?start=help" style={{ textDecoration: 'none' }}>
             <motion.div
               whileTap={{ scale: 0.95 }}
