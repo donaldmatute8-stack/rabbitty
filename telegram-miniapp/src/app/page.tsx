@@ -19,7 +19,7 @@ import MembershipCard from '@/components/ui/MembershipCard';
 import ProfileDrawer from '@/components/ProfileDrawer';
 import { useTheme } from '@/contexts/ThemeContext';
 import RabbittyContourLoader from '@/components/ui/RabbittyContourLoader';
-import GroupsStrip from '@/components/groups/GroupsStrip';
+import { openBunzy } from '@/lib/bunzyLaunch';
 
 const InteractiveMap = dynamic(() => import('@/features/map/InteractiveMap'), {
   ssr: false,
@@ -382,7 +382,7 @@ export default function FeedPage() {
 
             <Link 
               href="/chat/bot" 
-              onClick={() => PlatformBridge.hapticFeedback('medium')}
+              onClick={(e) => { e.preventDefault(); PlatformBridge.hapticFeedback('medium'); openBunzy(); }}
               className="w-9 h-9 rounded-full flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.04)] active:scale-95 transition-transform" 
               style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
               aria-label="Hablar con Bunzy"
@@ -409,12 +409,6 @@ export default function FeedPage() {
           />
         )}
       </div>
-
-      {activeTab !== 'Freehands' && (
-        <div style={{ maxWidth: 600, margin: '0 auto', padding: '12px 20px 0' }}>
-          <GroupsStrip />
-        </div>
-      )}
 
       {/* NAVBAR SUPERIOR MINIMALISTA FLOTANTE (ESTILO FACEBOOK):
           Aparece solo al hacer scroll hacia arriba y permanece oculto al bajar */}
@@ -470,7 +464,7 @@ export default function FeedPage() {
 
             <Link 
               href="/chat/bot" 
-              onClick={() => PlatformBridge.hapticFeedback('medium')}
+              onClick={(e) => { e.preventDefault(); PlatformBridge.hapticFeedback('medium'); openBunzy(); }}
               className="w-8 h-8 rounded-full flex items-center justify-center active:scale-95 transition-transform" 
               style={{ background: 'var(--bg-pressed)' }}
               aria-label="Hablar con Bunzy"

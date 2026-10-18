@@ -5,6 +5,7 @@ import { WalletProvider } from "@/contexts/WalletContext";
 import AuthProvider from "@/features/auth/AuthProvider";
 import { ToastProvider } from "@/contexts/ToastContext";
 import AppOpener from "@/components/AppOpener";
+import BunzyLaunchOverlay from "@/components/bunzy/BunzyLaunchOverlay";
 
 const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem('rabbitty_theme')||'dark';var r=t==='system'?(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t;var d=document.documentElement;d.setAttribute('data-theme',r);d.classList.toggle('dark',r==='dark');d.classList.toggle('light',r==='light');d.style.colorScheme=r;}catch(e){}})();`;
 
@@ -41,7 +42,8 @@ export default function RootLayout({
       </head>
       <body className="antialiased" suppressHydrationWarning>
         <ThemeProvider>
-          <AppOpener />
+          <BunzyLaunchOverlay />
+        <AppOpener />
           <ToastProvider>
             <AuthProvider>
               <WalletProvider>

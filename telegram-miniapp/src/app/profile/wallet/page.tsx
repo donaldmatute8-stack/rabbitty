@@ -29,6 +29,7 @@ export default function WalletPage() {
   const [showReceive, setShowReceive] = useState(false);
   const [showSend, setShowSend] = useState(false);
   const [sendAmount, setSendAmount] = useState('');
+  const [sendStep, setSendStep] = useState(1);
 
   // Resolvable P2P handle: @username (preferred, human) or uuid id (always exists).
   const payHandle = user?.username ? `@${user.username}` : (user?.id || '');
@@ -43,6 +44,7 @@ export default function WalletPage() {
     PlatformBridge.hapticFeedback('light');
     setIdempotencyKey(newIdempotencyKey());
     if (preset) setSendRecipient(preset.replace(/^rabbitty:\/\/pay\?to=/, ''));
+    setSendStep(preset ? 2 : 1);
     setShowSend(true);
   };
 
@@ -57,10 +59,14 @@ export default function WalletPage() {
       const url = new URL(window.location.href);
       const to = url.searchParams.get('to');
       if (to) {
-        setIdempotencyKey(newIdempotencyKey());
-        setSendRecipient(decodeURIComponent(to));
-        setShowSend(true);
+        const recipient = decodeURIComponent(to);
         window.history.replaceState({}, '', '/profile/wallet');
+        queueMicrotask(() => {
+          setIdempotencyKey(newIdempotencyKey());
+          setSendRecipient(recipient);
+          setSendStep(2);
+          setShowSend(true);
+        });
       }
     } catch {}
   }, []);
@@ -147,6 +153,7 @@ export default function WalletPage() {
       setSendRecipient('');
       setSendAmount('');
       setSendNote('');
+      setSendStep(1);
       setIdempotencyKey('');
       await handleRefresh();
     } catch (err: any) {
@@ -311,7 +318,14 @@ export default function WalletPage() {
             <p className="text-[13px] text-white/60 mb-4">Muestra este código para que te transfieran Bunz. Escanéalo desde la pestaña de escáner de Rabbitty.</p>
             <div className="rounded-3xl p-4 text-center mb-5 flex justify-center bg-white border border-pink-500/30">
               {payPayload ? (
-                <QRCodeSVG value={payPayload} size={180} level="M" bgColor="#ffffff" fgColor="#111111" />
+                <QRCodeSVG
+                  value={payPayload}
+                  size={180}
+                  level="H"
+                  bgColor="#ffffff"
+                  fgColor="#111111"
+                  imageSettings={{ src: '/logo_conejo.png', height: 42, width: 42, excavate: true }}
+                />
               ) : (
                 <span className="text-[#111] text-sm py-16">Inicia sesión para generar tu código</span>
               )}
@@ -335,52 +349,133 @@ export default function WalletPage() {
         </div>
       )}
 
-      {/* SEND MODAL */}
+      {/* SEND MODAL — flujo conversacional por pasos */}
       {showSend && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[rgba(0,0,0,0.7)] backdrop-blur-[8px] p-5">
           <div className="bg-[#181824] border border-white/10 text-white rounded-2xl w-full max-w-[400px] p-6 relative shadow-2xl">
-            <button onClick={() => setShowSend(false)} className="absolute top-4 right-4 bg-transparent border-0 cursor-pointer text-white/60 hover:text-white">
+            <button onClick={() => { setShowSend(false); setSendStep(1); }} className="absolute top-4 right-4 bg-transparent border-0 cursor-pointer text-white/60 hover:text-white">
               <X size={22} />
             </button>
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-8 h-8 rounded-full bg-[#E91E63]/20 flex items-center justify-center text-[#E91E63]">
-                <ArrowUpRight size={18} strokeWidth={2.5} />
+
+            {/* Indicador de pasos */}
+            <div className="flex items-center gap-1.5 mb-4 pr-8">
+              {[1, 2, 3].map((st) => (
+                <div
+                  key={st}
+                  className="h-1.5 flex-1 rounded-full transition-colors"
+                  style={{ background: sendStep >= st ? '#E91E63' : 'rgba(255,255,255,0.1)' }}
+                />
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-3 mb-5">
+              <div className="self-start max-w-[85%] bg-white/5 border border-white/10 rounded-2xl rounded-bl-md px-4 py-2.5 text-[14px] font-semibold">
+                {sendStep === 1 && '👋 ¿A quién quieres enviarle Bunz?'}
+                {sendStep === 2 && `💸 ¿Cuántos Bunz le envías a ${sendRecipient || '...'}?`}
+                {sendStep === 3 && '📝 ¿Quieres agregar un mensaje? (opcional)'}
               </div>
-              <h3 className="text-xl font-extrabold m-0">Enviar Bunz P2P</h3>
-            </div>
-            <p className="text-[13px] text-white/60 mb-5">Transfiere Bunz instantáneamente a cualquier amigo o negocio sin comisiones.</p>
-            
-            <label className="text-[11px] font-extrabold text-white/50 uppercase tracking-wider block mb-1.5">Destinatario</label>
-            <input 
-              value={sendRecipient} onChange={e => setSendRecipient(e.target.value)} 
-              placeholder="@usuario o ID de usuario" 
-              className="w-full p-3.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/30 mb-4 text-sm focus:outline-none focus:border-[#E91E63]"
-            />
 
-            <label className="text-[11px] font-extrabold text-white/50 uppercase tracking-wider block mb-1.5">Cantidad de Bunz</label>
-            <div className="relative mb-4">
-              <input 
-                type="number" value={sendAmount} onChange={e => setSendAmount(e.target.value)} 
-                placeholder="0" 
-                className="w-full p-3.5 pr-16 rounded-xl bg-white/5 border border-white/10 text-white font-extrabold placeholder-white/30 text-lg focus:outline-none focus:border-[#E91E63]"
-              />
-              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-[#E91E63]">BUNZ</span>
+              {sendStep === 1 && (
+                <input
+                  value={sendRecipient}
+                  onChange={(e) => setSendRecipient(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && sendRecipient.trim()) { PlatformBridge.hapticFeedback('light'); setSendStep(2); } }}
+                  placeholder="@usuario o ID"
+                  autoFocus
+                  className="self-end w-[70%] p-3 rounded-2xl rounded-br-md bg-[#E91E63] border border-[#E91E63] text-white placeholder-white/50 text-sm font-semibold focus:outline-none"
+                />
+              )}
+
+              {sendStep === 2 && (
+                <div className="self-end w-full flex flex-col items-end gap-2">
+                  <div className="relative w-[70%]">
+                    <input
+                      type="number"
+                      value={sendAmount}
+                      onChange={(e) => setSendAmount(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && parseInt(sendAmount, 10) > 0) { PlatformBridge.hapticFeedback('light'); setSendStep(3); } }}
+                      placeholder="0"
+                      autoFocus
+                      className="w-full p-3 pr-14 rounded-2xl rounded-br-md bg-[#E91E63] border border-[#E91E63] text-white font-extrabold placeholder-white/50 text-lg focus:outline-none"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-white/80">BUNZ</span>
+                  </div>
+                  <div className="flex gap-2">
+                    {[10, 50, 100].map((q) => (
+                      <button
+                        key={q}
+                        onClick={() => setSendAmount(String(q))}
+                        className="px-3 py-1.5 rounded-full text-[11px] font-black border border-white/15 bg-white/5 text-white/80 cursor-pointer hover:bg-white/10"
+                      >
+                        {q}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => setSendAmount(balance || '0')}
+                      className="px-3 py-1.5 rounded-full text-[11px] font-black border border-[#E91E63]/40 bg-[#E91E63]/15 text-[#E91E63] cursor-pointer"
+                    >
+                      Todo
+                    </button>
+                  </div>
+                  <span className="text-[11px] text-white/40 font-semibold">Saldo disponible: {balance} BUNZ</span>
+                </div>
+              )}
+
+              {sendStep === 3 && (
+                <div className="self-end w-full flex flex-col items-end gap-2">
+                  <input
+                    value={sendNote}
+                    onChange={(e) => setSendNote(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleSend(); }}
+                    placeholder="ej: ¡Gracias por los tacos! 🌮"
+                    autoFocus
+                    className="w-[75%] p-3 rounded-2xl rounded-br-md bg-[#E91E63] border border-[#E91E63] text-white placeholder-white/50 text-sm font-semibold focus:outline-none"
+                  />
+                  <div className="w-full bg-white/5 border border-white/10 rounded-2xl p-3.5 text-left">
+                    <p className="text-[11px] font-extrabold text-white/40 uppercase tracking-wider m-0 mb-1">Resumen</p>
+                    <p className="text-[15px] font-extrabold m-0 text-white">
+                      {sendAmount || '0'} BUNZ → {sendRecipient || '—'}
+                    </p>
+                    {sendNote.trim() && <p className="text-[12px] text-white/60 m-0 mt-1">“{sendNote.trim()}”</p>}
+                  </div>
+                </div>
+              )}
             </div>
 
-            <label className="text-[11px] font-extrabold text-white/50 uppercase tracking-wider block mb-1.5">Mensaje o Nota (Opcional)</label>
-            <input 
-              value={sendNote} onChange={e => setSendNote(e.target.value)} 
-              placeholder="ej: ¡Gracias por los tacos! 🌮" 
-              className="w-full p-3.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/30 mb-6 text-sm focus:outline-none focus:border-[#E91E63]"
-            />
-            
-            <button 
-              onClick={handleSend}
-              disabled={sending}
-              className="w-full p-4 bg-gradient-to-r from-[#E91E63] to-[#FF4081] text-white border-0 rounded-[14px] font-extrabold text-[15px] cursor-pointer shadow-lg shadow-[#E91E63]/30 disabled:opacity-50"
-            >
-              {sending ? 'Transfiriendo...' : 'Confirmar Envío de Bunz'}
-            </button>
+            {/* Acciones */}
+            <div className="flex gap-2">
+              {sendStep > 1 && (
+                <button
+                  onClick={() => setSendStep(sendStep - 1)}
+                  disabled={sending}
+                  className="flex-1 p-3.5 bg-white/5 border border-white/10 text-white/70 rounded-[14px] font-extrabold text-sm cursor-pointer disabled:opacity-50"
+                >
+                  Atrás
+                </button>
+              )}
+              {sendStep < 3 ? (
+                <button
+                  onClick={() => {
+                    if (sendStep === 1 && !sendRecipient.trim()) return;
+                    if (sendStep === 2 && (!parseInt(sendAmount, 10) || parseInt(sendAmount, 10) <= 0)) return;
+                    PlatformBridge.hapticFeedback('light');
+                    setSendStep(sendStep + 1);
+                  }}
+                  disabled={(sendStep === 1 && !sendRecipient.trim()) || (sendStep === 2 && (!parseInt(sendAmount, 10) || parseInt(sendAmount, 10) <= 0))}
+                  className="flex-[2] p-3.5 bg-gradient-to-r from-[#E91E63] to-[#FF4081] text-white border-0 rounded-[14px] font-extrabold text-[15px] cursor-pointer shadow-lg shadow-[#E91E63]/30 disabled:opacity-40"
+                >
+                  Continuar →
+                </button>
+              ) : (
+                <button
+                  onClick={handleSend}
+                  disabled={sending}
+                  className="flex-[2] p-3.5 bg-gradient-to-r from-[#E91E63] to-[#FF4081] text-white border-0 rounded-[14px] font-extrabold text-[15px] cursor-pointer shadow-lg shadow-[#E91E63]/30 disabled:opacity-50"
+                >
+                  {sending ? 'Transfiriendo…' : `Enviar ${sendAmount || '0'} BUNZ 🚀`}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

@@ -1,14 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Share2, Copy, CheckCircle2, Trophy } from 'lucide-react';
+import { Share2, Copy, CheckCircle2 } from 'lucide-react';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { PlatformBridge } from '@/lib/platform';
 
-const LEVEL_NAMES: Record<string, string> = {
-  '1': 'Bronce', '2': 'Plata', '3': 'Oro', '4': 'Rubí', '5': 'Diamante',
-};
+
 
 type TelegramWebApp = { openTelegramLink?: (url: string) => void };
 
@@ -50,33 +48,6 @@ export default function ReferralPage() {
   const referralLink = profile?.telegramId
     ? `https://t.me/Rabbittyme_bot/app?startapp=ref_${profile.telegramId}`
     : `https://t.me/Rabbittyme_bot/app?startapp=ref_${referralCode}`;
-
-  const handleNativeShare = async () => {
-    if (!referralLink) return;
-    PlatformBridge.hapticFeedback('medium');
-    const text = '¡Qué onda! Te invito a Rabbitty. Regístrate con mi enlace para ganar bunz de bienvenida y multiplicarlos en tus lugares favoritos:';
-
-    // Dentro de Telegram: usar el selector de chats nativo de Telegram
-    const tg = getTelegram();
-    if (tg?.openTelegramLink) {
-      tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent(text)}`);
-      return;
-    }
-
-    const shared = await PlatformBridge.share({
-      title: 'Únete a Rabbitty 🐰',
-      text,
-      url: referralLink,
-      dialogTitle: 'Invitar amigos a Rabbitty',
-    });
-
-    // Fallback visible: copiar al portapapeles y avisar
-    if (!shared) {
-      try { await navigator.clipboard.writeText(referralLink); } catch {}
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
 
   const copyToClipboard = () => {
     if (referralLink) {
@@ -176,19 +147,13 @@ export default function ReferralPage() {
                   </button>
                 </div>
 
-              {/* Primary Native iOS/Android Share Button */}
-              <button
-                onClick={handleNativeShare}
-                disabled={!referralLink}
-                className="w-full font-black text-sm py-4 rounded-2xl border-0 flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 transition-all text-white"
-                style={{
-                  background: 'linear-gradient(135deg, #FF2E93 0%, #FF8A00 100%)',
-                  boxShadow: '0 8px 24px rgba(255, 46, 147, 0.4)',
-                }}
+              {/* Título de compartir (sin estilo botón) */}
+              <p
+                className="text-[12px] font-black uppercase tracking-[1.5px] text-center mb-3 m-0"
+                style={{ color: 'rgba(255,255,255,0.45)' }}
               >
-                <Share2 size={18} />
-                <span>Compartir con Amigos</span>
-              </button>
+                Compartir con amigos
+              </p>
 
               <div className="flex gap-3">
                 <button

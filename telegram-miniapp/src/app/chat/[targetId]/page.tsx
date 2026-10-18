@@ -62,7 +62,12 @@ type MessageMetadata =
   | OrderDraft
   | { kind: 'LOCATION'; lat: number; lng: number; label?: string }
   | { kind: 'TRANSFER_REQUEST'; transferRequest: TransferRequest }
-  | { kind: 'RECEIVE_QR'; receiveQr: ReceiveQrRequest };
+  | { kind: 'RECEIVE_QR'; receiveQr: ReceiveQrRequest }
+  | { kind: 'REPLY'; replyTo: { id: string; text: string; sender?: 'user' | 'assistant' | 'bot' } }
+  | { kind: 'VOICE'; voiceUrl?: string; voiceDataUrl?: string; durationMs?: number }
+  | { kind: 'FORWARDED'; forwardedFrom?: { id: string; name: string } }
+  | { kind: 'TEXT'; reactions?: Record<string, string> }
+  | Record<string, unknown>;
 
 type Message = {
   id: string;
@@ -73,6 +78,14 @@ type Message = {
   metadata?: MessageMetadata | null;
   readAt?: string | null;
 };
+
+interface ForwardConversation {
+  id: string;
+  targetId: string;
+  targetName: string;
+  targetAvatar: string | null;
+  isBot?: boolean;
+}
 
 interface HistoryResponse {
   success?: boolean;
@@ -152,8 +165,46 @@ export default function ChatRoomPage() {
   const otherTypingAtRef = useRef<string | null>(null);
   const typingCooldownRef = useRef(0);
   const tempCounterRef = useRef(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const [recording, setRecording] = useState(false);
+  const [recordDuration, setRecordDuration] = useState(0);
+  const recordIntervalRef = useRef<number | null>(null);
+  const [replyTo, setReplyTo] = useState<{ id: string; text: string; sender?: 'user' | 'assistant' | 'bot' } | null>(null);
+  const [contextMsg, setContextMsg] = useState<string | null>(null);
+  const [reactionsOpen, setReactionsOpen] = useState<string | null>(null);
+  const [targetInfoOpen, setTargetInfoOpen] = useState(false);
+  const [msgReactions, setMsgReactions] = useState<Record<string, string>>({});
+  const [pinnedId, setPinnedId] = useState<string | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [forwardTexts, setForwardTexts] = useState<string[] | null>(null);
+  const [forwardList, setForwardList] = useState<ForwardConversation[] | null>(null);
+  const [forwardLoading, setForwardLoading] = useState(false);
+  const longPressTimerRef = useRef<number | null>(null);
+  const recordStartRef = useRef(0);
+  const recordingCancelledRef = useRef(false);
 
   const isBot = targetId === 'bot';
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      try {
+        const v = localStorage.getItem(`rabbitty_pinned_${conversationId || targetId}`);
+        setPinnedId(v || null);
+      } catch {
+        // silencioso
+      }
+    });
+    return () => {
+      if (recordIntervalRef.current) {
+        clearInterval(recordIntervalRef.current);
+        recordIntervalRef.current = null;
+      }
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId, targetId]);
 
   useEffect(() => {
     if (!user) return;
@@ -294,13 +345,17 @@ export default function ChatRoomPage() {
 
     tempCounterRef.current += 1;
     const tempId = `temp-${tempCounterRef.current}`;
+    let metaOut: MessageMetadata | null = isLoc && explicitCoords ? { kind: 'LOCATION', lat: explicitCoords.lat, lng: explicitCoords.lng } as MessageMetadata : null;
+    if (replyTo && !isLoc) {
+      metaOut = { kind: 'REPLY', replyTo } as MessageMetadata;
+    }
     const optimistic: Message = {
       id: tempId,
       senderId: myParticipantId || user.id,
       content,
       createdAt: new Date().toISOString(),
-      type: isLoc ? 'LOCATION' : 'TEXT',
-      metadata: isLoc && explicitCoords ? { kind: 'LOCATION', lat: explicitCoords.lat, lng: explicitCoords.lng } : null,
+      type: (metaOut && 'kind' in metaOut && typeof (metaOut as any).kind === 'string' ? (metaOut as any).kind : (isLoc ? 'LOCATION' : 'TEXT')),
+      metadata: metaOut,
     };
     setMessages((prev) => [...prev, optimistic]);
 
@@ -316,10 +371,12 @@ export default function ChatRoomPage() {
           type: isLoc ? 'LOCATION' : 'TEXT',
           lat: explicitCoords?.lat ?? coords?.lat ?? null,
           lng: explicitCoords?.lng ?? coords?.lng ?? null,
+          metadata: metaOut ?? null,
         }),
       });
       const data: SendResponse = await res.json();
       if (data.success) {
+        if (replyTo) setReplyTo(null);
         setMessages((prev) => {
           const replaced = prev.map((m) => (m.id === tempId && data.message ? data.message : m));
           const extra: Message[] = [];
@@ -437,6 +494,188 @@ export default function ChatRoomPage() {
       setBunzyBusy(false);
       setBunzyOpen(false);
     }
+  };
+
+  const speakText = (text: string) => {
+    try {
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'es-MX';
+      u.rate = 1.05;
+      window.speechSynthesis.speak(u);
+      PlatformBridge.hapticFeedback('light');
+    } catch {
+      // silencioso
+    }
+  };
+
+  const copyText = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      PlatformBridge.hapticFeedback('success');
+    } catch {
+      // silencioso
+    }
+  };
+
+  const removeMessages = (ids: string[]) => {
+    setMessages((prev) => prev.filter((m) => !ids.includes(m.id)));
+    PlatformBridge.hapticFeedback('medium');
+  };
+
+  const openForward = (texts: string[]) => {
+    const clean = texts.filter(Boolean);
+    if (!clean.length) return;
+    setForwardTexts(clean);
+    setForwardList(null);
+    setForwardLoading(true);
+    PlatformBridge.hapticFeedback('medium');
+    PlatformBridge.getAuthHeaders()
+      .then((headers) => fetch('/api/chat', { headers }).then((r) => r.json()))
+      .then((data) => setForwardList((data && data.conversations) || []))
+      .catch(() => setForwardList([]))
+      .finally(() => setForwardLoading(false));
+  };
+
+  const sendForward = async (conv: ForwardConversation) => {
+    if (!forwardTexts?.length) return;
+    const content = forwardTexts.map((t) => `↪ ${t}`).join('\n');
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch('/api/chat/send', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId: conv.id, content }),
+      });
+      const data = await res.json();
+      if (data?.success) {
+        PlatformBridge.hapticFeedback('success');
+        setForwardTexts(null);
+      } else {
+        PlatformBridge.hapticFeedback('error');
+      }
+    } catch {
+      PlatformBridge.hapticFeedback('error');
+    }
+  };
+
+  const reportMessage = (msg: Message) => {
+    try {
+      navigator.clipboard?.writeText(msg.content);
+    } catch {
+      // silencioso
+    }
+    setContextMsg(null);
+    router.push('/chat/bot?prefill=' + encodeURIComponent(`Reportar mensaje: ${msg.content.slice(0, 160)}`));
+  };
+
+  const startRecording = async () => {
+    if (recording || sending) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mime = typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+      const mr = new MediaRecorder(stream, mime ? { mimeType: mime, audioBitsPerSecond: 32000 } : undefined);
+      audioChunksRef.current = [];
+      recordingCancelledRef.current = false;
+      mr.ondataavailable = (e) => {
+        if (e.data.size) audioChunksRef.current.push(e.data);
+      };
+      mr.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const cancelled = recordingCancelledRef.current;
+        const durationMs = Math.max(500, performance.now() - (recordStartRef.current || performance.now() - 1000));
+        mediaRecorderRef.current = null;
+        setRecording(false);
+        if (cancelled || !audioChunksRef.current.length) return;
+        const blob = new Blob(audioChunksRef.current, { type: mr.mimeType || 'audio/webm' });
+        audioChunksRef.current = [];
+        const dataUrl = await new Promise<string>((resolve) => {
+          const fr = new FileReader();
+          fr.onload = () => resolve(String(fr.result));
+          fr.readAsDataURL(blob);
+        });
+        if (!dataUrl || dataUrl.length > 2_700_000) {
+          PlatformBridge.hapticFeedback('error');
+          return;
+        }
+        sendVoiceNote(dataUrl, durationMs);
+      };
+      mr.onstart = () => {
+        recordStartRef.current = performance.now();
+      };
+      recordStartRef.current = 0;
+      mr.start();
+      mediaRecorderRef.current = mr;
+      setRecordDuration(0);
+      setRecording(true);
+      PlatformBridge.hapticFeedback('medium');
+      recordIntervalRef.current = window.setInterval(() => {
+        const elapsed = Math.floor((performance.now() - recordStartRef.current) / 1000);
+        setRecordDuration(elapsed);
+        if (elapsed >= 60) stopRecording(false);
+      }, 1000);
+    } catch {
+      PlatformBridge.hapticFeedback('error');
+    }
+  };
+
+  const stopRecording = (cancel: boolean) => {
+    recordingCancelledRef.current = cancel;
+    if (recordIntervalRef.current) {
+      clearInterval(recordIntervalRef.current);
+      recordIntervalRef.current = null;
+    }
+    const mr = mediaRecorderRef.current;
+    if (mr && mr.state !== 'inactive') {
+      mr.stop();
+    } else {
+      mediaRecorderRef.current = null;
+      setRecording(false);
+    }
+    PlatformBridge.hapticFeedback('light');
+  };
+
+  const sendVoiceNote = (voiceDataUrl: string, durationMs: number) => {
+    if (!conversationId || sending) return;
+    tempCounterRef.current += 1;
+    const tempId = `temp-${tempCounterRef.current}`;
+    const meta = { kind: 'VOICE', voiceDataUrl, durationMs } as unknown as MessageMetadata;
+    const optimistic: Message = {
+      id: tempId,
+      senderId: myParticipantId || user?.id || '',
+      content: '🎤 Nota de voz',
+      createdAt: new Date().toISOString(),
+      type: 'VOICE',
+      metadata: meta,
+    };
+    setMessages((prev) => [...prev, optimistic]);
+    setSending(true);
+    PlatformBridge.getAuthHeaders()
+      .then((headers) =>
+        fetch('/api/chat/send', {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ conversationId, targetId, content: '🎤 Nota de voz', type: 'VOICE', metadata: meta }),
+        }),
+      )
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.success && data.message) {
+          setMessages((prev) => prev.map((m) => (m.id === tempId ? (data.message as Message) : m)));
+        } else {
+          setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, content: '🎤 Nota de voz (no enviada)' } : m)));
+        }
+      })
+      .catch(() => {
+        setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, content: '🎤 Nota de voz (no enviada)' } : m)));
+      })
+      .finally(() => setSending(false));
+  };
+
+  const exitSelect = () => {
+    setSelectMode(false);
+    setSelectedIds([]);
   };
 
   const handleSend = (e: React.FormEvent) => {
@@ -653,21 +892,34 @@ export default function ChatRoomPage() {
     const meta: MessageMetadata | null =
       msg.metadata && typeof msg.metadata === 'object' ? msg.metadata : null;
 
-    if (meta && 'kind' in meta && meta.kind === 'LOCATION' && typeof meta.lat === 'number' && typeof meta.lng === 'number') {
-      return renderLocation(meta);
+    if (meta && typeof meta === 'object' && 'kind' in meta) {
+      const m = meta as Record<string, unknown>;
+      const src = (typeof m.voiceDataUrl === 'string' && m.voiceDataUrl) || (typeof m.voiceUrl === 'string' && m.voiceUrl);
+      if (m.kind === 'VOICE' && src) {
+        const dur = typeof m.durationMs === 'number' ? m.durationMs : 0;
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, opacity: 0.85 }}>🎤 Nota de voz{dur ? ` · ${Math.max(1, Math.round(dur / 1000))}s` : ''}</span>
+            <audio controls preload="metadata" src={src} style={{ width: 220, maxWidth: '100%', height: 36 }} />
+          </div>
+        );
+      }
     }
-    if (meta && 'kind' in meta && meta.kind === 'TRANSFER_REQUEST' && meta.transferRequest) {
+    if (meta && typeof meta === 'object' && 'kind' in meta && meta.kind === 'LOCATION' && 'lat' in (meta as any) && typeof (meta as any).lat === 'number' && 'lng' in (meta as any) && typeof (meta as any).lng === 'number') {
+      return renderLocation(meta as any);
+    }
+    if (meta && typeof meta === 'object' && 'kind' in meta && (meta as any).kind === 'TRANSFER_REQUEST' && (meta as any).transferRequest) {
       return (
         <>
           {cleanOrEmpty(msg.content) && (
             <p style={{ fontSize: '15px', lineHeight: '1.5', margin: 0, whiteSpace: 'pre-wrap' }}>{cleanOrEmpty(msg.content)}</p>
           )}
-          {renderTransferRequest(meta.transferRequest)}
+          {renderTransferRequest((meta as any).transferRequest)}
         </>
       );
     }
-    if (meta && 'kind' in meta && meta.kind === 'RECEIVE_QR' && meta.receiveQr?.handle) {
-      const payload = `rabbitty://pay?to=${encodeURIComponent(meta.receiveQr.handle)}`;
+    if (meta && typeof meta === 'object' && 'kind' in meta && (meta as any).kind === 'RECEIVE_QR' && (meta as any).receiveQr?.handle) {
+      const handle = (meta as any).receiveQr.handle; const payload = `rabbitty://pay?to=${encodeURIComponent(handle)}`;
       return (
         <>
           {cleanOrEmpty(msg.content) && (
@@ -675,10 +927,17 @@ export default function ChatRoomPage() {
           )}
           <div style={{ marginTop: '10px', borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--border-subtle)', background: 'var(--bg-pressed)', padding: '16px', textAlign: 'center' }}>
             <div style={{ display: 'inline-block', padding: '12px', borderRadius: '20px', background: '#FFFFFF', marginBottom: '10px' }}>
-              <QRCodeSVG value={payload} size={160} level="M" bgColor="#ffffff" fgColor="#111111" />
+              <QRCodeSVG
+                value={payload}
+                size={160}
+                level="H"
+                bgColor="#ffffff"
+                fgColor="#111111"
+                imageSettings={{ src: '/logo_conejo.png', height: 36, width: 36, excavate: true }}
+              />
             </div>
             <p style={{ margin: 0, fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>
-              Identificador: {meta.receiveQr.handle}
+              Identificador: {(meta as any).receiveQr.handle}
             </p>
             <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'var(--text-muted)' }}>
               Escanéalo desde la pestaña de escáner de Rabbitty
@@ -687,20 +946,20 @@ export default function ChatRoomPage() {
         </>
       );
     }
-    if (meta && 'kind' in meta && meta.kind === 'OPTIONS') {
+    if (meta && typeof meta === 'object' && 'kind' in meta && (meta as any).kind === 'OPTIONS' && Array.isArray((meta as any).options)) {
       return (
         <>
           {cleanOrEmpty(msg.content) && (
             <p style={{ fontSize: '15px', lineHeight: '1.5', margin: 0, whiteSpace: 'pre-wrap' }}>{cleanOrEmpty(msg.content)}</p>
           )}
-          {renderOptions(meta.options)}
+          {renderOptions((meta as any).options as BusinessOption[])}
         </>
       );
     }
-    if (meta && 'kind' in meta && meta.kind === 'ORDER') {
+    if (meta && typeof meta === 'object' && 'kind' in meta && (meta as any).kind === 'ORDER') {
       return (
         <>
-          {renderOrder(meta)}
+          {renderOrder(meta as OrderDraft)}
         </>
       );
     }
@@ -736,54 +995,56 @@ export default function ChatRoomPage() {
           zIndex: 50,
           display: 'flex',
           alignItems: 'center',
-          padding: 'calc(max(env(safe-area-inset-top), 84px) + 8px) 20px 16px',
-          background: 'var(--bg-elevated)',
-          borderBottom: '1px solid var(--border-subtle)',
-          gap: '16px',
+          justifyContent: 'space-between',
+          padding: 'calc(var(--safe-top, 0px) + 8px) 16px 8px',
+          background: 'transparent',
+          gap: 8,
         }}
       >
-        <button
-          onClick={() => router.back()}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px 8px 8px 0', color: 'var(--text-primary)' }}
-        >
+        <button onClick={() => router.back()} aria-label="Volver" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: 38, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0, color: 'var(--text-primary)', boxShadow: '0 2px 10px rgba(0,0,0,0.12)' }}>
           <svg width="10" height="18" viewBox="0 0 10 18" fill="none">
             <path d="M9 1L1 9L9 17" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div
+        <div style={{ position: 'absolute', left: 0, right: 0, display: 'flex', justifyContent: 'center', zIndex: 1 }}>
+          <button
+            onClick={() => { PlatformBridge.hapticFeedback('light'); setTargetInfoOpen(true); }}
             style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: '50%',
-              background: isBot ? 'var(--rabbitty-pink)' : 'var(--bg-pressed)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '20px',
-              boxShadow: '0 4px 10px rgba(233, 30, 99, 0.2)',
-              overflow: 'hidden',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
+              background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 999,
+              padding: '6px 16px', boxShadow: '0 2px 10px rgba(0,0,0,0.12)', cursor: 'pointer', maxWidth: '58vw',
             }}
           >
-            {isBot ? (
-              '🐰'
-            ) : targetAvatar ? (
-              <img src={targetAvatar} alt={targetName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            ) : (
-              '💬'
-            )}
-          </div>
-          <div>
-            <h2 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)', margin: 0, lineHeight: 1.2 }}>
+            <span style={{ fontSize: 15, fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
               {targetName}
-            </h2>
-            <span style={{ fontSize: '13px', color: headerColor, fontWeight: 600 }}>
+            </span>
+            <span style={{ fontSize: 11, color: headerColor, fontWeight: 700, lineHeight: 1 }}>
               {showTyping && !isBot ? 'escribiendo…' : headerStatus}
             </span>
-          </div>
+          </button>
         </div>
+        <button
+          onClick={() => { PlatformBridge.hapticFeedback('light'); setTargetInfoOpen(true); }}
+          aria-label={`Perfil de ${targetName}`}
+          style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, position: 'relative', zIndex: 2 }}
+        >
+          <div style={{ width: 38, height: 38, borderRadius: '50%', background: isBot ? 'var(--rabbitty-pink)' : 'var(--bg-pressed)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, boxShadow: '0 2px 10px rgba(0,0,0,0.12)', overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
+            {isBot ? '🐰' : targetAvatar ? <img src={targetAvatar} alt={targetName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '💬'}
+          </div>
+        </button>
       </header>
+
+      <BottomSheet isOpen={targetInfoOpen} onClose={() => setTargetInfoOpen(false)} title="Contacto">
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '4px 0 12px' }}>
+          <div style={{ width: 72, height: 72, borderRadius: '50%', background: isBot ? 'var(--rabbitty-pink)' : 'var(--bg-pressed)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
+            {isBot ? '🐰' : targetAvatar ? <img src={targetAvatar} alt={targetName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '💬'}
+          </div>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: 'var(--text-primary)' }}>{targetName}</h3>
+          <span style={{ fontSize: 13, color: headerColor, fontWeight: 700 }}>
+            {showTyping && !isBot ? 'escribiendo…' : headerStatus}
+          </span>
+        </div>
+      </BottomSheet>
 
       <main
         style={{
@@ -795,6 +1056,32 @@ export default function ChatRoomPage() {
           gap: '20px',
         }}
       >
+        {pinnedId && messages.some((m) => m.id === pinnedId) && (() => {
+          const pm = messages.find((m) => m.id === pinnedId)!;
+          return (
+            <div
+              onClick={() => setReplyTo({ id: pm.id, text: (pm.content || '').slice(0, 120), sender: pm.senderId === myParticipantId ? 'user' : 'assistant' })}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderLeft: '3px solid #E91E63', borderRadius: 12, padding: '8px 12px', cursor: 'pointer', order: -1 }}
+            >
+              <span style={{ fontSize: 14, flexShrink: 0 }}>📌</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#E91E63' }}>Mensaje fijado</span>
+                <span style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pm.content}</span>
+              </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPinnedId(null);
+                  try { if (conversationId || targetId) localStorage.removeItem(`rabbitty_pinned_${conversationId || targetId}`); } catch {}
+                }}
+                aria-label="Desfijar"
+                style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', fontSize: 15, cursor: 'pointer', padding: 2 }}
+              >
+                ✕
+              </button>
+            </div>
+          );
+        })()}
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', marginTop: '40px' }}>
             <div
@@ -811,13 +1098,54 @@ export default function ChatRoomPage() {
         ) : (
           messages.map((msg, idx) => {
             const isMe = msg.senderId === myParticipantId;
+            const isSelected = selectedIds.includes(msg.id);
             return (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 key={msg.id || idx}
-                style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start', width: '100%' }}
+                style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start', width: '100%', position: 'relative' }}
               >
+                <div style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', opacity: 0.4, pointerEvents: 'none', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-muted)', fontWeight: 800 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                </div>
+                <div style={{ position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)', opacity: 0.4, pointerEvents: 'none', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-muted)', fontWeight: 800 }}>
+                  Volver
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 14 4 9l5-5"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+                </div>
+                <motion.div
+                  drag={selectMode ? false : 'x'}
+                  dragSnapToOrigin
+                  dragConstraints={{ left: 0, right: 0 }}
+                  dragElastic={0.2}
+                  dragDirectionLock
+                  onDragEnd={(_, info) => {
+                    if (info.offset.x < -60) {
+                      PlatformBridge.hapticFeedback('light');
+                      setReplyTo({ id: msg.id, text: (msg.content || '').slice(0, 120), sender: isMe ? 'user' : 'assistant' });
+                    } else if (info.offset.x > 60) {
+                      PlatformBridge.hapticFeedback('medium');
+                      router.back();
+                    }
+                  }}
+                  onPointerDown={() => {
+                    if (selectMode) return;
+                    longPressTimerRef.current = window.setTimeout(() => {
+                      PlatformBridge.hapticFeedback('medium');
+                      setContextMsg(msg.id);
+                    }, 450);
+                  }}
+                  onPointerUp={() => { if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; } }}
+                  onPointerLeave={() => { if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; } }}
+                  onPointerMove={() => { if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; } }}
+                  onClick={() => {
+                    if (selectMode) {
+                      PlatformBridge.hapticFeedback('light');
+                      setSelectedIds((prev) => (prev.includes(msg.id) ? prev.filter((x) => x !== msg.id) : [...prev, msg.id]));
+                    }
+                  }}
+                  style={{ cursor: selectMode ? 'pointer' : 'grab', position: 'relative' }}
+                >
                 <div
                   style={{
                     maxWidth: '85%',
@@ -826,7 +1154,8 @@ export default function ChatRoomPage() {
                     color: isMe ? '#FFFFFF' : 'var(--text-primary)',
                     borderRadius: isMe ? '20px 20px 4px 20px' : '20px 20px 20px 4px',
                     boxShadow: 'var(--shadow-sm)',
-                    border: isMe ? 'none' : '1px solid var(--border-subtle)',
+                    border: isSelected ? '2px solid #FCD34D' : (isMe ? 'none' : '1px solid var(--border-subtle)'),
+                    outline: isSelected ? '2px solid rgba(252,211,77,0.5)' : 'none',
                   }}
                 >
                   {msg.type === 'AUTO_REPLY' && (
@@ -844,6 +1173,29 @@ export default function ChatRoomPage() {
                       Respuesta automática
                     </span>
                   )}
+                  {(() => {
+                    const meta = msg.metadata && typeof msg.metadata === 'object' ? (msg.metadata as Record<string, unknown>) : null;
+                    if (meta && meta.kind === 'REPLY' && meta.replyTo && typeof meta.replyTo === 'object') {
+                      const rt = meta.replyTo as { text?: string; sender?: string };
+                      return (
+                        <div style={{ marginBottom: 6, paddingLeft: 8, borderLeft: `3px solid ${isMe ? 'rgba(255,255,255,0.7)' : '#E91E63'}`, background: isMe ? 'rgba(255,255,255,0.12)' : 'rgba(233,30,99,0.07)', borderRadius: 8, padding: '4px 8px' }}>
+                          <span style={{ display: 'block', fontSize: 11, fontWeight: 800, opacity: 0.85 }}>
+                            {rt.sender === 'user' ? 'Tú' : 'Otro'}
+                          </span>
+                          <span style={{ display: 'block', fontSize: 12, opacity: 0.75, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 220 }}>
+                            {rt.text || ''}
+                          </span>
+                        </div>
+                      );
+                    }
+                    if (meta && meta.kind === 'FORWARDED' && meta.forwardedFrom && typeof meta.forwardedFrom === 'object') {
+                      const ff = meta.forwardedFrom as { name?: string };
+                      return (
+                        <div style={{ marginBottom: 4, fontSize: 11, fontWeight: 800, fontStyle: 'italic', opacity: 0.7 }}>↪ Reenviado de {ff.name || 'contacto'}</div>
+                      );
+                    }
+                    return null;
+                  })()}
                   {renderContent(msg)}
                   <span
                     style={{
@@ -862,7 +1214,13 @@ export default function ChatRoomPage() {
                       </span>
                     )}
                   </span>
+                  {msgReactions[msg.id] && (
+                    <div style={{ position: 'absolute', bottom: -14, [isMe ? 'left' : 'right']: 8, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 999, padding: '2px 7px', fontSize: 13, boxShadow: 'var(--shadow-sm)', lineHeight: 1.2 } as React.CSSProperties}>
+                      {msgReactions[msg.id]}
+                    </div>
+                  )}
                 </div>
+                </motion.div>
               </motion.div>
             );
           })
@@ -996,6 +1354,71 @@ export default function ChatRoomPage() {
           </div>
         )}
 
+        {replyTo && !selectMode && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, background: 'var(--bg-pressed)', border: '1px solid var(--border-subtle)', borderLeft: '3px solid #E91E63', borderRadius: 12, padding: '8px 12px' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#E91E63' }}>
+                ↩ Respondiendo a {replyTo.sender === 'user' ? 'Tú' : 'Otro'}
+              </span>
+              <span style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {replyTo.text}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setReplyTo(null)}
+              aria-label="Cancelar respuesta"
+              style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', fontSize: 16, cursor: 'pointer', padding: 4 }}
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {selectMode && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', width: '100%' }}>
+            <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+              {selectedIds.length} sel.
+            </span>
+            <button type="button" onClick={() => copyText(messages.filter((m) => selectedIds.includes(m.id)).map((m) => m.content).join('\n'))} disabled={!selectedIds.length} style={{ flex: 1, border: '1px solid var(--border-subtle)', background: 'var(--bg-pressed)', color: 'var(--text-primary)', borderRadius: 100, padding: '11px 0', fontSize: 13, fontWeight: 800, cursor: selectedIds.length ? 'pointer' : 'not-allowed', opacity: selectedIds.length ? 1 : 0.5 }}>📋 Copiar</button>
+            <button type="button" onClick={() => openForward(messages.filter((m) => selectedIds.includes(m.id)).map((m) => m.content))} disabled={!selectedIds.length} style={{ flex: 1, border: '1px solid var(--border-subtle)', background: 'var(--bg-pressed)', color: 'var(--text-primary)', borderRadius: 100, padding: '11px 0', fontSize: 13, fontWeight: 800, cursor: selectedIds.length ? 'pointer' : 'not-allowed', opacity: selectedIds.length ? 1 : 0.5 }}>↪ Reenviar</button>
+            <button type="button" onClick={() => { removeMessages(selectedIds); exitSelect(); }} disabled={!selectedIds.length} style={{ flex: 1, border: 'none', background: '#D32F2F', color: '#fff', borderRadius: 100, padding: '11px 0', fontSize: 13, fontWeight: 800, cursor: selectedIds.length ? 'pointer' : 'not-allowed', opacity: selectedIds.length ? 1 : 0.5 }}>🗑️</button>
+            <button type="button" onClick={exitSelect} aria-label="Salir de selección" style={{ width: 40, height: 40, borderRadius: '50%', border: '1px solid var(--border-subtle)', background: 'var(--bg-pressed)', color: 'var(--text-primary)', fontSize: 15, cursor: 'pointer', flexShrink: 0 }}>✕</button>
+          </div>
+        )}
+
+        {!selectMode && recording && (
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={() => stopRecording(true)}
+              aria-label="Cancelar grabación"
+              style={{ width: 44, height: 44, borderRadius: '50%', border: 'none', background: 'var(--bg-pressed)', color: '#D32F2F', fontSize: 18, cursor: 'pointer', flexShrink: 0 }}
+            >
+              🗑️
+            </button>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-pressed)', border: '1px solid #E91E63', borderRadius: 100, padding: '12px 18px' }}>
+              <motion.span
+                animate={{ opacity: [1, 0.2, 1] }}
+                transition={{ repeat: Infinity, duration: 1 }}
+                style={{ width: 10, height: 10, borderRadius: '50%', background: '#E91E63', flexShrink: 0 }}
+              />
+              <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
+                Grabando… 0:{String(recordDuration).padStart(2, '0')}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => stopRecording(false)}
+              aria-label="Enviar nota de voz"
+              style={{ width: 44, height: 44, borderRadius: '50%', border: 'none', background: 'var(--rabbitty-pink)', color: '#fff', fontSize: 18, cursor: 'pointer', flexShrink: 0, boxShadow: '0 4px 12px rgba(233,30,99,0.35)' }}
+            >
+              ➤
+            </button>
+          </div>
+        )}
+
+        {!selectMode && !recording && (
         <form onSubmit={handleSend} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           <button
             type="button"
@@ -1037,30 +1460,179 @@ export default function ChatRoomPage() {
             onFocus={(e) => (e.target.style.borderColor = 'var(--rabbitty-pink)')}
             onBlur={(e) => (e.target.style.borderColor = 'var(--border-subtle)')}
           />
-          <button
-            type="submit"
-            disabled={!input.trim() || sending}
-            style={{
-              width: '44px',
-              height: '44px',
-              backgroundColor: !input.trim() || sending ? 'var(--bg-pressed)' : 'var(--rabbitty-pink)',
-              color: !input.trim() || sending ? 'var(--text-muted)' : '#FFFFFF',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: 'none',
-              cursor: !input.trim() || sending ? 'not-allowed' : 'pointer',
-              transition: 'all 0.2s ease',
-              boxShadow: !input.trim() || sending ? 'none' : '0 4px 12px rgba(233, 30, 99, 0.35)',
-            }}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: 'translateX(-1px) translateY(1px)' }}>
-              <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
-            </svg>
-          </button>
+          {input.trim() ? (
+            <button
+              type="submit"
+              disabled={sending}
+              aria-label="Enviar mensaje"
+              style={{
+                width: '44px',
+                height: '44px',
+                backgroundColor: sending ? 'var(--bg-pressed)' : 'var(--rabbitty-pink)',
+                color: sending ? 'var(--text-muted)' : '#FFFFFF',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: 'none',
+                cursor: sending ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: sending ? 'none' : '0 4px 12px rgba(233, 30, 99, 0.35)',
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: 'translateX(-1px) translateY(1px)' }}>
+                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+              </svg>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={startRecording}
+              disabled={sending}
+              title="Grabar nota de voz"
+              aria-label="Grabar nota de voz"
+              style={{
+                width: '44px',
+                height: '44px',
+                backgroundColor: sending ? 'var(--bg-pressed)' : 'var(--rabbitty-pink)',
+                color: sending ? 'var(--text-muted)' : '#FFFFFF',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: 'none',
+                cursor: sending ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: sending ? 'none' : '0 4px 12px rgba(233, 30, 99, 0.35)',
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                <line x1="12" y1="19" x2="12" y2="22" />
+              </svg>
+            </button>
+          )}
         </form>
+        )}
       </footer>
+
+      {contextMsg && (() => {
+        const msg = messages.find((m) => m.id === contextMsg);
+        if (!msg) return null;
+        const rows: Array<{ icon: string; label: string; danger?: boolean; run: () => void }> = [
+          { icon: '↩️', label: 'Responder', run: () => { setReplyTo({ id: msg.id, text: (msg.content || '').slice(0, 120), sender: msg.senderId === myParticipantId ? 'user' : 'assistant' }); setContextMsg(null); } },
+          { icon: '🔊', label: 'Escuchar', run: () => { speakText(msg.content); setContextMsg(null); } },
+          { icon: '📋', label: 'Copiar', run: () => { copyText(msg.content); setContextMsg(null); } },
+          { icon: '↪️', label: 'Reenviar', run: () => { openForward([msg.content]); setContextMsg(null); } },
+          { icon: '📌', label: pinnedId === msg.id ? 'Desfijar' : 'Fijar mensaje', run: () => { const next = pinnedId === msg.id ? null : msg.id; setPinnedId(next); try { if (conversationId || targetId) localStorage.setItem(`rabbitty_pinned_${conversationId || targetId}`, next || ''); } catch {} PlatformBridge.hapticFeedback('medium'); setContextMsg(null); } },
+          { icon: '☑️', label: 'Seleccionar', run: () => { setSelectMode(true); setSelectedIds([msg.id]); setContextMsg(null); } },
+          { icon: '🚩', label: 'Reportar', run: () => reportMessage(msg) },
+          { icon: '🗑️', label: 'Eliminar', danger: true, run: () => { removeMessages([msg.id]); setContextMsg(null); } },
+        ];
+        return (
+          <div
+            onClick={() => setContextMsg(null)}
+            style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: 'var(--bg-elevated)',
+                borderRadius: '20px 20px 0 0',
+                border: '1px solid var(--border-subtle)',
+                padding: '16px 16px calc(16px + env(safe-area-inset-bottom))',
+                maxHeight: '82vh',
+                overflowY: 'auto',
+              }}
+            >
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 14 }}>
+                {['🔥', '❤️', '👍', '😂', '😮', '🙏'].map((em) => (
+                  <button
+                    key={em}
+                    onClick={() => {
+                      setMsgReactions((prev) => ({ ...prev, [msg.id]: em }));
+                      PlatformBridge.hapticFeedback('light');
+                      setContextMsg(null);
+                    }}
+                    style={{ fontSize: 26, background: 'var(--bg-pressed)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: 48, height: 48, cursor: 'pointer', lineHeight: 1 }}
+                  >
+                    {em}
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                {rows.map((r) => (
+                  <button
+                    key={r.label}
+                    onClick={r.run}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 6,
+                      background: 'var(--bg-pressed)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 14,
+                      padding: '12px 6px',
+                      cursor: 'pointer',
+                      color: r.danger ? '#D32F2F' : 'var(--text-primary)',
+                    }}
+                  >
+                    <span style={{ fontSize: 20, lineHeight: 1 }}>{r.icon}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, textAlign: 'center' }}>{r.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      <BottomSheet isOpen={Boolean(forwardTexts)} onClose={() => setForwardTexts(null)} title="Reenviar mensaje">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {forwardLoading ? (
+            <p style={{ margin: 0, fontSize: 14, color: 'var(--text-secondary)', textAlign: 'center' }}>Cargando conversaciones…</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: '38vh', overflowY: 'auto' }}>
+              {(forwardList || []).map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => sendForward(c)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-pressed)', border: '1px solid var(--border-subtle)', borderRadius: 14, padding: '10px 12px', cursor: 'pointer', textAlign: 'left' }}
+                >
+                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: c.isBot ? 'var(--rabbitty-pink)' : 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, fontSize: 15 }}>
+                    {c.isBot ? '🐰' : c.targetAvatar ? <img src={c.targetAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '💬'}
+                  </div>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.targetName}</span>
+                </button>
+              ))}
+              {!forwardLoading && (forwardList || []).length === 0 && (
+                <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', textAlign: 'center' }}>No hay conversaciones disponibles.</p>
+              )}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => {
+                const text = (forwardTexts || []).map((t) => `↪ ${t}`).join('\n');
+                window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+              }}
+              style={{ flex: 1, border: '1px solid #25D366', background: 'rgba(37,211,102,0.12)', color: '#25D366', borderRadius: 100, padding: '12px 0', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}
+            >
+              WhatsApp
+            </button>
+            <button
+              type="button"
+              onClick={() => copyText((forwardTexts || []).map((t) => `↪ ${t}`).join('\n'))}
+              style={{ flex: 1, border: '1px solid var(--border-subtle)', background: 'var(--bg-pressed)', color: 'var(--text-primary)', borderRadius: 100, padding: '12px 0', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}
+            >
+              📋 Copiar
+            </button>
+          </div>
+        </div>
+      </BottomSheet>
 
       <BottomSheet
         isOpen={Boolean(orderTarget)}

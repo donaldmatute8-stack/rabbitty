@@ -3,15 +3,31 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import Image from 'next/image';
 import { HelpCircle } from 'lucide-react';
-import { useWallet } from '@/contexts/WalletContext';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useToast } from '@/contexts/ToastContext';
 import { PlatformBridge } from '@/lib/platform';
-import BottomNav from '@/components/BottomNav';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import AdminPanel from '@/features/admin/AdminPanel';
 import BunzGuide from '@/features/business/BunzGuide';
+
+interface UserProfile {
+  id?: string;
+  firstName?: string;
+  username?: string;
+  hops?: number;
+  role?: string;
+  totalBunzEarned?: number;
+  visitedBusinesses?: number;
+}
+
+interface GamificationLevelResponse {
+  level?: {
+    requiredHops?: number;
+    name?: string;
+  };
+}
 
 const MENU_ITEMS = [
   { icon: "💳", label: "Mi Billetera", badge: null, href: '/profile/wallet' },
@@ -32,10 +48,9 @@ const LEVEL_GRADIENTS: Record<string, string> = {
 const DEFAULT_GRADIENT = '#E91E63';
 
 export default function ProfilePage() {
-  const { address } = useWallet();
-  const { user, logout } = useAuth();
+  const { user: rawUser, logout } = useAuth();
+  const user = rawUser as UserProfile | null;
   const { showToast } = useToast();
-  const [isScrolled, setIsScrolled] = useState(false);
   const [tapCount, setTapCount] = useState(0);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showBunzGuide, setShowBunzGuide] = useState(false);
@@ -79,23 +94,11 @@ export default function ProfilePage() {
   };
 
   useEffect(() => {
-    const handleScroll = () => {
-      if (window.scrollY > 20) {
-        setIsScrolled(true);
-      } else {
-        setIsScrolled(false);
-      }
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  useEffect(() => {
     if (user?.id) {
       PlatformBridge.getAuthHeaders()
         .then(headers => fetch(`/api/gamification`, { headers }))
         .then(r => r.json())
-        .then((data: any) => {
+        .then((data: GamificationLevelResponse) => {
           if (data.level?.requiredHops) {
             setNextLevelHops(data.level.requiredHops);
           }
@@ -116,18 +119,25 @@ export default function ProfilePage() {
         onClick={handleAvatarTap}
         style={{ 
           background: levelGradient,
-          boxShadow: (user as any)?.hops >= 500 ? '0 4px 16px rgba(0,0,0,0.1)' : 'none'
+          boxShadow: (user?.hops ?? 0) >= 500 ? '0 4px 16px rgba(0,0,0,0.1)' : 'none'
         }}
-        className="w-[50px] h-[50px] rounded-[14px] p-0.5 flex items-center justify-center shrink-0 relative cursor-pointer"
+        className="w-12.5 h-12.5 rounded-[14px] p-0.5 flex items-center justify-center shrink-0 relative cursor-pointer"
       >
-        <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${user?.firstName || 'Rabbitty'}&backgroundColor=ffffff`} alt={user?.firstName || 'User'} className="w-full h-full rounded-xl" />
-        {(user as any)?.hops >= 2000 && (
-          <div className="absolute -top-[6px] -right-[6px] text-base">👑</div>
+        <Image 
+          src={`https://api.dicebear.com/7.x/notionists/svg?seed=${user?.firstName || 'Rabbitty'}&backgroundColor=ffffff`} 
+          alt={user?.firstName || 'User'} 
+          width={46}
+          height={46}
+          unoptimized
+          className="w-full h-full rounded-xl" 
+        />
+        {(user?.hops ?? 0) >= 2000 && (
+          <div className="absolute -top-1.5 -right-1.5 text-base">👑</div>
         )}
       </motion.div>
       <div className="flex-1">
-        <p className="text-lg font-extrabold text-[var(--text-primary)] mb-0 leading-[1.1]">{user?.firstName || 'Rabbiter'}</p>
-        <p className="text-[13px] text-[var(--text-muted)] m-0">
+        <p className="text-lg font-extrabold text-(--text-primary) mb-0 leading-[1.1]">{user?.firstName || 'Rabbiter'}</p>
+        <p className="text-[13px] text-(--text-muted) m-0">
           <span className="font-extrabold text-[#E91E63] mr-1.5">Lvl. {levelName}</span>
           @{user?.username || 'explorador'}
         </p>
@@ -141,18 +151,18 @@ export default function ProfilePage() {
 
         <div className="pb-4">
           {/* HOPS PROGRESS BAR */}
-          <div className="mb-5 bg-[var(--bg-elevated)] rounded-[14px] p-4 border border-[var(--border-subtle)]">
+          <div className="mb-5 bg-(--bg-elevated) rounded-[14px] p-4 border border-(--border-subtle)">
             <div className="flex justify-between items-end mb-2">
               <div>
-                <p className="text-[11px] font-extrabold text-[var(--text-muted)] uppercase tracking-[0.5px] m-0 mb-0.5">PROGRESO DE MADRIGUERA</p>
-                <p className="text-[15px] font-extrabold text-[var(--text-primary)] m-0">{(user as any)?.hops || 0} <span className="text-[#E91E63]">Hops</span></p>
+                <p className="text-[11px] font-extrabold text-(--text-muted) uppercase tracking-[0.5px] m-0 mb-0.5">PROGRESO DE MADRIGUERA</p>
+                <p className="text-[15px] font-extrabold text-(--text-primary) m-0">{user?.hops || 0} <span className="text-[#E91E63]">Hops</span></p>
               </div>
-              <p className="text-xs font-bold text-[var(--text-muted)] m-0">{(user as any)?.hops >= 5000 ? 'MAX' : `Siguiente: ${nextLevelHops} Hops`}</p>
+              <p className="text-xs font-bold text-(--text-muted) m-0">{(user?.hops ?? 0) >= 5000 ? 'MAX' : `Siguiente: ${nextLevelHops} Hops`}</p>
             </div>
-            <div className="h-2 bg-[var(--bg-pressed)] rounded-[100px] overflow-hidden">
+            <div className="h-2 bg-(--bg-pressed) rounded-[100px] overflow-hidden">
               <motion.div 
                 initial={{ width: 0 }} 
-                animate={{ width: `${Math.min((((user as any)?.hops || 0) / nextLevelHops) * 100, 100)}%` }} 
+                animate={{ width: `${Math.min(((user?.hops || 0) / nextLevelHops) * 100, 100)}%` }} 
                 transition={{ duration: 1, delay: 0.2 }}
                 style={{ background: levelGradient }}
                 className="h-full rounded-[100px]"
@@ -165,19 +175,19 @@ export default function ProfilePage() {
           transition={{ delay: 0.1 }}
           className="flex gap-3 mb-4"
         >
-          <div className="flex-1 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-[14px] px-4 py-3.5">
+          <div className="flex-1 bg-(--bg-elevated) border border-(--border-subtle) rounded-[14px] px-4 py-3.5">
             <div className="flex items-center gap-1.5 mb-1.5">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="#E91E63" strokeWidth="1.5" /><path d="M5 8l2 2 4-4" stroke="#E91E63" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </div>
-            <p className="text-[26px] font-extrabold text-[var(--text-primary)] tracking-[-0.5px]">{(user?.totalBunzEarned || 0).toLocaleString()}</p>
-            <p className="text-xs text-[var(--text-muted)] mt-0.5">bunz ganados</p>
+            <p className="text-[26px] font-extrabold text-(--text-primary) tracking-[-0.5px]">{(user?.totalBunzEarned || 0).toLocaleString()}</p>
+            <p className="text-xs text-(--text-muted) mt-0.5">bunz ganados</p>
           </div>
-          <div className="flex-1 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-[14px] px-4 py-3.5">
+          <div className="flex-1 bg-(--bg-elevated) border border-(--border-subtle) rounded-[14px] px-4 py-3.5">
             <div className="flex items-center gap-1.5 mb-1.5">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 13L6 3L10 10L12 6L14 13" stroke="#E91E63" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </div>
-            <p className="text-[26px] font-extrabold text-[var(--text-primary)] tracking-[-0.5px]">{user?.visitedBusinesses ?? 0}</p>
-            <p className="text-xs text-[var(--text-muted)] mt-0.5">Negocios visitados</p>
+            <p className="text-[26px] font-extrabold text-(--text-primary) tracking-[-0.5px]">{user?.visitedBusinesses ?? 0}</p>
+            <p className="text-xs text-(--text-muted) mt-0.5">Negocios visitados</p>
           </div>
         </motion.div>
 
@@ -189,10 +199,10 @@ export default function ProfilePage() {
         >
           {(user?.role === 'AFFILIATE' || hasBusiness) ? (
             <>
-              <Link href="/business" className="flex items-center justify-between bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-[14px] p-4 mb-2.5 no-underline active:scale-[0.98] transition-transform shadow-lg">
+              <Link href="/business" className="flex items-center justify-between bg-(--bg-elevated) border border-(--border-subtle) rounded-[14px] p-4 mb-2.5 no-underline active:scale-[0.98] transition-transform shadow-lg">
                 <div>
-                  <p className="text-sm font-extrabold text-[var(--text-primary)] mb-0.5">Portal de Negocio Afiliado</p>
-                  <p className="text-[11px] text-[var(--text-muted)] m-0">Gestiona tu negocio y tasa de Bunz</p>
+                  <p className="text-sm font-extrabold text-(--text-primary) mb-0.5">Portal de Negocio Afiliado</p>
+                  <p className="text-[11px] text-(--text-muted) m-0">Gestiona tu negocio y tasa de Bunz</p>
                 </div>
                 <div className="w-11 h-6 rounded-xl bg-[#E91E63] p-0.5 flex justify-end">
                   <div className="w-5 h-5 rounded-[10px] bg-white shadow-[0_2px_4px_rgba(0,0,0,0.2)]" />
@@ -212,7 +222,7 @@ export default function ProfilePage() {
                         try {
                           const parsed = JSON.parse(qrText);
                           if (parsed.token) qrToken = parsed.token;
-                        } catch (e) {}
+                        } catch { /* ignore parse error */ }
                       }
 
                       try {
@@ -225,36 +235,36 @@ export default function ProfilePage() {
                         const data = await res.json();
                         if (data.success) {
                           if (app.closeScanQrPopup) {
-                            try { app.closeScanQrPopup(); } catch (e) { }
+                            try { app.closeScanQrPopup(); } catch { /* ignore popup close error */ }
                           }
                           showToast("¡Inicio de sesión exitoso en la PC! 🪄", 'success');
                         } else {
                           showToast("Error: " + data.error, 'error');
                         }
-                      } catch (e) {
+                      } catch {
                         showToast("Error de conexión", 'error');
                       }
                     })();
                     return true;
                   });
                 }}
-                className="block w-full text-left bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-[14px] px-4 py-3 mb-2.5 cursor-pointer active:scale-[0.98] transition-transform"
+                className="block w-full text-left bg-(--bg-elevated) border border-(--border-subtle) rounded-[14px] px-4 py-3 mb-2.5 cursor-pointer active:scale-[0.98] transition-transform"
               >
-                <p className="text-[13px] font-extrabold text-[var(--text-primary)] mb-0.5">📸 Escanear QR de PC (Login Mágico)</p>
-                <p className="text-[11px] text-[var(--text-muted)] m-0">Inicia sesión en tu dashboard web</p>
+                <p className="text-[13px] font-extrabold text-(--text-primary) mb-0.5">📸 Escanear QR de PC (Login Mágico)</p>
+                <p className="text-[11px] text-(--text-muted) m-0">Inicia sesión en tu dashboard web</p>
               </button>
             </>
           ) : (
-            <Link href="/business" className="block bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-[14px] px-4 py-3 mb-2.5 flex-col gap-0.5 no-underline active:scale-[0.98] transition-transform">
-              <p className="text-[13px] font-bold text-[var(--text-primary)] mb-0.5">¿Tienes un negocio?</p>
-              <p className="text-[11px] text-[var(--text-muted)] m-0">Afíliate y otorga bunz</p>
+            <Link href="/business" className="block bg-(--bg-elevated) border border-(--border-subtle) rounded-[14px] px-4 py-3 mb-2.5 flex-col gap-0.5 no-underline active:scale-[0.98] transition-transform">
+              <p className="text-[13px] font-bold text-(--text-primary) mb-0.5">¿Tienes un negocio?</p>
+              <p className="text-[11px] text-(--text-muted) m-0">Afíliate y otorga bunz</p>
             </Link>
           )}
-          <button onClick={() => setShowBunzGuide(true)} className="w-full flex items-center gap-2 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-[14px] px-4 py-3 mb-2.5 cursor-pointer active:scale-[0.98] transition-transform text-left">
-            <HelpCircle size={16} className="text-[var(--text-muted)]" />
+          <button onClick={() => setShowBunzGuide(true)} className="w-full flex items-center gap-2 bg-(--bg-elevated) border border-(--border-subtle) rounded-[14px] px-4 py-3 mb-2.5 cursor-pointer active:scale-[0.98] transition-transform text-left">
+            <HelpCircle size={16} className="text-(--text-muted)" />
             <div>
-              <p className="text-[13px] font-bold text-[var(--text-primary)] mb-0.5">¿Cómo funciona la economía Bunz?</p>
-              <p className="text-[11px] text-[var(--text-muted)] m-0">Guía para negocios afiliados</p>
+              <p className="text-[13px] font-bold text-(--text-primary) mb-0.5">¿Cómo funciona la economía Bunz?</p>
+              <p className="text-[11px] text-(--text-muted) m-0">Guía para negocios afiliados</p>
             </div>
           </button>
 
@@ -277,20 +287,20 @@ export default function ProfilePage() {
       </div>
 
       <div>
-        <p className="text-[11px] font-bold text-[var(--text-muted)] tracking-[0.8px] mb-1 mt-1">CONFIGURACIÓN</p>
+        <p className="text-[11px] font-bold text-(--text-muted) tracking-[0.8px] mb-1 mt-1">CONFIGURACIÓN</p>
         {MENU_ITEMS.map((item, i) => (
           <Link
             href={item.href}
             key={item.label}
             style={{ borderBottom: i < MENU_ITEMS.length - 1 ? "1px solid var(--border-subtle)" : "none" }}
-            className="flex items-center gap-3.5 py-[15px] cursor-pointer no-underline active:opacity-60 transition-opacity"
+            className="flex items-center gap-3.5 py-3.75 cursor-pointer no-underline active:opacity-60 transition-opacity"
           >
             <span className="text-xl w-6 text-center">{item.icon}</span>
-            <span className="flex-1 text-[15px] text-[var(--text-primary)]">{item.label}</span>
+            <span className="flex-1 text-[15px] text-(--text-primary)">{item.label}</span>
             {item.badge && (
               <span className="bg-[#E91E63] text-white text-[11px] font-bold rounded-full w-5 h-5 flex items-center justify-center">{item.badge}</span>
             )}
-            <svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="M1 1l5 5-5 5" stroke="currentColor" className="text-[var(--text-muted)]" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            <svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="M1 1l5 5-5 5" stroke="currentColor" className="text-(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </Link>
         ))}
 

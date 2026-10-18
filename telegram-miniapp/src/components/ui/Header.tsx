@@ -3,6 +3,7 @@
 import { ChevronLeft } from 'lucide-react';
 import Link from 'next/link';
 import { useTheme } from '@/contexts/ThemeContext';
+import { openBunzy } from '@/lib/bunzyLaunch';
 
 interface HeaderProps {
   onBack?: () => void;
@@ -39,6 +40,7 @@ export default function Header({ onBack, showBack, isScrolled = false, isDark: i
 
       <Link
         href="/chat/bot"
+        onClick={(e) => { e.preventDefault(); openBunzy(); }}
         aria-label="Hablar con Bunzy"
         className="absolute flex items-center justify-center pointer-events-auto active:scale-90 transition-transform"
         style={{
