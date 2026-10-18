@@ -24,7 +24,7 @@ import { openBunzy } from '@/lib/bunzyLaunch';
 const InteractiveMap = dynamic(() => import('@/features/map/InteractiveMap'), {
   ssr: false,
   loading: () => (
-    <div className="h-full w-full bg-[var(--bg-primary)] flex items-center justify-center">
+    <div className="h-full w-full bg-(--bg-primary) flex items-center justify-center">
       <div className="flex flex-col items-center gap-3">
         <div className="w-8 h-8 rounded-full" style={{ border: '2px solid rgba(233,30,99,0.3)', borderTopColor: '#E91E63', animation: 'spin 0.8s linear infinite' }} />
         <p className="text-xs font-semibold" style={{ color: 'rgba(255,255,255,0.4)' }}>Cargando Mapa...</p>
@@ -329,7 +329,7 @@ export default function FeedPage() {
     >
       {/* HEADER COMPLETO INICIAL: Se desplaza naturalmente con el scroll (ya no está fixed/sticky constante) */}
       <div
-        className="w-full relative z-[40]"
+        className="w-full relative z-40"
         style={{
           background: 'var(--bg-primary)',
           borderBottom: '1px solid var(--border-subtle)',
@@ -369,17 +369,18 @@ export default function FeedPage() {
               className="flex items-center gap-3 bg-transparent border-none cursor-pointer p-0 text-left active:scale-[0.98] transition-transform"
             >
               <div className="w-11 h-11 rounded-full overflow-hidden" style={{ background: 'var(--bg-pressed)', border: '1px solid var(--border-subtle)' }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${user?.firstName || 'Rabbitty'}&backgroundColor=E91E63`} alt={user?.firstName || 'User'} className="w-full h-full" />
               </div>
               <div>
-                <p className="text-[11px] font-extrabold uppercase tracking-[0.5px] mb-[2px]" style={{ color: 'var(--text-muted)' }}>{greeting}</p>
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.5px] mb-0.5" style={{ color: 'var(--text-muted)' }}>{greeting}</p>
                 <h1 className="text-[19px] font-black tracking-[-0.5px] m-0" style={{ color: 'var(--text-primary)' }}>{user?.firstName || 'Explorador'}</h1>
               </div>
             </button>
           )}
 
           <div className="flex items-center gap-2.5">
-            <div className="px-3 py-[6px] rounded-full flex items-baseline gap-1" style={{ background: 'var(--bg-pressed)', border: '1px solid var(--border-subtle)' }}>
+            <div className="px-3 py-1.5 rounded-full flex items-baseline gap-1" style={{ background: 'var(--bg-pressed)', border: '1px solid var(--border-subtle)' }}>
               <span className="text-[15px] font-black" style={{ color: 'var(--text-primary)' }}>{bunzBalance.toLocaleString()}</span>
               <span className="text-[11px] font-black text-[#E91E63]">BUNZ</span>
             </div>
@@ -392,7 +393,7 @@ export default function FeedPage() {
               style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
             >
               <Bell size={18} strokeWidth={2.5} style={{ color: 'var(--text-primary)' }} />
-              <div className="absolute top-2 right-[9px] w-[6px] h-[6px] bg-[#E91E63] rounded-full" style={{ border: '1.5px solid var(--bg-elevated)' }} />
+              <div className="absolute top-2 right-2.25 w-1.5 h-1.5 bg-[#E91E63] rounded-full" style={{ border: '1.5px solid var(--bg-elevated)' }} />
             </Link>
 
             <Link 
@@ -402,6 +403,7 @@ export default function FeedPage() {
               style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
               aria-label="Hablar con Bunzy"
             >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img 
                 src="/logo_conejo.png" 
                 alt="Bunzy" 
@@ -429,7 +431,7 @@ export default function FeedPage() {
           Aparece solo al hacer scroll hacia arriba y permanece oculto al bajar */}
       {activeTab !== 'Freehands' && (
       <div
-        className="fixed top-0 left-0 right-0 z-[80] transition-all duration-300 ease-out select-none"
+        className="fixed top-0 left-0 right-0 z-80 transition-all duration-300 ease-out select-none"
         style={{
           transform: showMinimalHeader ? 'translateY(0)' : 'translateY(-110%)',
           background: 'var(--glass-bg)',
@@ -440,7 +442,7 @@ export default function FeedPage() {
           boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
         }}
       >
-        <div className="flex items-center justify-between max-w-[600px] mx-auto px-4 py-2">
+        <div className="flex items-center justify-between max-w-150 mx-auto px-4 py-2">
           {/* 3/4 Horizontal: Los 3 menús compactos (bunz'in, Stock, Freehands) */}
           <div className="flex items-center gap-1.5 w-[75%] pr-2">
             {TABS.map((tab) => {
@@ -474,7 +476,7 @@ export default function FeedPage() {
               style={{ background: 'var(--bg-pressed)' }}
             >
               <Bell size={16} strokeWidth={2.3} style={{ color: 'var(--text-primary)' }} />
-              <div className="absolute top-1.5 right-[7px] w-[5px] h-[5px] bg-[#E91E63] rounded-full" />
+              <div className="absolute top-1.5 right-1.75 w-1.25 h-1.25 bg-[#E91E63] rounded-full" />
             </Link>
 
             <Link 
@@ -484,6 +486,7 @@ export default function FeedPage() {
               style={{ background: 'var(--bg-pressed)' }}
               aria-label="Hablar con Bunzy"
             >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img 
                 src="/logo_conejo.png" 
                 alt="Bunzy" 
@@ -496,7 +499,7 @@ export default function FeedPage() {
       </div>
       )}
 
-      <main className="flex-1 w-full max-w-[600px] mx-auto" style={{ paddingLeft: isDark ? 0 : 16, paddingRight: isDark ? 0 : 16 }}>
+      <main className="flex-1 w-full max-w-150 mx-auto" style={{ paddingLeft: isDark ? 0 : 16, paddingRight: isDark ? 0 : 16 }}>
         <div className="pt-4">
 
           {/* Loader del conejo (global, se muestra al actualizar desde cualquier pestaña) */}
@@ -522,9 +525,9 @@ export default function FeedPage() {
 
               {!loading && postsWithDistance.length > 0 && (
                 <div className="flex items-center gap-3 mb-4 mt-2">
-                  <div className="flex-1 h-px bg-[var(--border-subtle)]" />
-                  <span className="text-[11px] font-black text-[var(--text-muted)] tracking-[0.5px]">COMERCIOS CERCA DE TI</span>
-                  <div className="flex-1 h-px bg-[var(--border-subtle)]" />
+                  <div className="flex-1 h-px bg-(--border-subtle)" />
+                  <span className="text-[11px] font-black text-(--text-muted) tracking-[0.5px]">COMERCIOS CERCA DE TI</span>
+                  <div className="flex-1 h-px bg-(--border-subtle)" />
                 </div>
               )}
               {loading ? (
@@ -565,13 +568,13 @@ export default function FeedPage() {
                   placeholder="Buscar negocios..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-full py-3 px-4 pl-10 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none box-border"
+                  className="w-full bg-(--bg-elevated) border border-(--border-subtle) rounded-full py-3 px-4 pl-10 text-sm text-(--text-primary) placeholder:text-(--text-muted) outline-none box-border"
                   style={{ fontFamily: 'var(--font-family-base)' }}
                 />
               </div>
 
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-[17px] font-black text-[var(--text-primary)] m-0">Ofertas Disponibles</h2>
+                <h2 className="text-[17px] font-black text-(--text-primary) m-0">Ofertas Disponibles</h2>
                 {offers.length > 0 && (
                   <span className="text-xs font-bold text-[#E91E63]">
                     {offers.filter(o => o.isAvailable).length} activas
@@ -582,9 +585,9 @@ export default function FeedPage() {
               {loading ? (
                 <SkeletonCard />
               ) : offers.length === 0 ? (
-                <div className="bg-[var(--bg-elevated)] rounded-[20px] p-6 text-center border-2 border-dashed border-[var(--border-subtle)]">
-                  <p className="font-bold text-[var(--text-secondary)] mb-1">No hay ofertas disponibles</p>
-                  <p className="text-xs text-[var(--text-muted)] m-0">Los negocios subirán certificados de regalo pronto.</p>
+                <div className="bg-(--bg-elevated) rounded-[20px] p-6 text-center border-2 border-dashed border-(--border-subtle)">
+                  <p className="font-bold text-(--text-secondary) mb-1">No hay ofertas disponibles</p>
+                  <p className="text-xs text-(--text-muted) m-0">Los negocios subirán certificados de regalo pronto.</p>
                 </div>
               ) : (
                 <div className="flex flex-col gap-4">
@@ -597,39 +600,40 @@ export default function FeedPage() {
                     .map((o) => (
                       <div
                         key={o.id}
-                        className="bg-[var(--bg-elevated)] rounded-[22px] overflow-hidden border border-[var(--border-subtle)] shadow-[0_2px_12px_rgba(0,0,0,0.3)] relative"
+                        className="bg-(--bg-elevated) rounded-[22px] overflow-hidden border border-(--border-subtle) shadow-[0_2px_12px_rgba(0,0,0,0.3)] relative"
                         style={{ opacity: o.isAvailable ? 1 : 0.55, filter: o.isAvailable ? 'none' : 'grayscale(1)' }}
                       >
                         {/* Ticket notch */}
-                        <div className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 w-5 h-5 bg-[var(--bg-primary)] rounded-full border border-[var(--border-subtle)]" />
-                        <div className="absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 w-5 h-5 bg-[var(--bg-primary)] rounded-full border border-[var(--border-subtle)]" />
+                        <div className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 w-5 h-5 bg-(--bg-primary) rounded-full border border-(--border-subtle)" />
+                        <div className="absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 w-5 h-5 bg-(--bg-primary) rounded-full border border-(--border-subtle)" />
 
                         <div className="p-5">
                           <div className="flex items-start gap-4 mb-4">
                             {o.image ? (
-                              <img src={o.image} alt={o.title} className="w-14 h-14 rounded-[16px] object-cover shrink-0 shadow-[0_2px_8px_rgba(0,0,0,0.4)]" />
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={o.image} alt={o.title} className="w-14 h-14 rounded-2xl object-cover shrink-0 shadow-[0_2px_8px_rgba(0,0,0,0.4)]" />
                             ) : (
-                              <div className="w-14 h-14 rounded-[16px] bg-[var(--bg-pressed)] border border-[var(--border-subtle)] flex items-center justify-center text-2xl shrink-0">🏪</div>
+                              <div className="w-14 h-14 rounded-2xl bg-(--bg-pressed) border border-(--border-subtle) flex items-center justify-center text-2xl shrink-0">🏪</div>
                             )}
                             <div className="flex-1 min-w-0">
                               <p className="text-[10px] font-black text-[#E91E63] tracking-[0.5px] uppercase mb-1">{o.businessName}</p>
-                              <p className="font-black text-[var(--text-primary)] text-base leading-[1.2] mb-1">{o.title}</p>
-                              <p className="text-xs text-[var(--text-muted)] leading-[1.5] m-0 line-clamp-2">{o.description}</p>
+                              <p className="font-black text-(--text-primary) text-base leading-[1.2] mb-1">{o.title}</p>
+                              <p className="text-xs text-(--text-muted) leading-normal m-0 line-clamp-2">{o.description}</p>
                             </div>
                           </div>
 
-                          <div className="flex items-center justify-between pt-4 border-t border-dashed border-[var(--border-subtle)]">
+                          <div className="flex items-center justify-between pt-4 border-t border-dashed border-(--border-subtle)">
                             <div>
-                              <p className="text-[9px] font-black text-[var(--text-muted)] tracking-[0.5px] uppercase mb-[2px]">Costo</p>
+                              <p className="text-[9px] font-black text-(--text-muted) tracking-[0.5px] uppercase mb-0.5">Costo</p>
                               <div className="flex items-baseline gap-1">
-                                <span className="text-[22px] font-black text-[var(--text-primary)]">{o.bunzCost}</span>
+                                <span className="text-[22px] font-black text-(--text-primary)">{o.bunzCost}</span>
                                 <span className="text-[13px] font-bold text-[#E91E63]">bunz</span>
                               </div>
                             </div>
                             <button
                               disabled={!o.isAvailable || purchasing}
                               onClick={() => handleSpend(o.id, o.bunzCost, o.businessName, o.title)}
-                              className="text-[13px] font-black px-5 py-[10px] rounded-full border-none"
+                              className="text-[13px] font-black px-5 py-2.5 rounded-full border-none"
                               style={{
                                 background: o.isAvailable && !purchasing ? '#E91E63' : 'var(--bg-pressed)',
                                 color: o.isAvailable && !purchasing ? '#fff' : 'var(--text-muted)',
@@ -651,24 +655,24 @@ export default function FeedPage() {
           {activeTab === 'Freehands' && (
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              className="fixed left-0 right-0 bottom-0 z-10 overflow-hidden bg-black"
+              className="fixed left-0 right-0 bottom-0 z-10 overflow-hidden bg-black flex items-center justify-center"
               style={{ top: 'calc(max(var(--safe-top, 0px), 8px) + 56px)' }}
             >
               {/* Holographic Toggle */}
               <div 
-                className="absolute z-[2000] flex bg-white/5 backdrop-blur-[10px] rounded-full border border-white/10 p-1" 
+                className="absolute z-2000 flex bg-white/5 backdrop-blur-[10px] rounded-full border border-white/10 p-1" 
                 style={{ top: PlatformBridge.isTelegram() ? 70 : 14, right: 64 }}
               >
                 <button
                   onClick={() => setMapMode('globe')}
-                  className="px-3 py-[4px] rounded-full text-[11px] font-bold border-none cursor-pointer"
+                  className="px-3 py-1 rounded-full text-[11px] font-bold border-none cursor-pointer"
                   style={{ background: mapMode === 'globe' ? 'rgba(233,30,99,0.2)' : 'transparent', color: mapMode === 'globe' ? '#E91E63' : '#888', transition: 'all 0.3s' }}
                 >
                   Globo 3D
                 </button>
                 <button
                   onClick={() => setMapMode('flat')}
-                  className="px-3 py-[4px] rounded-full text-[11px] font-bold border-none cursor-pointer"
+                  className="px-3 py-1 rounded-full text-[11px] font-bold border-none cursor-pointer"
                   style={{ background: mapMode === 'flat' ? 'rgba(255,255,255,0.1)' : 'transparent', color: mapMode === 'flat' ? '#FFF' : '#888', transition: 'all 0.3s' }}
                 >
                   Local

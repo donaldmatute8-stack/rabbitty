@@ -1,11 +1,10 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Keyboard, QrCode } from 'lucide-react';
+import { ArrowLeft, Keyboard } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Html5Qrcode } from 'html5-qrcode';
-import { QRCodeSVG } from 'qrcode.react';
 import RabbittyCode from '@/components/ui/RabbittyCode';
 import BottomNav from '@/components/BottomNav';
 import Button from '@/components/ui/Button';
@@ -13,6 +12,14 @@ import { useWallet } from '@/contexts/WalletContext';
 import { useAuth } from '@/features/auth/AuthProvider';
 
 import { PlatformBridge } from '@/lib/platform';
+
+interface PaymentIntentData {
+  id?: string;
+  amountMxn?: number;
+  bunzAmount?: number;
+  tenantId?: string;
+  status?: string;
+}
 
 export default function ScanPage() {
   const router = useRouter();
@@ -36,25 +43,37 @@ export default function ScanPage() {
     if (token) return `Bearer ${token}`;
     return "Bearer TMA_TOKEN";
   };
-  const [hasCamera, setHasCamera] = useState(false);
-  const [scanning, setScanning] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
+  const [hasCamera, setHasCamera] = useState(() => typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices));
+  const [result, setResult] = useState<PaymentIntentData | null>(null);
   const [manualCode, setManualCode] = useState('');
   const [showManualInput, setShowManualInput] = useState(false);
   const [activeTab, setActiveTab] = useState<'scan' | 'my-code'>(initialTab);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isTransitioningRef = useRef(false);
+  const startScanningRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     import('@twa-dev/sdk').then((mod) => {
       const app = mod.default;
       app.ready(); app.expand();
-      try { app.setBackgroundColor('#111111'); app.setHeaderColor('#111111'); } catch (e) {}
+      try { app.setBackgroundColor('#111111'); app.setHeaderColor('#111111'); } catch {}
     });
-    if (typeof navigator !== 'undefined' && navigator.mediaDevices) setHasCamera(true);
   }, []);
 
-  const stopScanning = async () => {
+  const requestCameraAccess = async () => {
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        stream.getTracks().forEach(t => t.stop());
+        setHasCamera(true);
+      } catch (e) {
+        console.error("Camera access failed:", e);
+        setHasCamera(false);
+      }
+    }
+  };
+
+  const stopScanning = useCallback(async () => {
     const inst = scannerRef.current;
     if (!inst || isTransitioningRef.current) return;
     isTransitioningRef.current = true;
@@ -67,11 +86,10 @@ export default function ScanPage() {
       inst.clear();
     } catch {}
     scannerRef.current = null;
-    setScanning(false);
     isTransitioningRef.current = false;
-  };
+  }, []);
 
-  const startScanning = async () => {
+  const startScanning = useCallback(async () => {
     if (isTransitioningRef.current || scannerRef.current?.isScanning) return;
     const el = document.getElementById("qr-reader");
     if (!el) return;
@@ -95,7 +113,6 @@ export default function ScanPage() {
               const parsed = new URL(decodedText.trim());
               const to = parsed.searchParams.get('to');
               if (to) {
-                setScanning(false);
                 await stopScanning();
                 router.push(`/profile/wallet?to=${encodeURIComponent(to)}`);
                 return;
@@ -110,7 +127,6 @@ export default function ScanPage() {
               const token = url.searchParams.get('token');
               const sid = url.searchParams.get('sid');
               if (token && sid) {
-                setScanning(false);
                 await stopScanning();
                 router.push(`/magic-link?token=${encodeURIComponent(token)}&sid=${encodeURIComponent(sid)}`);
                 return;
@@ -121,7 +137,6 @@ export default function ScanPage() {
           // 1. Check if it is a QR Login for PC/Admin
           if (decodedText.includes('qrlogin_')) {
             const qrToken = decodedText.split('qrlogin_')[1].split('&')[0].split('?')[0];
-            setScanning(false);
             await stopScanning();
             try {
               const headers = await PlatformBridge.getAuthHeaders();
@@ -137,12 +152,12 @@ export default function ScanPage() {
                 return;
               } else {
                 alert("Error de inicio de sesión QR: " + (data.error || 'Token inválido'));
-                startScanning();
+                startScanningRef.current();
                 return;
               }
             } catch {
               alert("Error de conexión al validar el QR.");
-              startScanning();
+              startScanningRef.current();
               return;
             }
           }
@@ -155,7 +170,6 @@ export default function ScanPage() {
             intentId = 'pi_' + decodedText.split('pi_')[1];
           }
 
-          setScanning(false);
           await stopScanning();
 
           // Resolve intent
@@ -171,28 +185,32 @@ export default function ScanPage() {
             } else {
               alert("Intención de pago no encontrada o inválida.");
               setResult(null);
-              startScanning();
+              startScanningRef.current();
             }
           })
           .catch(() => {
             alert("Error al contactar el servidor.");
             setResult(null);
-            startScanning();
+            startScanningRef.current();
           });
         },
         () => {}
       );
-      setScanning(true);
       setShowManualInput(false);
     } catch {
       setHasCamera(false);
     } finally {
       isTransitioningRef.current = false;
     }
-  };
+  }, [API_SERVER_URL, router, stopScanning]);
+
+  useEffect(() => {
+    startScanningRef.current = startScanning;
+  }, [startScanning]);
 
   useEffect(() => {
     if (activeTab === 'scan' && hasCamera && !showManualInput && !result) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       startScanning();
     } else {
       stopScanning();
@@ -200,7 +218,7 @@ export default function ScanPage() {
     return () => {
       stopScanning();
     };
-  }, [activeTab, hasCamera, showManualInput, result]);
+  }, [activeTab, hasCamera, showManualInput, result, startScanning, stopScanning]);
 
   return (
     <div 
@@ -231,7 +249,7 @@ export default function ScanPage() {
         </div>
 
         {/* Tabs */}
-        <div className="bg-black/40 backdrop-blur-2xl border border-white/10 p-1 rounded-full flex w-[240px]">
+        <div className="bg-black/40 backdrop-blur-2xl border border-white/10 p-1 rounded-full flex w-60">
           {(['scan', 'my-code'] as const).map((t, i) => (
             <button
               key={t}
@@ -249,7 +267,7 @@ export default function ScanPage() {
 
         {/* My Code tab - Official Rabbitty Code Hologram */}
         {activeTab === 'my-code' && (
-          <div className="flex flex-col items-center justify-center w-full max-w-[340px] z-20">
+          <div className="flex flex-col items-center justify-center w-full max-w-85 z-20">
             <div className="text-center mb-6 px-2">
               <span className="text-[11px] font-black uppercase tracking-[2px] text-[#E91E63] block mb-1">Mi Identificador Rabbitty</span>
               <p className="text-white/60 text-xs leading-relaxed m-0">Muestra este código en caja para acumular Bunz o autorizar consumo.</p>
@@ -278,7 +296,7 @@ export default function ScanPage() {
           <div className="w-full flex flex-col items-center justify-center relative">
 
             {/* QR Viewfinder Container: Camera Video is rendered strictly INSIDE this frame */}
-            <div className="relative w-[280px] h-[280px] rounded-[28px] overflow-hidden bg-black/90 border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.8)] mb-6 flex items-center justify-center">
+            <div className="relative w-70 h-70 rounded-[28px] overflow-hidden bg-black/90 border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.8)] mb-6 flex items-center justify-center">
               
               {/* Persistent qr-reader container in DOM strictly contained inside the viewfinder */}
               <div 
@@ -309,8 +327,14 @@ export default function ScanPage() {
               </div>
 
               {!hasCamera && (
-                <div className="z-30 text-center p-4">
-                  <p className="text-xs text-white/50">Cámara no disponible o permiso denegado</p>
+                <div className="z-30 text-center p-4 flex flex-col items-center gap-3">
+                  <p className="text-xs text-white/70 m-0">Cámara no disponible o permiso denegado</p>
+                  <button
+                    onClick={requestCameraAccess}
+                    className="px-4 py-2 rounded-full bg-[#E91E63] text-white text-xs font-bold border-none cursor-pointer active:scale-95 transition-transform shadow-lg shadow-[#E91E63]/30"
+                  >
+                    Activar cámara
+                  </button>
                 </div>
               )}
             </div>
@@ -367,23 +391,23 @@ export default function ScanPage() {
                   initial={{ opacity: 0, y: 80 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 80 }}
                   className="absolute bottom-32 left-4 right-4 bg-white rounded-[28px] p-6 z-30 shadow-[0_20px_60px_rgba(0,0,0,0.3)] border border-[#F0F0F0]"
                 >
-                  <p className="text-[#111] font-extrabold text-lg mb-[6px] flex items-center justify-between">
+                  <p className="text-[#111] font-extrabold text-lg mb-1.5 flex items-center justify-between">
                     <span className="flex items-center gap-2">
-                      <span className="w-[10px] h-[10px] rounded-full bg-[#10B981] inline-block" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#10B981] inline-block" />
                       Autorizar Pago
                     </span>
-                    <span className="text-xl">${(result as any).amountMxn?.toFixed(2)} MXN</span>
+                    <span className="text-xl">${result.amountMxn?.toFixed(2)} MXN</span>
                   </p>
                   
                   <div className="bg-gray-100 rounded-xl p-3 mb-4">
                     <p className="text-[#555] text-[13px]">
-                      <strong>Monto Bunz requerido:</strong> {(result as any).bunzAmount?.toFixed(2)} Bunz
+                      <strong>Monto Bunz requerido:</strong> {result.bunzAmount?.toFixed(2)} Bunz
                     </p>
                     <p className="text-[#555] text-[13px]">
-                      <strong>Establecimiento:</strong> {(result as any).tenantId}
+                      <strong>Establecimiento:</strong> {result.tenantId}
                     </p>
                     <p className="text-[#555] text-[13px]">
-                      <strong>Estado:</strong> {(result as any).status}
+                      <strong>Estado:</strong> {result.status}
                     </p>
                   </div>
 
@@ -392,7 +416,7 @@ export default function ScanPage() {
                     fullWidth 
                     className="rounded-full border-0 font-extrabold bg-[#E91E63] text-white"
                     onClick={async () => {
-                      const intentObj = result as any;
+                      const intentObj = result;
                       if (intentObj.status !== "PENDING_PAYMENT" && intentObj.status !== "CREATED") {
                         alert(`El pago no puede ser procesado (estado: ${intentObj.status})`);
                         return;
@@ -420,12 +444,13 @@ export default function ScanPage() {
                         alert("¡Pago aprobado y liquidado con éxito!");
                         setResult(null);
                         router.push('/');
-                      } catch (err: any) {
-                        alert(err.message);
+                      } catch (err: unknown) {
+                        const msg = err instanceof Error ? err.message : "Error al procesar pago";
+                        alert(msg);
                       }
                     }}
                   >
-                    Confirmar Pago (${(result as any).amountMxn?.toFixed(2)})
+                    Confirmar Pago (${result.amountMxn?.toFixed(2)})
                   </Button>
                   
                   <button 

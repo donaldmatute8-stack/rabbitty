@@ -176,7 +176,6 @@ export default function ChatRoomPage() {
   const [contextMsg, setContextMsg] = useState<string | null>(null);
   const voiceBlobCacheRef = useRef<Record<string, string>>({});
   const [voiceSrcMap, setVoiceSrcMap] = useState<Record<string, string>>({});
-  const [reactionsOpen, setReactionsOpen] = useState<string | null>(null);
   const [targetInfoOpen, setTargetInfoOpen] = useState(false);
   const [msgReactions, setMsgReactions] = useState<Record<string, string>>({});
   const [pinnedId, setPinnedId] = useState<string | null>(null);
@@ -185,6 +184,8 @@ export default function ChatRoomPage() {
   const [forwardTexts, setForwardTexts] = useState<string[] | null>(null);
   const [forwardList, setForwardList] = useState<ForwardConversation[] | null>(null);
   const [forwardLoading, setForwardLoading] = useState(false);
+  const [swipingMsgId, setSwipingMsgId] = useState<string | null>(null);
+  const [contextMenuPos, setContextMenuPos] = useState<{ top: number; left: number; bottom: number; right: number; isMe: boolean } | null>(null);
   const longPressTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -247,7 +248,6 @@ export default function ChatRoomPage() {
       }
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId, targetId]);
 
   useEffect(() => {
@@ -311,7 +311,7 @@ export default function ChatRoomPage() {
     }, 4000);
 
     return () => clearInterval(interval);
-  }, [user, targetId]);
+  }, [user, targetId, isBot]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -393,12 +393,15 @@ export default function ChatRoomPage() {
     if (replyTo && !isLoc) {
       metaOut = { kind: 'REPLY', replyTo } as MessageMetadata;
     }
+    const optimisticType = metaOut && 'kind' in metaOut && typeof (metaOut as { kind?: unknown }).kind === 'string'
+      ? (metaOut as { kind: string }).kind
+      : (isLoc ? 'LOCATION' : 'TEXT');
     const optimistic: Message = {
       id: tempId,
       senderId: myParticipantId || user.id,
       content,
       createdAt: new Date().toISOString(),
-      type: (metaOut && 'kind' in metaOut && typeof (metaOut as any).kind === 'string' ? (metaOut as any).kind : (isLoc ? 'LOCATION' : 'TEXT')),
+      type: optimisticType,
       metadata: metaOut,
     };
     setMessages((prev) => [...prev, optimistic]);
@@ -795,6 +798,7 @@ export default function ChatRoomPage() {
           }}
         >
           {target.meta?.logoUrl ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
             <img src={target.meta.logoUrl} alt={target.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           ) : (
             <span style={{ fontSize: '18px' }}>🏪</span>
@@ -860,6 +864,7 @@ export default function ChatRoomPage() {
               style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}
             >
               <div style={{ width: '36px', height: '36px', borderRadius: '10px', overflow: 'hidden', flexShrink: 0, background: '#E91E63', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 {o.logoUrl ? <img src={o.logoUrl} alt={o.businessName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: '16px' }}>🏪</span>}
               </div>
               <div style={{ minWidth: 0, flex: 1 }}>
@@ -1000,63 +1005,70 @@ export default function ChatRoomPage() {
         );
       }
     }
-    if (meta && typeof meta === 'object' && 'kind' in meta && meta.kind === 'LOCATION' && 'lat' in (meta as any) && typeof (meta as any).lat === 'number' && 'lng' in (meta as any) && typeof (meta as any).lng === 'number') {
-      return renderLocation(meta as any);
-    }
-    if (meta && typeof meta === 'object' && 'kind' in meta && (meta as any).kind === 'TRANSFER_REQUEST' && (meta as any).transferRequest) {
-      return (
-        <>
-          {cleanOrEmpty(msg.content) && (
-            <p style={{ fontSize: '15px', lineHeight: '1.5', margin: 0, whiteSpace: 'pre-wrap' }}>{cleanOrEmpty(msg.content)}</p>
-          )}
-          {renderTransferRequest((meta as any).transferRequest)}
-        </>
-      );
-    }
-    if (meta && typeof meta === 'object' && 'kind' in meta && (meta as any).kind === 'RECEIVE_QR' && (meta as any).receiveQr?.handle) {
-      const handle = (meta as any).receiveQr.handle; const payload = `rabbitty://pay?to=${encodeURIComponent(handle)}`;
-      return (
-        <>
-          {cleanOrEmpty(msg.content) && (
-            <p style={{ fontSize: '15px', lineHeight: '1.5', margin: 0, whiteSpace: 'pre-wrap' }}>{cleanOrEmpty(msg.content)}</p>
-          )}
-          <div style={{ marginTop: '10px', borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--border-subtle)', background: 'var(--bg-pressed)', padding: '16px', textAlign: 'center' }}>
-            <div style={{ display: 'inline-block', padding: '12px', borderRadius: '20px', background: '#FFFFFF', marginBottom: '10px' }}>
-              <QRCodeSVG
-                value={payload}
-                size={160}
-                level="H"
-                bgColor="#ffffff"
-                fgColor="#111111"
-                imageSettings={{ src: '/logo_conejo.png', height: 36, width: 36, excavate: true }}
-              />
-            </div>
-            <p style={{ margin: 0, fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>
-              Identificador: {(meta as any).receiveQr.handle}
-            </p>
-            <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'var(--text-muted)' }}>
-              Escanéalo desde la pestaña de escáner de Rabbitty
-            </p>
-          </div>
-        </>
-      );
-    }
-    if (meta && typeof meta === 'object' && 'kind' in meta && (meta as any).kind === 'OPTIONS' && Array.isArray((meta as any).options)) {
-      return (
-        <>
-          {cleanOrEmpty(msg.content) && (
-            <p style={{ fontSize: '15px', lineHeight: '1.5', margin: 0, whiteSpace: 'pre-wrap' }}>{cleanOrEmpty(msg.content)}</p>
-          )}
-          {renderOptions((meta as any).options as BusinessOption[])}
-        </>
-      );
-    }
-    if (meta && typeof meta === 'object' && 'kind' in meta && (meta as any).kind === 'ORDER') {
-      return (
-        <>
-          {renderOrder(meta as OrderDraft)}
-        </>
-      );
+    if (meta && typeof meta === 'object' && 'kind' in meta) {
+      const typedMeta = meta as Record<string, unknown>;
+      if (typedMeta.kind === 'LOCATION' && typeof typedMeta.lat === 'number' && typeof typedMeta.lng === 'number') {
+        return renderLocation(typedMeta as { lat: number; lng: number; label?: string });
+      }
+      if (typedMeta.kind === 'TRANSFER_REQUEST' && typedMeta.transferRequest && typeof typedMeta.transferRequest === 'object') {
+        return (
+          <>
+            {cleanOrEmpty(msg.content) && (
+              <p style={{ fontSize: '15px', lineHeight: '1.5', margin: 0, whiteSpace: 'pre-wrap' }}>{cleanOrEmpty(msg.content)}</p>
+            )}
+            {renderTransferRequest(typedMeta.transferRequest as TransferRequest)}
+          </>
+        );
+      }
+      if (typedMeta.kind === 'RECEIVE_QR' && typedMeta.receiveQr && typeof typedMeta.receiveQr === 'object') {
+        const rq = typedMeta.receiveQr as ReceiveQrRequest;
+        if (rq.handle) {
+          const handle = rq.handle;
+          const payload = `rabbitty://pay?to=${encodeURIComponent(handle)}`;
+          return (
+            <>
+              {cleanOrEmpty(msg.content) && (
+                <p style={{ fontSize: '15px', lineHeight: '1.5', margin: 0, whiteSpace: 'pre-wrap' }}>{cleanOrEmpty(msg.content)}</p>
+              )}
+              <div style={{ marginTop: '10px', borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--border-subtle)', background: 'var(--bg-pressed)', padding: '16px', textAlign: 'center' }}>
+                <div style={{ display: 'inline-block', padding: '12px', borderRadius: '20px', background: '#FFFFFF', marginBottom: '10px' }}>
+                  <QRCodeSVG
+                    value={payload}
+                    size={160}
+                    level="H"
+                    bgColor="#ffffff"
+                    fgColor="#111111"
+                    imageSettings={{ src: '/logo_conejo.png', height: 36, width: 36, excavate: true }}
+                  />
+                </div>
+                <p style={{ margin: 0, fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                  Identificador: {handle}
+                </p>
+                <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'var(--text-muted)' }}>
+                  Escanéalo desde la pestaña de escáner de Rabbitty
+                </p>
+              </div>
+            </>
+          );
+        }
+      }
+      if (typedMeta.kind === 'OPTIONS' && Array.isArray(typedMeta.options)) {
+        return (
+          <>
+            {cleanOrEmpty(msg.content) && (
+              <p style={{ fontSize: '15px', lineHeight: '1.5', margin: 0, whiteSpace: 'pre-wrap' }}>{cleanOrEmpty(msg.content)}</p>
+            )}
+            {renderOptions(typedMeta.options as BusinessOption[])}
+          </>
+        );
+      }
+      if (typedMeta.kind === 'ORDER') {
+        return (
+          <>
+            {renderOrder(meta as OrderDraft)}
+          </>
+        );
+      }
     }
 
     const legacy = /\[COMERCIO_ACTION id="([^"]+)" name="([^"]+)"\]/.exec(msg.content);
@@ -1096,7 +1108,34 @@ export default function ChatRoomPage() {
           gap: 8,
         }}
       >
-        <button onClick={() => router.back()} aria-label="Volver" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: 38, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0, color: 'var(--text-primary)', boxShadow: '0 2px 10px rgba(0,0,0,0.12)' }}>
+        <button
+          onClick={() => {
+            PlatformBridge.hapticFeedback('light');
+            if (typeof window !== 'undefined' && window.history.length > 2) {
+              router.back();
+            } else {
+              router.push('/chat');
+            }
+          }}
+          aria-label="Volver"
+          style={{
+            position: 'relative',
+            zIndex: 10,
+            background: 'var(--bg-elevated)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: '50%',
+            width: 38,
+            height: 38,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            padding: 0,
+            color: 'var(--text-primary)',
+            boxShadow: '0 2px 10px rgba(0,0,0,0.12)',
+            flexShrink: 0,
+          }}
+        >
           <svg width="10" height="18" viewBox="0 0 10 18" fill="none">
             <path d="M9 1L1 9L9 17" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
@@ -1124,6 +1163,7 @@ export default function ChatRoomPage() {
           style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, position: 'relative', zIndex: 2 }}
         >
           <div style={{ width: 38, height: 38, borderRadius: '50%', background: isBot ? 'var(--rabbitty-pink)' : 'var(--bg-pressed)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, boxShadow: '0 2px 10px rgba(0,0,0,0.12)', overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             {isBot ? '🐰' : targetAvatar ? <img src={targetAvatar} alt={targetName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '💬'}
           </div>
         </button>
@@ -1185,6 +1225,7 @@ export default function ChatRoomPage() {
       <BottomSheet isOpen={targetInfoOpen} onClose={() => setTargetInfoOpen(false)} title="Contacto">
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '4px 0 12px' }}>
           <div style={{ width: 72, height: 72, borderRadius: '50%', background: isBot ? 'var(--rabbitty-pink)' : 'var(--bg-pressed)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             {isBot ? '🐰' : targetAvatar ? <img src={targetAvatar} alt={targetName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '💬'}
           </div>
           <h3 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: 'var(--text-primary)' }}>{targetName}</h3>
@@ -1254,22 +1295,57 @@ export default function ChatRoomPage() {
                 key={msg.id || idx}
                 style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start', width: '100%', position: 'relative' }}
               >
+                {/* Telegram-style Reply indicator circle behind message during swipe */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: isMe ? 'auto' : 8,
+                    right: isMe ? 8 : 'auto',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    zIndex: 0,
+                    width: 34,
+                    height: 34,
+                    borderRadius: '50%',
+                    backgroundColor: 'rgba(233,30,99,0.2)',
+                    border: '1.5px solid #E91E63',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#E91E63',
+                    pointerEvents: 'none',
+                    opacity: swipingMsgId === msg.id ? 1 : 0,
+                    transition: 'opacity 0.2s ease',
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 14 4 9 9 4" />
+                    <path d="M20 20v-7a4 4 0 0 0-4-4H4" />
+                  </svg>
+                </div>
+
                 <motion.div
                   drag={selectMode ? false : 'x'}
                   dragSnapToOrigin
-                  dragConstraints={{ left: 0, right: 0 }}
-                  dragElastic={0.2}
+                  dragConstraints={{ left: isMe ? -80 : 0, right: isMe ? 0 : 80 }}
+                  dragElastic={0.25}
                   dragDirectionLock
+                  onDragStart={() => setSwipingMsgId(msg.id)}
                   onDragEnd={(_, info) => {
-                    if (info.offset.x > 60) {
-                      PlatformBridge.hapticFeedback('light');
+                    setSwipingMsgId(null);
+                    const threshold = isMe ? -50 : 50;
+                    const triggered = isMe ? info.offset.x < threshold : info.offset.x > threshold;
+                    if (triggered) {
+                      PlatformBridge.hapticFeedback('medium');
                       setReplyTo({ id: msg.id, text: (msg.content || '').slice(0, 120), sender: isMe ? 'user' : 'assistant' });
                     }
                   }}
-                  onPointerDown={() => {
+                  onPointerDown={(e) => {
                     if (selectMode) return;
+                    const rect = e.currentTarget.getBoundingClientRect();
                     longPressTimerRef.current = window.setTimeout(() => {
                       PlatformBridge.hapticFeedback('medium');
+                      setContextMenuPos({ top: rect.top, left: rect.left, bottom: rect.bottom, right: rect.right, isMe });
                       setContextMsg(msg.id);
                     }, 450);
                   }}
@@ -1282,7 +1358,7 @@ export default function ChatRoomPage() {
                       setSelectedIds((prev) => (prev.includes(msg.id) ? prev.filter((x) => x !== msg.id) : [...prev, msg.id]));
                     }
                   }}
-                  style={{ cursor: selectMode ? 'pointer' : 'grab', position: 'relative' }}
+                  style={{ cursor: selectMode ? 'pointer' : 'grab', position: 'relative', zIndex: 1 }}
                 >
                 <div
                   style={{
@@ -1326,7 +1402,7 @@ export default function ChatRoomPage() {
                         </div>
                       );
                     }
-                    if (meta && meta.kind === 'FORWARDED' && meta.forwardedFrom && typeof meta.forwardedFrom === 'object') {
+                    if (!isMe && meta && meta.kind === 'FORWARDED' && meta.forwardedFrom && typeof meta.forwardedFrom === 'object') {
                       const ff = meta.forwardedFrom as { name?: string };
                       return (
                         <div style={{ marginBottom: 4, fontSize: 11, fontWeight: 800, fontStyle: 'italic', opacity: 0.7 }}>↪ Reenviado de {ff.name || 'contacto'}</div>
@@ -1646,33 +1722,66 @@ export default function ChatRoomPage() {
       {contextMsg && (() => {
         const msg = messages.find((m) => m.id === contextMsg);
         if (!msg) return null;
+        const isMyMsg = msg.senderId === myParticipantId;
         const rows: Array<{ icon: string; label: string; danger?: boolean; run: () => void }> = [
-          { icon: '↩️', label: 'Responder', run: () => { setReplyTo({ id: msg.id, text: (msg.content || '').slice(0, 120), sender: msg.senderId === myParticipantId ? 'user' : 'assistant' }); setContextMsg(null); } },
-          { icon: '🔊', label: 'Escuchar', run: () => { speakText(msg.content); setContextMsg(null); } },
+          { icon: '↩️', label: 'Responder', run: () => { setReplyTo({ id: msg.id, text: (msg.content || '').slice(0, 120), sender: isMyMsg ? 'user' : 'assistant' }); setContextMsg(null); } },
           { icon: '📋', label: 'Copiar', run: () => { copyText(msg.content); showToast('Mensaje copiado', 'success'); setContextMsg(null); } },
           { icon: '↪️', label: 'Reenviar', run: () => { openForward([msg.content]); setContextMsg(null); } },
-          { icon: '📌', label: pinnedId === msg.id ? 'Desfijar' : 'Fijar mensaje', run: () => { const next = pinnedId === msg.id ? null : msg.id; setPinnedId(next); try { if (conversationId || targetId) localStorage.setItem(`rabbitty_pinned_${conversationId || targetId}`, next || ''); } catch {} PlatformBridge.hapticFeedback('medium'); showToast(next ? '📌 Mensaje fijado' : 'Mensaje desfijado', 'success'); setContextMsg(null); } },
+          { icon: '📌', label: pinnedId === msg.id ? 'Desfijar' : 'Fijar', run: () => { const next = pinnedId === msg.id ? null : msg.id; setPinnedId(next); try { if (conversationId || targetId) localStorage.setItem(`rabbitty_pinned_${conversationId || targetId}`, next || ''); } catch {} PlatformBridge.hapticFeedback('medium'); showToast(next ? '📌 Fijado' : 'Desfijado', 'success'); setContextMsg(null); } },
+          { icon: '🔊', label: 'Escuchar', run: () => { speakText(msg.content); setContextMsg(null); } },
           { icon: '☑️', label: 'Seleccionar', run: () => { setSelectMode(true); setSelectedIds([msg.id]); setContextMsg(null); } },
-          { icon: '🚩', label: 'Reportar', run: () => reportMessage(msg) },
+          ...(!isMyMsg ? [{ icon: '🚩', label: 'Reportar', run: () => reportMessage(msg) }] : []),
           { icon: '🗑️', label: 'Eliminar', danger: true, run: () => { removeMessages([msg.id]); setContextMsg(null); } },
         ];
+
+        // Telegram-style smart positioning
+        const pos = contextMenuPos;
+        const isNearBottom = pos && pos.top > (typeof window !== 'undefined' ? window.innerHeight * 0.6 : 500);
+
         return (
           <div
             onClick={() => setContextMsg(null)}
-            style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 400,
+              background: 'rgba(0, 0, 0, 0.45)',
+              backdropFilter: 'blur(5px)',
+              WebkitBackdropFilter: 'blur(5px)',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: isNearBottom ? 'flex-end' : 'center',
+              alignItems: isMyMsg ? 'flex-end' : 'flex-start',
+              padding: '16px 20px calc(24px + env(safe-area-inset-bottom, 20px))',
+            }}
           >
             <div
               onClick={(e) => e.stopPropagation()}
               style={{
-                background: 'var(--bg-elevated)',
-                borderRadius: '20px 20px 0 0',
-                border: '1px solid var(--border-subtle)',
-                padding: '16px 16px calc(16px + env(safe-area-inset-bottom))',
-                maxHeight: '82vh',
-                overflowY: 'auto',
+                width: '100%',
+                maxWidth: 270,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+                animation: 'scaleIn 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
               }}
             >
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 14 }}>
+              {/* Telegram Floating Emoji Reaction Pill */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  background: 'rgba(26, 26, 38, 0.88)',
+                  backdropFilter: 'blur(20px)',
+                  WebkitBackdropFilter: 'blur(20px)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  borderRadius: 999,
+                  padding: '6px 10px',
+                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
+                  alignSelf: isMyMsg ? 'flex-end' : 'flex-start',
+                }}
+              >
                 {['🔥', '❤️', '👍', '😂', '😮', '🙏'].map((em) => (
                   <button
                     key={em}
@@ -1681,34 +1790,64 @@ export default function ChatRoomPage() {
                       PlatformBridge.hapticFeedback('light');
                       setContextMsg(null);
                     }}
-                    style={{ fontSize: 26, background: 'var(--bg-pressed)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: 48, height: 48, cursor: 'pointer', lineHeight: 1 }}
+                    style={{
+                      fontSize: 22,
+                      background: 'transparent',
+                      border: 'none',
+                      borderRadius: '50%',
+                      width: 38,
+                      height: 38,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      transition: 'transform 0.15s ease',
+                      padding: 0,
+                    }}
                   >
                     {em}
                   </button>
                 ))}
               </div>
-              <div style={{ borderTop: '1px solid var(--border-subtle)', margin: '0 -16px' }}>
+
+              {/* Telegram Floating Action Menu */}
+              <div
+                style={{
+                  background: 'rgba(26, 26, 38, 0.94)',
+                  backdropFilter: 'blur(20px)',
+                  WebkitBackdropFilter: 'blur(20px)',
+                  borderRadius: 18,
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  overflow: 'hidden',
+                  boxShadow: '0 12px 36px rgba(0, 0, 0, 0.55)',
+                  width: '100%',
+                }}
+              >
                 {rows.map((r, i) => (
                   <button
                     key={r.label}
-                    onClick={r.run}
+                    onClick={() => {
+                      PlatformBridge.hapticFeedback('light');
+                      r.run();
+                    }}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 14,
+                      justifyContent: 'space-between',
                       width: '100%',
-                      padding: '13px 16px',
+                      padding: '11px 16px',
                       background: 'transparent',
                       border: 'none',
-                      borderBottom: i < rows.length - 1 ? '1px solid var(--border-subtle)' : 'none',
+                      borderBottom: i < rows.length - 1 ? '1px solid rgba(255, 255, 255, 0.07)' : 'none',
                       cursor: 'pointer',
-                      color: r.danger ? '#D32F2F' : 'var(--text-primary)',
+                      color: r.danger ? '#FF453A' : '#FFFFFF',
                       textAlign: 'left',
-                      fontSize: 15,
+                      fontSize: 14,
+                      fontWeight: 600,
                     }}
                   >
-                    <span style={{ fontSize: 18, lineHeight: 1, width: 24, textAlign: 'center', flexShrink: 0 }}>{r.icon}</span>
-                    <span style={{ fontWeight: 600 }}>{r.label}</span>
+                    <span>{r.label}</span>
+                    <span style={{ fontSize: 16, opacity: 0.85, width: 20, textAlign: 'right' }}>{r.icon}</span>
                   </button>
                 ))}
               </div>
@@ -1739,6 +1878,7 @@ export default function ChatRoomPage() {
                   style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-pressed)', border: '1px solid var(--border-subtle)', borderRadius: 14, padding: '10px 12px', cursor: 'pointer', textAlign: 'left' }}
                 >
                   <div style={{ width: 36, height: 36, borderRadius: '50%', background: c.isBot ? 'var(--rabbitty-pink)' : 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, fontSize: 15 }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     {c.isBot ? '🐰' : c.targetAvatar ? <img src={c.targetAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '💬'}
                   </div>
                   <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.targetName}</span>

@@ -9,6 +9,22 @@ export type PlatformType = 'telegram' | 'ios' | 'android' | 'web';
 const SESSION_TOKEN_KEY = 'rabbitty_auth_session_token';
 const USER_CACHE_KEY = 'rabbitty_user_cache';
 
+interface TelegramWebApp {
+  initData?: string;
+  initDataUnsafe?: { user?: { id?: number } };
+  openLink?: (url: string) => void;
+  HapticFeedback?: {
+    impactOccurred: (style: string) => void;
+    notificationOccurred: (type: string) => void;
+  };
+}
+
+interface WindowWithTelegram extends Window {
+  Telegram?: {
+    WebApp?: TelegramWebApp;
+  };
+}
+
 export const PlatformBridge = {
   /**
    * Determine the runtime platform
@@ -17,7 +33,7 @@ export const PlatformBridge = {
     if (typeof window === 'undefined') return 'web';
 
     // Check Telegram Mini App first
-    const tg = (window as any).Telegram?.WebApp;
+    const tg = (window as WindowWithTelegram).Telegram?.WebApp;
     if (tg && (tg.initData || tg.initDataUnsafe?.user?.id)) {
       return 'telegram';
     }
@@ -58,7 +74,7 @@ export const PlatformBridge = {
 
     try {
       if (this.isTelegram()) {
-        const haptics = (window as any).Telegram?.WebApp?.HapticFeedback;
+        const haptics = (window as WindowWithTelegram).Telegram?.WebApp?.HapticFeedback;
         if (haptics) {
           if (style === 'success' || style === 'warning' || style === 'error') {
             haptics.notificationOccurred(style);
@@ -92,7 +108,7 @@ export const PlatformBridge = {
       if ('vibrate' in navigator) {
         navigator.vibrate(style === 'heavy' ? 40 : 15);
       }
-    } catch (e) {
+    } catch {
       // Haptics should never throw unhandled
     }
   },
@@ -128,12 +144,12 @@ export const PlatformBridge = {
     try {
       const token = await this.getSessionToken();
       if (token) headers['Authorization'] = `Bearer ${token}`;
-    } catch (e) {
+    } catch {
       // ignore
     }
 
     if (typeof window !== 'undefined') {
-      const tg = (window as any).Telegram?.WebApp;
+      const tg = (window as WindowWithTelegram).Telegram?.WebApp;
       if (tg?.initData) headers['X-Init-Data'] = tg.initData;
     }
 
@@ -171,13 +187,48 @@ export const PlatformBridge = {
     }
   },
 
+  async getPreference(key: string): Promise<string | null> {
+    if (typeof window === 'undefined') return null;
+    try {
+      if (this.isNative()) {
+        const { value } = await Preferences.get({ key });
+        return value || null;
+      }
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+
+  async setPreference(key: string, value: string): Promise<void> {
+    if (typeof window === 'undefined') return;
+    try {
+      if (this.isNative()) {
+        await Preferences.set({ key, value });
+        return;
+      }
+      localStorage.setItem(key, value);
+    } catch {}
+  },
+
+  async removePreference(key: string): Promise<void> {
+    if (typeof window === 'undefined') return;
+    try {
+      if (this.isNative()) {
+        await Preferences.remove({ key });
+        return;
+      }
+      localStorage.removeItem(key);
+    } catch {}
+  },
+
   /**
    * Safe External Link Opener
    */
   async openExternalUrl(url: string) {
     if (typeof window === 'undefined') return;
 
-    const tg = (window as any).Telegram?.WebApp;
+    const tg = (window as WindowWithTelegram).Telegram?.WebApp;
     if (tg?.openLink) {
       tg.openLink(url);
     } else {

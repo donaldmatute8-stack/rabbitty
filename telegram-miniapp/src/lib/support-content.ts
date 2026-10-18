@@ -61,7 +61,14 @@ export const SUPPORT_KNOWLEDGE =
   'CENTRO DE AYUDA RABBITTY (FAQ):\n' +
   FAQS.map((f) => `· ${f.q}\n  → ${f.a}`).join('\n') +
   '\n\nGUÍA / DOCUMENTACIÓN:\n' +
-  DOC_SECTIONS.map((d) => `· ${d.title}: ${d.body}`).join('\n');
+  DOC_SECTIONS.map((d) => `· ${d.title}: ${d.body}`).join('\n') +
+  '\n\nCOMUNIDADES OFICIALES EN RABBITTY HUB (TELEGRAM & IN-APP):\n' +
+  '· General (#): Comunidad principal y anuncios para todos los usuarios.\n' +
+  '· Soporte Técnico (S): Resolución de incidencias, pagos y dudas técnicas dentro de la app.\n' +
+  '· Soporte Demos (S): Demostraciones guiadas y onboarding para nuevos usuarios y comercios.\n' +
+  '· Affiliates Circle (A): Comunidad de negocios y comercios afiliados.\n' +
+  '· Rabbitters Zone (R): Círculo exclusivo de Rabbitters (Nodos de la red).\n' +
+  'Nota para Bunzy: Cuando un usuario pregunte por grupos, soporte o comunidades, puedes darle asistencia directa in-app y ofrecerle el enlace directo si desea entrar al grupo de Telegram.';
 
 const SUPPORT_STOPWORDS = new Set([
   'que', 'con', 'para', 'por', 'los', 'las', 'una', 'uno', 'unos', 'unas', 'del', 'esta', 'este',
