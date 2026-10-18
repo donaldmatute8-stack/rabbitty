@@ -1,6 +1,7 @@
 import { db } from '@/db';
-import { users, levels, hatTricks, userHatTricks, achievements, userAchievements } from '@/db/schema';
+import { users, hatTricks, userHatTricks } from '@/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
+import { recordLedgerTransaction } from '@/lib/ledgerHelper';
 
 /**
  * Otorgar Hops a un usuario y verificar si subió de nivel.
@@ -59,41 +60,74 @@ export async function evaluateHatTricks(userId: string, actionContext: { type: s
         continue;
       }
 
-      // Buscar si el usuario ya lo completó
-      const userTrick = await db.query.userHatTricks.findFirst({
-        where: and(eq(userHatTricks.userId, userId), eq(userHatTricks.trickId, trick.id))
-      });
-
-      if (userTrick?.isCompleted) {
-        continue; // Ya lo completó
-      }
-
-      const newProgress = (userTrick?.progressValue || 0) + actionContext.value;
-      const isNowCompleted = newProgress >= trick.conditionTarget;
-
-      if (userTrick) {
-        await db.update(userHatTricks)
-          .set({ progressValue: newProgress, isCompleted: isNowCompleted, completedAt: isNowCompleted ? new Date() : null })
-          .where(eq(userHatTricks.id, userTrick.id));
-      } else {
-        await db.insert(userHatTricks).values({
-          userId,
-          trickId: trick.id,
-          progressValue: newProgress,
-          isCompleted: isNowCompleted,
-          completedAt: isNowCompleted ? new Date() : null
+      await db.transaction(async (tx) => {
+        // Lock/find userTrick
+        const userTrick = await tx.query.userHatTricks.findFirst({
+          where: and(eq(userHatTricks.userId, userId), eq(userHatTricks.trickId, trick.id))
         });
-      }
 
-      // Si lo completó, dar recompensas
-      if (isNowCompleted) {
-        await db.update(users)
-          .set({
-            hops: sql`${users.hops} + ${trick.rewardHops}`,
-            totalBunzEarned: sql`COALESCE(${users.totalBunzEarned}, 0) + ${trick.rewardBunz}`,
-          })
-          .where(eq(users.id, userId));
-      }
+        if (userTrick?.isCompleted) {
+          return; // Ya lo completó
+        }
+
+        const newProgress = (userTrick?.progressValue || 0) + actionContext.value;
+        const isNowCompleted = newProgress >= trick.conditionTarget;
+
+        if (userTrick) {
+          await tx.update(userHatTricks)
+            .set({ progressValue: newProgress, isCompleted: isNowCompleted, completedAt: isNowCompleted ? new Date() : null })
+            .where(eq(userHatTricks.id, userTrick.id));
+        } else {
+          await tx.insert(userHatTricks).values({
+            userId,
+            trickId: trick.id,
+            progressValue: newProgress,
+            isCompleted: isNowCompleted,
+            completedAt: isNowCompleted ? new Date() : null
+          });
+        }
+
+        // Si lo completó, dar recompensas
+        if (isNowCompleted) {
+          // Lock user row
+          const [userRow] = await tx
+            .select()
+            .from(users)
+            .where(eq(users.id, userId))
+            .limit(1)
+            .for('update');
+
+          if (!userRow) return;
+
+          await tx.update(users)
+            .set({
+              hops: sql`${users.hops} + ${trick.rewardHops}`,
+              totalBunzEarned: sql`COALESCE(${users.totalBunzEarned}, 0) + ${trick.rewardBunz}`,
+              updatedAt: new Date(),
+            })
+            .where(eq(users.id, userId));
+
+          // Registrar en ledger si entrega Bunz (> 0)
+          if (trick.rewardBunz > 0) {
+            await recordLedgerTransaction(
+              {
+                payerSubjectId: 'sys_gamification',
+                payeeSubjectId: `usr_${userId}`,
+                amount: trick.rewardBunz,
+                type: 'EARN',
+                referenceId: trick.id,
+                idempotencyKey: `hat_trick_${userId}_${trick.id}`,
+                metadata: {
+                  trickTitle: trick.title,
+                  rewardHops: trick.rewardHops,
+                  source: 'gamification_hat_tricks',
+                },
+              },
+              tx
+            );
+          }
+        }
+      });
     }
   } catch (error) {
     console.error('Error evaluating Hat Tricks:', error);

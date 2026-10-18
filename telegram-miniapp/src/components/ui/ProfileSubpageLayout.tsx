@@ -12,9 +12,10 @@ interface LayoutProps {
   centerTitle?: boolean;
   left?: React.ReactNode;
   right?: React.ReactNode;
+  hideNav?: boolean;
 }
 
-export default function ProfileSubpageLayout({ title, children, showBack = true, centerTitle = false, left, right }: LayoutProps) {
+export default function ProfileSubpageLayout({ title, children, showBack = true, centerTitle = false, left, right, hideNav = false }: LayoutProps) {
   const router = useRouter();
 
   return (
@@ -96,7 +97,7 @@ export default function ProfileSubpageLayout({ title, children, showBack = true,
         <div style={{ height: 40 }} />
       </main>
 
-      <BottomNav />
+      {!hideNav && <BottomNav />}
     </div>
   );
 }

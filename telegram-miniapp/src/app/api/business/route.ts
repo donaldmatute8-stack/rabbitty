@@ -16,11 +16,7 @@ export async function PATCH(req: Request) {
     }
 
     const body = await req.json();
-    const { rewardPercentage, businessId } = body;
-
-    if (rewardPercentage === undefined) {
-      return NextResponse.json({ error: 'Missing rewardPercentage' }, { status: 400 });
-    }
+    const { rewardPercentage, businessId, name, description, address, category, logoUrl } = body;
 
     const ownerId = caller.id;
 
@@ -39,8 +35,19 @@ export async function PATCH(req: Request) {
       ? eq(ownedBusinesses.id, businessId)
       : eq(ownedBusinesses.ownerId, ownerId);
 
+    const updateFields: Record<string, unknown> = {
+      updatedAt: new Date(),
+    };
+
+    if (rewardPercentage !== undefined) updateFields.rewardPercentage = parseInt(rewardPercentage);
+    if (name !== undefined) updateFields.name = String(name).trim();
+    if (description !== undefined) updateFields.description = String(description).trim();
+    if (address !== undefined) updateFields.address = String(address).trim();
+    if (category !== undefined) updateFields.category = String(category).trim();
+    if (logoUrl !== undefined) updateFields.logoUrl = String(logoUrl).trim();
+
     const [updated] = await db.update(ownedBusinesses)
-      .set({ rewardPercentage: parseInt(rewardPercentage) })
+      .set(updateFields)
       .where(whereClause)
       .returning();
 
@@ -48,7 +55,7 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: 'Business not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, rewardPercentage: updated.rewardPercentage });
+    return NextResponse.json({ success: true, business: updated, rewardPercentage: updated.rewardPercentage });
   } catch (error) {
     console.error('Business API PATCH Error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -145,7 +152,15 @@ export async function POST(req: Request) {
     if (TELEGRAM_BOT_TOKEN) {
       for (const adminId of ADMIN_TELEGRAM_IDS) {
         try {
-          const payload: any = {
+          const payload: {
+            chat_id: string;
+            text: string;
+            parse_mode: string;
+            disable_web_page_preview: boolean;
+            reply_markup?: {
+              inline_keyboard: Array<Array<{ text: string; callback_data: string }>>;
+            };
+          } = {
             chat_id: adminId.trim(),
             text: `🆕 *Nuevo negocio registrado*\n\n*${name}*\n${category} — ${address}\nPaquete: ${selectedPackage || 'Sin paquete'} (${parsedCredit.toLocaleString()} Bunz)\nReward: ${parsedReward}%\nDueño: ${owner.firstName || '?'} (@${owner.username || '?'})\n\nEstado: ${isGoogleVerified ? '✅ Aprobado (Google)' : '⏳ Pendiente de verificación'}`,
             parse_mode: 'Markdown',
