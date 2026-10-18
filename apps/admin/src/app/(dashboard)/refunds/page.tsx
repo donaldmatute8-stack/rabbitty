@@ -40,7 +40,7 @@ export default function RefundsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black via-zinc-950 to-black p-6">
+    <div className="min-h-screen bg-linear-to-br from-black via-zinc-950 to-black p-6">
       <div className="mx-auto max-w-6xl space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -64,7 +64,7 @@ export default function RefundsPage() {
             { label: "Bunz", value: totals?.bunz ?? 0, color: "from-pink-500/20 to-pink-600/10 border-pink-500/30" },
             { label: "Reembolsados", value: refundedPayments.reduce((s, p) => s + Math.abs(p.payment.amount), 0), color: "from-red-500/20 to-red-600/10 border-red-500/30" },
           ].map((item, i) => (
-            <Card key={i} className={`bg-gradient-to-br ${item.color} border p-5 backdrop-blur-md`}>
+            <Card key={i} className={`bg-linear-to-br ${item.color} border p-5 backdrop-blur-md`}>
               <p className="text-sm text-gray-400">{item.label}</p>
               <p className="text-2xl font-black text-white">${item.value.toFixed(2)}</p>
             </Card>
@@ -178,7 +178,7 @@ export default function RefundsPage() {
                   <button
                     onClick={handleRefund}
                     disabled={isPending || !refundNote}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-pink-600 to-pink-700 px-4 py-3 text-sm font-bold text-white hover:from-pink-500 hover:to-pink-600 disabled:opacity-50 transition-all"
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-pink-600 to-pink-700 px-4 py-3 text-sm font-bold text-white hover:from-pink-500 hover:to-pink-600 disabled:opacity-50 transition-all"
                   >
                     {isPending ? "Procesando..." : (
                       <>
