@@ -40,7 +40,13 @@ function FaceIdCard() {
         .then((ok) => { if (alive) setSupported(ok); })
         .catch(() => { if (alive) setSupported(false); });
     } else {
-      queueMicrotask(() => { if (alive) setSupported(false); });
+      queueMicrotask(() => {
+        if (alive) {
+          const isNative = (() => { try { const m = require('@/lib/platform'); return m.PlatformBridge?.isNative() ?? false; } catch { return false; } })();
+          // En app nativa iOS/Android WebAuthn puede funcionar; no marcar como false sin intentar
+          setSupported(isNative ? null : false);
+        }
+      });
     }
     return () => { alive = false; };
   }, []);
@@ -149,9 +155,9 @@ function FaceIdCard() {
           <p className="text-white/60 text-xs leading-[1.5] m-0 mb-3">
             Bloqueo con biometría vía WebAuthn (Face ID / Touch ID). Tu clave biométrica nunca sale de tu dispositivo.
           </p>
-          {supported === false && !enabled && (
+          {(supported === false || supported === null) && !enabled && (
             <p className="text-[11px] font-bold m-0 mb-2" style={{ color: '#F59E0B' }}>
-              ⚠️ No se detectó Face ID automáticamente en esta sesión (pasa dentro del webview de Telegram). Prueba a activarlo de todos modos; si falla, ábrelo en Safari.
+              {(typeof window !== 'undefined' && (window as any).__cap_native__) ? '⚠️ En app nativa WebAuthn puede depender del dispositivo/HTTPS. Prueba "Activar Face ID" directamente (iOS suele mostrar el prompt biométrico).' : '⚠️ No se detectó Face ID automáticamente en esta sesión (webview). Prueba a activarlo de todos modos; si falla, ábrelo en Safari.'}
             </p>
           )}
           <div className="flex gap-2 flex-wrap">
