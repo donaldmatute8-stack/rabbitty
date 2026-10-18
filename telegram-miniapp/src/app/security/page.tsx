@@ -45,8 +45,21 @@ function FaceIdCard() {
     return () => { alive = false; };
   }, []);
 
+  const webauthnError = (err: unknown): string => {
+    const name = err && typeof err === 'object' && 'name' in err ? String((err as { name?: unknown }).name) : '';
+    if (name === 'NotAllowedError') return '⚠️ Solicitud cancelada o no autorizada. Intenta de nuevo.';
+    if (name === 'NotSupportedError') return '❌ Este navegador/webview no soporta WebAuthn. Abre la app en Safari de iOS.';
+    if (name === 'SecurityError') return '❌ WebAuthn requiere HTTPS. Abre la página con https://.';
+    if (name === 'InvalidStateError') return '❌ Ya existe una credencial biométrica en este navegador.';
+    return '❌ No se pudo activar. Intenta de nuevo.';
+  };
+
   const enable = async () => {
-    if (busy || supported === false) return;
+    if (busy) return;
+    if (typeof navigator === 'undefined' || !navigator.credentials || typeof PublicKeyCredential === 'undefined') {
+      setFeedback('❌ Este navegador no ofrece WebAuthn. Abre Rabbitty en Safari de iOS.');
+      return;
+    }
     setBusy(true);
     setFeedback(null);
     try {
@@ -70,9 +83,11 @@ function FaceIdCard() {
         localStorage.setItem(CRED_KEY, b64url(credential.rawId));
         setEnabled(true);
         setFeedback('✅ Face ID / Touch ID activado en este dispositivo.');
+      } else {
+        setFeedback('❌ El navegador no devolvió credencial. Intenta de nuevo.');
       }
-    } catch {
-      setFeedback('❌ No se pudo activar. Intenta de nuevo.');
+    } catch (err) {
+      setFeedback(webauthnError(err));
     } finally {
       setBusy(false);
     }
@@ -98,8 +113,8 @@ function FaceIdCard() {
         },
       })) as PublicKeyCredential | null;
       if (assertion) setFeedback('🔓 Verificación biométrica exitosa.');
-    } catch {
-      setFeedback('⚠️ Verificación fallida o cancelada.');
+    } catch (err) {
+      setFeedback(webauthnError(err));
     } finally {
       setBusy(false);
     }
@@ -134,16 +149,16 @@ function FaceIdCard() {
           <p className="text-white/60 text-xs leading-[1.5] m-0 mb-3">
             Bloqueo con biometría vía WebAuthn (Face ID / Touch ID). Tu clave biométrica nunca sale de tu dispositivo.
           </p>
-          {supported === false && (
+          {supported === false && !enabled && (
             <p className="text-[11px] font-bold m-0 mb-2" style={{ color: '#F59E0B' }}>
-              ⚠️ Tu dispositivo/sesión no expone autenticador biométrico.
+              ⚠️ No se detectó Face ID automáticamente en esta sesión (pasa dentro del webview de Telegram). Prueba a activarlo de todos modos; si falla, ábrelo en Safari.
             </p>
           )}
           <div className="flex gap-2 flex-wrap">
             {!enabled ? (
               <button
                 onClick={enable}
-                disabled={busy || supported === false}
+                disabled={busy}
                 className="rounded-full px-4 py-2 text-[12px] font-black border-none cursor-pointer disabled:opacity-50"
                 style={{ background: '#10B981', color: '#06281C' }}
               >
