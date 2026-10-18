@@ -19,6 +19,7 @@ import MembershipCard from '@/components/ui/MembershipCard';
 import ProfileDrawer from '@/components/ProfileDrawer';
 import { useTheme } from '@/contexts/ThemeContext';
 import RabbittyContourLoader from '@/components/ui/RabbittyContourLoader';
+import GroupsStrip from '@/components/groups/GroupsStrip';
 
 const InteractiveMap = dynamic(() => import('@/features/map/InteractiveMap'), {
   ssr: false,
@@ -235,13 +236,43 @@ export default function FeedPage() {
     queueMicrotask(() => { fetchFeedData(); });
   }, [fetchFeedData]);
 
+  // Refresh disparado por el botón "Ra" del menú inferior: sube al inicio y recarga
+  const handleRefresh = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+    PlatformBridge.hapticFeedback('light');
+    fetchFeedData();
+  }, [fetchFeedData]);
+
   useEffect(() => {
-    const handleRefresh = () => {
-      fetchFeedData();
-    };
     window.addEventListener('rabbitty:refresh-feed', handleRefresh);
     return () => window.removeEventListener('rabbitty:refresh-feed', handleRefresh);
-  }, [fetchFeedData]);
+  }, [handleRefresh]);
+
+  // Pull-to-refresh (deslizar hacia abajo en el inicio) -> muestra el loader del conejo
+  useEffect(() => {
+    let startY = 0;
+    let armed = false;
+    const onStart = (e: TouchEvent) => {
+      armed = (window.scrollY || 0) <= 0 && e.touches.length === 1;
+      if (armed) startY = e.touches[0].clientY;
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!armed || e.touches.length !== 1) return;
+      if (e.touches[0].clientY - startY > 90) {
+        armed = false;
+        handleRefresh();
+      }
+    };
+    const onEnd = () => { armed = false; };
+    window.addEventListener('touchstart', onStart, { passive: true });
+    window.addEventListener('touchmove', onMove, { passive: true });
+    window.addEventListener('touchend', onEnd, { passive: true });
+    return () => {
+      window.removeEventListener('touchstart', onStart);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onEnd);
+    };
+  }, [handleRefresh]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -350,14 +381,15 @@ export default function FeedPage() {
             </Link>
 
             <Link 
-              href="/scan" 
+              href="/chat/bot" 
               onClick={() => PlatformBridge.hapticFeedback('medium')}
               className="w-9 h-9 rounded-full flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.04)] active:scale-95 transition-transform" 
               style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
+              aria-label="Hablar con Bunzy"
             >
               <img 
                 src="/logo_conejo.png" 
-                alt="Scan" 
+                alt="Bunzy" 
                 className="w-4 h-5 object-contain"
                 style={{ filter: isDark ? 'grayscale(100%) brightness(10)' : 'grayscale(100%) brightness(0)' }} 
               />
@@ -377,6 +409,12 @@ export default function FeedPage() {
           />
         )}
       </div>
+
+      {activeTab !== 'Freehands' && (
+        <div style={{ maxWidth: 600, margin: '0 auto', padding: '12px 20px 0' }}>
+          <GroupsStrip />
+        </div>
+      )}
 
       {/* NAVBAR SUPERIOR MINIMALISTA FLOTANTE (ESTILO FACEBOOK):
           Aparece solo al hacer scroll hacia arriba y permanece oculto al bajar */}
@@ -431,14 +469,15 @@ export default function FeedPage() {
             </Link>
 
             <Link 
-              href="/scan" 
+              href="/chat/bot" 
               onClick={() => PlatformBridge.hapticFeedback('medium')}
               className="w-8 h-8 rounded-full flex items-center justify-center active:scale-95 transition-transform" 
               style={{ background: 'var(--bg-pressed)' }}
+              aria-label="Hablar con Bunzy"
             >
               <img 
                 src="/logo_conejo.png" 
-                alt="Scan" 
+                alt="Bunzy" 
                 className="w-3.5 h-4 object-contain"
                 style={{ filter: isDark ? 'grayscale(100%) brightness(10)' : 'grayscale(100%) brightness(0)' }} 
               />
@@ -450,6 +489,13 @@ export default function FeedPage() {
 
       <main className="flex-1 w-full max-w-[600px] mx-auto" style={{ paddingLeft: isDark ? 0 : 16, paddingRight: isDark ? 0 : 16 }}>
         <div className="pt-4">
+
+          {/* Loader del conejo (global, se muestra al actualizar desde cualquier pestaña) */}
+          {loading && !(activeTab === "bunz'in") && (
+            <div className="mb-2">
+              <RabbittyContourLoader size={54} label="Actualizando..." />
+            </div>
+          )}
 
           {/* ── bunz'in tab ── */}
           {activeTab === "bunz'in" && (

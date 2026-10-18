@@ -3,51 +3,20 @@
 import { motion } from 'framer-motion';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 
+import { DOC_SECTIONS } from '@/lib/support-content';
+import React from 'react';
+
 export default function DocsPage() {
-  const sections = [
-    {
-      title: "El Ecosistema Rabbitty",
-      content: (
-        <>
-          <p>Rabbitty es una red de recompensas descentralizada diseñada para conectar negocios locales y consumidores mediante un modelo de <strong>Give-to-Get</strong>.</p>
-          <p>Al visitar los restaurantes y comercios de la red <em>Stock</em>, puedes escanear tu billetera para recibir un porcentaje de tus compras directamente en <strong>Bunz</strong>, nuestra moneda digital exclusiva.</p>
-        </>
-      )
-    },
-    {
-      title: "La Billetera Bunz",
-      content: (
-        <>
-          <p>Tu billetera es el corazón de la Mini App. Funciona gracias a tecnología blockchain invisible, lo que significa que tus Bunz te pertenecen al 100%.</p>
-          <ul>
-            <li><strong>Cobrar:</strong> Muestra tu Código QR en el establecimiento.</li>
-            <li><strong>Bóvedas Temporales:</strong> Si recibiste Bunz mediante tu teléfono antes de registrarte, tienes 3 meses para crear tu cuenta, de lo contrario se transferirán de vuelta a la Tesorería.</li>
-          </ul>
-        </>
-      )
-    },
-    {
-      title: "Stock y Freehands (Mapas)",
-      content: (
-        <>
-          <p>En el menú inferior encontrarás dos formas de descubrir recompensas:</p>
-          <ul>
-            <li><strong>Stock (Feed):</strong> Una lista dinámica de negocios activos y sus ofertas de cashback en Bunz.</li>
-            <li><strong>Freehands (Mapa):</strong> Un mapa interactivo y geolocalizado para encontrar los locales más cercanos a ti en tiempo real.</li>
-          </ul>
-        </>
-      )
-    },
-    {
-      title: "Niveles y Referidos",
-      content: (
-        <>
-          <p>A medida que acumulas <strong>Hops</strong> (puntos de experiencia por tus visitas), tu nivel de Madriguera sube, cambiando el borde de tu avatar a colores únicos (Legendario, Épico, Raro).</p>
-          <p>Además, al invitar a tus amigos con tu enlace del <strong>Programa de Referidos</strong>, ambos ganarán Bunz de regalo en la primera transacción del invitado.</p>
-        </>
-      )
-    }
-  ];
+  const sections = DOC_SECTIONS.map((sec) => ({
+    title: sec.title,
+    content: (
+      <>
+        {sec.body.split('\n').map((p, i) => (
+          <p key={i}>{p}</p>
+        ))}
+      </>
+    ),
+  }));
 
   return (
     <ProfileSubpageLayout title="Documentación">

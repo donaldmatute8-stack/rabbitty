@@ -1,6 +1,7 @@
 'use client';
 
 import { ChevronLeft } from 'lucide-react';
+import Link from 'next/link';
 import { useTheme } from '@/contexts/ThemeContext';
 
 interface HeaderProps {
@@ -36,8 +37,10 @@ export default function Header({ onBack, showBack, isScrolled = false, isDark: i
         <div className="w-10" />
       )}
 
-      <div
-        className="absolute flex items-center justify-center pointer-events-none"
+      <Link
+        href="/chat/bot"
+        aria-label="Hablar con Bunzy"
+        className="absolute flex items-center justify-center pointer-events-auto active:scale-90 transition-transform"
         style={{
           left: isScrolled ? 'auto' : '50%',
           right: isScrolled ? '16px' : 'auto',
@@ -56,7 +59,7 @@ export default function Header({ onBack, showBack, isScrolled = false, isDark: i
             filter: isDark ? 'brightness(0) invert(0.9)' : 'none',
           }}
         />
-      </div>
+      </Link>
 
       <div className="w-10" style={{ opacity: isScrolled ? 0 : 1, transition: 'opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }} />
     </header>

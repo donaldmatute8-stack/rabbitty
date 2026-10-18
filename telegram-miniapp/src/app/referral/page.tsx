@@ -10,6 +10,21 @@ const LEVEL_NAMES: Record<string, string> = {
   '1': 'Bronce', '2': 'Plata', '3': 'Oro', '4': 'Rubí', '5': 'Diamante',
 };
 
+type TelegramWebApp = { openTelegramLink?: (url: string) => void };
+
+const getTelegram = (): TelegramWebApp | null => {
+  if (typeof window === 'undefined') return null;
+  const tg = (window as { Telegram?: { WebApp?: TelegramWebApp } }).Telegram;
+  return tg?.WebApp ?? null;
+};
+
+type ReferralUser = {
+  id?: string;
+  username?: string;
+  telegramId?: string | number;
+  pendingBunz?: number;
+};
+
 export default function ReferralPage() {
   const { user } = useAuth();
   const [copied, setCopied] = useState(false);
@@ -20,14 +35,14 @@ export default function ReferralPage() {
       PlatformBridge.getAuthHeaders()
         .then(headers => fetch(`/api/gamification`, { headers }))
         .then(r => r.json())
-        .then((data: any) => {
+        .then((data: { level?: { name?: string } }) => {
           if (data?.level?.name) setLevelName(data.level.name);
         })
         .catch(() => {});
     }
   }, [user?.id]);
 
-  const profile = user as any;
+  const profile = user as unknown as ReferralUser;
   const loading = !user;
 
   // Telegram bot startapp referral link or web referral link fallback
@@ -39,12 +54,28 @@ export default function ReferralPage() {
   const handleNativeShare = async () => {
     if (!referralLink) return;
     PlatformBridge.hapticFeedback('medium');
-    await PlatformBridge.share({
+    const text = '¡Qué onda! Te invito a Rabbitty. Regístrate con mi enlace para ganar bunz de bienvenida y multiplicarlos en tus lugares favoritos:';
+
+    // Dentro de Telegram: usar el selector de chats nativo de Telegram
+    const tg = getTelegram();
+    if (tg?.openTelegramLink) {
+      tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent(text)}`);
+      return;
+    }
+
+    const shared = await PlatformBridge.share({
       title: 'Únete a Rabbitty 🐰',
-      text: `¡Qué onda! Te invito a Rabbitty. Regístrate con mi enlace para ganar bunz de bienvenida y multiplicarlos en tus lugares favoritos:`,
+      text,
       url: referralLink,
       dialogTitle: 'Invitar amigos a Rabbitty',
     });
+
+    // Fallback visible: copiar al portapapeles y avisar
+    if (!shared) {
+      try { await navigator.clipboard.writeText(referralLink); } catch {}
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   const copyToClipboard = () => {
@@ -59,13 +90,11 @@ export default function ReferralPage() {
   const shareOnTelegram = () => {
     PlatformBridge.hapticFeedback('medium');
     const url = encodeURIComponent(referralLink);
-    const text = encodeURIComponent('¡Únete a Rabbitty y descubre negocios con cashback en bunz!');
-    // @ts-ignore
-    if (window.Telegram?.WebApp?.openTelegramLink) {
-      // @ts-ignore
-      window.Telegram.WebApp.openTelegramLink(`https://t.me/share/url?url=${url}&text=${text}`);
+    const tg = getTelegram();
+    if (tg?.openTelegramLink) {
+      tg.openTelegramLink(`https://t.me/share/url?url=${url}&text=${encodeURIComponent('¡Qué onda! Te invito a Rabbitty:')}`);
     } else {
-      window.open(`https://t.me/share/url?url=${url}&text=${text}`, '_blank');
+      window.open(`https://t.me/share/url?url=${url}&text=${encodeURIComponent('¡Qué onda! Te invito a Rabbitty:')}`, '_blank');
     }
   };
 
@@ -158,7 +187,7 @@ export default function ReferralPage() {
                 }}
               >
                 <Share2 size={18} />
-                <span>Compartir con Amigos (Native)</span>
+                <span>Compartir con Amigos</span>
               </button>
 
               <div className="flex gap-3">

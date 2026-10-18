@@ -9,9 +9,11 @@ interface LayoutProps {
   title: React.ReactNode;
   children: React.ReactNode;
   showBack?: boolean;
+  centerTitle?: boolean;
+  right?: React.ReactNode;
 }
 
-export default function ProfileSubpageLayout({ title, children, showBack = true }: LayoutProps) {
+export default function ProfileSubpageLayout({ title, children, showBack = true, centerTitle = false, right }: LayoutProps) {
   const router = useRouter();
 
   return (
@@ -46,14 +48,34 @@ export default function ProfileSubpageLayout({ title, children, showBack = true 
                 </svg>
               </button>
             )}
-            {typeof title === 'string' ? (
+            {!centerTitle && (typeof title === 'string' ? (
               <h1 style={{ fontSize: 26, fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.5px', margin: 0, lineHeight: 1.1 }}>
                 {title}
               </h1>
             ) : (
               title
-            )}
+            ))}
           </div>
+
+          {/* Título centrado (estilo Telegram) */}
+          {centerTitle && (
+            <div style={{ position: 'absolute', left: 0, right: 0, textAlign: 'center', pointerEvents: 'none', zIndex: 1 }}>
+              {typeof title === 'string' ? (
+                <h1 style={{ fontSize: 20, fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.5px', margin: 0, lineHeight: 1.1 }}>
+                  {title}
+                </h1>
+              ) : (
+                title
+              )}
+            </div>
+          )}
+
+          {/* Acciones a la derecha (opcional) */}
+          {right && (
+            <div style={{ position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+              {right}
+            </div>
+          )}
 
           {/* Rabbit watermark */}
           <div style={{ position: 'absolute', right: -20, top: '50%', transform: 'translateY(-50%)', opacity: 0.15, pointerEvents: 'none' }}>
