@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import Image from 'next/image';
 import { HelpCircle } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useToast } from '@/contexts/ToastContext';
 import { PlatformBridge } from '@/lib/platform';
@@ -50,10 +51,10 @@ const LEVEL_GRADIENTS: Record<string, string> = {
 const DEFAULT_GRADIENT = '#E91E63';
 
 export default function ProfilePage() {
+  const router = useRouter();
   const { user: rawUser, logout } = useAuth();
   const user = rawUser as UserProfile | null;
   const { showToast } = useToast();
-  const [tapCount, setTapCount] = useState(0);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showBunzGuide, setShowBunzGuide] = useState(false);
   const [nextLevelHops, setNextLevelHops] = useState(500);
@@ -76,10 +77,9 @@ export default function ProfilePage() {
   }, [user]);
 
   const handleAvatarTap = () => {
-    const email = (user as any)?.email;
+    const email = user?.email;
     if (email === 'marco@rabbitty.me') {
       setShowAdmin(true);
-      setTapCount(0);
       return;
     }
     showToast('Identidad NFT (Próximamente)', 'info');
@@ -191,54 +191,75 @@ export default function ProfilePage() {
         >
           {(user?.role === 'AFFILIATE' || hasBusiness) ? (
             <>
-              <Link href="/business" className="flex items-center justify-between bg-(--bg-elevated) border border-(--border-subtle) rounded-[14px] p-4 mb-2.5 no-underline active:scale-[0.98] transition-transform shadow-lg">
-                <div>
-                  <p className="text-sm font-extrabold text-(--text-primary) mb-0.5">Portal de Negocio Afiliado</p>
-                  <p className="text-[11px] text-(--text-muted) m-0">Gestiona tu negocio y tasa de Bunz</p>
+              <Link href="/business" className="flex items-center justify-between bg-(--bg-elevated) border border-(--border-subtle) rounded-2xl p-4 mb-2.5 no-underline active:scale-[0.98] transition-transform shadow-lg group">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-lg">
+                    🏢
+                  </div>
+                  <div>
+                    <p className="text-sm font-extrabold text-(--text-primary) mb-0.5">Portal de Negocio Afiliado</p>
+                    <p className="text-[11px] text-(--text-muted) m-0">Gestiona tu negocio y tasa de Bunz</p>
+                  </div>
                 </div>
-                <div className="w-11 h-6 rounded-xl bg-[#E91E63] p-0.5 flex justify-end">
-                  <div className="w-5 h-5 rounded-[10px] bg-white shadow-[0_2px_4px_rgba(0,0,0,0.2)]" />
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-pink-500/15 border border-pink-500/30 text-[#E91E63] text-xs font-bold">
+                  <span>Admin</span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
                 </div>
               </Link>
 
               <button
                 onClick={async () => {
-                  const mod = await import('@twa-dev/sdk');
-                  const app = mod.default;
-                  app.showScanQrPopup({ text: "Escanea el código QR de tu PC" }, (qrText: string) => {
-                    (async () => {
-                      let qrToken = qrText;
-                      if (qrText.includes('qrlogin_')) {
-                        qrToken = qrText.split('qrlogin_')[1].split('&')[0].split('?')[0];
-                      } else if (qrText.startsWith('{')) {
-                        try {
-                          const parsed = JSON.parse(qrText);
-                          if (parsed.token) qrToken = parsed.token;
-                        } catch { /* ignore parse error */ }
-                      }
+                  PlatformBridge.hapticFeedback('light');
+                  if (PlatformBridge.isTelegram()) {
+                    try {
+                      const mod = await import('@twa-dev/sdk');
+                      const app = mod.default;
+                      if (app.showScanQrPopup) {
+                        app.showScanQrPopup({ text: "Escanea el código QR de tu PC" }, (qrText: string) => {
+                          (async () => {
+                            let qrToken = qrText;
+                            if (qrText.includes('qrlogin_')) {
+                              qrToken = qrText.split('qrlogin_')[1].split('&')[0].split('?')[0];
+                            } else if (qrText.startsWith('{')) {
+                              try {
+                                const parsed = JSON.parse(qrText);
+                                if (parsed.token) qrToken = parsed.token;
+                              } catch { /* ignore parse error */ }
+                            }
 
-                      try {
-                        const headers = await PlatformBridge.getAuthHeaders();
-                        const res = await fetch('/api/auth/qr/scan', {
-                          method: 'POST',
-                          headers: { ...headers, 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ qrToken })
+                            try {
+                              const headers = await PlatformBridge.getAuthHeaders();
+                              const res = await fetch('/api/auth/qr/scan', {
+                                method: 'POST',
+                                headers: { ...headers, 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ qrToken })
+                              });
+                              const data = await res.json();
+                              if (data.success) {
+                                if (app.closeScanQrPopup) {
+                                  try { app.closeScanQrPopup(); } catch { /* ignore popup close error */ }
+                                }
+                                showToast("¡Inicio de sesión exitoso en la PC! 🪄", 'success');
+                              } else {
+                                showToast("Error: " + data.error, 'error');
+                              }
+                            } catch {
+                              showToast("Error de conexión", 'error');
+                            }
+                          })();
+                          return true;
                         });
-                        const data = await res.json();
-                        if (data.success) {
-                          if (app.closeScanQrPopup) {
-                            try { app.closeScanQrPopup(); } catch { /* ignore popup close error */ }
-                          }
-                          showToast("¡Inicio de sesión exitoso en la PC! 🪄", 'success');
-                        } else {
-                          showToast("Error: " + data.error, 'error');
-                        }
-                      } catch {
-                        showToast("Error de conexión", 'error');
+                        return;
                       }
-                    })();
-                    return true;
-                  });
+                    } catch {
+                      // Fallback to in-app scanner
+                    }
+                  }
+
+                  // Native app or web browser: navigate directly to /scan
+                  router.push('/scan?flow=pc-login');
                 }}
                 className="block w-full text-left bg-(--bg-elevated) border border-(--border-subtle) rounded-[14px] px-4 py-3 mb-2.5 cursor-pointer active:scale-[0.98] transition-transform"
               >

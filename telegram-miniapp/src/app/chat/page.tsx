@@ -13,7 +13,6 @@ import { PlatformBridge } from '@/lib/platform';
 import { useConvPrefs, setPref, setOrder, type ConvPref } from '@/lib/convPrefs';
 import { Pencil, SquarePen, BellOff, Bell, Archive, ArchiveRestore, Trash2, Pin, PinOff, Search, X, Send, MessageCircle } from 'lucide-react';
 import { GROUPS, openTelegramLink } from '@/components/groups/GroupsStrip';
-import { openBunzy } from '@/lib/bunzyLaunch';
 import { useToast } from '@/contexts/ToastContext';
 
 type Conversation = {
@@ -188,38 +187,67 @@ export default function ChatInboxPage() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
               onClick={() => setDrawerOpen(false)}
-              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 210 }}
+              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(3px)', WebkitBackdropFilter: 'blur(3px)', zIndex: 210 }}
             />
+            {/* Telegram Floating Vertical Docker Sidebar */}
             <motion.aside
-              initial={{ x: '-100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '-100%' }}
-              transition={{ type: 'tween', duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+              initial={{ x: -90, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: -90, opacity: 0 }}
+              transition={{ type: 'spring', damping: 26, stiffness: 320 }}
               style={{
                 position: 'fixed',
-                top: 0,
-                bottom: 0,
-                left: 0,
-                width: 'min(78vw, 320px)',
-                background: 'var(--bg-elevated)',
-                borderRight: '1px solid var(--border-subtle)',
+                top: 'calc(var(--safe-top, 0px) + 54px)',
+                bottom: 'calc(18px + env(safe-area-inset-bottom))',
+                left: 12,
+                width: 74,
+                background: 'rgba(24, 24, 32, 0.94)',
+                backdropFilter: 'blur(24px)',
+                WebkitBackdropFilter: 'blur(24px)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: 24,
                 zIndex: 211,
-                padding: 'calc(var(--safe-top, 0px) + 18px) 14px calc(16px + env(safe-area-inset-bottom))',
+                padding: '12px 6px',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 4,
+                alignItems: 'center',
+                gap: 12,
                 overflowY: 'auto',
-                boxShadow: '10px 0 34px rgba(0,0,0,0.3)',
+                scrollbarWidth: 'none',
+                boxShadow: '0 16px 40px rgba(0,0,0,0.6)',
               }}
+              className="hide-scrollbar"
             >
-              <span style={{ fontSize: 11, fontWeight: 900, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--text-muted)', padding: '0 8px 8px' }}>
-                Comunidades
-              </span>
+              {/* Telegram Hub Header Icon */}
+              <div
+                style={{
+                  width: 44,
+                  height: 32,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderBottom: '1px solid rgba(255,255,255,0.08)',
+                  paddingBottom: 8,
+                  marginBottom: 2,
+                  color: 'rgba(255,255,255,0.4)',
+                }}
+              >
+                <svg width="22" height="16" viewBox="0 0 24 16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                  <rect x="1" y="1" width="22" height="14" rx="4" />
+                  <path d="M7 1v14" />
+                </svg>
+              </div>
+
               {([
-                { id: 'chats', label: 'Chats', icon: null as string | null, color: 'var(--bg-pressed)' },
-                ...GROUPS.map((g) => ({ id: g.id, label: g.name, icon: g.icon as string | null, color: g.color })),
-                { id: 'support', label: 'Soporte', icon: '🛟', color: 'linear-gradient(135deg,#00BCD4 0%,#26C6DA 100%)' },
-                { id: 'promotions', label: 'Promociones', icon: '🎉', color: 'linear-gradient(135deg,#FF9800 0%,#FFB74D 100%)' },
+                { id: 'chats', label: 'All', icon: <MessageCircle size={22} />, color: '#0088CC', isAll: true },
+                ...GROUPS.map((g) => ({
+                  id: g.id,
+                  label: g.badge || g.name.split(' ')[0],
+                  icon: g.icon,
+                  color: g.color,
+                  fullName: g.name,
+                })),
+                { id: 'support', label: 'Ayuda', icon: '🛟', color: '#00BCD4', fullName: 'Soporte' },
               ]).map((item) => {
                 const active = community === item.id;
                 return (
@@ -231,38 +259,78 @@ export default function ChatInboxPage() {
                       setCommunity(item.id);
                       setDrawerOpen(false);
                     }}
-                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: '100%', padding: '10px 4px', background: active ? 'var(--bg-pressed)' : 'transparent', border: 'none', borderRadius: 16, cursor: 'pointer' }}
+                    style={{
+                      position: 'relative',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 4,
+                      width: '100%',
+                      padding: '4px 0',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                    }}
                   >
+                    {/* Active Indicator Bar (Left vertical stripe like Telegram) */}
+                    {active && (
+                      <motion.div
+                        layoutId="docker-active-pill"
+                        style={{
+                          position: 'absolute',
+                          left: -6,
+                          top: 4,
+                          bottom: 18,
+                          width: 4,
+                          borderRadius: '0 4px 4px 0',
+                          background: '#0088CC',
+                          boxShadow: '0 0 10px #0088CC',
+                        }}
+                      />
+                    )}
                     <div
                       style={{
-                        width: 56,
-                        height: 56,
-                        borderRadius: '50%',
-                        background: item.icon ? item.color : 'var(--bg-pressed)',
+                        width: 46,
+                        height: 46,
+                        borderRadius: active ? 16 : 23,
+                        background: active ? (typeof item.icon === 'string' && item.icon === '#' ? '#0088CC' : item.color) : 'rgba(255,255,255,0.08)',
+                        color: active ? '#FFFFFF' : 'rgba(255,255,255,0.7)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: 26,
-                        border: active ? '3px solid #E91E63' : '1px solid var(--border-subtle)',
-                        boxShadow: active ? '0 0 0 3px rgba(233,30,99,0.18)' : 'none',
+                        fontSize: typeof item.icon === 'string' && item.icon.length === 1 ? 19 : 22,
+                        fontWeight: 900,
+                        transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+                        border: active ? '2px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.05)',
+                        boxShadow: active ? `0 4px 16px ${item.color}55` : 'none',
                       }}
                     >
-                      {item.icon || <MessageCircle size={24} style={{ color: 'var(--text-secondary)' }} />}
+                      {item.icon}
                     </div>
-                    <span style={{ fontSize: 11, fontWeight: 800, color: active ? '#E91E63' : 'var(--text-primary)', textAlign: 'center', lineHeight: 1.2 }}>{item.label}</span>
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: active ? 800 : 600,
+                        color: active ? '#FFFFFF' : 'rgba(255,255,255,0.5)',
+                        textAlign: 'center',
+                        lineHeight: 1.1,
+                        maxWidth: 62,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {item.label}
+                    </span>
                   </button>
                 );
               })}
-              <div style={{ flex: 1 }} />
-              <p style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', padding: '8px 6px 0', lineHeight: 1.5, margin: 0 }}>
-                Más comunidades pronto (ej. Promociones).
-              </p>
             </motion.aside>
           </>
         )}
       </AnimatePresence>
 
-      <div style={{ transform: drawerOpen ? 'translateX(min(78vw, 320px))' : 'none', transition: 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)' }}>
+      <div>
       <ProfileSubpageLayout
       title={community === 'chats' ? 'Chats' : (GROUPS.find((g) => g.id === community)?.name || 'Chats')}
       centerTitle
@@ -370,13 +438,13 @@ export default function ChatInboxPage() {
 
         {/* Category Tabs for Affiliates / Business Owners */}
         {hasBusinessConvs && !archived && (
-          <div className="flex gap-2 p-1 rounded-2xl bg-[var(--bg-elevated)] border border-[var(--border-subtle)]">
+          <div className="flex gap-2 p-1 rounded-2xl bg-(--bg-elevated) border border-(--border-subtle)">
             <button
               onClick={() => {
                 PlatformBridge.hapticFeedback('light');
                 setCategory('all');
               }}
-              className={`flex-1 py-2 text-xs font-black rounded-xl border-none cursor-pointer transition-all ${category === 'all' ? 'bg-[#E91E63] text-white shadow-md' : 'bg-transparent text-[var(--text-muted)]'}`}
+              className={`flex-1 py-2 text-xs font-black rounded-xl border-none cursor-pointer transition-all ${category === 'all' ? 'bg-[#E91E63] text-white shadow-md' : 'bg-transparent text-(--text-muted)'}`}
             >
               Mis Chats (Rabbitter)
             </button>
@@ -385,7 +453,7 @@ export default function ChatInboxPage() {
                 PlatformBridge.hapticFeedback('light');
                 setCategory('business');
               }}
-              className={`flex-1 py-2 text-xs font-black rounded-xl border-none cursor-pointer transition-all flex items-center justify-center gap-1.5 ${category === 'business' ? 'bg-[#E91E63] text-white shadow-md' : 'bg-transparent text-[var(--text-muted)]'}`}
+              className={`flex-1 py-2 text-xs font-black rounded-xl border-none cursor-pointer transition-all flex items-center justify-center gap-1.5 ${category === 'business' ? 'bg-[#E91E63] text-white shadow-md' : 'bg-transparent text-(--text-muted)'}`}
             >
               <span>🏪 Mi Negocio</span>
             </button>
@@ -418,7 +486,7 @@ export default function ChatInboxPage() {
                   className="flex items-center gap-4 p-4 rounded-3xl"
                   style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
                 >
-                  <div className="cursor-grab text-[var(--text-muted)] text-lg select-none">⠿</div>
+                  <div className="cursor-grab text-(--text-muted) text-lg select-none">⠿</div>
                   <div className="flex-1 min-w-0">
                     <h3 className="m-0 font-black text-base truncate" style={{ color: 'var(--text-primary)' }}>{conv.targetName}</h3>
                   </div>
@@ -518,25 +586,30 @@ export default function ChatInboxPage() {
             </div>
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: 'var(--text-primary)' }}>{g.name}</h2>
             <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)', maxWidth: 280, lineHeight: 1.5 }}>{g.desc}</p>
-            <span className="text-[10px] font-black tracking-[1px] px-3 py-1 rounded-full" style={{ background: 'rgba(233,30,99,0.12)', color: '#E91E63', border: '1px solid rgba(233,30,99,0.3)' }}>GRUPO OFICIAL</span>
-            <button
-              type="button"
-              onClick={() => { PlatformBridge.hapticFeedback('medium'); openTelegramLink(g.link); }}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-black text-sm"
-              style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)', cursor: 'pointer' }}
-            >
-              <Send size={16} style={{ color: '#229ED9' }} /> Abrir en Telegram
-            </button>
-            <button
-              type="button"
-              onClick={() => { PlatformBridge.hapticFeedback('medium'); openBunzy('Quisiera unirme al grupo ' + g.name); }}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-black text-sm"
-              style={{ background: 'linear-gradient(135deg,#E91E63 0%,#FF4081 100%)', border: 'none', color: '#fff', cursor: 'pointer' }}
-            >
-              <MessageCircle size={16} /> Preguntarle a Bunzy
-            </button>
-            <div className="w-full rounded-2xl border border-dashed px-4 py-5 text-xs" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-              Aquí aparecerá el contenido de {g.name}: anuncios, novedades y nuevas comunidades (ej. Promociones) muy pronto.
+            <div className="w-full flex flex-col gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  PlatformBridge.hapticFeedback('medium');
+                  router.push(`/chat/bot?prefill=${encodeURIComponent('Hola Bunzy, quiero interactuar con la comunidad ' + g.name + ' y obtener soporte in-app.')}`);
+                }}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-black text-sm"
+                style={{ background: 'linear-gradient(135deg,#E91E63 0%,#FF4081 100%)', border: 'none', color: '#fff', cursor: 'pointer', boxShadow: '0 4px 16px rgba(233,30,99,0.3)' }}
+              >
+                <MessageCircle size={17} /> Abrir Chat de Soporte In-App
+              </button>
+              <button
+                type="button"
+                onClick={() => { PlatformBridge.hapticFeedback('medium'); openTelegramLink(g.link); }}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-black text-sm"
+                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)', cursor: 'pointer' }}
+              >
+                <Send size={16} style={{ color: '#229ED9' }} /> Abrir grupo en Telegram
+              </button>
+            </div>
+            <div className="w-full rounded-2xl border border-dashed px-4 py-5 text-xs text-left" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-pressed)', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+              <p style={{ margin: '0 0 6px', fontWeight: 800, color: 'var(--text-primary)' }}>💡 Soporte y Acceso In-App</p>
+              Toda la atención, consultas y soporte técnico de esta comunidad están disponibles directamente dentro de Rabbitty con <strong>Bunzy AI</strong> y el equipo.
             </div>
             <button
               type="button"
@@ -661,6 +734,7 @@ export default function ChatInboxPage() {
                 style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 10, background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', borderRadius: 14 }}
               >
                 <div style={{ width: 42, height: 42, borderRadius: '50%', overflow: 'hidden', background: 'var(--bg-pressed)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   {c.isBot ? '🐰' : c.targetAvatar ? <img src={c.targetAvatar} alt={c.targetName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '💬'}
                 </div>
                 <span style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: 15 }}>{c.targetName}</span>
@@ -779,6 +853,7 @@ function SwipeRow({
             ) : (
               <div className="size-14 rounded-full bg-[#F5F5F5] overflow-hidden shrink-0 border border-[#EBEBEB]">
                 {conv.targetAvatar ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
                   <img src={conv.targetAvatar} alt={conv.targetName} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-2xl">{conv.isBusinessInbox ? '👤' : '💬'}</div>
@@ -815,7 +890,7 @@ function SwipeRow({
             </div>
 
             {!!conv.unreadCount && conv.unreadCount > 0 && (
-              <span className="min-w-[22px] h-[22px] px-1.5 rounded-full flex items-center justify-center text-[11px] font-black text-white shrink-0" style={{ background: '#E91E63' }}>
+              <span className="min-w-5.5 h-5.5 px-1.5 rounded-full flex items-center justify-center text-[11px] font-black text-white shrink-0" style={{ background: '#E91E63' }}>
                 {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
               </span>
             )}

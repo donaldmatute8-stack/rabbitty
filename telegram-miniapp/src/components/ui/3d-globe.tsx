@@ -336,12 +336,13 @@ export function Globe3D({ markers, onMarkerClick, onMarkerHover }: Globe3DProps)
 
       <canvas
         ref={canvasRef}
-        className="pointer-events-none"
+        className="pointer-events-none my-auto"
         style={{
           width: Math.min(dimensions.width, dimensions.height) || '100%',
           height: Math.min(dimensions.width, dimensions.height) || '100%',
           maxWidth: '100%',
           maxHeight: '100%',
+          transform: 'translateY(12px)',
         }}
       />
 
