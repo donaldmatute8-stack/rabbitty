@@ -2,10 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import BottomNav from '@/components/BottomNav';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import EmptyState from '@/components/ui/EmptyState';
-import { useWallet } from '@/contexts/WalletContext';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { PlatformBridge } from '@/lib/platform';
 
@@ -23,58 +21,49 @@ interface TxHistory {
 
 export default function HistoryPage() {
   const [activeFilter, setActiveFilter] = useState('Todos');
-  const [isScrolled, setIsScrolled] = useState(false);
   const [transactions, setTransactions] = useState<TxHistory[]>([]);
-  const [loading, setLoading] = useState(true);
-  const { address } = useWallet();
+  const [loading, setLoading] = useState(false);
   const { user } = useAuth();
 
   useEffect(() => {
-    if (user?.id) {
-      fetchHistory();
-    } else {
-      setLoading(false);
-    }
-  }, [user]);
-
-  const fetchHistory = async () => {
+    let active = true;
     if (!user?.id) return;
-    try {
-      const headers = await PlatformBridge.getAuthHeaders();
-      const res = await fetch(`/api/history`, { headers });
-      const data = await res.json();
-      if (data.success) {
-        setTransactions(data.history);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+
+    // Asynchronously begin fetch and manage loading in microtask / promise resolution
+    Promise.resolve().then(() => {
+      if (active) setLoading(true);
+      return PlatformBridge.getAuthHeaders();
+    })
+      .then((headers) => fetch('/api/history', { headers }))
+      .then((res) => res.json())
+      .then((data) => {
+        if (!active) return;
+        if (data.success && Array.isArray(data.history)) {
+          setTransactions(data.history);
+        }
+      })
+      .catch((err) => {
+        console.error('[History] fetch error:', err);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     import('@twa-dev/sdk').then((mod) => {
       const app = mod.default;
       app.ready();
       app.expand();
-    });
+    }).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    const handleScroll = () => {
-      if (window.scrollY > 20) {
-        setIsScrolled(true);
-      } else {
-        setIsScrolled(false);
-      }
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  const totalEarned = transactions.filter(t => t.type === 'earned').reduce((s, t) => s + parseInt(t.amount.replace('+', '')), 0);
-  const totalSpent = transactions.filter(t => t.type === 'spent').reduce((s, t) => s + parseInt(t.amount.replace('-', '')), 0);
+  const totalEarned = transactions.filter(t => t.type === 'earned').reduce((s, t) => s + parseInt(t.amount.replace('+', '') || '0', 10), 0);
+  const totalSpent = transactions.filter(t => t.type === 'spent').reduce((s, t) => s + parseInt(t.amount.replace('-', '') || '0', 10), 0);
 
   const filteredTransactions = transactions.filter(tx => {
     if (activeFilter === 'Todos') return true;
@@ -118,7 +107,7 @@ export default function HistoryPage() {
 
         {/* Filters */}
         <div className="flex gap-[8px] overflow-x-auto pb-[12px] scrollbar-hide">
-          {FILTERS.map((f, i) => (
+          {FILTERS.map((f) => (
             <button 
               key={f} 
               onClick={() => setActiveFilter(f)}

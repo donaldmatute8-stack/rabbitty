@@ -30,6 +30,10 @@ export default function WalletPage() {
   const [showSend, setShowSend] = useState(false);
   const [sendAmount, setSendAmount] = useState('');
   const [sendStep, setSendStep] = useState(1);
+  const [sendRecipient, setSendRecipient] = useState('');
+  const [sendNote, setSendNote] = useState('');
+  const [sending, setSending] = useState(false);
+  const [idempotencyKey, setIdempotencyKey] = useState('');
 
   // Resolvable P2P handle: @username (preferred, human) or uuid id (always exists).
   const payHandle = user?.username ? `@${user.username}` : (user?.id || '');
@@ -49,8 +53,48 @@ export default function WalletPage() {
   };
 
   useEffect(() => {
-    if (address) fetchHistory();
-  }, [address]);
+    let active = true;
+    if (!user?.id && !address) return;
+
+    Promise.resolve().then(() => {
+      if (active) setHistoryLoading(true);
+      return PlatformBridge.getAuthHeaders();
+    })
+      .then((headers) => fetch('/api/history', { headers }))
+      .then((res) => res.json())
+      .then((data) => {
+        if (!active) return;
+        if (data.success && Array.isArray(data.history)) {
+          setHistory(data.history.slice(0, 5));
+        }
+      })
+      .catch((err) => {
+        console.error('[Wallet] history fetch error:', err);
+      })
+      .finally(() => {
+        if (active) setHistoryLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user?.id, address]);
+
+  const fetchHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch(`/api/history`, { headers });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.history)) {
+        setHistory(data.history.slice(0, 5));
+      }
+    } catch (err) {
+      console.error('[Wallet] history fetch error:', err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
 
   // Prefill P2P recipient when arrived from a scanned "rabbitty://pay?to=..." code.
   useEffect(() => {
@@ -71,22 +115,6 @@ export default function WalletPage() {
     } catch {}
   }, []);
 
-
-  const fetchHistory = async () => {
-    if (!address) return;
-    setHistoryLoading(true);
-    try {
-      const headers = await PlatformBridge.getAuthHeaders();
-      const res = await fetch(`/api/history`, { headers });
-      const data = await res.json();
-      if (data.success) setHistory(data.history.slice(0, 5));
-    } catch (err) {
-      console.error('[Wallet] history fetch error:', err);
-    } finally {
-      setHistoryLoading(false);
-    }
-  };
-
   const handleRefresh = async () => {
     setRefreshing(true);
     await refreshBalance();
@@ -104,11 +132,6 @@ export default function WalletPage() {
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleDateString('es-MX', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-  const [sendRecipient, setSendRecipient] = useState('');
-  const [sendNote, setSendNote] = useState('');
-  const [sending, setSending] = useState(false);
-  const [idempotencyKey, setIdempotencyKey] = useState('');
-
   const handleSend = async () => {
     if (!sendRecipient.trim()) {
       alert('Ingresa el @usuario o ID del destinatario');
@@ -119,7 +142,8 @@ export default function WalletPage() {
       alert('Ingresa una cantidad válida de Bunz');
       return;
     }
-    if (amt > parseInt(balance, 10)) {
+    const currentBal = parseInt(balance, 10);
+    if (!isNaN(currentBal) && amt > currentBal) {
       alert('Saldo insuficiente de Bunz');
       return;
     }
@@ -156,9 +180,10 @@ export default function WalletPage() {
       setSendStep(1);
       setIdempotencyKey('');
       await handleRefresh();
-    } catch (err: any) {
+    } catch (err: unknown) {
       await PlatformBridge.hapticFeedback('error');
-      alert(err.message || 'Error al enviar Bunz');
+      const msg = err instanceof Error ? err.message : 'Error al enviar Bunz';
+      alert(msg);
     } finally {
       setSending(false);
     }
@@ -252,11 +277,9 @@ export default function WalletPage() {
 
         {/* Transaction history */}
         <div className="bg-[#161622] rounded-2xl border border-white/10 p-5 shadow-[0_4px_20px_rgba(0,0,0,0.25)]">
-          <p className="font-extrabold text-white text-[15px] mb-4">Últimas transacciones</p>
+          <p className="font-extrabold text-white text-[15px] mb-4">Últimas transacciones (Ledger)</p>
 
-          {!address ? (
-            <p className="text-center text-white/40 text-[13px] py-4">Conecta tu billetera para ver el historial</p>
-          ) : historyLoading ? (
+          {historyLoading ? (
             <div className="flex flex-col gap-3">
               {[1, 2, 3].map((_, i) => (
                 <div key={i} className="flex items-center justify-between py-2 animate-pulse">
@@ -272,7 +295,7 @@ export default function WalletPage() {
               ))}
             </div>
           ) : history.length === 0 ? (
-            <p className="text-center text-white/40 text-[13px] py-4">Aún no tienes transacciones</p>
+            <p className="text-center text-white/40 text-[13px] py-4">Aún no tienes transacciones en el Ledger</p>
           ) : (
             <div className="flex flex-col">
               {history.map((tx, i) => (

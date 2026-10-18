@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { users, pendingVaults, transactions, ownedBusinesses } from "@/db/schema";
 import { eq, and, gte, sql, or } from "drizzle-orm";
@@ -158,7 +158,7 @@ export async function POST(request: Request) {
           {
             branchId: businessId !== 'unknown' ? businessId : null,
             payerSubjectId: businessId !== 'unknown' ? businessId : 'POS',
-            payeeSubjectId: existingUser.telegramId || existingUser.id,
+            payeeSubjectId: `usr_${existingUser.id}`,
             amount: bunzToMint,
             type: 'EARN',
             referenceId: order_id || txId,
@@ -202,7 +202,7 @@ export async function POST(request: Request) {
       });
     }
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in /api/pos/reward:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
