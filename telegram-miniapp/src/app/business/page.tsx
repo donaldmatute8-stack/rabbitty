@@ -9,18 +9,9 @@ import { PlatformBridge } from '@/lib/platform';
 export default function BusinessPage() {
   const { user } = useAuth();
   const initDataRef = useRef('');
-  const [business, setBusiness] = useState<any>(null);
+  const [business, setBusiness] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (user) {
-      fetchBusiness();
-    }
-    import('@twa-dev/sdk').then(mod => {
-      initDataRef.current = mod.default.initData || '';
-    });
-  }, [user]);
 
   const fetchBusiness = async () => {
     try {
@@ -37,7 +28,17 @@ export default function BusinessPage() {
     }
   };
 
-  const handleCreateBusiness = async (formData: any) => {
+  useEffect(() => {
+    if (user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      void fetchBusiness();
+    }
+    import('@twa-dev/sdk').then(mod => {
+      initDataRef.current = mod.default.initData || '';
+    });
+  }, [user]);
+
+  const handleCreateBusiness = async (formData: Record<string, unknown>) => {
     if (!user) return;
     setSubmitting(true);
     try {
@@ -63,8 +64,8 @@ export default function BusinessPage() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-white">
-        <div className="w-6 h-6 border-2 border-black border-t-transparent rounded-full animate-spin" />
+      <div className="flex h-screen items-center justify-center" style={{ background: 'var(--bg-primary)' }}>
+        <div className="w-7 h-7 border-2 border-[#E91E63]/30 border-t-[#E91E63] rounded-full animate-spin" />
       </div>
     );
   }
