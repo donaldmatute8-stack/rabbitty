@@ -196,12 +196,12 @@ export default function WalletPage() {
         {/* Main balance card */}
         <div style={{
           background: 'linear-gradient(135deg, #0F0F1A 0%, #1A1025 50%, #2A0845 100%)',
-        }} className="rounded-[32px] px-6 py-7 relative overflow-hidden border border-[rgba(255,255,255,0.08)] shadow-[0_20px_60px_rgba(0,0,0,0.4)] text-white">
-          <div className="absolute right-[-20%] top-[-20%] w-[256px] h-[256px] bg-[rgba(233,30,99,0.2)] rounded-full" style={{ filter: 'blur(80px)' }} />
-          <div className="absolute left-[-10%] bottom-[-10%] w-[160px] h-[160px] bg-[rgba(59,130,246,0.15)] rounded-full" style={{ filter: 'blur(60px)' }} />
+        }} className="rounded-4xl px-6 py-7 relative overflow-hidden border border-[rgba(255,255,255,0.08)] shadow-[0_20px_60px_rgba(0,0,0,0.4)] text-white">
+          <div className="absolute right-[-20%] top-[-20%] w-64 h-64 bg-[rgba(233,30,99,0.2)] rounded-full" style={{ filter: 'blur(80px)' }} />
+          <div className="absolute left-[-10%] bottom-[-10%] w-40 h-40 bg-[rgba(59,130,246,0.15)] rounded-full" style={{ filter: 'blur(60px)' }} />
 
           {/* Top row */}
-          <div className="flex justify-between items-center mb-8 relative z-[1]">
+          <div className="flex justify-between items-center mb-8 relative z-1">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-[rgba(255,255,255,0.08)] flex items-center justify-center border border-[rgba(255,255,255,0.05)]">
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
@@ -213,7 +213,7 @@ export default function WalletPage() {
           </div>
 
           {/* Balance */}
-          <div className="relative z-[1] mb-7">
+          <div className="relative z-1 mb-7">
             <p className="text-[rgba(255,255,255,0.5)] text-[11px] font-semibold tracking-widest uppercase mb-2">Balance Disponible</p>
             <div className="flex items-baseline gap-2">
               <h1 className="text-[52px] font-extrabold tracking-tighter leading-none m-0 text-white">{balance}</h1>
@@ -231,7 +231,7 @@ export default function WalletPage() {
 
           {/* Address */}
           {address ? (
-            <div className="relative z-[1] bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.06)] rounded-[20px] p-4 flex items-center justify-between">
+            <div className="relative z-1 bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.06)] rounded-[20px] p-4 flex items-center justify-between">
               <div className="overflow-hidden pr-4">
                 <p className="text-[rgba(255,255,255,0.4)] text-[9px] font-extrabold tracking-widest uppercase mb-1.5">Billetera Conectada</p>
                 <p className="text-[rgba(255,255,255,0.85)] text-[13px] font-mono tracking-wide truncate">
@@ -243,7 +243,7 @@ export default function WalletPage() {
               </button>
             </div>
           ) : (
-            <div className="relative z-[1] bg-[rgba(233,30,99,0.1)] border border-[rgba(233,30,99,0.2)] rounded-[20px] p-4 text-[#F48FB1] text-xs leading-relaxed text-center font-medium">
+            <div className="relative z-1 bg-[rgba(233,30,99,0.1)] border border-[rgba(233,30,99,0.2)] rounded-[20px] p-4 text-[#F48FB1] text-xs leading-relaxed text-center font-medium">
               Tu cuenta está lista para transferir Bunz libremente.
             </div>
           )}
@@ -256,7 +256,7 @@ export default function WalletPage() {
               PlatformBridge.hapticFeedback('light');
               setShowReceive(true);
             }}
-            className="flex-1 max-w-[170px] h-[130px] bg-[#161622] hover:bg-[#1C1C2B] border border-white/10 rounded-2xl p-4 flex flex-col items-center justify-center gap-3 shadow-[0_8px_20px_rgba(0,0,0,0.3)] transition-transform active:scale-95 cursor-pointer"
+            className="flex-1 max-w-42.5 h-32.5 bg-[#161622] hover:bg-[#1C1C2B] border border-white/10 rounded-2xl p-4 flex flex-col items-center justify-center gap-3 shadow-[0_8px_20px_rgba(0,0,0,0.3)] transition-transform active:scale-95 cursor-pointer"
           >
             <div className="w-12 h-12 rounded-full bg-[#3B82F6]/15 border border-[#3B82F6]/30 flex items-center justify-center">
               <ArrowDownLeft size={22} color={'#60A5FA'} strokeWidth={2.5} />
@@ -266,7 +266,7 @@ export default function WalletPage() {
 
           <button
             onClick={() => openSend()}
-            className="flex-1 max-w-[170px] h-[130px] bg-[#161622] hover:bg-[#1C1C2B] border border-white/10 rounded-2xl p-4 flex flex-col items-center justify-center gap-3 shadow-[0_8px_20px_rgba(0,0,0,0.3)] transition-transform active:scale-95 cursor-pointer"
+            className="flex-1 max-w-42.5 h-32.5 bg-[#161622] hover:bg-[#1C1C2B] border border-white/10 rounded-2xl p-4 flex flex-col items-center justify-center gap-3 shadow-[0_8px_20px_rgba(0,0,0,0.3)] transition-transform active:scale-95 cursor-pointer"
           >
             <div className="w-12 h-12 rounded-full bg-[#E91E63]/15 border border-[#E91E63]/30 flex items-center justify-center">
               <ArrowUpRight size={22} color={'#E91E63'} strokeWidth={2.5} />
@@ -327,8 +327,8 @@ export default function WalletPage() {
 
       {/* RECEIVE MODAL */}
       {showReceive && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[rgba(0,0,0,0.7)] backdrop-blur-[8px] p-5">
-          <div className="bg-[#181824] border border-white/10 text-white rounded-2xl w-full max-w-[400px] p-6 relative shadow-2xl">
+        <div className="fixed inset-0 z-9999 flex items-center justify-center bg-[rgba(0,0,0,0.7)] backdrop-blur-sm p-5">
+          <div className="bg-[#181824] border border-white/10 text-white rounded-2xl w-full max-w-100 p-6 relative shadow-2xl">
             <button onClick={() => setShowReceive(false)} className="absolute top-4 right-4 bg-transparent border-0 cursor-pointer text-white/60 hover:text-white">
               <X size={22} />
             </button>
@@ -374,8 +374,8 @@ export default function WalletPage() {
 
       {/* SEND MODAL — flujo conversacional por pasos */}
       {showSend && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[rgba(0,0,0,0.7)] backdrop-blur-[8px] p-5">
-          <div className="bg-[#181824] border border-white/10 text-white rounded-2xl w-full max-w-[400px] p-6 relative shadow-2xl">
+        <div className="fixed inset-0 z-9999 flex items-center justify-center bg-[rgba(0,0,0,0.7)] backdrop-blur-sm p-5">
+          <div className="bg-[#181824] border border-white/10 text-white rounded-2xl w-full max-w-100 p-6 relative shadow-2xl">
             <button onClick={() => { setShowSend(false); setSendStep(1); }} className="absolute top-4 right-4 bg-transparent border-0 cursor-pointer text-white/60 hover:text-white">
               <X size={22} />
             </button>
@@ -485,7 +485,7 @@ export default function WalletPage() {
                     setSendStep(sendStep + 1);
                   }}
                   disabled={(sendStep === 1 && !sendRecipient.trim()) || (sendStep === 2 && (!parseInt(sendAmount, 10) || parseInt(sendAmount, 10) <= 0))}
-                  className="flex-[2] p-3.5 bg-gradient-to-r from-[#E91E63] to-[#FF4081] text-white border-0 rounded-[14px] font-extrabold text-[15px] cursor-pointer shadow-lg shadow-[#E91E63]/30 disabled:opacity-40"
+                  className="flex-2 p-3.5 bg-linear-to-r from-[#E91E63] to-[#FF4081] text-white border-0 rounded-[14px] font-extrabold text-[15px] cursor-pointer shadow-lg shadow-[#E91E63]/30 disabled:opacity-40"
                 >
                   Continuar →
                 </button>
@@ -493,7 +493,7 @@ export default function WalletPage() {
                 <button
                   onClick={handleSend}
                   disabled={sending}
-                  className="flex-[2] p-3.5 bg-gradient-to-r from-[#E91E63] to-[#FF4081] text-white border-0 rounded-[14px] font-extrabold text-[15px] cursor-pointer shadow-lg shadow-[#E91E63]/30 disabled:opacity-50"
+                  className="flex-2 p-3.5 bg-linear-to-r from-[#E91E63] to-[#FF4081] text-white border-0 rounded-[14px] font-extrabold text-[15px] cursor-pointer shadow-lg shadow-[#E91E63]/30 disabled:opacity-50"
                 >
                   {sending ? 'Transfiriendo…' : `Enviar ${sendAmount || '0'} BUNZ 🚀`}
                 </button>

@@ -165,12 +165,12 @@ export async function POST(req: NextRequest) {
       await recordLedgerTransaction(
         {
           payerSubjectId: business.id,
-          payeeSubjectId: customer.telegramId || customer.id,
+          payeeSubjectId: `usr_${customer.id}`,
           amount: bunzReward,
           type: "EARN",
           referenceId: appTx.id,
           idempotencyKey,
-          metadata: { fiatAmount, businessId: business.id },
+          metadata: { fiatAmount, businessId: business.id, customerTelegramId: customer.telegramId },
         },
         tx
       );
@@ -262,8 +262,9 @@ export async function POST(req: NextRequest) {
       bunzRewarded: bunzReward
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[MINT_ERROR]", error);
-    return NextResponse.json({ error: error.message || "Error procesando la recompensa" }, { status: 500 });
+    const msg = error instanceof Error ? error.message : "Error procesando la recompensa";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

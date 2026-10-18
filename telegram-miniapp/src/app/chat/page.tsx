@@ -346,12 +346,29 @@ export default function ChatInboxPage() {
 
   const pickDeviceContacts = async () => {
     PlatformBridge.hapticFeedback('medium');
-    const picker = (navigator as unknown as ContactPickerNav).contacts;
+    const nav = navigator as unknown as ContactPickerNav;
+    const picker = nav?.contacts;
+
     if (!picker || typeof picker.select !== 'function') {
-      showToast('Tu navegador no permite leer contactos. Usa las invitaciones por WhatsApp o Telegram.', 'info');
+      // In iOS Safari or environments without Contacts Picker API:
+      // Show graceful permission prompt & direct share dialog
+      showToast('Para ver contactos, permite el acceso o compárteles enlace directo de invitación', 'info');
+      if (typeof navigator !== 'undefined' && 'share' in navigator) {
+        try {
+          await navigator.share({
+            title: 'Rabbitty',
+            text: inviteText,
+            url: appLink,
+          });
+        } catch {
+          // user cancelled share
+        }
+      }
       return;
     }
+
     try {
+      showToast('Selecciona los contactos de tu agenda para conectar', 'info');
       const res = await picker.select(['name', 'tel'], { multiple: true });
       const mapped = (res || []).flatMap((c) => {
         const name = (c.name && c.name[0]) || 'Contacto';
@@ -359,13 +376,16 @@ export default function ChatInboxPage() {
         return tels.map((tel) => ({ name, tel }));
       });
       if (!mapped.length) {
-        showToast('No se encontraron contactos con teléfono.', 'info');
+        showToast('No se seleccionaron contactos.', 'info');
         return;
       }
-      setPickedContacts(mapped.slice(0, 20));
-      showToast(`${mapped.length} contacto(s) añadido(s) — invítalos a Rabbitty`, 'success');
-    } catch {
-      // canceled
+      setPickedContacts(mapped.slice(0, 30));
+      showToast(`${mapped.length} contacto(s) añadido(s) con éxito`, 'success');
+    } catch (err: unknown) {
+      const errName = err instanceof Error ? err.name : '';
+      if (errName === 'SecurityError') {
+        showToast('Acceso a contactos denegado. Permite el permiso en Ajustes de tu navegador.', 'error');
+      }
     }
   };
 
@@ -649,7 +669,7 @@ export default function ChatInboxPage() {
           title={
             <span className="font-bold text-[17px] tracking-tight text-white">
               {activeTab === 'business'
-                ? '🏪 Mi Negocio'
+                ? 'Mi Negocio'
                 : community === 'chats'
                 ? 'Chats'
                 : GROUPS.find((g) => g.id === community)?.name || 'Chats'}
@@ -673,6 +693,10 @@ export default function ChatInboxPage() {
                   <path d="M1 10.5h9" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
                 </svg>
               </button>
+            </div>
+          }
+          right={
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -680,14 +704,10 @@ export default function ChatInboxPage() {
                   setRevealed(null);
                   setEditMode((v) => !v);
                 }}
-                className="text-white text-[16px] font-normal hover:text-white/80 active:opacity-70 transition-opacity px-1"
+                className="text-white text-[15px] font-normal hover:text-white/80 active:opacity-70 transition-opacity px-1"
               >
                 {editMode ? 'Done' : 'Edit'}
               </button>
-            </div>
-          }
-          right={
-            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -703,7 +723,7 @@ export default function ChatInboxPage() {
           }
         >
           {community === 'chats' ? (
-            <div className="flex flex-col gap-3 pb-28">
+            <div className={`flex flex-col gap-3 pb-28 ${dockPosition === 'top' ? 'pt-16' : ''}`}>
               {/* Telegram Search Bar (Screenshot 1 top bar) */}
               <div
                 onClick={() => {
@@ -875,9 +895,9 @@ export default function ChatInboxPage() {
 
       {/* 2. Floating Dock (Dynamic position: bottom, top, or left lateral) */}
       <div
-        className={`fixed z-40 pointer-events-none transition-all duration-300 ${
+        className={`fixed z-35 pointer-events-none transition-all duration-300 ${
           dockPosition === 'top'
-            ? 'top-[calc(var(--safe-top,0)+60px)] inset-x-0 flex justify-center px-4'
+            ? 'top-[calc(var(--safe-top,0)+62px)] inset-x-0 flex justify-center px-4'
             : dockPosition === 'left'
             ? 'left-3 top-1/2 -translate-y-1/2 flex flex-col'
             : 'bottom-4 inset-x-0 flex justify-center px-4'

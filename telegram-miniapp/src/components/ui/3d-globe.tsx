@@ -334,16 +334,18 @@ export function Globe3D({ markers, onMarkerClick, onMarkerHover }: Globe3DProps)
         }}
       />
 
-      <canvas
-        ref={canvasRef}
-        className="pointer-events-none my-auto"
-        style={{
-          width: Math.min(dimensions.width, dimensions.height) || '100%',
-          height: Math.min(dimensions.width, dimensions.height) || '100%',
-          maxWidth: '100%',
-          maxHeight: '100%',
-        }}
-      />
+      <div className="w-full h-full flex items-center justify-center pointer-events-none pb-12">
+        <canvas
+          ref={canvasRef}
+          className="pointer-events-none"
+          style={{
+            width: Math.min(dimensions.width, dimensions.height) || '100%',
+            height: Math.min(dimensions.width, dimensions.height) || '100%',
+            maxWidth: '100%',
+            maxHeight: '100%',
+          }}
+        />
+      </div>
 
       {/* Zoom controls */}
       <div className="absolute right-4 top-4 z-30 flex flex-col gap-2">
