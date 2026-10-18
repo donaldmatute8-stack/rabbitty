@@ -11,7 +11,29 @@ import useSWR from 'swr';
 import { BusinessCardSkeleton } from '@/components/ui/Skeleton';
 import { PlatformBridge } from '@/lib/platform';
 import { useConvPrefs, setPref, setOrder, type ConvPref } from '@/lib/convPrefs';
-import { Pencil, SquarePen, BellOff, Bell, Archive, ArchiveRestore, Trash2, Pin, PinOff, Search, X, Send, MessageCircle } from 'lucide-react';
+import {
+  SquarePen,
+  BellOff,
+  Bell,
+  Archive,
+  ArchiveRestore,
+  Trash2,
+  Pin,
+  PinOff,
+  Search,
+  X,
+  Send,
+  MessageCircle,
+  Users,
+  Settings,
+  Store,
+  ChevronRight,
+  Camera,
+  Check,
+  Phone,
+  AtSign,
+  Sparkles,
+} from 'lucide-react';
 import { GROUPS, openTelegramLink } from '@/components/groups/GroupsStrip';
 import { useToast } from '@/contexts/ToastContext';
 
@@ -29,6 +51,29 @@ type Conversation = {
   unreadCount?: number;
 };
 
+type OwnedBusiness = {
+  id: string;
+  name: string;
+  category: string;
+  description?: string | null;
+  address: string;
+  logoUrl?: string | null;
+  rewardPercentage?: number;
+};
+
+type UserProfileData = {
+  id: string;
+  username?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  phoneNumber?: string | null;
+  role?: string;
+  totalBunzEarned?: number;
+  visitedBusinesses?: number;
+  hops?: number;
+  ownedBusiness?: OwnedBusiness | null;
+};
+
 const fetcher = async (url: string) => {
   const headers = await PlatformBridge.getAuthHeaders();
   return fetch(url, { headers }).then((res) => res.json());
@@ -37,6 +82,27 @@ const fetcher = async (url: string) => {
 const cleanPreview = (text?: string, type?: string) => {
   if (type === 'AUTO_REPLY') return '🤖 Respuesta automática';
   return (text || '').replace(/\[[A-Z_]+[^\]]*\]/g, '').trim();
+};
+
+const formatTelegramTime = (dateString?: string) => {
+  if (!dateString) return '';
+  const d = new Date(dateString);
+  const now = new Date();
+  const isToday =
+    d.getDate() === now.getDate() &&
+    d.getMonth() === now.getMonth() &&
+    d.getFullYear() === now.getFullYear();
+
+  if (isToday) {
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  const diffDays = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays < 7) {
+    return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()];
+  }
+
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
 
 const OPEN_WIDTH = 174;
@@ -55,10 +121,14 @@ const actionStyleBase: React.CSSProperties = {
 
 const actionLabelStyle: React.CSSProperties = { fontSize: 10, fontWeight: 800, lineHeight: 1.1 };
 
+type BottomDockTab = 'contacts' | 'chats' | 'business' | 'settings' | 'search';
+type SearchCategory = 'Chats' | 'Canales' | 'Apps' | 'Posts' | 'Media';
+
 export default function ChatInboxPage() {
   const { user } = useAuth();
   const router = useRouter();
   const { prefs, order } = useConvPrefs();
+  const { showToast } = useToast();
 
   const { data, isLoading } = useSWR<{ conversations: Conversation[] }>(
     user?.id ? `/api/chat` : null,
@@ -66,7 +136,12 @@ export default function ChatInboxPage() {
     { refreshInterval: 5000 }
   );
 
-  const [category, setCategory] = useState<'all' | 'business'>('all');
+  const { data: profileRes, mutate: mutateProfile } = useSWR<{ profile: UserProfileData }>(
+    user?.id ? `/api/auth/profile` : null,
+    fetcher
+  );
+
+  const [activeTab, setActiveTab] = useState<BottomDockTab>('chats');
   const [archived, setArchived] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [revealed, setRevealed] = useState<string | null>(null);
@@ -82,10 +157,85 @@ export default function ChatInboxPage() {
     }
     return 'vertical';
   });
+
+  const [dockPosition, setDockPosition] = useState<'bottom' | 'top' | 'left'>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('rabbitty_dock_position');
+        if (saved === 'bottom' || saved === 'top' || saved === 'left') return saved;
+      } catch {}
+    }
+    return 'bottom';
+  });
+
+  const changeDockPosition = (pos: 'bottom' | 'top' | 'left') => {
+    PlatformBridge.hapticFeedback('medium');
+    setDockPosition(pos);
+    try {
+      localStorage.setItem('rabbitty_dock_position', pos);
+    } catch {}
+  };
+
   const [community, setCommunity] = useState<'chats' | string>('chats');
-  const [search, setSearch] = useState('');
+
+  // Search Screen State (Screenshot 2)
+  const [searchOverlayOpen, setSearchOverlayOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchFilter, setSearchFilter] = useState<SearchCategory>('Chats');
+  const [recentSearches, setRecentSearches] = useState<Array<{ id: string; name: string; subtitle: string; avatar?: string | null; isBot?: boolean }>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('rabbitty_recent_searches');
+        if (raw) return JSON.parse(raw);
+      } catch {}
+    }
+    return [
+      { id: 'bot', name: "Bunzy AI", subtitle: 'bot', isBot: true },
+      { id: 'recent_support', name: 'Soporte Rabbitty', subtitle: 'canal oficial' },
+    ];
+  });
+
+  // Settings Modal State
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsIdentity, setSettingsIdentity] = useState<'rabbitter' | 'business'>('rabbitter');
+  const [userFirstName, setUserFirstName] = useState('');
+  const [userLastName, setUserLastName] = useState('');
+  const [userUsername, setUserUsername] = useState('');
+  const [userPhone, setUserPhone] = useState('');
+  const [isSavingUser, setIsSavingUser] = useState(false);
+
+  // Business Settings State
+  const [bizName, setBizName] = useState('');
+  const [bizCategory, setBizCategory] = useState('');
+  const [bizDescription, setBizDescription] = useState('');
+  const [bizAddress, setBizAddress] = useState('');
+  const [bizReward, setBizReward] = useState('10');
+  const [isSavingBiz, setIsSavingBiz] = useState(false);
+
+  // Contacts state
   const [pickedContacts, setPickedContacts] = useState<Array<{ name: string; tel: string }>>([]);
-  const { showToast } = useToast();
+  const [contactsModalOpen, setContactsModalOpen] = useState(false);
+  const [contactsSearch, setContactsSearch] = useState('');
+
+  const openSettingsModal = () => {
+    const p = profileRes?.profile;
+    if (p) {
+      setUserFirstName(p.firstName || '');
+      setUserLastName(p.lastName || '');
+      setUserUsername(p.username || '');
+      setUserPhone(p.phoneNumber || '');
+      if (p.ownedBusiness) {
+        const b = p.ownedBusiness;
+        setBizName(b.name || '');
+        setBizCategory(b.category || '');
+        setBizDescription(b.description || '');
+        setBizAddress(b.address || '');
+        setBizReward(String(b.rewardPercentage || 10));
+      }
+    }
+    setSettingsIdentity(activeTab === 'business' ? 'business' : 'rabbitter');
+    setSettingsOpen(true);
+  };
 
   const toggleDockerOrientation = () => {
     PlatformBridge.hapticFeedback('medium');
@@ -100,14 +250,20 @@ export default function ChatInboxPage() {
     () => (data?.conversations ?? []).filter((c) => !prefs[c.id]?.deleted),
     [data, prefs]
   );
-  const hasBusinessConvs = allConversations.some((c) => c.isBusinessInbox);
+
+  const hasBusinessConvs = allConversations.some((c) => c.isBusinessInbox) || !!profileRes?.profile?.ownedBusiness;
+  const isAffiliate = user?.role === 'AFFILIATE' || hasBusinessConvs;
   const archivedCount = allConversations.filter((c) => prefs[c.id]?.archived).length;
+  const totalUnreadCount = useMemo(
+    () => allConversations.reduce((acc, c) => acc + (c.unreadCount || 0), 0),
+    [allConversations]
+  );
 
   const visible = useMemo(() => {
     const list = allConversations.filter((c) => {
       const p = prefs[c.id] || {};
       if (!!p.archived !== archived) return false;
-      if (category === 'business') return !!c.isBusinessInbox;
+      if (activeTab === 'business') return !!c.isBusinessInbox;
       return true;
     });
     return [...list].sort((a, b) => {
@@ -123,7 +279,7 @@ export default function ChatInboxPage() {
       const tb = b.lastMessageTime ? Date.parse(b.lastMessageTime) : 0;
       return tb - ta;
     });
-  }, [allConversations, prefs, order, category, archived]);
+  }, [allConversations, prefs, order, activeTab, archived]);
 
   const contacts = useMemo(() => {
     const seen = new Set<string>();
@@ -133,7 +289,22 @@ export default function ChatInboxPage() {
       return true;
     });
   }, [allConversations]);
-  const filteredContacts = contacts.filter((c) => c.targetName.toLowerCase().includes(search.trim().toLowerCase()));
+
+  const filteredContacts = contacts.filter((c) =>
+    c.targetName.toLowerCase().includes(contactsSearch.trim().toLowerCase())
+  );
+
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return allConversations.filter((c) => {
+      const matchName = c.targetName.toLowerCase().includes(q);
+      const matchMsg = (c.lastMessage || '').toLowerCase().includes(q);
+      if (searchFilter === 'Chats') return matchName || matchMsg;
+      if (searchFilter === 'Apps') return c.isBot;
+      return matchName || matchMsg;
+    });
+  }, [allConversations, searchQuery, searchFilter]);
 
   const handleAction = (id: string, action: 'mute' | 'archive' | 'delete' | 'pin') => {
     PlatformBridge.hapticFeedback('medium');
@@ -151,7 +322,9 @@ export default function ChatInboxPage() {
   };
 
   type DeviceContact = { name?: string[]; tel?: string[] };
-  type ContactPickerNav = { contacts?: { select: (props: string[], opts?: { multiple?: boolean }) => Promise<DeviceContact[]> } };
+  type ContactPickerNav = {
+    contacts?: { select: (props: string[], opts?: { multiple?: boolean }) => Promise<DeviceContact[]> };
+  };
 
   const appLink = typeof window !== 'undefined' ? window.location.origin : '';
   const inviteText = `Únete a Rabbitty 🐰 ${appLink}`;
@@ -165,7 +338,9 @@ export default function ChatInboxPage() {
   };
 
   const openTelegramInvite = () => {
-    const url = `https://t.me/share/url?url=${encodeURIComponent(appLink)}&text=${encodeURIComponent('Únete a Rabbitty 🐰')}`;
+    const url = `https://t.me/share/url?url=${encodeURIComponent(appLink)}&text=${encodeURIComponent(
+      'Únete a Rabbitty 🐰'
+    )}`;
     window.open(url, '_blank');
   };
 
@@ -190,12 +365,89 @@ export default function ChatInboxPage() {
       setPickedContacts(mapped.slice(0, 20));
       showToast(`${mapped.length} contacto(s) añadido(s) — invítalos a Rabbitty`, 'success');
     } catch {
-      // usuario canceló el selector
+      // canceled
+    }
+  };
+
+  const clearRecentSearches = () => {
+    PlatformBridge.hapticFeedback('light');
+    setRecentSearches([]);
+    try {
+      localStorage.removeItem('rabbitty_recent_searches');
+    } catch {}
+  };
+
+  const addRecentSearch = (item: { id: string; name: string; subtitle: string; avatar?: string | null; isBot?: boolean }) => {
+    const next = [item, ...recentSearches.filter((r) => r.id !== item.id)].slice(0, 10);
+    setRecentSearches(next);
+    try {
+      localStorage.setItem('rabbitty_recent_searches', JSON.stringify(next));
+    } catch {}
+  };
+
+  // Save Rabbitter Profile
+  const handleSaveUserProfile = async () => {
+    setIsSavingUser(true);
+    PlatformBridge.hapticFeedback('medium');
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch(`/api/auth/profile`, {
+        method: 'PATCH',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstName: userFirstName,
+          lastName: userLastName,
+          username: userUsername,
+          phoneNumber: userPhone,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || 'Error al guardar perfil', 'error');
+      } else {
+        showToast('Perfil actualizado correctamente', 'success');
+        mutateProfile();
+      }
+    } catch {
+      showToast('Error de conexión', 'error');
+    } finally {
+      setIsSavingUser(false);
+    }
+  };
+
+  // Save Affiliate Business Profile
+  const handleSaveBusinessProfile = async () => {
+    setIsSavingBiz(true);
+    PlatformBridge.hapticFeedback('medium');
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch(`/api/business`, {
+        method: 'PATCH',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: bizName,
+          category: bizCategory,
+          description: bizDescription,
+          address: bizAddress,
+          rewardPercentage: parseInt(bizReward) || 10,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || 'Error al actualizar negocio', 'error');
+      } else {
+        showToast('Perfil de Negocio actualizado', 'success');
+        mutateProfile();
+      }
+    } catch {
+      showToast('Error de conexión', 'error');
+    } finally {
+      setIsSavingBiz(false);
     }
   };
 
   const dockerItems = [
-    { id: 'chats', label: 'All', icon: <MessageCircle size={20} />, color: '#0088CC', isAll: true },
+    { id: 'chats', label: 'All', icon: <MessageCircle size={20} />, color: '#0088CC', isAll: true, fullName: 'Todos los chats' },
     ...GROUPS.map((g) => ({
       id: g.id,
       label: g.badge || g.name.split(' ')[0],
@@ -207,8 +459,8 @@ export default function ChatInboxPage() {
   ];
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden" style={{ background: 'var(--bg-primary)' }}>
-      {/* 1. Lateral Vertical Docker (Empuja contenido, sin backdrop fade, como en screenshots 2 y 3) */}
+    <div className="relative min-h-screen overflow-x-hidden bg-black text-white select-none">
+      {/* 1. Lateral Vertical Docker (Empuja contenido) */}
       <AnimatePresence>
         {drawerOpen && dockerOrientation === 'vertical' && (
           <motion.aside
@@ -219,7 +471,7 @@ export default function ChatInboxPage() {
             style={{
               position: 'fixed',
               top: 'calc(var(--safe-top, 0px) + 54px)',
-              bottom: 'calc(18px + env(safe-area-inset-bottom))',
+              bottom: 'calc(80px + env(safe-area-inset-bottom))',
               left: 10,
               width: 70,
               background: 'rgba(20, 20, 28, 0.96)',
@@ -239,7 +491,6 @@ export default function ChatInboxPage() {
             }}
             className="hide-scrollbar"
           >
-            {/* Docker Orientation Switch Button (Top header icon inside docker) */}
             <button
               type="button"
               onClick={toggleDockerOrientation}
@@ -259,11 +510,10 @@ export default function ChatInboxPage() {
                 color: '#0088CC',
                 cursor: 'pointer',
               }}
-              className="active:scale-90 transition-transform"
             >
-              <svg width="22" height="15" viewBox="0 0 24 16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+              <svg width="18" height="13" viewBox="0 0 24 16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
                 <rect x="1" y="1" width="22" height="14" rx="4" />
-                <path d="M7 1v14" />
+                <path d="M1 6h22" />
               </svg>
             </button>
 
@@ -277,69 +527,26 @@ export default function ChatInboxPage() {
                     PlatformBridge.hapticFeedback('light');
                     setCommunity(item.id);
                   }}
+                  title={item.fullName || item.label}
                   style={{
-                    position: 'relative',
+                    width: 52,
+                    height: 52,
+                    borderRadius: 18,
+                    background: active ? 'rgba(0, 136, 204, 0.22)' : 'rgba(255,255,255,0.05)',
+                    border: active ? '2px solid #0088CC' : '1px solid rgba(255,255,255,0.08)',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
+                    justifyContent: 'center',
                     gap: 3,
-                    width: '100%',
-                    padding: '3px 0',
-                    background: 'transparent',
-                    border: 'none',
+                    color: active ? '#0088CC' : 'rgba(255,255,255,0.7)',
                     cursor: 'pointer',
+                    flexShrink: 0,
                   }}
+                  className="active:scale-95 transition-transform"
                 >
-                  {/* Active Indicator Bar (Left vertical stripe like Telegram) */}
-                  {active && (
-                    <motion.div
-                      layoutId="docker-active-pill"
-                      style={{
-                        position: 'absolute',
-                        left: -4,
-                        top: 4,
-                        bottom: 16,
-                        width: 4,
-                        borderRadius: '0 4px 4px 0',
-                        background: '#0088CC',
-                        boxShadow: '0 0 10px #0088CC',
-                      }}
-                    />
-                  )}
-                  <div
-                    style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: active ? 14 : 22,
-                      background: active ? (typeof item.icon === 'string' && item.icon === '#' ? '#0088CC' : item.color) : 'rgba(255,255,255,0.08)',
-                      color: active ? '#FFFFFF' : 'rgba(255,255,255,0.7)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: typeof item.icon === 'string' && item.icon.length === 1 ? 18 : 20,
-                      fontWeight: 900,
-                      transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
-                      border: active ? '2px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.05)',
-                      boxShadow: active ? `0 4px 16px ${item.color}55` : 'none',
-                    }}
-                  >
-                    {item.icon}
-                  </div>
-                  <span
-                    style={{
-                      fontSize: 10,
-                      fontWeight: active ? 800 : 600,
-                      color: active ? '#FFFFFF' : 'rgba(255,255,255,0.5)',
-                      textAlign: 'center',
-                      lineHeight: 1.1,
-                      maxWidth: 60,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {item.label}
-                  </span>
+                  <span style={{ fontSize: 18, display: 'flex', alignItems: 'center' }}>{item.icon}</span>
+                  <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: -0.2 }}>{item.label}</span>
                 </button>
               );
             })}
@@ -355,7 +562,7 @@ export default function ChatInboxPage() {
         transition={{ type: 'spring', damping: 28, stiffness: 320 }}
         style={{ width: '100%' }}
       >
-        {/* Horizontal Docker Bar (Screenshot 2: Superior/Horizontal docker choice) */}
+        {/* Horizontal Docker Bar */}
         <AnimatePresence>
           {drawerOpen && dockerOrientation === 'horizontal' && (
             <motion.div
@@ -439,354 +646,848 @@ export default function ChatInboxPage() {
         </AnimatePresence>
 
         <ProfileSubpageLayout
-          title={community === 'chats' ? 'Chats' : (GROUPS.find((g) => g.id === community)?.name || 'Chats')}
+          title={
+            <span className="font-bold text-[17px] tracking-tight text-white">
+              {activeTab === 'business'
+                ? '🏪 Mi Negocio'
+                : community === 'chats'
+                ? 'Chats'
+                : GROUPS.find((g) => g.id === community)?.name || 'Chats'}
+            </span>
+          }
           centerTitle
+          hideNav={true}
           left={
-            <button
-              type="button"
-              onClick={() => {
-                PlatformBridge.hapticFeedback('light');
-                setDrawerOpen((v) => !v);
-              }}
-              aria-label="Comunidades"
-              style={{
-                width: 38,
-                height: 38,
-                borderRadius: '50%',
-                border: '1px solid var(--border-subtle)',
-                background: drawerOpen ? 'var(--bg-pressed)' : 'var(--bg-elevated)',
-                color: drawerOpen ? '#0088CC' : 'var(--text-primary)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-              }}
-            >
-              <svg width="18" height="14" viewBox="0 0 18 14" fill="none">
-                <path d="M1 3.5h16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                <path d="M1 10.5h9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-              </svg>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  PlatformBridge.hapticFeedback('light');
+                  setDrawerOpen((v) => !v);
+                }}
+                aria-label="Comunidades"
+                className="w-9 h-9 rounded-full bg-white/5 border border-white/10 text-white flex items-center justify-center active:scale-95 transition-transform"
+              >
+                <svg width="17" height="13" viewBox="0 0 18 14" fill="none">
+                  <path d="M1 3.5h16" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+                  <path d="M1 10.5h9" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  PlatformBridge.hapticFeedback('light');
+                  setRevealed(null);
+                  setEditMode((v) => !v);
+                }}
+                className="text-white text-[16px] font-normal hover:text-white/80 active:opacity-70 transition-opacity px-1"
+              >
+                {editMode ? 'Done' : 'Edit'}
+              </button>
+            </div>
           }
           right={
-        <>
-          <button
-            type="button"
-            onClick={() => {
-              PlatformBridge.hapticFeedback('light');
-              setRevealed(null);
-              setEditMode((v) => !v);
-            }}
-            aria-label={editMode ? 'Listo' : 'Editar'}
-            style={{
-              width: 38,
-              height: 38,
-              borderRadius: '50%',
-              border: '1px solid var(--border-subtle)',
-              background: editMode ? '#E91E63' : 'var(--bg-elevated)',
-              color: editMode ? '#fff' : 'var(--text-primary)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-            }}
-          >
-            {editMode ? <X size={18} /> : <Pencil size={18} />}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              PlatformBridge.hapticFeedback('medium');
-              setNewOpen(true);
-            }}
-            aria-label="Nuevo mensaje"
-            style={{
-              width: 38,
-              height: 38,
-              borderRadius: '50%',
-              border: '1px solid var(--border-subtle)',
-              background: 'var(--bg-elevated)',
-              color: 'var(--text-primary)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-            }}
-          >
-            <SquarePen size={18} />
-          </button>
-        </>
-      }
-    >
-      {community === 'chats' ? (
-      <div className="flex flex-col gap-4">
-
-        {/* Filtro archivados */}
-        {(archived || archivedCount > 0) && (
-          <button
-            type="button"
-            onClick={() => {
-              PlatformBridge.hapticFeedback('light');
-              setArchived((v) => !v);
-              setRevealed(null);
-            }}
-            className="self-start flex items-center gap-2 px-3 py-2 rounded-full text-xs font-black"
-            style={{
-              background: archived ? '#3F51B5' : 'var(--bg-elevated)',
-              color: archived ? '#fff' : 'var(--text-secondary)',
-              border: '1px solid var(--border-subtle)',
-              cursor: 'pointer',
-            }}
-          >
-            {archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
-            {archived ? 'Volver a la bandeja' : `Archivados${archivedCount ? ` (${archivedCount})` : ''}`}
-          </button>
-        )}
-
-        {/* Category Tabs for Affiliates / Business Owners */}
-        {hasBusinessConvs && !archived && (
-          <div className="flex gap-2 p-1 rounded-2xl bg-(--bg-elevated) border border-(--border-subtle)">
-            <button
-              onClick={() => {
-                PlatformBridge.hapticFeedback('light');
-                setCategory('all');
-              }}
-              className={`flex-1 py-2 text-xs font-black rounded-xl border-none cursor-pointer transition-all ${category === 'all' ? 'bg-[#E91E63] text-white shadow-md' : 'bg-transparent text-(--text-muted)'}`}
-            >
-              Mis Chats (Rabbitter)
-            </button>
-            <button
-              onClick={() => {
-                PlatformBridge.hapticFeedback('light');
-                setCategory('business');
-              }}
-              className={`flex-1 py-2 text-xs font-black rounded-xl border-none cursor-pointer transition-all flex items-center justify-center gap-1.5 ${category === 'business' ? 'bg-[#E91E63] text-white shadow-md' : 'bg-transparent text-(--text-muted)'}`}
-            >
-              <span>🏪 Mi Negocio</span>
-            </button>
-          </div>
-        )}
-
-        {isLoading && (
-          <div className="flex flex-col gap-4">
-            <BusinessCardSkeleton />
-            <BusinessCardSkeleton />
-          </div>
-        )}
-
-        {!isLoading && visible.length === 0 && (
-          <div className="p-10 text-center text-[#AAA]">
-            {archived
-              ? 'No tienes chats archivados.'
-              : category === 'business'
-                ? 'No tienes solicitudes de clientes pendientes en tu negocio.'
-                : 'No tienes conversaciones activas. Explora negocios o pregúntale a Bunzy.'}
-          </div>
-        )}
-
-        {/* Modo edición: reordenar/fijar */}
-        {!isLoading && editMode && (
-          <Reorder.Group axis="y" values={visible} onReorder={onReorder} style={{ display: 'flex', flexDirection: 'column', gap: 16, listStyle: 'none', padding: 0, margin: 0 }}>
-            {visible.map((conv) => (
-              <Reorder.Item key={conv.id} value={conv} style={{ listStyle: 'none' }}>
-                <div
-                  className="flex items-center gap-4 p-4 rounded-3xl"
-                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
-                >
-                  <div className="cursor-grab text-(--text-muted) text-lg select-none">⠿</div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="m-0 font-black text-base truncate" style={{ color: 'var(--text-primary)' }}>{conv.targetName}</h3>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      PlatformBridge.hapticFeedback('light');
-                      const p = prefs[conv.id] || {};
-                      setPref(conv.id, { pinned: !p.pinned });
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-black"
-                    style={{
-                      background: prefs[conv.id]?.pinned ? '#E91E63' : 'var(--bg-pressed)',
-                      color: prefs[conv.id]?.pinned ? '#fff' : 'var(--text-muted)',
-                      border: '1px solid var(--border-subtle)',
-                      cursor: 'pointer',
-                      flexShrink: 0,
-                    }}
-                  >
-                    {prefs[conv.id]?.pinned ? <Pin size={14} /> : <PinOff size={14} />}
-                    {prefs[conv.id]?.pinned ? 'Fijado' : 'Fijar'}
-                  </button>
-                </div>
-              </Reorder.Item>
-            ))}
-          </Reorder.Group>
-        )}
-
-        {/* Modo normal: filas con swipe */}
-        {!isLoading && !editMode && (
-          <div className="flex flex-col gap-4">
-            {visible.map((conv) => (
-              <SwipeRow
-                key={conv.id}
-                conv={conv}
-                pref={prefs[conv.id] || {}}
-                revealed={revealed === conv.id}
-                revealedRight={revealedRight === conv.id}
-                onReveal={setRevealed}
-                onRevealRight={setRevealedRight}
-                onAction={handleAction}
-              />
-            ))}
-          </div>
-        )}
-
-      </div>
-      ) : (() => {
-        if (community === 'support') {
-          return (
-            <div className="flex flex-col items-center text-center gap-3 pt-8 pb-6">
-              <div style={{ width: 88, height: 88, borderRadius: '50%', background: 'linear-gradient(135deg,#00BCD4 0%,#26C6DA 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40 }}>🛟</div>
-              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: 'var(--text-primary)' }}>Soporte Rabbitty</h2>
-              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)', maxWidth: 280, lineHeight: 1.5 }}>Centro de tickets, seguimiento y soporte entre usuarios/admins.</p>
-              <button
-                type="button"
-                onClick={() => { PlatformBridge.hapticFeedback('medium'); window.location.href = '/support'; }}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-black text-sm"
-                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)', cursor: 'pointer' }}
-              >
-                Ir a Ayuda y Soporte
-              </button>
-              <button
-                type="button"
-                onClick={() => { PlatformBridge.hapticFeedback('light'); setCommunity('chats'); }}
-                className="text-xs font-black"
-                style={{ background: 'transparent', border: 'none', color: '#E91E63', cursor: 'pointer', padding: 6 }}
-              >
-                ← Volver a mis chats
-              </button>
-            </div>
-          );
-        }
-        if (community === 'promotions') {
-          return (
-            <div className="flex flex-col items-center text-center gap-3 pt-8 pb-6">
-              <div style={{ width: 88, height: 88, borderRadius: '50%', background: 'linear-gradient(135deg,#FF9800 0%,#FFB74D 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40 }}>🎉</div>
-              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: 'var(--text-primary)' }}>Promociones</h2>
-              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)', maxWidth: 280, lineHeight: 1.5 }}>Pronto: promociones, cupones y ofertas exclusivas para Rabbitters.</p>
-              <button
-                type="button"
-                onClick={() => { PlatformBridge.hapticFeedback('light'); setCommunity('chats'); }}
-                className="text-xs font-black"
-                style={{ background: 'transparent', border: 'none', color: '#E91E63', cursor: 'pointer', padding: 6 }}
-              >
-                ← Volver a mis chats
-              </button>
-            </div>
-          );
-        }
-                const g = GROUPS.find((x) => x.id === community);
-        if (!g) return null;
-        return (
-          <div className="flex flex-col items-center text-center gap-3 pt-8 pb-6">
-            <div style={{ width: 88, height: 88, borderRadius: '50%', background: g.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40, border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-sm)' }}>
-              {g.icon}
-            </div>
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: 'var(--text-primary)' }}>{g.name}</h2>
-            <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)', maxWidth: 280, lineHeight: 1.5 }}>{g.desc}</p>
-            <div className="w-full flex flex-col gap-2.5">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => {
                   PlatformBridge.hapticFeedback('medium');
-                  router.push(`/chat/bot?prefill=${encodeURIComponent('Hola Bunzy, quiero interactuar con la comunidad ' + g.name + ' y obtener soporte in-app.')}`);
+                  setNewOpen(true);
                 }}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-black text-sm"
-                style={{ background: 'linear-gradient(135deg,#E91E63 0%,#FF4081 100%)', border: 'none', color: '#fff', cursor: 'pointer', boxShadow: '0 4px 16px rgba(233,30,99,0.3)' }}
+                aria-label="Nuevo mensaje"
+                className="w-9 h-9 rounded-full bg-white/5 border border-white/10 text-white flex items-center justify-center active:scale-95 transition-transform"
               >
-                <MessageCircle size={17} /> Abrir Chat de Soporte In-App
-              </button>
-              <button
-                type="button"
-                onClick={() => { PlatformBridge.hapticFeedback('medium'); openTelegramLink(g.link); }}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-black text-sm"
-                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)', cursor: 'pointer' }}
-              >
-                <Send size={16} style={{ color: '#229ED9' }} /> Abrir grupo en Telegram
+                <SquarePen size={18} />
               </button>
             </div>
-            <div className="w-full rounded-2xl border border-dashed px-4 py-5 text-xs text-left" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-pressed)', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-              <p style={{ margin: '0 0 6px', fontWeight: 800, color: 'var(--text-primary)' }}>💡 Soporte y Acceso In-App</p>
-              Toda la atención, consultas y soporte técnico de esta comunidad están disponibles directamente dentro de Rabbitty con <strong>Bunzy AI</strong> y el equipo.
-            </div>
-            <button
-              type="button"
-              onClick={() => { PlatformBridge.hapticFeedback('light'); setCommunity('chats'); }}
-              className="text-xs font-black"
-              style={{ background: 'transparent', border: 'none', color: '#E91E63', cursor: 'pointer', padding: 6 }}
-            >
-              ← Volver a mis chats
-            </button>
-          </div>
-        );
-      })()}
+          }
+        >
+          {community === 'chats' ? (
+            <div className="flex flex-col gap-3 pb-28">
+              {/* Telegram Search Bar (Screenshot 1 top bar) */}
+              <div
+                onClick={() => {
+                  PlatformBridge.hapticFeedback('light');
+                  setSearchOverlayOpen(true);
+                }}
+                className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-[#1C1C1E] border border-white/5 cursor-pointer active:opacity-80 transition-opacity"
+              >
+                <Search size={16} className="text-[#8E8E93]" />
+                <span className="text-[16px] text-[#8E8E93]">Search</span>
+              </div>
 
+              {/* Filtro archivados */}
+              {(archived || archivedCount > 0) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    PlatformBridge.hapticFeedback('light');
+                    setArchived((v) => !v);
+                    setRevealed(null);
+                  }}
+                  className="self-start flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold"
+                  style={{
+                    background: archived ? '#0088CC' : '#1C1C1E',
+                    color: archived ? '#fff' : '#8E8E93',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+                  {archived ? 'Volver a chats' : `Archivados${archivedCount ? ` (${archivedCount})` : ''}`}
+                </button>
+              )}
+
+              {isLoading && (
+                <div className="flex flex-col gap-2">
+                  <BusinessCardSkeleton />
+                  <BusinessCardSkeleton />
+                  <BusinessCardSkeleton />
+                </div>
+              )}
+
+              {!isLoading && visible.length === 0 && (
+                <div className="py-16 text-center text-[#8E8E93] text-[15px]">
+                  {archived
+                    ? 'No tienes chats archivados.'
+                    : activeTab === 'business'
+                    ? 'No tienes mensajes de clientes en tu negocio aún.'
+                    : 'No tienes conversaciones activas. Inicia una con Bunzy o explora negocios.'}
+                </div>
+              )}
+
+              {/* Modo edición: reordenar/fijar */}
+              {!isLoading && editMode && (
+                <Reorder.Group axis="y" values={visible} onReorder={onReorder} style={{ display: 'flex', flexDirection: 'column', gap: 4, listStyle: 'none', padding: 0, margin: 0 }}>
+                  {visible.map((conv) => (
+                    <Reorder.Item key={conv.id} value={conv} style={{ listStyle: 'none' }}>
+                      <div className="flex items-center gap-3.5 p-3 rounded-2xl bg-[#1C1C1E] border border-white/5">
+                        <div className="cursor-grab text-[#8E8E93] text-lg select-none">⠿</div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="m-0 font-semibold text-[16px] text-white truncate">{conv.targetName}</h3>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            PlatformBridge.hapticFeedback('light');
+                            const p = prefs[conv.id] || {};
+                            setPref(conv.id, { pinned: !p.pinned });
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
+                          style={{
+                            background: prefs[conv.id]?.pinned ? '#0088CC' : 'rgba(255,255,255,0.08)',
+                            color: '#fff',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                          }}
+                        >
+                          {prefs[conv.id]?.pinned ? <Pin size={13} /> : <PinOff size={13} />}
+                          {prefs[conv.id]?.pinned ? 'Fijado' : 'Fijar'}
+                        </button>
+                      </div>
+                    </Reorder.Item>
+                  ))}
+                </Reorder.Group>
+              )}
+
+              {/* Modo normal: Lista estilo Telegram Screenshot 1 */}
+              {!isLoading && !editMode && (
+                <div className="flex flex-col">
+                  {visible.map((conv, idx) => (
+                    <TelegramChatRow
+                      key={conv.id}
+                      conv={conv}
+                      isLast={idx === visible.length - 1}
+                      pref={prefs[conv.id] || {}}
+                      revealed={revealed === conv.id}
+                      revealedRight={revealedRight === conv.id}
+                      onReveal={setRevealed}
+                      onRevealRight={setRevealedRight}
+                      onAction={handleAction}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (() => {
+            if (community === 'support') {
+              return (
+                <div className="flex flex-col items-center text-center gap-3 pt-8 pb-28">
+                  <div style={{ width: 88, height: 88, borderRadius: '50%', background: 'linear-gradient(135deg,#00BCD4 0%,#26C6DA 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40 }}>🛟</div>
+                  <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: '#fff' }}>Soporte Rabbitty</h2>
+                  <p style={{ margin: 0, fontSize: 13, color: '#8E8E93', maxWidth: 280, lineHeight: 1.5 }}>Centro de tickets, seguimiento y soporte entre usuarios/admins.</p>
+                  <button
+                    type="button"
+                    onClick={() => { PlatformBridge.hapticFeedback('medium'); window.location.href = '/support'; }}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm bg-[#1C1C1E] border border-white/10 text-white cursor-pointer"
+                  >
+                    Ir a Ayuda y Soporte
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { PlatformBridge.hapticFeedback('light'); setCommunity('chats'); }}
+                    className="text-xs font-bold text-[#0088CC] cursor-pointer p-2"
+                  >
+                    ← Volver a mis chats
+                  </button>
+                </div>
+              );
+            }
+            const g = GROUPS.find((x) => x.id === community);
+            if (!g) return null;
+            return (
+              <div className="flex flex-col items-center text-center gap-3 pt-8 pb-28">
+                <div style={{ width: 88, height: 88, borderRadius: '50%', background: g.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40, border: '1px solid rgba(255,255,255,0.1)' }}>
+                  {g.icon}
+                </div>
+                <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: '#fff' }}>{g.name}</h2>
+                <p style={{ margin: 0, fontSize: 13, color: '#8E8E93', maxWidth: 280, lineHeight: 1.5 }}>{g.desc}</p>
+                <div className="w-full flex flex-col gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      PlatformBridge.hapticFeedback('medium');
+                      router.push(`/chat/bot?prefill=${encodeURIComponent('Hola Bunzy, quiero soporte de ' + g.name)}`);
+                    }}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm bg-[#0088CC] text-white cursor-pointer shadow-lg"
+                  >
+                    <MessageCircle size={17} /> Abrir Chat de Soporte In-App
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { PlatformBridge.hapticFeedback('medium'); openTelegramLink(g.link); }}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm bg-[#1C1C1E] border border-white/10 text-white cursor-pointer"
+                  >
+                    <Send size={16} style={{ color: '#229ED9' }} /> Abrir grupo en Telegram
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { PlatformBridge.hapticFeedback('light'); setCommunity('chats'); }}
+                  className="text-xs font-bold text-[#0088CC] cursor-pointer p-2"
+                >
+                  ← Volver a mis chats
+                </button>
+              </div>
+            );
+          })()}
         </ProfileSubpageLayout>
       </motion.div>
 
-      <BottomSheet isOpen={newOpen} onClose={() => setNewOpen(false)} title="Nuevo mensaje">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-pressed)', border: '1px solid var(--border-subtle)', borderRadius: 14, padding: '10px 12px' }}>
-            <Search size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+      {/* 2. Floating Dock (Dynamic position: bottom, top, or left lateral) */}
+      <div
+        className={`fixed z-40 pointer-events-none transition-all duration-300 ${
+          dockPosition === 'top'
+            ? 'top-[calc(var(--safe-top,0)+60px)] inset-x-0 flex justify-center px-4'
+            : dockPosition === 'left'
+            ? 'left-3 top-1/2 -translate-y-1/2 flex flex-col'
+            : 'bottom-4 inset-x-0 flex justify-center px-4'
+        }`}
+      >
+        <div
+          className={`pointer-events-auto flex items-center gap-1.5 p-2 rounded-full bg-[#1C1C1E]/92 backdrop-blur-2xl border border-white/10 shadow-[0_16px_36px_rgba(0,0,0,0.65)] ${
+            dockPosition === 'left' ? 'flex-col py-3 px-2 rounded-3xl' : 'px-3 py-2'
+          }`}
+        >
+          {/* Contacts */}
+          <button
+            type="button"
+            onClick={() => {
+              PlatformBridge.hapticFeedback('light');
+              setContactsModalOpen(true);
+            }}
+            className={`flex flex-col items-center justify-center text-[#8E8E93] hover:text-white transition-colors ${
+              dockPosition === 'left' ? 'w-11 py-1.5' : 'w-14 py-1'
+            }`}
+          >
+            <Users size={dockPosition === 'left' ? 19 : 21} />
+            <span className="text-[10px] font-medium mt-1">Contacts</span>
+          </button>
+
+          {/* Chats */}
+          <button
+            type="button"
+            onClick={() => {
+              PlatformBridge.hapticFeedback('light');
+              setActiveTab('chats');
+            }}
+            className={`flex flex-col items-center justify-center relative transition-colors ${
+              dockPosition === 'left' ? 'w-11 py-1.5' : 'w-14 py-1'
+            } ${activeTab === 'chats' ? 'text-[#0088CC]' : 'text-[#8E8E93]'}`}
+          >
+            <div className="relative">
+              <MessageCircle size={dockPosition === 'left' ? 19 : 21} />
+              {totalUnreadCount > 0 && (
+                <span className="absolute -top-1.5 -right-2 min-w-4 h-4 px-1 rounded-full bg-[#FF3B30] text-white text-[9px] font-bold flex items-center justify-center">
+                  {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] font-medium mt-1">Chats</span>
+          </button>
+
+          {/* Mi Negocio (Only for Affiliates / Business Owners) */}
+          {isAffiliate && (
+            <button
+              type="button"
+              onClick={() => {
+                PlatformBridge.hapticFeedback('light');
+                setActiveTab('business');
+              }}
+              className={`flex flex-col items-center justify-center transition-colors ${
+                dockPosition === 'left' ? 'w-11 py-1.5' : 'w-14 py-1'
+              } ${activeTab === 'business' ? 'text-[#0088CC]' : 'text-[#8E8E93]'}`}
+            >
+              <Store size={dockPosition === 'left' ? 19 : 21} />
+              <span className="text-[10px] font-medium mt-1">Negocio</span>
+            </button>
+          )}
+
+          {/* Settings */}
+          <button
+            type="button"
+            onClick={() => {
+              PlatformBridge.hapticFeedback('light');
+              openSettingsModal();
+            }}
+            className={`flex flex-col items-center justify-center text-[#8E8E93] hover:text-white transition-colors relative ${
+              dockPosition === 'left' ? 'w-11 py-1.5' : 'w-14 py-1'
+            }`}
+          >
+            <Settings size={dockPosition === 'left' ? 19 : 21} />
+            <span className="text-[10px] font-medium mt-1">Settings</span>
+          </button>
+
+          {/* Search Button (Opens Screenshot 2 Search Interface) */}
+          <button
+            type="button"
+            onClick={() => {
+              PlatformBridge.hapticFeedback('light');
+              setSearchOverlayOpen(true);
+            }}
+            className={`flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/15 active:scale-95 transition-all ${
+              dockPosition === 'left' ? 'w-9 h-9 mt-1' : 'w-10 h-10 ml-1'
+            }`}
+            aria-label="Buscar"
+          >
+            <Search size={18} />
+          </button>
+        </div>
+      </div>
+
+      {/* 3. Search Fullscreen View (Screenshot 2: Complete Telegram Search Modal) */}
+      <AnimatePresence>
+        {searchOverlayOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 15 }}
+            transition={{ duration: 0.18 }}
+            className="fixed inset-0 z-50 bg-black flex flex-col"
+          >
+            {/* Header: RECENT & Clear button */}
+            <div className="pt-[calc(var(--safe-top,0)+12px)] px-4 pb-2 flex items-center justify-between border-b border-white/5">
+              <span className="text-[12px] font-semibold tracking-wider text-[#8E8E93] uppercase">
+                {searchQuery ? 'Resultados' : 'Recent'}
+              </span>
+              {!searchQuery && recentSearches.length > 0 && (
+                <button
+                  type="button"
+                  onClick={clearRecentSearches}
+                  className="text-[15px] text-[#0088CC] hover:opacity-80 transition-opacity"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            {/* Content: Recent List or Search Results */}
+            <div className="flex-1 overflow-y-auto px-4 py-2">
+              {!searchQuery ? (
+                <div>
+                  {recentSearches.length === 0 ? (
+                    <div className="py-20 text-center text-[#8E8E93] text-sm">
+                      No hay búsquedas recientes
+                    </div>
+                  ) : (
+                    recentSearches.map((item) => (
+                      <div
+                        key={item.id}
+                        onClick={() => {
+                          PlatformBridge.hapticFeedback('light');
+                          setSearchOverlayOpen(false);
+                          router.push(`/chat/${item.id}`);
+                        }}
+                        className="flex items-center gap-3 py-2.5 cursor-pointer active:opacity-75 transition-opacity"
+                      >
+                        <div className="w-11 h-11 rounded-full bg-[#1C1C1E] border border-white/10 flex items-center justify-center text-lg overflow-hidden shrink-0">
+                          {item.isBot ? '🐰' : item.avatar ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={item.avatar} alt={item.name} className="w-full h-full object-cover" />
+                          ) : (
+                            item.name.charAt(0).toUpperCase()
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="m-0 font-medium text-[16px] text-white truncate">{item.name}</p>
+                          <p className="m-0 text-[13px] text-[#8E8E93] truncate">{item.subtitle}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              ) : (
+                <div>
+                  {searchResults.length === 0 ? (
+                    <div className="py-20 text-center text-[#8E8E93] text-sm">
+                      No se encontraron resultados para &ldquo;{searchQuery}&rdquo;
+                    </div>
+                  ) : (
+                    searchResults.map((conv) => (
+                      <div
+                        key={conv.id}
+                        onClick={() => {
+                          addRecentSearch({
+                            id: conv.targetId,
+                            name: conv.targetName,
+                            subtitle: conv.lastMessage || 'Conversación',
+                            avatar: conv.targetAvatar,
+                            isBot: conv.isBot,
+                          });
+                          PlatformBridge.hapticFeedback('light');
+                          setSearchOverlayOpen(false);
+                          router.push(`/chat/${conv.targetId}`);
+                        }}
+                        className="flex items-center gap-3 py-2.5 border-b border-white/5 cursor-pointer active:opacity-75 transition-opacity"
+                      >
+                        <div className="w-11 h-11 rounded-full bg-[#1C1C1E] border border-white/10 flex items-center justify-center text-lg overflow-hidden shrink-0">
+                          {conv.isBot ? '🐰' : conv.targetAvatar ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={conv.targetAvatar} alt={conv.targetName} className="w-full h-full object-cover" />
+                          ) : (
+                            conv.targetName.charAt(0).toUpperCase()
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="m-0 font-medium text-[16px] text-white truncate">{conv.targetName}</p>
+                          <p className="m-0 text-[13px] text-[#8E8E93] truncate">
+                            {cleanPreview(conv.lastMessage, conv.lastMessageType) || 'Sin mensajes'}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Bottom Controls: Filters & Search Input Bar (Screenshot 2 Bottom Bar) */}
+            <div className="p-3 bg-[#0A0A0A] border-t border-white/10 flex flex-col gap-2 pb-[calc(12px+env(safe-area-inset-bottom))]">
+              {/* Filter Pills */}
+              <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
+                {(['Chats', 'Canales', 'Apps', 'Posts', 'Media'] as SearchCategory[]).map((tab) => {
+                  const active = searchFilter === tab;
+                  return (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() => {
+                        PlatformBridge.hapticFeedback('light');
+                        setSearchFilter(tab);
+                      }}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                        active
+                          ? 'bg-[#1C1C1E] text-white border border-white/20'
+                          : 'bg-transparent text-[#8E8E93] hover:text-white'
+                      }`}
+                    >
+                      <span>{tab}</span>
+                      {tab === 'Posts' && (
+                        <span className="bg-[#0088CC] text-white text-[9px] px-1 py-0.2 rounded font-bold uppercase">
+                          NEW
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Search Input Bar with Clear & Cancel X */}
+              <div className="flex items-center gap-2">
+                <div className="flex-1 flex items-center gap-2 px-3.5 py-2.5 rounded-full bg-[#1C1C1E] border border-white/10">
+                  <Search size={18} className="text-[#8E8E93]" />
+                  <input
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search"
+                    autoFocus
+                    className="flex-1 bg-transparent border-none outline-none text-white text-[16px] placeholder-[#8E8E93]"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      className="text-[#8E8E93] hover:text-white p-1"
+                    >
+                      <X size={15} />
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    PlatformBridge.hapticFeedback('light');
+                    setSearchOverlayOpen(false);
+                  }}
+                  className="w-10 h-10 rounded-full bg-[#1C1C1E] border border-white/10 flex items-center justify-center text-white active:scale-90 transition-transform"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 4. Telegram-styled Settings Modal with Dual Identity (Rabbitter vs Mi Negocio) */}
+      <BottomSheet
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        title="Settings"
+      >
+        <div className="flex flex-col gap-4 text-white pb-6">
+          {/* Identity Switcher Tabs (If affiliate / has business) */}
+          {isAffiliate && (
+            <div className="flex p-1 rounded-xl bg-[#1C1C1E] border border-white/10">
+              <button
+                type="button"
+                onClick={() => {
+                  PlatformBridge.hapticFeedback('light');
+                  setSettingsIdentity('rabbitter');
+                }}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg border-none cursor-pointer transition-all ${
+                  settingsIdentity === 'rabbitter' ? 'bg-[#0088CC] text-white shadow' : 'bg-transparent text-[#8E8E93]'
+                }`}
+              >
+                🐰 Perfil Rabbitter
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  PlatformBridge.hapticFeedback('light');
+                  setSettingsIdentity('business');
+                }}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg border-none cursor-pointer transition-all ${
+                  settingsIdentity === 'business' ? 'bg-[#0088CC] text-white shadow' : 'bg-transparent text-[#8E8E93]'
+                }`}
+              >
+                🏪 Mi Negocio
+              </button>
+            </div>
+          )}
+
+          {settingsIdentity === 'rabbitter' ? (
+            /* Rabbitter Profile Settings */
+            <div className="flex flex-col gap-4">
+              {/* Telegram User Card */}
+              <div className="flex items-center gap-3.5 p-3 rounded-2xl bg-[#1C1C1E] border border-white/10">
+                <div className="relative">
+                  <div className="w-16 h-16 rounded-full overflow-hidden bg-linear-to-tr from-pink-500 to-purple-600 flex items-center justify-center text-2xl font-bold border border-white/20">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(
+                        userUsername || userFirstName || 'Rabbitter'
+                      )}&backgroundColor=E91E63`}
+                      alt={userFirstName || 'Usuario'}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[#0088CC] flex items-center justify-center text-white text-xs border border-black shadow">
+                    <Camera size={12} />
+                  </div>
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <h3 className="m-0 text-[18px] font-bold text-white truncate">
+                    {userFirstName} {userLastName}
+                  </h3>
+                  <p className="m-0 text-[13px] text-[#0088CC] truncate">
+                    @{userUsername || 'sin_usuario'}
+                  </p>
+                  <p className="m-0 text-[12px] text-[#8E8E93] truncate">
+                    {userPhone || 'Sin número registrado'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Form fields */}
+              <div className="flex flex-col gap-3">
+                <div>
+                  <label className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider block mb-1">
+                    Nombre
+                  </label>
+                  <input
+                    value={userFirstName}
+                    onChange={(e) => setUserFirstName(e.target.value)}
+                    placeholder="Nombre"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#1C1C1E] border border-white/10 text-white text-[15px] outline-none focus:border-[#0088CC]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider block mb-1">
+                    Apellido
+                  </label>
+                  <input
+                    value={userLastName}
+                    onChange={(e) => setUserLastName(e.target.value)}
+                    placeholder="Apellido"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#1C1C1E] border border-white/10 text-white text-[15px] outline-none focus:border-[#0088CC]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider block mb-1">
+                    Usuario único (@ estilo X/Meta)
+                  </label>
+                  <div className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#1C1C1E] border border-white/10 focus-within:border-[#0088CC]">
+                    <AtSign size={16} className="text-[#8E8E93]" />
+                    <input
+                      value={userUsername}
+                      onChange={(e) => setUserUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                      placeholder="usuario_unico"
+                      className="w-full bg-transparent border-none text-white text-[15px] outline-none"
+                    />
+                  </div>
+                  <span className="text-[11px] text-[#8E8E93] mt-1 block">
+                    Solo letras, números y guiones bajos (mínimo 3 caracteres).
+                  </span>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider block mb-1">
+                    Número (WhatsApp / Móvil)
+                  </label>
+                  <div className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#1C1C1E] border border-white/10 focus-within:border-[#0088CC]">
+                    <Phone size={16} className="text-[#8E8E93]" />
+                    <input
+                      value={userPhone}
+                      onChange={(e) => setUserPhone(e.target.value)}
+                      placeholder="+52 55 1234 5678"
+                      className="w-full bg-transparent border-none text-white text-[15px] outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Dock Position Switcher */}
+                <div>
+                  <label className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider block mb-1">
+                    Posición de la barra de navegación (Dock)
+                  </label>
+                  <div className="flex gap-2 p-1 rounded-xl bg-[#1C1C1E] border border-white/10">
+                    <button
+                      type="button"
+                      onClick={() => changeDockPosition('bottom')}
+                      className={`flex-1 py-2 text-xs font-bold rounded-lg border-none cursor-pointer transition-all ${
+                        dockPosition === 'bottom' ? 'bg-[#0088CC] text-white shadow' : 'bg-transparent text-[#8E8E93]'
+                      }`}
+                    >
+                      👇 Inferior
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => changeDockPosition('top')}
+                      className={`flex-1 py-2 text-xs font-bold rounded-lg border-none cursor-pointer transition-all ${
+                        dockPosition === 'top' ? 'bg-[#0088CC] text-white shadow' : 'bg-transparent text-[#8E8E93]'
+                      }`}
+                    >
+                      👆 Superior
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => changeDockPosition('left')}
+                      className={`flex-1 py-2 text-xs font-bold rounded-lg border-none cursor-pointer transition-all ${
+                        dockPosition === 'left' ? 'bg-[#0088CC] text-white shadow' : 'bg-transparent text-[#8E8E93]'
+                      }`}
+                    >
+                      👈 Lateral
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleSaveUserProfile}
+                disabled={isSavingUser}
+                className="w-full py-3 rounded-xl bg-[#0088CC] hover:bg-[#0088CC]/90 text-white font-bold text-[15px] flex items-center justify-center gap-2 active:scale-98 transition-transform disabled:opacity-50 mt-2"
+              >
+                {isSavingUser ? 'Guardando...' : (
+                  <>
+                    <Check size={18} /> Guardar Perfil
+                  </>
+                )}
+              </button>
+            </div>
+          ) : (
+            /* Affiliate Business Profile Settings */
+            <div className="flex flex-col gap-4">
+              {/* Business Header Card */}
+              <div className="flex items-center gap-3.5 p-3 rounded-2xl bg-[#1C1C1E] border border-white/10">
+                <div className="w-16 h-16 rounded-2xl bg-linear-to-tr from-amber-500 to-orange-600 flex items-center justify-center text-2xl font-bold border border-white/20 shrink-0">
+                  🏪
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="m-0 text-[18px] font-bold text-white truncate">{bizName || 'Mi Negocio'}</h3>
+                  <p className="m-0 text-[13px] text-[#FF8A00] truncate">{bizCategory || 'Categoría no definida'}</p>
+                  <p className="m-0 text-[12px] text-[#8E8E93] truncate">{bizAddress || 'Dirección no definida'}</p>
+                </div>
+              </div>
+
+              {/* Form fields */}
+              <div className="flex flex-col gap-3">
+                <div>
+                  <label className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider block mb-1">
+                    Nombre del Negocio
+                  </label>
+                  <input
+                    value={bizName}
+                    onChange={(e) => setBizName(e.target.value)}
+                    placeholder="Ej. Rabbitty Café"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#1C1C1E] border border-white/10 text-white text-[15px] outline-none focus:border-[#0088CC]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider block mb-1">
+                    Categoría
+                  </label>
+                  <input
+                    value={bizCategory}
+                    onChange={(e) => setBizCategory(e.target.value)}
+                    placeholder="Restaurante / Bar / Gimnasio..."
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#1C1C1E] border border-white/10 text-white text-[15px] outline-none focus:border-[#0088CC]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider block mb-1">
+                    Descripción / Bio del Negocio
+                  </label>
+                  <textarea
+                    value={bizDescription}
+                    onChange={(e) => setBizDescription(e.target.value)}
+                    rows={3}
+                    placeholder="Describe tu negocio a los clientes..."
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#1C1C1E] border border-white/10 text-white text-[15px] outline-none focus:border-[#0088CC] resize-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider block mb-1">
+                    Dirección
+                  </label>
+                  <input
+                    value={bizAddress}
+                    onChange={(e) => setBizAddress(e.target.value)}
+                    placeholder="Calle, número, colonia, ciudad"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#1C1C1E] border border-white/10 text-white text-[15px] outline-none focus:border-[#0088CC]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider block mb-1">
+                    Recompensa Bunz (%)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={bizReward}
+                    onChange={(e) => setBizReward(e.target.value)}
+                    placeholder="10"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#1C1C1E] border border-white/10 text-white text-[15px] outline-none focus:border-[#0088CC]"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleSaveBusinessProfile}
+                disabled={isSavingBiz}
+                className="w-full py-3 rounded-xl bg-[#0088CC] hover:bg-[#0088CC]/90 text-white font-bold text-[15px] flex items-center justify-center gap-2 active:scale-98 transition-transform disabled:opacity-50 mt-2"
+              >
+                {isSavingBiz ? 'Guardando...' : (
+                  <>
+                    <Check size={18} /> Guardar Perfil de Negocio
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+        </div>
+      </BottomSheet>
+
+      {/* 5. Contacts View Modal */}
+      <BottomSheet
+        isOpen={contactsModalOpen}
+        onClose={() => setContactsModalOpen(false)}
+        title="Contacts"
+      >
+        <div className="flex flex-col gap-4 text-white pb-6">
+          <div className="flex items-center gap-2 bg-[#1C1C1E] border border-white/10 rounded-xl px-3 py-2">
+            <Search size={16} className="text-[#8E8E93]" />
             <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar contacto…"
-              style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: 15 }}
+              value={contactsSearch}
+              onChange={(e) => setContactsSearch(e.target.value)}
+              placeholder="Buscar contactos..."
+              className="flex-1 bg-transparent border-none text-white text-[15px] outline-none placeholder-[#8E8E93]"
             />
           </div>
 
           <button
             type="button"
             onClick={pickDeviceContacts}
-            style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: 'var(--bg-pressed)', border: '1px solid var(--border-subtle)', borderRadius: 14, cursor: 'pointer', textAlign: 'left' }}
+            className="flex items-center gap-3 p-3 rounded-xl bg-[#1C1C1E] border border-white/10 text-left hover:bg-white/5 cursor-pointer active:scale-98 transition-all"
           >
-            <span style={{ fontSize: 20, width: 30, textAlign: 'center', flexShrink: 0 }}>📇</span>
-            <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-              <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--text-primary)' }}>Contactos del dispositivo</span>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Permite elegir contactos de tu móvil e invitarlos</span>
-            </span>
+            <span className="text-xl">📇</span>
+            <div className="flex-1 min-w-0">
+              <p className="m-0 font-bold text-[15px] text-white">Contactos del móvil</p>
+              <p className="m-0 text-[12px] text-[#8E8E93]">Seleccionar desde tu agenda e invitar</p>
+            </div>
+            <ChevronRight size={18} className="text-[#8E8E93]" />
           </button>
 
           {pickedContacts.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: '1px', color: 'var(--text-muted)', textTransform: 'uppercase', paddingLeft: 4 }}>
-                Elegidos de tu móvil
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider px-1">
+                Contactos seleccionados
               </span>
               {pickedContacts.map((c, i) => (
                 <div
                   key={`${c.name}-${i}`}
-                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: 'var(--bg-pressed)', borderRadius: 14 }}
+                  className="flex items-center gap-3 p-2.5 rounded-xl bg-[#1C1C1E] border border-white/5"
                 >
-                  <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0, border: '1px solid var(--border-subtle)' }}>
-                    {(c.name || '?').charAt(0).toUpperCase()}
+                  <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center font-bold text-sm">
+                    {c.name.charAt(0).toUpperCase()}
                   </div>
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ display: 'block', fontWeight: 800, fontSize: 14, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
-                    {c.tel && <span style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)' }}>{c.tel}</span>}
-                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="m-0 font-semibold text-[14px] text-white truncate">{c.name}</p>
+                    {c.tel && <p className="m-0 text-[12px] text-[#8E8E93] truncate">{c.tel}</p>}
+                  </div>
                   <button
                     type="button"
                     onClick={() => openWhatsAppInvite(c.tel)}
-                    aria-label={`Invitar a ${c.name} por WhatsApp`}
-                    style={{ width: 34, height: 34, borderRadius: '50%', border: '1px solid #25D366', background: 'rgba(37,211,102,0.12)', color: '#25D366', fontSize: 14, cursor: 'pointer', flexShrink: 0 }}
+                    className="w-8 h-8 rounded-full bg-[#25D366]/15 border border-[#25D366]/30 text-[#25D366] flex items-center justify-center text-xs"
+                    aria-label="WhatsApp"
                   >
                     📱
                   </button>
                   <button
                     type="button"
                     onClick={openTelegramInvite}
-                    aria-label={`Invitar a ${c.name} por Telegram`}
-                    style={{ width: 34, height: 34, borderRadius: '50%', border: '1px solid #229ED9', background: 'rgba(34,158,217,0.12)', color: '#229ED9', fontSize: 14, cursor: 'pointer', flexShrink: 0 }}
+                    className="w-8 h-8 rounded-full bg-[#229ED9]/15 border border-[#229ED9]/30 text-[#229ED9] flex items-center justify-center text-xs"
+                    aria-label="Telegram"
                   >
                     ✈
                   </button>
@@ -795,67 +1496,115 @@ export default function ChatInboxPage() {
             </div>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: '1px', color: 'var(--text-muted)', textTransform: 'uppercase', paddingLeft: 4 }}>
-              Invitar a Rabbitty
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider px-1">
+              Invitar por enlace
             </span>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => openWhatsAppInvite()}
-                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px 0', borderRadius: 14, border: '1px solid #25D366', background: 'rgba(37,211,102,0.1)', color: '#128C4A', fontWeight: 900, fontSize: 13, cursor: 'pointer' }}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#25D366]/15 border border-[#25D366]/30 text-[#25D366] font-bold text-[13px] active:scale-95 transition-transform"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z"/></svg>
-                WhatsApp
+                <span>WhatsApp</span>
               </button>
               <button
                 type="button"
                 onClick={openTelegramInvite}
-                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px 0', borderRadius: 14, border: '1px solid #229ED9', background: 'rgba(34,158,217,0.1)', color: '#229ED9', fontWeight: 900, fontSize: 13, cursor: 'pointer' }}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#229ED9]/15 border border-[#229ED9]/30 text-[#229ED9] font-bold text-[13px] active:scale-95 transition-transform"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
-                Telegram
+                <span>Telegram</span>
               </button>
             </div>
           </div>
 
-          <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: '1px', color: 'var(--text-muted)', textTransform: 'uppercase', paddingLeft: 4 }}>
-            Contactos en Rabbitty
-          </span>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 260, overflowY: 'auto' }}>
-            {filteredContacts.length === 0 && (
-              <p style={{ margin: '8px 0', fontSize: 13, color: 'var(--text-muted)', textAlign: 'center' }}>
-                Sin contactos aún. Comparte tu link o escanea un ticket para conectar.
-              </p>
-            )}
-            {filteredContacts.map((c) => (
-              <button
-                key={c.targetId}
-                type="button"
-                onClick={() => {
-                  PlatformBridge.hapticFeedback('light');
-                  setNewOpen(false);
-                  router.push(`/chat/${c.targetId}`);
-                }}
-                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 10, background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', borderRadius: 14 }}
-              >
-                <div style={{ width: 42, height: 42, borderRadius: '50%', overflow: 'hidden', background: 'var(--bg-pressed)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  {c.isBot ? '🐰' : c.targetAvatar ? <img src={c.targetAvatar} alt={c.targetName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '💬'}
-                </div>
-                <span style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: 15 }}>{c.targetName}</span>
-              </button>
-            ))}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider px-1">
+              Contactos en Rabbitty
+            </span>
+            <div className="flex flex-col gap-1 max-h-60 overflow-y-auto">
+              {filteredContacts.length === 0 ? (
+                <p className="text-center text-[#8E8E93] text-[13px] py-4 m-0">
+                  Sin contactos en tu lista aún.
+                </p>
+              ) : (
+                filteredContacts.map((c) => (
+                  <div
+                    key={c.targetId}
+                    onClick={() => {
+                      PlatformBridge.hapticFeedback('light');
+                      setContactsModalOpen(false);
+                      router.push(`/chat/${c.targetId}`);
+                    }}
+                    className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 cursor-pointer active:opacity-75 transition-opacity"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-[#1C1C1E] border border-white/10 flex items-center justify-center text-base overflow-hidden shrink-0">
+                      {c.isBot ? '🐰' : c.targetAvatar ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={c.targetAvatar} alt={c.targetName} className="w-full h-full object-cover" />
+                      ) : (
+                        c.targetName.charAt(0).toUpperCase()
+                      )}
+                    </div>
+                    <span className="font-semibold text-[15px] text-white truncate flex-1">{c.targetName}</span>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
+        </div>
+      </BottomSheet>
+
+      {/* 6. Nuevo Mensaje Sheet */}
+      <BottomSheet isOpen={newOpen} onClose={() => setNewOpen(false)} title="Nuevo mensaje">
+        <div className="flex flex-col gap-3 pb-6">
+          <button
+            type="button"
+            onClick={() => {
+              PlatformBridge.hapticFeedback('light');
+              setNewOpen(false);
+              router.push('/chat/bot');
+            }}
+            className="flex items-center gap-3 p-3 rounded-2xl bg-[#0088CC]/10 border border-[#0088CC]/20 text-left active:scale-98 transition-all"
+          >
+            <div className="w-11 h-11 rounded-full bg-[#0088CC] flex items-center justify-center text-xl shrink-0">
+              🐰
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="m-0 font-bold text-[15px] text-white flex items-center gap-1.5">
+                Bunzy AI <Sparkles size={14} className="text-[#0088CC]" />
+              </p>
+              <p className="m-0 text-[12px] text-[#8E8E93]">Asistente oficial inteligente de Rabbitty</p>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              PlatformBridge.hapticFeedback('light');
+              setNewOpen(false);
+              setContactsModalOpen(true);
+            }}
+            className="flex items-center gap-3 p-3 rounded-2xl bg-[#1C1C1E] border border-white/10 text-left active:scale-98 transition-all"
+          >
+            <div className="w-11 h-11 rounded-full bg-white/10 flex items-center justify-center text-xl shrink-0">
+              👥
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="m-0 font-bold text-[15px] text-white">Elegir de Contactos</p>
+              <p className="m-0 text-[12px] text-[#8E8E93]">Abrir agenda o buscar rabbitters</p>
+            </div>
+          </button>
         </div>
       </BottomSheet>
     </div>
   );
 }
 
-function SwipeRow({
+// Telegram-styled Chat Row matching Screenshot 1
+function TelegramChatRow({
   conv,
+  isLast,
   pref,
   revealed,
   revealedRight,
@@ -864,6 +1613,7 @@ function SwipeRow({
   onAction,
 }: {
   conv: Conversation;
+  isLast: boolean;
   pref: ConvPref;
   revealed: boolean;
   revealedRight: boolean;
@@ -890,37 +1640,54 @@ function SwipeRow({
   };
 
   return (
-    <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 24 }}>
-      <div style={{ position: 'absolute', inset: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'stretch' }}>
-        <div style={{ display: 'flex', alignItems: 'stretch' }}>
+    <div className="relative overflow-hidden select-none">
+      {/* Swipe Actions Background */}
+      <div className="absolute inset-0 flex justify-between items-stretch">
+        <div className="flex items-stretch">
           <button
             type="button"
             onClick={togglePin}
-            style={{ ...actionStyleBase, background: pref.pinned ? '#E91E63' : '#9C27B0', width: 80 }}
+            style={{ ...actionStyleBase, background: pref.pinned ? '#0088CC' : '#5E5CE6', width: 80 }}
             aria-label={pref.pinned ? 'Desfijar' : 'Fijar'}
           >
             {pref.pinned ? <PinOff size={20} /> : <Pin size={20} />}
             <span style={actionLabelStyle}>{pref.pinned ? 'Desfijar' : 'Fijar'}</span>
           </button>
         </div>
-        <div style={{ display: 'flex', alignItems: 'stretch' }}>
-          <button type="button" onClick={() => onAction(conv.id, 'mute')} style={{ ...actionStyleBase, background: '#607D8B' }} aria-label={pref.muted ? 'Activar notificaciones' : 'Silenciar'}>
+        <div className="flex items-stretch">
+          <button
+            type="button"
+            onClick={() => onAction(conv.id, 'mute')}
+            style={{ ...actionStyleBase, background: '#FF9F0A' }}
+            aria-label={pref.muted ? 'Activar notificaciones' : 'Silenciar'}
+          >
             {pref.muted ? <Bell size={20} /> : <BellOff size={20} />}
-            <span style={actionLabelStyle}>{pref.muted ? 'Activar' : 'Silenciar'}</span>
+            <span style={actionLabelStyle}>{pref.muted ? 'Sonido' : 'Silenciar'}</span>
           </button>
-        <button type="button" onClick={() => onAction(conv.id, 'archive')} style={{ ...actionStyleBase, background: '#3F51B5' }} aria-label={pref.archived ? 'Desarchivar' : 'Archivar'}>
-          {pref.archived ? <ArchiveRestore size={20} /> : <Archive size={20} />}
-          <span style={actionLabelStyle}>{pref.archived ? 'Desarchivar' : 'Archivar'}</span>
-        </button>
-        <button type="button" onClick={() => onAction(conv.id, 'delete')} style={{ ...actionStyleBase, background: '#E53935' }} aria-label="Eliminar">
-          <Trash2 size={20} />
-          <span style={actionLabelStyle}>Eliminar</span>
-        </button>
+          <button
+            type="button"
+            onClick={() => onAction(conv.id, 'archive')}
+            style={{ ...actionStyleBase, background: '#64D2FF' }}
+            aria-label={pref.archived ? 'Desarchivar' : 'Archivar'}
+          >
+            {pref.archived ? <ArchiveRestore size={20} /> : <Archive size={20} />}
+            <span style={actionLabelStyle}>{pref.archived ? 'Desarchivar' : 'Archivar'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onAction(conv.id, 'delete')}
+            style={{ ...actionStyleBase, background: '#FF453A' }}
+            aria-label="Eliminar"
+          >
+            <Trash2 size={20} />
+            <span style={actionLabelStyle}>Eliminar</span>
+          </button>
         </div>
       </div>
 
+      {/* Row Front Item */}
       <motion.div
-        style={{ x, position: 'relative', zIndex: 1, background: 'var(--bg-primary)' }}
+        style={{ x }}
         drag="x"
         dragConstraints={{ left: -OPEN_WIDTH, right: 80 }}
         dragElastic={0.06}
@@ -939,69 +1706,68 @@ function SwipeRow({
             close();
           }
         }}
+        className="relative z-10 bg-black"
       >
         <Link
           href={`/chat/${conv.targetId}${conv.id && conv.id !== 'bunzy-initial' ? `?c=${conv.id}` : ''}`}
           className="no-underline block"
           onClick={(e) => {
-            if (revealed) {
+            if (revealed || revealedRight) {
               e.preventDefault();
               close();
             }
           }}
         >
-          <motion.div
-            whileTap={{ scale: 0.98 }}
-            className="flex items-center gap-4 p-4 rounded-3xl"
-            style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-sm)' }}
-          >
-            {conv.isBot ? (
-              <div className="size-14 rounded-full bg-[#E91E63] flex items-center justify-center text-2xl shadow-[0_0_16px_rgba(233,30,99,0.3)] shrink-0">🐰</div>
-            ) : (
-              <div className="size-14 rounded-full bg-[#F5F5F5] overflow-hidden shrink-0 border border-[#EBEBEB]">
-                {conv.targetAvatar ? (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img src={conv.targetAvatar} alt={conv.targetName} className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-2xl">{conv.isBusinessInbox ? '👤' : '💬'}</div>
-                )}
-              </div>
-            )}
-
-            <div className="flex-1 min-w-0">
-              <div className="flex justify-between items-center mb-1">
-                <div className="flex items-center gap-2 truncate">
-                  <h3 className="m-0 font-black text-base truncate" style={{ color: 'var(--text-primary)' }}>
-                    {conv.targetName}
-                  </h3>
-                  {pref.pinned && <Pin size={13} style={{ color: '#E91E63', flexShrink: 0 }} />}
-                  {pref.muted && <BellOff size={13} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />}
+          <div className="flex items-center gap-3 px-1 py-2 active:bg-[#1C1C1E]/60 transition-colors">
+            {/* Telegram Circular Avatar */}
+            <div className="w-13 h-13 rounded-full overflow-hidden bg-[#2C2C2E] flex items-center justify-center shrink-0 border border-white/5">
+              {conv.isBot ? (
+                <div className="w-full h-full bg-linear-to-tr from-pink-500 to-rose-600 flex items-center justify-center text-2xl">
+                  🐰
                 </div>
-                {conv.isBot ? (
-                  <span className="text-[10px] font-black text-[#E91E63] bg-[rgba(233,30,99,0.1)] px-2 py-0.5 rounded-full uppercase shrink-0">Oficial</span>
-                ) : conv.lastMessageTime ? (
-                  <span className="text-[11px] font-semibold shrink-0" style={{ color: 'var(--text-muted)' }}>
-                    {new Date(conv.lastMessageTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                ) : null}
-              </div>
-              <p
-                className="m-0 text-[13px] truncate"
-                style={{
-                  color: (conv.unreadCount || 0) > 0 ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  fontWeight: (conv.unreadCount || 0) > 0 ? 700 : 400,
-                }}
-              >
-                {cleanPreview(conv.lastMessage, conv.lastMessageType) || 'Sin mensajes aún'}
-              </p>
+              ) : conv.targetAvatar ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={conv.targetAvatar} alt={conv.targetName} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-linear-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg">
+                  {conv.targetName.charAt(0).toUpperCase()}
+                </div>
+              )}
             </div>
 
-            {!!conv.unreadCount && conv.unreadCount > 0 && (
-              <span className="min-w-5.5 h-5.5 px-1.5 rounded-full flex items-center justify-center text-[11px] font-black text-white shrink-0" style={{ background: '#E91E63' }}>
-                {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
-              </span>
-            )}
-          </motion.div>
+            {/* Telegram Info + Divider Line */}
+            <div className={`flex-1 min-w-0 py-1.5 ${!isLast ? 'border-b border-[#2C2C2E]' : ''}`}>
+              <div className="flex justify-between items-baseline mb-0.5">
+                <div className="flex items-center gap-1.5 truncate">
+                  <h3 className="m-0 font-semibold text-[16px] text-white truncate leading-tight">
+                    {conv.targetName}
+                  </h3>
+                  {pref.muted && <BellOff size={12} className="text-[#8E8E93] shrink-0" />}
+                </div>
+
+                <div className="flex items-center gap-1 shrink-0 ml-2">
+                  {conv.lastMessageTime && (
+                    <span className="text-[12px] text-[#8E8E93]">
+                      {formatTelegramTime(conv.lastMessageTime)}
+                    </span>
+                  )}
+                  {pref.pinned && <Pin size={12} className="text-[#8E8E93] ml-0.5 shrink-0" />}
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center gap-2">
+                <p className="m-0 text-[14px] text-[#8E8E93] truncate leading-normal">
+                  {cleanPreview(conv.lastMessage, conv.lastMessageType) || 'Sin mensajes aún'}
+                </p>
+
+                {!!conv.unreadCount && conv.unreadCount > 0 && (
+                  <span className="min-w-5 h-5 px-1.5 rounded-full bg-[#0088CC] text-white text-[11px] font-bold flex items-center justify-center shrink-0">
+                    {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
         </Link>
       </motion.div>
     </div>
