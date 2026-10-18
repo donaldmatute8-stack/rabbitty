@@ -8,6 +8,7 @@ import { PlatformBridge } from '@/lib/platform';
 import { useTheme } from '@/contexts/ThemeContext';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { QRCodeSVG } from 'qrcode.react';
+import { useToast } from '@/contexts/ToastContext';
 
 interface BusinessCard {
   kind?: 'BUSINESS';
@@ -171,7 +172,10 @@ export default function ChatRoomPage() {
   const [recordDuration, setRecordDuration] = useState(0);
   const recordIntervalRef = useRef<number | null>(null);
   const [replyTo, setReplyTo] = useState<{ id: string; text: string; sender?: 'user' | 'assistant' | 'bot' } | null>(null);
+  const { showToast } = useToast();
   const [contextMsg, setContextMsg] = useState<string | null>(null);
+  const voiceBlobCacheRef = useRef<Record<string, string>>({});
+  const [voiceSrcMap, setVoiceSrcMap] = useState<Record<string, string>>({});
   const [reactionsOpen, setReactionsOpen] = useState<string | null>(null);
   const [targetInfoOpen, setTargetInfoOpen] = useState(false);
   const [msgReactions, setMsgReactions] = useState<Record<string, string>>({});
@@ -182,6 +186,46 @@ export default function ChatRoomPage() {
   const [forwardList, setForwardList] = useState<ForwardConversation[] | null>(null);
   const [forwardLoading, setForwardLoading] = useState(false);
   const longPressTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const cache = voiceBlobCacheRef.current;
+    return () => {
+      Object.values(cache).forEach((u) => {
+        try { URL.revokeObjectURL(u); } catch { /* noop */ }
+      });
+      Object.keys(cache).forEach((k) => delete cache[k]);
+    };
+  }, []);
+
+  useEffect(() => {
+    const created: Record<string, string> = {};
+    for (const msg of messages) {
+      const meta = msg.metadata && typeof msg.metadata === 'object' ? (msg.metadata as Record<string, unknown>) : null;
+      if (!meta || meta.kind !== 'VOICE') continue;
+      if (typeof meta.voiceUrl === 'string' && meta.voiceUrl) continue;
+      const data = typeof meta.voiceDataUrl === 'string' && meta.voiceDataUrl ? meta.voiceDataUrl : null;
+      if (!data) continue;
+      const key = msg.id || `${data.length}:${data.slice(-48)}`;
+      if (voiceBlobCacheRef.current[key]) continue;
+      try {
+        const comma = data.indexOf(',');
+        const header = comma >= 0 ? data.slice(0, comma) : '';
+        const mimeMatch = /^data:([^;,]+)/.exec(header);
+        const mime = (mimeMatch && mimeMatch[1]) || 'audio/webm';
+        const body = comma >= 0 ? data.slice(comma + 1) : data;
+        const isB64 = header.includes(';base64');
+        const bin = isB64 ? atob(body) : decodeURIComponent(body);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const blobUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
+        voiceBlobCacheRef.current[key] = blobUrl;
+        created[key] = blobUrl;
+      } catch { /* fallback: se queda sin audio */ }
+    }
+    if (Object.keys(created).length > 0) {
+      queueMicrotask(() => setVoiceSrcMap((prev) => ({ ...prev, ...created })));
+    }
+  }, [messages]);
   const recordStartRef = useRef(0);
   const recordingCancelledRef = useRef(false);
 
@@ -570,36 +614,68 @@ export default function ChatRoomPage() {
     router.push('/chat/bot?prefill=' + encodeURIComponent(`Reportar mensaje: ${msg.content.slice(0, 160)}`));
   };
 
+  const pickRecorderMime = (): string => {
+    if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') return '';
+    const candidates = ['audio/mp4', 'audio/mp4;codecs=mp4a.40.2', 'audio/webm;codecs=opus', 'audio/webm'];
+    for (const c of candidates) {
+      try {
+        if (MediaRecorder.isTypeSupported(c)) return c;
+      } catch { /* siguiente */ }
+    }
+    return '';
+  };
+
   const startRecording = async () => {
     if (recording || sending) return;
     try {
+      if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+        PlatformBridge.hapticFeedback('error');
+        showToast('El micrófono no está disponible en este contexto', 'error');
+        return;
+      }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mime = typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
-      const mr = new MediaRecorder(stream, mime ? { mimeType: mime, audioBitsPerSecond: 32000 } : undefined);
+      const mime = pickRecorderMime();
+      let mr: MediaRecorder;
+      try {
+        mr = new MediaRecorder(stream, mime ? { mimeType: mime, audioBitsPerSecond: 24000 } : undefined);
+      } catch {
+        mr = new MediaRecorder(stream);
+      }
       audioChunksRef.current = [];
       recordingCancelledRef.current = false;
       mr.ondataavailable = (e) => {
-        if (e.data.size) audioChunksRef.current.push(e.data);
+        if (e.data && e.data.size) audioChunksRef.current.push(e.data);
       };
       mr.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
-        const cancelled = recordingCancelledRef.current;
-        const durationMs = Math.max(500, performance.now() - (recordStartRef.current || performance.now() - 1000));
-        mediaRecorderRef.current = null;
-        setRecording(false);
-        if (cancelled || !audioChunksRef.current.length) return;
-        const blob = new Blob(audioChunksRef.current, { type: mr.mimeType || 'audio/webm' });
-        audioChunksRef.current = [];
-        const dataUrl = await new Promise<string>((resolve) => {
-          const fr = new FileReader();
-          fr.onload = () => resolve(String(fr.result));
-          fr.readAsDataURL(blob);
-        });
-        if (!dataUrl || dataUrl.length > 2_700_000) {
+        try {
+          const cancelled = recordingCancelledRef.current;
+          const durationMs = Math.max(500, performance.now() - (recordStartRef.current || performance.now() - 1000));
+          mediaRecorderRef.current = null;
+          setRecording(false);
+          if (cancelled || !audioChunksRef.current.length) return;
+          const blob = new Blob(audioChunksRef.current, { type: mr.mimeType || mime || 'audio/webm' });
+          audioChunksRef.current = [];
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            const fr = new FileReader();
+            fr.onload = () => resolve(String(fr.result));
+            fr.onerror = () => reject(new Error('read-failed'));
+            fr.readAsDataURL(blob);
+          });
+          if (!dataUrl || dataUrl.length > 1_500_000) {
+            PlatformBridge.hapticFeedback('error');
+            showToast('Nota de voz demasiado larga', 'error');
+            return;
+          }
+          sendVoiceNote(dataUrl, durationMs);
+        } catch {
+          mediaRecorderRef.current = null;
+          setRecording(false);
           PlatformBridge.hapticFeedback('error');
-          return;
+        } finally {
+          stream.getTracks().forEach((t) => {
+            try { t.stop(); } catch { /* noop */ }
+          });
         }
-        sendVoiceNote(dataUrl, durationMs);
       };
       mr.onstart = () => {
         recordStartRef.current = performance.now();
@@ -617,6 +693,7 @@ export default function ChatRoomPage() {
       }, 1000);
     } catch {
       PlatformBridge.hapticFeedback('error');
+      showToast('No se pudo acceder al micrófono', 'error');
     }
   };
 
@@ -659,7 +736,10 @@ export default function ChatRoomPage() {
           body: JSON.stringify({ conversationId, targetId, content: '🎤 Nota de voz', type: 'VOICE', metadata: meta }),
         }),
       )
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`http-${r.status}`);
+        return r.json();
+      })
       .then((data) => {
         if (data?.success && data.message) {
           setMessages((prev) => prev.map((m) => (m.id === tempId ? (data.message as Message) : m)));
@@ -894,13 +974,28 @@ export default function ChatRoomPage() {
 
     if (meta && typeof meta === 'object' && 'kind' in meta) {
       const m = meta as Record<string, unknown>;
-      const src = (typeof m.voiceDataUrl === 'string' && m.voiceDataUrl) || (typeof m.voiceUrl === 'string' && m.voiceUrl);
-      if (m.kind === 'VOICE' && src) {
+      if (m.kind === 'VOICE') {
+        const src =
+          (typeof m.voiceUrl === 'string' && m.voiceUrl) ||
+          (msg.id && voiceSrcMap[msg.id]) ||
+          null;
         const dur = typeof m.durationMs === 'number' ? m.durationMs : 0;
+        if (!src) {
+          return <span style={{ fontSize: 13, fontWeight: 700, opacity: 0.85 }}>🎤 Nota de voz</span>;
+        }
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <span style={{ fontSize: 13, fontWeight: 700, opacity: 0.85 }}>🎤 Nota de voz{dur ? ` · ${Math.max(1, Math.round(dur / 1000))}s` : ''}</span>
-            <audio controls preload="metadata" src={src} style={{ width: 220, maxWidth: '100%', height: 36 }} />
+            <audio
+              controls
+              preload="metadata"
+              src={src}
+              style={{ width: 220, maxWidth: '100%', height: 36 }}
+              onError={(e) => {
+                const el = e.currentTarget;
+                el.style.display = 'none';
+              }}
+            />
           </div>
         );
       }
@@ -1032,6 +1127,59 @@ export default function ChatRoomPage() {
             {isBot ? '🐰' : targetAvatar ? <img src={targetAvatar} alt={targetName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '💬'}
           </div>
         </button>
+        {selectMode && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              zIndex: 10,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 14,
+              padding: 'calc(var(--safe-top, 0px) + 8px) 16px 8px',
+              background: 'var(--bg-elevated)',
+              borderBottom: '1px solid var(--border-subtle)',
+            }}
+          >
+            <button
+              type="button"
+              onClick={exitSelect}
+              aria-label="Cancelar selección"
+              style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-primary)' }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              <span style={{ fontSize: 15, fontWeight: 900 }}>{selectedIds.length}</span>
+            </button>
+            <div style={{ flex: 1 }} />
+            <button
+              type="button"
+              onClick={() => copyText(messages.filter((m) => selectedIds.includes(m.id)).map((m) => m.content).join('\n'))}
+              disabled={!selectedIds.length}
+              aria-label="Copiar"
+              style={{ background: 'transparent', border: 'none', cursor: selectedIds.length ? 'pointer' : 'not-allowed', padding: 0, fontSize: 17, opacity: selectedIds.length ? 1 : 0.4 }}
+            >
+              📋
+            </button>
+            <button
+              type="button"
+              onClick={() => openForward(messages.filter((m) => selectedIds.includes(m.id)).map((m) => m.content))}
+              disabled={!selectedIds.length}
+              aria-label="Reenviar"
+              style={{ background: 'transparent', border: 'none', cursor: selectedIds.length ? 'pointer' : 'not-allowed', padding: 0, fontSize: 17, opacity: selectedIds.length ? 1 : 0.4 }}
+            >
+              ↪️
+            </button>
+            <button
+              type="button"
+              onClick={() => { removeMessages(selectedIds); exitSelect(); }}
+              disabled={!selectedIds.length}
+              aria-label="Eliminar"
+              style={{ background: 'transparent', border: 'none', cursor: selectedIds.length ? 'pointer' : 'not-allowed', padding: 0, fontSize: 17, opacity: selectedIds.length ? 1 : 0.4 }}
+            >
+              🗑️
+            </button>
+          </div>
+        )}
       </header>
 
       <BottomSheet isOpen={targetInfoOpen} onClose={() => setTargetInfoOpen(false)} title="Contacto">
@@ -1061,7 +1209,7 @@ export default function ChatRoomPage() {
           return (
             <div
               onClick={() => setReplyTo({ id: pm.id, text: (pm.content || '').slice(0, 120), sender: pm.senderId === myParticipantId ? 'user' : 'assistant' })}
-              style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderLeft: '3px solid #E91E63', borderRadius: 12, padding: '8px 12px', cursor: 'pointer', order: -1 }}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderLeft: '3px solid #E91E63', borderRadius: 12, padding: '8px 12px', cursor: 'pointer', order: -1, position: 'sticky', top: 0, zIndex: 30, boxShadow: 'var(--shadow-sm)' }}
             >
               <span style={{ fontSize: 14, flexShrink: 0 }}>📌</span>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -1106,13 +1254,6 @@ export default function ChatRoomPage() {
                 key={msg.id || idx}
                 style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start', width: '100%', position: 'relative' }}
               >
-                <div style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', opacity: 0.4, pointerEvents: 'none', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-muted)', fontWeight: 800 }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                </div>
-                <div style={{ position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)', opacity: 0.4, pointerEvents: 'none', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-muted)', fontWeight: 800 }}>
-                  Volver
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 14 4 9l5-5"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
-                </div>
                 <motion.div
                   drag={selectMode ? false : 'x'}
                   dragSnapToOrigin
@@ -1120,12 +1261,9 @@ export default function ChatRoomPage() {
                   dragElastic={0.2}
                   dragDirectionLock
                   onDragEnd={(_, info) => {
-                    if (info.offset.x < -60) {
+                    if (info.offset.x > 60) {
                       PlatformBridge.hapticFeedback('light');
                       setReplyTo({ id: msg.id, text: (msg.content || '').slice(0, 120), sender: isMe ? 'user' : 'assistant' });
-                    } else if (info.offset.x > 60) {
-                      PlatformBridge.hapticFeedback('medium');
-                      router.back();
                     }
                   }}
                   onPointerDown={() => {
@@ -1375,18 +1513,6 @@ export default function ChatRoomPage() {
           </div>
         )}
 
-        {selectMode && (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', width: '100%' }}>
-            <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-              {selectedIds.length} sel.
-            </span>
-            <button type="button" onClick={() => copyText(messages.filter((m) => selectedIds.includes(m.id)).map((m) => m.content).join('\n'))} disabled={!selectedIds.length} style={{ flex: 1, border: '1px solid var(--border-subtle)', background: 'var(--bg-pressed)', color: 'var(--text-primary)', borderRadius: 100, padding: '11px 0', fontSize: 13, fontWeight: 800, cursor: selectedIds.length ? 'pointer' : 'not-allowed', opacity: selectedIds.length ? 1 : 0.5 }}>📋 Copiar</button>
-            <button type="button" onClick={() => openForward(messages.filter((m) => selectedIds.includes(m.id)).map((m) => m.content))} disabled={!selectedIds.length} style={{ flex: 1, border: '1px solid var(--border-subtle)', background: 'var(--bg-pressed)', color: 'var(--text-primary)', borderRadius: 100, padding: '11px 0', fontSize: 13, fontWeight: 800, cursor: selectedIds.length ? 'pointer' : 'not-allowed', opacity: selectedIds.length ? 1 : 0.5 }}>↪ Reenviar</button>
-            <button type="button" onClick={() => { removeMessages(selectedIds); exitSelect(); }} disabled={!selectedIds.length} style={{ flex: 1, border: 'none', background: '#D32F2F', color: '#fff', borderRadius: 100, padding: '11px 0', fontSize: 13, fontWeight: 800, cursor: selectedIds.length ? 'pointer' : 'not-allowed', opacity: selectedIds.length ? 1 : 0.5 }}>🗑️</button>
-            <button type="button" onClick={exitSelect} aria-label="Salir de selección" style={{ width: 40, height: 40, borderRadius: '50%', border: '1px solid var(--border-subtle)', background: 'var(--bg-pressed)', color: 'var(--text-primary)', fontSize: 15, cursor: 'pointer', flexShrink: 0 }}>✕</button>
-          </div>
-        )}
-
         {!selectMode && recording && (
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
             <button
@@ -1523,9 +1649,9 @@ export default function ChatRoomPage() {
         const rows: Array<{ icon: string; label: string; danger?: boolean; run: () => void }> = [
           { icon: '↩️', label: 'Responder', run: () => { setReplyTo({ id: msg.id, text: (msg.content || '').slice(0, 120), sender: msg.senderId === myParticipantId ? 'user' : 'assistant' }); setContextMsg(null); } },
           { icon: '🔊', label: 'Escuchar', run: () => { speakText(msg.content); setContextMsg(null); } },
-          { icon: '📋', label: 'Copiar', run: () => { copyText(msg.content); setContextMsg(null); } },
+          { icon: '📋', label: 'Copiar', run: () => { copyText(msg.content); showToast('Mensaje copiado', 'success'); setContextMsg(null); } },
           { icon: '↪️', label: 'Reenviar', run: () => { openForward([msg.content]); setContextMsg(null); } },
-          { icon: '📌', label: pinnedId === msg.id ? 'Desfijar' : 'Fijar mensaje', run: () => { const next = pinnedId === msg.id ? null : msg.id; setPinnedId(next); try { if (conversationId || targetId) localStorage.setItem(`rabbitty_pinned_${conversationId || targetId}`, next || ''); } catch {} PlatformBridge.hapticFeedback('medium'); setContextMsg(null); } },
+          { icon: '📌', label: pinnedId === msg.id ? 'Desfijar' : 'Fijar mensaje', run: () => { const next = pinnedId === msg.id ? null : msg.id; setPinnedId(next); try { if (conversationId || targetId) localStorage.setItem(`rabbitty_pinned_${conversationId || targetId}`, next || ''); } catch {} PlatformBridge.hapticFeedback('medium'); showToast(next ? '📌 Mensaje fijado' : 'Mensaje desfijado', 'success'); setContextMsg(null); } },
           { icon: '☑️', label: 'Seleccionar', run: () => { setSelectMode(true); setSelectedIds([msg.id]); setContextMsg(null); } },
           { icon: '🚩', label: 'Reportar', run: () => reportMessage(msg) },
           { icon: '🗑️', label: 'Eliminar', danger: true, run: () => { removeMessages([msg.id]); setContextMsg(null); } },
@@ -1561,26 +1687,28 @@ export default function ChatRoomPage() {
                   </button>
                 ))}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-                {rows.map((r) => (
+              <div style={{ borderTop: '1px solid var(--border-subtle)', margin: '0 -16px' }}>
+                {rows.map((r, i) => (
                   <button
                     key={r.label}
                     onClick={r.run}
                     style={{
                       display: 'flex',
-                      flexDirection: 'column',
                       alignItems: 'center',
-                      gap: 6,
-                      background: 'var(--bg-pressed)',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: 14,
-                      padding: '12px 6px',
+                      gap: 14,
+                      width: '100%',
+                      padding: '13px 16px',
+                      background: 'transparent',
+                      border: 'none',
+                      borderBottom: i < rows.length - 1 ? '1px solid var(--border-subtle)' : 'none',
                       cursor: 'pointer',
                       color: r.danger ? '#D32F2F' : 'var(--text-primary)',
+                      textAlign: 'left',
+                      fontSize: 15,
                     }}
                   >
-                    <span style={{ fontSize: 20, lineHeight: 1 }}>{r.icon}</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, textAlign: 'center' }}>{r.label}</span>
+                    <span style={{ fontSize: 18, lineHeight: 1, width: 24, textAlign: 'center', flexShrink: 0 }}>{r.icon}</span>
+                    <span style={{ fontWeight: 600 }}>{r.label}</span>
                   </button>
                 ))}
               </div>
@@ -1591,6 +1719,15 @@ export default function ChatRoomPage() {
 
       <BottomSheet isOpen={Boolean(forwardTexts)} onClose={() => setForwardTexts(null)} title="Reenviar mensaje">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {forwardTexts && forwardTexts.length > 0 && (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', background: 'var(--bg-pressed)', borderLeft: '3px solid #E91E63', borderRadius: 10, padding: '8px 10px' }}>
+              <span style={{ fontSize: 14, lineHeight: 1.3 }}>↪️</span>
+              <span style={{ fontSize: 13, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.4 }}>
+                {forwardTexts.slice(0, 2).join(' · ')}
+                {forwardTexts.length > 2 ? ` (+${forwardTexts.length - 2})` : ''}
+              </span>
+            </div>
+          )}
           {forwardLoading ? (
             <p style={{ margin: 0, fontSize: 14, color: 'var(--text-secondary)', textAlign: 'center' }}>Cargando conversaciones…</p>
           ) : (

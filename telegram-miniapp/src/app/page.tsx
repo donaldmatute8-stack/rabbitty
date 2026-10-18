@@ -212,6 +212,7 @@ export default function FeedPage() {
   const topDeltaAcc = useRef(0);
 
   const fetchFeedData = useCallback(async () => {
+    const startedAt = performance.now();
     setLoading(true);
     try {
       if (activeTab === "bunz'in" || activeTab === 'Freehands') {
@@ -228,6 +229,10 @@ export default function FeedPage() {
     } catch (err) {
       console.error('[Feed] data fetch error:', err);
     } finally {
+      const elapsed = performance.now() - startedAt;
+      if (elapsed < 700) {
+        await new Promise((r) => setTimeout(r, 700 - elapsed));
+      }
       setLoading(false);
     }
   }, [activeTab]);
@@ -238,7 +243,17 @@ export default function FeedPage() {
 
   // Refresh disparado por el botón "Ra" del menú inferior: sube al inicio y recarga
   const handleRefresh = useCallback(() => {
-    window.scrollTo({ top: 0, behavior: 'auto' });
+    const se = (document.scrollingElement || document.documentElement) as HTMLElement;
+    const prevBehavior = se.style.scrollBehavior;
+    se.style.scrollBehavior = 'auto';
+    se.scrollTop = 0;
+    document.body.scrollTop = 0;
+    window.scrollTo(0, 0);
+    se.style.scrollBehavior = prevBehavior;
+    requestAnimationFrame(() => {
+      se.scrollTop = 0;
+      window.scrollTo(0, 0);
+    });
     PlatformBridge.hapticFeedback('light');
     fetchFeedData();
   }, [fetchFeedData]);
