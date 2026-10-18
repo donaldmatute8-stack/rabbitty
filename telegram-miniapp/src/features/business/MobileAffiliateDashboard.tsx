@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { QrCode, Inbox, Check, X, ArrowLeft } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { QrCode, Inbox, Check, X, ArrowLeft, BookOpen, AlertTriangle, BarChart3, Users, Settings2 } from 'lucide-react';
 import RabbittyCode from '@/components/ui/RabbittyCode';
 import { PlatformBridge } from '@/lib/platform';
 
@@ -35,6 +35,36 @@ interface TransactionItem {
   bunzMinted?: number;
 }
 
+interface LedgerStatementRow {
+  id: string;
+  direction: 'INFLOW' | 'OUTFLOW';
+  type: string;
+  amount: number;
+  counterparty: string;
+  createdAt: string;
+  metadata?: Record<string, unknown>;
+}
+
+interface LedgerAuditData {
+  business: {
+    id: string;
+    name: string;
+    package: string | null;
+    creditLimit: number;
+    creditUsed: number;
+    remainingInventory: number | null;
+    isLowInventory: boolean;
+  };
+  audit: {
+    totalRewarded: number;
+    countRewarded: number;
+    totalRedeemed: number;
+    countRedeemed: number;
+    netFlow: number;
+  };
+  statement: LedgerStatementRow[];
+}
+
 interface MobileAffiliateDashboardProps {
   business: BusinessProfile;
   telegramId?: string;
@@ -43,7 +73,7 @@ interface MobileAffiliateDashboardProps {
 export default function MobileAffiliateDashboard({ business }: MobileAffiliateDashboardProps) {
   const router = useRouter();
   const [showCodeModal, setShowCodeModal] = useState(false);
-  const [activeSubTab, setActiveSubTab] = useState<'analytics' | 'clients' | 'settings' | null>(null);
+  const [activeSubTab, setActiveSubTab] = useState<'analytics' | 'clients' | 'settings' | 'ledger' | null>(null);
   const [rewardRate, setRewardRate] = useState(business?.rewardPercentage || 21);
   const [savingRate, setSavingRate] = useState(false);
   const [reservations, setReservations] = useState<ReservationItem[]>([]);
@@ -52,6 +82,10 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
   const [totalBunz, setTotalBunz] = useState(0);
   const [clientCount, setClientCount] = useState(0);
   const [clientList] = useState<Array<{ user?: { firstName?: string; username?: string }; txs?: number; bunz?: number }>>([]);
+  
+  // Paso C: Ledger audit state
+  const [ledgerData, setLedgerData] = useState<LedgerAuditData | null>(null);
+  const [loadingLedger, setLoadingLedger] = useState(false);
 
   const saveRewardRate = async () => {
     setSavingRate(true);
@@ -95,6 +129,34 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
         })
         .catch(() => {});
     }
+  }, [business?.id]);
+
+  useEffect(() => {
+    let active = true;
+    if (!business?.id) return;
+
+    Promise.resolve().then(() => {
+      if (active) setLoadingLedger(true);
+      return PlatformBridge.getAuthHeaders();
+    })
+      .then((headers) => fetch(`/api/business/ledger?businessId=${business.id}`, { headers }))
+      .then((r) => r.json())
+      .then((data) => {
+        if (!active) return;
+        if (data.success) {
+          setLedgerData(data as LedgerAuditData);
+        }
+      })
+      .catch((err) => {
+        console.error('[Affiliate Ledger] Fetch error:', err);
+      })
+      .finally(() => {
+        if (active) setLoadingLedger(false);
+      });
+
+    return () => {
+      active = false;
+    };
   }, [business?.id]);
 
   const handleReservationStatus = async (id: string, status: string) => {
@@ -472,119 +534,371 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
           )}
         </motion.div>
 
-        {/* Tab Selection */}
+        {/* Low Inventory Alert Banner */}
+        {ledgerData?.business?.isLowInventory && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="rounded-2xl p-3.5 mb-4 flex items-center gap-3 border border-amber-500/30 bg-amber-500/10 text-amber-200"
+          >
+            <AlertTriangle className="text-amber-400 shrink-0" size={22} />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-amber-300 m-0 leading-tight">Inventario de Bunz Bajo</p>
+              <p className="text-[11px] text-amber-200/80 m-0 mt-0.5">
+                Te quedan {ledgerData.business.remainingInventory?.toLocaleString()} Bunz. Recarga tu paquete para seguir otorgando recompensas.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                PlatformBridge.hapticFeedback('light');
+                setActiveSubTab('ledger');
+              }}
+              className="px-2.5 py-1 rounded-lg bg-amber-400 text-black text-[11px] font-black border-none cursor-pointer active:scale-95 transition-transform shrink-0"
+            >
+              Auditar
+            </button>
+          </motion.div>
+        )}
+
+        {/* Tab Selection con Iconos Personalizados Rabbitty */}
         <motion.div 
           initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
-          className="grid grid-cols-3 gap-2 mb-4"
+          className="grid grid-cols-4 gap-1.5 mb-4"
         >
           <button 
-            onClick={() => setActiveSubTab(activeSubTab === 'analytics' ? null : 'analytics')}
-            className="rounded-2xl p-3 flex flex-col items-center gap-1 cursor-pointer transition-all border-none"
+            type="button"
+            onClick={() => {
+              PlatformBridge.hapticFeedback('light');
+              setActiveSubTab(activeSubTab === 'analytics' ? null : 'analytics');
+            }}
+            className="rounded-2xl p-2.5 flex flex-col items-center gap-1.5 cursor-pointer transition-all border-none"
             style={{ 
-              background: activeSubTab === 'analytics' ? 'rgba(233,30,99,0.15)' : 'var(--bg-elevated)', 
-              border: activeSubTab === 'analytics' ? '1px solid #E91E63' : '1px solid var(--border-subtle)',
+              background: activeSubTab === 'analytics' ? 'rgba(233,30,99,0.18)' : 'var(--bg-elevated)', 
+              border: activeSubTab === 'analytics' ? '1.5px solid #E91E63' : '1px solid var(--border-subtle)',
               color: activeSubTab === 'analytics' ? '#E91E63' : 'var(--text-secondary)'
             }}
           >
-            <span className="text-xl">📊</span>
-            <span className="text-[12px] font-bold">Analíticas</span>
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${activeSubTab === 'analytics' ? 'bg-[#E91E63]/20 text-[#E91E63]' : 'bg-white/5 text-(--text-muted)'}`}>
+              <BarChart3 size={18} strokeWidth={2.4} />
+            </div>
+            <span className="text-[11px] font-extrabold tracking-tight">Analíticas</span>
           </button>
 
           <button 
-            onClick={() => setActiveSubTab(activeSubTab === 'clients' ? null : 'clients')}
-            className="rounded-2xl p-3 flex flex-col items-center gap-1 cursor-pointer transition-all border-none"
+            type="button"
+            onClick={() => {
+              PlatformBridge.hapticFeedback('light');
+              setActiveSubTab(activeSubTab === 'ledger' ? null : 'ledger');
+            }}
+            className="rounded-2xl p-2.5 flex flex-col items-center gap-1.5 cursor-pointer transition-all border-none"
             style={{ 
-              background: activeSubTab === 'clients' ? 'rgba(233,30,99,0.15)' : 'var(--bg-elevated)', 
-              border: activeSubTab === 'clients' ? '1px solid #E91E63' : '1px solid var(--border-subtle)',
+              background: activeSubTab === 'ledger' ? 'rgba(233,30,99,0.18)' : 'var(--bg-elevated)', 
+              border: activeSubTab === 'ledger' ? '1.5px solid #E91E63' : '1px solid var(--border-subtle)',
+              color: activeSubTab === 'ledger' ? '#E91E63' : 'var(--text-secondary)'
+            }}
+          >
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${activeSubTab === 'ledger' ? 'bg-[#E91E63]/20 text-[#E91E63]' : 'bg-white/5 text-(--text-muted)'}`}>
+              <BookOpen size={18} strokeWidth={2.4} />
+            </div>
+            <span className="text-[11px] font-extrabold tracking-tight">Libro</span>
+          </button>
+
+          <button 
+            type="button"
+            onClick={() => {
+              PlatformBridge.hapticFeedback('light');
+              setActiveSubTab(activeSubTab === 'clients' ? null : 'clients');
+            }}
+            className="rounded-2xl p-2.5 flex flex-col items-center gap-1.5 cursor-pointer transition-all border-none"
+            style={{ 
+              background: activeSubTab === 'clients' ? 'rgba(233,30,99,0.18)' : 'var(--bg-elevated)', 
+              border: activeSubTab === 'clients' ? '1.5px solid #E91E63' : '1px solid var(--border-subtle)',
               color: activeSubTab === 'clients' ? '#E91E63' : 'var(--text-secondary)'
             }}
           >
-            <span className="text-xl">👥</span>
-            <span className="text-[12px] font-bold">Clientes</span>
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${activeSubTab === 'clients' ? 'bg-[#E91E63]/20 text-[#E91E63]' : 'bg-white/5 text-(--text-muted)'}`}>
+              <Users size={18} strokeWidth={2.4} />
+            </div>
+            <span className="text-[11px] font-extrabold tracking-tight">Clientes</span>
           </button>
 
           <button 
-            onClick={() => setActiveSubTab(activeSubTab === 'settings' ? null : 'settings')}
-            className="rounded-2xl p-3 flex flex-col items-center gap-1 cursor-pointer transition-all border-none"
+            type="button"
+            onClick={() => {
+              PlatformBridge.hapticFeedback('light');
+              setActiveSubTab(activeSubTab === 'settings' ? null : 'settings');
+            }}
+            className="rounded-2xl p-2.5 flex flex-col items-center gap-1.5 cursor-pointer transition-all border-none"
             style={{ 
-              background: activeSubTab === 'settings' ? 'rgba(233,30,99,0.15)' : 'var(--bg-elevated)', 
-              border: activeSubTab === 'settings' ? '1px solid #E91E63' : '1px solid var(--border-subtle)',
+              background: activeSubTab === 'settings' ? 'rgba(233,30,99,0.18)' : 'var(--bg-elevated)', 
+              border: activeSubTab === 'settings' ? '1.5px solid #E91E63' : '1px solid var(--border-subtle)',
               color: activeSubTab === 'settings' ? '#E91E63' : 'var(--text-secondary)'
             }}
           >
-            <span className="text-xl">⚙️</span>
-            <span className="text-[12px] font-bold">Ajustes</span>
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${activeSubTab === 'settings' ? 'bg-[#E91E63]/20 text-[#E91E63]' : 'bg-white/5 text-(--text-muted)'}`}>
+              <Settings2 size={18} strokeWidth={2.4} />
+            </div>
+            <span className="text-[11px] font-extrabold tracking-tight">Ajustes</span>
           </button>
         </motion.div>
-
-        {/* SUBTAB: ANALYTICS */}
-        {activeSubTab === 'analytics' && (
-          <motion.div 
-            initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} 
-            className="rounded-2xl p-4 mb-4"
-            style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
-          >
-            <h4 className="text-sm font-extrabold text-(--text-primary) mb-3 m-0">📊 Analíticas del Negocio</h4>
-            <div className="flex flex-col gap-2 text-xs text-(--text-secondary)">
-              <div className="flex justify-between p-2.5 rounded-xl" style={{ background: 'var(--bg-subtle)' }}>
-                <span>Promedio por consumo:</span>
-                <span className="font-bold text-(--text-primary)">${txCount > 0 ? (totalBunz / txCount * 10).toFixed(0) : 0} MXN</span>
-              </div>
-              <div className="flex justify-between p-2.5 rounded-xl" style={{ background: 'var(--bg-subtle)' }}>
-                <span>Tasa de retorno de clientes:</span>
-                <span className="font-bold text-(--text-primary)">{clientCount > 0 ? (txCount / clientCount).toFixed(1) : 0}x visitas/cliente</span>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {/* SUBTAB: CLIENTS */}
-        {activeSubTab === 'clients' && (
-          <motion.div 
-            initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} 
-            className="rounded-2xl p-4 mb-4"
-            style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
-          >
-            <h4 className="text-sm font-extrabold text-(--text-primary) mb-3 m-0">👥 Clientes Frecuentes ({clientCount})</h4>
-            {clientList.length === 0 ? (
-              <p className="text-xs text-(--text-muted) m-0">Aún no hay registros de clientes.</p>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {clientList.map((c, i) => (
-                  <div key={i} className="flex justify-between items-center p-2.5 rounded-xl text-xs" style={{ background: 'var(--bg-subtle)' }}>
-                    <div>
-                      <p className="font-bold text-(--text-primary) m-0">{c.user?.firstName || 'Rabbitter'} (@{c.user?.username || 'user'})</p>
-                      <p className="text-[10px] text-(--text-muted) m-0">{c.txs} visita(s)</p>
-                    </div>
-                    <span className="font-extrabold text-[#E91E63]">{c.bunz} Bunz</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </motion.div>
-        )}
-
-        {/* SUBTAB: SETTINGS */}
-        {activeSubTab === 'settings' && (
-          <motion.div 
-            initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} 
-            className="rounded-2xl p-4 mb-4"
-            style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
-          >
-            <h4 className="text-sm font-extrabold text-(--text-primary) mb-3 m-0">⚙️ Ajustes del Comercio</h4>
-            <div className="flex flex-col gap-2 text-xs">
-              <div className="p-3 rounded-xl" style={{ background: 'var(--bg-subtle)' }}>
-                <p className="font-bold text-(--text-primary) m-0 mb-1">Horario Happy Hour</p>
-                <p className="text-(--text-muted) m-0">{business?.startTime || '00:00'} - {business?.endTime || '23:59'}</p>
-              </div>
-              <div className="p-3 rounded-xl" style={{ background: 'var(--bg-subtle)' }}>
-                <p className="font-bold text-(--text-primary) m-0 mb-1">Dirección Registrada</p>
-                <p className="text-(--text-muted) m-0">{business?.address || 'Sin dirección registrada'}</p>
-              </div>
-            </div>
-          </motion.div>
-        )}
       </div>
+
+      {/* FULL SCREEN SLIDE-UP MODAL PARA SUBTABS (Analíticas, Libro, Clientes, Ajustes) */}
+      <AnimatePresence>
+        {activeSubTab && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex flex-col justify-end bg-black/75 backdrop-blur-md"
+            onClick={() => setActiveSubTab(null)}
+          >
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full h-[92vh] max-h-[92vh] rounded-t-3xl flex flex-col overflow-hidden"
+              style={{
+                background: 'var(--bg-primary)',
+                borderTop: '1px solid var(--border-subtle)',
+                boxShadow: '0 -10px 40px rgba(0,0,0,0.5)',
+              }}
+            >
+              {/* Grab handle indicator */}
+              <div className="w-full flex items-center justify-center pt-3 pb-1 shrink-0">
+                <div className="w-12 h-1.5 rounded-full bg-white/20" />
+              </div>
+
+              {/* Modal Top Header */}
+              <div 
+                className="flex items-center justify-between px-5 py-3 shrink-0"
+                style={{ borderBottom: '1px solid var(--border-subtle)' }}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-[#E91E63]/15 text-[#E91E63] flex items-center justify-center">
+                    {activeSubTab === 'analytics' && <BarChart3 size={18} strokeWidth={2.4} />}
+                    {activeSubTab === 'ledger' && <BookOpen size={18} strokeWidth={2.4} />}
+                    {activeSubTab === 'clients' && <Users size={18} strokeWidth={2.4} />}
+                    {activeSubTab === 'settings' && <Settings2 size={18} strokeWidth={2.4} />}
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-(--text-primary) m-0 leading-tight">
+                      {activeSubTab === 'analytics' && 'Métricas y Analíticas'}
+                      {activeSubTab === 'ledger' && 'Libro Mayor Inmutable'}
+                      {activeSubTab === 'clients' && `Clientes Frecuentes (${clientCount})`}
+                      {activeSubTab === 'settings' && 'Ajustes del Comercio'}
+                    </h3>
+                    <p className="text-[11px] text-(--text-muted) m-0">
+                      {activeSubTab === 'analytics' && 'Rendimiento y retorno de clientes'}
+                      {activeSubTab === 'ledger' && 'Auditoría criptográfica y transacciones'}
+                      {activeSubTab === 'clients' && 'Usuarios más recurrentes y puntos acumulados'}
+                      {activeSubTab === 'settings' && 'Horarios y configuración de sucursal'}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    PlatformBridge.hapticFeedback('light');
+                    setActiveSubTab(null);
+                  }}
+                  aria-label="Cerrar modal"
+                  className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer border-none"
+                  style={{
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-secondary)'
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Modal Scrollable Body */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-4 pb-20">
+                {/* SUBTAB: ANALYTICS */}
+                {activeSubTab === 'analytics' && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-4 rounded-2xl" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                        <p className="text-[11px] font-bold text-(--text-muted) uppercase m-0">Ticket Promedio</p>
+                        <p className="text-2xl font-black text-[#E91E63] m-0 mt-1">
+                          ${txCount > 0 ? (totalBunz / txCount * 10).toFixed(0) : 0} <span className="text-xs font-bold text-(--text-muted)">MXN</span>
+                        </p>
+                        <p className="text-[10px] text-(--text-muted) m-0 mt-1">Por visita registrada</p>
+                      </div>
+
+                      <div className="p-4 rounded-2xl" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                        <p className="text-[11px] font-bold text-(--text-muted) uppercase m-0">Retorno de Visita</p>
+                        <p className="text-2xl font-black text-emerald-400 m-0 mt-1">
+                          {clientCount > 0 ? (txCount / clientCount).toFixed(1) : 0}x
+                        </p>
+                        <p className="text-[10px] text-(--text-muted) m-0 mt-1">Visitas por cliente único</p>
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-2xl space-y-3" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                      <h4 className="text-xs font-black uppercase text-(--text-muted) m-0 tracking-wider">Desglose de Operaciones</h4>
+                      <div className="flex justify-between items-center py-2" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                        <span className="text-xs text-(--text-secondary)">Total Bunz Distribuidos</span>
+                        <span className="text-sm font-black text-(--text-primary)">{totalBunz.toLocaleString()} B</span>
+                      </div>
+                      <div className="flex justify-between items-center py-2" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                        <span className="text-xs text-(--text-secondary)">Total Escaneos y Consumos</span>
+                        <span className="text-sm font-black text-(--text-primary)">{txCount.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-2">
+                        <span className="text-xs text-(--text-secondary)">Clientes Registrados</span>
+                        <span className="text-sm font-black text-(--text-primary)">{clientCount.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* SUBTAB: LEDGER (LIBRO CONTABLE) */}
+                {activeSubTab === 'ledger' && (
+                  <div className="space-y-4">
+                    {loadingLedger ? (
+                      <p className="text-xs text-(--text-muted) m-0 py-6 text-center">Consultando libro contable inmutable...</p>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="p-3.5 rounded-2xl" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                            <p className="text-[10px] uppercase font-bold text-(--text-muted) m-0">Bunz Otorgados</p>
+                            <p className="text-lg font-black text-rose-400 m-0 mt-0.5">
+                              -{ledgerData?.audit.totalRewarded.toLocaleString() || 0} B
+                            </p>
+                            <p className="text-[10px] text-(--text-muted) m-0 mt-0.5">{ledgerData?.audit.countRewarded || 0} emisiones</p>
+                          </div>
+                          <div className="p-3.5 rounded-2xl" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                            <p className="text-[10px] uppercase font-bold text-(--text-muted) m-0">Bunz Canjeados</p>
+                            <p className="text-lg font-black text-emerald-400 m-0 mt-0.5">
+                              +{ledgerData?.audit.totalRedeemed.toLocaleString() || 0} B
+                            </p>
+                            <p className="text-[10px] text-(--text-muted) m-0 mt-0.5">{ledgerData?.audit.countRedeemed || 0} canjes</p>
+                          </div>
+                        </div>
+
+                        <div className="p-4 rounded-2xl space-y-2" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-(--text-secondary)">Balance Inventario:</span>
+                            <span className="text-xs font-black text-(--text-primary)">
+                              {ledgerData?.business.remainingInventory !== null && ledgerData?.business.remainingInventory !== undefined
+                                ? `${ledgerData.business.remainingInventory.toLocaleString()} Bunz`
+                                : 'Ilimitado'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center text-xs text-(--text-muted)">
+                            <span>Flujo neto del comercio:</span>
+                            <span className={`font-black ${((ledgerData?.audit.netFlow || 0) >= 0) ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              {((ledgerData?.audit.netFlow || 0) >= 0 ? '+' : '')}{ledgerData?.audit.netFlow.toLocaleString()} B
+                            </span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <h5 className="text-[11px] font-black uppercase text-(--text-muted) mb-2 m-0 tracking-wider">
+                            Últimos Movimientos del Ledger
+                          </h5>
+                          {!ledgerData?.statement || ledgerData.statement.length === 0 ? (
+                            <p className="text-xs text-(--text-muted) m-0 py-4 text-center">Sin movimientos contables registrados.</p>
+                          ) : (
+                            <div className="flex flex-col gap-2">
+                              {ledgerData.statement.map((row) => (
+                                <div
+                                  key={row.id}
+                                  className="flex items-center justify-between p-3 rounded-xl text-xs"
+                                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
+                                >
+                                  <div className="min-w-0 pr-2">
+                                    <p className="font-bold text-(--text-primary) m-0 truncate">
+                                      {row.direction === 'OUTFLOW' ? 'Recompensa a' : 'Canje de'} {row.counterparty}
+                                    </p>
+                                    <p className="text-[10px] text-(--text-muted) m-0 mt-0.5">
+                                      {new Date(row.createdAt).toLocaleDateString('es-MX', {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                      })}
+                                    </p>
+                                  </div>
+                                  <span
+                                    className={`font-black text-xs shrink-0 ${
+                                      row.direction === 'OUTFLOW' ? 'text-rose-400' : 'text-emerald-400'
+                                    }`}
+                                  >
+                                    {row.direction === 'OUTFLOW' ? '-' : '+'}{row.amount.toLocaleString()} B
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* SUBTAB: CLIENTS */}
+                {activeSubTab === 'clients' && (
+                  <div className="space-y-3">
+                    {clientList.length === 0 ? (
+                      <p className="text-xs text-(--text-muted) m-0 py-8 text-center">Aún no hay registros de clientes en esta sucursal.</p>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        {clientList.map((c, i) => (
+                          <div 
+                            key={i} 
+                            className="flex justify-between items-center p-3.5 rounded-2xl text-xs" 
+                            style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
+                          >
+                            <div>
+                              <p className="font-bold text-(--text-primary) m-0 text-sm">
+                                {c.user?.firstName || 'Rabbitter'} (@{c.user?.username || 'user'})
+                              </p>
+                              <p className="text-[11px] text-(--text-muted) m-0 mt-0.5">{c.txs} visita(s) acumuladas</p>
+                            </div>
+                            <span className="font-black text-sm text-[#E91E63]">{c.bunz} Bunz</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* SUBTAB: SETTINGS */}
+                {activeSubTab === 'settings' && (
+                  <div className="space-y-3">
+                    <div className="p-4 rounded-2xl" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                      <p className="font-bold text-xs uppercase text-(--text-muted) m-0 mb-1">Horario de Operación / Happy Hour</p>
+                      <p className="text-sm font-black text-(--text-primary) m-0">
+                        {business?.startTime || '00:00'} - {business?.endTime || '23:59'}
+                      </p>
+                    </div>
+                    <div className="p-4 rounded-2xl" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                      <p className="font-bold text-xs uppercase text-(--text-muted) m-0 mb-1">Dirección de la Sucursal</p>
+                      <p className="text-sm font-semibold text-(--text-primary) m-0">
+                        {business?.address || 'Sin dirección registrada'}
+                      </p>
+                    </div>
+                    <div className="p-4 rounded-2xl" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                      <p className="font-bold text-xs uppercase text-(--text-muted) m-0 mb-1">Estado de Afiliación</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <p className="text-xs font-bold text-emerald-400 m-0">Negocio Verificado en Red Rabbitty</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Modal Rabbitty Code Ampliado para Escaneo */}
       {showCodeModal && (

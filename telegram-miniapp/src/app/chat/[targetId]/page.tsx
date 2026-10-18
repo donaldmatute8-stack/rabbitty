@@ -139,6 +139,13 @@ function CheckTicks({ read }: { read: boolean }) {
   );
 }
 
+function generateChatTxKey(convId: string | null, attempt: number): string {
+  const rand = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+    ? crypto.randomUUID()
+    : `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return `tx_${convId || 'bot'}_${attempt}_${rand}`;
+}
+
 export default function ChatRoomPage() {
   const { user } = useAuth();
   const { targetId } = useParams();
@@ -469,7 +476,7 @@ export default function ChatRoomPage() {
     try {
       await PlatformBridge.hapticFeedback('medium');
       const headers = await PlatformBridge.getAuthHeaders();
-      const idempotencyKey = `tx_${conversationId || 'bot'}_${attemptId}`;
+      const idempotencyKey = generateChatTxKey(conversationId, attemptId);
       const res = await fetch('/api/wallet/transfer', {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json' },

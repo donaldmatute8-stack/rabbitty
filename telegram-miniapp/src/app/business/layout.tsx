@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { Store, Users, Settings, ArrowLeft, ScanLine } from 'lucide-react';
+import { Store, Users, Settings, ScanLine } from 'lucide-react';
 import BottomNav from '@/components/BottomNav';
 
 export default function BusinessLayout({ children }: { children: React.ReactNode }) {
@@ -16,9 +16,12 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
   ];
 
   return (
-    <div className="flex h-screen bg-white">
+    <div className="flex h-screen" style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
       {/* Sidebar for Desktop */}
-      <aside className="hidden md:flex flex-col w-64 border-r border-gray-100 p-6 bg-white shrink-0">
+      <aside
+        className="hidden md:flex flex-col w-64 p-6 shrink-0"
+        style={{ background: 'var(--bg-elevated)', borderRight: '1px solid var(--border-subtle)' }}
+      >
         <div className="flex items-center gap-3 mb-10">
           <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -27,8 +30,8 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
             </svg>
           </div>
           <div>
-            <h2 className="text-xl font-black text-black tracking-tight leading-none">Rabbitty</h2>
-            <p className="text-xs text-gray-500 font-bold tracking-wide uppercase mt-0.5">Business</p>
+            <h2 className="text-xl font-black text-(--text-primary) tracking-tight leading-none">Rabbitty</h2>
+            <p className="text-xs text-(--text-muted) font-bold tracking-wide uppercase mt-0.5">Business</p>
           </div>
         </div>
 
@@ -47,7 +50,7 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
         <div className="mt-auto">
           <button 
             onClick={() => router.push('/')}
-            className="flex items-center gap-3 w-full p-3 rounded-xl text-left text-sm font-semibold text-gray-500 hover:bg-gray-50 hover:text-black transition-colors"
+            className="flex items-center gap-3 w-full p-3 rounded-xl text-left text-sm font-semibold text-(--text-muted) hover:bg-(--bg-pressed) hover:text-(--text-primary) transition-colors border-none cursor-pointer"
           >
             <span className="text-lg">↩️</span>
             Modo Usuario
@@ -56,7 +59,7 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto relative pb-24 md:pb-0">
+      <main className="flex-1 overflow-y-auto relative pb-24 md:pb-0" style={{ background: 'var(--bg-primary)' }}>
         {children}
       </main>
 
