@@ -88,7 +88,11 @@ export async function POST(req: Request) {
           ? { kind: 'OPTIONS', options: reply.options }
           : reply.orderDraft
             ? { kind: 'ORDER', orderDraft: reply.orderDraft }
-            : null;
+            : reply.transferRequest
+              ? { kind: 'TRANSFER_REQUEST', transferRequest: reply.transferRequest }
+              : reply.receiveQr
+                ? { kind: 'RECEIVE_QR', receiveQr: reply.receiveQr }
+                : null;
 
       const [botMessage] = await db
         .insert(messages)
@@ -114,6 +118,8 @@ export async function POST(req: Request) {
         suggestions: reply.suggestions,
         options: reply.options ?? [],
         orderDraft: reply.orderDraft ?? null,
+        transferRequest: reply.transferRequest ?? null,
+        receiveQr: reply.receiveQr ?? null,
       });
     }
 

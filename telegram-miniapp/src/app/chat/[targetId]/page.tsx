@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import { PlatformBridge } from '@/lib/platform';
 import { useTheme } from '@/contexts/ThemeContext';
 import { BottomSheet } from '@/components/ui/BottomSheet';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface BusinessCard {
   kind?: 'BUSINESS';
@@ -45,11 +46,23 @@ interface OrderDraft {
   status?: string;
 }
 
+interface TransferRequest {
+  amount: number;
+  recipient: string;
+  note: string;
+}
+
+interface ReceiveQrRequest {
+  handle: string;
+}
+
 type MessageMetadata =
   | BusinessCard
   | { kind: 'OPTIONS'; options: BusinessOption[] }
   | OrderDraft
-  | { kind: 'LOCATION'; lat: number; lng: number; label?: string };
+  | { kind: 'LOCATION'; lat: number; lng: number; label?: string }
+  | { kind: 'TRANSFER_REQUEST'; transferRequest: TransferRequest }
+  | { kind: 'RECEIVE_QR'; receiveQr: ReceiveQrRequest };
 
 type Message = {
   id: string;
@@ -127,6 +140,10 @@ export default function ChatRoomPage() {
   const [orderTarget, setOrderTarget] = useState<{ businessId: string; businessName: string } | null>(null);
   const [orderItems, setOrderItems] = useState('');
   const [orderNotes, setOrderNotes] = useState('');
+  const [bunzyOpen, setBunzyOpen] = useState(false);
+  const [bunzyBusy, setBunzyBusy] = useState(false);
+  const [bunzyIntent, setBunzyIntent] = useState('');
+  const [bunzyNote, setBunzyNote] = useState<{ mode: 'draft' | 'summarize'; text: string } | null>(null);
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
 
@@ -144,6 +161,8 @@ export default function ChatRoomPage() {
     if (!currentUserId) return;
 
     const urlConversationId = new URLSearchParams(window.location.search).get('c');
+    const urlPrefill = isBot ? new URLSearchParams(window.location.search).get('prefill') : null;
+    let prefillApplied = false;
 
     const buildUrl = () => {
       const id = conversationIdRef.current || urlConversationId;
@@ -165,6 +184,11 @@ export default function ChatRoomPage() {
       if (data.businessOpen !== undefined) setBusinessOpen(data.businessOpen);
       otherTypingAtRef.current = data.otherTypingAt ?? null;
       setMessages(data.messages || []);
+
+      if (urlPrefill && data.conversationId && !prefillApplied) {
+        prefillApplied = true;
+        setInput(urlPrefill);
+      }
     };
 
     const fetchHistory = async () => {
@@ -312,6 +336,55 @@ export default function ChatRoomPage() {
     }
   };
 
+  const confirmTransfer = async (req: TransferRequest) => {
+    if (!req.recipient) {
+      sendMessage('¿A quién quieres enviar los bunz? Dame el @usuario.');
+      return;
+    }
+    setSending(true);
+    tempCounterRef.current += 1;
+    const attemptId = tempCounterRef.current;
+    try {
+      await PlatformBridge.hapticFeedback('medium');
+      const headers = await PlatformBridge.getAuthHeaders();
+      const idempotencyKey = `tx_${conversationId || 'bot'}_${attemptId}`;
+      const res = await fetch('/api/wallet/transfer', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipient: req.recipient.replace(/^@/, ''),
+          amount: req.amount,
+          note: req.note,
+          idempotencyKey,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'No se pudo enviar');
+      await PlatformBridge.hapticFeedback('success');
+      const confirmMsg: Message = {
+        id: `tx-${attemptId}`,
+        senderId: 'bot',
+        content: `🎉 ¡Listo! Enviaste **${req.amount} bunz** a **${data.data?.recipientName || req.recipient}**${req.note ? `\n📝 "${req.note}"` : ''}`,
+        createdAt: new Date().toISOString(),
+        type: 'TEXT',
+      };
+      setMessages((prev) => [...prev, confirmMsg]);
+    } catch (err: unknown) {
+      await PlatformBridge.hapticFeedback('error');
+      const msg = err instanceof Error ? err.message : 'Error al enviar bunz';
+      const errMsg: Message = {
+        id: `tx-err-${attemptId}`,
+        senderId: 'bot',
+        content: `⚠️ ${msg}`,
+        createdAt: new Date().toISOString(),
+        type: 'TEXT',
+      };
+      setMessages((prev) => [...prev, errMsg]);
+    } finally {
+      setSending(false);
+    }
+  };
+
   const submitOrder = async () => {
     if (!orderTarget || !orderItems.trim() || sending) return;
     setSending(true);
@@ -335,6 +408,34 @@ export default function ChatRoomPage() {
       console.error('Error enviando pedido', err);
     } finally {
       setSending(false);
+    }
+  };
+
+  const runBunzy = async (mode: 'draft' | 'summarize') => {
+    const cid = conversationIdRef.current || conversationId;
+    if (!cid) return;
+    setBunzyBusy(true);
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch('/api/chat/bunzy-assist', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId: cid, mode, intent: bunzyIntent }),
+      });
+      const data = await res.json();
+      if (data?.text) {
+        if (mode === 'draft') {
+          setInput(data.text);
+          PlatformBridge.hapticFeedback('success');
+        } else {
+          setBunzyNote({ mode, text: data.text });
+        }
+      }
+    } catch {
+      // silencioso
+    } finally {
+      setBunzyBusy(false);
+      setBunzyOpen(false);
     }
   };
 
@@ -510,12 +611,81 @@ export default function ChatRoomPage() {
     </div>
   );
 
+  const renderTransferRequest = (req: TransferRequest) => (
+    <div style={{ marginTop: '10px', borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--border-subtle)', background: 'var(--bg-pressed)' }}>
+      <div style={{ padding: '10px 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <span style={{ fontSize: '18px' }}>💸</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ margin: 0, fontWeight: 800, fontSize: '14px', color: 'var(--text-primary)' }}>Enviar bunz</p>
+          <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>
+            {req.amount} bunz → {req.recipient || '¿a quién?'}
+          </p>
+          {req.note && (
+            <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic' }}>📝 {req.note}</p>
+          )}
+        </div>
+      </div>
+      <div style={{ display: 'flex', borderTop: '1px solid var(--border-subtle)' }}>
+        <button
+          onClick={() => confirmTransfer(req)}
+          disabled={sending || !req.recipient}
+          style={{
+            flex: 1, border: 'none', background: req.recipient ? '#E91E63' : 'var(--bg-pressed)', color: req.recipient ? '#FFF' : 'var(--text-muted)',
+            fontWeight: 800, fontSize: '13px', padding: '11px', cursor: req.recipient ? 'pointer' : 'not-allowed', opacity: sending ? 0.6 : 1,
+          }}
+        >
+          {sending ? 'Enviando…' : '✅ Confirmar'}
+        </button>
+        <button
+          onClick={() => {
+            PlatformBridge.hapticFeedback('light');
+            sendMessage('Cancelar');
+          }}
+          style={{ flex: 1, border: 'none', borderLeft: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-primary)', fontWeight: 800, fontSize: '13px', padding: '11px', cursor: 'pointer' }}
+        >
+          ❌ Cancelar
+        </button>
+      </div>
+    </div>
+  );
+
   const renderContent = (msg: Message) => {
     const meta: MessageMetadata | null =
       msg.metadata && typeof msg.metadata === 'object' ? msg.metadata : null;
 
     if (meta && 'kind' in meta && meta.kind === 'LOCATION' && typeof meta.lat === 'number' && typeof meta.lng === 'number') {
       return renderLocation(meta);
+    }
+    if (meta && 'kind' in meta && meta.kind === 'TRANSFER_REQUEST' && meta.transferRequest) {
+      return (
+        <>
+          {cleanOrEmpty(msg.content) && (
+            <p style={{ fontSize: '15px', lineHeight: '1.5', margin: 0, whiteSpace: 'pre-wrap' }}>{cleanOrEmpty(msg.content)}</p>
+          )}
+          {renderTransferRequest(meta.transferRequest)}
+        </>
+      );
+    }
+    if (meta && 'kind' in meta && meta.kind === 'RECEIVE_QR' && meta.receiveQr?.handle) {
+      const payload = `rabbitty://pay?to=${encodeURIComponent(meta.receiveQr.handle)}`;
+      return (
+        <>
+          {cleanOrEmpty(msg.content) && (
+            <p style={{ fontSize: '15px', lineHeight: '1.5', margin: 0, whiteSpace: 'pre-wrap' }}>{cleanOrEmpty(msg.content)}</p>
+          )}
+          <div style={{ marginTop: '10px', borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--border-subtle)', background: 'var(--bg-pressed)', padding: '16px', textAlign: 'center' }}>
+            <div style={{ display: 'inline-block', padding: '12px', borderRadius: '20px', background: '#FFFFFF', marginBottom: '10px' }}>
+              <QRCodeSVG value={payload} size={160} level="M" bgColor="#ffffff" fgColor="#111111" />
+            </div>
+            <p style={{ margin: 0, fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>
+              Identificador: {meta.receiveQr.handle}
+            </p>
+            <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'var(--text-muted)' }}>
+              Escanéalo desde la pestaña de escáner de Rabbitty
+            </p>
+          </div>
+        </>
+      );
     }
     if (meta && 'kind' in meta && meta.kind === 'OPTIONS') {
       return (
@@ -758,6 +928,74 @@ export default function ChatRoomPage() {
           </div>
         )}
 
+        {!isBot && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => {
+                PlatformBridge.hapticFeedback('light');
+                setBunzyOpen(true);
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                background: 'rgba(233,30,99,0.12)',
+                border: '1px solid rgba(233,30,99,0.35)',
+                borderRadius: '100px',
+                padding: '6px 12px',
+                fontSize: '12px',
+                fontWeight: 800,
+                color: '#E91E63',
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              🐰 Ayuda de Bunzy
+            </button>
+
+            {bunzyNote && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  flex: 1,
+                  minWidth: 0,
+                  background: 'var(--bg-pressed)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: '14px',
+                  padding: '8px 10px',
+                }}
+              >
+                <span style={{ flex: 1, fontSize: '12px', lineHeight: 1.4, color: 'var(--text-secondary)' }}>
+                  <strong style={{ color: '#E91E63' }}>Bunzy:</strong> {bunzyNote.text}
+                </span>
+                {bunzyNote.mode === 'draft' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInput(bunzyNote.text);
+                      setBunzyNote(null);
+                    }}
+                    style={{ border: 'none', background: '#E91E63', color: '#fff', borderRadius: '100px', padding: '5px 10px', fontSize: '11px', fontWeight: 800, cursor: 'pointer', flexShrink: 0 }}
+                  >
+                    Usar
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setBunzyNote(null)}
+                  style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', fontSize: '14px', cursor: 'pointer', flexShrink: 0 }}
+                  aria-label="Cerrar"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         <form onSubmit={handleSend} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           <button
             type="button"
@@ -889,6 +1127,73 @@ export default function ChatRoomPage() {
             }}
           >
             {sending ? 'Enviando…' : '🛒 Enviar pedido'}
+          </button>
+        </div>
+      </BottomSheet>
+
+      <BottomSheet isOpen={bunzyOpen} onClose={() => setBunzyOpen(false)} title="Bunzy 🐰">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <p style={{ margin: 0, fontSize: '13px', lineHeight: 1.5, color: 'var(--text-secondary)' }}>
+            Puedo ayudarte a escribir un mensaje o resumir esta conversación.
+          </p>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-muted)', marginBottom: 6 }}>
+              ¿Qué quieres decir? (opcional)
+            </label>
+            <input
+              value={bunzyIntent}
+              onChange={(e) => setBunzyIntent(e.target.value)}
+              placeholder="Ej. confirmar la reserva para el sábado a las 8"
+              style={{
+                width: '100%',
+                backgroundColor: 'var(--bg-pressed)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: '14px',
+                padding: '12px 14px',
+                fontSize: '15px',
+                color: 'var(--text-primary)',
+                outline: 'none',
+              }}
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => runBunzy('draft')}
+            disabled={bunzyBusy}
+            style={{
+              width: '100%',
+              border: 'none',
+              borderRadius: '100px',
+              padding: '14px',
+              fontSize: '15px',
+              fontWeight: 800,
+              color: '#FFF',
+              background: bunzyBusy ? 'var(--bg-pressed)' : 'linear-gradient(135deg, #FF2E93 0%, #FF8A00 100%)',
+              cursor: bunzyBusy ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {bunzyBusy ? 'Escribiendo…' : '✍️ Escribir mensaje'}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => runBunzy('summarize')}
+            disabled={bunzyBusy}
+            style={{
+              width: '100%',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: '100px',
+              padding: '14px',
+              fontSize: '15px',
+              fontWeight: 800,
+              color: 'var(--text-primary)',
+              background: 'var(--bg-pressed)',
+              cursor: bunzyBusy ? 'not-allowed' : 'pointer',
+            }}
+          >
+            📝 Resumir chat
           </button>
         </div>
       </BottomSheet>

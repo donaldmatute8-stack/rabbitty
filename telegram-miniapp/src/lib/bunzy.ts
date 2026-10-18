@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 type BusinessRow = typeof ownedBusinesses.$inferSelect;
 type MessageRow = typeof messages.$inferSelect;
 import { isBusinessOpen } from '@/lib/chat';
+import { SUPPORT_KNOWLEDGE, matchFaq } from './support-content';
 
 export interface BusinessCardMetadata {
   businessId: string;
@@ -47,6 +48,16 @@ export interface OrderDraft {
   step: 'SELECT_ITEMS' | 'CONFIRM' | 'SENT';
 }
 
+export interface TransferRequest {
+  amount: number;
+  recipient: string;
+  note: string;
+}
+
+export interface ReceiveQrRequest {
+  handle: string;
+}
+
 export interface BunzyReply {
   content: string;
   type: 'TEXT' | 'CARD' | 'OPTIONS';
@@ -54,6 +65,8 @@ export interface BunzyReply {
   suggestions: string[];
   options?: BusinessOption[];
   orderDraft?: OrderDraft | null;
+  transferRequest?: TransferRequest | null;
+  receiveQr?: ReceiveQrRequest | null;
 }
 
 export interface BunzyInput {
@@ -91,6 +104,33 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
 
 function normalizeText(text: string): string {
   return (text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+const TRANSFER_RE =
+  /\b(?:enviar|envia|mandar|manda|transfiere|transferir|regalar|regalame|pasa(?:me)?|sueltame|soltar)\b(?:\s+(?:al?|la?|los?|l[aá]s?)?)?\s*(\d[\d.,]*)\s*bunz?\b(?:\s+(?:a|al|para|para el|para la)\s+@?[\w.]+)?/i;
+const TRANSFER_TO_RE = /\b(?:a|al|para|para el|para la|destino)\s+@?([\w.]{2,32})\b/i;
+const TRANSFER_NOTE_RE = /\b(?:nota|mensaje|concepto|por|diciendo|con el mensaje|con la nota|que diga|dice)[:\s]+["“]?([^"”\n]{2,60})["”]?/i;
+
+export function parseTransferIntent(content: string, selfUsername?: string | null): TransferRequest | null {
+  const nc = normalizeText(content);
+  if (!/bunz/.test(nc)) return null;
+  const amountMatch = TRANSFER_RE.exec(content) || TRANSFER_RE.exec(nc);
+  if (!amountMatch) return null;
+
+  const rawAmount = amountMatch[1].replace(/[.,]/g, '');
+  const amount = parseInt(rawAmount, 10);
+  if (!Number.isInteger(amount) || amount <= 0 || amount > 10_000_000) return null;
+
+  const toMatch = TRANSFER_TO_RE.exec(content) || TRANSFER_TO_RE.exec(nc);
+  const recipientRaw = toMatch ? toMatch[1].replace(/^@/, '') : '';
+  const recipient = recipientRaw && recipientRaw.toLowerCase() !== (selfUsername || '').toLowerCase()
+    ? `@${recipientRaw}`
+    : '';
+
+  const noteMatch = TRANSFER_NOTE_RE.exec(content) || TRANSFER_NOTE_RE.exec(nc);
+  const note = noteMatch ? noteMatch[1].trim() : '';
+
+  return { amount, recipient, note };
 }
 
 function rankBusinesses(
@@ -184,10 +224,11 @@ function suggestionsFor(content: string, hasBusiness: boolean, multiple = false)
   const t = normalizeText(content);
   if (hasBusiness && multiple) return ['Reservar', 'Pedir por Bunzy', 'Darme contacto'];
   if (hasBusiness) return ['Cómo llego 🗺️', 'Reservar mesa', 'Ver otras opciones'];
-  if (/bunz|ganar|recompens/.test(t)) return ['¿Cómo gano bunz?', 'Negocios cerca de mí', 'Canjear mis bunz'];
+  if (/bunz|ganar|recompens/.test(t)) return ['¿Cómo gano bunz?', 'Enviar bunz', 'Mi QR de pago'];
+  if (/enviar|mandar|transfer|pagar|pago|qr|recibir/.test(t)) return ['Enviar bunz', 'Mi QR de pago', 'Ver mi saldo'];
   if (/comer|cafe|rest|bar|antoj/.test(t)) return ['Cafés cerca ☕', 'Restaurantes 🍽️', 'Postres 🍰'];
   if (/pizza|pizzas|taco|tacos|hamburg|comida/.test(t)) return ['Usar mi ubicación', 'Buscar por dirección', 'Ver todos'];
-  return ['Recomiéndame un lugar', '¿Cómo gano bunz?', 'Ver el mapa Freehands'];
+  return ['Recomiéndame un lugar', 'Enviar bunz', '¿Cómo gano bunz?'];
 }
 
 interface BunzyContext {
@@ -197,6 +238,8 @@ interface BunzyContext {
     hops: number;
     levelName: string | null;
     multiplier: number;
+    username: string | null;
+    id: string;
   } | null;
   businesses: BusinessRow[];
   allBusinesses: BusinessRow[];
@@ -212,7 +255,7 @@ async function loadContext(input: BunzyInput): Promise<BunzyContext> {
   const userRow = await db.query.users
     .findFirst({
       where: eq(users.id, input.userId),
-      columns: { firstName: true, totalBunzEarned: true, totalBunzSpent: true, hops: true, levelId: true },
+      columns: { firstName: true, totalBunzEarned: true, totalBunzSpent: true, hops: true, levelId: true, username: true, id: true },
     })
     .catch(() => undefined);
 
@@ -232,6 +275,8 @@ async function loadContext(input: BunzyInput): Promise<BunzyContext> {
           hops: userRow.hops || 0,
           levelName,
           multiplier,
+          username: userRow.username,
+          id: userRow.id,
         }
       : null,
     businesses: ranked,
@@ -279,7 +324,10 @@ REGLAS GENERALES:
 1. Recomienda SOLAMENTE negocios del directorio anterior. Nunca inventes negocios, direcciones, tel/WhatsApp ni recompensas.
 2. Usa herramienta "buscar_negocios" solo si realmente faltan resultados. Puedes usar "buscar_negocios_cercanos" con soloAbiertosAhora=true cuando diga "ahorita".
 3. Si vas a mostrar UNA sola opción directa, agrega EXACTAMENTE esta etiqueta al final: [COMERCIO_ACTION id="{id_del_comercio}" name="{nombre_del_comercio}"]
-4. Sé breve (máx ~120 palabras), dinámico y útil. Usa emojis con moderación. Responde SIEMPRE en español.`;
+4. Sé breve (máx ~120 palabras), dinámico y útil. Usa emojis con moderación. Responde SIEMPRE en español.
+
+CONOCIMIENTO DE SOPORTE (usa esto ÚNICAMENTE si la consulta es sobre "bunzz", "soporte", "ayuda", "FAQ", "cómo funciona", "recompensas generales", "billetera", "referidos", "niveles"):
+${SUPPORT_KNOWLEDGE}`;
 }
 
 type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
@@ -625,9 +673,116 @@ async function runOllama(
   }
 }
 
+export interface BunzyAssistInput {
+  mode: 'draft' | 'summarize';
+  intent?: string;
+  otherName?: string;
+  messages: { fromMe: boolean; content: string }[];
+}
+
+/**
+ * Bunzy como asistente dentro de un chat interno (Rabbitter ↔ Rabbitter / Negocio).
+ * Redacta un mensaje sugerido ('draft') o resume la conversación ('summarize').
+ */
+export async function generateBunzyAssist(input: BunzyAssistInput): Promise<string> {
+  const transcript = input.messages
+    .slice(-12)
+    .map((m) => `${m.fromMe ? 'Yo' : input.otherName || 'Contacto'}: ${m.content}`)
+    .join('\n');
+
+  const system =
+    input.mode === 'summarize'
+      ? `Eres Bunzy 🐰, asistente oficial de Rabbitty. Resume en 2 o 3 viñetas muy breves de qué se habló en esta conversación y, si aplica, cuál es el siguiente paso pendiente. Tono mexicano fresco y directo. Responde en español, máximo 60 palabras.`
+      : `Eres Bunzy 🐰, asistente oficial de Rabbitty. Redacta UN mensaje breve, natural y cordial para que el usuario lo envíe en este chat${input.otherName ? ` con ${input.otherName}` : ''}. ${
+          input.intent ? `Lo que el usuario quiere decir: "${input.intent}".` : 'Ayúdalo a responder al último mensaje de forma clara y amable.'
+        } Devuelve SOLO el texto del mensaje, sin comillas, sin prefijos ni explicaciones, máximo 40 palabras.`;
+
+  if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'dummy_key_for_build') {
+    try {
+      const OpenAI = (await import('openai')).default;
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: transcript || '(Aún no hay mensajes previos)' },
+        ],
+        max_tokens: 140,
+        temperature: 0.8,
+      });
+      const text = completion.choices[0]?.message?.content?.trim();
+      if (text) return text;
+    } catch (err) {
+      console.error('[BunzyAssist OpenAI Error]:', err);
+    }
+  }
+
+  // Fallback heurístico (sin proveedor de IA)
+  if (input.mode === 'summarize') {
+    const last = input.messages
+      .slice(-3)
+      .map((m) => `${m.fromMe ? 'Yo' : input.otherName || 'Contacto'}: ${m.content}`)
+      .join(' · ');
+    return last ? `Esto es lo más reciente: ${last}` : 'Aún no hay mensajes para resumir.';
+  }
+  return (input.intent || '').trim() || '¡Hola! ¿Cómo estás? Quedo al pendiente, cualquier cosa me dices. 🙌';
+}
+
 export async function generateBunzyReply(input: BunzyInput): Promise<BunzyReply> {
   const ctx = await loadContext(input);
   const history = await loadHistory(input.conversationId);
+
+  // Fallback -2: pide QR de pago / recibir bunz
+  const nc0 = normalizeText(input.content);
+  if (
+    /\b(mi qr|qr de pago|codigo de pago|codigo qr|recibir bunz|recibir pago|pagame|pagame con qr|mostrar qr|escanear qr)\b/.test(nc0) ||
+    (/qr/.test(nc0) && /pag|bunz|cobrar|rece/.test(nc0))
+  ) {
+    const handle = ctx.user?.username ? `@${ctx.user.username}` : ctx.user?.id || '';
+    return {
+      content:
+        `🐰 ¡Claro! Aquí tienes tu QR de pago. Muestra este código para que te transfieran bunz.\n\n` +
+        (handle ? `Tu identificador es **${handle}**.` : 'Inicia sesión para generar tu código.'),
+      type: 'TEXT',
+      metadata: null,
+      suggestions: ['Enviar bunz', 'Ver mi saldo'],
+      options: [],
+      orderDraft: null,
+      transferRequest: null,
+      receiveQr: handle ? { handle } : null,
+    };
+  }
+
+  // Fallback -1: intención de transferencia conversacional → tarjeta de confirmación
+  const transfer = parseTransferIntent(input.content, ctx.user?.firstName || undefined);
+  if (transfer) {
+    const who = transfer.recipient || '¿a quién?';
+    return {
+      content:
+        `🐰 ¿Quieres enviar **${transfer.amount} bunz** a **${who}**?` +
+        (transfer.note ? `\n📝 Nota: "${transfer.note}"` : '') +
+        `\n\nRevisa los datos y confirma abajo.`,
+      type: 'TEXT',
+      metadata: null,
+      suggestions: ['Ver mi saldo', 'Cancelar'],
+      options: [],
+      orderDraft: null,
+      transferRequest: transfer,
+    };
+  }
+
+  // Fallback 0: pregunta de soporte → responde con FAQ conciso + enlace
+  const faqMatch = matchFaq(input.content);
+  if (faqMatch) {
+    return {
+      content: `🐰 ${faqMatch.q}\n\n${faqMatch.a}\n\n¿Necesitas algo más? Escribe "soporte" o ve a Soporte > FAQs/Docs.`,
+      type: 'TEXT',
+      metadata: null,
+      suggestions: ['Ver todas las FAQs', 'Ver documentación'],
+      options: [],
+      orderDraft: null,
+    };
+  }
 
   let text: string | null = null;
   if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'dummy_key_for_build') {

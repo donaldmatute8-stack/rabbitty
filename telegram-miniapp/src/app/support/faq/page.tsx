@@ -5,32 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import Link from 'next/link';
 
-const FAQS = [
-  {
-    q: "¿Qué son los Bunz?",
-    a: "Los Bunz son la moneda digital exclusiva del ecosistema Rabbitty. Sirven para recibir recompensas cuando consumes en negocios afiliados y luego gastarlos como dinero real en otros negocios participantes."
-  },
-  {
-    q: "¿Cómo gano Bunz?",
-    a: "¡Es automático! Cada vez que pagas en un restaurante o negocio con el sistema Rabbitty POS, muestras el código QR de tu billetera o das tu número de teléfono. El cajero lo escanea y un porcentaje de tu cuenta se regresa inmediatamente en Bunz."
-  },
-  {
-    q: "¿Tienen fecha de vencimiento?",
-    a: "Los Bunz en tu cuenta registrada no vencen. Sin embargo, si un negocio te emite Bunz a tu número telefónico y aún no has creado tu cuenta (Bóveda Temporal), tienes 3 meses para registrarte antes de que expiren."
-  },
-  {
-    q: "¿Puedo transferir mis Bunz a otra persona?",
-    a: "Puedes usarlos para invitar la cuenta en un restaurante participante. La transferencia directa peer-to-peer está planeada para futuras actualizaciones, ¡mantente atento a la comunidad!"
-  },
-  {
-    q: "¿Cómo funciona el programa de referidos?",
-    a: "En tu perfil encontrarás un enlace único. Compártelo con tus amigos y, cuando ellos creen su cuenta y realicen su primera transacción, tú recibirás Bunz automáticamente en tu billetera."
-  },
-  {
-    q: "¿Dónde veo qué negocios aceptan Bunz?",
-    a: "En la pantalla principal (Stock o Feed) y en la pestaña 'Freehands' (nuestro mapa inteligente), verás en tiempo real todos los negocios afiliados cercanos a tu ubicación."
-  }
-];
+import { FAQS } from '@/lib/support-content';
 
 export default function FAQPage() {
   const [query, setQuery] = useState('');

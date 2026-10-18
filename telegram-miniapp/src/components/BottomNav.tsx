@@ -108,10 +108,10 @@ export default function BottomNav({ isDark }: BottomNavProps = {}) {
           {/* Home / Feed con Ra más grande (tap to top & refresh) */}
           <Link
             href="/"
-            onClick={() => {
+            onClick={(e) => {
               handleTabPress();
               if (pathname === '/') {
-                window.scrollTo({ top: 0, behavior: 'smooth' });
+                e.preventDefault();
                 window.dispatchEvent(new CustomEvent('rabbitty:refresh-feed'));
               }
             }}
