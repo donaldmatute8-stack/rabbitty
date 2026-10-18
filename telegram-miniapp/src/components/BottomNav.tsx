@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { MessageCircle, ScanLine } from 'lucide-react';
+import { MessageCircle, ScanLine, User } from 'lucide-react';
 import useSWR from 'swr';
 
 import { PlatformBridge } from '@/lib/platform';
@@ -35,6 +35,7 @@ export default function BottomNav({ isDark }: BottomNavProps = {}) {
   const isFeed = pathname === '/';
   const isDiscover = pathname === '/chat';
   const isScan = pathname === '/scan';
+  const isProfile = pathname?.startsWith('/profile') || false;
 
   const effectiveDark = isDark ?? themeIsDark;
 
@@ -147,6 +148,11 @@ export default function BottomNav({ isDark }: BottomNavProps = {}) {
           {/* Scan */}
           <Link href="/scan" onClick={handleTabPress} className="flex items-center justify-center w-12 h-12 active:scale-90 transition-all" style={{ color: getColor(isScan) }}>
             <ScanLine className="w-[25px] h-[25px]" strokeWidth={2.2} />
+          </Link>
+
+          {/* Perfil */}
+          <Link href="/profile" onClick={handleTabPress} className="flex items-center justify-center w-12 h-12 active:scale-90 transition-all" style={{ color: getColor(isProfile) }}>
+            <User className="w-[25px] h-[25px]" strokeWidth={2.2} />
           </Link>
 
         </div>
