@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Sparkles, Zap, ArrowRight, ShieldCheck, Flame, HelpCircle, ChevronRight, X } from 'lucide-react';
+import { Check, Sparkles, ArrowRight, X } from 'lucide-react';
 
 export interface PackagePlan {
   id: string;
@@ -45,6 +45,8 @@ export const NICHES_DATA: NicheData[] = [
           'Códigos QR dinámicos para mesa y mostrador',
           'Bóveda de emisión inicial: 3,000 BUNZ de bienvenida',
           'Pin verificado en el mapa Freehands con radar',
+          'Landing page propia en subdominio (tunegocio.rabbitty.me)',
+          'Optimización con Schema.org y microdatos para motores de IA (ChatGPT, Perplexity y Gemini)',
           'Catálogo digital y cobro express offline-first',
           'Integración básica a Bunzy Concierge IA',
         ],
@@ -60,6 +62,8 @@ export const NICHES_DATA: NicheData[] = [
         idealFor: '8 a 25 Mesas con salón',
         features: [
           'Todo lo de Café Express +',
+          'Sucursal digital interactiva con menú online y pedidos QR',
+          'Microdatos Schema.org estructurados (menú y horarios para Google/IA)',
           'Mapa interactivo de mesas con estado en tiempo real',
           'KDS de Cocina (Kitchen Display) en pantallas táctiles',
           'Comandas móviles ilimitadas para meseros',
@@ -149,6 +153,8 @@ export const NICHES_DATA: NicheData[] = [
           'Control de inventario por SKU y tallas',
           'Bóveda de emisión inicial: 3,500 BUNZ',
           'Perfil en el directorio con geolocalización en mapa',
+          'Landing page propia con subdominio (tunegocio.rabbitty.me)',
+          'Datos estructurados Schema.org para descubrimiento en ChatGPT Search, Perplexity y Gemini',
           'Cobro rápido y tickets digitales vía Telegram/SMS',
         ],
       },
@@ -163,6 +169,8 @@ export const NICHES_DATA: NicheData[] = [
         idealFor: 'Espacios Multimarca / Alto Tráfico',
         features: [
           'Múltiples terminales inalámbricas para asesores de piso',
+          'Landing page web + sucursal digital interactiva en subdominio',
+          'SEO Local con microdatos Schema.org & GEO indexing para IAs',
           'Lanzamiento de Drops exclusivos canjeables con bunz',
           'Bóveda de emisión inicial: 9,500 BUNZ',
           'Campañas push dirigidas a coleccionistas y exploradores',
@@ -226,7 +234,7 @@ export default function PricingPackagesSection({ onSelectPlan }: PricingProps) {
   const currentNiche = NICHES_DATA.find((n) => n.id === selectedNicheId) || NICHES_DATA[0];
 
   return (
-    <section id="paquetes" className="relative z-10 py-28 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-[#080812] via-[#05050A] to-[#080812] border-t border-white/10">
+    <section id="paquetes" className="relative z-10 py-28 px-4 sm:px-6 lg:px-8 bg-linear-to-b from-[#080812] via-[#05050A] to-[#080812] border-t border-white/10">
       <div className="max-w-7xl mx-auto">
         
         {/* Section Header */}
@@ -255,7 +263,7 @@ export default function PricingPackagesSection({ onSelectPlan }: PricingProps) {
             <button
               onClick={() => setBillingPeriod('yearly')}
               className={`relative px-5 py-2 rounded-full text-xs sm:text-sm font-extrabold transition-all cursor-pointer flex items-center gap-2 ${
-                billingPeriod === 'yearly' ? 'bg-gradient-to-r from-pink-600 to-purple-600 text-white shadow-lg shadow-pink-500/30' : 'text-white/60 hover:text-white'
+                billingPeriod === 'yearly' ? 'bg-linear-to-r from-pink-600 to-purple-600 text-white shadow-lg shadow-pink-500/30' : 'text-white/60 hover:text-white'
               }`}
             >
               <span>Membresía Anual (48,000 BUNZ)</span>
@@ -309,13 +317,13 @@ export default function PricingPackagesSection({ onSelectPlan }: PricingProps) {
               transition={{ duration: 0.3 }}
               className={`relative rounded-3xl p-6 sm:p-8 flex flex-col justify-between transition-all duration-300 border ${
                 plan.isPopular
-                  ? 'bg-gradient-to-b from-[#181122] via-[#0E0E18] to-[#0A0A12] border-pink-500/60 shadow-[0_0_40px_rgba(233,30,99,0.2)] md:-translate-y-2'
-                  : 'bg-white/[0.03] border-white/10 hover:border-white/20 hover:bg-white/[0.05]'
+                  ? 'bg-linear-to-b from-[#181122] via-[#0E0E18] to-[#0A0A12] border-pink-500/60 shadow-[0_0_40px_rgba(233,30,99,0.2)] md:-translate-y-2'
+                  : 'bg-white/3 border-white/10 hover:border-white/20 hover:bg-white/5'
               }`}
             >
               {/* Badge */}
               {plan.badge && (
-                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-gradient-to-r from-pink-600 to-purple-600 text-[10px] font-black text-white tracking-widest uppercase shadow-lg shadow-pink-500/30">
+                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-linear-to-r from-pink-600 to-purple-600 text-[10px] font-black text-white tracking-widest uppercase shadow-lg shadow-pink-500/30">
                   {plan.badge}
                 </div>
               )}
@@ -371,7 +379,7 @@ export default function PricingPackagesSection({ onSelectPlan }: PricingProps) {
                 onClick={() => onSelectPlan(plan, currentNiche, billingPeriod)}
                 className={`w-full py-4 rounded-2xl font-black text-sm tracking-wide transition-all cursor-pointer flex items-center justify-center gap-2 border-none active:scale-[0.98] ${
                   plan.isPopular
-                    ? 'bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white shadow-[0_4px_20px_rgba(233,30,99,0.4)]'
+                    ? 'bg-linear-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white shadow-[0_4px_20px_rgba(233,30,99,0.4)]'
                     : 'bg-white hover:bg-slate-100 text-black shadow-md'
                 }`}
               >
@@ -383,7 +391,7 @@ export default function PricingPackagesSection({ onSelectPlan }: PricingProps) {
         </div>
 
         {/* Comparison Trigger Banner vs Dinosaur Systems */}
-        <div className="mt-16 max-w-4xl mx-auto rounded-3xl bg-gradient-to-r from-blue-950/40 via-purple-950/30 to-pink-950/40 border border-white/10 p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6 backdrop-blur-md">
+        <div className="mt-16 max-w-4xl mx-auto rounded-3xl bg-linear-to-r from-blue-950/40 via-purple-950/30 to-pink-950/40 border border-white/10 p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6 backdrop-blur-md">
           <div className="text-center sm:text-left">
             <span className="text-xs font-black text-blue-400 uppercase tracking-widest block mb-1">
               BENCHMARK DE MERCADO
@@ -409,7 +417,7 @@ export default function PricingPackagesSection({ onSelectPlan }: PricingProps) {
       {/* MODAL COMPARATIVA VS SOFT RESTAURANT */}
       <AnimatePresence>
         {showComparisonModal && (
-          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+          <div className="fixed inset-0 z-120 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
             <motion.div
               initial={{ scale: 0.92, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -462,6 +470,11 @@ export default function PricingPackagesSection({ onSelectPlan }: PricingProps) {
                       <td className="py-3.5 px-3 font-bold">Kiosko Autoservicio & QR BYOD</td>
                       <td className="py-3.5 px-3 text-white/40">❌ Módulos extras caros ($15,000+)</td>
                       <td className="py-3.5 px-3 text-emerald-400 font-bold">✅ Incluido nativamente sin hardware propietario</td>
+                    </tr>
+                    <tr>
+                      <td className="py-3.5 px-3 font-bold">Landing Page & SEO para IAs (ChatGPT/Gemini)</td>
+                      <td className="py-3.5 px-3 text-white/40">❌ No incluye. Requiere pagar agencia o Wix ($3,000+/mes)</td>
+                      <td className="py-3.5 px-3 text-emerald-400 font-bold">✅ Incluida con subdominio, Schema.org y GEO Search</td>
                     </tr>
                     <tr>
                       <td className="py-3.5 px-3 font-bold">Hardware Requerido</td>
