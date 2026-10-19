@@ -77,8 +77,13 @@ export default function ProfilePage() {
   }, [user]);
 
   const handleAvatarTap = () => {
-    const email = user?.email;
-    if (email === 'marco@rabbitty.me') {
+    const isOwner = 
+      user?.email === 'marco@rabbitty.me' ||
+      user?.role === 'ADMIN' ||
+      user?.username?.toLowerCase() === 'mardelbull' ||
+      user?.username?.toLowerCase() === 'marco';
+
+    if (isOwner) {
       setShowAdmin(true);
       return;
     }

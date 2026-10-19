@@ -156,6 +156,19 @@ export default function AdminPanel({ onClose }: { onClose: () => void }) {
           </p>
         </div>
 
+        {/* SECTION: INVESTOR & ECOSYSTEM METRICS */}
+        <div style={{ backgroundColor: '#09090B', color: '#fff', borderRadius: 16, padding: 18, border: '1px solid #27272A', marginBottom: 16, boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 900, color: '#fff', margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+              📈 Métricas del Ecosistema · Data Room Inversionistas
+            </h3>
+            <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 999, background: 'rgba(233,30,99,0.15)', color: '#F43F5E', border: '1px solid rgba(233,30,99,0.3)' }}>
+              LIVE LEDGER
+            </span>
+          </div>
+          <EcosystemMetricsSection />
+        </div>
+
         {/* SECTION: OMNICHANNEL DRIP METRICS */}
         <div style={{ backgroundColor: '#FAFAFA', borderRadius: 14, padding: 16, border: '1px solid #EAEAEA', marginBottom: 16 }}>
           <h3 style={{ fontSize: 15, fontWeight: 800, color: '#111', margin: '0 0 12px 0' }}>📊 Métricas Omnicanal & Drip Campaigns</h3>
@@ -1084,6 +1097,208 @@ function LedgerReconciliationSection() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+interface EcosystemData {
+  businesses?: {
+    total: number;
+    active: number;
+    pending: number;
+    totalCreditLimit: number;
+    totalCreditUsed: number;
+  };
+  rabbitters?: {
+    total: number;
+    totalBunzEarned: number;
+    totalBunzSpent: number;
+    circulatingSupply: number;
+  };
+  ledger?: {
+    rewardsGiven: number;
+    rewardsCount: number;
+    redemptionsSpent: number;
+    redemptionsCount: number;
+    transfersP2P: number;
+    transfersCount: number;
+  };
+  qrTelemetry?: {
+    campaignRef: string;
+    totalScans: number;
+    iosScans: number;
+    androidScans: number;
+  }[];
+  businessesBreakdown?: {
+    id: string;
+    name: string;
+    category: string;
+    status: string;
+    creditLimit: number;
+    creditUsed: number;
+  }[];
+}
+
+function EcosystemMetricsSection() {
+  const { user } = useAuth();
+  const [data, setData] = useState<EcosystemData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchMetrics = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/ecosystem-metrics', {
+        headers: await adminHeaders(user),
+      });
+      const json = await res.json();
+      if (json.success && json.ecosystem) {
+        setData(json.ecosystem);
+      }
+    } catch (err) {
+      console.error('Error fetching ecosystem metrics:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch('/api/admin/ecosystem-metrics', {
+          headers: await adminHeaders(user),
+        });
+        const json = await res.json();
+        if (active && json.success && json.ecosystem) {
+          setData(json.ecosystem);
+        }
+      } catch (err) {
+        console.error('Error fetching ecosystem metrics:', err);
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
+  if (loading) {
+    return <p style={{ fontSize: 12, color: '#A1A1AA', margin: '8px 0' }}>Cargando métricas del ecosistema...</p>;
+  }
+
+  if (!data) {
+    return <p style={{ fontSize: 12, color: '#EF4444', margin: '8px 0' }}>No se pudieron cargar las métricas.</p>;
+  }
+
+  const b = data.businesses || { total: 0, active: 0, pending: 0, totalCreditLimit: 0, totalCreditUsed: 0 };
+  const r = data.rabbitters || { total: 0, totalBunzEarned: 0, totalBunzSpent: 0, circulatingSupply: 0 };
+  const l = data.ledger || { rewardsGiven: 0, rewardsCount: 0, redemptionsSpent: 0, redemptionsCount: 0, transfersP2P: 0, transfersCount: 0 };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* KPI Cards Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+        <div style={{ background: '#18181B', padding: 12, borderRadius: 12, border: '1px solid #27272A' }}>
+          <span style={{ fontSize: 10, color: '#A1A1AA', textTransform: 'uppercase', fontWeight: 800 }}>🏪 Negocios Afiliados</span>
+          <div style={{ fontSize: 20, fontWeight: 900, color: '#fff', marginTop: 4 }}>
+            {b.active} <span style={{ fontSize: 12, color: '#71717A', fontWeight: 500 }}>/ {b.total}</span>
+          </div>
+          <span style={{ fontSize: 10, color: '#34D399', fontWeight: 700 }}>
+            {b.pending > 0 ? `${b.pending} pendientes de aprobar` : '100% al día'}
+          </span>
+        </div>
+
+        <div style={{ background: '#18181B', padding: 12, borderRadius: 12, border: '1px solid #27272A' }}>
+          <span style={{ fontSize: 10, color: '#A1A1AA', textTransform: 'uppercase', fontWeight: 800 }}>👥 Rabbitters Activos</span>
+          <div style={{ fontSize: 20, fontWeight: 900, color: '#fff', marginTop: 4 }}>
+            {r.total.toLocaleString()}
+          </div>
+          <span style={{ fontSize: 10, color: '#F43F5E', fontWeight: 700 }}>
+            {r.circulatingSupply.toLocaleString()} Bunz circulantes
+          </span>
+        </div>
+
+        <div style={{ background: '#18181B', padding: 12, borderRadius: 12, border: '1px solid #27272A' }}>
+          <span style={{ fontSize: 10, color: '#A1A1AA', textTransform: 'uppercase', fontWeight: 800 }}>🎁 Recompensas Emitidas</span>
+          <div style={{ fontSize: 20, fontWeight: 900, color: '#38BDF8', marginTop: 4 }}>
+            ${l.rewardsGiven.toLocaleString()}
+          </div>
+          <span style={{ fontSize: 10, color: '#71717A' }}>
+            {l.rewardsCount} transacciones de cashback
+          </span>
+        </div>
+
+        <div style={{ background: '#18181B', padding: 12, borderRadius: 12, border: '1px solid #27272A' }}>
+          <span style={{ fontSize: 10, color: '#A1A1AA', textTransform: 'uppercase', fontWeight: 800 }}>💳 Canjes en POS</span>
+          <div style={{ fontSize: 20, fontWeight: 900, color: '#F59E0B', marginTop: 4 }}>
+            ${l.redemptionsSpent.toLocaleString()}
+          </div>
+          <span style={{ fontSize: 10, color: '#71717A' }}>
+            {l.redemptionsCount} consumos pagados con Bunz
+          </span>
+        </div>
+      </div>
+
+      {/* QR Scans Breakdown */}
+      {data.qrTelemetry && data.qrTelemetry.length > 0 && (
+        <div style={{ background: '#18181B', padding: 12, borderRadius: 12, border: '1px solid #27272A' }}>
+          <span style={{ fontSize: 11, fontWeight: 800, color: '#fff', display: 'block', marginBottom: 8 }}>
+            📲 Telemetría de Escaneos por Campaña / Negocio
+          </span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {data.qrTelemetry.map((q) => (
+              <div key={q.campaignRef} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, padding: '4px 8px', background: '#27272A', borderRadius: 8 }}>
+                <span style={{ fontWeight: 800, color: '#F43F5E' }}>📍 {q.campaignRef}</span>
+                <span style={{ color: '#E4E4E7' }}>
+                  <strong>{q.totalScans}</strong> escaneos ({q.iosScans} iOS · {q.androidScans} Android)
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Individual Business Progress */}
+      {data.businessesBreakdown && data.businessesBreakdown.length > 0 && (
+        <div style={{ background: '#18181B', padding: 12, borderRadius: 12, border: '1px solid #27272A' }}>
+          <span style={{ fontSize: 11, fontWeight: 800, color: '#fff', display: 'block', marginBottom: 8 }}>
+            🏢 Consumo de Cupo Promocional por Afiliado
+          </span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {data.businessesBreakdown.slice(0, 5).map((biz) => {
+              const usedPct = biz.creditLimit > 0 ? Math.min(100, Math.round((biz.creditUsed / biz.creditLimit) * 100)) : 0;
+              return (
+                <div key={biz.id} style={{ fontSize: 11, padding: '6px 8px', background: '#27272A', borderRadius: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={{ fontWeight: 800, color: '#fff' }}>{biz.name}</span>
+                    <span style={{ color: '#A1A1AA', fontSize: 10 }}>{biz.creditUsed} / {biz.creditLimit} Bunz ({usedPct}%)</span>
+                  </div>
+                  <div style={{ width: '100%', height: 4, background: '#3F3F46', borderRadius: 2, overflow: 'hidden' }}>
+                    <div style={{ width: `${usedPct}%`, height: '100%', background: '#F43F5E' }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <button
+        onClick={fetchMetrics}
+        style={{
+          padding: '8px 12px',
+          borderRadius: 8,
+          border: '1px solid #3F3F46',
+          background: '#27272A',
+          color: '#fff',
+          fontSize: 11,
+          fontWeight: 700,
+          cursor: 'pointer',
+        }}
+      >
+        🔄 Actualizar Métricas en Vivo
+      </button>
     </div>
   );
 }
