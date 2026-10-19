@@ -241,6 +241,10 @@ export default function LandingPage() {
           </a>
           <a href="#paquetes" className="text-pink-400 hover:text-pink-300 font-extrabold transition-colors">Paquetes</a>
           <a href="#bunz" className="hover:text-white transition-colors">Economía</a>
+          <a href="/gtm-plan" className="text-emerald-400 hover:text-emerald-300 font-extrabold transition-colors flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            Plan GTM 30D
+          </a>
         </nav>
         <div className="flex items-center gap-4">
           <a href="https://admin.rabbitty.me/login" target="_blank" className="hidden md:block text-sm font-bold text-blue-400 hover:text-blue-300 transition-colors">
@@ -634,6 +638,7 @@ export default function LandingPage() {
             <span className="font-bold text-white/50">© 2026 Rabbitty Corp.</span>
           </div>
           <div className="flex flex-wrap items-center gap-6 text-sm font-semibold text-white/40">
+            <a href="/gtm-plan" className="text-emerald-400 hover:text-emerald-300 font-bold transition-colors cursor-pointer">Plan GTM 30 Días (Público)</a>
             <a href="/privacy" className="hover:text-white transition-colors cursor-pointer">Privacidad y Términos</a>
             <a href="/whitepaper" className="hover:text-white transition-colors cursor-pointer">Whitepaper</a>
             <button onClick={() => setShowSmartContractModal(true)} className="hover:text-white transition-colors cursor-pointer">Smart Contract</button>
