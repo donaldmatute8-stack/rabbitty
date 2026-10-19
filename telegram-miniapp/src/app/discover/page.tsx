@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Search, Store } from 'lucide-react';
+import { Search, Store, Sparkles, ChevronLeft } from 'lucide-react';
 import BottomNav from '@/components/BottomNav';
+import { PlatformBridge } from '@/lib/platform';
 
 import { VibePassportRoute } from '@/types/mood';
 
@@ -30,6 +32,7 @@ interface PassportRouteWithProgress extends VibePassportRoute {
 }
 
 export default function DiscoverPage() {
+  const router = useRouter();
   const [query, setQuery] = useState('');
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [loading, setLoading] = useState(false);
@@ -101,9 +104,44 @@ export default function DiscoverPage() {
   return (
     <div className="page-wrap pb-28" style={{ fontFamily: "var(--font-family-base)", background: 'var(--bg-primary)' }}>
       <div style={{ height: 'var(--safe-top)' }} />
-      <div className="p-4">
-        <h1 className="text-[28px] font-extrabold tracking-[-0.5px] m-0 mb-4" style={{ color: 'var(--text-primary)' }}>Descubrir</h1>
+      
+      {/* Rabbitty Identity Header: Back arrow left, Central Pill title */}
+      <div className="flex items-center justify-between px-4 py-3 sticky top-0 z-30" style={{ background: 'var(--bg-primary)' }}>
+        <button
+          type="button"
+          onClick={() => {
+            PlatformBridge.hapticFeedback('light');
+            if (window.history.length > 1) {
+              router.back();
+            } else {
+              router.push('/');
+            }
+          }}
+          className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
+          style={{ background: 'var(--bg-elevated)', color: 'var(--text-primary)' }}
+          aria-label="Volver"
+        >
+          <ChevronLeft size={20} strokeWidth={2.5} />
+        </button>
 
+        {/* Central Pill */}
+        <div 
+          className="px-4 py-1.5 rounded-full flex items-center justify-center shadow-xs"
+          style={{ 
+            background: 'var(--bg-elevated)', 
+            border: '1px solid var(--border-subtle)',
+          }}
+        >
+          <span className="text-[14px] font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>
+            Descubrir
+          </span>
+        </div>
+
+        {/* Spacer for symmetrical centering */}
+        <div className="w-10" />
+      </div>
+
+      <div className="p-4 pt-1">
         <div className="relative mb-4">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: 'var(--text-muted)' }} strokeWidth={1.5} />
           <input
@@ -129,12 +167,15 @@ export default function DiscoverPage() {
         {!loading && !query && (
           <div className="space-y-6">
             {/* Vibe Passport Spotlight */}
-            <div className="rounded-2xl p-4 bg-linear-to-br from-amber-500/15 via-purple-500/10 to-transparent border border-amber-500/30">
-              <div className="flex items-center justify-between mb-2">
-                <span className="flex items-center gap-1.5 text-xs font-black text-amber-400 uppercase tracking-wider">
-                  <span>🧭</span> Rabbitty Vibe Passport
+            <div className="rounded-3xl p-4.5 bg-linear-to-br from-[#E91E63]/20 via-[#1F0A17]/80 to-zinc-950/90 border border-[#E91E63]/30 shadow-[0_8px_32px_rgba(233,30,99,0.12)]">
+              <div className="flex items-center justify-between mb-2.5">
+                <span className="flex items-center gap-2 text-xs font-black text-[#E91E63] uppercase tracking-wider">
+                  <div className="w-5 h-5 rounded-md bg-[#E91E63]/20 flex items-center justify-center border border-[#E91E63]/40">
+                    <Sparkles size={12} className="text-[#E91E63]" />
+                  </div>
+                  <span>Rabbitty Vibe Passport</span>
                 </span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold">
+                <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-[#E91E63]/20 text-pink-300 font-extrabold border border-[#E91E63]/30 uppercase tracking-wider">
                   Rutas de la Ciudad
                 </span>
               </div>
@@ -142,48 +183,48 @@ export default function DiscoverPage() {
                 Recorre la ciudad con pasaportes temáticos entre locales afiliados. Gana Bunz minteados al consumir en cada parada.
               </p>
 
-              <div className="space-y-3">
+              <div className="space-y-3.5">
                 {passportRoutes.map((route) => (
-                  <div key={route.id} className="p-3.5 rounded-xl bg-black/40 border border-white/10 space-y-2.5">
+                  <div key={route.id} className="p-4 rounded-2xl bg-[#120E15]/80 border border-white/10 space-y-3 shadow-inner">
                     <div className="flex items-center justify-between">
                       <div>
-                        <span className="text-sm font-bold text-white block">{route.title}</span>
-                        <span className="text-[10px] text-amber-300 font-medium">{route.theme} · {route.estimatedHours}</span>
+                        <span className="text-sm font-black text-white block tracking-tight">{route.title}</span>
+                        <span className="text-[10px] text-[#E91E63] font-bold tracking-wide uppercase">{route.theme} · {route.estimatedHours}</span>
                       </div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${route.isCompleted ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-white/10 text-white/70'}`}>
+                      <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full ${route.isCompleted ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-[#E91E63]/15 text-pink-300 border border-[#E91E63]/25'}`}>
                         {route.completedStopsCount}/{route.stops.length} Sellos
                       </span>
                     </div>
-                    <p className="text-[11px] text-white/60 leading-tight">
+                    <p className="text-[11px] text-white/60 leading-normal">
                       {route.description}
                     </p>
-                    <div className="space-y-1.5 pt-1">
+                    <div className="space-y-2 pt-1">
                       {route.stops.map((stop) => {
                         const isStamped = route.stamps?.some((s) => s.stopOrder === stop.order);
                         const isStampingThis = stamping === `${route.id}-${stop.order}`;
                         return (
-                          <div key={stop.order} className="flex items-center justify-between p-2 rounded-lg bg-white/5 border border-white/5 text-xs">
-                            <div className="flex items-center gap-2">
-                              <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold bg-white/10 text-white">
+                          <div key={stop.order} className="flex items-center justify-between p-2.5 rounded-xl bg-white/4 border border-white/8 text-xs hover:border-[#E91E63]/30 transition-colors">
+                            <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${isStamped ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-[#E91E63]/20 text-[#E91E63] border border-[#E91E63]/30'}`}>
                                 {isStamped ? '✓' : stop.order}
                               </span>
-                              <div>
-                                <span className={`font-semibold ${isStamped ? 'text-emerald-400 line-through' : 'text-white'}`}>
+                              <div className="min-w-0 truncate">
+                                <span className={`font-bold block truncate ${isStamped ? 'text-emerald-400 line-through' : 'text-white'}`}>
                                   {stop.category}
                                 </span>
-                                <span className="text-[10px] text-white/50 block">{stop.pairingHint}</span>
+                                <span className="text-[10px] text-white/50 block truncate">{stop.pairingHint}</span>
                               </div>
                             </div>
                             {!isStamped ? (
                               <button
                                 onClick={() => handleManualStamp(route.id, stop.order, stop.vibeRequired)}
                                 disabled={isStampingThis}
-                                className="px-2.5 py-1 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[10px] font-bold border border-amber-500/30 cursor-pointer disabled:opacity-50"
+                                className="px-3 py-1.5 rounded-lg bg-[#E91E63] hover:bg-[#D81B60] active:scale-95 text-white text-[10px] font-black border-none cursor-pointer disabled:opacity-50 shadow-[0_2px_10px_rgba(233,30,99,0.35)] shrink-0 transition-transform"
                               >
                                 {isStampingThis ? '...' : 'Sellar'}
                               </button>
                             ) : (
-                              <span className="text-[10px] font-bold text-emerald-400">Sellado</span>
+                              <span className="text-[10px] font-black text-emerald-400 px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 shrink-0">Sellado</span>
                             )}
                           </div>
                         );

@@ -148,10 +148,9 @@ export function BunzBadge({
         type="button"
         onClick={() => setOpen(true)}
         title="Haz clic para ver qué es bunz"
-        className={`inline-flex items-center gap-1 font-semibold text-pink-500 hover:text-pink-400 underline decoration-pink-500/40 hover:decoration-pink-400 underline-offset-2 transition-colors cursor-pointer group ${className}`}
+        className={`inline-flex items-baseline font-semibold text-pink-600 hover:text-pink-500 underline decoration-pink-500/40 hover:decoration-pink-500 underline-offset-2 transition-colors cursor-pointer ${className}`}
       >
         <span>bunz</span>
-        <span className="text-[10px] opacity-75 font-mono group-hover:scale-110 transition-transform">ℹ️</span>
       </button>
 
       <BunzInfoModal
