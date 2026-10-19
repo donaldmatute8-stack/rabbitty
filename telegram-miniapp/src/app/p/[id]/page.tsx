@@ -1,9 +1,9 @@
-import { Metadata, ResolvingMetadata } from 'next';
+import { Metadata } from 'next';
+import Image from 'next/image';
 import { db } from '@/db';
 import { ownedBusinesses } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { MapPin, Tag, ExternalLink } from 'lucide-react';
-import Link from 'next/link';
 
 const parseGallery = (galleryStr: string | null | undefined): string[] => {
   if (!galleryStr) return [];
@@ -20,8 +20,7 @@ type Props = {
 }
 
 export async function generateMetadata(
-  { params }: Props,
-  parent: ResolvingMetadata
+  { params }: Props
 ): Promise<Metadata> {
   const { id } = await params;
   const business = await db.query.ownedBusinesses.findFirst({ where: eq(ownedBusinesses.id, id) });
@@ -67,8 +66,15 @@ export default async function PublicAffiliatePage({ params }: Props) {
     <div className="min-h-screen bg-gray-50 font-sans pb-24">
       {/* Hero Image */}
       <div className="w-full h-72 md:h-96 relative">
-        <img src={coverImage} alt={business.name} className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
+        <Image
+          src={coverImage}
+          alt={business.name}
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover"
+        />
+        <div className="absolute inset-0 bg-linear-to-t from-black/80 to-transparent" />
         <div className="absolute bottom-6 left-6 right-6 text-white max-w-4xl mx-auto">
           <span className="bg-pink-600 text-white text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider mb-3 inline-block">
             {business.category}
@@ -103,21 +109,29 @@ export default async function PublicAffiliatePage({ params }: Props) {
               </div>
             </div>
 
-            <div className="w-full md:w-80 bg-gray-50 rounded-2xl p-6 border border-gray-200 text-center flex-shrink-0">
+            <div className="w-full md:w-80 bg-gray-50 rounded-2xl p-6 border border-gray-200 text-center shrink-0">
               <div className="w-16 h-16 bg-pink-100 text-pink-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-3xl">
                 🐰
               </div>
-              <h3 className="font-black text-gray-900 text-xl mb-2">¿Quieres ganar cripto?</h3>
+              <h3 className="font-black text-gray-900 text-xl mb-2">Reclama tus Bunz</h3>
               <p className="text-sm text-gray-500 mb-6 font-medium">
-                Abre esta oferta en la App oficial de Rabbitty en Telegram para reclamar tus puntos.
+                Abre esta oferta en la App de Rabbitty o al instante en Telegram para recibir tus recompensas.
               </p>
-              <a
-                href={telegramDeepLink}
-                className="block w-full bg-[#2AABEE] text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-[#229ED9] transition-colors"
-              >
-                <ExternalLink size={18} />
-                Abrir en Telegram
-              </a>
+              <div className="flex flex-col gap-2.5">
+                <a
+                  href={`https://rabbitty.me/download?ref=${business.id.slice(0, 8)}`}
+                  className="w-full bg-linear-to-r from-pink-500 to-rose-600 text-white font-black py-3.5 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-pink-500/20 hover:opacity-95 transition-opacity text-sm"
+                >
+                  <ExternalLink size={16} />
+                  Abrir App Rabbitty
+                </a>
+                <a
+                  href={telegramDeepLink}
+                  className="w-full bg-zinc-100 text-zinc-700 font-bold py-2.5 rounded-xl flex items-center justify-center gap-2 hover:bg-zinc-200 transition-colors text-xs"
+                >
+                  Continuar en Telegram
+                </a>
+              </div>
             </div>
           </div>
         </div>

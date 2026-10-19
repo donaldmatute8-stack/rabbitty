@@ -43,11 +43,13 @@ export default function ReferralPage() {
   const profile = user as unknown as ReferralUser;
   const loading = !user;
 
-  // Telegram bot startapp referral link or web referral link fallback
+  // Smart referral link: Generates native web link (https://rabbitty.me/download?ref=...) on mobile/web,
+  // or Telegram Mini App link (https://t.me/Rabbittyme_bot/app?startapp=...) when inside Telegram.
   const referralCode = profile?.username || profile?.telegramId || profile?.id || 'rabbitty';
-  const referralLink = profile?.telegramId
-    ? `https://t.me/Rabbittyme_bot/app?startapp=ref_${profile.telegramId}`
-    : `https://t.me/Rabbittyme_bot/app?startapp=ref_${referralCode}`;
+  const referralLink = PlatformBridge.getShareableLink(
+    `/download?ref=${referralCode}`,
+    `ref_${profile?.telegramId || referralCode}`
+  );
 
   const copyToClipboard = () => {
     if (referralLink) {
@@ -89,10 +91,10 @@ export default function ReferralPage() {
           <>
             {/* Level + Pending Bunz */}
             <div
-              className="rounded-[28px] px-5 py-6 relative overflow-hidden border border-white/[0.05] shadow-[0_12px_40px_rgba(45,16,96,0.4)]"
+              className="rounded-[28px] px-5 py-6 relative overflow-hidden border border-white/5 shadow-[0_12px_40px_rgba(45,16,96,0.4)]"
               style={{ background: 'linear-gradient(135deg, #1A0540 0%, #2D1060 55%, #3D0F80 100%)' }}
             >
-              <div className="absolute right-[-10%] top-[-10%] w-44 h-44 bg-white/[0.06] rounded-full blur-[30px]" />
+              <div className="absolute right-[-10%] top-[-10%] w-44 h-44 bg-white/6 rounded-full blur-[30px]" />
 
               <div className="flex justify-between items-start relative z-10">
                 <div>
@@ -130,7 +132,7 @@ export default function ReferralPage() {
               {/* Link box */}
               <div className="bg-black/25 border-2 border-dashed border-white/10 rounded-[20px] p-4 flex flex-col gap-3 mb-4">
                 <p className="text-[9px] font-black text-white/40 tracking-[1.5px] uppercase m-0">Tu Link Único</p>
-                <div className="flex items-center justify-between gap-2 bg-white/[0.06] rounded-[14px] p-3 border border-white/10">
+                <div className="flex items-center justify-between gap-2 bg-white/6 rounded-[14px] p-3 border border-white/10">
                   <div className="overflow-hidden text-left">
                     <span className="text-[11px] font-black text-[#E91E63] uppercase tracking-[0.5px] block mb-1">TU CÓDIGO</span>
                     <span className="text-xl font-black text-white font-mono truncate block">{referralCode}</span>
@@ -159,7 +161,7 @@ export default function ReferralPage() {
                 <button
                   onClick={shareOnTelegram}
                   disabled={!referralLink}
-                  className="flex-1 font-black text-[13px] py-3.5 rounded-[16px] border-0 flex items-center justify-center gap-2 active:scale-95 transition-transform"
+                  className="flex-1 font-black text-[13px] py-3.5 rounded-2xl border-0 flex items-center justify-center gap-2 active:scale-95 transition-transform"
                   style={{
                     background: referralLink ? '#2AABEE' : 'rgba(255,255,255,0.08)',
                     color: referralLink ? '#fff' : 'rgba(255,255,255,0.35)',
@@ -173,7 +175,7 @@ export default function ReferralPage() {
                 <button
                   onClick={shareOnWhatsApp}
                   disabled={!referralLink}
-                  className="flex-1 font-black text-[13px] py-3.5 rounded-[16px] border-0 flex items-center justify-center gap-2 active:scale-95 transition-transform"
+                  className="flex-1 font-black text-[13px] py-3.5 rounded-2xl border-0 flex items-center justify-center gap-2 active:scale-95 transition-transform"
                   style={{
                     background: referralLink ? '#25D366' : 'rgba(255,255,255,0.08)',
                     color: referralLink ? '#fff' : 'rgba(255,255,255,0.35)',

@@ -3,7 +3,7 @@ import { validateTelegramInitData, parseTelegramUser } from '@/lib/telegramAuth'
 import { resolveUniqueUsername } from '@/lib/username';
 import { db } from '@/db';
 import { users, referrals, webSessions, ownedBusinesses, pendingVaults } from '@/db/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, or, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 import { recordLedgerTransaction, findLedgerEntry } from '@/lib/ledgerHelper';
 
@@ -68,6 +68,68 @@ export async function POST(req: Request) {
             rewardAmount: 50
           });
         }
+      }
+    }
+
+    // Manejo de códigos promocionales de carteles / impresos (ej. promo_626cafe)
+    if (startParam && startParam.startsWith('promo_')) {
+      const promoBusinessSlug = startParam.replace('promo_', '').trim().toLowerCase();
+
+      // Blindaje de seguridad: Solo usuarios nuevos o sin bono previo pueden recibirlo (1 sola vez de por vida)
+      const idempotencyKey = `promo_welcome_${promoBusinessSlug}_${user.id}`;
+      const priorBonus = await findLedgerEntry(idempotencyKey);
+
+      if (!priorBonus && isNewUser) {
+        // Buscar el negocio afiliado emisor
+        const [promoBiz] = await db
+          .select({ id: ownedBusinesses.id, name: ownedBusinesses.name, rewardPercentage: ownedBusinesses.rewardPercentage })
+          .from(ownedBusinesses)
+          .where(
+            or(
+              eq(sql`LOWER(REPLACE(${ownedBusinesses.name}, ' ', ''))`, promoBusinessSlug),
+              eq(sql`LOWER(COALESCE(slug, ''))`, promoBusinessSlug),
+              eq(sql`SUBSTRING(${ownedBusinesses.id}::text, 1, 8)`, promoBusinessSlug)
+            )
+          )
+          .limit(1);
+
+        const bonusBunz = promoBiz?.rewardPercentage || 25;
+
+        await db.transaction(async (tx) => {
+          const [lockedUser] = await tx
+            .select()
+            .from(users)
+            .where(eq(users.id, user.id))
+            .for('update');
+
+          if (!lockedUser) return;
+
+          const recheck = await findLedgerEntry(idempotencyKey, tx);
+          if (recheck) return;
+
+          await tx
+            .update(users)
+            .set({ totalBunzEarned: sql`COALESCE(${users.totalBunzEarned}, 0) + ${bonusBunz}` })
+            .where(eq(users.id, lockedUser.id));
+
+          await recordLedgerTransaction(
+            {
+              payerSubjectId: promoBiz?.id || 'sys_promo_welcome',
+              payeeSubjectId: `usr_${user.id}`,
+              amount: bonusBunz,
+              type: 'EARN',
+              referenceId: promoBusinessSlug,
+              idempotencyKey,
+              metadata: {
+                reason: 'PROMO_WELCOME_PRINT_KIT',
+                businessName: promoBiz?.name || promoBusinessSlug,
+                ref: promoBusinessSlug,
+                telegramId: user.telegramId,
+              },
+            },
+            tx
+          );
+        });
       }
     }
 

@@ -326,7 +326,7 @@ export default function ChatInboxPage() {
     contacts?: { select: (props: string[], opts?: { multiple?: boolean }) => Promise<DeviceContact[]> };
   };
 
-  const appLink = typeof window !== 'undefined' ? window.location.origin : '';
+  const appLink = PlatformBridge.getShareableLink('/download?ref=chat_invite', 'chat_invite');
   const inviteText = `Únete a Rabbitty 🐰 ${appLink}`;
 
   const openWhatsAppInvite = (phone?: string) => {
@@ -334,14 +334,14 @@ export default function ChatInboxPage() {
     const url = digits
       ? `https://wa.me/${digits}?text=${encodeURIComponent(inviteText)}`
       : `https://wa.me/?text=${encodeURIComponent(inviteText)}`;
-    window.open(url, '_blank');
+    PlatformBridge.openExternalUrl(url);
   };
 
   const openTelegramInvite = () => {
     const url = `https://t.me/share/url?url=${encodeURIComponent(appLink)}&text=${encodeURIComponent(
       'Únete a Rabbitty 🐰'
     )}`;
-    window.open(url, '_blank');
+    PlatformBridge.openExternalUrl(url);
   };
 
   const pickDeviceContacts = async () => {

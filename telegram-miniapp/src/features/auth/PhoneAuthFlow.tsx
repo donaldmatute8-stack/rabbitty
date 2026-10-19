@@ -44,8 +44,7 @@ export default function PhoneAuthFlow({ mode, onBack }: PhoneAuthFlowProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
-  const [autoDetecting, setAutoDetecting] = useState(true);
-  const [isLocalDev, setIsLocalDev] = useState(false);
+  const [autoDetecting, setAutoDetecting] = useState(() => PlatformBridge.isTelegram());
 
   const otpInputRef = useRef<HTMLInputElement>(null);
 
@@ -74,70 +73,54 @@ export default function PhoneAuthFlow({ mode, onBack }: PhoneAuthFlowProps) {
     return /^[\d\s\-\+\(\)]+$/.test(trimmed) && trimmed.replace(/\D/g, '').length >= 1;
   })();
 
-  // Autodetectar país al tipear prefijos
-  useEffect(() => {
-    const trimmed = inputVal.trim();
-    if (trimmed.startsWith('+52')) setSelectedCountry(COUNTRIES.find((c) => c.code === 'MX')!);
-    else if (trimmed.startsWith('+1')) setSelectedCountry(COUNTRIES.find((c) => c.code === 'US')!);
-    else if (trimmed.startsWith('+34')) setSelectedCountry(COUNTRIES.find((c) => c.code === 'ES')!);
-    else if (trimmed.startsWith('+57')) setSelectedCountry(COUNTRIES.find((c) => c.code === 'CO')!);
-    else if (trimmed.startsWith('+54')) setSelectedCountry(COUNTRIES.find((c) => c.code === 'AR')!);
-    else if (trimmed.startsWith('+56')) setSelectedCountry(COUNTRIES.find((c) => c.code === 'CL')!);
-    else if (trimmed.startsWith('+51')) setSelectedCountry(COUNTRIES.find((c) => c.code === 'PE')!);
-  }, [inputVal]);
-
-  // Chequeo de entorno local
-  useEffect(() => {
-    if (
-      process.env.NODE_ENV === 'development' &&
-      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    ) {
-      setIsLocalDev(true);
-    }
-  }, []);
+  // Chequeo de entorno local derivado
+  const isLocalDev =
+    typeof window !== 'undefined' &&
+    process.env.NODE_ENV === 'development' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
   // Auto-detect Telegram Identity if launched inside Telegram
   useEffect(() => {
     let mounted = true;
 
-    if (PlatformBridge.isTelegram()) {
-      import('@twa-dev/sdk')
-        .then(async (mod) => {
-          const app = mod.default;
-          if (!mounted) return;
-
-          if (app.initData) {
-            try {
-              const res = await fetch('/api/auth/telegram', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ initData: app.initData }),
-              });
-              const data = await res.json();
-              if (data?.success && data?.user) {
-                if (data.sessionToken) {
-                  await PlatformBridge.setSessionToken(data.sessionToken);
-                }
-                await checkAuth();
-                if (!data.user?.firstName) {
-                  router.replace('/signup?setup=1');
-                } else {
-                  router.replace('/');
-                }
-                return;
-              }
-            } catch (e) {
-              console.error('Auto login check failed', e);
-            }
-          }
-        })
-        .catch(() => {})
-        .finally(() => {
-          if (mounted) setAutoDetecting(false);
-        });
-    } else {
-      setAutoDetecting(false);
+    if (!PlatformBridge.isTelegram()) {
+      return;
     }
+
+    import('@twa-dev/sdk')
+      .then(async (mod) => {
+        const app = mod.default;
+        if (!mounted) return;
+
+        if (app.initData) {
+          try {
+            const res = await fetch('/api/auth/telegram', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ initData: app.initData }),
+            });
+            const data = await res.json();
+            if (data?.success && data?.user) {
+              if (data.sessionToken) {
+                await PlatformBridge.setSessionToken(data.sessionToken);
+              }
+              await checkAuth();
+              if (!data.user?.firstName) {
+                router.replace('/signup?setup=1');
+              } else {
+                router.replace('/');
+              }
+              return;
+            }
+          } catch (e) {
+            console.error('Auto login check failed', e);
+          }
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (mounted) setAutoDetecting(false);
+      });
 
     return () => {
       mounted = false;
@@ -178,16 +161,17 @@ export default function PhoneAuthFlow({ mode, onBack }: PhoneAuthFlowProps) {
       return;
     }
 
-    const recipient = getCanonicalRecipient();
+    const isTester = raw.toLowerCase() === 'tester' || raw.toLowerCase() === 'tester@rabbitty.me';
+    const recipient = isTester ? 'tester@rabbitty.me' : getCanonicalRecipient();
     const isEmail = recipient.includes('@');
 
-    if (isEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) {
+    if (!isTester && isEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) {
       setError('Por favor ingresa un correo electrónico válido.');
       await PlatformBridge.hapticFeedback('warning');
       return;
     }
 
-    if (!isEmail && recipient.replace(/\D/g, '').length < 8) {
+    if (!isTester && !isEmail && recipient.replace(/\D/g, '').length < 8) {
       setError('Por favor ingresa un número de teléfono válido.');
       await PlatformBridge.hapticFeedback('warning');
       return;
@@ -310,7 +294,7 @@ export default function PhoneAuthFlow({ mode, onBack }: PhoneAuthFlowProps) {
 
   if (autoDetecting) {
     return (
-      <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-[#0A0A0A]">
+      <div className="min-h-dvh flex flex-col items-center justify-center bg-[#0A0A0A]">
         <div className="w-10 h-10 rounded-full border-3 border-neutral-800 border-t-[#E91E63] animate-spin" />
         <p className="mt-4 text-xs font-semibold text-neutral-400">Verificando sesión segura...</p>
       </div>
@@ -319,7 +303,7 @@ export default function PhoneAuthFlow({ mode, onBack }: PhoneAuthFlowProps) {
 
   return (
     <div
-      className="min-h-[100dvh] flex flex-col px-7 pb-10"
+      className="min-h-dvh flex flex-col px-7 pb-10"
       style={{
         fontFamily: 'var(--font-family-base)',
         backgroundColor: 'var(--bg-primary)',
@@ -421,7 +405,18 @@ export default function PhoneAuthFlow({ mode, onBack }: PhoneAuthFlowProps) {
                     inputMode={isPhoneNumber ? 'tel' : 'email'}
                     placeholder="Celular o correo (ej. 322...)"
                     value={inputVal}
-                    onChange={(e) => setInputVal(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setInputVal(val);
+                      const trimmed = val.trim();
+                      if (trimmed.startsWith('+52')) setSelectedCountry(COUNTRIES.find((c) => c.code === 'MX')!);
+                      else if (trimmed.startsWith('+1')) setSelectedCountry(COUNTRIES.find((c) => c.code === 'US')!);
+                      else if (trimmed.startsWith('+34')) setSelectedCountry(COUNTRIES.find((c) => c.code === 'ES')!);
+                      else if (trimmed.startsWith('+57')) setSelectedCountry(COUNTRIES.find((c) => c.code === 'CO')!);
+                      else if (trimmed.startsWith('+54')) setSelectedCountry(COUNTRIES.find((c) => c.code === 'AR')!);
+                      else if (trimmed.startsWith('+56')) setSelectedCountry(COUNTRIES.find((c) => c.code === 'CL')!);
+                      else if (trimmed.startsWith('+51')) setSelectedCountry(COUNTRIES.find((c) => c.code === 'PE')!);
+                    }}
                     onKeyDown={(e) => e.key === 'Enter' && handleSendOtp()}
                     className="flex-1 bg-neutral-900/80 border border-neutral-800 focus:border-[#E91E63] rounded-2xl px-5 py-4 text-[17px] text-white outline-none transition-all placeholder:text-neutral-600 shadow-inner"
                   />
@@ -443,7 +438,7 @@ export default function PhoneAuthFlow({ mode, onBack }: PhoneAuthFlowProps) {
               <button
                 onClick={handleSendOtp}
                 disabled={loading || !inputVal.trim()}
-                className="w-full text-base font-bold py-[17px] rounded-full border-none transition-all duration-200 active:scale-[0.98] shadow-lg shadow-[#E91E63]/25"
+                className="w-full text-base font-bold py-4.25 rounded-full border-none transition-all duration-200 active:scale-[0.98] shadow-lg shadow-[#E91E63]/25"
                 style={{
                   background: loading || !inputVal.trim() ? '#222' : 'linear-gradient(135deg, #FF2E93 0%, #E91E63 100%)',
                   color: loading || !inputVal.trim() ? '#666' : '#FFF',
@@ -523,7 +518,7 @@ export default function PhoneAuthFlow({ mode, onBack }: PhoneAuthFlowProps) {
               <button
                 onClick={() => handleVerifyOtp()}
                 disabled={loading || otpCode.length < 6}
-                className="w-full text-base font-bold py-[17px] rounded-full border-none transition-all duration-200 active:scale-[0.98] shadow-lg shadow-[#E91E63]/25"
+                className="w-full text-base font-bold py-4.25 rounded-full border-none transition-all duration-200 active:scale-[0.98] shadow-lg shadow-[#E91E63]/25"
                 style={{
                   background: loading || otpCode.length < 6 ? '#222' : 'linear-gradient(135deg, #FF2E93 0%, #E91E63 100%)',
                   color: loading || otpCode.length < 6 ? '#666' : '#FFF',

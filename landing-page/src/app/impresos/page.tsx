@@ -1,12 +1,19 @@
-'use client';
-
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { Printer, Sparkles, Smartphone, ArrowRight, CheckCircle2, ShieldCheck, Coffee } from 'lucide-react';
+import { Printer, Sparkles, Smartphone, ArrowRight, CheckCircle2, ShieldCheck, Coffee, Search, ChevronDown, Check, Building2 } from 'lucide-react';
 import { SimpleQRCode } from '@/components/SimpleQRCode';
 
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
+
+interface BusinessItem {
+  id: string;
+  name: string;
+  category: string;
+  rewardPercentage: number;
+  address: string;
+  refCode: string;
+}
 
 function ImpresosContent() {
   const searchParams = useSearchParams();
@@ -21,6 +28,51 @@ function ImpresosContent() {
   const [welcomeBunz, setWelcomeBunz] = useState(initialBunz);
   const [appUrl, setAppUrl] = useState(initialUrl);
   const [activeTab, setActiveTab] = useState<'all' | 'poster' | 'table' | 'cashier' | 'guide'>('all');
+
+  // Estados para selector inteligente de negocios de la BD
+  const [businesses, setBusinesses] = useState<BusinessItem[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [loadingBusinesses, setLoadingBusinesses] = useState(true);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetch('/api/affiliates')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.success && Array.isArray(data.businesses)) {
+          setBusinesses(data.businesses);
+        }
+      })
+      .catch((err) => console.error('Error cargando afiliados:', err))
+      .finally(() => setLoadingBusinesses(false));
+  }, []);
+
+  // Cerrar dropdown al hacer click fuera
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelectBusiness = (b: BusinessItem) => {
+    setBusinessName(b.name);
+    setWelcomeBunz(String(b.rewardPercentage || '25'));
+    const generatedUrl = `https://rabbitty.me/download?ref=${b.refCode}`;
+    setAppUrl(generatedUrl);
+    setIsDropdownOpen(false);
+    setSearchQuery('');
+  };
+
+  const filteredBusinesses = businesses.filter((b) =>
+    b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    b.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    b.address.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const handlePrint = () => {
     window.print();
@@ -99,7 +151,7 @@ function ImpresosContent() {
                   Materiales de Activación en Punto de Venta (100% Identidad Rabbitty)
                 </h1>
                 <p className="text-xs text-zinc-400 mt-0.5">
-                  Diseñado con estética suiza, alto contraste blanco/negro y acentos rosa Rabbitty para máxima atracción visual sin subordinar la marca a terceros.
+                  Selecciona cualquier negocio afiliado registrado o escribe directamente sus datos para adaptar el cartel, habladores y códigos QR.
                 </p>
               </div>
               <div className="text-right">
@@ -109,10 +161,80 @@ function ImpresosContent() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-zinc-800">
+            {/* Smart Business Selector */}
+            <div className="mb-4 pt-2 border-t border-zinc-800 relative" ref={dropdownRef}>
+              <label className="text-[11px] font-bold text-pink-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                <Building2 className="w-3.5 h-3.5" /> Seleccionar Negocio Afiliado de la Red
+              </label>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className="w-full bg-black border border-zinc-800 hover:border-pink-500/50 rounded-xl px-4 py-2.5 text-sm text-left flex items-center justify-between text-white transition-colors"
+                >
+                  <span className="font-bold flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-pink-500" />
+                    {businessName}
+                  </span>
+                  <div className="flex items-center gap-2 text-zinc-400 text-xs">
+                    <span>{loadingBusinesses ? 'Cargando red...' : `${businesses.length} afiliados`}</span>
+                    <ChevronDown className="w-4 h-4" />
+                  </div>
+                </button>
+
+                {isDropdownOpen && (
+                  <div className="absolute left-0 right-0 top-full mt-2 z-50 bg-[#121216] border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-2xl">
+                    <div className="p-3 border-b border-zinc-800 flex items-center gap-2 bg-zinc-950/60">
+                      <Search className="w-4 h-4 text-zinc-500" />
+                      <input
+                        type="text"
+                        placeholder="Buscar por nombre, categoría o dirección..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        autoFocus
+                        className="bg-transparent border-none text-white text-xs w-full focus:outline-none placeholder:text-zinc-600"
+                      />
+                    </div>
+                    <div className="max-h-60 overflow-y-auto divide-y divide-zinc-800/50">
+                      {filteredBusinesses.length === 0 ? (
+                        <div className="p-4 text-center text-xs text-zinc-500">
+                          No se encontraron negocios con ese término.
+                        </div>
+                      ) : (
+                        filteredBusinesses.map((b) => (
+                          <button
+                            key={b.id}
+                            type="button"
+                            onClick={() => handleSelectBusiness(b)}
+                            className="w-full px-4 py-3 text-left hover:bg-pink-500/10 flex items-center justify-between transition-colors group cursor-pointer"
+                          >
+                            <div>
+                              <div className="text-sm font-bold text-white group-hover:text-pink-400 flex items-center gap-2">
+                                {b.name}
+                                {b.name === businessName && <Check className="w-3.5 h-3.5 text-pink-500" />}
+                              </div>
+                              <div className="text-[11px] text-zinc-400 flex items-center gap-2 mt-0.5">
+                                <span className="text-zinc-500">{b.category}</span>
+                                {b.address && <span>· {b.address}</span>}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-xs font-mono font-bold text-pink-400">+{b.rewardPercentage}% Bunz</span>
+                              <span className="block text-[9px] font-mono text-zinc-500">ref: {b.refCode}</span>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-zinc-800/60">
               <div>
                 <label className="block text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                  Nombre del Afiliado / Local
+                  Nombre en Carteles
                 </label>
                 <input
                   type="text"
@@ -136,13 +258,13 @@ function ImpresosContent() {
 
               <div>
                 <label className="block text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                  URL Destino del QR (TestFlight / App Store)
+                  URL Destino del QR (Con código de referido)
                 </label>
                 <input
                   type="text"
                   value={appUrl}
                   onChange={(e) => setAppUrl(e.target.value)}
-                  placeholder="https://testflight.apple.com/join/..."
+                  placeholder="https://rabbitty.me/download?ref=..."
                   className="w-full bg-black border border-zinc-800 rounded-xl px-3 py-2 text-sm text-pink-400 font-mono focus:outline-none focus:border-pink-500"
                 />
               </div>
