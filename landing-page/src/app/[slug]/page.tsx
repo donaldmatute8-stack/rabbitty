@@ -157,9 +157,21 @@ export default async function AffiliateLandingPage({ params }: PageProps) {
       <header className="sticky top-0 z-40 bg-[#FDFBF7]/90 backdrop-blur-md border-b border-stone-200/80 px-6 py-4">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-amber-900/10 border border-amber-900/20 flex items-center justify-center text-amber-900 font-serif font-black text-lg">
-              ☕
-            </div>
+            {affiliate.logoUrl ? (
+              <div className="relative w-10 h-10 rounded-2xl overflow-hidden border border-stone-200/90 bg-white p-1 shadow-sm shrink-0">
+                <Image
+                  src={affiliate.logoUrl}
+                  alt={affiliate.name}
+                  fill
+                  unoptimized
+                  className="object-contain"
+                />
+              </div>
+            ) : (
+              <div className="w-10 h-10 rounded-2xl bg-amber-900/10 border border-amber-900/20 flex items-center justify-center text-amber-900 font-serif font-black text-lg shrink-0">
+                ☕
+              </div>
+            )}
             <div>
               <span className="font-serif font-black text-base sm:text-lg tracking-tight text-stone-900 block leading-none">
                 {affiliate.name}
@@ -172,15 +184,21 @@ export default async function AffiliateLandingPage({ params }: PageProps) {
 
           <div className="flex items-center gap-4">
             <nav className="hidden md:flex items-center gap-6 text-xs uppercase tracking-widest font-bold text-stone-600">
-              <a href="#menu-section" className="hover:text-stone-900 transition-colors no-underline">
-                Menú
-              </a>
-              <a href="#story-section" className="hover:text-stone-900 transition-colors no-underline">
-                Nosotros
-              </a>
-              <a href="#visit-section" className="hover:text-stone-900 transition-colors no-underline">
-                Ubicación
-              </a>
+              {affiliate.menuItems && affiliate.menuItems.length > 0 && (
+                <a href="#menu-section" className="hover:text-stone-900 transition-colors no-underline">
+                  Menú
+                </a>
+              )}
+              {(affiliate.story || (affiliate.gallery && affiliate.gallery.length > 0)) && (
+                <a href="#story-section" className="hover:text-stone-900 transition-colors no-underline">
+                  Nosotros
+                </a>
+              )}
+              {affiliate.address && (
+                <a href="#visit-section" className="hover:text-stone-900 transition-colors no-underline">
+                  Ubicación
+                </a>
+              )}
             </nav>
 
             <SmartAppAction
@@ -201,7 +219,7 @@ export default async function AffiliateLandingPage({ params }: PageProps) {
           <div className="lg:col-span-6 space-y-6 sm:space-y-8">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-100/70 border border-amber-900/15 text-amber-950 text-xs font-bold uppercase tracking-wider">
               <Sparkles size={13} className="text-amber-800" />
-              <span>Cafetería de Especialidad & Masa Madre</span>
+              <span>{affiliate.category}</span>
             </div>
 
             <h1 className="font-serif text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-stone-950 leading-[1.05]">
@@ -281,158 +299,165 @@ export default async function AffiliateLandingPage({ params }: PageProps) {
         </div>
       </section>
 
-      {/* SECTION 2: FAVORITOS DEL NEGOCIO (Visual Menu with Real Photos) */}
-      <section id="menu-section" className="py-16 sm:py-24 px-6 bg-[#F5F2EB] border-y border-stone-200/80">
-        <div className="max-w-6xl mx-auto space-y-12">
-          
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-            <div>
-              <span className="text-xs font-bold uppercase tracking-widest text-amber-900 block mb-2">
-                Selección de Temporada
-              </span>
-              <h2 className="font-serif text-3xl sm:text-5xl font-black tracking-tight text-stone-900">
-                Especialidades de la Casa
-              </h2>
+      {/* SECTION 2: FAVORITOS DEL NEGOCIO (Solo si el comercio tiene productos reales cargados) */}
+      {affiliate.menuItems && affiliate.menuItems.length > 0 && (
+        <section id="menu-section" className="py-16 sm:py-24 px-6 bg-[#F5F2EB] border-y border-stone-200/80">
+          <div className="max-w-6xl mx-auto space-y-12">
+            
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+              <div>
+                <span className="text-xs font-bold uppercase tracking-widest text-amber-900 block mb-2">
+                  Selección de Temporada
+                </span>
+                <h2 className="font-serif text-3xl sm:text-5xl font-black tracking-tight text-stone-900">
+                  Especialidades de la Casa
+                </h2>
+              </div>
+              <p className="text-xs sm:text-sm text-stone-600 max-w-sm">
+                Cada platillo y bebida preparado al momento con ingredientes frescos de productores locales.
+              </p>
             </div>
-            <p className="text-xs sm:text-sm text-stone-600 max-w-sm">
-              Cada platillo y bebida preparado al momento con ingredientes frescos de productores locales.
-            </p>
-          </div>
 
-          {/* 3 Featured Products with High-Resolution Photography */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {affiliate.menuItems.map(item => (
-              <div
-                key={item.id}
-                className="bg-[#FDFBF7] rounded-3xl overflow-hidden border border-stone-200/90 shadow-md hover:shadow-xl transition-all duration-300 flex flex-col justify-between group"
-              >
-                <div>
-                  {/* Photo Container */}
-                  <div className="relative aspect-4/3 w-full bg-stone-200 overflow-hidden">
-                    {item.imageUrl ? (
-                      <Image
-                        src={item.imageUrl}
-                        alt={item.name}
-                        fill
-                        unoptimized
-                        className="object-cover group-hover:scale-105 transition-transform duration-500"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-4xl">☕</div>
-                    )}
-                    {item.badge && (
-                      <div className="absolute top-4 left-4 px-3 py-1 rounded-full bg-[#2C1810]/85 backdrop-blur-md text-[#FDFBF7] text-[10px] font-black uppercase tracking-wider">
-                        {item.badge}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Content */}
-                  <div className="p-6 space-y-2">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <h3 className="font-serif font-bold text-xl text-stone-900 leading-tight">
-                        {item.name}
-                      </h3>
-                      <span className="font-mono font-black text-base text-amber-950 shrink-0">
-                        ${item.price} <span className="text-xs font-normal text-stone-500">MXN</span>
-                      </span>
+            {/* 3 Featured Products with High-Resolution Photography */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {affiliate.menuItems.map(item => (
+                <div
+                  key={item.id}
+                  className="bg-[#FDFBF7] rounded-3xl overflow-hidden border border-stone-200/90 shadow-md hover:shadow-xl transition-all duration-300 flex flex-col justify-between group"
+                >
+                  <div>
+                    {/* Photo Container */}
+                    <div className="relative aspect-4/3 w-full bg-stone-200 overflow-hidden">
+                      {item.imageUrl ? (
+                        <Image
+                          src={item.imageUrl}
+                          alt={item.name}
+                          fill
+                          unoptimized
+                          className="object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-4xl">☕</div>
+                      )}
+                      {item.badge && (
+                        <div className="absolute top-4 left-4 px-3 py-1 rounded-full bg-[#2C1810]/85 backdrop-blur-md text-[#FDFBF7] text-[10px] font-black uppercase tracking-wider">
+                          {item.badge}
+                        </div>
+                      )}
                     </div>
 
-                    {item.description && (
-                      <p className="text-xs text-stone-600 leading-relaxed font-normal">
-                        {item.description}
-                      </p>
+                    {/* Content */}
+                    <div className="p-6 space-y-2">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <h3 className="font-serif font-bold text-xl text-stone-900 leading-tight">
+                          {item.name}
+                        </h3>
+                        <span className="font-mono font-black text-base text-amber-950 shrink-0">
+                          ${item.price} <span className="text-xs font-normal text-stone-500">MXN</span>
+                        </span>
+                      </div>
+
+                      {item.description && (
+                        <p className="text-xs text-stone-600 leading-relaxed font-normal">
+                          {item.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Card Action Footer */}
+                  <div className="p-6 pt-0 border-t border-stone-100 flex items-center justify-between text-xs">
+                    {item.rewardBunz && affiliate.features.hasRewards ? (
+                      <span className="text-stone-500 font-medium">
+                        Acumula <strong className="text-amber-900 font-bold">+{item.rewardBunz}</strong>{' '}
+                        <BunzBadge affiliateName={affiliate.name} rewardPercentage={affiliate.rewardPercentage} />
+                      </span>
+                    ) : (
+                      <span className="text-stone-400 text-[11px]">Disponible en barra</span>
                     )}
+
+                    <SmartAppAction
+                      affiliateId={affiliate.id}
+                      affiliateName={affiliate.name}
+                      buttonLabel="Pedir"
+                      variant="subtle"
+                      className="py-2 px-4 text-[11px]"
+                    />
                   </div>
                 </div>
+              ))}
+            </div>
 
-                {/* Card Action Footer */}
-                <div className="p-6 pt-0 border-t border-stone-100 flex items-center justify-between text-xs">
-                  {item.rewardBunz && affiliate.features.hasRewards ? (
-                    <span className="text-stone-500 font-medium">
-                      Acumula <strong className="text-amber-900 font-bold">+{item.rewardBunz}</strong>{' '}
-                      <BunzBadge affiliateName={affiliate.name} rewardPercentage={affiliate.rewardPercentage} />
+            <div className="text-center pt-4">
+              <p className="text-xs text-stone-500 mb-4">
+                ¿Quieres consultar el menú completo con opciones veganas, sin gluten y filtrados?
+              </p>
+              <SmartAppAction
+                affiliateId={affiliate.id}
+                affiliateName={affiliate.name}
+                buttonLabel="Ver Menú Completo en Rabbitty"
+                variant="outline"
+              />
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* SECTION 3: LA EXPERIENCIA Y ATMÓSFERA (Solo si el comercio tiene historia o fotos) */}
+      {(affiliate.story || (affiliate.gallery && affiliate.gallery.length > 0)) && (
+        <section id="story-section" className="py-20 px-6 max-w-6xl mx-auto space-y-16">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+            
+            <div className="lg:col-span-5 space-y-6">
+              <span className="text-xs font-bold uppercase tracking-widest text-amber-900 block">
+                Nuestra Filosofía
+              </span>
+              <h2 className="font-serif text-3xl sm:text-5xl font-black tracking-tight text-stone-900 leading-tight">
+                Espacio con identidad propia.
+              </h2>
+              {affiliate.story && (
+                <p className="text-stone-600 text-sm leading-relaxed">
+                  {affiliate.story}
+                </p>
+              )}
+
+              {/* Ambience Tags */}
+              {affiliate.ambienceTags && (
+                <div className="pt-2 flex flex-wrap gap-2">
+                  {affiliate.ambienceTags.map((tag, idx) => (
+                    <span
+                      key={idx}
+                      className="px-3 py-1.5 rounded-full bg-stone-100 border border-stone-200 text-stone-800 text-xs font-medium"
+                    >
+                      #{tag}
                     </span>
-                  ) : (
-                    <span className="text-stone-400 text-[11px]">Disponible en barra</span>
-                  )}
-
-                  <SmartAppAction
-                    affiliateId={affiliate.id}
-                    affiliateName={affiliate.name}
-                    buttonLabel="Pedir"
-                    variant="subtle"
-                    className="py-2 px-4 text-[11px]"
-                  />
+                  ))}
                 </div>
-              </div>
-            ))}
-          </div>
+              )}
+            </div>
 
-          <div className="text-center pt-4">
-            <p className="text-xs text-stone-500 mb-4">
-              ¿Quieres consultar el menú completo con opciones veganas, sin gluten y filtrados?
-            </p>
-            <SmartAppAction
-              affiliateId={affiliate.id}
-              affiliateName={affiliate.name}
-              buttonLabel="Ver Menú Completo en Rabbitty"
-              variant="outline"
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* SECTION 3: LA EXPERIENCIA Y ATMÓSFERA */}
-      <section id="story-section" className="py-20 px-6 max-w-6xl mx-auto space-y-16">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-          
-          <div className="lg:col-span-5 space-y-6">
-            <span className="text-xs font-bold uppercase tracking-widest text-amber-900 block">
-              Nuestra Filosofía
-            </span>
-            <h2 className="font-serif text-3xl sm:text-5xl font-black tracking-tight text-stone-900 leading-tight">
-              Café sin prisas. Espacio con alma.
-            </h2>
-            <p className="text-stone-600 text-sm leading-relaxed">
-              {affiliate.story ||
-                'Creemos que una cafetería debe ser el tercer lugar: ese espacio entre el hogar y el trabajo donde puedes concentrarte en tus ideas, leer un buen libro o reconectar con amigos sin el ruido invasivo de las franquicias industriales.'}
-            </p>
-
-            {/* Ambience Tags */}
-            {affiliate.ambienceTags && (
-              <div className="pt-2 flex flex-wrap gap-2">
-                {affiliate.ambienceTags.map((tag, idx) => (
-                  <span
-                    key={idx}
-                    className="px-3 py-1.5 rounded-full bg-stone-100 border border-stone-200 text-stone-800 text-xs font-medium"
+            {/* Photo Gallery Grid */}
+            {affiliate.gallery && affiliate.gallery.length > 0 && (
+              <div className="lg:col-span-7 grid grid-cols-2 gap-4">
+                {affiliate.gallery.slice(0, 4).map((img, i) => (
+                  <div
+                    key={i}
+                    className="relative aspect-4/3 rounded-2xl overflow-hidden border border-stone-200 bg-stone-100 shadow-sm group"
                   >
-                    #{tag}
-                  </span>
+                    <Image
+                      src={img}
+                      alt={`${affiliate.name} fotografía ${i + 1}`}
+                      fill
+                      unoptimized
+                      className="object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                  </div>
                 ))}
               </div>
             )}
           </div>
-
-          {/* Photo Gallery Grid */}
-          <div className="lg:col-span-7 grid grid-cols-2 gap-4">
-            {affiliate.gallery.slice(0, 4).map((img, i) => (
-              <div
-                key={i}
-                className="relative aspect-4/3 rounded-2xl overflow-hidden border border-stone-200 bg-stone-100 shadow-sm group"
-              >
-                <Image
-                  src={img}
-                  alt={`${affiliate.name} fotografía ${i + 1}`}
-                  fill
-                  unoptimized
-                  className="object-cover group-hover:scale-105 transition-transform duration-500"
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* SECTION 4: FIDELIZACIÓN RABBITTY (Totalmente Dinámica por Comercio) */}
       <section className="py-16 px-6 bg-[#2C1810] text-[#FDFBF7]">
