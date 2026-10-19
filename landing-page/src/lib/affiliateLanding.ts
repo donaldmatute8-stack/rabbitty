@@ -28,6 +28,7 @@ export interface AffiliateLandingData {
   heroImage: string;
   gallery: string[];
   rewardPercentage: number;
+  welcomeBunz?: number;
   startTime: string;
   endTime: string;
   templateStyle: 'editorial' | 'urban' | 'minimal';
@@ -97,6 +98,7 @@ export async function getAffiliateBySlug(slug: string): Promise<AffiliateLanding
           'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=800&q=80',
         ],
         rewardPercentage: 15,
+        welcomeBunz: 25,
         startTime: '08:00',
         endTime: '20:00',
         templateStyle: 'editorial',
@@ -193,6 +195,7 @@ export async function getAffiliateBySlug(slug: string): Promise<AffiliateLanding
             'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=800&q=80',
           ],
           rewardPercentage: 15,
+          welcomeBunz: 25,
           startTime: '08:00',
           endTime: '20:00',
           templateStyle: 'editorial',
@@ -300,6 +303,7 @@ export async function getAffiliateBySlug(slug: string): Promise<AffiliateLanding
       heroImage: parsedGallery[0] || b.logoUrl || '/hero-bg.png',
       gallery: parsedGallery,
       rewardPercentage: Number(b.rewardPercentage || 10),
+      welcomeBunz: 25,
       startTime: String(b.startTime || '09:00'),
       endTime: String(b.endTime || '21:00'),
       templateStyle,
