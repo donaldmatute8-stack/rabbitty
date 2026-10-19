@@ -1,26 +1,46 @@
 import { sql } from './db';
 
+export interface MenuItemData {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  imageUrl: string | null;
+  category?: string;
+  badge?: string;
+  rewardBunz?: number;
+}
+
 export interface AffiliateLandingData {
   id: string;
   name: string;
   slug: string;
   category: string;
+  tagline?: string;
   description: string | null;
+  story?: string;
   address: string;
+  city?: string;
+  phone?: string;
   lat: number;
   lng: number;
   logoUrl: string | null;
+  heroImage: string;
   gallery: string[];
   rewardPercentage: number;
   startTime: string;
   endTime: string;
-  menuItems: Array<{
-    id: string;
-    name: string;
-    description: string | null;
-    price: number;
-    imageUrl: string | null;
-  }>;
+  templateStyle: 'editorial' | 'urban' | 'minimal';
+  primaryColor?: string;
+  accentColor?: string;
+  features: {
+    hasTableOrdering: boolean;
+    hasTakeaway: boolean;
+    hasReservations: boolean;
+    hasRewards: boolean;
+  };
+  menuItems: MenuItemData[];
+  ambienceTags?: string[];
 }
 
 export const RESERVED_SLUGS = new Set([
@@ -59,23 +79,67 @@ export async function getAffiliateBySlug(slug: string): Promise<AffiliateLanding
         id: '626cafe',
         name: '626 Café',
         slug: '626cafe',
-        category: 'Cafetería de Especialidad',
-        description: 'Café de especialidad, desayunos artesanales, panadería francesa y ambiente relajado en el corazón de la ciudad.',
-        address: 'Calle Libertad 626, Centro',
-        lat: 19.4326,
-        lng: -99.1332,
+        category: 'Cafetería de Especialidad & Tostaduría',
+        tagline: 'Donde cada taza cuenta una historia de origen.',
+        description: 'Tostaduría de café de especialidad y panadería de masa madre en el corazón de la ciudad. Espacio acústicamente curado para enfoque, lectura y buena conversación.',
+        story: 'Nacimos con la convicción de que el buen café no tiene prisa. Seleccionamos granos de origen único cosechados a más de 1,400 metros de altura en Chiapas y Veracruz, tostados semanalmente en pequeños lotes para preservar sus notas florales y frutales.',
+        address: 'Calle Libertad 626, Colonia Centro',
+        city: 'Guadalajara, Jalisco',
+        phone: '+52 33 1234 5678',
+        lat: 20.6736,
+        lng: -103.344,
         logoUrl: '/icon_ra.png',
+        heroImage: '/626cafe-hero.jpg',
         gallery: [
-          'https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=800&q=80',
+          '/626cafe-hero.jpg',
+          '/menu-flatwhite.jpg',
+          '/menu-croissant.jpg',
           'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=800&q=80',
         ],
-        rewardPercentage: 20,
+        rewardPercentage: 15,
         startTime: '08:00',
         endTime: '20:00',
+        templateStyle: 'editorial',
+        primaryColor: '#2C1810',
+        accentColor: '#D97706',
+        features: {
+          hasTableOrdering: true,
+          hasTakeaway: true,
+          hasReservations: false, // Honest: no reservations for specialty coffee
+          hasRewards: true,
+        },
+        ambienceTags: ['Café de Especialidad', 'Pet Friendly', 'Wi-Fi Alta Velocidad', 'Música Lofi & Acústica', 'Masa Madre'],
         menuItems: [
-          { id: '1', name: 'Flat White Doble', description: 'Espresso doble y leche micro-texturizada.', price: 65, imageUrl: null },
-          { id: '2', name: 'Croissant Mantequilla', description: 'Panadería fresca del día.', price: 48, imageUrl: null },
-          { id: '3', name: 'Capuccino Red Velvet', description: 'Receta signature con cacao y toque de frutos rojos.', price: 75, imageUrl: null },
+          {
+            id: '1',
+            name: 'Flat White Doble',
+            category: 'Café Caliente',
+            description: 'Extracción doble de espresso origen Chiapas con leche microtexturizada en cerámica artesanal.',
+            price: 65,
+            imageUrl: '/menu-flatwhite.jpg',
+            badge: 'Favorito de la Casa',
+            rewardBunz: 10,
+          },
+          {
+            id: '2',
+            name: 'Croissant Francés de Mantequilla',
+            category: 'Panadería Artesanal',
+            description: 'Hojaldre tradicional fermentado 48 horas con mantequilla pura de rancho. Horneado al amanecer.',
+            price: 48,
+            imageUrl: '/menu-croissant.jpg',
+            badge: 'Horneado Diario',
+            rewardBunz: 7,
+          },
+          {
+            id: '3',
+            name: 'Capuccino Red Velvet',
+            category: 'Signature',
+            description: 'Receta de autor con cacao tabasqueño orgánico, toque de frutos rojos silvestres y canela.',
+            price: 75,
+            imageUrl: '/menu-cappuccino.jpg',
+            badge: 'Especial de Temporada',
+            rewardBunz: 12,
+          },
         ],
       };
     }
@@ -111,23 +175,67 @@ export async function getAffiliateBySlug(slug: string): Promise<AffiliateLanding
           id: '626cafe',
           name: '626 Café',
           slug: '626cafe',
-          category: 'Cafetería de Especialidad',
-          description: 'Café de especialidad, desayunos artesanales, panadería francesa y ambiente relajado en el corazón de la ciudad.',
-          address: 'Calle Libertad 626, Centro',
-          lat: 19.4326,
-          lng: -99.1332,
+          category: 'Cafetería de Especialidad & Tostaduría',
+          tagline: 'Donde cada taza cuenta una historia de origen.',
+          description: 'Tostaduría de café de especialidad y panadería de masa madre en el corazón de la ciudad. Espacio acústicamente curado para enfoque, lectura y buena conversación.',
+          story: 'Nacimos con la convicción de que el buen café no tiene prisa. Seleccionamos granos de origen único cosechados a más de 1,400 metros de altura en Chiapas y Veracruz, tostados semanalmente en pequeños lotes para preservar sus notas florales y frutales.',
+          address: 'Calle Libertad 626, Colonia Centro',
+          city: 'Guadalajara, Jalisco',
+          phone: '+52 33 1234 5678',
+          lat: 20.6736,
+          lng: -103.344,
           logoUrl: '/icon_ra.png',
+          heroImage: '/626cafe-hero.jpg',
           gallery: [
-            'https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=800&q=80',
+            '/626cafe-hero.jpg',
+            '/menu-flatwhite.jpg',
+            '/menu-croissant.jpg',
             'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=800&q=80',
           ],
-          rewardPercentage: 20,
+          rewardPercentage: 15,
           startTime: '08:00',
           endTime: '20:00',
+          templateStyle: 'editorial',
+          primaryColor: '#2C1810',
+          accentColor: '#D97706',
+          features: {
+            hasTableOrdering: true,
+            hasTakeaway: true,
+            hasReservations: false,
+            hasRewards: true,
+          },
+          ambienceTags: ['Café de Especialidad', 'Pet Friendly', 'Wi-Fi Alta Velocidad', 'Música Lofi & Acústica', 'Masa Madre'],
           menuItems: [
-            { id: '1', name: 'Flat White Doble', description: 'Espresso doble y leche micro-texturizada.', price: 65, imageUrl: null },
-            { id: '2', name: 'Croissant Mantequilla', description: 'Panadería fresca del día.', price: 48, imageUrl: null },
-            { id: '3', name: 'Capuccino Red Velvet', description: 'Receta signature con cacao y toque de frutos rojos.', price: 75, imageUrl: null },
+            {
+              id: '1',
+              name: 'Flat White Doble',
+              category: 'Café Caliente',
+              description: 'Extracción doble de espresso origen Chiapas con leche microtexturizada en cerámica artesanal.',
+              price: 65,
+              imageUrl: '/menu-flatwhite.jpg',
+              badge: 'Favorito de la Casa',
+              rewardBunz: 10,
+            },
+            {
+              id: '2',
+              name: 'Croissant Francés de Mantequilla',
+              category: 'Panadería Artesanal',
+              description: 'Hojaldre tradicional fermentado 48 horas con mantequilla pura de rancho. Horneado al amanecer.',
+              price: 48,
+              imageUrl: '/menu-croissant.jpg',
+              badge: 'Horneado Diario',
+              rewardBunz: 7,
+            },
+            {
+              id: '3',
+              name: 'Capuccino Red Velvet',
+              category: 'Signature',
+              description: 'Receta de autor con cacao tabasqueño orgánico, toque de frutos rojos silvestres y canela.',
+              price: 75,
+              imageUrl: '/menu-cappuccino.jpg',
+              badge: 'Especial de Temporada',
+              rewardBunz: 12,
+            },
           ],
         };
       }
@@ -141,6 +249,15 @@ export async function getAffiliateBySlug(slug: string): Promise<AffiliateLanding
     } catch {
       parsedGallery = [];
     }
+
+    // Determine template style dynamically based on category
+    const catLower = (b.category || '').toLowerCase();
+    const templateStyle: 'editorial' | 'urban' | 'minimal' = 
+      catLower.includes('gym') || catLower.includes('barber') || catLower.includes('spa') || catLower.includes('wellness')
+        ? 'minimal'
+        : catLower.includes('bar') || catLower.includes('burger') || catLower.includes('pizza') || catLower.includes('night')
+        ? 'urban'
+        : 'editorial';
 
     // Strictly isolated query for menu items belonging exclusively to this business
     let menuItems: Array<{ id: string; name: string; description: string | null; price: number; imageUrl: string | null }> = [];
@@ -171,16 +288,29 @@ export async function getAffiliateBySlug(slug: string): Promise<AffiliateLanding
       name: String(b.name),
       slug: String(b.slug),
       category: String(b.category || 'Comercio Local'),
+      tagline: b.description ? String(b.description).slice(0, 80) : undefined,
       description: b.description ? String(b.description) : null,
+      story: b.description ? String(b.description) : undefined,
       address: String(b.address || ''),
+      city: 'México',
+      phone: undefined,
       lat: Number(b.lat || 19.4326),
       lng: Number(b.lng || -99.1332),
       logoUrl: b.logoUrl ? String(b.logoUrl) : null,
+      heroImage: parsedGallery[0] || b.logoUrl || '/hero-bg.png',
       gallery: parsedGallery,
       rewardPercentage: Number(b.rewardPercentage || 10),
       startTime: String(b.startTime || '09:00'),
       endTime: String(b.endTime || '21:00'),
+      templateStyle,
+      features: {
+        hasTableOrdering: true,
+        hasTakeaway: true,
+        hasReservations: false,
+        hasRewards: Number(b.rewardPercentage || 0) > 0,
+      },
       menuItems,
+      ambienceTags: [b.category || 'Comercio Local', 'Pago con Bunz', 'Comunidad Rabbitty'],
     };
   } catch (err) {
     console.error('[getAffiliateBySlug Error]:', err);
