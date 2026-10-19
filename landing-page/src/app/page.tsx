@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { motion, Variants } from 'framer-motion';
-import { ArrowRight, Store, UserCircle2, Zap, Shield, Smartphone, QrCode, X, Clock, Salad, Truck, Receipt, Bell, Building2, DollarSign, Monitor, Gift, Award, Megaphone, Cake, BookOpen, HelpCircle } from 'lucide-react';
+import { ArrowRight, Store, UserCircle2, Zap, Shield, Smartphone, QrCode, X, Clock, Salad, Truck, Receipt, Bell, Building2, DollarSign, Monitor, Gift, Award, Megaphone, Cake, BookOpen, HelpCircle, Sparkles, Compass, Headphones, Activity, Utensils, Globe } from 'lucide-react';
 import BunzGuide from '@/components/BunzGuide';
 import PricingPackagesSection, { PackagePlan, NicheData } from '@/components/PricingPackagesSection';
 
@@ -236,6 +236,9 @@ export default function LandingPage() {
         <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-white/70">
           <a href="#rabbitters" className="hover:text-white transition-colors">Rabbitters</a>
           <a href="#affiliates" className="hover:text-white transition-colors">Negocios</a>
+          <a href="#phygital-experience" className="text-amber-400 hover:text-amber-300 font-extrabold transition-colors flex items-center gap-1.5">
+            <Sparkles size={14} /> Mood & Vibe
+          </a>
           <a href="#paquetes" className="text-pink-400 hover:text-pink-300 font-extrabold transition-colors">Paquetes</a>
           <a href="#bunz" className="hover:text-white transition-colors">Economía</a>
         </nav>
@@ -430,6 +433,98 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* PHYGITAL EXPERIENCE & MOOD INTELLIGENCE FOR AFFILIATES */}
+      <section id="phygital-experience" className="relative z-10 py-32 px-6 bg-linear-to-b from-transparent via-amber-950/15 to-transparent border-b border-white/5">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-black tracking-widest uppercase mb-4">
+              <Sparkles size={14} /> La Nueva Dimensión Phygital
+            </div>
+            <h2 className="text-4xl md:text-5xl font-black tracking-tight leading-tight">
+              Más allá de los puntos: <br />
+              <span className="text-gradient">Inteligencia de Atmósfera & Conexión.</span>
+            </h2>
+            <p className="text-white/60 text-lg mt-4 max-w-3xl mx-auto leading-relaxed">
+              Descubre lo que ninguna app tradicional de lealtad puede ofrecerte: conecta con el estado de ánimo voluntario de tus clientes, optimiza la atmósfera sensorial de tu local y participa en la inteligencia colectiva de tu ciudad.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Pillar 1: Proof of Atmosphere */}
+            <div className="group rounded-3xl border border-emerald-500/20 bg-linear-to-b from-emerald-500/10 via-white/3 to-transparent p-7 backdrop-blur-sm hover:border-emerald-500/40 transition-all duration-500 flex flex-col justify-between">
+              <div>
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-400 mb-6 group-hover:scale-110 transition-transform">
+                  <Activity size={28} />
+                </div>
+                <div className="text-[11px] font-black uppercase tracking-wider text-emerald-400 mb-1">Métrica Científica</div>
+                <h3 className="text-xl font-black text-white mb-3">Proof of Atmosphere (PoA)</h3>
+                <p className="text-sm text-white/60 leading-relaxed">
+                  Comprueba de forma empírica el retorno de inversión de tu ambiente. Correlaciona recetas ambientales (iluminación, volumen, estilo de servicio) con tiempo de permanencia, ticket promedio y retorno de clientes en 7 y 30 días.
+                </p>
+              </div>
+              <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between text-xs text-emerald-400 font-bold">
+                <span>KPIs Verificados</span>
+                <span>+18% Ticket Promedio</span>
+              </div>
+            </div>
+
+            {/* Pillar 2: Rabbitty Vibe Passport */}
+            <div className="group rounded-3xl border border-cyan-500/20 bg-linear-to-b from-cyan-500/10 via-white/3 to-transparent p-7 backdrop-blur-sm hover:border-cyan-500/40 transition-all duration-500 flex flex-col justify-between">
+              <div>
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-500/20 text-cyan-400 mb-6 group-hover:scale-110 transition-transform">
+                  <Compass size={28} />
+                </div>
+                <div className="text-[11px] font-black uppercase tracking-wider text-cyan-400 mb-1">Descubrimiento Urbano</div>
+                <h3 className="text-xl font-black text-white mb-3">Rabbitty Vibe Passport</h3>
+                <p className="text-sm text-white/60 leading-relaxed">
+                  Rutas de exploración inter-negocios. Los Rabbitters recorren tu ciudad completando pasaportes temáticos de bienestar (Café de especialidad en la mañana, Coworking por la tarde, Cena íntima por la noche), trayendo nuevo tráfico cruzado sin pagar ads.
+                </p>
+              </div>
+              <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between text-xs text-cyan-400 font-bold">
+                <span>Rutas Cruzadas</span>
+                <span>Zero Ad Spend</span>
+              </div>
+            </div>
+
+            {/* Pillar 3: The Collective Sonic Room */}
+            <div className="group rounded-3xl border border-violet-500/20 bg-linear-to-b from-violet-500/10 via-white/3 to-transparent p-7 backdrop-blur-sm hover:border-violet-500/40 transition-all duration-500 flex flex-col justify-between">
+              <div>
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/20 text-violet-400 mb-6 group-hover:scale-110 transition-transform">
+                  <Headphones size={28} />
+                </div>
+                <div className="text-[11px] font-black uppercase tracking-wider text-violet-400 mb-1">Curaduría Acústica</div>
+                <h3 className="text-xl font-black text-white mb-3">The Collective Sonic Room</h3>
+                <p className="text-sm text-white/60 leading-relaxed">
+                  Identidad sonora adaptativa y legal. Sintoniza tu espacio con curadurías musicales de alto impacto según la energía colectiva predominante de tu salón (Calma, Enfoque o Celebración), o permite a los clientes escuchar en sus audífonos con deeplinks universales.
+                </p>
+              </div>
+              <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between text-xs text-violet-400 font-bold">
+                <span>Ambiente Armónico</span>
+                <span>TOS Compliant</span>
+              </div>
+            </div>
+
+            {/* Pillar 4: Rabbitty Vibe Graph */}
+            <div className="group rounded-3xl border border-blue-500/20 bg-linear-to-b from-blue-500/10 via-white/3 to-transparent p-7 backdrop-blur-sm hover:border-blue-500/40 transition-all duration-500 flex flex-col justify-between">
+              <div>
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-500/20 text-blue-400 mb-6 group-hover:scale-110 transition-transform">
+                  <Store size={28} />
+                </div>
+                <div className="text-[11px] font-black uppercase tracking-wider text-blue-400 mb-1">Inteligencia de Red</div>
+                <h3 className="text-xl font-black text-white mb-3">Rabbitty Vibe Graph</h3>
+                <p className="text-sm text-white/60 leading-relaxed">
+                  Inteligencia de red descentralizada: descubre qué atmósfera detona mayor recompra, predice flujos de concurrencia y genera sinergias comerciales y airdrops geocercados con otros comercios complementarios de tu colonia.
+                </p>
+              </div>
+              <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between text-xs text-blue-400 font-bold">
+                <span>Grafos de Comportamiento</span>
+                <span>Moat Incomparable</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* PHASE 11-12: POWER FEATURES */}
       <section className="relative z-10 py-32 px-6 bg-linear-to-b from-transparent via-blue-950/10 to-transparent">
         <div className="max-w-7xl mx-auto">
@@ -445,6 +540,13 @@ export default function LandingPage() {
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
+              { icon: Utensils, title: 'Rabbitty Digital Branch', desc: 'Convierte tu perfil en una sucursal digital interactiva: menú estructurado, pedidos para recoger o en mesa por QR y personalización antes de llegar.', color: 'text-pink-400' },
+              { icon: Globe, title: 'Landing Pages Automáticas & SEO LLM', desc: 'Tu negocio con subdominio propio (ej: tunegocio.rabbitty.me), microdatos Schema.org estructurados y optimización GEO para motores de IA como ChatGPT y Gemini.', color: 'text-emerald-400' },
+              { icon: Sparkles, title: 'Rabbitty Mood & Atmósfera', desc: 'Descubre qué experiencias prefieren tus clientes y adapta el ambiente con información agregada (Calma, Enfoque, Energía). Sugerencias acústicas y maridajes para fidelizar.', color: 'text-amber-400' },
+              { icon: Activity, title: 'Proof of Atmosphere (PoA)', desc: 'Mide empíricamente el impacto de tu ambiente: correlaciona intervenciones acústicas con satisfacción, ticket promedio y retención de clientes.', color: 'text-emerald-400' },
+              { icon: Compass, title: 'Rabbitty Vibe Passport', desc: 'Rutas comunitarias entre comercios. Los Rabbitters descubren tu local completando pasaportes temáticos de bienestar y experiencia en la ciudad.', color: 'text-cyan-400' },
+              { icon: Headphones, title: 'The Collective Sonic Room', desc: 'Identidad sonora inteligente por franjas horarias. Sintoniza tu espacio con curadurías musicales autorizadas según la vibra predominante de la sala.', color: 'text-violet-400' },
+              { icon: Building2, title: 'Rabbitty Vibe Graph', desc: 'Inteligencia de red: descubre qué experiencias generan mayor recurrencia y crea colaboraciones de alto impacto con otros afiliados de tu zona.', color: 'text-blue-400' },
               { icon: Building2, title: 'Eventos & Catering', desc: 'Gestiona eventos con menús personalizados, depósitos y seguimiento de estado.', color: 'text-pink-400' },
               { icon: DollarSign, title: 'Precios Dinámicos IA', desc: 'Reglas automáticas de precio por hora, día y demanda. Sin perder el control.', color: 'text-amber-400' },
               { icon: Monitor, title: 'Menú Digital TV', desc: 'Convierte cualquier pantalla HDMI en un menú digital actualizado en tiempo real.', color: 'text-emerald-400' },

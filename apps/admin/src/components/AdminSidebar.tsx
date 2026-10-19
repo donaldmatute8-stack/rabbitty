@@ -138,6 +138,7 @@ const menuPillars: MenuPillar[] = [
     title: "Crecimiento & Lealtad",
     icon: TrendingUp,
     items: [
+      { href: "/atmosphere", label: "Atmósfera & PoA", icon: Sparkles, badge: "V2" },
       { href: "/loyalty", label: "Cashback Bunz", icon: Award },
       { href: "/customers", label: "Clientes Rabbitters", icon: UserRound },
       { href: "/referrals", label: "Red de Referidos", icon: Gift },
@@ -245,7 +246,7 @@ export function AdminSidebar() {
           />
           {!isCollapsed && (
             <div>
-              <h1 className="text-base font-black tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-white via-gray-200 to-gray-400">
+              <h1 className="text-base font-black tracking-wider bg-clip-text text-transparent bg-linear-to-r from-white via-gray-200 to-gray-400">
                 RABBITTY
               </h1>
               <p className="text-[9px] uppercase tracking-widest text-pink-500 font-extrabold">
@@ -309,8 +310,8 @@ export function AdminSidebar() {
                           isCollapsed ? "justify-center px-0 border-l-0" : "px-3.5 border-l-2",
                           isActive
                             ? isCollapsed
-                              ? "bg-gradient-to-r from-pink-500/20 to-purple-500/10 text-pink-400 shadow-[inset_0_0_12px_rgba(236,72,153,0.15)]"
-                              : "bg-gradient-to-r from-pink-500/20 to-purple-500/10 text-pink-300 border-pink-500 shadow-[inset_0_0_12px_rgba(236,72,153,0.15)] font-bold"
+                              ? "bg-linear-to-r from-pink-500/20 to-purple-500/10 text-pink-400 shadow-[inset_0_0_12px_rgba(236,72,153,0.15)]"
+                              : "bg-linear-to-r from-pink-500/20 to-purple-500/10 text-pink-300 border-pink-500 shadow-[inset_0_0_12px_rgba(236,72,153,0.15)] font-bold"
                             : "text-gray-400 hover:text-white hover:bg-white/5 border-transparent hover:border-white/20"
                         )}
                       >

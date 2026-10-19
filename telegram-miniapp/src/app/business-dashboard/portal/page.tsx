@@ -2,13 +2,28 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { LogOut, Users, Receipt, Store, Settings, TrendingUp } from 'lucide-react';
+import { LogOut, Users, Receipt, Store, TrendingUp, Sparkles, Compass, Headphones, Activity } from 'lucide-react';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { PlatformBridge } from '@/lib/platform';
+import { MoodPulseWidget } from '@/components/mood/MoodPulseWidget';
+
+interface BusinessInfo {
+  id: string;
+  name: string;
+  status: string;
+  [key: string]: unknown;
+}
+
+interface TransactionItem {
+  id: string;
+  userId: string;
+  bunzMinted?: number;
+  [key: string]: unknown;
+}
 
 export default function BusinessPortal() {
   const { user } = useAuth();
-  const [businessState, setBusinessState] = useState<any>(null);
+  const [businessState, setBusinessState] = useState<BusinessInfo | null>(null);
   const [stats, setStats] = useState({ clients: 0, tickets: 0, bunz: 0, visits: 0 });
   const [loading, setLoading] = useState(true);
 
@@ -19,13 +34,13 @@ export default function BusinessPortal() {
         const headers = await PlatformBridge.getAuthHeaders();
         const bizData = await fetch(`/api/business`, { headers }).then(r => r.json());
         if (bizData.success && bizData.business) {
-          const biz = bizData.business;
+          const biz = bizData.business as BusinessInfo;
           setBusinessState(biz);
           const txData = await fetch(`/api/business/transactions?businessId=${biz.id}`, { headers }).then(r => r.json());
           if (txData.success) {
-            const txs = txData.transactions || [];
-            const uniqueClients = new Set(txs.map((t: any) => t.userId));
-            const totalBunz = txs.reduce((sum: number, t: any) => sum + (t.bunzMinted || 0), 0);
+            const txs = (txData.transactions || []) as TransactionItem[];
+            const uniqueClients = new Set(txs.map((t) => t.userId));
+            const totalBunz = txs.reduce((sum: number, t) => sum + (t.bunzMinted || 0), 0);
             setStats({
               clients: uniqueClients.size,
               tickets: txs.length,
@@ -103,22 +118,63 @@ export default function BusinessPortal() {
           </motion.div>
         </div>
 
-        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="flex border-b border-gray-100">
-            <button className="flex-1 p-4 font-bold text-pink-600 border-b-2 border-pink-600 bg-pink-50/30">
-              Historial de Tráfico
-            </button>
-            <button className="flex-1 p-4 font-semibold text-gray-500 hover:bg-gray-50 flex items-center justify-center gap-2">
-              <Settings size={18} /> Configurar Recompensas
-            </button>
-          </div>
-          
-          <div className="p-8 text-center text-gray-500 font-medium">
-            <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-300">
-              <Receipt size={24} />
+        {/* Rabbitty Mood Intelligence Widget */}
+        <div className="mb-8">
+          <MoodPulseWidget businessId={businessState?.id} />
+        </div>
+
+        {/* Rabbitty Ecosystem Innovation: Phygital Experience Pillars */}
+        <div className="mt-8 bg-linear-to-b from-gray-900 to-black text-white p-6 rounded-3xl border border-white/10 shadow-xl space-y-4">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400">
+              <Sparkles size={16} />
+            </span>
+            <div>
+              <h3 className="font-extrabold text-base text-white">Ecosistema Phygital Rabbitty</h3>
+              <p className="text-xs text-white/50">Innovación en experiencia y hospitalidad para tu negocio</p>
             </div>
-            <h3 className="text-gray-900 font-bold mb-1">Aún no hay actividad reciente</h3>
-            <p className="text-sm">Cuando los clientes escaneen tickets, aparecerán aquí.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-1">
+              <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
+                <Activity size={15} />
+                <span>Proof of Atmosphere (PoA)</span>
+              </div>
+              <p className="text-xs text-white/70 leading-relaxed">
+                Mide de forma empírica y agregada cómo las recetas ambientales y acústicas se asocian a una mayor permanencia, ticket promedio y satisfacción de tus mesas.
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-1">
+              <div className="flex items-center gap-2 text-xs font-bold text-cyan-400">
+                <Compass size={15} />
+                <span>Rabbitty Vibe Passport</span>
+              </div>
+              <p className="text-xs text-white/70 leading-relaxed">
+                Rutas temáticas comunitarias en tu ciudad. Nuevos Rabbitters descubren tu local al completar pasaportes de bienestar (Café de mañana, Coworking, Restaurante).
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-1">
+              <div className="flex items-center gap-2 text-xs font-bold text-violet-400">
+                <Headphones size={15} />
+                <span>The Collective Sonic Room</span>
+              </div>
+              <p className="text-xs text-white/70 leading-relaxed">
+                Identidad sonora colectiva. Adapta sutilmente la ambientación de tu establecimiento sintonizando listas curadas según la energía predominante del salón.
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-1">
+              <div className="flex items-center gap-2 text-xs font-bold text-blue-400">
+                <Store size={15} />
+                <span>Rabbitty Vibe Graph</span>
+              </div>
+              <p className="text-xs text-white/70 leading-relaxed">
+                Inteligencia de red: descubre qué experiencias generan mayor recurrencia y activa campañas y colaboraciones estratégicas con otros comercios de tu zona.
+              </p>
+            </div>
           </div>
         </div>
       </div>

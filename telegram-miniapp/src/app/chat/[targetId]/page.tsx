@@ -867,9 +867,18 @@ export default function ChatRoomPage() {
         <button
           onClick={() => {
             PlatformBridge.hapticFeedback('medium');
-            router.push(`/chat/${target.id}`);
+            router.push(`/affiliate/${target.id}`);
           }}
           style={{ flex: 1, border: 'none', background: '#E91E63', color: '#FFF', fontWeight: 800, fontSize: '13px', padding: '11px', cursor: 'pointer' }}
+        >
+          🏪 Ver Sucursal
+        </button>
+        <button
+          onClick={() => {
+            PlatformBridge.hapticFeedback('medium');
+            router.push(`/chat/${target.id}`);
+          }}
+          style={{ flex: 1, border: 'none', borderLeft: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-primary)', fontWeight: 800, fontSize: '13px', padding: '11px', cursor: 'pointer' }}
         >
           💬 Chatear
         </button>
@@ -916,6 +925,15 @@ export default function ChatRoomPage() {
                 <p style={{ margin: 0, fontWeight: 800, fontSize: '13.5px', color: 'inherit' }}>{o.businessName}</p>
                 {metaLine && <p style={{ margin: 0, fontSize: '11.5px', opacity: 0.8 }}>{metaLine}</p>}
               </div>
+            </button>
+            <button
+              onClick={() => {
+                PlatformBridge.hapticFeedback('light');
+                router.push(`/affiliate/${o.businessId}`);
+              }}
+              style={{ flexShrink: 0, border: 'none', background: 'rgba(255,255,255,0.08)', color: '#FFF', fontWeight: 700, fontSize: '11px', padding: '7px 11px', borderRadius: '999px', cursor: 'pointer' }}
+            >
+              🏪 Ver
             </button>
             {o.acceptsBunz !== false && (
               <button

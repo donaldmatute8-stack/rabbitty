@@ -279,3 +279,66 @@ export const pushDevices = pgTable("pushDevices", {
   isActive: boolean("isActive").default(true).notNull(),
   ...timestamps,
 });
+
+/**
+ * Rabbitty Mood: Anonymous, aggregated environmental & sensory preferences
+ * mood: 'calm' | 'energy' | 'focus' | 'celebration' | 'connection' | 'surprise'
+ */
+export const moodEvents = pgTable("moodEvents", {
+  id: id(),
+  userId: text("userId"), // Optional pseudonymized ID for personal recommendations
+  businessId: text("businessId").references(() => ownedBusinesses.id, { onDelete: "set null" }),
+  mood: text("mood").notNull(), // 'calm' | 'energy' | 'focus' | 'celebration' | 'connection' | 'surprise'
+  source: text("source").default("checkin").notNull(), // 'checkin' | 'qr' | 'manual'
+  rating: integer("rating"), // Optional 1-5 feedback after experience
+  feedbackNote: text("feedbackNote"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+/**
+ * Contextual campaigns run by affiliates based on atmosphere (e.g. "Pausa Tranquila" in slow hours)
+ */
+export const moodCampaigns = pgTable("moodCampaigns", {
+  id: id(),
+  businessId: text("businessId").notNull().references(() => ownedBusinesses.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  targetMood: text("targetMood").notNull(), // Target mood
+  rewardBunz: integer("rewardBunz").default(0).notNull(),
+  startHour: integer("startHour").default(0).notNull(), // 0-23
+  endHour: integer("endHour").default(23).notNull(),   // 0-23
+  isActive: boolean("isActive").default(true).notNull(),
+  ...timestamps,
+});
+
+/**
+ * Proof of Atmosphere (PoA): Operational atmosphere recipe activations logged by staff/owner
+ */
+export const atmosphereInterventions = pgTable("atmosphereInterventions", {
+  id: id(),
+  businessId: text("businessId").notNull().references(() => ownedBusinesses.id, { onDelete: "cascade" }),
+  recipeType: text("recipeType").notNull(), // 'calm' | 'energy' | 'focus' | 'celebration' | 'connection' | 'surprise'
+  staffId: text("staffId"), // optional staff who activated it
+  soundtrackApplied: text("soundtrackApplied"),
+  lightingApplied: text("lightingApplied"),
+  roomAction: text("roomAction"),
+  notes: text("notes"),
+  executedAt: timestamp("executedAt").defaultNow().notNull(),
+});
+
+/**
+ * Rabbitty Vibe Passport: User stamps for completing stops along curated city routes
+ */
+export const vibePassportStamps = pgTable("vibePassportStamps", {
+  id: id(),
+  userId: text("userId").notNull(),
+  routeId: text("routeId").notNull(), // e.g. 'deep-work-flow', 'golden-hour-social'
+  stopOrder: integer("stopOrder").notNull(), // 1, 2, 3
+  businessId: text("businessId").references(() => ownedBusinesses.id, { onDelete: "set null" }),
+  vibe: text("vibe").notNull(), // 'focus', 'energy', 'calm', etc.
+  transactionId: text("transactionId"), // optional link to verified payment transaction
+  stampedAt: timestamp("stampedAt").defaultNow().notNull(),
+});
+
+
