@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Sparkles, ExternalLink, Headphones, Coffee, Check, ArrowRight, ShieldCheck } from 'lucide-react';
 import { MOOD_DEFINITIONS, MoodType, MoodDefinition } from '@/types/mood';
 import { PlatformBridge } from '@/lib/platform';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface MoodCheckInProps {
   isOpen: boolean;
@@ -21,6 +22,7 @@ export function MoodCheckInSheet({
   businessName,
   onMoodSelected,
 }: MoodCheckInProps) {
+  const { isDark } = useTheme();
   const [selectedMood, setSelectedMood] = useState<MoodType | null>(null);
   const [activeExperience, setActiveExperience] = useState<MoodDefinition | null>(null);
   const [loading, setLoading] = useState(false);
@@ -79,7 +81,12 @@ export function MoodCheckInSheet({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-200 flex items-end justify-center bg-black/80 backdrop-blur-md">
+      <div 
+        className="fixed inset-0 z-200 flex items-end justify-center backdrop-blur-md"
+        style={{
+          background: isDark ? 'rgba(0, 0, 0, 0.75)' : 'rgba(0, 0, 0, 0.45)',
+        }}
+      >
         {/* Backdrop click to dismiss */}
         <div className="absolute inset-0" onClick={handleDismiss} />
 
@@ -88,27 +95,53 @@ export function MoodCheckInSheet({
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: '100%', opacity: 0 }}
           transition={{ type: 'spring', damping: 26, stiffness: 290 }}
-          className="relative w-full max-w-lg rounded-t-[36px] border-t border-pink-500/20 bg-linear-to-b from-[#121118] via-[#0D0C12] to-black px-6 pt-5 pb-8 shadow-[0_-10px_40px_rgba(233,30,99,0.15)] z-10 max-h-[88vh] overflow-y-auto"
+          className="relative w-full max-w-lg rounded-t-[36px] px-6 pt-5 pb-8 shadow-[0_-10px_40px_rgba(233,30,99,0.15)] z-10 max-h-[88vh] overflow-y-auto"
+          style={{
+            background: isDark 
+              ? 'linear-gradient(180deg, #14121A 0%, #0D0C12 50%, #050508 100%)' 
+              : 'linear-gradient(180deg, #FFFFFF 0%, #FFF5F8 60%, #FFFFFF 100%)',
+            borderTop: isDark ? '1px solid rgba(233, 30, 99, 0.25)' : '1px solid rgba(233, 30, 99, 0.2)',
+            color: 'var(--text-primary)',
+          }}
         >
           {/* Subtle Top Indicator / Drag Handle */}
-          <div className="w-12 h-1 bg-white/15 rounded-full mx-auto mb-4" />
+          <div 
+            className="w-12 h-1 rounded-full mx-auto mb-4" 
+            style={{ background: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.15)' }} 
+          />
 
           {/* Header */}
-          <div className="flex items-center justify-between pb-4 border-b border-white/8">
+          <div 
+            className="flex items-center justify-between pb-4" 
+            style={{ borderBottom: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.06)' }}
+          >
             <div className="flex items-center gap-3">
-              <div className="relative flex h-10 w-10 items-center justify-center rounded-2xl bg-linear-to-tr from-pink-500/20 to-rose-500/20 border border-pink-500/30 text-pink-400">
-                <Sparkles className="h-5 w-5 animate-pulse text-pink-400" />
+              <div 
+                className="relative flex h-10 w-10 items-center justify-center rounded-2xl"
+                style={{
+                  background: isDark ? 'rgba(233, 30, 99, 0.15)' : 'rgba(233, 30, 99, 0.12)',
+                  border: '1px solid rgba(233, 30, 99, 0.3)',
+                }}
+              >
+                <Sparkles className="h-5 w-5 animate-pulse text-[#E91E63]" />
               </div>
               <div>
-                <h3 className="text-base font-extrabold text-white flex items-center gap-2 tracking-tight">
+                <h3 className="text-base font-extrabold flex items-center gap-2 tracking-tight m-0" style={{ color: 'var(--text-primary)' }}>
                   Rabbitty Mood
                   {businessName && (
-                    <span className="text-[11px] font-mono font-bold text-pink-400 bg-pink-500/10 border border-pink-500/20 px-2.5 py-0.5 rounded-full">
+                    <span 
+                      className="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full"
+                      style={{
+                        color: '#E91E63',
+                        background: 'rgba(233, 30, 99, 0.12)',
+                        border: '1px solid rgba(233, 30, 99, 0.25)',
+                      }}
+                    >
                       {businessName}
                     </span>
                   )}
                 </h3>
-                <p className="text-[11px] font-mono text-zinc-400 tracking-wide">
+                <p className="text-[11px] font-mono tracking-wide m-0" style={{ color: 'var(--text-muted)' }}>
                   Tu experiencia sensorial & ambiental
                 </p>
               </div>
@@ -116,7 +149,12 @@ export function MoodCheckInSheet({
 
             <button
               onClick={handleDismiss}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+              className="flex h-8 w-8 items-center justify-center rounded-full transition-colors cursor-pointer border-none"
+              style={{
+                background: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+                color: 'var(--text-secondary)',
+              }}
+              aria-label="Cerrar"
             >
               <X className="h-4 w-4" />
             </button>
@@ -126,15 +164,15 @@ export function MoodCheckInSheet({
           {!activeExperience ? (
             <div className="mt-5">
               <div className="mb-5 text-center">
-                <h4 className="text-xl font-black text-white tracking-tight">
+                <h4 className="text-xl font-black tracking-tight m-0" style={{ color: 'var(--text-primary)' }}>
                   ¿Qué vibra buscas ahora?
                 </h4>
-                <p className="text-xs text-zinc-400 mt-1.5 max-w-xs mx-auto leading-relaxed">
+                <p className="text-xs mt-1.5 max-w-xs mx-auto leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
                   Personaliza la atmósfera, curaduría musical y recomendaciones para tu visita.
                 </p>
               </div>
 
-              {/* 6 Grid Cards - Modern Rabbitty Cyber/Minimalist Cards */}
+              {/* 6 Grid Cards */}
               <div className="grid grid-cols-2 gap-3">
                 {(Object.keys(MOOD_DEFINITIONS) as MoodType[]).map((key) => {
                   const m = MOOD_DEFINITIONS[key];
@@ -147,27 +185,36 @@ export function MoodCheckInSheet({
                       whileTap={{ scale: 0.97 }}
                       onClick={() => handleSelectMood(key)}
                       disabled={loading}
-                      className={`relative flex flex-col items-start p-4 rounded-2xl border text-left transition-all duration-200 cursor-pointer overflow-hidden ${
-                        isSelected
-                          ? 'border-pink-500 bg-pink-500/15 shadow-[0_0_20px_rgba(233,30,99,0.3)] ring-1 ring-pink-500/40'
-                          : 'border-zinc-800/80 bg-zinc-900/60 hover:border-pink-500/40 hover:bg-zinc-900/90'
-                      }`}
+                      className="relative flex flex-col items-start p-4 rounded-2xl border text-left transition-all duration-200 cursor-pointer overflow-hidden"
+                      style={{
+                        background: isSelected 
+                          ? (isDark ? 'rgba(233, 30, 99, 0.18)' : 'rgba(233, 30, 99, 0.10)')
+                          : (isDark ? 'rgba(255, 255, 255, 0.04)' : '#FFFFFF'),
+                        borderColor: isSelected 
+                          ? '#E91E63' 
+                          : (isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)'),
+                        boxShadow: isSelected 
+                          ? '0 0 20px rgba(233, 30, 99, 0.25)' 
+                          : (isDark ? 'none' : '0 2px 8px rgba(0, 0, 0, 0.03)'),
+                      }}
                     >
                       {/* Ambient card accent gradient on hover */}
-                      <div className="absolute top-0 right-0 w-24 h-24 bg-pink-500/5 rounded-full blur-xl pointer-events-none" />
+                      <div className="absolute top-0 right-0 w-24 h-24 bg-[#E91E63]/5 rounded-full blur-xl pointer-events-none" />
 
                       <div className="flex items-center justify-between w-full mb-2 z-10">
-                        <span className="text-2xl select-none filter drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]">
+                        <span className="text-2xl select-none filter drop-shadow-sm">
                           {m.emoji}
                         </span>
                         {isSelected && (
-                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-pink-500 text-white shadow-[0_0_10px_rgba(233,30,99,0.8)]">
+                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#E91E63] text-white shadow-[0_0_10px_rgba(233,30,99,0.6)]">
                             <Check className="h-3 w-3 stroke-3" />
                           </span>
                         )}
                       </div>
-                      <span className="text-sm font-black text-white tracking-tight z-10">{m.label}</span>
-                      <span className="text-[11px] font-mono text-zinc-400 mt-0.5 leading-snug line-clamp-1 z-10">
+                      <span className="text-sm font-black tracking-tight z-10" style={{ color: 'var(--text-primary)' }}>
+                        {m.label}
+                      </span>
+                      <span className="text-[11px] font-mono mt-0.5 leading-snug line-clamp-1 z-10" style={{ color: 'var(--text-muted)' }}>
                         {m.tagline}
                       </span>
                     </motion.button>
@@ -176,28 +223,39 @@ export function MoodCheckInSheet({
               </div>
 
               {/* Privacy Notice & Don't ask today */}
-              <div className="mt-6 pt-4 border-t border-white/5 flex flex-col gap-3">
+              <div 
+                className="mt-6 pt-4 flex flex-col gap-3"
+                style={{ borderTop: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(0,0,0,0.06)' }}
+              >
                 <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-2 cursor-pointer text-xs text-zinc-400 select-none hover:text-zinc-200 transition-colors">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs select-none" style={{ color: 'var(--text-secondary)' }}>
                     <input
                       type="checkbox"
                       checked={dontAskToday}
                       onChange={(e) => setDontAskToday(e.target.checked)}
-                      className="rounded border-zinc-700 bg-zinc-900 text-pink-500 focus:ring-pink-500/30 cursor-pointer"
+                      className="rounded accent-[#E91E63] cursor-pointer"
                     />
                     <span>No volver a preguntar hoy</span>
                   </label>
 
                   <button
                     onClick={handleDismiss}
-                    className="text-xs font-mono text-zinc-400 hover:text-pink-400 transition-colors cursor-pointer"
+                    className="text-xs font-mono transition-colors cursor-pointer border-none bg-transparent"
+                    style={{ color: 'var(--text-muted)' }}
                   >
                     Saltar por ahora
                   </button>
                 </div>
 
-                <div className="flex items-center gap-2 text-[10px] text-zinc-400 bg-zinc-900/50 p-2.5 rounded-xl border border-white/5 font-mono">
-                  <ShieldCheck className="h-3.5 w-3.5 text-pink-400 shrink-0" />
+                <div 
+                  className="flex items-center gap-2 text-[10px] p-2.5 rounded-xl border font-mono"
+                  style={{
+                    background: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)',
+                    borderColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)',
+                    color: 'var(--text-muted)',
+                  }}
+                >
+                  <ShieldCheck className="h-3.5 w-3.5 text-[#E91E63] shrink-0" />
                   <span>
                     Tus elecciones se agregan de forma anónima para calibrar la atmósfera colectiva.
                   </span>
@@ -212,28 +270,41 @@ export function MoodCheckInSheet({
               className="mt-5 space-y-4"
             >
               <div
-                className="p-5 rounded-2xl border border-pink-500/30 text-center relative overflow-hidden bg-linear-to-b from-pink-500/15 to-zinc-950/80 shadow-[0_0_25px_rgba(233,30,99,0.15)]"
+                className="p-5 rounded-2xl border text-center relative overflow-hidden"
+                style={{
+                  background: isDark 
+                    ? 'linear-gradient(180deg, rgba(233,30,99,0.18) 0%, rgba(10,10,15,0.85) 100%)' 
+                    : 'linear-gradient(180deg, rgba(233,30,99,0.12) 0%, #FFFFFF 100%)',
+                  borderColor: isDark ? 'rgba(233, 30, 99, 0.35)' : 'rgba(233, 30, 99, 0.25)',
+                  boxShadow: '0 8px 30px rgba(233, 30, 99, 0.12)',
+                }}
               >
-                <div className="text-4xl mb-2 select-none filter drop-shadow-[0_0_15px_rgba(233,30,99,0.6)]">
+                <div className="text-4xl mb-2 select-none filter drop-shadow-sm">
                   {activeExperience.emoji}
                 </div>
-                <h4 className="text-xl font-black text-white tracking-tight">
+                <h4 className="text-xl font-black tracking-tight m-0" style={{ color: 'var(--text-primary)' }}>
                   Modo {activeExperience.label}
                 </h4>
-                <p className="text-xs text-zinc-300 mt-1 max-w-sm mx-auto leading-relaxed">
+                <p className="text-xs mt-1.5 max-w-sm mx-auto leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
                   {activeExperience.description}
                 </p>
               </div>
 
               {/* Music Recommendation Card */}
-              <div className="p-4 rounded-2xl border border-zinc-800 bg-zinc-900/70 space-y-3">
-                <div className="flex items-center gap-2 text-[11px] font-mono font-bold text-pink-400 uppercase tracking-widest">
+              <div 
+                className="p-4 rounded-2xl border space-y-3"
+                style={{
+                  background: 'var(--bg-elevated)',
+                  borderColor: 'var(--border-subtle)',
+                }}
+              >
+                <div className="flex items-center gap-2 text-[11px] font-mono font-bold text-[#E91E63] uppercase tracking-widest">
                   <Headphones className="h-4 w-4" />
                   <span>Banda Sonora Recomendada</span>
                 </div>
                 <div>
-                  <h5 className="text-sm font-bold text-white">{activeExperience.music.title}</h5>
-                  <p className="text-xs font-mono text-zinc-400">{activeExperience.music.artistOrCurator}</p>
+                  <h5 className="text-sm font-bold m-0" style={{ color: 'var(--text-primary)' }}>{activeExperience.music.title}</h5>
+                  <p className="text-xs font-mono m-0 mt-0.5" style={{ color: 'var(--text-muted)' }}>{activeExperience.music.artistOrCurator}</p>
                 </div>
 
                 {/* External Links */}
@@ -242,7 +313,12 @@ export function MoodCheckInSheet({
                     href={activeExperience.music.spotifyUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-[#1DB954]/15 hover:bg-[#1DB954]/25 text-[#1DB954] text-xs font-bold border border-[#1DB954]/30 transition-all"
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold border transition-all no-underline"
+                    style={{
+                      background: 'rgba(29, 185, 84, 0.12)',
+                      color: '#1DB954',
+                      borderColor: 'rgba(29, 185, 84, 0.25)',
+                    }}
                   >
                     <span>Spotify</span>
                     <ExternalLink className="h-3 w-3" />
@@ -251,7 +327,12 @@ export function MoodCheckInSheet({
                     href={activeExperience.music.appleMusicUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-pink-500/15 hover:bg-pink-500/25 text-pink-400 text-xs font-bold border border-pink-500/30 transition-all"
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold border transition-all no-underline"
+                    style={{
+                      background: 'rgba(233, 30, 99, 0.12)',
+                      color: '#E91E63',
+                      borderColor: 'rgba(233, 30, 99, 0.25)',
+                    }}
                   >
                     <span>Apple Music</span>
                     <ExternalLink className="h-3 w-3" />
@@ -260,7 +341,12 @@ export function MoodCheckInSheet({
                     href={activeExperience.music.youtubeUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-400 text-xs font-bold border border-red-500/30 transition-all"
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold border transition-all no-underline"
+                    style={{
+                      background: 'rgba(239, 68, 68, 0.12)',
+                      color: '#EF4444',
+                      borderColor: 'rgba(239, 68, 68, 0.25)',
+                    }}
                   >
                     <span>YouTube</span>
                     <ExternalLink className="h-3 w-3" />
@@ -269,18 +355,30 @@ export function MoodCheckInSheet({
               </div>
 
               {/* Menu Pairing Card */}
-              <div className="p-4 rounded-2xl border border-zinc-800 bg-zinc-900/70 flex items-start gap-3">
-                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-pink-500/15 text-pink-400 shrink-0 border border-pink-500/20">
+              <div 
+                className="p-4 rounded-2xl border flex items-start gap-3"
+                style={{
+                  background: 'var(--bg-elevated)',
+                  borderColor: 'var(--border-subtle)',
+                }}
+              >
+                <span 
+                  className="flex h-9 w-9 items-center justify-center rounded-xl text-[#E91E63] shrink-0 border"
+                  style={{
+                    background: 'rgba(233, 30, 99, 0.12)',
+                    borderColor: 'rgba(233, 30, 99, 0.25)',
+                  }}
+                >
                   <Coffee className="h-5 w-5" />
                 </span>
                 <div>
-                  <span className="text-[10px] font-mono font-bold text-pink-400 uppercase tracking-widest block">
+                  <span className="text-[10px] font-mono font-bold text-[#E91E63] uppercase tracking-widest block">
                     Pairing Sugerido
                   </span>
-                  <h5 className="text-sm font-bold text-white mt-0.5">
+                  <h5 className="text-sm font-bold mt-0.5 m-0" style={{ color: 'var(--text-primary)' }}>
                     {activeExperience.pairingSuggestion.itemType}
                   </h5>
-                  <p className="text-xs text-zinc-400 mt-0.5 leading-relaxed">
+                  <p className="text-xs mt-0.5 leading-relaxed m-0" style={{ color: 'var(--text-secondary)' }}>
                     {activeExperience.pairingSuggestion.description}
                   </p>
                 </div>
@@ -289,7 +387,10 @@ export function MoodCheckInSheet({
               {/* Final Confirm Button */}
               <button
                 onClick={handleDismiss}
-                className="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl bg-linear-to-r from-pink-500 via-rose-500 to-pink-600 text-white font-black text-sm shadow-xl shadow-pink-500/25 hover:from-pink-600 hover:to-rose-700 transition-all cursor-pointer"
+                className="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl text-white font-black text-sm shadow-xl shadow-pink-500/25 transition-all cursor-pointer border-none"
+                style={{
+                  background: 'linear-gradient(135deg, #E91E63 0%, #D81B60 100%)',
+                }}
               >
                 <span>Disfrutar mi estancia</span>
                 <ArrowRight className="h-4 w-4" />

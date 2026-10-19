@@ -92,12 +92,13 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}
             transition={{ type: 'spring', damping: 32, stiffness: 320 }}
-            className="fixed top-0 left-0 bottom-0 z-201 w-[78%] max-w-72 sm:max-w-80 flex flex-col justify-between"
+            className="fixed top-0 left-0 bottom-0 z-201 w-[78%] max-w-72 sm:max-w-80 flex flex-col justify-between rounded-r-[32px] overflow-hidden"
             style={{
               background: 'var(--bg-primary)',
               paddingTop: 'calc(max(var(--safe-top, 0px), 12px) + 12px)',
               paddingBottom: 'calc(max(var(--safe-bottom, 0px), 12px) + 16px)',
-              boxShadow: '16px 0 45px rgba(0,0,0,0.45)',
+              borderRight: '1px solid var(--border-subtle)',
+              boxShadow: '10px 0 30px rgba(0, 0, 0, 0.12), 4px 0 10px rgba(0, 0, 0, 0.05)',
             }}
           >
             {/* Header: X/Twitter style layout */}
