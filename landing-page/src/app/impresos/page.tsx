@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Printer, Sparkles, Smartphone, ArrowRight, CheckCircle2, ShieldCheck, Coffee, Search, ChevronDown, Check, Building2 } from 'lucide-react';
