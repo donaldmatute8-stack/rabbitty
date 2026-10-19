@@ -16,8 +16,7 @@ import {
   Store, 
   Bell, 
   ShieldCheck, 
-  HelpCircle,
-  Home
+  HelpCircle
 } from 'lucide-react';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -93,23 +92,22 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}
             transition={{ type: 'spring', damping: 32, stiffness: 320 }}
-            className="fixed top-0 left-0 bottom-0 z-201 w-[82%] max-w-85 flex flex-col justify-between"
+            className="fixed top-0 left-0 bottom-0 z-201 w-[78%] max-w-72 sm:max-w-80 flex flex-col justify-between"
             style={{
               background: 'var(--bg-primary)',
-              borderRight: '1px solid var(--border-subtle)',
-              paddingTop: 'calc(max(var(--safe-top, 0px), 8px) + 8px)',
-              paddingBottom: 'calc(max(var(--safe-bottom, 0px), 8px) + 12px)',
-              boxShadow: '24px 0 60px rgba(0,0,0,0.5)',
+              paddingTop: 'calc(max(var(--safe-top, 0px), 12px) + 12px)',
+              paddingBottom: 'calc(max(var(--safe-bottom, 0px), 12px) + 16px)',
+              boxShadow: '16px 0 45px rgba(0,0,0,0.45)',
             }}
           >
             {/* Header: X/Twitter style layout */}
-            <div className="px-5 pt-2 pb-3 shrink-0">
-              {/* Top Row: Avatar with subtle Home/Badge shadow, plus business avatars and close */}
-              <div className="flex items-center justify-between mb-3">
-                {/* Main Avatar with subtle home badge on bottom right corner */}
+            <div className="px-5 pt-1 pb-4 shrink-0">
+              {/* Top Row: Avatar and Close Button */}
+              <div className="flex items-center justify-between mb-3.5">
+                {/* Main Avatar */}
                 <div className="relative">
                   <div 
-                    className="w-11 h-11 rounded-full overflow-hidden p-0.5 border-2 border-[#E91E63]/80 shrink-0 shadow-sm"
+                    className="w-12 h-12 rounded-full overflow-hidden p-0.5 border-2 border-[#E91E63] shrink-0 shadow-sm"
                     style={{ background: 'var(--bg-elevated)' }}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -119,24 +117,13 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                       className="w-full h-full rounded-full object-cover"
                     />
                   </div>
-                  {/* Mini Home icon with soft glow & corner shadow */}
-                  <div 
-                    className="absolute -bottom-1 -right-1 w-4.5 h-4.5 rounded-full flex items-center justify-center text-white"
-                    style={{ 
-                      background: '#E91E63',
-                      boxShadow: '0 2px 6px rgba(233, 30, 99, 0.45)',
-                      border: '1.5px solid var(--bg-primary)'
-                    }}
-                  >
-                    <Home size={9} strokeWidth={2.8} />
-                  </div>
                 </div>
 
                 {/* Right cluster: subtle affiliated businesses pill + Close button */}
                 <div className="flex items-center gap-2">
                   {user?.role === 'AFFILIATE' && (
                     <div 
-                      className="flex items-center gap-1 px-2 py-0.5 rounded-full"
+                      className="flex items-center gap-1 px-2.5 py-0.5 rounded-full"
                       style={{ 
                         background: 'rgba(233, 30, 99, 0.12)', 
                         border: '1px solid rgba(233, 30, 99, 0.28)' 
@@ -162,8 +149,8 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
               </div>
 
               {/* User Name & Handle */}
-              <div className="mb-2.5">
-                <h2 className="text-base font-black tracking-tight text-(--text-primary) m-0 leading-tight truncate">
+              <div className="mb-3">
+                <h2 className="text-lg font-black tracking-tight text-(--text-primary) m-0 leading-tight truncate">
                   {user?.firstName || 'Explorador Rabbitty'}
                 </h2>
                 <p className="text-xs font-medium text-(--text-muted) m-0 mt-0.5 truncate">
@@ -171,13 +158,13 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                 </p>
               </div>
 
-              {/* Followers / Stats Row (Twitter style) */}
+              {/* Stats Row (Following / Followers style) */}
               <div className="flex items-center gap-4 text-xs">
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5">
                   <span className="font-extrabold text-(--text-primary)">{bunzBalance.toLocaleString()}</span>
                   <span className="text-(--text-muted)">Bunz</span>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5">
                   <span className="font-extrabold text-(--text-primary)">
                     {user?.role === 'AFFILIATE' ? '1' : '0'}
                   </span>
@@ -187,11 +174,19 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
             </div>
 
             {/* Subtle Divider */}
-            <div className="h-px w-full bg-(--border-subtle) opacity-60" />
+            <div className="h-px w-full bg-(--border-subtle) opacity-40 my-1" />
 
-            {/* Navigation Menu (Group 1: General, Group 2: Negocio y Ajustes) */}
-            <div className="flex-1 min-h-0 flex flex-col justify-between px-3 py-1 overflow-hidden">
-              <div className="flex flex-col gap-0.5">
+            {/* Navigation Menu (Group 1: Principal, Group 2: Negocio y Ajustes) */}
+            <div className="flex-1 min-h-0 flex flex-col justify-between px-3 py-3 overflow-y-auto gap-3">
+              {/* Grupo Principal (tarjeta redondeada con sombra y borde sutil estilo Twitter/iOS) */}
+              <div 
+                className="flex flex-col gap-1 p-2 rounded-2xl"
+                style={{
+                  background: 'var(--bg-elevated)',
+                  border: '1px solid var(--border-subtle)',
+                  boxShadow: '0 2px 10px rgba(0,0,0,0.03)',
+                }}
+              >
                 {GENERAL_ITEMS.map((item) => {
                   const IconComponent = item.icon;
                   return (
@@ -202,15 +197,15 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                         PlatformBridge.hapticFeedback('light');
                         onClose();
                       }}
-                      className="flex items-center gap-3.5 px-3 py-2 rounded-xl no-underline transition-all active:scale-[0.98] group"
+                      className="flex items-center gap-3.5 px-3 py-2.5 rounded-xl no-underline transition-all active:scale-[0.98] group hover:bg-(--bg-pressed)"
                       style={{ color: 'var(--text-primary)' }}
                     >
                       <IconComponent 
-                        size={19} 
-                        strokeWidth={2}
-                        className="text-(--text-secondary) group-hover:text-[#E91E63] shrink-0 transition-colors" 
+                        size={21} 
+                        strokeWidth={2.2}
+                        className="text-(--text-primary) group-hover:text-[#E91E63] shrink-0 transition-colors" 
                       />
-                      <span className="text-[14px] font-bold tracking-tight flex-1">
+                      <span className="text-[15px] font-extrabold tracking-tight flex-1">
                         {item.label}
                       </span>
                     </Link>
@@ -218,10 +213,15 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                 })}
               </div>
 
-              {/* Tenue línea divisoria entre General y Negocio / Ajustes */}
-              <div className="my-1 mx-2 h-px bg-(--border-subtle) opacity-40" />
-
-              <div className="flex flex-col gap-0.5">
+              {/* Grupo Secundario / Ajustes (tarjeta redondeada con borde sutil) */}
+              <div 
+                className="flex flex-col gap-0.5 p-2 rounded-2xl"
+                style={{
+                  background: 'var(--bg-elevated)',
+                  border: '1px solid var(--border-subtle)',
+                  boxShadow: '0 2px 10px rgba(0,0,0,0.03)',
+                }}
+              >
                 {SETTINGS_ITEMS.map((item) => {
                   const IconComponent = item.icon;
                   return (
@@ -232,15 +232,15 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                         PlatformBridge.hapticFeedback('light');
                         onClose();
                       }}
-                      className="flex items-center gap-3 px-3 py-1.5 rounded-xl no-underline transition-all active:scale-[0.98] group"
+                      className="flex items-center gap-3 px-3 py-2 rounded-xl no-underline transition-all active:scale-[0.98] group hover:bg-(--bg-pressed)"
                       style={{ color: 'var(--text-secondary)' }}
                     >
                       <IconComponent 
-                        size={16} 
-                        strokeWidth={1.9}
+                        size={18} 
+                        strokeWidth={2}
                         className="text-(--text-muted) group-hover:text-[#E91E63] shrink-0 transition-colors" 
                       />
-                      <span className="text-[12.5px] font-medium tracking-tight flex-1 group-hover:text-(--text-primary) transition-colors">
+                      <span className="text-[13px] font-semibold tracking-tight flex-1 group-hover:text-(--text-primary) transition-colors">
                         {item.label}
                       </span>
                       {item.isBusiness && user?.role === 'AFFILIATE' && (

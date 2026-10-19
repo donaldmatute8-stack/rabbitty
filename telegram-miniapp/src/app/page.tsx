@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo, useRef, useCallback, useSyncExternalStore } from 'react';
 import { motion } from 'framer-motion';
-import { Bell, Sparkles, ChevronRight } from 'lucide-react';
+import { Bell, Sparkles, ChevronRight, Home } from 'lucide-react';
 import Link from 'next/link';
 import BottomNav from '@/components/BottomNav';
 import Tabs from '@/components/ui/Tabs';
@@ -21,6 +21,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import RabbittyContourLoader from '@/components/ui/RabbittyContourLoader';
 import { openBunzy } from '@/lib/bunzyLaunch';
 import { MoodCheckInSheet } from '@/components/mood/MoodCheckInSheet';
+import { WelcomeRitual } from '@/components/ui/WelcomeRitual';
 
 const InteractiveMap = dynamic(() => import('@/features/map/InteractiveMap'), {
   ssr: false,
@@ -162,14 +163,20 @@ export default function FeedPage() {
       );
     }
 
-    // Auto-prompt Rabbitty Mood una vez al día tras 1.2 segundos (si no fue descartado hoy)
+    // Auto-prompt Rabbitty Mood moderado (máximo una vez cada 7 días, si ya vio el ritual de bienvenida)
     try {
-      const today = new Date().toISOString().slice(0, 10);
-      const dismissed = localStorage.getItem('rabbitty_mood_dismissed_date');
-      if (dismissed !== today) {
+      const lastShown = localStorage.getItem('rabbitty_mood_last_shown_time');
+      const ritualSeen = localStorage.getItem('rabbitty_welcome_ritual_seen_v2');
+      const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+      const now = Date.now();
+
+      if (ritualSeen && (!lastShown || now - parseInt(lastShown, 10) > SEVEN_DAYS_MS)) {
         const timer = setTimeout(() => {
           setMoodOpen(true);
-        }, 1200);
+          try {
+            localStorage.setItem('rabbitty_mood_last_shown_time', String(Date.now()));
+          } catch {}
+        }, 2000);
         return () => clearTimeout(timer);
       }
     } catch {}
@@ -344,21 +351,40 @@ export default function FeedPage() {
       {/* Contenedor animado con efecto X/Twitter al abrir el Drawer lateral */}
       <motion.div
         animate={{
-          scale: drawerOpen ? 0.93 : 1,
-          x: drawerOpen ? '55%' : 0,
-          borderRadius: drawerOpen ? 24 : 0,
-          filter: drawerOpen ? 'brightness(0.7)' : 'none',
+          scale: drawerOpen ? 0.90 : 1,
+          x: drawerOpen ? '74%' : 0,
+          borderRadius: drawerOpen ? 36 : 0,
+          filter: drawerOpen ? (isDark ? 'brightness(0.65)' : 'brightness(0.97)') : 'none',
         }}
-        transition={{ type: 'spring', damping: 32, stiffness: 320 }}
+        transition={{ type: 'spring', damping: 30, stiffness: 280 }}
+        className="relative"
         style={{
           transformOrigin: 'center left',
           willChange: 'transform',
+          height: drawerOpen ? '100vh' : 'auto',
           minHeight: '100vh',
           background: 'var(--bg-primary)',
           overflow: drawerOpen ? 'hidden' : 'visible',
           pointerEvents: drawerOpen ? 'none' : 'auto',
+          border: drawerOpen ? (isDark ? '1.5px solid rgba(255,255,255,0.18)' : '1.5px solid rgba(0,0,0,0.12)') : 'none',
+          boxShadow: drawerOpen ? (isDark ? '-12px 0 45px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.08)' : '-10px 0 40px rgba(0,0,0,0.18)') : 'none',
         }}
       >
+        {/* Indicador visual sutil de Home en la parte inferior derecha del borde de la pantalla principal */}
+        {drawerOpen && (
+          <div 
+            className="absolute bottom-6 right-6 z-50 flex items-center justify-center w-9 h-9 rounded-full pointer-events-none select-none transition-all duration-300"
+            style={{
+              background: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)',
+              border: isDark ? '1px solid rgba(255, 255, 255, 0.2)' : '1px solid rgba(0, 0, 0, 0.1)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              boxShadow: isDark ? '0 4px 16px rgba(0,0,0,0.5)' : '0 4px 16px rgba(0,0,0,0.1)',
+            }}
+          >
+            <Home size={16} strokeWidth={2.4} className={isDark ? 'text-white/80' : 'text-slate-800/80'} />
+          </div>
+        )}
       {/* HEADER COMPLETO INICIAL: Se desplaza naturalmente con el scroll (ya no está fixed/sticky constante) */}
       <div
         className="w-full relative z-40"
@@ -570,29 +596,33 @@ export default function FeedPage() {
               </div>
 
               {/* Rabbitty Vibe Passport Quick Banner */}
-              <div className="px-1 mt-3">
+              <div className="px-1 mt-1 mb-5">
                 <Link
                   href="/discover"
                   onClick={() => PlatformBridge.hapticFeedback('light')}
-                  className="flex items-center justify-between p-3.5 rounded-2xl bg-linear-to-r from-amber-500/15 via-orange-500/10 to-transparent border border-amber-500/25 active:scale-[0.98] transition-transform no-underline"
+                  className={`flex items-center justify-between p-3.5 rounded-2xl border active:scale-[0.98] transition-all no-underline ${
+                    isDark
+                      ? 'bg-linear-to-r from-[#E91E63]/15 via-[#240C1A]/60 to-zinc-950/60 border-[#E91E63]/25 shadow-[0_4px_20px_rgba(233,30,99,0.08)]'
+                      : 'bg-linear-to-r from-pink-50 via-rose-50/50 to-white border-pink-200 shadow-sm'
+                  }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-lg shrink-0">
-                      🧭
+                    <div className="w-10 h-10 rounded-xl bg-[#E91E63]/15 text-[#E91E63] border border-[#E91E63]/30 flex items-center justify-center shrink-0 shadow-[0_0_12px_rgba(233,30,99,0.25)]">
+                      <Sparkles size={20} className="text-[#E91E63]" />
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-black text-white">Rabbitty Vibe Passport</span>
-                        <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 font-bold uppercase tracking-wider">
+                        <span className={`text-xs font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>Rabbitty Vibe Passport</span>
+                        <span className="text-[9px] px-2 py-0.5 rounded-full bg-[#E91E63]/20 text-[#E91E63] font-black uppercase tracking-wider border border-[#E91E63]/30">
                           Nuevo
                         </span>
                       </div>
-                      <p className="text-[11px] text-white/60 m-0 leading-tight mt-0.5">
+                      <p className={`text-[11px] m-0 leading-tight mt-0.5 ${isDark ? 'text-white/60' : 'text-slate-500'}`}>
                         Explora rutas temáticas urbanas y sella tus visitas
                       </p>
                     </div>
                   </div>
-                  <ChevronRight size={18} className="text-amber-400/80 shrink-0" />
+                  <ChevronRight size={18} className="text-[#E91E63]/80 shrink-0" />
                 </Link>
               </div>
 
@@ -781,6 +811,8 @@ export default function FeedPage() {
 
         </div>
       </main>
+
+      {activeTab !== 'Freehands' && <BottomNav isDark={isDark} />}
       </motion.div>
 
       <style dangerouslySetInnerHTML={{__html: `
@@ -788,9 +820,9 @@ export default function FeedPage() {
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
       `}} />
 
-      {activeTab !== 'Freehands' && <BottomNav isDark={isDark} />}
       <ProfileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
       <MoodCheckInSheet isOpen={moodOpen} onClose={() => setMoodOpen(false)} />
+      <WelcomeRitual />
     </div>
   );
 }

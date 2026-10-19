@@ -74,7 +74,7 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
         transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
         className="w-full relative overflow-hidden rounded-3xl mb-5 cursor-pointer select-none"
         style={{
-          padding: isCollapsed ? '14px 18px 24px' : '20px 20px 26px',
+          padding: isCollapsed ? '12px 16px 18px' : '20px 20px 26px',
           background: isDark
             ? 'linear-gradient(135deg, #18181B 0%, #111113 45%, #240C1A 100%)'
             : 'linear-gradient(135deg, #FFFFFF 0%, #FFF5F8 50%, #FFE4EE 100%)',
@@ -91,46 +91,61 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
           style={{ background: 'radial-gradient(circle, #E91E63 0%, transparent 70%)' }}
         />
 
-        {/* Top Header inside Card */}
-        <div className={`flex items-center justify-between relative z-10 ${isCollapsed ? 'mb-2' : 'mb-4'}`}>
-          <div className="flex items-center gap-2.5">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center p-1 backdrop-blur-md relative ${isDark ? 'bg-black/40 border border-white/10' : 'bg-pink-500/10 border border-pink-500/20'}`}>
-              <Image src="/logo_conejo.png" alt="Rabbitty" width={24} height={24} priority className="object-contain filter drop-shadow-[0_0_8px_rgba(233,30,99,0.8)]" />
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-black uppercase tracking-[1.5px] text-[#E91E63]">RABBITTY PASS</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${isDark ? 'bg-white/10 text-white/80 border border-white/10' : 'bg-slate-900/5 text-slate-800 border border-slate-900/10'}`}>
-                  Lvl. {levelName}
-                </span>
+        {/* Top Header inside Card (Only when expanded) */}
+        {!isCollapsed && (
+          <div className="flex items-center justify-between relative z-10 mb-4">
+            <div className="flex items-center gap-2.5">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center p-1 backdrop-blur-md relative ${isDark ? 'bg-black/40 border border-white/10' : 'bg-pink-500/10 border border-pink-500/20'}`}>
+                <Image src="/logo_conejo.png" alt="Rabbitty" width={24} height={24} priority className="object-contain filter drop-shadow-[0_0_8px_rgba(233,30,99,0.8)]" />
               </div>
-              <p className={`text-xs font-bold m-0 leading-tight ${isDark ? 'text-white/50' : 'text-slate-500'}`}>{username}</p>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-[1.5px] text-[#E91E63]">RABBITTY PASS</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${isDark ? 'bg-white/10 text-white/80 border border-white/10' : 'bg-slate-900/5 text-slate-800 border border-slate-900/10'}`}>
+                    Lvl. {levelName}
+                  </span>
+                </div>
+                <p className={`text-xs font-bold m-0 leading-tight ${isDark ? 'text-white/50' : 'text-slate-500'}`}>{username}</p>
+              </div>
+            </div>
+
+            <div className={`flex items-center gap-1 text-[11px] font-extrabold text-[#E91E63] px-2.5 py-1 rounded-full border ${isDark ? 'bg-[#E91E63]/10 border-[#E91E63]/25' : 'bg-[#E91E63]/15 border-[#E91E63]/30'}`}>
+              <Sparkles size={12} />
+              <span>Digital Club</span>
             </div>
           </div>
-
-          <div className={`flex items-center gap-1 text-[11px] font-extrabold text-[#E91E63] px-2.5 py-1 rounded-full border ${isDark ? 'bg-[#E91E63]/10 border-[#E91E63]/25' : 'bg-[#E91E63]/15 border-[#E91E63]/30'}`}>
-            <Sparkles size={12} />
-            <span>Digital Club</span>
-          </div>
-        </div>
+        )}
 
         {/* Essential / Collapsible View */}
         {isCollapsed ? (
-          <div className="flex items-center justify-between mt-1 relative z-10">
-            <div>
-              <span className={`text-[10px] font-bold uppercase tracking-wider block ${isDark ? 'text-white/45' : 'text-slate-500'}`}>Saldo</span>
-              <div className="flex items-baseline gap-1.5">
-                <span className={`text-2xl font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  {bunzBalance.toLocaleString()}
-                </span>
-                <span className="text-xs font-black text-[#E91E63] tracking-wider">BUNZ</span>
+          <div className="flex items-center justify-between relative z-10">
+            {/* Left: Brand + Level + Username */}
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center p-1 backdrop-blur-md shrink-0 relative ${isDark ? 'bg-black/40 border border-white/10' : 'bg-pink-500/10 border border-pink-500/20'}`}>
+                <Image src="/logo_conejo.png" alt="Rabbitty" width={22} height={22} priority className="object-contain filter drop-shadow-[0_0_8px_rgba(233,30,99,0.8)]" />
+              </div>
+              <div className="min-w-0 truncate">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-[#E91E63]">RABBITTY PASS</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[8.5px] font-black uppercase tracking-wider ${isDark ? 'bg-white/10 text-white/80 border border-white/10' : 'bg-slate-900/5 text-slate-800 border border-slate-900/10'}`}>
+                    Lvl. {levelName}
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-1 mt-0.5">
+                  <span className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-white/45' : 'text-slate-500'}`}>Saldo:</span>
+                  <span className={`text-sm font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                    {bunzBalance.toLocaleString()}
+                  </span>
+                  <span className="text-[10px] font-black text-[#E91E63]">BUNZ</span>
+                </div>
               </div>
             </div>
 
+            {/* Right: Quick Action QR Button */}
             <button
               type="button"
               onClick={handleOpenModal}
-              className="flex items-center gap-1 bg-[#E91E63] text-white text-[11px] font-black px-3 py-1.5 rounded-full shadow-[0_4px_12px_rgba(233,30,99,0.35)] cursor-pointer border-none"
+              className="flex items-center gap-1.5 bg-[#E91E63] hover:bg-[#D81B60] active:scale-95 text-white text-[11px] font-black px-3 py-1.5 rounded-full shadow-[0_4px_12px_rgba(233,30,99,0.35)] cursor-pointer border-none shrink-0"
             >
               <QrCode size={13} />
               <span>Ver QR</span>

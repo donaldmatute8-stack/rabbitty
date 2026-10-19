@@ -79,7 +79,7 @@ export function MoodCheckInSheet({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm">
+      <div className="fixed inset-0 z-200 flex items-end justify-center bg-black/80 backdrop-blur-md">
         {/* Backdrop click to dismiss */}
         <div className="absolute inset-0" onClick={handleDismiss} />
 
@@ -87,31 +87,36 @@ export function MoodCheckInSheet({
           initial={{ y: '100%', opacity: 0.5 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: '100%', opacity: 0 }}
-          transition={{ type: 'spring', damping: 25, stiffness: 280 }}
-          className="relative w-full max-w-lg rounded-t-4xl border-t border-white/10 bg-[#0f1117] p-6 shadow-2xl z-10 max-h-[90vh] overflow-y-auto"
+          transition={{ type: 'spring', damping: 26, stiffness: 290 }}
+          className="relative w-full max-w-lg rounded-t-[36px] border-t border-pink-500/20 bg-linear-to-b from-[#121118] via-[#0D0C12] to-black px-6 pt-5 pb-8 shadow-[0_-10px_40px_rgba(233,30,99,0.15)] z-10 max-h-[88vh] overflow-y-auto"
         >
+          {/* Subtle Top Indicator / Drag Handle */}
+          <div className="w-12 h-1 bg-white/15 rounded-full mx-auto mb-4" />
+
           {/* Header */}
-          <div className="flex items-center justify-between pb-4 border-b border-white/5">
-            <div className="flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-linear-to-tr from-amber-500/20 to-orange-500/20 text-amber-400">
-                <Sparkles className="h-4 w-4" />
-              </span>
+          <div className="flex items-center justify-between pb-4 border-b border-white/8">
+            <div className="flex items-center gap-3">
+              <div className="relative flex h-10 w-10 items-center justify-center rounded-2xl bg-linear-to-tr from-pink-500/20 to-rose-500/20 border border-pink-500/30 text-pink-400">
+                <Sparkles className="h-5 w-5 animate-pulse text-pink-400" />
+              </div>
               <div>
-                <h3 className="text-base font-bold text-white flex items-center gap-1.5">
+                <h3 className="text-base font-extrabold text-white flex items-center gap-2 tracking-tight">
                   Rabbitty Mood
                   {businessName && (
-                    <span className="text-xs font-medium text-amber-400/90 bg-amber-400/10 px-2 py-0.5 rounded-full">
-                      en {businessName}
+                    <span className="text-[11px] font-mono font-bold text-pink-400 bg-pink-500/10 border border-pink-500/20 px-2.5 py-0.5 rounded-full">
+                      {businessName}
                     </span>
                   )}
                 </h3>
-                <p className="text-xs text-white/50">Tu experiencia sensorial y ambiental</p>
+                <p className="text-[11px] font-mono text-zinc-400 tracking-wide">
+                  Tu experiencia sensorial & ambiental
+                </p>
               </div>
             </div>
 
             <button
               onClick={handleDismiss}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 text-white/60 hover:bg-white/10 hover:text-white transition-colors"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
             >
               <X className="h-4 w-4" />
             </button>
@@ -120,16 +125,16 @@ export function MoodCheckInSheet({
           {/* Body: State 1 - Choose Mood */}
           {!activeExperience ? (
             <div className="mt-5">
-              <div className="mb-4 text-center">
-                <h4 className="text-lg font-bold text-white tracking-tight">
-                  ¿Qué necesitas en este momento?
+              <div className="mb-5 text-center">
+                <h4 className="text-xl font-black text-white tracking-tight">
+                  ¿Qué vibra buscas ahora?
                 </h4>
-                <p className="text-xs text-white/60 mt-1 max-w-xs mx-auto">
-                  Elige una preferencia para personalizar tu música y acompañar tu estancia.
+                <p className="text-xs text-zinc-400 mt-1.5 max-w-xs mx-auto leading-relaxed">
+                  Personaliza la atmósfera, curaduría musical y recomendaciones para tu visita.
                 </p>
               </div>
 
-              {/* 6 Grid Cards */}
+              {/* 6 Grid Cards - Modern Rabbitty Cyber/Minimalist Cards */}
               <div className="grid grid-cols-2 gap-3">
                 {(Object.keys(MOOD_DEFINITIONS) as MoodType[]).map((key) => {
                   const m = MOOD_DEFINITIONS[key];
@@ -142,25 +147,27 @@ export function MoodCheckInSheet({
                       whileTap={{ scale: 0.97 }}
                       onClick={() => handleSelectMood(key)}
                       disabled={loading}
-                      className={`relative flex flex-col items-start p-4 rounded-2xl border text-left transition-all ${
+                      className={`relative flex flex-col items-start p-4 rounded-2xl border text-left transition-all duration-200 cursor-pointer overflow-hidden ${
                         isSelected
-                          ? 'border-amber-400 bg-amber-400/10 shadow-lg shadow-amber-500/10'
-                          : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/8'
+                          ? 'border-pink-500 bg-pink-500/15 shadow-[0_0_20px_rgba(233,30,99,0.3)] ring-1 ring-pink-500/40'
+                          : 'border-zinc-800/80 bg-zinc-900/60 hover:border-pink-500/40 hover:bg-zinc-900/90'
                       }`}
-                      style={{
-                        background: isSelected ? undefined : m.gradient,
-                      }}
                     >
-                      <div className="flex items-center justify-between w-full mb-2">
-                        <span className="text-3xl select-none">{m.emoji}</span>
+                      {/* Ambient card accent gradient on hover */}
+                      <div className="absolute top-0 right-0 w-24 h-24 bg-pink-500/5 rounded-full blur-xl pointer-events-none" />
+
+                      <div className="flex items-center justify-between w-full mb-2 z-10">
+                        <span className="text-2xl select-none filter drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]">
+                          {m.emoji}
+                        </span>
                         {isSelected && (
-                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-400 text-black">
+                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-pink-500 text-white shadow-[0_0_10px_rgba(233,30,99,0.8)]">
                             <Check className="h-3 w-3 stroke-3" />
                           </span>
                         )}
                       </div>
-                      <span className="text-sm font-bold text-white tracking-tight">{m.label}</span>
-                      <span className="text-[11px] text-white/60 mt-0.5 leading-snug line-clamp-1">
+                      <span className="text-sm font-black text-white tracking-tight z-10">{m.label}</span>
+                      <span className="text-[11px] font-mono text-zinc-400 mt-0.5 leading-snug line-clamp-1 z-10">
                         {m.tagline}
                       </span>
                     </motion.button>
@@ -171,28 +178,28 @@ export function MoodCheckInSheet({
               {/* Privacy Notice & Don't ask today */}
               <div className="mt-6 pt-4 border-t border-white/5 flex flex-col gap-3">
                 <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-2 cursor-pointer text-xs text-white/60 select-none">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs text-zinc-400 select-none hover:text-zinc-200 transition-colors">
                     <input
                       type="checkbox"
                       checked={dontAskToday}
                       onChange={(e) => setDontAskToday(e.target.checked)}
-                      className="rounded border-white/20 bg-white/5 text-amber-500 focus:ring-amber-500/30"
+                      className="rounded border-zinc-700 bg-zinc-900 text-pink-500 focus:ring-pink-500/30 cursor-pointer"
                     />
                     <span>No volver a preguntar hoy</span>
                   </label>
 
                   <button
                     onClick={handleDismiss}
-                    className="text-xs text-white/40 hover:text-white/80 transition-colors"
+                    className="text-xs font-mono text-zinc-400 hover:text-pink-400 transition-colors cursor-pointer"
                   >
                     Saltar por ahora
                   </button>
                 </div>
 
-                <div className="flex items-center gap-1.5 text-[10px] text-white/40 bg-white/2 p-2 rounded-xl border border-white/5">
-                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-400/80 shrink-0" />
+                <div className="flex items-center gap-2 text-[10px] text-zinc-400 bg-zinc-900/50 p-2.5 rounded-xl border border-white/5 font-mono">
+                  <ShieldCheck className="h-3.5 w-3.5 text-pink-400 shrink-0" />
                   <span>
-                    Tus elecciones son voluntarias y se agregan de forma anónima para proteger tu privacidad.
+                    Tus elecciones se agregan de forma anónima para calibrar la atmósfera colectiva.
                   </span>
                 </div>
               </div>
@@ -205,30 +212,31 @@ export function MoodCheckInSheet({
               className="mt-5 space-y-4"
             >
               <div
-                className="p-5 rounded-2xl border border-white/10 text-center relative overflow-hidden"
-                style={{ background: activeExperience.gradient }}
+                className="p-5 rounded-2xl border border-pink-500/30 text-center relative overflow-hidden bg-linear-to-b from-pink-500/15 to-zinc-950/80 shadow-[0_0_25px_rgba(233,30,99,0.15)]"
               >
-                <div className="text-4xl mb-2">{activeExperience.emoji}</div>
-                <h4 className="text-xl font-extrabold text-white">
+                <div className="text-4xl mb-2 select-none filter drop-shadow-[0_0_15px_rgba(233,30,99,0.6)]">
+                  {activeExperience.emoji}
+                </div>
+                <h4 className="text-xl font-black text-white tracking-tight">
                   Modo {activeExperience.label}
                 </h4>
-                <p className="text-xs text-white/70 mt-1 max-w-sm mx-auto leading-relaxed">
+                <p className="text-xs text-zinc-300 mt-1 max-w-sm mx-auto leading-relaxed">
                   {activeExperience.description}
                 </p>
               </div>
 
               {/* Music Recommendation Card */}
-              <div className="p-4 rounded-2xl border border-white/10 bg-white/5 space-y-3">
-                <div className="flex items-center gap-2 text-xs font-bold text-amber-400">
+              <div className="p-4 rounded-2xl border border-zinc-800 bg-zinc-900/70 space-y-3">
+                <div className="flex items-center gap-2 text-[11px] font-mono font-bold text-pink-400 uppercase tracking-widest">
                   <Headphones className="h-4 w-4" />
-                  <span>BANDA SONORA RECOMENDADA</span>
+                  <span>Banda Sonora Recomendada</span>
                 </div>
                 <div>
-                  <h5 className="text-sm font-semibold text-white">{activeExperience.music.title}</h5>
-                  <p className="text-xs text-white/50">{activeExperience.music.artistOrCurator}</p>
+                  <h5 className="text-sm font-bold text-white">{activeExperience.music.title}</h5>
+                  <p className="text-xs font-mono text-zinc-400">{activeExperience.music.artistOrCurator}</p>
                 </div>
 
-                {/* External Links: Universal & Spotify Safe */}
+                {/* External Links */}
                 <div className="flex gap-2 pt-1">
                   <a
                     href={activeExperience.music.spotifyUrl}
@@ -261,20 +269,18 @@ export function MoodCheckInSheet({
               </div>
 
               {/* Menu Pairing Card */}
-              <div className="p-4 rounded-2xl border border-white/10 bg-white/5 flex items-start gap-3">
-                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-400/10 text-amber-400 shrink-0">
+              <div className="p-4 rounded-2xl border border-zinc-800 bg-zinc-900/70 flex items-start gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-pink-500/15 text-pink-400 shrink-0 border border-pink-500/20">
                   <Coffee className="h-5 w-5" />
                 </span>
                 <div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
-                      Pairing Sugerido
-                    </span>
-                  </div>
-                  <h5 className="text-sm font-semibold text-white mt-0.5">
+                  <span className="text-[10px] font-mono font-bold text-pink-400 uppercase tracking-widest block">
+                    Pairing Sugerido
+                  </span>
+                  <h5 className="text-sm font-bold text-white mt-0.5">
                     {activeExperience.pairingSuggestion.itemType}
                   </h5>
-                  <p className="text-xs text-white/60 mt-0.5 leading-relaxed">
+                  <p className="text-xs text-zinc-400 mt-0.5 leading-relaxed">
                     {activeExperience.pairingSuggestion.description}
                   </p>
                 </div>
@@ -283,7 +289,7 @@ export function MoodCheckInSheet({
               {/* Final Confirm Button */}
               <button
                 onClick={handleDismiss}
-                className="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl bg-linear-to-r from-amber-500 to-orange-500 text-black font-extrabold text-sm shadow-lg shadow-amber-500/20 hover:opacity-95 transition-opacity"
+                className="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl bg-linear-to-r from-pink-500 via-rose-500 to-pink-600 text-white font-black text-sm shadow-xl shadow-pink-500/25 hover:from-pink-600 hover:to-rose-700 transition-all cursor-pointer"
               >
                 <span>Disfrutar mi estancia</span>
                 <ArrowRight className="h-4 w-4" />

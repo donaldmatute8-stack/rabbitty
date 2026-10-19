@@ -157,21 +157,15 @@ export default async function AffiliateLandingPage({ params }: PageProps) {
       <header className="sticky top-0 z-40 bg-[#FDFBF7]/90 backdrop-blur-md border-b border-stone-200/80 px-6 py-4">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {affiliate.logoUrl ? (
-              <div className="relative w-10 h-10 rounded-2xl overflow-hidden border border-stone-200/90 bg-white p-1 shadow-sm shrink-0">
-                <Image
-                  src={affiliate.logoUrl}
-                  alt={affiliate.name}
-                  fill
-                  unoptimized
-                  className="object-contain"
-                />
-              </div>
-            ) : (
-              <div className="w-10 h-10 rounded-2xl bg-amber-900/10 border border-amber-900/20 flex items-center justify-center text-amber-900 font-serif font-black text-lg shrink-0">
-                ☕
-              </div>
-            )}
+            <div className="relative w-10 h-10 rounded-2xl overflow-hidden border border-stone-200/90 bg-white p-1 shadow-sm shrink-0">
+              <Image
+                src={affiliate.logoUrl || '/icon_ra.png'}
+                alt={affiliate.name}
+                fill
+                unoptimized
+                className="object-contain"
+              />
+            </div>
             <div>
               <span className="font-serif font-black text-base sm:text-lg tracking-tight text-stone-900 block leading-none">
                 {affiliate.name}
@@ -282,8 +276,14 @@ export default async function AffiliateLandingPage({ params }: PageProps) {
 
               {/* Floating Verified Badge */}
               <div className="absolute bottom-5 left-5 right-5 sm:right-auto bg-[#FDFBF7]/95 backdrop-blur-md p-4 rounded-2xl shadow-xl border border-stone-200 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-900/10 text-amber-900 flex items-center justify-center font-serif font-black text-xl">
-                  ✨
+                <div className="relative w-10 h-10 rounded-xl overflow-hidden border border-stone-200 bg-white p-1 shadow-sm shrink-0">
+                  <Image
+                    src={affiliate.logoUrl || '/icon_ra.png'}
+                    alt={affiliate.name}
+                    fill
+                    unoptimized
+                    className="object-contain"
+                  />
                 </div>
                 <div>
                   <span className="text-[10px] font-bold text-stone-500 uppercase tracking-widest block">

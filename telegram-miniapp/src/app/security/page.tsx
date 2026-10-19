@@ -1,9 +1,23 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { 
+  User, 
+  ShieldCheck, 
+  EyeOff, 
+  Database, 
+  ChevronRight, 
+  Search, 
+  ChevronLeft,
+  Key,
+  Smartphone,
+  Lock,
+  CheckCircle2,
+  LogOut
+} from 'lucide-react';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
-
 import { PlatformBridge } from '@/lib/platform';
+import { useAuth } from '@/features/auth/AuthProvider';
 
 const CRED_KEY = 'rabbitty_faceid_cred';
 const NATIVE_BIO_KEY = 'rabbitty_biometric_enabled';
@@ -542,100 +556,326 @@ function TwoFactorCard() {
 }
 
 const FEATURES = [
-  { icon: '🔑', color: '#10B981', bg: '#F0FDF4', title: 'Llaves Privadas',    desc: 'Tus llaves privadas de TON nunca tocan nuestros servidores. Se encriptan localmente en tu dispositivo con AES-256.' },
-  { icon: '🛡️', color: '#6366F1', bg: '#EEF2FF', title: 'Contratos Auditados', desc: 'Nuestros Smart Contracts en la blockchain han sido auditados por firmas de seguridad independientes.' },
-  { icon: '🫶', color: '#F59E0B', bg: '#FFFBEB', title: 'Biometría',           desc: 'Soporte completo para Face ID y Touch ID a través de Telegram y tu wallet nativa de TON.' },
-  { icon: '🕵️', color: '#E91E63', bg: '#FFF0F5', title: 'Zero-Knowledge',     desc: 'El saldo de tu billetera es privado. Los negocios solo ven tu dirección pública cuando interactúas.' },
+  { icon: Key, color: '#10B981', title: 'Llaves Privadas Locales', desc: 'Tus llaves de TON se generan y protegen localmente con cifrado AES-256. Nunca tocan nuestros servidores.' },
+  { icon: ShieldCheck, color: '#6366F1', title: 'Smart Contracts Auditados', desc: 'Contratos inteligentes en TON blockchain verificados por firmas de seguridad independientes.' },
+  { icon: Smartphone, color: '#F59E0B', title: 'Cripto-Biometría Nativa', desc: 'Soporte integrado para Secure Enclave, Face ID y Touch ID en tu dispositivo.' },
+  { icon: EyeOff, color: '#E91E63', title: 'Zero-Knowledge Protocol', desc: 'Privacidad asegurada: comercios y terceros solo reciben datos esenciales de validación de pago.' },
 ];
 
 const STATS = [
-  { val: '0',    label: 'Hackeos',  color: '#10B981' },
-  { val: '100%', label: 'Uptime',   color: '#6366F1' },
-  { val: '256b', label: 'AES',      color: '#F59E0B' },
+  { val: '0', label: 'Incidentes', color: '#10B981' },
+  { val: '100%', label: 'Uptime TON', color: '#6366F1' },
+  { val: '256b', label: 'AES Enclave', color: '#F59E0B' },
 ];
 
+type SettingsSection = 'root' | 'account' | 'security_access' | 'privacy' | 'audit';
+
 export default function SecurityPage() {
+  const { user, logout } = useAuth();
+  const [currentSection, setCurrentSection] = useState<SettingsSection>('root');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const navigateTo = (sec: SettingsSection) => {
+    PlatformBridge.hapticFeedback('light');
+    setCurrentSection(sec);
+  };
+
+  const MENU_SECTIONS = [
+    {
+      id: 'account' as const,
+      icon: User,
+      title: 'Tu cuenta',
+      desc: 'Consulta los datos de tu cuenta, ID de Telegram y estado de la sesión.',
+    },
+    {
+      id: 'security_access' as const,
+      icon: Lock,
+      title: 'Seguridad y acceso a la cuenta',
+      desc: 'Administra la seguridad de tu cuenta: Face ID, PIN de 4 dígitos y verificación en dos pasos.',
+    },
+    {
+      id: 'privacy' as const,
+      icon: EyeOff,
+      title: 'Privacidad y transacciones',
+      desc: 'Controla la visibilidad de tu saldo Bunz, pagos y protocolos Zero-Knowledge.',
+    },
+    {
+      id: 'audit' as const,
+      icon: Database,
+      title: 'Auditoría y arquitectura TON',
+      desc: 'Verifica los Smart Contracts, auditorías de seguridad y cifrado descentralizado.',
+    },
+  ];
+
+  const filteredSections = MENU_SECTIONS.filter(s => 
+    !searchQuery.trim() || 
+    s.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    s.desc.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
-    <ProfileSubpageLayout title="Seguridad">
+    <ProfileSubpageLayout 
+      title={
+        currentSection === 'root' ? 'Configuración' :
+        currentSection === 'account' ? 'Tu cuenta' :
+        currentSection === 'security_access' ? 'Seguridad' :
+        currentSection === 'privacy' ? 'Privacidad' : 'Auditoría'
+      }
+      left={
+        currentSection !== 'root' ? (
+          <button
+            type="button"
+            onClick={() => navigateTo('root')}
+            className="w-9 h-9 rounded-full flex items-center justify-center cursor-pointer border-none mr-2 active:scale-90 transition-transform"
+            style={{ background: 'var(--bg-elevated)', color: 'var(--text-primary)' }}
+            aria-label="Volver al menú de configuración"
+          >
+            <ChevronLeft size={20} strokeWidth={2.5} />
+          </button>
+        ) : null
+      }
+    >
       <div className="flex flex-col gap-4 mt-2">
 
-        {/* Hero card */}
-        <div
-          className="relative overflow-hidden rounded-[28px] px-6 py-7 border border-[rgba(255,255,255,0.05)] shadow-[0_20px_60px_rgba(0,0,0,0.3)]"
-          style={{ background: 'linear-gradient(135deg, #0A0A0A 0%, #111827 55%, #0D2818 100%)' }}
-        >
-          {/* Glow blobs */}
-          <div className="absolute right-[-8%] top-[-8%] w-44 h-44 rounded-full blur-[50px]" style={{ background: 'rgba(16,185,129,0.15)' }} />
-          <div className="absolute left-[-5%] bottom-[-5%] w-32 h-32 rounded-full blur-2xl" style={{ background: 'rgba(99,102,241,0.1)' }} />
+        {/* --- VIEW: ROOT SETTINGS (Estilo X/Twitter Screenshots 1, 2, 3) --- */}
+        {currentSection === 'root' && (
+          <div className="flex flex-col gap-3">
+            {/* Barra de Búsqueda estilo X/Twitter */}
+            <div className="relative mb-1">
+              <Search 
+                size={18} 
+                className="absolute left-4 top-1/2 -translate-y-1/2" 
+                style={{ color: 'var(--text-muted)' }} 
+              />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Buscar en Configuración"
+                className="w-full rounded-full pl-11 pr-4 py-2.5 text-[14px] outline-none border transition-colors"
+                style={{
+                  background: 'var(--bg-elevated)',
+                  color: 'var(--text-primary)',
+                  borderColor: 'var(--border-subtle)',
+                }}
+              />
+            </div>
 
-          {/* Status badge */}
-          <div
-            className="inline-flex items-center gap-2 rounded-full px-3 py-1 mb-5 relative z-10"
-            style={{ background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)' }}
-          >
-            <div className="w-2 h-2 rounded-full bg-[#34D399] shadow-[0_0_6px_#10B981]" />
-            <span className="text-[10px] font-black text-[#34D399] tracking-[1.5px]">SISTEMA PROTEGIDO</span>
-          </div>
-
-          <div className="relative z-10">
-            <div
-              className="w-16 h-16 rounded-[20px] flex items-center justify-center text-[28px] mb-4"
-              style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.2)' }}
-            >🔒</div>
-            <h2 className="text-[22px] font-black text-white m-0 mb-2 tracking-[-0.5px] leading-[1.2]">
-              Seguridad de Nivel Bancario
-            </h2>
-            <p className="text-[13px] leading-[1.6] m-0" style={{ color: 'rgba(255,255,255,0.55)' }}>
-              Rabbitty utiliza criptografía de última generación y la infraestructura descentralizada de TON para garantizar que tus activos estén siempre a salvo.
-            </p>
-          </div>
-
-          {/* Stats row */}
-          <div className="grid grid-cols-3 gap-3 mt-5 relative z-10">
-            {STATS.map(({ val, label, color }) => (
-              <div
-                key={label}
-                className="rounded-2xl p-3 text-center"
-                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.04)' }}
-              >
-                <p className="text-lg font-black m-0 mb-0.5" style={{ color }}>{val}</p>
-                <p className="text-[10px] font-semibold m-0" style={{ color: 'rgba(255,255,255,0.35)' }}>{label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <h3 className="font-black text-white text-[15px] mt-2 mx-1 mb-0 p-0">Características Clave</h3>
-
-        {/* Feature cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-6">
-          {FEATURES.map((feat, i) => (
-            <div
-              key={i}
-              className="bg-[#161622] border border-white/10 rounded-[22px] p-4 flex gap-4 items-start shadow-md"
+            {/* Lista Principal de Menús */}
+            <div 
+              className="rounded-2xl overflow-hidden border divide-y"
+              style={{
+                background: 'var(--bg-elevated)',
+                borderColor: 'var(--border-subtle)',
+              }}
             >
-              <div
-                className="w-11.5 h-11.5 rounded-[14px] flex shrink-0 items-center justify-center text-[22px] mt-0.5 border border-white/5"
-                style={{ background: 'rgba(255,255,255,0.06)' }}
+              {filteredSections.map((item) => {
+                const IconComponent = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => navigateTo(item.id)}
+                    className="w-full flex items-center gap-3.5 px-4 py-3.5 text-left border-none cursor-pointer transition-colors active:bg-(--bg-pressed) hover:bg-(--bg-pressed)"
+                    style={{ background: 'transparent' }}
+                  >
+                    <IconComponent 
+                      size={20} 
+                      strokeWidth={2}
+                      className="shrink-0"
+                      style={{ color: 'var(--text-secondary)' }}
+                    />
+                    <div className="flex-1 min-w-0 pr-2">
+                      <h4 className="text-[15px] font-bold m-0 leading-snug" style={{ color: 'var(--text-primary)' }}>
+                        {item.title}
+                      </h4>
+                      <p className="text-[12px] m-0 mt-0.5 leading-normal line-clamp-2" style={{ color: 'var(--text-muted)' }}>
+                        {item.desc}
+                      </p>
+                    </div>
+                    <ChevronRight 
+                      size={18} 
+                      className="shrink-0"
+                      style={{ color: 'var(--text-muted)' }} 
+                    />
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* SECCIÓN INFORMATIVA TRASLADADA A LA PARTE INFERIOR DEL MENÚ */}
+            <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+              <div 
+                className="rounded-2xl p-4 border"
+                style={{ 
+                  background: 'var(--bg-elevated)', 
+                  borderColor: 'var(--border-subtle)',
+                }}
               >
-                {feat.icon}
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <h4 className="font-black text-white text-[14px] m-0">{feat.title}</h4>
-                  <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: feat.color }} />
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10B981]" />
+                  <span className="text-[11px] font-black uppercase tracking-wider text-emerald-500">
+                    SISTEMA PROTEGIDO · TON NETWORK
+                  </span>
                 </div>
-                <p className="text-white/60 text-xs leading-normal m-0">{feat.desc}</p>
+                <h4 className="text-[15px] font-black m-0 mb-1" style={{ color: 'var(--text-primary)' }}>
+                  Criptografía Descentralizada
+                </h4>
+                <p className="text-xs leading-relaxed m-0" style={{ color: 'var(--text-secondary)' }}>
+                  Rabbitty opera sobre protocolos no-custodiales en la blockchain de TON y cifrado de hardware en tu dispositivo.
+                </p>
+                <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+                  {STATS.map(({ val, label, color }) => (
+                    <div key={label} className="text-center">
+                      <span className="text-base font-black block" style={{ color }}>{val}</span>
+                      <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>{label}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-          ))}
-        </div>
+          </div>
+        )}
 
-        <h3 className="font-black text-white text-[15px] mt-3 mx-1 mb-0 p-0">Protección del Dispositivo y Cuentas</h3>
-        <FaceIdCard />
-        <SecurityPinCard />
-        <TwoFactorCard />
-        <div className="h-6" />
+        {/* --- VIEW: TU CUENTA --- */}
+        {currentSection === 'account' && (
+          <div className="flex flex-col gap-3">
+            <p className="text-xs px-1" style={{ color: 'var(--text-muted)' }}>
+              Consulta o administra los detalles asociados a tu cuenta de Telegram y perfil Rabbitty.
+            </p>
+
+            <div 
+              className="rounded-2xl overflow-hidden border divide-y"
+              style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
+            >
+              <div className="flex items-center justify-between px-4 py-3">
+                <span className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Nombre</span>
+                <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{user?.firstName || 'Explorador'}</span>
+              </div>
+              <div className="flex items-center justify-between px-4 py-3">
+                <span className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Usuario</span>
+                <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>@{user?.username || 'explorador'}</span>
+              </div>
+              <div className="flex items-center justify-between px-4 py-3">
+                <span className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>ID de Telegram</span>
+                <span className="text-sm font-mono font-bold" style={{ color: 'var(--text-primary)' }}>{user?.id || '—'}</span>
+              </div>
+              <div className="flex items-center justify-between px-4 py-3">
+                <span className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Rol de cuenta</span>
+                <span className="text-xs font-black uppercase px-2 py-0.5 rounded-full bg-[#E91E63]/15 text-[#E91E63]">
+                  {user?.role || 'EXPLORADOR'}
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                PlatformBridge.hapticFeedback('medium');
+                logout();
+              }}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border font-bold text-sm cursor-pointer mt-2"
+              style={{ 
+                background: 'rgba(239,68,68,0.1)', 
+                color: '#EF4444', 
+                borderColor: 'rgba(239,68,68,0.2)' 
+              }}
+            >
+              <LogOut size={16} />
+              <span>Cerrar sesión en este dispositivo</span>
+            </button>
+          </div>
+        )}
+
+        {/* --- VIEW: SEGURIDAD Y ACCESO A LA CUENTA --- */}
+        {currentSection === 'security_access' && (
+          <div className="flex flex-col gap-3">
+            <p className="text-xs px-1" style={{ color: 'var(--text-muted)' }}>
+              Configura los métodos de autenticación directa y credenciales de acceso para tu dispositivo.
+            </p>
+            <FaceIdCard />
+            <SecurityPinCard />
+            <TwoFactorCard />
+          </div>
+        )}
+
+        {/* --- VIEW: PRIVACIDAD Y TRANSACCIONES --- */}
+        {currentSection === 'privacy' && (
+          <div className="flex flex-col gap-3">
+            <p className="text-xs px-1" style={{ color: 'var(--text-muted)' }}>
+              Gestiona qué información ven los comercios afiliados y cómo se resguardan tus actividades.
+            </p>
+
+            <div 
+              className="rounded-2xl p-4 border"
+              style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
+            >
+              <div className="flex items-start gap-3">
+                <EyeOff className="text-[#E91E63] shrink-0 mt-0.5" size={20} />
+                <div>
+                  <h4 className="text-[14px] font-extrabold m-0 mb-1" style={{ color: 'var(--text-primary)' }}>
+                    Protocolo Zero-Knowledge
+                  </h4>
+                  <p className="text-xs leading-relaxed m-0" style={{ color: 'var(--text-secondary)' }}>
+                    Tus pagos generan un hash criptográfico de verificación instantáneo en TON. Los comercios no tienen acceso a tu saldo total ni a tu historial general de compras.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div 
+              className="rounded-2xl p-4 border"
+              style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
+            >
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="text-emerald-500 shrink-0 mt-0.5" size={20} />
+                <div>
+                  <h4 className="text-[14px] font-extrabold m-0 mb-1" style={{ color: 'var(--text-primary)' }}>
+                    Modo Incógnito en Check-ins
+                  </h4>
+                  <p className="text-xs leading-relaxed m-0" style={{ color: 'var(--text-secondary)' }}>
+                    Tu estado de ánimo y respuestas de Rabbitty Mood se procesan de forma anónima para calcular el vibe colectivo sin vincular tu identidad nominal.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* --- VIEW: AUDITORÍA Y ARQUITECTURA TON --- */}
+        {currentSection === 'audit' && (
+          <div className="flex flex-col gap-3">
+            <p className="text-xs px-1" style={{ color: 'var(--text-muted)' }}>
+              Infraestructura técnica, Smart Contracts auditados y estándares de seguridad.
+            </p>
+
+            <div className="grid grid-cols-1 gap-2.5">
+              {FEATURES.map((feat, i) => {
+                const IconComponent = feat.icon;
+                return (
+                  <div
+                    key={i}
+                    className="border rounded-2xl p-3.5 flex gap-3.5 items-start"
+                    style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
+                  >
+                    <div 
+                      className="w-9 h-9 rounded-xl flex shrink-0 items-center justify-center mt-0.5"
+                      style={{ background: 'var(--bg-pressed)' }}
+                    >
+                      <IconComponent size={18} style={{ color: feat.color }} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <h4 className="font-extrabold text-[14px] m-0" style={{ color: 'var(--text-primary)' }}>{feat.title}</h4>
+                      </div>
+                      <p className="text-xs leading-normal m-0" style={{ color: 'var(--text-secondary)' }}>{feat.desc}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
       </div>
     </ProfileSubpageLayout>

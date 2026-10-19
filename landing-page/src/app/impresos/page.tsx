@@ -239,9 +239,7 @@ function ImpresosContent() {
     setWelcomeBunz(bunzVal);
     const generatedUrl = `https://rabbitty.me/download?ref=${b.refCode}&bunz=${bunzVal}`;
     setAppUrl(generatedUrl);
-    if (b.logoUrl) {
-      setBusinessLogo(b.logoUrl);
-    }
+    setBusinessLogo(b.logoUrl || '/icon_ra.png');
     const detected = detectNicheKey(`${b.category} ${b.name}`);
     setSelectedTemplateKey(detected);
     setIsDropdownOpen(false);
@@ -258,33 +256,31 @@ function ImpresosContent() {
     window.print();
   };
 
-  // Helper para renderizar insignia o logo del afiliado con fallback elegante
+  // Helper para renderizar insignia o logo del afiliado con fallback elegante al logo de Ra
   const renderAffiliateBadge = (size: 'sm' | 'md' | 'lg' = 'md', dark = true) => {
     const sizeClasses = {
-      sm: 'h-6 max-w-28 text-[10px]',
-      md: 'h-9 max-w-40 text-xs',
-      lg: 'h-12 max-w-52 text-sm'
+      sm: 'h-6 max-w-36 text-[10px]',
+      md: 'h-9 max-w-44 text-xs',
+      lg: 'h-12 max-w-56 text-sm'
     };
 
-    if (businessLogo) {
-      return (
-        <div className={`flex items-center gap-2 px-2.5 py-1 rounded-xl border ${dark ? 'bg-zinc-900/90 border-zinc-700/80 text-white' : 'bg-white border-zinc-200 text-black shadow-xs'} ${sizeClasses[size]}`}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img 
-            src={businessLogo} 
-            alt={businessName} 
-            className="h-full w-auto max-h-7 object-contain rounded-md"
-            onError={() => setBusinessLogo('')}
-          />
-          <span className="font-black truncate tracking-tight">{businessName}</span>
-        </div>
-      );
-    }
+    const effectiveLogo = businessLogo || '/icon_ra.png';
 
     return (
-      <div className={`flex items-center gap-2 px-3 py-1 rounded-xl font-black uppercase tracking-wider border ${dark ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-zinc-100 border-zinc-300 text-zinc-900'} ${sizeClasses[size]}`}>
-        <Building2 className="w-3.5 h-3.5 text-pink-500 shrink-0" />
-        <span className="truncate">{businessName}</span>
+      <div className={`flex items-center gap-2 px-2.5 py-1 rounded-xl border ${dark ? 'bg-zinc-900/90 border-zinc-700/80 text-white' : 'bg-white border-zinc-200 text-black shadow-xs'} ${sizeClasses[size]}`}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img 
+          src={effectiveLogo} 
+          alt={businessName} 
+          className="h-full w-auto max-h-7 object-contain rounded-md shrink-0"
+          onError={(e) => {
+            // Si falla la imagen externa, hacer fallback inmediato al Ra de Rabbitty
+            if (e.currentTarget.src !== window.location.origin + '/icon_ra.png') {
+              e.currentTarget.src = '/icon_ra.png';
+            }
+          }}
+        />
+        <span className="font-black truncate tracking-tight">{businessName}</span>
       </div>
     );
   };
