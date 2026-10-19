@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { MoreHorizontal, Bookmark, Share2, Sparkles, X, Check, Heart, ExternalLink } from 'lucide-react';
+import { MoreHorizontal, Bookmark, Share2, X, Check, Heart, ExternalLink } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
 import { useToast } from '@/contexts/ToastContext';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface FeedCardProps {
   id: string;
@@ -17,9 +19,13 @@ interface FeedCardProps {
   index: number;
 }
 
+const emptySubscribe = () => () => {};
+
 export default function FeedCard({ id, user, device, label, bunz, imageUrl, index }: FeedCardProps) {
   const router = useRouter();
   const { showToast } = useToast();
+  const { isDark } = useTheme();
+  const isClient = useSyncExternalStore(emptySubscribe, () => true, () => false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [isSaved, setIsSaved] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -193,6 +199,7 @@ export default function FeedCard({ id, user, device, label, bunz, imageUrl, inde
         {/* Image */}
         <div style={{ position: 'relative', width: '100%', aspectRatio: '4/3', overflow: 'hidden', background: 'var(--bg-pressed)' }}>
           {imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={imageUrl}
               alt={label}
@@ -306,125 +313,168 @@ export default function FeedCard({ id, user, device, label, bunz, imageUrl, inde
       </motion.div>
 
       {/* Menú Contextual (Click-hold / 3 puntos) estilo Telegram/iOS */}
-      <AnimatePresence>
-        {menuOpen && (
-          <div 
-            className="fixed inset-0 z-200 flex flex-col justify-end p-4 bg-black/75 backdrop-blur-md"
-            onClick={() => setMenuOpen(false)}
-          >
-            <motion.div
-              initial={{ y: '100%', opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: '100%', opacity: 0 }}
-              transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-              className="w-full max-w-sm mx-auto bg-[#18181F] border border-white/10 rounded-[28px] p-4 text-white shadow-2xl flex flex-col gap-2.5"
-              onClick={(e) => e.stopPropagation()}
+      {/* Menú Contextual (Click-hold / 3 puntos) con Portal al body para escapar de transformaciones */}
+      {isClient && typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {menuOpen && (
+            <div 
+              className="fixed inset-0 z-999 flex flex-col justify-end p-4 backdrop-blur-md"
+              style={{
+                background: isDark ? 'rgba(0, 0, 0, 0.75)' : 'rgba(0, 0, 0, 0.45)',
+              }}
+              onClick={() => setMenuOpen(false)}
             >
-              {/* Header del Negocio */}
-              <div className="flex items-center justify-between pb-3 border-b border-white/10">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <span className="text-xl">🐰</span>
-                  <div className="min-w-0">
-                    <h3 className="text-[15px] font-black m-0 leading-tight truncate">{user}</h3>
-                    <p className="text-[11px] text-white/50 m-0 mt-0.5 truncate">{device} • {label}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setMenuOpen(false)}
-                  className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-white/70 border-none cursor-pointer active:scale-90"
+              <motion.div
+                initial={{ y: '100%', opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: '100%', opacity: 0 }}
+                transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+                className="w-full max-w-sm mx-auto rounded-[28px] p-4 shadow-2xl flex flex-col gap-2.5 border"
+                style={{
+                  background: 'var(--bg-elevated)',
+                  borderColor: 'var(--border-subtle)',
+                  color: 'var(--text-primary)',
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Header del Negocio */}
+                <div 
+                  className="flex items-center justify-between pb-3 border-b"
+                  style={{ borderColor: 'var(--border-subtle)' }}
                 >
-                  <X size={14} />
-                </button>
-              </div>
-
-              {/* Acciones principales */}
-              <div className="flex flex-col gap-1.5 pt-1">
-                {/* 1. Guardar en Madrigueras */}
-                <button
-                  type="button"
-                  onClick={handleToggleMadriguera}
-                  className="flex items-center gap-3.5 p-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 text-left active:scale-[0.98] transition-all cursor-pointer"
-                >
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isSaved ? 'bg-[#E91E63] text-white' : 'bg-white/10 text-white/80'}`}>
-                    <Bookmark size={18} fill={isSaved ? '#fff' : 'none'} />
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="text-xl">🐰</span>
+                    <div className="min-w-0">
+                      <h3 className="text-[15px] font-black m-0 leading-tight truncate" style={{ color: 'var(--text-primary)' }}>
+                        {user}
+                      </h3>
+                      <p className="text-[11px] m-0 mt-0.5 truncate" style={{ color: 'var(--text-muted)' }}>
+                        {device} • {label}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <p className="text-[14px] font-bold text-white m-0">
-                      {isSaved ? 'En tus Madrigueras' : 'Guardar en Madrigueras'}
-                    </p>
-                    <p className="text-[11px] text-white/50 m-0">Acceso rápido a tus comercios favoritos</p>
-                  </div>
-                  {isSaved && <Check size={16} className="text-[#E91E63]" />}
-                </button>
-
-                {/* 2. Dar Hop (Like de comunidad para subir en el ranking de afiliados) */}
-                <button
-                  type="button"
-                  onClick={handleHop}
-                  className="flex items-center gap-3.5 p-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 text-left active:scale-[0.98] transition-all cursor-pointer"
-                >
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${hasHopped ? 'bg-amber-400 text-black' : 'bg-white/10 text-amber-400'}`}>
-                    <Heart size={18} fill={hasHopped ? '#000' : 'none'} />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-[14px] font-bold text-white m-0">Dar un Hop 🐾</p>
-                    <p className="text-[11px] text-white/50 m-0">Recomienda y apoya a este comercio</p>
-                  </div>
-                  {hopsCount !== null && (
-                    <span className="text-xs font-black text-amber-400 px-2 py-0.5 rounded-full bg-amber-400/15 border border-amber-400/30">
-                      +{hopsCount}
-                    </span>
-                  )}
-                </button>
-
-                {/* 3. Compartir con amigos */}
-                <div className="p-3 rounded-2xl bg-white/5 border border-white/5 flex flex-col gap-2">
-                  <div className="flex items-center gap-2">
-                    <Share2 size={16} className="text-[#E91E63]" />
-                    <span className="text-[13px] font-bold text-white">Compartir negocio</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 mt-1">
-                    <button
-                      type="button"
-                      onClick={() => handleShare('whatsapp')}
-                      className="py-2 px-2.5 rounded-xl bg-[#25D366]/15 border border-[#25D366]/30 text-[#25D366] text-xs font-bold flex items-center justify-center gap-1 active:scale-95 cursor-pointer"
-                    >
-                      WhatsApp
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleShare('telegram')}
-                      className="py-2 px-2.5 rounded-xl bg-[#229ED9]/15 border border-[#229ED9]/30 text-[#229ED9] text-xs font-bold flex items-center justify-center gap-1 active:scale-95 cursor-pointer"
-                    >
-                      Telegram
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleShare('copy')}
-                      className="py-2 px-2.5 rounded-xl bg-white/10 border border-white/15 text-white text-xs font-bold flex items-center justify-center gap-1 active:scale-95 cursor-pointer"
-                    >
-                      Copiar
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => setMenuOpen(false)}
+                    className="w-7 h-7 rounded-full flex items-center justify-center border-none cursor-pointer active:scale-90"
+                    style={{
+                      background: 'var(--bg-pressed)',
+                      color: 'var(--text-secondary)',
+                    }}
+                    aria-label="Cerrar"
+                  >
+                    <X size={14} />
+                  </button>
                 </div>
 
-                {/* 4. Ver perfil completo */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    router.push(`/affiliate/${id}`);
-                  }}
-                  className="w-full py-3 rounded-xl bg-[#E91E63] text-white font-black text-[13px] flex items-center justify-center gap-2 active:scale-98 transition-transform cursor-pointer border-none mt-1"
-                >
-                  <ExternalLink size={15} />
-                  <span>Ver perfil de comercio</span>
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+                {/* Acciones principales */}
+                <div className="flex flex-col gap-1.5 pt-1">
+                  {/* 1. Guardar en Madrigueras */}
+                  <button
+                    type="button"
+                    onClick={handleToggleMadriguera}
+                    className="flex items-center gap-3.5 p-3 rounded-2xl text-left active:scale-[0.98] transition-all cursor-pointer border"
+                    style={{
+                      background: 'var(--bg-primary)',
+                      borderColor: 'var(--border-subtle)',
+                    }}
+                  >
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isSaved ? 'bg-[#E91E63] text-white' : 'text-[#E91E63]'}`} style={{ background: isSaved ? '#E91E63' : 'rgba(233,30,99,0.12)' }}>
+                      <Bookmark size={18} fill={isSaved ? '#fff' : 'none'} />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-[14px] font-bold m-0" style={{ color: 'var(--text-primary)' }}>
+                        {isSaved ? 'En tus Madrigueras' : 'Guardar en Madrigueras'}
+                      </p>
+                      <p className="text-[11px] m-0" style={{ color: 'var(--text-muted)' }}>Acceso rápido a tus comercios favoritos</p>
+                    </div>
+                    {isSaved && <Check size={16} className="text-[#E91E63]" />}
+                  </button>
+
+                  {/* 2. Dar Hop */}
+                  <button
+                    type="button"
+                    onClick={handleHop}
+                    className="flex items-center gap-3.5 p-3 rounded-2xl text-left active:scale-[0.98] transition-all cursor-pointer border"
+                    style={{
+                      background: 'var(--bg-primary)',
+                      borderColor: 'var(--border-subtle)',
+                    }}
+                  >
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${hasHopped ? 'bg-amber-400 text-black' : 'text-amber-500'}`} style={{ background: hasHopped ? '#F59E0B' : 'rgba(245,158,11,0.15)' }}>
+                      <Heart size={18} fill={hasHopped ? '#000' : 'none'} />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-[14px] font-bold m-0" style={{ color: 'var(--text-primary)' }}>Dar un Hop 🐾</p>
+                      <p className="text-[11px] m-0" style={{ color: 'var(--text-muted)' }}>Recomienda y apoya a este comercio</p>
+                    </div>
+                    {hopsCount !== null && (
+                      <span className="text-xs font-black text-amber-500 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30">
+                        +{hopsCount}
+                      </span>
+                    )}
+                  </button>
+
+                  {/* 3. Compartir con amigos */}
+                  <div 
+                    className="p-3 rounded-2xl border flex flex-col gap-2"
+                    style={{
+                      background: 'var(--bg-primary)',
+                      borderColor: 'var(--border-subtle)',
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Share2 size={16} className="text-[#E91E63]" />
+                      <span className="text-[13px] font-bold" style={{ color: 'var(--text-primary)' }}>Compartir negocio</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 mt-1">
+                      <button
+                        type="button"
+                        onClick={() => handleShare('whatsapp')}
+                        className="py-2 px-2.5 rounded-xl bg-[#25D366]/15 border border-[#25D366]/30 text-[#25D366] text-xs font-bold flex items-center justify-center gap-1 active:scale-95 cursor-pointer"
+                      >
+                        WhatsApp
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleShare('telegram')}
+                        className="py-2 px-2.5 rounded-xl bg-[#229ED9]/15 border border-[#229ED9]/30 text-[#229ED9] text-xs font-bold flex items-center justify-center gap-1 active:scale-95 cursor-pointer"
+                      >
+                        Telegram
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleShare('copy')}
+                        className="py-2 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1 active:scale-95 cursor-pointer border"
+                        style={{
+                          background: 'var(--bg-pressed)',
+                          borderColor: 'var(--border-subtle)',
+                          color: 'var(--text-primary)',
+                        }}
+                      >
+                        Copiar
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 4. Ver perfil completo */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      router.push(`/affiliate/${id}`);
+                    }}
+                    className="w-full py-3 rounded-xl bg-[#E91E63] text-white font-black text-[13px] flex items-center justify-center gap-2 active:scale-98 transition-transform cursor-pointer border-none mt-1"
+                  >
+                    <ExternalLink size={15} />
+                    <span>Ver perfil de comercio</span>
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
     </>
   );
 }

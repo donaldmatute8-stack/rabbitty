@@ -13,10 +13,20 @@ interface LayoutProps {
   left?: React.ReactNode;
   right?: React.ReactNode;
   hideNav?: boolean;
+  onBackCustom?: () => void;
 }
 
-export default function ProfileSubpageLayout({ title, children, showBack = true, centerTitle = false, left, right, hideNav = false }: LayoutProps) {
+export default function ProfileSubpageLayout({ title, children, showBack = true, centerTitle = false, left, right, hideNav = false, onBackCustom }: LayoutProps) {
   const router = useRouter();
+
+  const handleBack = () => {
+    PlatformBridge.hapticFeedback('light');
+    if (onBackCustom) {
+      onBackCustom();
+    } else {
+      router.back();
+    }
+  };
 
   return (
     <div className="page-wrap" style={{ background: 'var(--bg-primary)', fontFamily: 'var(--font-family-base)', paddingBottom: 100, minHeight: '100dvh' }}>
@@ -37,10 +47,7 @@ export default function ProfileSubpageLayout({ title, children, showBack = true,
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, position: 'relative', zIndex: 2 }}>
             {showBack && (
               <button
-                onClick={() => {
-                  PlatformBridge.hapticFeedback('light');
-                  router.back();
-                }}
+                onClick={handleBack}
                 aria-label="Volver"
                 className="active:scale-90 transition-transform flex items-center justify-center"
                 style={{

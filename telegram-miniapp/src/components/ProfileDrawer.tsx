@@ -92,7 +92,7 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}
             transition={{ type: 'spring', damping: 32, stiffness: 320 }}
-            className="fixed top-0 left-0 bottom-0 z-201 w-[78%] max-w-72 sm:max-w-80 flex flex-col justify-between rounded-r-[32px] overflow-hidden"
+            className="fixed top-0 left-0 bottom-0 z-201 w-[78%] max-w-72 sm:max-w-80 flex flex-col justify-between rounded-r-4xl overflow-hidden"
             style={{
               background: 'var(--bg-primary)',
               paddingTop: 'calc(max(var(--safe-top, 0px), 12px) + 12px)',
