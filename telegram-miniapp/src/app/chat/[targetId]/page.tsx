@@ -1373,8 +1373,14 @@ export default function ChatRoomPage() {
               type="button"
               onClick={() => {
                 PlatformBridge.hapticFeedback('light');
-                if (navigator.share) {
+                if (typeof navigator !== 'undefined' && navigator.share) {
                   navigator.share({ title: targetName, text: `Chat con ${targetName} en Rabbitty`, url: window.location.href }).catch(() => {});
+                } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                  navigator.clipboard.writeText(window.location.href).then(() => {
+                    showToast('Enlace copiado al portapapeles', 'success');
+                  }).catch(() => {
+                    showToast('Enlace copiado', 'info');
+                  });
                 } else {
                   showToast('Enlace copiado al portapapeles', 'success');
                 }

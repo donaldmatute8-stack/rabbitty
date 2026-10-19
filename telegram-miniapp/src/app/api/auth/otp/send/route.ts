@@ -33,8 +33,12 @@ export async function POST(req: NextRequest) {
     let telegramId: string | null = null;
 
     const isEmail = rawInput.includes('@');
+    const isTesterDemo = rawInput.toLowerCase() === 'tester' || rawInput.toLowerCase() === 'tester@rabbitty.me';
 
-    if (isEmail) {
+    if (isTesterDemo) {
+      email = 'tester@rabbitty.me';
+      mode = 'email';
+    } else if (isEmail) {
       email = rawInput.toLowerCase();
       mode = 'email';
     } else {
@@ -72,8 +76,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const code = crypto.randomInt(100000, 1000000).toString();
-    const expires = new Date(Date.now() + 10 * 60 * 1000);
+    const code = isTesterDemo ? '123456' : crypto.randomInt(100000, 1000000).toString();
+    const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour for tester demo
 
     // Borrar tokens previos para email, rawInput o teléfono
     await db.delete(verificationTokens).where(
@@ -91,6 +95,16 @@ export async function POST(req: NextRequest) {
       token: tokenHashEmail,
       expires,
     });
+
+    if (isTesterDemo) {
+      return NextResponse.json({
+        success: true,
+        message: 'Código de acceso demo para revisión Apple generado.',
+        channel: 'email',
+        mode: 'email',
+        otpCode: '123456',
+      });
+    }
 
     if (rawInput !== email) {
       try {

@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { motion, Variants } from 'framer-motion';
 import { ArrowRight, Store, UserCircle2, Zap, Shield, Smartphone, QrCode, X, Clock, Salad, Truck, Receipt, Bell, Building2, DollarSign, Monitor, Gift, Award, Megaphone, Cake, BookOpen, HelpCircle } from 'lucide-react';
 import BunzGuide from '@/components/BunzGuide';
 import PricingPackagesSection, { PackagePlan, NicheData } from '@/components/PricingPackagesSection';
 
 const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || '5213312345678';
+const BUSINESS_TYPES = ['restaurante', 'cafetería', 'barbería', 'gimnasio', 'tienda'];
 
 type TrackingWindow = Window & {
   gtag?: (...args: unknown[]) => void;
@@ -35,7 +37,6 @@ const EMPTY_FORM = {
 
 export default function LandingPage() {
   const [showSmartContractModal, setShowSmartContractModal] = useState(false);
-  const [showWhitepaperModal, setShowWhitepaperModal] = useState(false);
   const [showBunzGuide, setShowBunzGuide] = useState(false);
   const [showApplyForm, setShowApplyForm] = useState(false);
   const [selectedPlanInfo, setSelectedPlanInfo] = useState<{ planName: string; setupBunz: number; billing: string } | null>(null);
@@ -137,7 +138,6 @@ export default function LandingPage() {
     setShowApplyForm(true);
   };
   // Typewriter effect state
-  const businessTypes = ['restaurante', 'cafetería', 'barbería', 'gimnasio', 'tienda'];
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const [currentText, setCurrentText] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
@@ -158,7 +158,7 @@ export default function LandingPage() {
   }, []);
 
   useEffect(() => {
-    const word = businessTypes[currentWordIndex];
+    const word = BUSINESS_TYPES[currentWordIndex];
     let timeout: NodeJS.Timeout;
 
     if (isDeleting) {
@@ -166,7 +166,7 @@ export default function LandingPage() {
         setCurrentText(prev => prev.slice(0, -1));
         if (currentText.length === 0) {
           setIsDeleting(false);
-          setCurrentWordIndex((prev) => (prev + 1) % businessTypes.length);
+          setCurrentWordIndex((prev) => (prev + 1) % BUSINESS_TYPES.length);
         }
       }, 50);
     } else {
@@ -223,14 +223,14 @@ export default function LandingPage() {
         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay z-20" />
         
         {/* Dark vignette to blend edges */}
-        <div className="absolute inset-0 bg-gradient-to-b from-[#05050A] via-transparent to-[#05050A] z-20" />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#05050A] via-transparent to-[#05050A] z-20" />
+        <div className="absolute inset-0 bg-linear-to-b from-[#05050A] via-transparent to-[#05050A] z-20" />
+        <div className="absolute inset-0 bg-linear-to-r from-[#05050A] via-transparent to-[#05050A] z-20" />
       </div>
 
       {/* HEADER */}
       <header className="fixed top-0 w-full z-50 bg-[#05050A]/80 backdrop-blur-xl border-b border-white/10 py-4 px-6 md:px-12 flex justify-between items-center">
         <div className="flex items-center gap-3">
-          <img src="/icon_ra.png" alt="Rabbitty" className="w-10 h-10 object-contain drop-shadow-[0_0_15px_rgba(233,30,99,0.5)]" />
+          <Image src="/icon_ra.png" alt="Rabbitty" width={40} height={40} className="object-contain drop-shadow-[0_0_15px_rgba(233,30,99,0.5)]" />
           <span className="font-black text-xl tracking-tight hidden sm:block">RABBITTY<span className="text-gradient">.me</span></span>
         </div>
         <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-white/70">
@@ -292,10 +292,10 @@ export default function LandingPage() {
             className="order-2 md:order-1 relative"
           >
             {/* Mockup */}
-            <div className="w-[320px] h-[640px] mx-auto bg-black border-[8px] border-[#1A1A24] rounded-[50px] overflow-hidden relative shadow-[0_20px_60px_rgba(0,0,0,0.8)] before:content-[''] before:absolute before:top-0 before:left-1/2 before:-translate-x-1/2 before:w-[120px] before:h-[30px] before:bg-[#1A1A24] before:rounded-b-[20px] before:z-20">
-              <div className="absolute inset-0 bg-gradient-to-b from-[#0D0D1A] to-black">
+            <div className="w-[320px] h-160 mx-auto bg-black border-8 border-[#1A1A24] rounded-[50px] overflow-hidden relative shadow-[0_20px_60px_rgba(0,0,0,0.8)] before:content-[''] before:absolute before:top-0 before:left-1/2 before:-translate-x-1/2 before:w-30 before:h-7.5 before:bg-[#1A1A24] before:rounded-b-[20px] before:z-20">
+              <div className="absolute inset-0 bg-linear-to-b from-[#0D0D1A] to-black">
                 {/* Fake UI */}
-                <div className="h-40 bg-gradient-to-b from-primary/20 to-transparent p-6 pt-12">
+                <div className="h-40 bg-linear-to-b from-primary/20 to-transparent p-6 pt-12">
                   <div className="text-3xl font-black mb-2">1,250 bunz</div>
                   <div className="text-white/50 text-sm">Balance Disponible</div>
                 </div>
@@ -338,7 +338,7 @@ export default function LandingPage() {
                 { icon: Shield, title: 'Identidad Dinámica', desc: 'Sube de nivel, desbloquea logros y evoluciona tu perfil.' }
               ].map((f, i) => (
                 <div key={i} className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-primary flex-shrink-0">
+                  <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-primary shrink-0">
                     <f.icon size={24} />
                   </div>
                   <div>
@@ -376,7 +376,7 @@ export default function LandingPage() {
                 { icon: Shield, title: 'Modo Offline Indestructible', desc: 'Si se cae tu internet, nuestro POS encola ventas y sincroniza en segundo plano al regresar la red.' }
               ].map((f, i) => (
                 <div key={i} className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-400 flex-shrink-0">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-400 shrink-0">
                     <f.icon size={24} />
                   </div>
                   <div>
@@ -394,8 +394,8 @@ export default function LandingPage() {
           </div>
           
           <div className="relative">
-            <div className="aspect-[4/3] rounded-3xl glass-panel p-2 shadow-2xl relative overflow-hidden group">
-              <div className="absolute inset-0 bg-gradient-to-tr from-blue-900/40 to-transparent z-10 pointer-events-none" />
+            <div className="aspect-4/3 rounded-3xl glass-panel p-2 shadow-2xl relative overflow-hidden group">
+              <div className="absolute inset-0 bg-linear-to-tr from-blue-900/40 to-transparent z-10 pointer-events-none" />
               {/* Fake Dashboard */}
               <div className="w-full h-full bg-[#111] rounded-2xl overflow-hidden flex flex-col">
                 <div className="h-12 border-b border-white/10 flex items-center px-4 gap-4">
@@ -431,7 +431,7 @@ export default function LandingPage() {
       </section>
 
       {/* PHASE 11-12: POWER FEATURES */}
-      <section className="relative z-10 py-32 px-6 bg-gradient-to-b from-transparent via-blue-950/10 to-transparent">
+      <section className="relative z-10 py-32 px-6 bg-linear-to-b from-transparent via-blue-950/10 to-transparent">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <div className="text-primary font-bold tracking-widest text-sm uppercase mb-3">V2.0 Power Features</div>
@@ -456,7 +456,7 @@ export default function LandingPage() {
               { icon: QrCode, title: 'Pagos QR en Mesa', desc: 'Paga, divide cuenta y agrega propina desde el celular. Sin apps ni fichas.', color: 'text-cyan-400' },
               { icon: BookOpen, title: 'Academy Integrada', desc: 'Centro de aprendizaje con guías interactivas para cada funcionalidad del sistema.', color: 'text-indigo-400' },
             ].map((f, i) => (
-              <div key={i} className="group rounded-3xl border border-white/5 bg-white/[0.03] p-6 backdrop-blur-sm hover:border-white/10 hover:bg-white/[0.06] transition-all duration-500">
+              <div key={i} className="group rounded-3xl border border-white/5 bg-white/3 p-6 backdrop-blur-sm hover:border-white/10 hover:bg-white/6 transition-all duration-500">
                 <div className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 ${f.color} mb-4 group-hover:scale-110 transition-transform`}>
                   <f.icon size={24} />
                 </div>
@@ -467,7 +467,7 @@ export default function LandingPage() {
           </div>
 
           <div className="text-center mt-12">
-            <a href="#paquetes" className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-gradient-to-r from-pink-600 to-blue-600 hover:from-pink-500 hover:to-blue-500 text-white font-bold text-lg transition-all shadow-[0_0_30px_rgba(233,30,99,0.2)] cursor-pointer no-underline">
+            <a href="#paquetes" className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-linear-to-r from-pink-600 to-blue-600 hover:from-pink-500 hover:to-blue-500 text-white font-bold text-lg transition-all shadow-[0_0_30px_rgba(233,30,99,0.2)] cursor-pointer no-underline">
               Ver Paquetes de Iniciación <ArrowRight size={20} />
             </a>
             <div className="mt-4">
@@ -528,10 +528,11 @@ export default function LandingPage() {
       <footer className="relative z-10 border-t border-white/10 py-12 px-6">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-3">
-            <img src="/icon_ra.png" alt="Rabbitty" className="w-8 h-8 object-contain opacity-50" />
+            <Image src="/icon_ra.png" alt="Rabbitty" width={32} height={32} className="object-contain opacity-50" />
             <span className="font-bold text-white/50">© 2026 Rabbitty Corp.</span>
           </div>
-          <div className="flex gap-6 text-sm font-semibold text-white/40">
+          <div className="flex flex-wrap items-center gap-6 text-sm font-semibold text-white/40">
+            <a href="/privacy" className="hover:text-white transition-colors cursor-pointer">Privacidad y Términos</a>
             <a href="/whitepaper" className="hover:text-white transition-colors cursor-pointer">Whitepaper</a>
             <button onClick={() => setShowSmartContractModal(true)} className="hover:text-white transition-colors cursor-pointer">Smart Contract</button>
           </div>
@@ -540,11 +541,11 @@ export default function LandingPage() {
 
       {/* APPLY FORM MODAL (Typeform-style) */}
       {showApplyForm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-md p-4" onClick={(e) => { if (e.target === e.currentTarget) resetForm(); }}>
+        <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/70 backdrop-blur-md p-4" onClick={(e) => { if (e.target === e.currentTarget) resetForm(); }}>
           <div className="bg-[#0D0D1A] border border-white/10 rounded-3xl w-full max-w-lg relative overflow-hidden shadow-[0_0_60px_rgba(233,30,99,0.15)]">
             {/* Progress bar */}
             <div className="h-1 bg-white/5">
-              <div className="h-full bg-gradient-to-r from-pink-600 to-blue-600 transition-all duration-500" style={{ width: `${((formStep + 1) / 4) * 100}%` }} />
+              <div className="h-full bg-linear-to-r from-pink-600 to-blue-600 transition-all duration-500" style={{ width: `${((formStep + 1) / 4) * 100}%` }} />
             </div>
             <button onClick={resetForm} className="absolute top-4 right-4 text-white/50 hover:text-white z-10">
               <X size={24} />
@@ -554,7 +555,7 @@ export default function LandingPage() {
               <div className="p-8">
                 {/* Selected Plan Summary Banner */}
                 {selectedPlanInfo && (
-                  <div className="mb-4 p-3 rounded-2xl bg-gradient-to-r from-pink-500/10 via-purple-500/10 to-transparent border border-pink-500/30 flex items-center justify-between">
+                  <div className="mb-4 p-3 rounded-2xl bg-linear-to-r from-pink-500/10 via-purple-500/10 to-transparent border border-pink-500/30 flex items-center justify-between">
                     <div>
                       <span className="text-[10px] font-black text-pink-400 uppercase tracking-widest block">Paquete Seleccionado</span>
                       <span className="text-sm font-black text-white">{selectedPlanInfo.planName}</span>
@@ -572,7 +573,7 @@ export default function LandingPage() {
                 {/* Honeypot anti-spam (invisible) */}
                 <input type="text" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true"
                   value={formData.website} onChange={(e) => handleFormChange('website', e.target.value)}
-                  className="absolute -left-[9999px] h-0 w-0 opacity-0" />
+                  className="absolute -left-2499.75 h-0 w-0 opacity-0" />
 
                 {submitError && (
                   <div className="mb-4 p-3 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs font-bold">{submitError}</div>
@@ -590,7 +591,7 @@ export default function LandingPage() {
                       autoFocus onKeyDown={(e) => e.key === 'Enter' && formData.negocio && setFormStep(1)} />
                     <div className="flex justify-end">
                       <button onClick={() => formData.negocio && setFormStep(1)} disabled={!formData.negocio}
-                        className="px-8 py-3 rounded-full bg-gradient-to-r from-pink-600 to-blue-600 text-white font-bold disabled:opacity-30 transition-all cursor-pointer">
+                        className="px-8 py-3 rounded-full bg-linear-to-r from-pink-600 to-blue-600 text-white font-bold disabled:opacity-30 transition-all cursor-pointer">
                         Siguiente <ArrowRight size={18} className="inline ml-1" />
                       </button>
                     </div>
@@ -611,7 +612,7 @@ export default function LandingPage() {
                     <div className="flex justify-between">
                       <button onClick={() => setFormStep(0)} className="text-white/50 hover:text-white font-bold transition-all cursor-pointer">← Atrás</button>
                       <button onClick={() => (formData.telefono || formData.email) && setFormStep(2)} disabled={!formData.telefono && !formData.email}
-                        className="px-8 py-3 rounded-full bg-gradient-to-r from-pink-600 to-blue-600 text-white font-bold disabled:opacity-30 transition-all cursor-pointer">
+                        className="px-8 py-3 rounded-full bg-linear-to-r from-pink-600 to-blue-600 text-white font-bold disabled:opacity-30 transition-all cursor-pointer">
                         Siguiente <ArrowRight size={18} className="inline ml-1" />
                       </button>
                     </div>
@@ -638,7 +639,7 @@ export default function LandingPage() {
                     </button>
                     <div className="flex justify-between">
                       <button onClick={() => setFormStep(1)} className="text-white/50 hover:text-white font-bold transition-all cursor-pointer">← Atrás</button>
-                      <button onClick={() => setFormStep(3)} className="px-8 py-3 rounded-full bg-gradient-to-r from-pink-600 to-blue-600 text-white font-bold transition-all cursor-pointer">
+                      <button onClick={() => setFormStep(3)} className="px-8 py-3 rounded-full bg-linear-to-r from-pink-600 to-blue-600 text-white font-bold transition-all cursor-pointer">
                         Siguiente <ArrowRight size={18} className="inline ml-1" />
                       </button>
                     </div>
@@ -658,7 +659,7 @@ export default function LandingPage() {
                     <div className="flex justify-between">
                       <button onClick={() => setFormStep(2)} className="text-white/50 hover:text-white font-bold transition-all cursor-pointer">← Atrás</button>
                       <button onClick={handleFormSubmit} disabled={!formData.negocio || submitting}
-                        className="px-8 py-3 rounded-full bg-gradient-to-r from-green-500 to-blue-600 text-white font-bold hover:scale-105 transition-all cursor-pointer disabled:opacity-30">
+                        className="px-8 py-3 rounded-full bg-linear-to-r from-green-500 to-blue-600 text-white font-bold hover:scale-105 transition-all cursor-pointer disabled:opacity-30">
                         {submitting ? 'Enviando…' : 'Enviar Solicitud 🚀'}
                       </button>
                     </div>
@@ -699,7 +700,7 @@ export default function LandingPage() {
       {/* MODALS */}
       {showBunzGuide && <BunzGuide onClose={() => setShowBunzGuide(false)} />}
       {showSmartContractModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
+        <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
           <div className="bg-[#111] border border-white/10 rounded-3xl p-8 max-w-md w-full relative">
             <button onClick={() => setShowSmartContractModal(false)} className="absolute top-4 right-4 text-white/50 hover:text-white">
               <X size={24} />

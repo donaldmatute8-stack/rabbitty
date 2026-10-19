@@ -67,6 +67,20 @@ export const PlatformBridge = {
   },
 
   /**
+   * Genera el enlace de retorno inteligente según la plataforma de origen:
+   * - En Native Mobile App / Web: Genera el enlace web/universal (https://rabbitty.me/...)
+   * - En Telegram Mini App: Genera el enlace de Telegram con startapp (https://t.me/Rabbittyme_bot/app?startapp=...)
+   */
+  getShareableLink(path: string, tgParam?: string): string {
+    const isTg = this.isTelegram();
+    if (isTg && tgParam) {
+      return `https://t.me/Rabbittyme_bot/app?startapp=${encodeURIComponent(tgParam)}`;
+    }
+    const cleanPath = path.startsWith('/') ? path : `/${path}`;
+    return `https://rabbitty.me${cleanPath}`;
+  },
+
+  /**
    * Universal Haptic Feedback across Telegram, Native iOS/Android, and Web
    */
   async hapticFeedback(style: 'light' | 'medium' | 'heavy' | 'success' | 'warning' | 'error' = 'light') {

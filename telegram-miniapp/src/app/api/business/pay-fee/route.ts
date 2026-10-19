@@ -110,16 +110,17 @@ export async function POST(req: Request) {
       message: `Cuota de ${feeAmount.toLocaleString()} Bunz pagada exitosamente`,
       feePaid: feeAmount,
     });
-  } catch (error: any) {
-    if (error?.message === 'INSUFFICIENT_BUNZ_BALANCE') {
+  } catch (error: unknown) {
+    const errorMsg = error instanceof Error ? error.message : 'Internal server error';
+    if (errorMsg === 'INSUFFICIENT_BUNZ_BALANCE') {
       return NextResponse.json({
         error: 'Saldo insuficiente de Bunz para pagar la cuota.',
       }, { status: 400 });
     }
-    if (error?.message === 'NOT_AUTHORIZED') {
+    if (errorMsg === 'NOT_AUTHORIZED') {
       return NextResponse.json({ error: 'No autorizado para pagar la cuota de este negocio.' }, { status: 403 });
     }
     console.error('Pay Fee Error:', error);
-    return NextResponse.json({ error: error?.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: errorMsg }, { status: 500 });
   }
 }
