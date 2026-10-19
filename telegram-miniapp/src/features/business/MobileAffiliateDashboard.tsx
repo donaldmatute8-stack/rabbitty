@@ -18,6 +18,8 @@ interface BusinessProfile {
   startTime?: string;
   endTime?: string;
   address?: string;
+  logoUrl?: string | null;
+  hops?: number;
 }
 
 interface ReservationItem {
@@ -296,40 +298,51 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
         {/* Metric Cards */}
         <motion.div 
           initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-          className="grid grid-cols-3 gap-2 mb-4"
+          className="grid grid-cols-4 gap-2 mb-4"
         >
           <div 
-            className="rounded-2xl p-3 text-center transition-all"
+            className="rounded-2xl p-2.5 text-center transition-all"
             style={{ 
               background: 'var(--bg-elevated)', 
               border: '1px solid var(--border-subtle)',
               boxShadow: 'var(--shadow-sm)'
             }}
           >
-            <p className="text-xl font-black text-(--text-primary) tracking-tight m-0">{txCount}</p>
-            <p className="text-[9px] font-black text-(--text-muted) tracking-wider uppercase mt-1 mb-0">Transacciones</p>
+            <p className="text-lg font-black text-(--text-primary) tracking-tight m-0">{txCount}</p>
+            <p className="text-[8px] font-black text-(--text-muted) tracking-wider uppercase mt-1 mb-0">Tickets</p>
           </div>
           <div 
-            className="rounded-2xl p-3 text-center transition-all"
+            className="rounded-2xl p-2.5 text-center transition-all"
             style={{ 
               background: 'var(--bg-elevated)', 
               border: '1px solid var(--border-subtle)',
               boxShadow: 'var(--shadow-sm)'
             }}
           >
-            <p className="text-xl font-black text-(--text-primary) tracking-tight m-0">{clientCount}</p>
-            <p className="text-[9px] font-black text-(--text-muted) tracking-wider uppercase mt-1 mb-0">Clientes</p>
+            <p className="text-lg font-black text-(--text-primary) tracking-tight m-0">{clientCount}</p>
+            <p className="text-[8px] font-black text-(--text-muted) tracking-wider uppercase mt-1 mb-0">Clientes</p>
           </div>
           <div 
-            className="rounded-2xl p-3 text-center transition-all"
+            className="rounded-2xl p-2.5 text-center transition-all"
             style={{ 
               background: 'var(--bg-elevated)', 
               border: '1px solid var(--border-subtle)',
               boxShadow: 'var(--shadow-sm)'
             }}
           >
-            <p className="text-xl font-black text-[#E91E63] tracking-tight m-0">{totalBunz.toLocaleString()}</p>
-            <p className="text-[9px] font-black text-(--text-muted) tracking-wider uppercase mt-1 mb-0">Bunz Dados</p>
+            <p className="text-lg font-black text-amber-400 tracking-tight m-0">{business?.hops || 0}</p>
+            <p className="text-[8px] font-black text-(--text-muted) tracking-wider uppercase mt-1 mb-0">Hops 🐾</p>
+          </div>
+          <div 
+            className="rounded-2xl p-2.5 text-center transition-all"
+            style={{ 
+              background: 'var(--bg-elevated)', 
+              border: '1px solid var(--border-subtle)',
+              boxShadow: 'var(--shadow-sm)'
+            }}
+          >
+            <p className="text-lg font-black text-[#E91E63] tracking-tight m-0">{totalBunz.toLocaleString()}</p>
+            <p className="text-[8px] font-black text-(--text-muted) tracking-wider uppercase mt-1 mb-0">Bunz Dados</p>
           </div>
         </motion.div>
 
@@ -377,7 +390,10 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
             PlatformBridge.hapticFeedback('medium');
             const encodedName = encodeURIComponent(business.name || 'Mi Negocio');
             const encodedRef = encodeURIComponent(business.id?.replace(/-/g, '').slice(0, 8) || 'afiliado');
-            const printKitUrl = `https://rabbitty.me/impresos?name=${encodedName}&ref=${encodedRef}&bunz=25`;
+            const encodedLogo = encodeURIComponent(business.logoUrl || '');
+            const encodedNiche = encodeURIComponent(business.category || '');
+            const bunzValue = encodeURIComponent(String(business.rewardPercentage || 25));
+            const printKitUrl = `https://rabbitty.me/impresos?name=${encodedName}&ref=${encodedRef}&bunz=${bunzValue}&logo=${encodedLogo}&niche=${encodedNiche}`;
             window.open(printKitUrl, '_blank');
           }}
         >

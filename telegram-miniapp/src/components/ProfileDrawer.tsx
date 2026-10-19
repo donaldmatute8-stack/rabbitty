@@ -28,12 +28,15 @@ interface ProfileDrawerProps {
   onClose: () => void;
 }
 
-const MENU_ITEMS = [
+const GENERAL_ITEMS = [
   { icon: Wallet, label: 'Mi Billetera', href: '/profile/wallet' },
   { icon: History, label: 'Historial', href: '/history' },
   { icon: Trophy, label: 'Logros y Misiones', href: '/profile/gamification' },
   { icon: Ticket, label: 'Mis Cupones', href: '/profile/inventory' },
   { icon: UserPlus, label: 'Invitar amigos', href: '/referral' },
+];
+
+const SETTINGS_ITEMS = [
   { icon: Store, label: 'Portal Comercio', href: '/business', isBusiness: true },
   { icon: Bell, label: 'Notificaciones', href: '/notifications' },
   { icon: ShieldCheck, label: 'Seguridad y Privacidad', href: '/security' },
@@ -186,42 +189,74 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
             {/* Subtle Divider */}
             <div className="h-px w-full bg-(--border-subtle) opacity-60" />
 
-            {/* Single Consolidated Navigation Menu (Clean Twitter/X style list) */}
-            <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 flex flex-col gap-0.5 scrollbar-hide">
-              {MENU_ITEMS.map((item) => {
-                const IconComponent = item.icon;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => {
-                      PlatformBridge.hapticFeedback('light');
-                      onClose();
-                    }}
-                    className="flex items-center gap-4 px-3.5 py-3 rounded-2xl no-underline transition-all active:scale-[0.98] group"
-                    style={{ color: 'var(--text-primary)' }}
-                  >
-                    <IconComponent 
-                      size={20} 
-                      strokeWidth={2}
-                      className="text-(--text-secondary) group-hover:text-[#E91E63] shrink-0 transition-colors" 
-                    />
-                    <span className="text-[15px] font-bold tracking-tight flex-1">
-                      {item.label}
-                    </span>
-                    {item.isBusiness && user?.role === 'AFFILIATE' && (
-                      <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-[#E91E63]/15 text-[#E91E63] border border-[#E91E63]/30 uppercase">
-                        Activo
+            {/* Navigation Menu (Group 1: General, Group 2: Negocio y Ajustes) */}
+            <div className="flex-1 min-h-0 flex flex-col justify-between px-3 py-1 overflow-hidden">
+              <div className="flex flex-col gap-0.5">
+                {GENERAL_ITEMS.map((item) => {
+                  const IconComponent = item.icon;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => {
+                        PlatformBridge.hapticFeedback('light');
+                        onClose();
+                      }}
+                      className="flex items-center gap-3.5 px-3 py-2 rounded-xl no-underline transition-all active:scale-[0.98] group"
+                      style={{ color: 'var(--text-primary)' }}
+                    >
+                      <IconComponent 
+                        size={19} 
+                        strokeWidth={2}
+                        className="text-(--text-secondary) group-hover:text-[#E91E63] shrink-0 transition-colors" 
+                      />
+                      <span className="text-[14px] font-bold tracking-tight flex-1">
+                        {item.label}
                       </span>
-                    )}
-                  </Link>
-                );
-              })}
+                    </Link>
+                  );
+                })}
+              </div>
+
+              {/* Tenue línea divisoria entre General y Negocio / Ajustes */}
+              <div className="my-1 mx-2 h-px bg-(--border-subtle) opacity-40" />
+
+              <div className="flex flex-col gap-0.5">
+                {SETTINGS_ITEMS.map((item) => {
+                  const IconComponent = item.icon;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => {
+                        PlatformBridge.hapticFeedback('light');
+                        onClose();
+                      }}
+                      className="flex items-center gap-3 px-3 py-1.5 rounded-xl no-underline transition-all active:scale-[0.98] group"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      <IconComponent 
+                        size={16} 
+                        strokeWidth={1.9}
+                        className="text-(--text-muted) group-hover:text-[#E91E63] shrink-0 transition-colors" 
+                      />
+                      <span className="text-[12.5px] font-medium tracking-tight flex-1 group-hover:text-(--text-primary) transition-colors">
+                        {item.label}
+                      </span>
+                      {item.isBusiness && user?.role === 'AFFILIATE' && (
+                        <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-full bg-[#E91E63]/15 text-[#E91E63] border border-[#E91E63]/30 uppercase tracking-wider">
+                          Socio
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* Bottom section: smaller typography, theme toggle + logout in single row */}
+            {/* Bottom section: reduced bottom space, theme toggle + logout */}
             <div 
-              className="px-4 pt-3 pb-1 shrink-0 flex items-center justify-between gap-3"
+              className="px-4 pt-1.5 pb-0.5 shrink-0 flex items-center justify-between gap-3"
               style={{ borderTop: '1px solid var(--border-subtle)' }}
             >
               {/* Dark / Light Toggle */}
@@ -236,14 +271,14 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                     PlatformBridge.hapticFeedback('light');
                     setTheme('light');
                   }}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center transition-all border-none cursor-pointer"
+                  className="w-6.5 h-6.5 rounded-lg flex items-center justify-center transition-all border-none cursor-pointer"
                   style={{
                     background: resolvedTheme === 'light' ? 'var(--bg-primary)' : 'transparent',
                     color: resolvedTheme === 'light' ? '#E91E63' : 'var(--text-muted)',
                     boxShadow: resolvedTheme === 'light' ? 'var(--shadow-sm)' : 'none',
                   }}
                 >
-                  <Sun size={14} strokeWidth={2.4} />
+                  <Sun size={13} strokeWidth={2.4} />
                 </button>
                 <button
                   type="button"
@@ -252,14 +287,14 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                     PlatformBridge.hapticFeedback('light');
                     setTheme('dark');
                   }}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center transition-all border-none cursor-pointer"
+                  className="w-6.5 h-6.5 rounded-lg flex items-center justify-center transition-all border-none cursor-pointer"
                   style={{
                     background: resolvedTheme === 'dark' ? 'var(--bg-primary)' : 'transparent',
                     color: resolvedTheme === 'dark' ? '#E91E63' : 'var(--text-muted)',
                     boxShadow: resolvedTheme === 'dark' ? 'var(--shadow-sm)' : 'none',
                   }}
                 >
-                  <Moon size={14} strokeWidth={2.4} />
+                  <Moon size={13} strokeWidth={2.4} />
                 </button>
               </div>
 
@@ -273,9 +308,9 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                 }}
                 title="Cerrar Sesión"
                 aria-label="Cerrar Sesión"
-                className="h-8 px-3 rounded-xl flex items-center gap-1.5 bg-rose-500/10 text-rose-500 border border-rose-500/20 font-bold text-[11px] cursor-pointer active:scale-95 transition-transform"
+                className="h-7.5 px-2.5 rounded-xl flex items-center gap-1.5 bg-rose-500/10 text-rose-500 border border-rose-500/20 font-bold text-[11px] cursor-pointer active:scale-95 transition-transform"
               >
-                <LogOut size={13} strokeWidth={2.2} />
+                <LogOut size={12} strokeWidth={2.2} />
                 <span>Cerrar sesión</span>
               </button>
             </div>

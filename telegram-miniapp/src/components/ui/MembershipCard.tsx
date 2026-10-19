@@ -7,8 +7,18 @@ import { PlatformBridge } from '@/lib/platform';
 import RabbittyCode from '@/components/ui/RabbittyCode';
 import { useTheme } from '@/contexts/ThemeContext';
 
+import Image from 'next/image';
+
 interface MembershipCardProps {
-  user: any;
+  user: {
+    id?: string;
+    telegramId?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+    username?: string | null;
+    totalBunzEarned?: number;
+    totalBunzSpent?: number;
+  } | null;
   levelName?: string;
   isDark?: boolean;
 }
@@ -33,15 +43,38 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
     setShowQrModal(false);
   };
 
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        return localStorage.getItem('rabbitty_pass_collapsed') === 'true';
+      } catch {}
+    }
+    return false;
+  });
+
+  const toggleCollapse = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    PlatformBridge.hapticFeedback('light');
+    setIsCollapsed(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('rabbitty_pass_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
+
   return (
     <>
       {/* ── CARD HERO COMPONENT ── */}
       <motion.div
+        layout
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        className="w-full relative overflow-hidden rounded-[24px] p-5 mb-5 cursor-pointer select-none"
+        transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+        className="w-full relative overflow-hidden rounded-3xl mb-5 cursor-pointer select-none"
         style={{
+          padding: isCollapsed ? '14px 18px 24px' : '20px 20px 26px',
           background: isDark
             ? 'linear-gradient(135deg, #18181B 0%, #111113 45%, #240C1A 100%)'
             : 'linear-gradient(135deg, #FFFFFF 0%, #FFF5F8 50%, #FFE4EE 100%)',
@@ -59,10 +92,10 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
         />
 
         {/* Top Header inside Card */}
-        <div className="flex items-center justify-between mb-4 relative z-10">
+        <div className={`flex items-center justify-between relative z-10 ${isCollapsed ? 'mb-2' : 'mb-4'}`}>
           <div className="flex items-center gap-2.5">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center p-1 backdrop-blur-md ${isDark ? 'bg-black/40 border border-white/10' : 'bg-pink-500/10 border border-pink-500/20'}`}>
-              <img src="/logo_conejo.png" alt="Rabbitty" className="w-full h-full object-contain filter drop-shadow-[0_0_8px_rgba(233,30,99,0.8)]" />
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center p-1 backdrop-blur-md relative ${isDark ? 'bg-black/40 border border-white/10' : 'bg-pink-500/10 border border-pink-500/20'}`}>
+              <Image src="/logo_conejo.png" alt="Rabbitty" width={24} height={24} priority className="object-contain filter drop-shadow-[0_0_8px_rgba(233,30,99,0.8)]" />
             </div>
             <div>
               <div className="flex items-center gap-1.5">
@@ -81,33 +114,103 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
           </div>
         </div>
 
-        {/* Middle: Bunz Balance Display */}
-        <div className="my-2 relative z-10">
-          <span className={`text-[11px] font-bold uppercase tracking-wider block mb-0.5 ${isDark ? 'text-white/45' : 'text-slate-500'}`}>Saldo acumulado</span>
-          <div className="flex items-baseline gap-2">
-            <span className={`text-4xl font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
-              {bunzBalance.toLocaleString()}
-            </span>
-            <span className="text-lg font-black text-[#E91E63] tracking-wide">BUNZ</span>
-          </div>
-        </div>
+        {/* Essential / Collapsible View */}
+        {isCollapsed ? (
+          <div className="flex items-center justify-between mt-1 relative z-10">
+            <div>
+              <span className={`text-[10px] font-bold uppercase tracking-wider block ${isDark ? 'text-white/45' : 'text-slate-500'}`}>Saldo</span>
+              <div className="flex items-baseline gap-1.5">
+                <span className={`text-2xl font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                  {bunzBalance.toLocaleString()}
+                </span>
+                <span className="text-xs font-black text-[#E91E63] tracking-wider">BUNZ</span>
+              </div>
+            </div>
 
-        {/* Bottom Bar: Member info and CTA to show barcode */}
-        <div className={`flex items-center justify-between pt-3 border-t relative z-10 mt-3 ${isDark ? 'border-white/10' : 'border-slate-200'}`}>
-          <div className="truncate max-w-[200px]">
-            <p className={`text-[13px] font-extrabold truncate m-0 ${isDark ? 'text-white' : 'text-slate-900'}`}>{memberName}</p>
-            <p className={`text-[10px] font-mono m-0 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>ID: {String(qrIdentifier).slice(0, 14)}...</p>
+            <button
+              type="button"
+              onClick={handleOpenModal}
+              className="flex items-center gap-1 bg-[#E91E63] text-white text-[11px] font-black px-3 py-1.5 rounded-full shadow-[0_4px_12px_rgba(233,30,99,0.35)] cursor-pointer border-none"
+            >
+              <QrCode size={13} />
+              <span>Ver QR</span>
+            </button>
           </div>
+        ) : (
+          <>
+            {/* Middle: Bunz Balance Display */}
+            <div className="my-2 relative z-10">
+              <span className={`text-[11px] font-bold uppercase tracking-wider block mb-0.5 ${isDark ? 'text-white/45' : 'text-slate-500'}`}>Saldo acumulado</span>
+              <div className="flex items-baseline gap-2">
+                <span className={`text-4xl font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                  {bunzBalance.toLocaleString()}
+                </span>
+                <span className="text-lg font-black text-[#E91E63] tracking-wide">BUNZ</span>
+              </div>
+            </div>
 
-          <button
-            type="button"
-            className="flex items-center gap-1.5 bg-[#E91E63] hover:bg-[#D81B60] active:scale-95 text-white text-xs font-black px-3.5 py-2 rounded-full shadow-[0_4px_14px_rgba(233,30,99,0.35)] transition-all cursor-pointer border-none"
+            {/* Bottom Bar: Member info and CTA to show barcode */}
+            <div className={`flex items-center justify-between pt-3 border-t relative z-10 mt-3 ${isDark ? 'border-white/10' : 'border-slate-200'}`}>
+              <div className="truncate max-w-50">
+                <p className={`text-[13px] font-extrabold truncate m-0 ${isDark ? 'text-white' : 'text-slate-900'}`}>{memberName}</p>
+                <p className={`text-[10px] font-mono m-0 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>ID: {String(qrIdentifier).slice(0, 14)}...</p>
+              </div>
+
+              <button
+                type="button"
+                className="flex items-center gap-1.5 bg-[#E91E63] hover:bg-[#D81B60] active:scale-95 text-white text-xs font-black px-3.5 py-2 rounded-full shadow-[0_4px_14px_rgba(233,30,99,0.35)] transition-all cursor-pointer border-none"
+              >
+                <QrCode size={14} />
+                <span>Ver QR</span>
+                <ChevronRight size={12} />
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Pill triangular en el centro inferior para comprimir/expandir */}
+        <button
+          type="button"
+          onClick={toggleCollapse}
+          aria-label={isCollapsed ? 'Expandir tarjeta Rabbitty Pass' : 'Comprimir tarjeta Rabbitty Pass'}
+          title={isCollapsed ? 'Expandir tarjeta' : 'Comprimir tarjeta'}
+          className="absolute bottom-0 left-1/2 -translate-x-1/2 z-20 flex items-center justify-center cursor-pointer border-none"
+          style={{
+            background: 'transparent',
+            padding: 0,
+            outline: 'none',
+          }}
+        >
+          <div
+            className="flex items-center justify-center px-3.5 py-0.5 rounded-t-lg transition-transform active:scale-90"
+            style={{
+              background: isDark ? 'rgba(36, 36, 44, 0.95)' : 'rgba(255, 235, 242, 0.95)',
+              border: isDark ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid rgba(233, 30, 99, 0.25)',
+              borderBottom: 'none',
+              boxShadow: '0 -2px 8px rgba(0, 0, 0, 0.15)',
+            }}
           >
-            <QrCode size={14} />
-            <span>Ver QR</span>
-            <ChevronRight size={12} />
-          </button>
-        </div>
+            {/* Triángulo indicador (apuntando arriba al expandir, abajo al comprimir) */}
+            <svg
+              width="10"
+              height="6"
+              viewBox="0 0 10 6"
+              fill="none"
+              style={{
+                transform: isCollapsed ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform 0.3s ease',
+              }}
+            >
+              <path
+                d="M1 1L5 5L9 1"
+                stroke="#E91E63"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </div>
+        </button>
       </motion.div>
 
       {/* ── MODAL QR INTERACTIVO FULLSCREEN / PRESENTACIÓN EN CAJA ── */}
@@ -117,7 +220,7 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[150] bg-black/85 backdrop-blur-xl flex flex-col items-center justify-center p-5 select-none"
+            className="fixed inset-0 z-150 bg-black/85 backdrop-blur-xl flex flex-col items-center justify-center p-5 select-none"
             onClick={handleCloseModal}
           >
             <motion.div
@@ -125,7 +228,7 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
               transition={{ type: 'spring', damping: 25, stiffness: 260 }}
-              className="w-full max-w-[340px] bg-[#121214] border border-white/15 rounded-[32px] p-6 flex flex-col items-center shadow-[0_20px_50px_rgba(0,0,0,0.9)] relative"
+              className="w-full max-w-85 bg-[#121214] border border-white/15 rounded-4xl p-6 flex flex-col items-center shadow-[0_20px_50px_rgba(0,0,0,0.9)] relative"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Close Button */}

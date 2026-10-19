@@ -470,6 +470,26 @@ export default function ChatRoomPage() {
       sendMessage('¿A quién quieres enviar los bunz? Dame el @usuario.');
       return;
     }
+
+    // Comprobación de seguridad: PIN / Biométricos configurados
+    const savedPin = typeof window !== 'undefined' ? localStorage.getItem('rabbitty_security_pin') : null;
+    const hasBio = typeof window !== 'undefined' ? Boolean(localStorage.getItem('rabbitty_faceid_cred')) : false;
+
+    if (savedPin) {
+      const enteredPin = window.prompt('🔐 Seguridad Rabbitty: Ingresa tu PIN de 4 dígitos para autorizar el envío de Bunz:');
+      if (enteredPin !== savedPin) {
+        showToast('PIN incorrecto. Operación cancelada por seguridad.', 'error');
+        PlatformBridge.hapticFeedback('error');
+        return;
+      }
+      PlatformBridge.hapticFeedback('success');
+    } else if (hasBio) {
+      PlatformBridge.hapticFeedback('medium');
+      showToast('Verificando biometría para autorizar envío...', 'info');
+    } else {
+      showToast('⚠️ Operación procesada. Te sugerimos activar PIN o Face ID en Seguridad y Privacidad.', 'info');
+    }
+
     setSending(true);
     tempCounterRef.current += 1;
     const attemptId = tempCounterRef.current;

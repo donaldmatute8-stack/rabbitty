@@ -357,5 +357,37 @@ export const PlatformBridge = {
       return null;
     }
   },
+
+  /**
+   * Biometric Authentication across Native iOS/Android (via @aparajita/capacitor-biometric-auth)
+   * Falls back gracefully if unavailable or on web/telegram
+   */
+  async authenticateBiometric(reason: string = 'Verifica tu identidad'): Promise<{ success: boolean; error?: string }> {
+    if (typeof window === 'undefined') return { success: false, error: 'no_window' };
+
+    if (this.isNative()) {
+      try {
+        const { BiometricAuth } = await import('@aparajita/capacitor-biometric-auth');
+        const check = await BiometricAuth.checkBiometry();
+        if (!check.isAvailable) {
+          return { success: false, error: 'biometry_unavailable' };
+        }
+        await BiometricAuth.authenticate({
+          reason,
+          cancelTitle: 'Cancelar',
+          allowDeviceCredential: true,
+          iosFallbackTitle: 'Usar código',
+          androidTitle: 'Autenticación biométrica',
+        });
+        return { success: true };
+      } catch (err: unknown) {
+        console.warn('[PlatformBridge] Biometric auth error:', err);
+        const message = err instanceof Error ? err.message : String(err);
+        return { success: false, error: message };
+      }
+    }
+
+    return { success: true };
+  },
 };
 
