@@ -1,17 +1,24 @@
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
+import Link from 'next/link';
 import {
   MapPin,
   Clock,
   Sparkles,
   Navigation,
   ArrowRight,
-  ExternalLink,
-  HelpCircle,
+  ShieldCheck,
+  Coffee,
+  Heart,
   Award,
+  CheckCircle2,
+  Phone,
+  Flame,
 } from 'lucide-react';
 import { getAffiliateBySlug, isValidSlug } from '@/lib/affiliateLanding';
+import { SmartAppAction } from '@/components/SmartAppAction';
+import { StickyMobileBar } from '@/components/StickyMobileBar';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -28,12 +35,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     };
   }
 
-  const title = `${affiliate.name} | Menú, Horarios y Recompensas Bunz`;
+  const title = `${affiliate.name} | ${affiliate.category}`;
   const description =
     affiliate.description ||
-    `Conoce ${affiliate.name} en ${affiliate.address}. Explora su menú oficial, horarios de atención y acumula +${affiliate.rewardPercentage}% en Bunz en cada consumo.`;
+    `Conoce ${affiliate.name} en ${affiliate.address}. Menú artesanal, horarios de atención y programa de lealtad Rabbitty en cada consumo.`;
 
-  const coverImage = affiliate.gallery[0] || affiliate.logoUrl || 'https://rabbitty.me/icon.png';
+  const coverImage = affiliate.heroImage || affiliate.gallery[0] || 'https://rabbitty.me/icon.png';
   const canonicalUrl = `https://${affiliate.slug}.rabbitty.me`;
 
   return {
@@ -46,7 +53,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       title,
       description,
       url: canonicalUrl,
-      siteName: 'Rabbitty Network',
+      siteName: `${affiliate.name} · Digital Branch`,
       images: [
         {
           url: coverImage,
@@ -84,12 +91,7 @@ export default async function AffiliateLandingPage({ params }: PageProps) {
     notFound();
   }
 
-  const coverImage =
-    affiliate.gallery.length > 0
-      ? affiliate.gallery[0]
-      : 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=1200&q=80';
-
-  // Schema.org structured JSON-LD for Search Engines & LLMs
+  // Schema.org structured JSON-LD for Google & LLM Crawlers
   const schemaType =
     affiliate.category.toLowerCase().includes('cafe') || affiliate.category.toLowerCase().includes('cafetería')
       ? 'CafeOrCoffeeShop'
@@ -101,14 +103,15 @@ export default async function AffiliateLandingPage({ params }: PageProps) {
     '@context': 'https://schema.org',
     '@type': schemaType,
     name: affiliate.name,
-    image: affiliate.gallery.length > 0 ? affiliate.gallery : [coverImage],
+    image: affiliate.gallery.length > 0 ? affiliate.gallery : [affiliate.heroImage],
     '@id': `https://${affiliate.slug}.rabbitty.me`,
     url: `https://${affiliate.slug}.rabbitty.me`,
-    telephone: '+523312345678',
+    telephone: affiliate.phone || '+523312345678',
     priceRange: '$$',
     address: {
       '@type': 'PostalAddress',
       streetAddress: affiliate.address,
+      addressLocality: affiliate.city || 'México',
       addressCountry: 'MX',
     },
     geo: {
@@ -142,303 +145,455 @@ export default async function AffiliateLandingPage({ params }: PageProps) {
       : undefined,
   };
 
-  const appDirectLink = `https://app.rabbitty.me/affiliate/${affiliate.id}`;
+  const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    `${affiliate.name} ${affiliate.address}`
+  )}`;
 
   return (
-    <div className="min-h-screen bg-[#0A0A10] text-white selection:bg-[#E91E63] selection:text-white">
-      {/* Injected Schema.org JSON-LD for Google & LLM Crawlers */}
+    <div className="min-h-screen bg-[#FDFBF7] text-[#2C1810] selection:bg-[#D97706]/30 selection:text-[#2C1810] font-sans antialiased pb-20 md:pb-0">
+      {/* Injected Schema.org JSON-LD for Search Engines & LLMs */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-      {/* Top Universal Navbar */}
-      <header className="sticky top-0 z-50 bg-[#0A0A10]/80 backdrop-blur-xl border-b border-white/10 px-6 py-4">
+      {/* Sticky Top Header: 70% Brand, 30% Rabbitty */}
+      <header className="sticky top-0 z-40 bg-[#FDFBF7]/90 backdrop-blur-md border-b border-stone-200/80 px-6 py-4">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-[#E91E63]/20 border border-[#E91E63]/30 flex items-center justify-center text-pink-400 font-black">
-              🐰
+            <div className="w-9 h-9 rounded-full bg-amber-900/10 border border-amber-900/20 flex items-center justify-center text-amber-900 font-serif font-black text-lg">
+              ☕
             </div>
             <div>
-              <span className="font-black text-sm tracking-tight text-white block leading-none">
+              <span className="font-serif font-black text-base sm:text-lg tracking-tight text-stone-900 block leading-none">
                 {affiliate.name}
               </span>
-              <span className="text-[10px] text-white/50 font-bold uppercase tracking-wider">
-                Sucursal Oficial en Rabbitty
+              <span className="text-[10px] text-stone-500 font-medium uppercase tracking-wider block mt-0.5">
+                {affiliate.category}
               </span>
             </div>
           </div>
 
-          <a
-            href={appDirectLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 bg-[#E91E63] hover:bg-[#FF4081] text-white text-xs font-black px-4 py-2 rounded-full transition-all shadow-lg shadow-[#E91E63]/30 active:scale-95 no-underline"
-          >
-            <span>Abrir en Rabbitty</span>
-            <ExternalLink size={14} />
-          </a>
+          <div className="flex items-center gap-4">
+            <nav className="hidden md:flex items-center gap-6 text-xs uppercase tracking-widest font-bold text-stone-600">
+              <a href="#menu-section" className="hover:text-stone-900 transition-colors no-underline">
+                Menú
+              </a>
+              <a href="#story-section" className="hover:text-stone-900 transition-colors no-underline">
+                Nosotros
+              </a>
+              <a href="#visit-section" className="hover:text-stone-900 transition-colors no-underline">
+                Ubicación
+              </a>
+            </nav>
+
+            <SmartAppAction
+              affiliateId={affiliate.id}
+              affiliateName={affiliate.name}
+              buttonLabel="Abrir en Rabbitty"
+              variant="primary"
+            />
+          </div>
         </div>
       </header>
 
-      {/* Hero Showcase Section */}
-      <section className="relative w-full h-95 sm:h-115 bg-black">
-        <Image
-          src={coverImage}
-          alt={affiliate.name}
-          fill
-          priority
-          unoptimized
-          className="object-cover opacity-70"
-        />
-        <div className="absolute inset-0 bg-linear-to-t from-[#0A0A10] via-[#0A0A10]/50 to-transparent" />
-
-        <div className="absolute bottom-10 left-0 right-0 px-6">
-          <div className="max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-end justify-between gap-6">
-            <div className="space-y-2">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#E91E63]/20 border border-[#E91E63]/30 text-pink-300 text-xs font-bold uppercase tracking-wider">
-                <Sparkles size={14} />
-                <span>{affiliate.category}</span>
-              </div>
-              <h1 className="text-4xl sm:text-6xl font-black tracking-tight text-white leading-tight">
-                {affiliate.name}
-              </h1>
-              <p className="text-sm text-white/70 max-w-xl flex items-center gap-2">
-                <MapPin size={16} className="text-[#E91E63] shrink-0" />
-                <span>{affiliate.address}</span>
-              </p>
+      {/* HERO SECTION: Editorial Gastronomic Focus */}
+      <section className="relative px-6 pt-10 sm:pt-16 pb-12 sm:pb-20 max-w-6xl mx-auto">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 sm:gap-12 items-center">
+          
+          {/* Brand & Copy Left Column */}
+          <div className="lg:col-span-6 space-y-6 sm:space-y-8">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-100/70 border border-amber-900/15 text-amber-950 text-xs font-bold uppercase tracking-wider">
+              <Sparkles size={13} className="text-amber-800" />
+              <span>Cafetería de Especialidad & Masa Madre</span>
             </div>
 
-            {/* Bunz Badge Card */}
-            <div className="bg-linear-to-br from-[#E91E63] to-[#AD1457] p-4 rounded-3xl border border-white/20 shadow-2xl flex items-center gap-4 shrink-0">
-              <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center font-black text-2xl">
-                🎁
+            <h1 className="font-serif text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-stone-950 leading-[1.05]">
+              Donde cada taza cuenta una <span className="italic font-normal text-amber-900">historia.</span>
+            </h1>
+
+            <p className="text-base sm:text-lg text-stone-600 leading-relaxed max-w-xl font-normal">
+              {affiliate.description ||
+                'Granos de origen único seleccionados en pequeños lotes, tostados semanalmente y panadería artesanal horneada al amanecer.'}
+            </p>
+
+            {/* Direct Dual CTAs: Ver Menú + Cómo Llegar */}
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <a
+                href="#menu-section"
+                className="inline-flex items-center justify-center gap-2 px-7 py-4 rounded-full bg-[#2C1810] hover:bg-[#3D2318] text-white text-xs uppercase tracking-wider font-bold transition-all shadow-lg shadow-black/10 no-underline cursor-pointer active:scale-95"
+              >
+                <span>Explorar Menú</span>
+                <ArrowRight size={15} />
+              </a>
+
+              <a
+                href={googleMapsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 px-6 py-4 rounded-full border border-stone-300 hover:border-stone-400 bg-white hover:bg-stone-50 text-stone-800 text-xs uppercase tracking-wider font-bold transition-all no-underline active:scale-95 shadow-sm"
+              >
+                <MapPin size={15} className="text-amber-800" />
+                <span>Cómo Llegar</span>
+              </a>
+            </div>
+
+            {/* Verified Quick Highlights */}
+            <div className="pt-4 border-t border-stone-200 grid grid-cols-2 gap-4 text-xs">
+              <div className="flex items-center gap-2 text-stone-700">
+                <CheckCircle2 size={16} className="text-amber-800 shrink-0" />
+                <span>Extracción artesanal diaria</span>
               </div>
-              <div>
-                <span className="text-xs font-bold text-white/80 block">Recompensa Oficial</span>
-                <span className="text-2xl font-black text-white leading-none">
-                  +{affiliate.rewardPercentage}% Bunz
-                </span>
-                <span className="text-[10px] text-white/70 block mt-0.5">En cada visita validada</span>
+              <div className="flex items-center gap-2 text-stone-700">
+                <CheckCircle2 size={16} className="text-amber-800 shrink-0" />
+                <span>Acumula Bunz en cada consumo</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Hero Photography with Arch/Editorial Framing */}
+          <div className="lg:col-span-6 relative">
+            <div className="relative aspect-4/3 sm:aspect-5/4 rounded-3xl sm:rounded-[36px] overflow-hidden shadow-2xl border-4 border-white bg-stone-200 group">
+              <Image
+                src={affiliate.heroImage}
+                alt={affiliate.name}
+                fill
+                priority
+                unoptimized
+                className="object-cover group-hover:scale-105 transition-transform duration-700"
+              />
+              <div className="absolute inset-0 bg-linear-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
+
+              {/* Floating Verified Badge */}
+              <div className="absolute bottom-5 left-5 right-5 sm:right-auto bg-[#FDFBF7]/95 backdrop-blur-md p-4 rounded-2xl shadow-xl border border-stone-200 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-900/10 text-amber-900 flex items-center justify-center font-serif font-black text-xl">
+                  ✨
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-stone-500 uppercase tracking-widest block">
+                    Sucursal Oficial
+                  </span>
+                  <span className="font-serif font-bold text-sm text-stone-900 block leading-tight">
+                    {affiliate.address}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Main Body Grid */}
-      <main className="max-w-6xl mx-auto px-6 py-12 space-y-16">
-        {/* Quick Info & Action Bar */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-[#14141E] p-5 rounded-2xl border border-white/10 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0">
-              <Clock size={24} />
-            </div>
+      {/* SECTION 2: FAVORITOS DEL NEGOCIO (Visual Menu with Real Photos) */}
+      <section id="menu-section" className="py-16 sm:py-24 px-6 bg-[#F5F2EB] border-y border-stone-200/80">
+        <div className="max-w-6xl mx-auto space-y-12">
+          
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
-              <span className="text-xs text-white/50 font-bold block">Horario de Servicio</span>
-              <span className="text-sm font-black text-white">
-                {affiliate.startTime} - {affiliate.endTime}
+              <span className="text-xs font-bold uppercase tracking-widest text-amber-900 block mb-2">
+                Selección de Temporada
               </span>
-              <span className="text-[11px] text-emerald-400 block mt-0.5">Abierto hoy</span>
+              <h2 className="font-serif text-3xl sm:text-5xl font-black tracking-tight text-stone-900">
+                Especialidades de la Casa
+              </h2>
             </div>
-          </div>
-
-          <div className="bg-[#14141E] p-5 rounded-2xl border border-white/10 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-pink-500/10 text-pink-400 flex items-center justify-center shrink-0">
-              <Award size={24} />
-            </div>
-            <div>
-              <span className="text-xs text-white/50 font-bold block">Fidelización Activa</span>
-              <span className="text-sm font-black text-white">Programa Bunz</span>
-              <span className="text-[11px] text-pink-400 block mt-0.5">Canjeable en el local</span>
-            </div>
-          </div>
-
-          <a
-            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${affiliate.name} ${affiliate.address}`)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="bg-[#14141E] hover:bg-[#1a1a27] p-5 rounded-2xl border border-white/10 flex items-center justify-between text-white no-underline transition-colors group"
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                <Navigation size={24} />
-              </div>
-              <div>
-                <span className="text-xs text-white/50 font-bold block">¿Cómo llegar?</span>
-                <span className="text-sm font-black text-white">Ver en Google Maps</span>
-              </div>
-            </div>
-            <ArrowRight size={18} className="text-white/40 group-hover:text-white transition-colors" />
-          </a>
-        </div>
-
-        {/* About Section */}
-        {affiliate.description && (
-          <div className="bg-[#14141E] p-8 rounded-3xl border border-white/10 space-y-3">
-            <h2 className="text-xs font-black uppercase tracking-wider text-pink-400">
-              Acerca de {affiliate.name}
-            </h2>
-            <p className="text-base text-white/80 leading-relaxed max-w-3xl">
-              {affiliate.description}
+            <p className="text-xs sm:text-sm text-stone-600 max-w-sm">
+              Cada platillo y bebida preparado al momento con ingredientes frescos de productores locales.
             </p>
           </div>
-        )}
 
-        {/* Digital Menu Catalog Preview */}
-        {affiliate.menuItems.length > 0 && (
-          <div className="space-y-6">
-            <div className="flex items-baseline justify-between border-b border-white/10 pb-4">
-              <div>
-                <span className="text-xs font-black uppercase tracking-wider text-pink-400">
-                  Especialidades de la Casa
-                </span>
-                <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                  Menú Destacado
-                </h2>
-              </div>
-              <a
-                href={appDirectLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs font-black text-pink-400 hover:text-pink-300 inline-flex items-center gap-1.5 no-underline"
+          {/* 3 Featured Products with High-Resolution Photography */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {affiliate.menuItems.map(item => (
+              <div
+                key={item.id}
+                className="bg-[#FDFBF7] rounded-3xl overflow-hidden border border-stone-200/90 shadow-md hover:shadow-xl transition-all duration-300 flex flex-col justify-between group"
               >
-                <span>Ver Menú Completo & Pedir</span>
-                <ArrowRight size={14} />
-              </a>
-            </div>
+                <div>
+                  {/* Photo Container */}
+                  <div className="relative aspect-4/3 w-full bg-stone-200 overflow-hidden">
+                    {item.imageUrl ? (
+                      <Image
+                        src={item.imageUrl}
+                        alt={item.name}
+                        fill
+                        unoptimized
+                        className="object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-4xl">☕</div>
+                    )}
+                    {item.badge && (
+                      <div className="absolute top-4 left-4 px-3 py-1 rounded-full bg-[#2C1810]/85 backdrop-blur-md text-[#FDFBF7] text-[10px] font-black uppercase tracking-wider">
+                        {item.badge}
+                      </div>
+                    )}
+                  </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {affiliate.menuItems.map(item => (
-                <div
-                  key={item.id}
-                  className="bg-[#14141E] border border-white/10 rounded-2xl p-4 flex flex-col justify-between hover:border-white/20 transition-all space-y-3"
-                >
-                  <div>
+                  {/* Content */}
+                  <div className="p-6 space-y-2">
                     <div className="flex items-baseline justify-between gap-2">
-                      <h3 className="font-black text-sm text-white">{item.name}</h3>
-                      <span className="font-extrabold text-sm text-pink-400">${item.price} MXN</span>
+                      <h3 className="font-serif font-bold text-xl text-stone-900 leading-tight">
+                        {item.name}
+                      </h3>
+                      <span className="font-mono font-black text-base text-amber-950 shrink-0">
+                        ${item.price} <span className="text-xs font-normal text-stone-500">MXN</span>
+                      </span>
                     </div>
+
                     {item.description && (
-                      <p className="text-xs text-white/60 mt-1.5 line-clamp-2 leading-relaxed">
+                      <p className="text-xs text-stone-600 leading-relaxed font-normal">
                         {item.description}
                       </p>
                     )}
                   </div>
-                  <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[11px] text-white/40">
-                    <span>Acumula +{Math.round(item.price * (affiliate.rewardPercentage / 100))} Bunz</span>
-                    <a
-                      href={appDirectLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-pink-400 font-bold hover:underline"
-                    >
-                      Pedir en mesa →
-                    </a>
-                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
 
-        {/* Gallery Section */}
-        {affiliate.gallery.length > 0 && (
-          <div className="space-y-4">
-            <h2 className="text-xs font-black uppercase tracking-wider text-pink-400">
-              Galería de la Sucursal
-            </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {affiliate.gallery.map((img, i) => (
-                <div
-                  key={i}
-                  className="relative h-44 rounded-2xl overflow-hidden border border-white/10 bg-black/40 shadow-md group"
-                >
-                  <Image
-                    src={img}
-                    alt={`${affiliate.name} fotografía ${i + 1}`}
-                    fill
-                    unoptimized
-                    className="object-cover group-hover:scale-105 transition-transform duration-500"
+                {/* Card Action Footer */}
+                <div className="p-6 pt-0 border-t border-stone-100 flex items-center justify-between text-xs">
+                  {item.rewardBunz && affiliate.features.hasRewards ? (
+                    <span className="text-stone-500 font-medium">
+                      Acumula <strong className="text-amber-900 font-bold">+{item.rewardBunz} Bunz</strong>
+                    </span>
+                  ) : (
+                    <span className="text-stone-400 text-[11px]">Disponible en barra</span>
+                  )}
+
+                  <SmartAppAction
+                    affiliateId={affiliate.id}
+                    affiliateName={affiliate.name}
+                    buttonLabel="Pedir"
+                    variant="subtle"
+                    className="py-2 px-4 text-[11px]"
                   />
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
-        )}
 
-        {/* LLM & Human FAQ Section (Semantic Content visible for AI & users) */}
-        <div className="bg-[#14141E] p-8 rounded-3xl border border-white/10 space-y-6">
-          <div className="flex items-center gap-2.5 text-pink-400">
-            <HelpCircle size={20} />
-            <h2 className="text-lg font-black tracking-tight text-white">
-              Preguntas Frecuentes sobre {affiliate.name}
+          <div className="text-center pt-4">
+            <p className="text-xs text-stone-500 mb-4">
+              ¿Quieres consultar el menú completo con opciones veganas, sin gluten y filtrados?
+            </p>
+            <SmartAppAction
+              affiliateId={affiliate.id}
+              affiliateName={affiliate.name}
+              buttonLabel="Ver Menú Completo en Rabbitty"
+              variant="outline"
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* SECTION 3: LA EXPERIENCIA Y ATMÓSFERA */}
+      <section id="story-section" className="py-20 px-6 max-w-6xl mx-auto space-y-16">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+          
+          <div className="lg:col-span-5 space-y-6">
+            <span className="text-xs font-bold uppercase tracking-widest text-amber-900 block">
+              Nuestra Filosofía
+            </span>
+            <h2 className="font-serif text-3xl sm:text-5xl font-black tracking-tight text-stone-900 leading-tight">
+              Café sin prisas. Espacio con alma.
             </h2>
+            <p className="text-stone-600 text-sm leading-relaxed">
+              {affiliate.story ||
+                'Creemos que una cafetería debe ser el tercer lugar: ese espacio entre el hogar y el trabajo donde puedes concentrarte en tus ideas, leer un buen libro o reconectar con amigos sin el ruido invasivo de las franquicias industriales.'}
+            </p>
+
+            {/* Ambience Tags */}
+            {affiliate.ambienceTags && (
+              <div className="pt-2 flex flex-wrap gap-2">
+                {affiliate.ambienceTags.map((tag, idx) => (
+                  <span
+                    key={idx}
+                    className="px-3 py-1.5 rounded-full bg-stone-100 border border-stone-200 text-stone-800 text-xs font-medium"
+                  >
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm">
-            <div className="space-y-1.5">
-              <h3 className="font-bold text-white">¿Cómo acumulo recompensas en este local?</h3>
-              <p className="text-white/60 text-xs leading-relaxed">
-                Al pagar tu cuenta, solicita escanear el código QR en caja con tu cuenta de Rabbitty. Recibirás automáticamente el +{affiliate.rewardPercentage}% del total de tu consumo acreditado en Bunz.
-              </p>
-            </div>
+          {/* Photo Gallery Grid */}
+          <div className="lg:col-span-7 grid grid-cols-2 gap-4">
+            {affiliate.gallery.slice(0, 4).map((img, i) => (
+              <div
+                key={i}
+                className="relative aspect-4/3 rounded-2xl overflow-hidden border border-stone-200 bg-stone-100 shadow-sm group"
+              >
+                <Image
+                  src={img}
+                  alt={`${affiliate.name} fotografía ${i + 1}`}
+                  fill
+                  unoptimized
+                  className="object-cover group-hover:scale-105 transition-transform duration-500"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-            <div className="space-y-1.5">
-              <h3 className="font-bold text-white">¿Tienen servicio y pedidos en mesa?</h3>
-              <p className="text-white/60 text-xs leading-relaxed">
-                Sí. Puedes escanear el código QR de cualquiera de las mesas del establecimiento para consultar el menú interactivo, ver fotografías y enviar tu pedido directamente desde tu teléfono.
-              </p>
+      {/* SECTION 4: FIDELIZACIÓN RABBITTY (30% Integración Discreta) */}
+      <section className="py-16 px-6 bg-[#2C1810] text-[#FDFBF7]">
+        <div className="max-w-5xl mx-auto rounded-3xl p-8 sm:p-14 space-y-8">
+          <div className="max-w-xl space-y-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 text-xs font-bold uppercase tracking-wider">
+              <Sparkles size={13} /> Programa de Lealtad Oficial
             </div>
+            <h2 className="font-serif text-3xl sm:text-4xl font-black tracking-tight leading-tight">
+              Gana +{affiliate.rewardPercentage}% en Bunz cada vez que nos visites.
+            </h2>
+            <p className="text-xs sm:text-sm text-stone-300 leading-relaxed font-normal">
+              Sin tarjetas plásticas ni sellos de papel que se pierden. Pide tu café, escanea tu código en mostrador y acumula recompensas utilizables en tus siguientes consumos.
+            </p>
+          </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-4 border-t border-white/10 text-xs">
             <div className="space-y-1.5">
-              <h3 className="font-bold text-white">¿Cuál es el horario y ubicación oficial?</h3>
-              <p className="text-white/60 text-xs leading-relaxed">
-                Atienden de lunes a domingo en horario continuo de {affiliate.startTime} a {affiliate.endTime} en {affiliate.address}.
-              </p>
+              <span className="font-bold text-amber-400 block text-sm">1. Visita y Disfruta</span>
+              <p className="text-stone-300">Ordena tus alimentos o bebidas favoritas en barra o mesa.</p>
             </div>
-
             <div className="space-y-1.5">
-              <h3 className="font-bold text-white">¿Se requiere reservar con anticipación?</h3>
-              <p className="text-white/60 text-xs leading-relaxed">
-                Se reciben clientes por orden de llegada y se admiten reservas anticipadas a través de la red Rabbitty y el portal de atención directa.
-              </p>
+              <span className="font-bold text-amber-400 block text-sm">2. Escanea en Mostrador</span>
+              <p className="text-stone-300">Muestra tu perfil Rabbitty para acreditar tu consumo al instante.</p>
+            </div>
+            <div className="space-y-1.5">
+              <span className="font-bold text-amber-400 block text-sm">3. Canjea en Tu Próxima Visita</span>
+              <p className="text-stone-300">Utiliza tus Bunz para canjear bebidas, postres y promociones.</p>
             </div>
           </div>
         </div>
+      </section>
 
-        {/* Bottom CTA Card */}
-        <div className="p-8 sm:p-12 rounded-3xl bg-linear-to-r from-[#E91E63]/20 via-[#14141E] to-[#8B5CF6]/20 border border-white/10 text-center space-y-6">
-          <h2 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
-            Vive la experiencia completa en {affiliate.name}
+      {/* SECTION 5: VISÍTANOS (Confirmed Map, Hours and Contact) */}
+      <section id="visit-section" className="py-20 px-6 max-w-6xl mx-auto space-y-12">
+        <div className="text-center max-w-2xl mx-auto space-y-3">
+          <span className="text-xs font-bold uppercase tracking-widest text-amber-900 block">
+            Encuéntranos
+          </span>
+          <h2 className="font-serif text-3xl sm:text-5xl font-black tracking-tight text-stone-900">
+            Horarios & Ubicación
           </h2>
-          <p className="text-sm text-white/70 max-w-lg mx-auto leading-relaxed">
-            Explora el menú interactivo, reserva tu mesa y gana hasta +{affiliate.rewardPercentage}% en recompensas Bunz cada vez que visites este establecimiento.
-          </p>
-          <div className="pt-2">
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Card 1: Horario Confirmado */}
+          <div className="p-7 rounded-3xl bg-[#F5F2EB] border border-stone-200/90 space-y-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-900/10 text-amber-900 flex items-center justify-center">
+              <Clock size={20} />
+            </div>
+            <h3 className="font-serif font-bold text-lg text-stone-900">Horario de Servicio</h3>
+            <p className="text-xs text-stone-600 leading-relaxed">
+              Lunes a Domingo en horario continuo: <br />
+              <strong className="text-stone-900 text-sm font-mono mt-1 block">
+                {affiliate.startTime} — {affiliate.endTime} hrs
+              </strong>
+            </p>
+            <span className="inline-block text-[11px] font-bold text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-full">
+              Abierto Hoy
+            </span>
+          </div>
+
+          {/* Card 2: Dirección Física */}
+          <div className="p-7 rounded-3xl bg-[#F5F2EB] border border-stone-200/90 space-y-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-900/10 text-amber-900 flex items-center justify-center">
+              <MapPin size={20} />
+            </div>
+            <h3 className="font-serif font-bold text-lg text-stone-900">Ubicación Física</h3>
+            <p className="text-xs text-stone-600 leading-relaxed">
+              {affiliate.address} <br />
+              <span className="text-stone-500">{affiliate.city || 'México'}</span>
+            </p>
             <a
-              href={appDirectLink}
+              href={googleMapsUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 bg-linear-to-r from-[#E91E63] to-[#FF4081] text-white px-8 py-4 rounded-full font-black text-sm tracking-wide shadow-xl shadow-[#E91E63]/30 hover:scale-105 active:scale-95 transition-all no-underline"
+              className="inline-flex items-center gap-1.5 text-xs font-black text-amber-900 hover:text-amber-950 underline underline-offset-4"
             >
-              <span>Abrir Sucursal Digital en Rabbitty</span>
-              <ArrowRight size={18} />
+              <span>Abrir en Google Maps</span>
+              <Navigation size={13} />
+            </a>
+          </div>
+
+          {/* Card 3: Atención y Contacto */}
+          <div className="p-7 rounded-3xl bg-[#F5F2EB] border border-stone-200/90 space-y-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-900/10 text-amber-900 flex items-center justify-center">
+              <Phone size={20} />
+            </div>
+            <h3 className="font-serif font-bold text-lg text-stone-900">Contacto Directo</h3>
+            <p className="text-xs text-stone-600 leading-relaxed">
+              Atención en sucursal y pedidos para recoger: <br />
+              <strong className="text-stone-900 text-sm font-mono mt-1 block">
+                {affiliate.phone || '+52 33 1234 5678'}
+              </strong>
+            </p>
+            <span className="text-[11px] text-stone-500 block">
+              {affiliate.features.hasTakeaway ? '✓ Servicio Takeaway disponible' : 'Solo consumo en salón'}
+            </span>
+          </div>
+        </div>
+      </section>
+
+      {/* SECTION 6: CIERRE DE CONVERSIÓN */}
+      <section className="py-16 px-6 bg-[#FAF8F5] border-t border-stone-200 text-center">
+        <div className="max-w-2xl mx-auto space-y-6">
+          <h2 className="font-serif text-3xl sm:text-4xl font-black text-stone-900 tracking-tight">
+            Ven a conocernos a {affiliate.name}
+          </h2>
+          <p className="text-xs sm:text-sm text-stone-600 max-w-md mx-auto">
+            Descubre nuestro café de especialidad, disfruta de la atmósfera y únete a la comunidad de amantes del buen café.
+          </p>
+          <div className="pt-2 flex flex-wrap justify-center gap-3">
+            <SmartAppAction
+              affiliateId={affiliate.id}
+              affiliateName={affiliate.name}
+              buttonLabel="Abrir Sucursal en Rabbitty"
+              variant="primary"
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* Footer Legal & Terms (Mexico 2026 Compliant) */}
+      <footer className="border-t border-stone-200/80 py-10 px-6 bg-[#F5F2EB] text-xs text-stone-500">
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
+          <div className="space-y-1 text-center md:text-left">
+            <p className="font-serif font-bold text-stone-800 text-sm">
+              © 2026 {affiliate.name}
+            </p>
+            <p className="text-[11px] text-stone-500">
+              Sucursal digital impulsada por Rabbitty Technologies · Ciudad de México & Guadalajara, México.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-6 text-[11px] font-semibold text-stone-600">
+            <Link href="/privacy" className="hover:text-stone-950 transition-colors">
+              Aviso de Privacidad (LFPDPPP)
+            </Link>
+            <Link href="/privacy" className="hover:text-stone-950 transition-colors">
+              Términos de Servicio (PROFECO 2026)
+            </Link>
+            <a
+              href="https://rabbitty.me"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-amber-900 hover:text-amber-950 font-bold transition-colors"
+            >
+              rabbitty.me
             </a>
           </div>
         </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="border-t border-white/10 py-8 px-6 text-center text-xs text-white/40 space-y-2">
-        <p>© 2026 {affiliate.name} · Impulsado por la red descentralizada Rabbitty.</p>
-        <p>
-          <a href="https://rabbitty.me" className="text-pink-400 hover:underline">
-            rabbitty.me
-          </a>{' '}
-          · Descubre, visita y vuelve.
-        </p>
       </footer>
+
+      {/* Sticky Bottom Bar for Mobile Visitors */}
+      <StickyMobileBar
+        affiliateId={affiliate.id}
+        affiliateName={affiliate.name}
+        address={affiliate.address}
+        hasMenu={affiliate.menuItems.length > 0}
+      />
     </div>
   );
 }
