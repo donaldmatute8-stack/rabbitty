@@ -31,6 +31,8 @@ export async function GET() {
         category, 
         "rewardPercentage", 
         address,
+        "logoUrl",
+        gallery,
         COALESCE(slug, SUBSTRING(id::text, 1, 8)) as "refCode"
       FROM "ownedBusinesses"
       WHERE status = 'APPROVED' OR status = 'ACTIVE' OR status = 'PENDING'
@@ -44,8 +46,20 @@ export async function GET() {
       category: string | null;
       rewardPercentage: number | null;
       address: string | null;
+      logoUrl: string | null;
+      gallery: string | null;
       refCode: string | null;
     }
+
+    const parseFirstGalleryImage = (str: string | null): string | null => {
+      if (!str) return null;
+      try {
+        const parsed = JSON.parse(str);
+        return Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : null;
+      } catch {
+        return null;
+      }
+    };
 
     const businesses = (rows as unknown as DbBusinessRow[]).map((r) => ({
       id: r.id,
@@ -53,6 +67,7 @@ export async function GET() {
       category: r.category || 'Local Afiliado',
       rewardPercentage: r.rewardPercentage || 25,
       address: r.address || '',
+      logoUrl: r.logoUrl || parseFirstGalleryImage(r.gallery) || null,
       refCode: r.refCode || r.name.toLowerCase().replace(/[^a-z0-9]/g, ''),
     }));
 
@@ -64,6 +79,7 @@ export async function GET() {
         category: 'Cafetería de Especialidad',
         rewardPercentage: 25,
         address: 'Calle Libertad 626, Centro',
+        logoUrl: null,
         refCode: '626cafe',
       });
     }

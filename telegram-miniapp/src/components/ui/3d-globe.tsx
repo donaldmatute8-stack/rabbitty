@@ -334,7 +334,7 @@ export function Globe3D({ markers, onMarkerClick, onMarkerHover }: Globe3DProps)
         }}
       />
 
-      <div className="w-full h-full flex items-center justify-center pointer-events-none pb-12">
+      <div className="w-full h-full flex items-center justify-center pointer-events-none">
         <canvas
           ref={canvasRef}
           className="pointer-events-none"

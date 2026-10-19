@@ -90,34 +90,64 @@ export default function AffiliateProfilePage() {
       {/* Floating Dynamic Header */}
       <div style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
-        background: isScrolled ? 'rgba(255,255,255,0.95)' : 'transparent',
-        backdropFilter: isScrolled ? 'blur(20px)' : 'none',
-        borderBottom: isScrolled ? '1px solid #F0F0F0' : 'none',
-        transition: 'all 0.3s ease',
-        paddingTop: 'calc(max(env(safe-area-inset-top), 84px) + 8px)',
-        paddingBottom: 16,
+        paddingTop: 'calc(max(var(--safe-top, 0px), env(safe-area-inset-top, 0px)) + 12px)',
+        paddingBottom: 12,
         paddingLeft: 16,
         paddingRight: 16,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        pointerEvents: 'none',
       }}>
+        {/* Back Button */}
         <button
           onClick={() => router.back()}
           style={{
-            width: 40, height: 40, borderRadius: '50%',
-            background: isScrolled ? '#F5F5F5' : 'rgba(0,0,0,0.4)',
-            color: isScrolled ? '#111' : '#fff',
+            width: 42, height: 42, borderRadius: '50%',
+            background: 'rgba(20, 20, 26, 0.75)',
+            color: '#fff',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            border: 'none', cursor: 'pointer',
-            backdropFilter: isScrolled ? 'none' : 'blur(10px)',
-            transition: 'all 0.3s'
+            border: '1px solid rgba(255, 255, 255, 0.12)',
+            cursor: 'pointer',
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4)',
+            pointerEvents: 'auto',
+          }}
+          className="active:scale-90 transition-transform"
+          aria-label="Volver atrás"
+        >
+          <ChevronLeft size={22} />
+        </button>
+
+        {/* Central Floating Pill (Screenshot 1: solo el pill central con nombre del negocio + su categoría) */}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: isScrolled ? 1 : 0, y: isScrolled ? 0 : -10 }}
+          transition={{ duration: 0.25 }}
+          style={{
+            background: 'rgba(24, 24, 32, 0.88)',
+            backdropFilter: 'blur(18px)',
+            WebkitBackdropFilter: 'blur(18px)',
+            border: '1px solid rgba(255, 255, 255, 0.12)',
+            padding: '6px 16px',
+            borderRadius: 999,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.45)',
+            maxWidth: '65%',
+            pointerEvents: 'auto',
           }}
         >
-          <ChevronLeft size={24} />
-        </button>
-        <div style={{ opacity: isScrolled ? 1 : 0, transition: 'opacity 0.3s', fontWeight: 900, fontSize: 17, color: '#111' }}>
-          {affiliate.name}
-        </div>
-        <div style={{ width: 40 }} /> {/* Spacer */}
+          <span style={{ fontWeight: 900, fontSize: 14, color: '#fff', lineHeight: 1.15, textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>
+            {affiliate.name}
+          </span>
+          <span style={{ fontSize: 10, fontWeight: 700, color: '#E91E63', textTransform: 'uppercase', letterSpacing: '0.8px', marginTop: 1 }}>
+            {affiliate.category || 'Negocio'}
+          </span>
+        </motion.div>
+
+        <div style={{ width: 42 }} /> {/* Spacer to preserve center balance */}
       </div>
 
       {/* Hero Image */}

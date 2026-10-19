@@ -324,9 +324,27 @@ export default function FeedPage() {
 
   return (
     <div
-      className="page-wrap pb-16"
+      className="page-wrap pb-16 relative overflow-x-hidden min-h-screen"
       style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)', transition: 'background 0.5s' }}
     >
+      {/* Contenedor animado con efecto X/Twitter al abrir el Drawer lateral */}
+      <motion.div
+        animate={{
+          scale: drawerOpen ? 0.93 : 1,
+          x: drawerOpen ? '55%' : 0,
+          borderRadius: drawerOpen ? 24 : 0,
+          filter: drawerOpen ? 'brightness(0.7)' : 'none',
+        }}
+        transition={{ type: 'spring', damping: 32, stiffness: 320 }}
+        style={{
+          transformOrigin: 'center left',
+          willChange: 'transform',
+          minHeight: '100vh',
+          background: 'var(--bg-primary)',
+          overflow: drawerOpen ? 'hidden' : 'visible',
+          pointerEvents: drawerOpen ? 'none' : 'auto',
+        }}
+      >
       {/* HEADER COMPLETO INICIAL: Se desplaza naturalmente con el scroll (ya no está fixed/sticky constante) */}
       <div
         className="w-full relative z-40"
@@ -708,6 +726,7 @@ export default function FeedPage() {
 
         </div>
       </main>
+      </motion.div>
 
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes spin { to { transform: rotate(360deg); } }
