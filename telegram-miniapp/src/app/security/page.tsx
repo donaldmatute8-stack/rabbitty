@@ -8,7 +8,6 @@ import {
   Database, 
   ChevronRight, 
   Search, 
-  ChevronLeft,
   Key,
   Smartphone,
   Lock,
@@ -232,37 +231,46 @@ function FaceIdCard() {
   };
 
   return (
-    <div className="bg-[#161622] border border-white/10 rounded-[22px] p-4">
-      <div className="flex items-start gap-4">
-        <div className="w-11.5 h-11.5 rounded-[14px] flex shrink-0 items-center justify-center text-[22px] border border-white/5" style={{ background: 'rgba(255,255,255,0.06)' }}>
+    <div 
+      className="rounded-2xl p-4 border"
+      style={{
+        background: 'var(--bg-elevated)',
+        borderColor: 'var(--border-subtle)',
+      }}
+    >
+      <div className="flex items-start gap-3.5">
+        <div 
+          className="w-10 h-10 rounded-xl flex shrink-0 items-center justify-center text-xl" 
+          style={{ background: 'var(--bg-pressed)' }}
+        >
           🫣
         </div>
         <div className="flex-1">
           <div className="flex items-center justify-between gap-2 mb-1">
-            <h4 className="font-black text-white text-[14px] m-0">Face ID / Touch ID</h4>
+            <h4 className="font-extrabold text-[15px] m-0" style={{ color: 'var(--text-primary)' }}>Face ID / Touch ID</h4>
             <span
               className="text-[10px] font-black px-2 py-0.5 rounded-full"
               style={{
-                background: enabled ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.08)',
-                color: enabled ? '#34D399' : 'rgba(255,255,255,0.5)',
-                border: `1px solid ${enabled ? 'rgba(16,185,129,0.35)' : 'rgba(255,255,255,0.1)'}`,
+                background: enabled ? 'rgba(16,185,129,0.15)' : 'var(--bg-pressed)',
+                color: enabled ? '#10B981' : 'var(--text-muted)',
+                border: `1px solid ${enabled ? 'rgba(16,185,129,0.35)' : 'var(--border-subtle)'}`,
               }}
             >
               {enabled ? 'ACTIVO' : 'INACTIVO'}
             </span>
           </div>
-          <p className="text-white/60 text-xs leading-normal m-0 mb-3">
+          <p className="text-xs leading-normal m-0 mb-3" style={{ color: 'var(--text-secondary)' }}>
             Bloqueo con biometría (Face ID / Touch ID). Tu clave de autenticación se almacena de forma segura en este dispositivo.
           </p>
           <div className="flex gap-2 flex-wrap">
             {supported === false ? (
-              <span className="text-white/40 text-[11px] font-semibold">No disponible en este navegador/dispositivo</span>
+              <span className="text-[11px] font-semibold" style={{ color: 'var(--text-muted)' }}>No disponible en este dispositivo</span>
             ) : !enabled ? (
               <button
                 onClick={enable}
                 disabled={busy}
-                className="rounded-full px-4 py-2 text-[12px] font-black border-none cursor-pointer disabled:opacity-50"
-                style={{ background: '#10B981', color: '#06281C' }}
+                className="rounded-full px-4 py-2 text-[12px] font-black border-none cursor-pointer active:scale-95 transition-transform"
+                style={{ background: '#E91E63', color: '#FFFFFF' }}
               >
                 {busy ? 'Activando…' : 'Activar Face ID'}
               </button>
@@ -271,23 +279,23 @@ function FaceIdCard() {
                 <button
                   onClick={verify}
                   disabled={busy}
-                  className="rounded-full px-4 py-2 text-[12px] font-black border-none cursor-pointer disabled:opacity-50"
+                  className="rounded-full px-4 py-2 text-[12px] font-black border-none cursor-pointer active:scale-95 transition-transform"
                   style={{ background: 'rgba(99,102,241,0.2)', color: '#A5B4FC', border: '1px solid rgba(99,102,241,0.4)' }}
                 >
-                  {busy ? 'Verificando…' : 'Probar ahora'}
+                  {busy ? 'Verificando…' : 'Probar'}
                 </button>
                 <button
                   onClick={disable}
                   disabled={busy}
-                  className="rounded-full px-4 py-2 text-[12px] font-black border-none cursor-pointer disabled:opacity-50"
-                  style={{ background: 'rgba(211,47,47,0.15)', color: '#FCA5A5', border: '1px solid rgba(211,47,47,0.4)' }}
+                  className="rounded-full px-4 py-2 text-[12px] font-black border-none cursor-pointer active:scale-95 transition-transform"
+                  style={{ background: 'rgba(239,68,68,0.15)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.3)' }}
                 >
                   Desactivar
                 </button>
               </>
             )}
           </div>
-          {feedback && <p className="text-[11px] font-bold m-0 mt-2" style={{ color: 'rgba(255,255,255,0.7)' }}>{feedback}</p>}
+          {feedback && <p className="text-[11px] font-bold m-0 mt-2.5" style={{ color: 'var(--text-primary)' }}>{feedback}</p>}
         </div>
       </div>
     </div>
@@ -339,31 +347,40 @@ function SecurityPinCard() {
   };
 
   return (
-    <div className="bg-[#161622] border border-white/10 rounded-[22px] p-4">
-      <div className="flex items-start gap-4">
-        <div className="w-11.5 h-11.5 rounded-[14px] flex shrink-0 items-center justify-center text-[22px] border border-white/5" style={{ background: 'rgba(255,255,255,0.06)' }}>
+    <div 
+      className="rounded-2xl p-4 border"
+      style={{
+        background: 'var(--bg-elevated)',
+        borderColor: 'var(--border-subtle)',
+      }}
+    >
+      <div className="flex items-start gap-3.5">
+        <div 
+          className="w-10 h-10 rounded-xl flex shrink-0 items-center justify-center text-xl" 
+          style={{ background: 'var(--bg-pressed)' }}
+        >
           🔢
         </div>
         <div className="flex-1">
           <div className="flex items-center justify-between gap-2 mb-1">
-            <h4 className="font-black text-white text-[14px] m-0">PIN de Seguridad (4 dígitos)</h4>
+            <h4 className="font-extrabold text-[15px] m-0" style={{ color: 'var(--text-primary)' }}>PIN de Seguridad (4 dígitos)</h4>
             <span
               className="text-[10px] font-black px-2 py-0.5 rounded-full"
               style={{
-                background: hasPin ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.08)',
-                color: hasPin ? '#34D399' : 'rgba(255,255,255,0.5)',
-                border: `1px solid ${hasPin ? 'rgba(16,185,129,0.35)' : 'rgba(255,255,255,0.1)'}`,
+                background: hasPin ? 'rgba(16,185,129,0.15)' : 'var(--bg-pressed)',
+                color: hasPin ? '#10B981' : 'var(--text-muted)',
+                border: `1px solid ${hasPin ? 'rgba(16,185,129,0.35)' : 'var(--border-subtle)'}`,
               }}
             >
               {hasPin ? 'ACTIVO' : 'INACTIVO'}
             </span>
           </div>
-          <p className="text-white/60 text-xs leading-normal m-0 mb-3">
+          <p className="text-xs leading-normal m-0 mb-3" style={{ color: 'var(--text-secondary)' }}>
             Código numérico privado requerido para autorizar envíos de Bunz y operaciones clave con Bunzy.
           </p>
 
           {settingPin ? (
-            <div className="flex flex-col gap-2.5 p-3 rounded-xl bg-white/5 border border-white/10 mb-2">
+            <div className="flex flex-col gap-2.5 p-3 rounded-xl border mb-2" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-subtle)' }}>
               <input
                 type="password"
                 inputMode="numeric"
@@ -371,7 +388,8 @@ function SecurityPinCard() {
                 value={pinInput}
                 onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))}
                 placeholder="Ingresa 4 dígitos"
-                className="w-full bg-[#1C1C24] border border-white/10 rounded-xl px-3 py-2 text-white text-center text-lg tracking-[8px] outline-none"
+                className="w-full border rounded-xl px-3 py-2 text-center text-lg tracking-[8px] outline-none"
+                style={{ background: 'var(--bg-elevated)', color: 'var(--text-primary)', borderColor: 'var(--border-subtle)' }}
               />
               <input
                 type="password"
@@ -380,20 +398,23 @@ function SecurityPinCard() {
                 value={confirmPin}
                 onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
                 placeholder="Confirma tus 4 dígitos"
-                className="w-full bg-[#1C1C24] border border-white/10 rounded-xl px-3 py-2 text-white text-center text-lg tracking-[8px] outline-none"
+                className="w-full border rounded-xl px-3 py-2 text-center text-lg tracking-[8px] outline-none"
+                style={{ background: 'var(--bg-elevated)', color: 'var(--text-primary)', borderColor: 'var(--border-subtle)' }}
               />
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={handleSavePin}
-                  className="flex-1 py-2 rounded-xl bg-[#10B981] text-[#06281C] font-black text-xs cursor-pointer border-none"
+                  className="flex-1 py-2 rounded-xl text-white font-black text-xs cursor-pointer border-none"
+                  style={{ background: '#E91E63' }}
                 >
                   Guardar PIN
                 </button>
                 <button
                   type="button"
                   onClick={() => setSettingPin(false)}
-                  className="px-3 py-2 rounded-xl bg-white/10 text-white font-bold text-xs cursor-pointer border-none"
+                  className="px-3 py-2 rounded-xl font-bold text-xs cursor-pointer border-none"
+                  style={{ background: 'var(--bg-pressed)', color: 'var(--text-secondary)' }}
                 >
                   Cancelar
                 </button>
@@ -404,8 +425,8 @@ function SecurityPinCard() {
               {!hasPin ? (
                 <button
                   onClick={() => { setSettingPin(true); setFeedback(null); }}
-                  className="rounded-full px-4 py-2 text-[12px] font-black border-none cursor-pointer"
-                  style={{ background: '#10B981', color: '#06281C' }}
+                  className="rounded-full px-4 py-2 text-[12px] font-black border-none cursor-pointer active:scale-95 transition-transform"
+                  style={{ background: '#E91E63', color: '#FFFFFF' }}
                 >
                   Configurar PIN
                 </button>
@@ -413,15 +434,15 @@ function SecurityPinCard() {
                 <>
                   <button
                     onClick={() => { setSettingPin(true); setFeedback(null); }}
-                    className="rounded-full px-4 py-2 text-[12px] font-black border-none cursor-pointer"
-                    style={{ background: 'rgba(99,102,241,0.2)', color: '#A5B4FC', border: '1px solid rgba(99,102,241,0.4)' }}
+                    className="rounded-full px-4 py-2 text-[12px] font-black border-none cursor-pointer active:scale-95 transition-transform"
+                    style={{ background: 'var(--bg-pressed)', color: 'var(--text-primary)' }}
                   >
                     Cambiar PIN
                   </button>
                   <button
                     onClick={handleRemovePin}
-                    className="rounded-full px-4 py-2 text-[12px] font-black border-none cursor-pointer"
-                    style={{ background: 'rgba(211,47,47,0.15)', color: '#FCA5A5', border: '1px solid rgba(211,47,47,0.4)' }}
+                    className="rounded-full px-4 py-2 text-[12px] font-black border-none cursor-pointer active:scale-95 transition-transform"
+                    style={{ background: 'rgba(239,68,68,0.15)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.3)' }}
                   >
                     Desactivar
                   </button>
@@ -430,7 +451,7 @@ function SecurityPinCard() {
             </div>
           )}
 
-          {feedback && <p className="text-[11px] font-bold m-0 mt-2 text-white/80">{feedback}</p>}
+          {feedback && <p className="text-[11px] font-bold m-0 mt-2.5" style={{ color: 'var(--text-primary)' }}>{feedback}</p>}
         </div>
       </div>
     </div>
@@ -472,83 +493,107 @@ function TwoFactorCard() {
   const isAnyActive = methods.email || methods.phone || methods.authenticatorApp;
 
   return (
-    <div className="bg-[#161622] border border-white/10 rounded-[22px] p-4">
-      <div className="flex items-start gap-4">
-        <div className="w-11.5 h-11.5 rounded-[14px] flex shrink-0 items-center justify-center text-[22px] border border-white/5" style={{ background: 'rgba(255,255,255,0.06)' }}>
+    <div 
+      className="rounded-2xl p-4 border"
+      style={{
+        background: 'var(--bg-elevated)',
+        borderColor: 'var(--border-subtle)',
+      }}
+    >
+      <div className="flex items-start gap-3.5">
+        <div 
+          className="w-10 h-10 rounded-xl flex shrink-0 items-center justify-center text-xl" 
+          style={{ background: 'var(--bg-pressed)' }}
+        >
           📲
         </div>
         <div className="flex-1">
           <div className="flex items-center justify-between gap-2 mb-1">
-            <h4 className="font-black text-white text-[14px] m-0">Autenticación en Dos Pasos (2FA)</h4>
+            <h4 className="font-extrabold text-[15px] m-0" style={{ color: 'var(--text-primary)' }}>Autenticación en Dos Pasos (2FA)</h4>
             <span
               className="text-[10px] font-black px-2 py-0.5 rounded-full"
               style={{
-                background: isAnyActive ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.08)',
-                color: isAnyActive ? '#34D399' : 'rgba(255,255,255,0.5)',
-                border: `1px solid ${isAnyActive ? 'rgba(16,185,129,0.35)' : 'rgba(255,255,255,0.1)'}`,
+                background: isAnyActive ? 'rgba(16,185,129,0.15)' : 'var(--bg-pressed)',
+                color: isAnyActive ? '#10B981' : 'var(--text-muted)',
+                border: `1px solid ${isAnyActive ? 'rgba(16,185,129,0.35)' : 'var(--border-subtle)'}`,
               }}
             >
               {isAnyActive ? 'ACTIVO' : 'INACTIVO'}
             </span>
           </div>
-          <p className="text-white/60 text-xs leading-normal m-0 mb-3">
+          <p className="text-xs leading-normal m-0 mb-3" style={{ color: 'var(--text-secondary)' }}>
             Verificación adicional para transferencias, canje de cupones y accesos en nuevos dispositivos.
           </p>
 
           <div className="flex flex-col gap-2">
             {/* Opción 1: Correo */}
-            <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/5 border border-white/5">
+            <div 
+              className="flex items-center justify-between p-2.5 rounded-xl border"
+              style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-subtle)' }}
+            >
               <div>
-                <span className="text-[13px] font-bold text-white block">✉️ Correo Electrónico</span>
-                <span className="text-[10px] text-white/50">Código OTP enviado a tu bandeja</span>
+                <span className="text-[13px] font-bold block" style={{ color: 'var(--text-primary)' }}>✉️ Correo Electrónico</span>
+                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Código OTP enviado a tu bandeja</span>
               </div>
               <button
                 type="button"
                 onClick={() => toggleMethod('email', 'Correo')}
-                className={`px-3 py-1 rounded-full text-[11px] font-bold border-none cursor-pointer transition-colors ${
-                  methods.email ? 'bg-emerald-500 text-black' : 'bg-white/10 text-white/70'
-                }`}
+                className="px-3 py-1 rounded-full text-[11px] font-black border-none cursor-pointer"
+                style={{
+                  background: methods.email ? '#10B981' : 'var(--bg-pressed)',
+                  color: methods.email ? '#FFFFFF' : 'var(--text-primary)',
+                }}
               >
                 {methods.email ? 'Activo' : 'Activar'}
               </button>
             </div>
 
             {/* Opción 2: Teléfono SMS / Telegram */}
-            <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/5 border border-white/5">
+            <div 
+              className="flex items-center justify-between p-2.5 rounded-xl border"
+              style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-subtle)' }}
+            >
               <div>
-                <span className="text-[13px] font-bold text-white block">📱 SMS / WhatsApp / Telegram</span>
-                <span className="text-[10px] text-white/50">Código de 6 dígitos al móvil</span>
+                <span className="text-[13px] font-bold block" style={{ color: 'var(--text-primary)' }}>📱 SMS / WhatsApp / Telegram</span>
+                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Código de 6 dígitos al móvil</span>
               </div>
               <button
                 type="button"
                 onClick={() => toggleMethod('phone', 'Número de Teléfono')}
-                className={`px-3 py-1 rounded-full text-[11px] font-bold border-none cursor-pointer transition-colors ${
-                  methods.phone ? 'bg-emerald-500 text-black' : 'bg-white/10 text-white/70'
-                }`}
+                className="px-3 py-1 rounded-full text-[11px] font-black border-none cursor-pointer"
+                style={{
+                  background: methods.phone ? '#10B981' : 'var(--bg-pressed)',
+                  color: methods.phone ? '#FFFFFF' : 'var(--text-primary)',
+                }}
               >
                 {methods.phone ? 'Activo' : 'Activar'}
               </button>
             </div>
 
             {/* Opción 3: Google Authenticator / TOTP */}
-            <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/5 border border-white/5">
+            <div 
+              className="flex items-center justify-between p-2.5 rounded-xl border"
+              style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-subtle)' }}
+            >
               <div>
-                <span className="text-[13px] font-bold text-white block">🔐 Google Authenticator / Authy</span>
-                <span className="text-[10px] text-white/50">Generador de códigos temporales TOTP</span>
+                <span className="text-[13px] font-bold block" style={{ color: 'var(--text-primary)' }}>🔐 Google Authenticator / Authy</span>
+                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Generador de códigos temporales TOTP</span>
               </div>
               <button
                 type="button"
                 onClick={() => toggleMethod('authenticatorApp', 'App Authenticator')}
-                className={`px-3 py-1 rounded-full text-[11px] font-bold border-none cursor-pointer transition-colors ${
-                  methods.authenticatorApp ? 'bg-emerald-500 text-black' : 'bg-white/10 text-white/70'
-                }`}
+                className="px-3 py-1 rounded-full text-[11px] font-black border-none cursor-pointer"
+                style={{
+                  background: methods.authenticatorApp ? '#10B981' : 'var(--bg-pressed)',
+                  color: methods.authenticatorApp ? '#FFFFFF' : 'var(--text-primary)',
+                }}
               >
                 {methods.authenticatorApp ? 'Activo' : 'Activar'}
               </button>
             </div>
           </div>
 
-          {feedback && <p className="text-[11px] font-bold m-0 mt-2 text-white/80">{feedback}</p>}
+          {feedback && <p className="text-[11px] font-bold m-0 mt-2.5" style={{ color: 'var(--text-primary)' }}>{feedback}</p>}
         </div>
       </div>
     </div>
@@ -621,19 +666,8 @@ export default function SecurityPage() {
         currentSection === 'security_access' ? 'Seguridad' :
         currentSection === 'privacy' ? 'Privacidad' : 'Auditoría'
       }
-      left={
-        currentSection !== 'root' ? (
-          <button
-            type="button"
-            onClick={() => navigateTo('root')}
-            className="w-9 h-9 rounded-full flex items-center justify-center cursor-pointer border-none mr-2 active:scale-90 transition-transform"
-            style={{ background: 'var(--bg-elevated)', color: 'var(--text-primary)' }}
-            aria-label="Volver al menú de configuración"
-          >
-            <ChevronLeft size={20} strokeWidth={2.5} />
-          </button>
-        ) : null
-      }
+      showBack={true}
+      onBackCustom={currentSection !== 'root' ? () => navigateTo('root') : undefined}
     >
       <div className="flex flex-col gap-4 mt-2">
 

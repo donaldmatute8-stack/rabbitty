@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import { Search, Store, Sparkles, ChevronLeft } from 'lucide-react';
 import BottomNav from '@/components/BottomNav';
 import { PlatformBridge } from '@/lib/platform';
+import { useTheme } from '@/contexts/ThemeContext';
 
 import { VibePassportRoute } from '@/types/mood';
 
@@ -33,6 +34,7 @@ interface PassportRouteWithProgress extends VibePassportRoute {
 
 export default function DiscoverPage() {
   const router = useRouter();
+  const { isDark } = useTheme();
   const [query, setQuery] = useState('');
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [loading, setLoading] = useState(false);
@@ -167,7 +169,16 @@ export default function DiscoverPage() {
         {!loading && !query && (
           <div className="space-y-6">
             {/* Vibe Passport Spotlight */}
-            <div className="rounded-3xl p-4.5 bg-linear-to-br from-[#E91E63]/20 via-[#1F0A17]/80 to-zinc-950/90 border border-[#E91E63]/30 shadow-[0_8px_32px_rgba(233,30,99,0.12)]">
+            <div 
+              className="rounded-3xl p-4.5 border transition-all"
+              style={{
+                background: isDark 
+                  ? 'linear-gradient(135deg, rgba(233,30,99,0.18) 0%, rgba(31,10,23,0.85) 50%, rgba(9,9,11,0.95) 100%)' 
+                  : 'linear-gradient(135deg, rgba(233,30,99,0.12) 0%, #FFF0F5 50%, #FFFFFF 100%)',
+                borderColor: isDark ? 'rgba(233, 30, 99, 0.3)' : 'rgba(233, 30, 99, 0.25)',
+                boxShadow: isDark ? '0 8px 32px rgba(233,30,99,0.12)' : '0 4px 20px rgba(233,30,99,0.08)',
+              }}
+            >
               <div className="flex items-center justify-between mb-2.5">
                 <span className="flex items-center gap-2 text-xs font-black text-[#E91E63] uppercase tracking-wider">
                   <div className="w-5 h-5 rounded-md bg-[#E91E63]/20 flex items-center justify-center border border-[#E91E63]/40">
@@ -175,27 +186,39 @@ export default function DiscoverPage() {
                   </div>
                   <span>Rabbitty Vibe Passport</span>
                 </span>
-                <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-[#E91E63]/20 text-pink-300 font-extrabold border border-[#E91E63]/30 uppercase tracking-wider">
+                <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-[#E91E63]/20 text-[#E91E63] font-extrabold border border-[#E91E63]/30 uppercase tracking-wider">
                   Rutas de la Ciudad
                 </span>
               </div>
-              <p className="text-xs text-white/70 leading-relaxed mb-4">
+              <p className="text-xs leading-relaxed mb-4" style={{ color: 'var(--text-secondary)' }}>
                 Recorre la ciudad con pasaportes temáticos entre locales afiliados. Gana Bunz minteados al consumir en cada parada.
               </p>
 
               <div className="space-y-3.5">
                 {passportRoutes.map((route) => (
-                  <div key={route.id} className="p-4 rounded-2xl bg-[#120E15]/80 border border-white/10 space-y-3 shadow-inner">
+                  <div 
+                    key={route.id} 
+                    className="p-4 rounded-2xl border space-y-3"
+                    style={{
+                      background: isDark ? 'rgba(18, 14, 21, 0.85)' : '#FFFFFF',
+                      borderColor: 'var(--border-subtle)',
+                      boxShadow: isDark ? 'inset 0 1px 0 rgba(255,255,255,0.05)' : '0 2px 10px rgba(0,0,0,0.03)',
+                    }}
+                  >
                     <div className="flex items-center justify-between">
                       <div>
-                        <span className="text-sm font-black text-white block tracking-tight">{route.title}</span>
-                        <span className="text-[10px] text-[#E91E63] font-bold tracking-wide uppercase">{route.theme} · {route.estimatedHours}</span>
+                        <span className="text-sm font-black block tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                          {route.title}
+                        </span>
+                        <span className="text-[10px] text-[#E91E63] font-bold tracking-wide uppercase">
+                          {route.theme} · {route.estimatedHours}
+                        </span>
                       </div>
-                      <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full ${route.isCompleted ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-[#E91E63]/15 text-pink-300 border border-[#E91E63]/25'}`}>
+                      <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full ${route.isCompleted ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/40' : 'bg-[#E91E63]/15 text-[#E91E63] border border-[#E91E63]/25'}`}>
                         {route.completedStopsCount}/{route.stops.length} Sellos
                       </span>
                     </div>
-                    <p className="text-[11px] text-white/60 leading-normal">
+                    <p className="text-[11px] leading-normal" style={{ color: 'var(--text-muted)' }}>
                       {route.description}
                     </p>
                     <div className="space-y-2 pt-1">
@@ -203,16 +226,25 @@ export default function DiscoverPage() {
                         const isStamped = route.stamps?.some((s) => s.stopOrder === stop.order);
                         const isStampingThis = stamping === `${route.id}-${stop.order}`;
                         return (
-                          <div key={stop.order} className="flex items-center justify-between p-2.5 rounded-xl bg-white/4 border border-white/8 text-xs hover:border-[#E91E63]/30 transition-colors">
+                          <div 
+                            key={stop.order} 
+                            className="flex items-center justify-between p-2.5 rounded-xl border text-xs transition-colors"
+                            style={{
+                              background: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.02)',
+                              borderColor: 'var(--border-subtle)',
+                            }}
+                          >
                             <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${isStamped ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-[#E91E63]/20 text-[#E91E63] border border-[#E91E63]/30'}`}>
+                              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${isStamped ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/40' : 'bg-[#E91E63]/20 text-[#E91E63] border border-[#E91E63]/30'}`}>
                                 {isStamped ? '✓' : stop.order}
                               </span>
                               <div className="min-w-0 truncate">
-                                <span className={`font-bold block truncate ${isStamped ? 'text-emerald-400 line-through' : 'text-white'}`}>
+                                <span className={`font-bold block truncate ${isStamped ? 'text-emerald-500 line-through' : ''}`} style={{ color: isStamped ? undefined : 'var(--text-primary)' }}>
                                   {stop.category}
                                 </span>
-                                <span className="text-[10px] text-white/50 block truncate">{stop.pairingHint}</span>
+                                <span className="text-[10px] block truncate" style={{ color: 'var(--text-muted)' }}>
+                                  {stop.pairingHint}
+                                </span>
                               </div>
                             </div>
                             {!isStamped ? (
@@ -224,7 +256,7 @@ export default function DiscoverPage() {
                                 {isStampingThis ? '...' : 'Sellar'}
                               </button>
                             ) : (
-                              <span className="text-[10px] font-black text-emerald-400 px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 shrink-0">Sellado</span>
+                              <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 shrink-0">Sellado</span>
                             )}
                           </div>
                         );
@@ -239,7 +271,9 @@ export default function DiscoverPage() {
               <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
                 <Store size={26} style={{ color: 'var(--text-muted)' }} />
               </div>
-              <p className="text-xs text-white/50">Escribe el nombre o categoría de un comercio arriba para explorar la red.</p>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                Escribe el nombre o categoría de un comercio arriba para explorar la red.
+              </p>
             </div>
           </div>
         )}
