@@ -78,7 +78,7 @@ export async function GET() {
         name: '626 Café',
         category: 'Cafetería de Especialidad',
         rewardPercentage: 25,
-        address: 'Calle Libertad 626, Centro',
+        address: 'Av. Lázaro Cárdenas #74, Bucerías, Nayarit',
         logoUrl: null,
         refCode: '626cafe',
       });
@@ -95,7 +95,7 @@ export async function GET() {
           name: '626 Café',
           category: 'Cafetería de Especialidad',
           rewardPercentage: 25,
-          address: 'Calle Libertad 626, Centro',
+          address: 'Av. Lázaro Cárdenas #74, Bucerías, Nayarit',
           refCode: '626cafe',
         },
       ],
