@@ -101,13 +101,13 @@ export async function POST(req: NextRequest) {
       await recordLedgerTransaction(
         {
           branchId: business.id,
-          payerSubjectId: user.telegramId || user.id,
+          payerSubjectId: `usr_${user.id}`,
           payeeSubjectId: business.id,
           amount: bunzCost,
           type: 'SPEND',
           referenceId: resRow.id,
           idempotencyKey,
-          metadata: { title, businessId },
+          metadata: { title, businessId, telegramId: user.telegramId },
         },
         tx
       );
@@ -120,11 +120,12 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true, reservation });
-  } catch (error: any) {
-    if (error?.message === 'INSUFFICIENT_BUNZ') {
+  } catch (error: unknown) {
+    const errorMsg = error instanceof Error ? error.message : 'Internal server error';
+    if (errorMsg === 'INSUFFICIENT_BUNZ') {
       return NextResponse.json({ error: 'Saldo insuficiente de Bunz' }, { status: 400 });
     }
     console.error('Reserve Error:', error);
-    return NextResponse.json({ error: error?.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: errorMsg }, { status: 500 });
   }
 }

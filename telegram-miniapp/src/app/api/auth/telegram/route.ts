@@ -2,9 +2,10 @@ import { NextResponse } from 'next/server';
 import { validateTelegramInitData, parseTelegramUser } from '@/lib/telegramAuth';
 import { resolveUniqueUsername } from '@/lib/username';
 import { db } from '@/db';
-import { users, referrals, webSessions } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { users, referrals, webSessions, ownedBusinesses, pendingVaults } from '@/db/schema';
+import { eq, and, sql } from 'drizzle-orm';
 import crypto from 'crypto';
+import { recordLedgerTransaction, findLedgerEntry } from '@/lib/ledgerHelper';
 
 export async function POST(req: Request) {
   try {
@@ -72,16 +73,12 @@ export async function POST(req: Request) {
 
     if (startParam && startParam.startsWith('claim_')) {
       const claimId = startParam.replace('claim_', ''); // UUID sin guiones o ticket orderNumber
-      
-      const { sql: drizzleSql, and } = require('drizzle-orm');
-      const { ownedBusinesses, pendingVaults } = require('@/db/schema');
-      const { recordLedgerTransaction, findLedgerEntry } = require('@/lib/ledgerHelper');
-      
+
       // 1. Buscar si corresponde a un reclamo de negocio afiliado
       const [business] = await db
         .select({ id: ownedBusinesses.id, ownerId: ownedBusinesses.ownerId })
         .from(ownedBusinesses)
-        .where(eq(drizzleSql`REPLACE(${ownedBusinesses.id}::text, '-', '')`, claimId))
+        .where(eq(sql`REPLACE(${ownedBusinesses.id}::text, '-', '')`, claimId))
         .limit(1);
 
       if (business) {
@@ -93,7 +90,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'No autorizado para reclamar este negocio' }, { status: 403 });
           }
           await db.execute(
-            drizzleSql`UPDATE "ownedBusinesses" SET "ownerId" = ${user.id} WHERE id = ${bId}`
+            sql`UPDATE "ownedBusinesses" SET "ownerId" = ${user.id} WHERE id = ${bId}`
           );
           console.log(`[Claim Business] Negocio ${bId} transferido por admin ${user.id}`);
         }
@@ -119,7 +116,7 @@ export async function POST(req: Request) {
           const bunzToAward = vault.bunzAmount;
           const branchId = vault.businessId || null;
 
-          await db.transaction(async (tx: any) => {
+          await db.transaction(async (tx) => {
             const [lockedUser] = await tx
               .select()
               .from(users)
@@ -133,7 +130,7 @@ export async function POST(req: Request) {
 
             await tx
               .update(users)
-              .set({ totalBunzEarned: drizzleSql`COALESCE(${users.totalBunzEarned}, 0) + ${bunzToAward}` })
+              .set({ totalBunzEarned: sql`COALESCE(${users.totalBunzEarned}, 0) + ${bunzToAward}` })
               .where(eq(users.id, lockedUser.id));
 
             await tx
@@ -145,12 +142,12 @@ export async function POST(req: Request) {
               {
                 branchId,
                 payerSubjectId: branchId || 'SYSTEM',
-                payeeSubjectId: user.telegramId || user.id,
+                payeeSubjectId: `usr_${user.id}`,
                 amount: bunzToAward,
                 type: 'EARN',
                 referenceId: claimId,
                 idempotencyKey,
-                metadata: { orderNumber: claimId, reason: 'TICKET_QR_CLAIM' },
+                metadata: { orderNumber: claimId, reason: 'TICKET_QR_CLAIM', telegramId: user.telegramId },
               },
               tx
             );

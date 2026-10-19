@@ -74,28 +74,33 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await db.transaction(async (tx) => {
-      // 1. Lock sender
-      const [sender] = await tx
+      // Deterministic lock acquisition order (eliminates AB-BA deadlock risk in Postgres)
+      const isCallerFirst = caller.id < targetUser.id;
+      const firstId = isCallerFirst ? caller.id : targetUser.id;
+      const secondId = isCallerFirst ? targetUser.id : caller.id;
+
+      const [firstLocked] = await tx
         .select()
         .from(users)
-        .where(eq(users.id, caller.id))
+        .where(eq(users.id, firstId))
         .limit(1)
         .for("update");
 
+      const [secondLocked] = await tx
+        .select()
+        .from(users)
+        .where(eq(users.id, secondId))
+        .limit(1)
+        .for("update");
+
+      const sender = isCallerFirst ? firstLocked : secondLocked;
+      const receiver = isCallerFirst ? secondLocked : firstLocked;
+
       if (!sender) throw new Error("SENDER_NOT_FOUND");
+      if (!receiver) throw new Error("RECIPIENT_NOT_FOUND");
 
       const availableBalance = (sender.totalBunzEarned || 0) - (sender.totalBunzSpent || 0);
       if (availableBalance < bunzAmount) throw new Error("INSUFFICIENT_BUNZ");
-
-      // 2. Lock recipient
-      const [receiver] = await tx
-        .select()
-        .from(users)
-        .where(eq(users.id, targetUser.id))
-        .limit(1)
-        .for("update");
-
-      if (!receiver) throw new Error("RECIPIENT_NOT_FOUND");
 
       // 3. Debit sender
       await tx
