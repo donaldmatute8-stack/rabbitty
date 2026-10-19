@@ -81,12 +81,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
               {
                 branchId: locked.businessId,
                 payerSubjectId: locked.businessId || 'system',
-                payeeSubjectId: lockedUser.telegramId || lockedUser.id,
+                payeeSubjectId: `usr_${lockedUser.id}`,
                 amount: locked.bunzCost,
                 type: 'REFUND',
                 referenceId: locked.id,
                 idempotencyKey,
-                metadata: { reservationId: locked.id, reason: status },
+                metadata: { reservationId: locked.id, reason: status, telegramId: lockedUser.telegramId },
               },
               tx
             );

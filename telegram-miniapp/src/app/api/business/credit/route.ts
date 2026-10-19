@@ -85,12 +85,12 @@ export async function POST(req: NextRequest) {
       await recordLedgerTransaction(
         {
           payerSubjectId: 'SYSTEM',
-          payeeSubjectId: user.telegramId || user.id,
+          payeeSubjectId: `usr_${user.id}`,
           amount: bunzAmount,
           type: 'MINT',
           referenceId: appTx.id,
           idempotencyKey,
-          metadata: { title, businessId },
+          metadata: { title, businessId, telegramId: user.telegramId },
         },
         tx
       );
@@ -99,8 +99,9 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true, transaction: result.tx, newBalance: result.newBalance });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMsg = error instanceof Error ? error.message : 'Internal server error';
     console.error('Credit Error:', error);
-    return NextResponse.json({ error: error?.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: errorMsg }, { status: 500 });
   }
 }

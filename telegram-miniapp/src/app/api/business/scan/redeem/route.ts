@@ -87,13 +87,13 @@ export async function POST(req: NextRequest) {
       // Record authoritative Ledger entry
       await recordLedgerTransaction(
         {
-          payerSubjectId: user.telegramId || user.id,
+          payerSubjectId: `usr_${user.id}`,
           payeeSubjectId: business.id,
           amount: bunzCost,
           type: 'SPEND',
           referenceId: appTx.id,
           idempotencyKey,
-          metadata: { title, businessId },
+          metadata: { title, businessId, telegramId: user.telegramId },
         },
         tx
       );
@@ -130,11 +130,12 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true, transaction: result.tx, newBalance: result.newBalance });
-  } catch (error: any) {
-    if (error?.message === 'INSUFFICIENT_FUNDS') {
+  } catch (error: unknown) {
+    const errorMsg = error instanceof Error ? error.message : 'Internal server error';
+    if (errorMsg === 'INSUFFICIENT_FUNDS') {
       return NextResponse.json({ error: 'Saldo insuficiente de Bunz' }, { status: 400 });
     }
     console.error('Redeem Error:', error);
-    return NextResponse.json({ error: error?.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: errorMsg }, { status: 500 });
   }
 }

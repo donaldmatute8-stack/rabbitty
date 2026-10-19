@@ -20,7 +20,11 @@ async def scan_qr(
     db: Session = Depends(get_db),
     _=Depends(rate_limit)
 ):
-    """Registra un escaneo QR y otorga recompensa."""
+    """[DEPRECADO] Migrado a Next.js /api/business/scan/mint con ledger_entries autoritativo."""
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Endpoint deprecado por arquitectura contable inmutable. Usa Next.js /api/business/scan/mint."
+    )
     # Verificar negocio
     business = db.query(Business).filter(Business.id == scan_data.business_id).first()
     if not business:
@@ -90,7 +94,11 @@ async def pay_with_bunz(
     db: Session = Depends(get_db),
     _=Depends(rate_limit)
 ):
-    """Paga con bunz en un negocio."""
+    """[DEPRECADO] Migrado a Next.js /api/pos/checkout y /api/pos/charge con ledger_entries autoritativo."""
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Endpoint deprecado por arquitectura contable inmutable. Usa Next.js /api/pos/checkout o /api/pos/charge."
+    )
     # Verificar negocio
     business = db.query(Business).filter(Business.id == pay_data.business_id).first()
     if not business:

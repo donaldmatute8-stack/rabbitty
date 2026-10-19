@@ -151,7 +151,16 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { userId, syncDirection } = body;
+    const { userId, syncDirection, confirmDestructiveAction } = body;
+
+    // Safety lock: Self-healing / destructive balance override must be explicitly authorized
+    // and confirmed to protect legitimate balances with legacy genesis history.
+    if (process.env.ALLOW_LEDGER_AUTO_HEALING !== 'true' && !confirmDestructiveAction) {
+      return NextResponse.json({
+        error: 'AUTO_HEALING_LOCKED',
+        message: 'La auto-sanación destructiva está congelada por seguridad contable. Requiere confirmDestructiveAction: true o ALLOW_LEDGER_AUTO_HEALING=true.',
+      }, { status: 403 });
+    }
 
     if (!userId || typeof userId !== 'string') {
       return NextResponse.json({ error: 'Falta userId a reconciliar' }, { status: 400 });

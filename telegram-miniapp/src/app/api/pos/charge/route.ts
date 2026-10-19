@@ -117,13 +117,13 @@ export async function POST(request: Request) {
       await recordLedgerTransaction(
         {
           branchId: business_id || null,
-          payerSubjectId: user.telegramId || user.id,
+          payerSubjectId: `usr_${user.id}`,
           payeeSubjectId: business_id || 'POS',
           amount: bunzRequired,
           type: 'SPEND',
           referenceId: order_id || txId,
           idempotencyKey,
-          metadata: { orderId: order_id, amountUsd: amount_usd },
+          metadata: { orderId: order_id, amountUsd: amount_usd, telegramId: user.telegramId },
         },
         tx
       );
@@ -137,8 +137,9 @@ export async function POST(request: Request) {
       balance_remaining: result.balanceRemaining
     });
 
-  } catch (error: any) {
-    if (error?.message === 'INSUFFICIENT_BUNZ') {
+  } catch (error: unknown) {
+    const errorMsg = error instanceof Error ? error.message : '';
+    if (errorMsg === 'INSUFFICIENT_BUNZ') {
       return NextResponse.json({ error: 'Saldo insuficiente de Bunz' }, { status: 402 });
     }
     console.error('Error in /api/pos/charge:', error);

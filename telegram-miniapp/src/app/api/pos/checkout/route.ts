@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { restaurantDb } from '@/db/restaurant';
 import { orders, orderItems, tables, payments } from '@rabbitty/database-restaurant/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
+import { db } from '@/db';
+import { users } from '@/db/schema';
+import { getAuthenticatedUser } from '@/lib/serverAuth';
+import { recordLedgerTransaction, findLedgerEntry } from '@/lib/ledgerHelper';
 
 export async function POST(req: Request) {
   try {
@@ -16,13 +20,20 @@ export async function POST(req: Request) {
 
     let targetOrderId = existingOrderId;
     let totalToPay = splitPaymentAmount;
-    let totalTip = Number(tip) || 0;
+    const totalTip = Number(tip) || 0;
 
     if (!existingOrderId) {
       const [table] = await restaurantDb.select().from(tables).where(eq(tables.id, tableId));
       if (!table) return NextResponse.json({ success: false, error: 'Mesa no válida' }, { status: 404 });
 
-      const itemsTotal = items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0);
+      interface OrderItemInput {
+        id: string;
+        price: number;
+        quantity: number;
+        notes?: string | null;
+      }
+      const typedItems = items as OrderItemInput[];
+      const itemsTotal = typedItems.reduce((sum: number, item: OrderItemInput) => sum + (item.price * item.quantity), 0);
       const grandTotal = itemsTotal + totalTip;
 
       // 1. Guardar la orden en la BD con estado PENDING
@@ -37,7 +48,7 @@ export async function POST(req: Request) {
       }).returning();
 
       // 2. Guardar los items
-      const orderItemsData = items.map((i: any) => ({
+      const orderItemsData = typedItems.map((i: OrderItemInput) => ({
         orderId: newOrder.id,
         menuItemId: i.id,
         quantity: i.quantity,
@@ -94,7 +105,65 @@ export async function POST(req: Request) {
         throw new Error(tgData.description || "Error creando invoice de Telegram");
       }
     } else if (paymentMethod === 'BUNZ') {
-      // Si fue BUNZ, y era Split Payment, insertamos el payment y checamos si ya se cubrió el total
+      const caller = await getAuthenticatedUser(req);
+      if (!caller) {
+        return NextResponse.json({ success: false, error: 'Inicia sesión para pagar con Bunz' }, { status: 401 });
+      }
+
+      const bunzRequired = Math.round(Number(totalToPay));
+      if (bunzRequired <= 0) {
+        return NextResponse.json({ success: false, error: 'Monto inválido de Bunz' }, { status: 400 });
+      }
+
+      // 1. Atomic debit from user account with row-lock and authoritative ledger entry
+      const idempotencyKey = `pos_chk_${targetOrderId}_${caller.id}_${bunzRequired}`;
+      await db.transaction(async (tx) => {
+        const [lockedUser] = await tx
+          .select()
+          .from(users)
+          .where(eq(users.id, caller.id))
+          .limit(1)
+          .for('update');
+
+        if (!lockedUser) throw new Error('USUARIO_NO_ENCONTRADO');
+
+        const prior = await findLedgerEntry(idempotencyKey, tx);
+        if (prior) return; // Idempotent replay
+
+        const available = (lockedUser.totalBunzEarned || 0) - (lockedUser.totalBunzSpent || 0);
+        if (available < bunzRequired) {
+          throw new Error('SALDO_INSUFICIENTE_BUNZ');
+        }
+
+        // Debit user balance
+        await tx
+          .update(users)
+          .set({
+            totalBunzSpent: sql`COALESCE(${users.totalBunzSpent}, 0) + ${bunzRequired}`,
+            updatedAt: new Date(),
+          })
+          .where(eq(users.id, lockedUser.id));
+
+        // Record authoritative ledger entry
+        await recordLedgerTransaction(
+          {
+            payerSubjectId: `usr_${caller.id}`,
+            payeeSubjectId: 'POS_CHECKOUT',
+            amount: bunzRequired,
+            type: 'SPEND',
+            referenceId: targetOrderId,
+            idempotencyKey,
+            metadata: {
+              orderId: targetOrderId,
+              tableId,
+              concept: 'Pago de mesa POS con Bunz',
+            },
+          },
+          tx
+        );
+      });
+
+      // 2. Insert restaurant payment record
       await restaurantDb.insert(payments).values({
         orderId: targetOrderId,
         method: "BUNZ",
@@ -102,7 +171,6 @@ export async function POST(req: Request) {
         status: "COMPLETED"
       });
 
-      // Lógica simplificada: aquí deberíamos llamar al wallet para descontar, lo asume exitoso por ahora
       const [orderAfter] = await restaurantDb.select().from(orders).where(eq(orders.id, targetOrderId));
       const allPayments = await restaurantDb.select().from(payments).where(eq(payments.orderId, targetOrderId));
       const sumPayments = allPayments.reduce((s, p) => s + p.amount, 0);
@@ -113,7 +181,8 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ success: true, orderId: targetOrderId });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Error desconocido procesando pago';
+    return NextResponse.json({ success: false, error: errorMsg }, { status: 500 });
   }
 }

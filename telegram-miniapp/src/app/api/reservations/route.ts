@@ -112,13 +112,13 @@ export async function POST(req: Request) {
       await recordLedgerTransaction(
         {
           branchId: business.id,
-          payerSubjectId: user.telegramId || user.id,
+          payerSubjectId: `usr_${user.id}`,
           payeeSubjectId: business.id,
           amount: bunzCost,
           type: "SPEND",
           referenceId: resRow.id,
           idempotencyKey,
-          metadata: { offerTitle, businessId: business.id },
+          metadata: { offerTitle, businessId: business.id, telegramId: user.telegramId },
         },
         tx
       );

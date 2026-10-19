@@ -118,8 +118,8 @@ export async function POST(req: NextRequest) {
         // 3. Authoritative Ledger entry for the balance migration
         await recordLedgerTransaction(
           {
-            payerSubjectId: sourceUser.telegramId || sourceUser.id,
-            payeeSubjectId: merged.telegramId || merged.id,
+            payerSubjectId: `usr_${sourceUser.id}`,
+            payeeSubjectId: `usr_${merged.id}`,
             amount: sourceEarned,
             type: 'TRANSFER',
             referenceId: sourceUser.id,
@@ -130,6 +130,7 @@ export async function POST(req: NextRequest) {
               targetUserId: merged.id,
               earnedTransferred: sourceEarned,
               debtTransferred: newDebt,
+              telegramId,
             },
           },
           tx
