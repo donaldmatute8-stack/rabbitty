@@ -5,11 +5,21 @@ import Link from 'next/link';
 import { Printer, Sparkles, Smartphone, ArrowRight, CheckCircle2, ShieldCheck, Coffee } from 'lucide-react';
 import { SimpleQRCode } from '@/components/SimpleQRCode';
 
-export default function ImpresosPage() {
-  // Configuración editable en vivo para el lanzamiento con 626 Café
-  const [businessName, setBusinessName] = useState('626 Café');
-  const [welcomeBunz, setWelcomeBunz] = useState('25');
-  const [appUrl, setAppUrl] = useState('https://rabbitty.me/download?ref=626cafe');
+import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
+
+function ImpresosContent() {
+  const searchParams = useSearchParams();
+
+  // Permite que CUALQUIER negocio genere su kit dinámicamente pasando ?name=...&bunz=...&ref=...
+  const initialName = searchParams?.get('name') || '626 Café';
+  const initialBunz = searchParams?.get('bunz') || '25';
+  const initialRef = searchParams?.get('ref') || '626cafe';
+  const initialUrl = searchParams?.get('url') || `https://rabbitty.me/download?ref=${initialRef}`;
+
+  const [businessName, setBusinessName] = useState(initialName);
+  const [welcomeBunz, setWelcomeBunz] = useState(initialBunz);
+  const [appUrl, setAppUrl] = useState(initialUrl);
   const [activeTab, setActiveTab] = useState<'all' | 'poster' | 'table' | 'cashier' | 'guide'>('all');
 
   const handlePrint = () => {
@@ -503,5 +513,13 @@ export default function ImpresosPage() {
         }
       `}</style>
     </div>
+  );
+}
+
+export default function ImpresosPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#09090B] text-white flex items-center justify-center font-mono text-sm">Cargando kit de impresión...</div>}>
+      <ImpresosContent />
+    </Suspense>
   );
 }

@@ -31,10 +31,25 @@ function DownloadContent() {
     const id = requestAnimationFrame(() => {
       setDevice(detectedDevice);
       setRedirectingTo(targetUrl);
+
+      // Fire and forget telemetry event
+      try {
+        fetch('/api/telemetry/qr', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ref,
+            device: detectedDevice,
+            userAgent: ua,
+          }),
+        }).catch(() => {});
+      } catch {
+        // Ignore network failure on analytics
+      }
     });
 
     return () => cancelAnimationFrame(id);
-  }, [TESTFLIGHT_URL, TELEGRAM_MINIAPP_URL]);
+  }, [TESTFLIGHT_URL, TELEGRAM_MINIAPP_URL, ref]);
 
   // Redirección suave automática si es dispositivo móvil
   useEffect(() => {

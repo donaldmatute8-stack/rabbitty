@@ -364,6 +364,37 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
           </div>
         </motion.div>
 
+        {/* Action: Kit de Impresión Físico Dinámico */}
+        <motion.div
+          initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
+          className="rounded-2xl p-4 mb-4 flex items-center justify-between cursor-pointer active:scale-[0.99] transition-transform"
+          style={{
+            background: 'var(--bg-elevated)',
+            border: '1px solid var(--border-subtle)',
+            boxShadow: 'var(--shadow-sm)',
+          }}
+          onClick={() => {
+            PlatformBridge.hapticFeedback('medium');
+            const encodedName = encodeURIComponent(business.name || 'Mi Negocio');
+            const encodedRef = encodeURIComponent(business.id?.replace(/-/g, '').slice(0, 8) || 'afiliado');
+            const printKitUrl = `https://rabbitty.me/impresos?name=${encodedName}&ref=${encodedRef}&bunz=25`;
+            window.open(printKitUrl, '_blank');
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center shrink-0 text-lg">
+              🖨️
+            </div>
+            <div>
+              <p className="text-sm font-extrabold text-(--text-primary) m-0 leading-snug">Kit de Impresos del Local</p>
+              <p className="text-xs text-(--text-muted) m-0">Cartel A3, habladores de mesa y caja listos en PDF</p>
+            </div>
+          </div>
+          <div className="px-3 py-1.5 rounded-full bg-pink-500/15 border border-pink-500/30 text-[#E91E63] text-xs font-bold shrink-0">
+            Exportar
+          </div>
+        </motion.div>
+
         {/* Minting Credit Card */}
         <motion.div 
           initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
