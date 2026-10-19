@@ -235,8 +235,9 @@ function ImpresosContent() {
 
   const handleSelectBusiness = (b: BusinessItem) => {
     setBusinessName(b.name);
-    setWelcomeBunz(String(b.rewardPercentage || '25'));
-    const generatedUrl = `https://rabbitty.me/download?ref=${b.refCode}`;
+    const bunzVal = String(b.rewardPercentage || '25');
+    setWelcomeBunz(bunzVal);
+    const generatedUrl = `https://rabbitty.me/download?ref=${b.refCode}&bunz=${bunzVal}`;
     setAppUrl(generatedUrl);
     if (b.logoUrl) {
       setBusinessLogo(b.logoUrl);

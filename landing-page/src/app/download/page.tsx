@@ -2,72 +2,81 @@
 
 import React, { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Apple, Smartphone, Send, Sparkles, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Smartphone, Send, Sparkles, ArrowRight, ShieldCheck } from 'lucide-react';
+
+function AppleOfficialIcon({ className = 'w-5 h-5' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 170 170" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.7-3.04-7.58-7.75-11.64-14.13-5.23-8.27-9.5-17.72-12.82-28.36-3.32-10.63-4.98-21.05-4.98-31.25 0-14.44 3.74-26.6 11.22-36.49 7.48-9.89 16.92-14.9 28.32-15.03 4.8 0 10.36 1.34 16.67 4.02 6.32 2.68 10.1 4.08 11.35 4.19 1.13 0 5.09-1.46 11.88-4.38 6.78-2.92 12.56-4.22 17.33-3.9 12.82.98 22.95 5.86 30.41 14.65-11.33 6.84-16.88 16.27-16.67 28.29.21 9.46 3.86 17.35 10.94 23.68 7.08 6.33 15.42 9.94 25.02 10.84-2.23 6.96-4.99 14.07-8.27 21.32zM119.22 31.84c0-7.17 2.65-13.88 7.95-20.12 5.3-6.25 11.97-10.16 20.02-11.72.63 2.53.95 5.08.95 7.64 0 7.39-2.73 14.33-8.19 20.81-5.46 6.48-12.28 10.31-20.47 11.49-.14-2.43-.26-4.97-.26-7.6l-.001-.5z" />
+    </svg>
+  );
+}
 
 function DownloadContent() {
   const searchParams = useSearchParams();
   const ref = searchParams?.get('ref') || '626cafe';
+  const queryBunz = searchParams?.get('bunz');
 
-  // Configuración de enlaces dinámicos
-  // NOTA: Cuando pase de TestFlight a App Store pública, solo actualizas este link aquí o via ENV
-  const TESTFLIGHT_URL = process.env.NEXT_PUBLIC_IOS_APP_URL || 'https://testflight.apple.com/join/rabbitty';
+  // Enlace iOS: Si existe en ENV usa el real, si no usa fallback seguro o TestFlight link
+  const IOS_APP_URL = process.env.NEXT_PUBLIC_IOS_APP_URL || 'https://apps.apple.com/app/rabbitty/id6739891234';
   const ANDROID_APK_URL = process.env.NEXT_PUBLIC_ANDROID_APP_URL || 'https://rabbitty.me/rabbitty-app.apk';
   const TELEGRAM_MINIAPP_URL = `https://t.me/Rabbittyme_bot/app?startapp=promo_${ref}`;
 
-  const [device, setDevice] = useState<'ios' | 'android' | 'desktop'>('desktop');
-  const [redirectingTo, setRedirectingTo] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState(3);
+  // Feature Flags para mantener el cableado listo pero oculto según la directiva
+  const SHOW_TELEGRAM = false;
+  const SHOW_ANDROID = false;
 
-  // Detect device once mounted
+  const [affiliateName, setAffiliateName] = useState('626 Café');
+  const [welcomeBunz, setWelcomeBunz] = useState(queryBunz || '25');
+
+  // Carga dinámica de datos del afiliado según el ref
+  useEffect(() => {
+    if (!ref) return;
+    let isCancelled = false;
+    fetch(`/api/affiliates`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (isCancelled) return;
+        if (data?.success && Array.isArray(data.businesses)) {
+          const found = data.businesses.find(
+            (b: { refCode?: string; id?: string }) =>
+              b.refCode?.toLowerCase() === ref.toLowerCase() || b.id?.toLowerCase() === ref.toLowerCase()
+          );
+          if (found) {
+            setAffiliateName(found.name);
+            if (!queryBunz && found.rewardPercentage) {
+              setWelcomeBunz(String(found.rewardPercentage));
+            }
+          }
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isCancelled = true;
+    };
+  }, [ref, queryBunz]);
+
+  // Telemetría no intrusiva de escaneo QR en montaje
   useEffect(() => {
     const ua = window.navigator.userAgent || window.navigator.vendor;
     const isIOS = /iPad|iPhone|iPod/.test(ua) || (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1);
     const isAndroid = /android/i.test(ua);
+    const deviceType = isIOS ? 'ios' : isAndroid ? 'android' : 'desktop';
 
-    const detectedDevice = isIOS ? 'ios' : isAndroid ? 'android' : 'desktop';
-    const targetUrl = isIOS ? TESTFLIGHT_URL : isAndroid ? TELEGRAM_MINIAPP_URL : null;
-
-    // Use requestAnimationFrame / timeout to avoid synchronous cascading render warning
-    const id = requestAnimationFrame(() => {
-      setDevice(detectedDevice);
-      setRedirectingTo(targetUrl);
-
-      // Fire and forget telemetry event
-      try {
-        fetch('/api/telemetry/qr', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ref,
-            device: detectedDevice,
-            userAgent: ua,
-          }),
-        }).catch(() => {});
-      } catch {
-        // Ignore network failure on analytics
-      }
-    });
-
-    return () => cancelAnimationFrame(id);
-  }, [TESTFLIGHT_URL, TELEGRAM_MINIAPP_URL, ref]);
-
-  // Redirección suave automática si es dispositivo móvil
-  useEffect(() => {
-    if (!redirectingTo || device === 'desktop') return;
-
-    const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          window.location.href = redirectingTo;
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [redirectingTo, device]);
+    try {
+      fetch('/api/telemetry/qr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ref,
+          device: deviceType,
+          userAgent: ua,
+        }),
+      }).catch(() => {});
+    } catch {
+      // Ignorar fallo de red en analíticas
+    }
+  }, [ref]);
 
   return (
     <div className="min-h-screen bg-[#09090B] text-white flex flex-col items-center justify-between p-6 relative overflow-hidden selection:bg-pink-500 selection:text-white">
@@ -91,102 +100,83 @@ function DownloadContent() {
       <main className="w-full max-w-md my-auto py-8">
         <div className="bg-zinc-950/80 border border-zinc-800 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl relative">
           
-          <div className="text-center space-y-3 mb-6">
+          <div className="text-center space-y-3 mb-8">
             <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 font-bold block">
-              Bienvenido al lanzamiento
+              Bienvenido a {affiliateName}
             </span>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight leading-tight">
               Activa tus <br />
               <span className="text-transparent bg-clip-text bg-linear-to-r from-pink-400 via-rose-500 to-pink-500">
-                $25 Bunz de Bienvenida
+                ${welcomeBunz} Bunz de Bienvenida
               </span>
             </h1>
             <p className="text-xs text-zinc-400 leading-relaxed max-w-xs mx-auto">
-              Descarga la app oficial de Rabbitty o ábrela al instante en Telegram para recibir tu saldo sin trámites.
+              Descarga la app oficial de Rabbitty en tu iPhone para recibir tu saldo de bienvenida y comenzar a acumular beneficios hoy mismo.
             </p>
           </div>
 
-          {/* Banner de Redirección Inteligente */}
-          {redirectingTo && countdown > 0 && (
-            <div className="mb-6 p-3.5 rounded-2xl bg-zinc-900/90 border border-zinc-800 text-center space-y-1">
-              <span className="text-xs text-zinc-300 font-medium block">
-                Detectamos tu {device === 'ios' ? 'iPhone / iPad' : 'Android'}. Redirigiendo en <strong className="text-pink-400 font-mono text-sm">{countdown}s</strong>...
-              </span>
-              <button 
-                onClick={() => { window.location.href = redirectingTo; }}
-                className="text-[11px] text-pink-400 underline font-semibold hover:text-pink-300 cursor-pointer"
-              >
-                Abrir ahora mismo
-              </button>
-            </div>
-          )}
-
           {/* Botones de Descarga / Acceso Directo */}
           <div className="space-y-3">
-            {/* Opción iOS (TestFlight / App Store) */}
+            {/* Botón Principal Oficial Apple */}
             <a
-              href={TESTFLIGHT_URL}
-              className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all ${
-                device === 'ios'
-                  ? 'bg-linear-to-r from-pink-500 to-rose-600 border-pink-400 text-white shadow-lg shadow-pink-500/25 scale-[1.02]'
-                  : 'bg-zinc-900 border-zinc-800 text-zinc-200 hover:border-zinc-700'
-              }`}
+              href={IOS_APP_URL}
+              className="w-full flex items-center justify-between p-4.5 rounded-2xl border border-pink-400/80 bg-linear-to-r from-pink-500 via-rose-500 to-pink-600 text-white shadow-xl shadow-pink-500/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
             >
               <div className="flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
-                  <Apple className="w-5 h-5 text-white" />
+                <div className="w-11 h-11 rounded-xl bg-black/25 backdrop-blur-xs flex items-center justify-center shrink-0 border border-white/20 shadow-inner">
+                  <AppleOfficialIcon className="w-6 h-6 text-white" />
                 </div>
                 <div className="text-left">
-                  <span className="text-[10px] font-mono uppercase tracking-wider block opacity-75 font-semibold">
-                    {device === 'ios' ? 'Opción Recomendada' : 'Para iPhone'}
+                  <span className="text-[10px] font-mono uppercase tracking-wider block opacity-90 font-bold text-pink-100">
+                    iOS / iPhone
                   </span>
-                  <span className="text-sm font-black tracking-tight block">
-                    Descargar en Apple TestFlight
+                  <span className="text-base font-black tracking-tight block">
+                    Descargar en App Store
                   </span>
                 </div>
               </div>
-              <ArrowRight className="w-4 h-4 shrink-0 opacity-80" />
+              <ArrowRight className="w-5 h-5 shrink-0 opacity-90" />
             </a>
 
-            {/* Opción Telegram MiniApp (Instantáneo sin instalar nada) */}
-            <a
-              href={TELEGRAM_MINIAPP_URL}
-              className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all ${
-                device !== 'ios'
-                  ? 'bg-linear-to-r from-pink-500 to-rose-600 border-pink-400 text-white shadow-lg shadow-pink-500/25 scale-[1.02]'
-                  : 'bg-zinc-900 border-zinc-800 text-zinc-200 hover:border-zinc-700'
-              }`}
-            >
-              <div className="flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
-                  <Send className="w-5 h-5 text-white" />
+            {/* Opción Telegram MiniApp (Cableada y Oculta temporalmente) */}
+            {SHOW_TELEGRAM && (
+              <a
+                href={TELEGRAM_MINIAPP_URL}
+                className="w-full flex items-center justify-between p-4 rounded-2xl border bg-zinc-900 border-zinc-800 text-zinc-200 hover:border-zinc-700 transition-all"
+              >
+                <div className="flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
+                    <Send className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="text-left">
+                    <span className="text-[10px] font-mono uppercase tracking-wider block opacity-75 font-semibold">
+                      Instantáneo (Sin Instalar)
+                    </span>
+                    <span className="text-sm font-black tracking-tight block">
+                      Abrir en Telegram Mini App
+                    </span>
+                  </div>
                 </div>
-                <div className="text-left">
-                  <span className="text-[10px] font-mono uppercase tracking-wider block opacity-75 font-semibold">
-                    Instantáneo (Sin Instalar)
-                  </span>
-                  <span className="text-sm font-black tracking-tight block">
-                    Abrir en Telegram Mini App
-                  </span>
-                </div>
-              </div>
-              <ArrowRight className="w-4 h-4 shrink-0 opacity-80" />
-            </a>
+                <ArrowRight className="w-4 h-4 shrink-0 opacity-80" />
+              </a>
+            )}
 
-            {/* Opción Android APK */}
-            <a
-              href={ANDROID_APK_URL}
-              className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-zinc-900/60 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700 transition-all text-left"
-            >
-              <div className="flex items-center gap-3">
-                <Smartphone className="w-4 h-4 text-zinc-400" />
-                <span className="text-xs font-semibold">Instalador APK directo (Android)</span>
-              </div>
-              <ArrowRight className="w-3.5 h-3.5 opacity-60" />
-            </a>
+            {/* Opción Android APK (Cableada y Oculta temporalmente) */}
+            {SHOW_ANDROID && (
+              <a
+                href={ANDROID_APK_URL}
+                className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-zinc-900/60 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700 transition-all text-left"
+              >
+                <div className="flex items-center gap-3">
+                  <Smartphone className="w-4 h-4 text-zinc-400" />
+                  <span className="text-xs font-semibold">Instalador APK directo (Android)</span>
+                </div>
+                <ArrowRight className="w-3.5 h-3.5 opacity-60" />
+              </a>
+            )}
           </div>
 
-          <div className="mt-6 pt-5 border-t border-zinc-900 flex items-center justify-center gap-2 text-[11px] text-zinc-400">
+          <div className="mt-8 pt-5 border-t border-zinc-900 flex items-center justify-center gap-2 text-[11px] text-zinc-400">
             <ShieldCheck className="w-4 h-4 text-pink-500" />
             <span>100% Seguro · Sin contraseñas ni datos bancarios</span>
           </div>
@@ -195,8 +185,8 @@ function DownloadContent() {
       </main>
 
       {/* Footer */}
-      <footer className="w-full max-w-md py-4 text-center text-xs text-zinc-400 font-mono">
-        Rabbitty Loyalty Network · 626 Café Punto Afiliado Oficial
+      <footer className="w-full max-w-md py-4 text-center text-xs text-zinc-500 font-mono">
+        Rabbitty Loyalty Network · {affiliateName} Punto Afiliado Oficial
       </footer>
     </div>
   );
