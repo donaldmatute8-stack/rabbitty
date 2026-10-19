@@ -1,24 +1,20 @@
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
-import Link from 'next/link';
 import {
   MapPin,
   Clock,
   Sparkles,
   Navigation,
   ArrowRight,
-  ShieldCheck,
-  Coffee,
-  Heart,
-  Award,
   CheckCircle2,
   Phone,
-  Flame,
 } from 'lucide-react';
 import { getAffiliateBySlug, isValidSlug } from '@/lib/affiliateLanding';
 import { SmartAppAction } from '@/components/SmartAppAction';
 import { StickyMobileBar } from '@/components/StickyMobileBar';
+import { BunzBadge } from '@/components/BunzInfoModal';
+import { PrivacyTrigger } from '@/components/PrivacyModal';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -246,7 +242,9 @@ export default async function AffiliateLandingPage({ params }: PageProps) {
               </div>
               <div className="flex items-center gap-2 text-stone-700">
                 <CheckCircle2 size={16} className="text-amber-800 shrink-0" />
-                <span>Acumula Bunz en cada consumo</span>
+                <span>
+                  Acumula <BunzBadge affiliateName={affiliate.name} rewardPercentage={affiliate.rewardPercentage} /> en cada consumo
+                </span>
               </div>
             </div>
           </div>
@@ -352,7 +350,8 @@ export default async function AffiliateLandingPage({ params }: PageProps) {
                 <div className="p-6 pt-0 border-t border-stone-100 flex items-center justify-between text-xs">
                   {item.rewardBunz && affiliate.features.hasRewards ? (
                     <span className="text-stone-500 font-medium">
-                      Acumula <strong className="text-amber-900 font-bold">+{item.rewardBunz} Bunz</strong>
+                      Acumula <strong className="text-amber-900 font-bold">+{item.rewardBunz}</strong>{' '}
+                      <BunzBadge affiliateName={affiliate.name} rewardPercentage={affiliate.rewardPercentage} />
                     </span>
                   ) : (
                     <span className="text-stone-400 text-[11px]">Disponible en barra</span>
@@ -435,33 +434,34 @@ export default async function AffiliateLandingPage({ params }: PageProps) {
         </div>
       </section>
 
-      {/* SECTION 4: FIDELIZACIÓN RABBITTY (30% Integración Discreta) */}
+      {/* SECTION 4: FIDELIZACIÓN RABBITTY (Totalmente Dinámica por Comercio) */}
       <section className="py-16 px-6 bg-[#2C1810] text-[#FDFBF7]">
         <div className="max-w-5xl mx-auto rounded-3xl p-8 sm:p-14 space-y-8">
           <div className="max-w-xl space-y-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 text-xs font-bold uppercase tracking-wider">
-              <Sparkles size={13} /> Programa de Lealtad Oficial
+              <Sparkles size={13} /> Programa de Lealtad Oficial de {affiliate.name}
             </div>
             <h2 className="font-serif text-3xl sm:text-4xl font-black tracking-tight leading-tight">
-              Gana +{affiliate.rewardPercentage}% en Bunz cada vez que nos visites.
+              Gana +{affiliate.rewardPercentage}% en{' '}
+              <BunzBadge affiliateName={affiliate.name} rewardPercentage={affiliate.rewardPercentage} className="text-amber-400 decoration-amber-400/50 hover:text-amber-300 text-3xl sm:text-4xl font-serif font-black" /> cada vez que nos visites.
             </h2>
             <p className="text-xs sm:text-sm text-stone-300 leading-relaxed font-normal">
-              Sin tarjetas plásticas ni sellos de papel que se pierden. Pide tu café, escanea tu código en mostrador y acumula recompensas utilizables en tus siguientes consumos.
+              Sin tarjetas plásticas ni sellos de papel que se pierden. Disfruta en {affiliate.name}, escanea tu código de Rabbitty en mostrador y acumula recompensas utilizables como dinero real en tus siguientes consumos.
             </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-4 border-t border-white/10 text-xs">
             <div className="space-y-1.5">
               <span className="font-bold text-amber-400 block text-sm">1. Visita y Disfruta</span>
-              <p className="text-stone-300">Ordena tus alimentos o bebidas favoritas en barra o mesa.</p>
+              <p className="text-stone-300">Ordena tus productos habituales en {affiliate.name}.</p>
             </div>
             <div className="space-y-1.5">
               <span className="font-bold text-amber-400 block text-sm">2. Escanea en Mostrador</span>
-              <p className="text-stone-300">Muestra tu perfil Rabbitty para acreditar tu consumo al instante.</p>
+              <p className="text-stone-300">Muestra tu perfil Rabbitty para acreditar tu porcentaje de <strong>bunz</strong> al instante.</p>
             </div>
             <div className="space-y-1.5">
               <span className="font-bold text-amber-400 block text-sm">3. Canjea en Tu Próxima Visita</span>
-              <p className="text-stone-300">Utiliza tus Bunz para canjear bebidas, postres y promociones.</p>
+              <p className="text-stone-300">Utiliza tus <strong>bunz</strong> acumulados para descontar de tu cuenta en este comercio o la red.</p>
             </div>
           </div>
         </div>
@@ -564,17 +564,13 @@ export default async function AffiliateLandingPage({ params }: PageProps) {
               © 2026 {affiliate.name}
             </p>
             <p className="text-[11px] text-stone-500">
-              Sucursal digital impulsada por Rabbitty Technologies · Ciudad de México & Guadalajara, México.
+              Sucursal digital impulsada por Rabbitty Technologies · {affiliate.address}{affiliate.city ? `, ${affiliate.city}` : ''}.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-6 text-[11px] font-semibold text-stone-600">
-            <Link href="/privacy" className="hover:text-stone-950 transition-colors">
-              Aviso de Privacidad (LFPDPPP)
-            </Link>
-            <Link href="/privacy" className="hover:text-stone-950 transition-colors">
-              Términos de Servicio (PROFECO 2026)
-            </Link>
+            <PrivacyTrigger affiliateName={affiliate.name} label="Aviso de Privacidad (LFPDPPP)" />
+            <PrivacyTrigger affiliateName={affiliate.name} label="Términos de Servicio (PROFECO 2026)" />
             <a
               href="https://rabbitty.me"
               target="_blank"
