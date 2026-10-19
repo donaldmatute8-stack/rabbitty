@@ -17,6 +17,10 @@ STORE_LISTING_METADATA.md
 RABBITTY_PHASE_A_E_FINANCIAL_AUDIT.md
 *.apk
 
+# Internal Ecosystem Documentation
+Docs/
+docs/
+
 # Rabbit Bot runtime
 rabbit-bot/.env
 rabbit-bot/data/pending-approvals.json

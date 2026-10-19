@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo, useRef, useCallback, useSyncExternalStore } from 'react';
 import { motion } from 'framer-motion';
-import { Bell } from 'lucide-react';
+import { Bell, Sparkles, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import BottomNav from '@/components/BottomNav';
 import Tabs from '@/components/ui/Tabs';
@@ -20,6 +20,7 @@ import ProfileDrawer from '@/components/ProfileDrawer';
 import { useTheme } from '@/contexts/ThemeContext';
 import RabbittyContourLoader from '@/components/ui/RabbittyContourLoader';
 import { openBunzy } from '@/lib/bunzyLaunch';
+import { MoodCheckInSheet } from '@/components/mood/MoodCheckInSheet';
 
 const InteractiveMap = dynamic(() => import('@/features/map/InteractiveMap'), {
   ssr: false,
@@ -100,6 +101,7 @@ export default function FeedPage() {
 
   const { isDark } = useTheme();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [moodOpen, setMoodOpen] = useState(false);
   const bunzBalance = (user?.totalBunzEarned || 0) - (user?.totalBunzSpent || 0);
 
   const greeting = useSyncExternalStore(
@@ -159,6 +161,18 @@ export default function FeedPage() {
         { enableHighAccuracy: true, timeout: 5000 }
       );
     }
+
+    // Auto-prompt Rabbitty Mood una vez al día tras 1.2 segundos (si no fue descartado hoy)
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const dismissed = localStorage.getItem('rabbitty_mood_dismissed_date');
+      if (dismissed !== today) {
+        const timer = setTimeout(() => {
+          setMoodOpen(true);
+        }, 1200);
+        return () => clearTimeout(timer);
+      }
+    } catch {}
   }, []);
 
   useEffect(() => {
@@ -414,6 +428,20 @@ export default function FeedPage() {
               <div className="absolute top-2 right-2.25 w-1.5 h-1.5 bg-[#E91E63] rounded-full" style={{ border: '1.5px solid var(--bg-elevated)' }} />
             </Link>
 
+            {/* Rabbitty Mood Trigger */}
+            <button
+              type="button"
+              onClick={() => {
+                PlatformBridge.hapticFeedback('medium');
+                setMoodOpen(true);
+              }}
+              className="w-9 h-9 rounded-full flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.04)] active:scale-95 transition-transform bg-linear-to-tr from-amber-500/20 to-orange-500/20 border border-amber-400/30 text-amber-400"
+              aria-label="Rabbitty Mood"
+              title="Tu vibra y experiencia de hoy"
+            >
+              <Sparkles size={16} strokeWidth={2.5} />
+            </button>
+
             <Link 
               href="/chat/bot" 
               onClick={(e) => { e.preventDefault(); PlatformBridge.hapticFeedback('medium'); openBunzy(); }}
@@ -539,6 +567,33 @@ export default function FeedPage() {
               {/* Digital Pass / Membership Card */}
               <div className="px-1">
                 <MembershipCard user={user} levelName={user?.level?.name || '1'} isDark={isDark} />
+              </div>
+
+              {/* Rabbitty Vibe Passport Quick Banner */}
+              <div className="px-1 mt-3">
+                <Link
+                  href="/discover"
+                  onClick={() => PlatformBridge.hapticFeedback('light')}
+                  className="flex items-center justify-between p-3.5 rounded-2xl bg-linear-to-r from-amber-500/15 via-orange-500/10 to-transparent border border-amber-500/25 active:scale-[0.98] transition-transform no-underline"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-lg shrink-0">
+                      🧭
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-black text-white">Rabbitty Vibe Passport</span>
+                        <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 font-bold uppercase tracking-wider">
+                          Nuevo
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-white/60 m-0 leading-tight mt-0.5">
+                        Explora rutas temáticas urbanas y sella tus visitas
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight size={18} className="text-amber-400/80 shrink-0" />
+                </Link>
               </div>
 
               {!loading && postsWithDistance.length > 0 && (
@@ -735,6 +790,7 @@ export default function FeedPage() {
 
       {activeTab !== 'Freehands' && <BottomNav isDark={isDark} />}
       <ProfileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      <MoodCheckInSheet isOpen={moodOpen} onClose={() => setMoodOpen(false)} />
     </div>
   );
 }

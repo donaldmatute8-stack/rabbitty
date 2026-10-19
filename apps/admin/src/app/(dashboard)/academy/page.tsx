@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { Card } from "@rabbitty/ui";
-import { BookOpen, ChevronRight, Building2, DollarSign, Monitor, Store, Award, Megaphone, Cake, QrCode, Gift, Store as StoreIcon, Salad, Truck, Receipt as ReceiptIcon, Clock, Users } from "lucide-react";
+import { BookOpen, ChevronRight, Building2, DollarSign, Monitor, Store, Award, Megaphone, Cake, QrCode, Gift, Store as StoreIcon, Salad, Truck, Receipt as ReceiptIcon, Clock, Users, Sparkles, Activity, Compass, Headphones } from "lucide-react";
 
-type GuideRole = "all" | "admin" | "pos" | "marketing";
+type GuideRole = "all" | "admin" | "pos" | "marketing" | "phygital";
 
 interface Guide {
   id: string;
@@ -16,6 +16,38 @@ interface Guide {
 }
 
 const guides: Guide[] = [
+  {
+    id: "poa",
+    icon: Activity,
+    label: "Proof of Atmosphere (PoA)",
+    desc: "Mide el retorno empírico de tus intervenciones acústicas y ambientales",
+    role: "phygital",
+    content: `## Proof of Atmosphere (PoA)\n\nEl sistema PoA transforma la atmósfera de tu local en un activo cuantitativo con métricas de negocio comprobables.\n\n### ¿Cómo funciona?\n1. **Diagnóstico Agregado**: Tus clientes expresan voluntariamente su necesidad emocional (Calma, Enfoque, Energía, Celebración) de forma anónima.\n2. **Recetas Ambientales**: Tu equipo activa ajustes sugeridos de iluminación, volumen musical, servicio y maridaje de menú.\n3. **Correlación de Retorno**: El sistema mide empíricamente el tiempo de permanencia, ticket promedio y recompra a 7 y 30 días durante los períodos de receta activa.\n\n### Privacidad Estricta:\n- Mínimo de 10 respuestas agregadas requeridas antes de desplegar métricas para proteger al 100% la privacidad del cliente.\n\n### Beneficio para el Afiliado:\nDemuestra con datos duros qué ambiente genera mayor utilidad en tu negocio sin gastar en agencias de neuromarketing.`,
+  },
+  {
+    id: "vibe-passport",
+    icon: Compass,
+    label: "Rabbitty Vibe Passport",
+    desc: "Rutas urbanas colaborativas para atraer nuevos clientes sin gasto en pauta",
+    role: "phygital",
+    content: `## Rabbitty Vibe Passport\n\nEl pasaporte de vibra urbana es una red de descubrimiento físico entre comercios no competidores.\n\n### Dinámica de Rutas:\n- **Conexión de Estilos**: Tu café de mañana se conecta con un espacio de coworking al mediodía y una coctelería o restaurante de noche.\n- **Sellos Digitales**: El Rabbitter sella su pasaporte al consumir en cada punto afiliado de la ruta.\n- **Recompensas Colectivas**: Los Bunz provienen exclusivamente del consumo real (o de bóvedas prepagadas por los comercios organizadores), garantizando sostenibilidad económica sin inflación.\n\n### Ventaja Comercial:\nRecibe tráfico de calidad de clientes que ya frecuentan otros negocios de tu misma sintonía en la ciudad.`,
+  },
+  {
+    id: "sonic-room",
+    icon: Headphones,
+    label: "The Collective Sonic Room",
+    desc: "Identidad sonora respetuosa con derechos de autor y preferencias colectivas",
+    role: "phygital",
+    content: `## The Collective Sonic Room\n\nIdentidad sonora inteligente y adaptativa para tu establecimiento.\n\n### Modelo Decoplado Legal:\n- **Cumplimiento Normativo (TOS)**: No utilizamos APIs no autorizadas para reproducción en locales comerciales. Tu negocio gestiona su ambientación con curadurías sonoras recomendadas o servicios de música ambiental con licencia.\n- **Curadurías de Frecuencia**: Sugerencias acústicas de géneros y BPM (Lo-Fi, Neo-Soul, Ambient, Deep House) adaptadas al pulso de la sala.\n- **Deeplinks para Rabbitters**: Los clientes que deseen sumergirse en la vibra con sus propios auriculares reciben enlaces universales (Spotify, Apple Music, YouTube) directamente en su teléfono.\n\n### Objetivo:\nEvitar ambientes ruidosos o fuera de contexto que ahuyenten a clientes de ticket alto.`,
+  },
+  {
+    id: "vibe-graph",
+    icon: Store,
+    label: "Rabbitty Vibe Graph",
+    desc: "Inteligencia de red descentralizada y colaboraciones entre afiliados",
+    role: "phygital",
+    content: `## Rabbitty Vibe Graph\n\nEl grafo de experiencia colectiva de Rabbitty mapea las correlaciones de estilo de vida de los usuarios.\n\n### Inteligencia Predictiva:\n- **Patrones de Recurrencia**: Descubre si los clientes que visitan tu salón en modo 'Enfoque' tienen un 40% más de probabilidad de regresar fines de semana en modo 'Celebración'.\n- **Alianzas Estratégicas**: Identifica qué otros comercios de tu vecindario comparten tu base demográfica para lanzar promociones cruzadas respaldadas con Bunz.\n- **Ventaja Inalcanzable**: Este tejido de datos de estilo de vida local crea una barrera competitiva imposible de replicar por plataformas de cupones o terminales bancarias tradicionales.`,
+  },
   {
     id: "catering",
     icon: Building2,
@@ -140,12 +172,14 @@ const guides: Guide[] = [
 
 const ROLES: { key: GuideRole; label: string }[] = [
   { key: "all", label: "Todas" },
+  { key: "phygital", label: "Atmósfera & Vibe" },
   { key: "admin", label: "Administración" },
   { key: "pos", label: "POS / Operación" },
   { key: "marketing", label: "Marketing" },
 ];
 
 const ROLE_BADGES: Record<string, { label: string; color: string }> = {
+  phygital: { label: "Atmósfera & Vibe", color: "text-amber-400 bg-amber-500/10 border-amber-500/20" },
   admin: { label: "Admin", color: "text-blue-400 bg-blue-500/10 border-blue-500/20" },
   pos: { label: "POS", color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" },
   marketing: { label: "Marketing", color: "text-purple-400 bg-purple-500/10 border-purple-500/20" },
@@ -199,13 +233,13 @@ export default function AcademyPage() {
 
   return (
     <div className="space-y-6">
-      <div className="relative overflow-hidden rounded-3xl border border-white/5 bg-gradient-to-br from-gray-900/60 to-black/80 p-8 shadow-2xl backdrop-blur-xl">
+      <div className="relative overflow-hidden rounded-3xl border border-white/5 bg-linear-to-br from-gray-900/60 to-black/80 p-8 shadow-2xl backdrop-blur-xl">
         <div className="absolute top-0 right-0 h-48 w-48 rounded-full bg-pink-500/10 blur-3xl" />
         <div className="relative z-10">
           <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-pink-500">
             <BookOpen className="h-3.5 w-3.5" /> Centro de Aprendizaje
           </span>
-          <h1 className="text-4xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-500 mt-2">
+          <h1 className="text-4xl font-black tracking-tight text-transparent bg-clip-text bg-linear-to-r from-white via-gray-200 to-gray-500 mt-2">
             Academy
           </h1>
           <p className="text-gray-400 mt-2 text-sm font-medium">
