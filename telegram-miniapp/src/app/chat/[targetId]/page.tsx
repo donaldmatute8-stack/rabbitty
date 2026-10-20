@@ -423,7 +423,7 @@ export default function ChatRoomPage() {
       : (isLoc ? 'LOCATION' : 'TEXT');
     const optimistic: Message = {
       id: tempId,
-      senderId: myParticipantId || user.id,
+      senderId: myParticipantId || user.id || 'me',
       content,
       createdAt: new Date().toISOString(),
       type: optimisticType,

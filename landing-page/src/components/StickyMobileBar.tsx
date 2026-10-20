@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Utensils, MapPin, ExternalLink } from 'lucide-react';
+import { Utensils, MapPin } from 'lucide-react';
 import { SmartAppAction } from './SmartAppAction';
 
 interface StickyMobileBarProps {

@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { motion, Variants } from 'framer-motion';
-import { ArrowRight, Store, UserCircle2, Zap, Shield, Smartphone, QrCode, X, Clock, Salad, Truck, Receipt, Bell, Building2, DollarSign, Monitor, Gift, Award, Megaphone, Cake, BookOpen, HelpCircle, Sparkles, Compass, Headphones, Activity, Utensils, Globe } from 'lucide-react';
+import { ArrowRight, Store, UserCircle2, Zap, Shield, Smartphone, QrCode, X, Clock, Salad, Truck, Receipt, Bell, Building2, DollarSign, Monitor, Gift, Award, Megaphone, Cake, BookOpen, HelpCircle, Sparkles, Compass, Headphones, Activity, Utensils, Globe, ChevronDown, Coins } from 'lucide-react';
 import BunzGuide from '@/components/BunzGuide';
 import OpenAppButton from '@/components/OpenAppButton';
 import PricingPackagesSection, { PackagePlan, NicheData } from '@/components/PricingPackagesSection';
@@ -229,31 +230,115 @@ export default function LandingPage() {
       </div>
 
       {/* HEADER */}
-      <header className="fixed top-0 w-full z-50 bg-[#05050A]/80 backdrop-blur-xl border-b border-white/10 py-4 px-6 md:px-12 flex justify-between items-center">
-        <div className="flex items-center gap-3">
-          <Image src="/icon_ra.png" alt="Rabbitty" width={40} height={40} className="object-contain drop-shadow-[0_0_15px_rgba(233,30,99,0.5)]" />
-          <span className="font-black text-xl tracking-tight hidden sm:block">RABBITTY<span className="text-gradient">.me</span></span>
-        </div>
-        <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-white/70">
-          <a href="#rabbitters" className="hover:text-white transition-colors">Rabbitters</a>
-          <a href="#affiliates" className="hover:text-white transition-colors">Negocios</a>
-          <a href="#phygital-experience" className="text-amber-400 hover:text-amber-300 font-extrabold transition-colors flex items-center gap-1.5">
-            <Sparkles size={14} /> Mood & Vibe
+      <header className="fixed top-0 w-full z-50 py-3.5 px-4 sm:px-8 md:px-12 transition-all duration-300">
+        <div className="max-w-7xl mx-auto flex items-center justify-between bg-[#05050A]/85 backdrop-blur-2xl border border-white/10 rounded-full px-4 sm:px-6 py-2.5 shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
+          {/* Brand */}
+          <a href="#" className="flex items-center gap-3 group">
+            <Image 
+              src="/icon_ra.png" 
+              alt="Rabbitty" 
+              width={34} 
+              height={34} 
+              className="object-contain drop-shadow-[0_0_15px_rgba(233,30,99,0.6)] group-hover:scale-105 transition-transform" 
+            />
+            <span className="font-black text-lg tracking-tight hidden sm:block text-white">
+              RABBITTY<span className="text-gradient">.me</span>
+            </span>
           </a>
-          <a href="#paquetes" className="text-pink-400 hover:text-pink-300 font-extrabold transition-colors">Paquetes</a>
-          <a href="#bunz" className="hover:text-white transition-colors">Economía</a>
-          <a href="/gtm-plan" className="text-emerald-400 hover:text-emerald-300 font-extrabold transition-colors flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            Plan GTM 30D
-          </a>
-        </nav>
-        <div className="flex items-center gap-4">
-          <a href="https://admin.rabbitty.me/login" target="_blank" className="hidden md:block text-sm font-bold text-blue-400 hover:text-blue-300 transition-colors">
-            Portal de Negocios
-          </a>
-          <OpenAppButton className="bg-white text-black px-5 py-2.5 rounded-full font-bold text-sm hover:scale-105 transition-transform cursor-pointer">
-            Abrir App
-          </OpenAppButton>
+
+          {/* Integrated Segmented Pill Navigation */}
+          <nav className="hidden lg:flex items-center bg-white/4 border border-white/8 rounded-full p-1 text-xs font-semibold">
+            {/* Comunidad / Rabbitters */}
+            <a 
+              href="#rabbitters" 
+              className="px-3.5 py-1.5 rounded-full text-white/70 hover:text-white hover:bg-white/8 transition-all flex items-center gap-1.5"
+            >
+              <UserCircle2 size={13} className="text-white/60" />
+              Rabbitters
+            </a>
+
+            {/* Dropdown Negocios / B2B */}
+            <div className="relative group/biz">
+              <a 
+                href="#affiliates" 
+                className="px-3.5 py-1.5 rounded-full text-white/70 hover:text-white hover:bg-white/8 transition-all flex items-center gap-1 cursor-pointer"
+              >
+                <Store size={13} className="text-blue-400" />
+                Negocios
+                <ChevronDown size={11} className="text-white/40 group-hover/biz:rotate-180 transition-transform duration-200" />
+              </a>
+
+              {/* Mega Dropdown */}
+              <div className="absolute top-full left-0 mt-2 w-64 p-2 bg-[#090912]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_16px_40px_rgba(0,0,0,0.6)] opacity-0 translate-y-2 pointer-events-none group-hover/biz:opacity-100 group-hover/biz:translate-y-0 group-hover/biz:pointer-events-auto transition-all duration-200 z-50">
+                <a 
+                  href="#affiliates" 
+                  className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/6 transition-colors text-left"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/15 border border-blue-500/30 flex items-center justify-center shrink-0">
+                    <Store size={15} className="text-blue-400" />
+                  </div>
+                  <div>
+                    <div className="text-white text-xs font-bold">Afiliados y POS</div>
+                    <div className="text-[10px] text-white/50 leading-tight">Gestión y terminales de lealtad</div>
+                  </div>
+                </a>
+                <a 
+                  href="#paquetes" 
+                  className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/6 transition-colors text-left"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-pink-500/15 border border-pink-500/30 flex items-center justify-center shrink-0">
+                    <Zap size={15} className="text-pink-400" />
+                  </div>
+                  <div>
+                    <div className="text-white text-xs font-bold">Planes y Hardware</div>
+                    <div className="text-[10px] text-white/50 leading-tight">Membresías por nicho de negocio</div>
+                  </div>
+                </a>
+              </div>
+            </div>
+
+            {/* Mood & Vibe Phygital Pill */}
+            <a 
+              href="#phygital-experience" 
+              className="px-3.5 py-1.5 rounded-full text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 transition-all flex items-center gap-1.5 font-bold shadow-[0_0_12px_rgba(245,158,11,0.15)]"
+            >
+              <Sparkles size={12} className="text-amber-400 animate-spin-slow" />
+              Mood & Vibe
+            </a>
+
+            {/* Paquetes */}
+            <a 
+              href="#paquetes" 
+              className="px-3.5 py-1.5 rounded-full text-white/70 hover:text-white hover:bg-white/8 transition-all"
+            >
+              Paquetes
+            </a>
+
+            {/* Economía Bunz */}
+            <a 
+              href="#bunz" 
+              className="px-3.5 py-1.5 rounded-full text-white/70 hover:text-white hover:bg-white/8 transition-all flex items-center gap-1.5"
+            >
+              <Coins size={12} className="text-emerald-400" />
+              Economía
+            </a>
+          </nav>
+
+          {/* Action CTAs */}
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <a 
+              href="https://admin.rabbitty.me/login" 
+              target="_blank" 
+              className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold text-white/80 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 px-3.5 py-2 rounded-full transition-all"
+            >
+              <Building2 size={13} className="text-blue-400" />
+              Portal Negocios
+            </a>
+            <OpenAppButton className="bg-white text-black px-4.5 sm:px-5 py-2 rounded-full font-bold text-xs sm:text-sm hover:scale-105 active:scale-95 transition-all shadow-[0_0_20px_rgba(255,255,255,0.25)] cursor-pointer flex items-center gap-1.5">
+              <span>Abrir App</span>
+              <ArrowRight size={13} />
+            </OpenAppButton>
+          </div>
         </div>
       </header>
 
@@ -639,9 +724,8 @@ export default function LandingPage() {
             <span className="font-bold text-white/50">© 2026 Rabbitty Corp.</span>
           </div>
           <div className="flex flex-wrap items-center gap-6 text-sm font-semibold text-white/40">
-            <a href="/gtm-plan" className="text-emerald-400 hover:text-emerald-300 font-bold transition-colors cursor-pointer">Plan GTM 30 Días (Público)</a>
-            <a href="/privacy" className="hover:text-white transition-colors cursor-pointer">Privacidad y Términos</a>
-            <a href="/whitepaper" className="hover:text-white transition-colors cursor-pointer">Whitepaper</a>
+            <Link href="/privacy" className="hover:text-white transition-colors cursor-pointer">Privacidad y Términos</Link>
+            <Link href="/whitepaper" className="hover:text-white transition-colors cursor-pointer">Whitepaper</Link>
             <button onClick={() => setShowSmartContractModal(true)} className="hover:text-white transition-colors cursor-pointer">Smart Contract</button>
           </div>
         </div>
