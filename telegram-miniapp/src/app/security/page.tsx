@@ -1,606 +1,563 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { 
-  User, 
-  ShieldCheck, 
-  EyeOff, 
-  Database, 
-  ChevronRight, 
-  Search, 
+import { useEffect, useState, type ReactNode } from 'react';
+import {
+  User,
+  ShieldCheck,
+  EyeOff,
+  Database,
+  ChevronRight,
+  Search,
   Key,
   Smartphone,
   Lock,
   CheckCircle2,
-  LogOut
+  LogOut,
+  ScanFace,
+  Hash,
+  Mail,
+  MessageSquare,
+  KeyRound,
+  type LucideIcon,
 } from 'lucide-react';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
+import { QRCodeSVG } from 'qrcode.react';
 import { PlatformBridge } from '@/lib/platform';
 import { useAuth } from '@/features/auth/AuthProvider';
+import {
+  PIN_DIGITS,
+  hasPin,
+  setPin,
+  removePin,
+  verifyPin,
+  pinLockRemainingMs,
+  detectBiometric,
+  isBiometricEnabled,
+  enableBiometric,
+  verifyBiometric,
+  disableBiometric,
+  type BiometricSupport,
+} from '@/lib/securityVault';
 
-const CRED_KEY = 'rabbitty_faceid_cred';
-const NATIVE_BIO_KEY = 'rabbitty_biometric_enabled';
+const ACCENT = '#E91E63';
+const HAIRLINE = '1px solid var(--border-subtle)';
 
-function b64url(buf: ArrayBuffer): string {
-  const bytes = new Uint8Array(buf);
-  let bin = '';
-  bytes.forEach((b) => { bin += String.fromCharCode(b); });
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+/* ───────────── Primitivas planas estilo X ───────────── */
+
+function Switch({ on, disabled, onChange, label }: { on: boolean; disabled?: boolean; onChange: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onChange}
+      className="relative shrink-0 border-none cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+      style={{ width: 44, height: 26, borderRadius: 13, background: on ? ACCENT : 'var(--bg-pressed)' }}
+    >
+      <span
+        className="absolute top-0.75 rounded-full bg-white transition-all"
+        style={{ width: 20, height: 20, left: on ? 21 : 3, boxShadow: '0 1px 3px rgba(0,0,0,0.3)' }}
+      />
+    </button>
+  );
 }
 
-function b64urlDecode(s: string): Uint8Array {
-  const norm = s.replace(/-/g, '+').replace(/_/g, '/');
-  const bin = atob(norm + '='.repeat((4 - (norm.length % 4)) % 4));
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return bytes;
+function Row({
+  icon: Icon,
+  title,
+  desc,
+  trailing,
+  onClick,
+  iconColor,
+}: {
+  icon: LucideIcon;
+  title: string;
+  desc?: string;
+  trailing?: ReactNode;
+  onClick?: () => void;
+  iconColor?: string;
+}) {
+  const content = (
+    <>
+      <Icon size={20} strokeWidth={2} className="shrink-0" style={{ color: iconColor ?? 'var(--text-secondary)' }} />
+      <div className="flex-1 min-w-0 pr-2 text-left">
+        <div className="text-[15px] font-bold leading-snug" style={{ color: 'var(--text-primary)' }}>{title}</div>
+        {desc && <div className="text-[12px] mt-0.5 leading-normal" style={{ color: 'var(--text-muted)' }}>{desc}</div>}
+      </div>
+      {trailing}
+    </>
+  );
+  const cls = 'w-full flex items-center gap-3.5 px-1 py-3.5 bg-transparent border-none';
+  return onClick ? (
+    <button type="button" onClick={onClick} className={`${cls} cursor-pointer active:opacity-60`} style={{ borderBottom: HAIRLINE }}>
+      {content}
+    </button>
+  ) : (
+    <div className={cls} style={{ borderBottom: HAIRLINE }}>{content}</div>
+  );
 }
 
-function FaceIdCard() {
-  const [supported, setSupported] = useState<boolean | null>(true);
+function Panel({ children }: { children: ReactNode }) {
+  return <div className="px-1 pb-4 pt-1 flex flex-col gap-3" style={{ borderBottom: HAIRLINE }}>{children}</div>;
+}
+
+function PillButton({ children, onClick, variant = 'primary', disabled }: { children: ReactNode; onClick: () => void; variant?: 'primary' | 'ghost' | 'danger'; disabled?: boolean }) {
+  const styles = {
+    primary: { background: ACCENT, color: '#fff' },
+    ghost: { background: 'transparent', color: 'var(--text-primary)', boxShadow: 'inset 0 0 0 1px var(--border-subtle)' },
+    danger: { background: 'transparent', color: '#EF4444', boxShadow: 'inset 0 0 0 1px rgba(239,68,68,0.4)' },
+  }[variant];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="rounded-full px-4 py-2 text-[13px] font-bold border-none cursor-pointer active:scale-95 transition-transform disabled:opacity-50"
+      style={styles}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Note({ text, tone = 'info' }: { text: string; tone?: 'info' | 'ok' | 'error' }) {
+  const color = tone === 'ok' ? '#10B981' : tone === 'error' ? '#EF4444' : 'var(--text-secondary)';
+  return <p className="text-[12px] font-medium m-0 leading-normal" style={{ color }}>{text}</p>;
+}
+
+function PinInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
+  return (
+    <input
+      type="password"
+      inputMode="numeric"
+      autoComplete="off"
+      maxLength={PIN_DIGITS}
+      value={value}
+      onChange={(e) => onChange(e.target.value.replace(/\D/g, ''))}
+      placeholder={placeholder}
+      className="w-full rounded-xl px-3 py-2.5 text-center text-lg tracking-[8px] outline-none bg-transparent"
+      style={{ color: 'var(--text-primary)', boxShadow: 'inset 0 0 0 1px var(--border-subtle)' }}
+    />
+  );
+}
+
+/* ───────────── Face ID / Biometría ───────────── */
+
+function BiometricRow() {
+  const [support, setSupport] = useState<BiometricSupport | null>(null);
   const [enabled, setEnabled] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [note, setNote] = useState<{ text: string; tone: 'info' | 'ok' | 'error' } | null>(null);
 
   useEffect(() => {
     let alive = true;
     (async () => {
-      try {
-        const isNative = PlatformBridge.isNative();
-        if (isNative) {
-          const pref = await PlatformBridge.getPreference(NATIVE_BIO_KEY);
-          if (alive) {
-            setEnabled(pref === 'true' || Boolean(localStorage.getItem(CRED_KEY)));
-            setSupported(true);
-          }
-          return;
-        }
-
-        if (alive) setEnabled(Boolean(localStorage.getItem(CRED_KEY)));
-        if (typeof PublicKeyCredential !== 'undefined' && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
-          const ok = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-          if (alive) setSupported(ok);
-        } else {
-          if (alive) setSupported(false);
-        }
-      } catch {
-        if (alive) setSupported(true);
-      }
+      const [s, e] = await Promise.all([detectBiometric(), isBiometricEnabled()]);
+      if (!alive) return;
+      setSupport(s);
+      setEnabled(e);
     })();
-
     return () => { alive = false; };
   }, []);
 
-  const webauthnError = (err: unknown): string => {
-    const name = err && typeof err === 'object' && 'name' in err ? String((err as { name?: unknown }).name) : '';
-    if (name === 'NotAllowedError') return '⚠️ Solicitud cancelada o no autorizada. Intenta de nuevo.';
-    if (name === 'NotSupportedError') return '❌ Este navegador no soporta WebAuthn.';
-    if (name === 'SecurityError') return '❌ WebAuthn requiere HTTPS.';
-    if (name === 'InvalidStateError') return '❌ Ya existe una credencial biométrica.';
-    return '❌ No se pudo activar biometría.';
-  };
+  const label = support?.label ?? 'Face ID / Touch ID';
+  const available = support?.available ?? false;
 
-  const enable = async () => {
+  const toggle = async () => {
     if (busy) return;
     setBusy(true);
-    setFeedback(null);
+    setNote(null);
     PlatformBridge.hapticFeedback('medium');
-
     try {
-      const isNative = PlatformBridge.isNative();
-
-      // Native iOS / Android environment
-      if (isNative) {
-        await PlatformBridge.setPreference(NATIVE_BIO_KEY, 'true');
-        try { localStorage.setItem(CRED_KEY, 'native_biometric_active'); } catch {}
-        setEnabled(true);
-        PlatformBridge.hapticFeedback('success');
-        setFeedback('✅ Face ID / Biometría activado exitosamente en este iPhone.');
-        return;
-      }
-
-      // WebAuthn Browser fallback
-      if (typeof navigator === 'undefined' || !navigator.credentials || typeof PublicKeyCredential === 'undefined') {
-        // Fallback for native webviews without WebAuthn
-        await PlatformBridge.setPreference(NATIVE_BIO_KEY, 'true');
-        try { localStorage.setItem(CRED_KEY, 'native_biometric_active'); } catch {}
-        setEnabled(true);
-        PlatformBridge.hapticFeedback('success');
-        setFeedback('✅ Biometría vinculada a tu dispositivo.');
-        return;
-      }
-
-      if (PlatformBridge.isNative()) {
-        const bioResult = await PlatformBridge.authenticateBiometric('Activa la seguridad biométrica de Rabbitty');
-        if (bioResult.success) {
-          await PlatformBridge.setPreference(NATIVE_BIO_KEY, 'true');
-          try { localStorage.setItem(CRED_KEY, 'native_biometric_active'); } catch {}
-          setEnabled(true);
-          PlatformBridge.hapticFeedback('success');
-          setFeedback('✅ Face ID / Biometría activado en tu app.');
-        } else {
-          PlatformBridge.hapticFeedback('warning');
-          setFeedback('❌ No se pudo completar la autenticación biométrica.');
-        }
-        return;
-      }
-
-      const challenge = crypto.getRandomValues(new Uint8Array(32));
-      const userId = crypto.getRandomValues(new Uint8Array(16));
-      const credential = (await navigator.credentials.create({
-        publicKey: {
-          challenge: challenge.buffer as ArrayBuffer,
-          rp: { name: 'Rabbitty' },
-          user: { id: userId.buffer as ArrayBuffer, name: `rabbitty-${b64url(userId.buffer).slice(0, 10)}`, displayName: 'Rabbitty User' },
-          pubKeyCredParams: [
-            { type: 'public-key', alg: -7 },
-            { type: 'public-key', alg: -257 },
-          ],
-          authenticatorSelection: { residentKey: 'preferred', userVerification: 'required' },
-          timeout: 60000,
-          attestation: 'none',
-        },
-      })) as PublicKeyCredential | null;
-
-      if (credential) {
-        localStorage.setItem(CRED_KEY, b64url(credential.rawId));
-        await PlatformBridge.setPreference(NATIVE_BIO_KEY, 'true');
-        setEnabled(true);
-        PlatformBridge.hapticFeedback('success');
-        setFeedback('✅ Face ID / Touch ID activado en este dispositivo.');
+      if (enabled) {
+        disableBiometric();
+        setEnabled(false);
+        setNote({ text: 'Biometría desactivada.', tone: 'info' });
       } else {
-        setFeedback('❌ El navegador no devolvió credencial. Intenta de nuevo.');
-      }
-    } catch (err) {
-      // In native app, if WebAuthn throws NotSupportedError / SecurityError, activate native biometric preference directly!
-      if (PlatformBridge.isNative() || PlatformBridge.isTelegram()) {
-        await PlatformBridge.setPreference(NATIVE_BIO_KEY, 'true');
-        try { localStorage.setItem(CRED_KEY, 'native_biometric_active'); } catch {}
-        setEnabled(true);
-        PlatformBridge.hapticFeedback('success');
-        setFeedback('✅ Face ID / Biometría activado en tu app.');
-      } else {
-        setFeedback(webauthnError(err));
+        const res = await enableBiometric();
+        setEnabled(res.ok);
+        setNote({ text: res.message, tone: res.ok ? 'ok' : 'error' });
+        PlatformBridge.hapticFeedback(res.ok ? 'success' : 'warning');
       }
     } finally {
       setBusy(false);
     }
   };
 
-  const verify = async () => {
+  const test = async () => {
     if (busy) return;
     setBusy(true);
-    setFeedback(null);
-    PlatformBridge.hapticFeedback('light');
-
-    try {
-      const isNative = PlatformBridge.isNative();
-      const rawId = localStorage.getItem(CRED_KEY);
-
-      if (isNative || rawId === 'native_biometric_active') {
-        const bioResult = await PlatformBridge.authenticateBiometric('Confirma tu identidad para continuar');
-        if (bioResult.success) {
-          PlatformBridge.hapticFeedback('success');
-          setFeedback('🔓 Verificación biométrica exitosa.');
-        } else {
-          PlatformBridge.hapticFeedback('warning');
-          setFeedback('❌ Verificación biométrica cancelada o fallida.');
-        }
-        return;
-      }
-
-      if (!rawId) {
-        setFeedback('Activa primero la protección biométrica.');
-        return;
-      }
-
-      const challenge = crypto.getRandomValues(new Uint8Array(32));
-      const assertion = (await navigator.credentials.get({
-        publicKey: {
-          challenge: challenge.buffer as ArrayBuffer,
-          allowCredentials: [{ type: 'public-key', id: b64urlDecode(rawId).buffer as ArrayBuffer }],
-          userVerification: 'required',
-          timeout: 60000,
-        },
-      })) as PublicKeyCredential | null;
-
-      if (assertion) {
-        PlatformBridge.hapticFeedback('success');
-        setFeedback('🔓 Verificación biométrica exitosa.');
-      }
-    } catch (err) {
-      if (PlatformBridge.isNative()) {
-        PlatformBridge.hapticFeedback('success');
-        setFeedback('🔓 Verificación biométrica exitosa.');
-      } else {
-        setFeedback(webauthnError(err));
-      }
-    } finally {
-      setBusy(false);
-    }
+    const res = await verifyBiometric('Prueba de verificación en Rabbitty');
+    setNote({ text: res.message, tone: res.ok ? 'ok' : 'error' });
+    setBusy(false);
   };
 
-  const disable = async () => {
-    try { 
-      localStorage.removeItem(CRED_KEY);
-      await PlatformBridge.removePreference(NATIVE_BIO_KEY);
-    } catch { /* silencioso */ }
-    setEnabled(false);
-    PlatformBridge.hapticFeedback('medium');
-    setFeedback('Protección biométrica desactivada.');
-  };
+  const isApple = typeof navigator !== 'undefined' && /iPhone|iPad|Macintosh/i.test(navigator.userAgent);
+  const displayTitle = isApple ? 'Face ID / Clave de Acceso (Apple ID)' : label;
+
+  const desc = support === null
+    ? 'Comprobando compatibilidad de claves de acceso…'
+    : available
+      ? (isApple 
+          ? 'Guarda tu clave de acceso en Llavero de iCloud con tu Apple ID y autoriza con Face ID.' 
+          : 'Autoriza envíos y acceso con tu clave biométrica de dispositivo.')
+      : 'No disponible: configura Face ID o Touch ID en tu dispositivo.';
 
   return (
-    <div 
-      className="rounded-2xl p-4 border"
-      style={{
-        background: 'var(--bg-elevated)',
-        borderColor: 'var(--border-subtle)',
-      }}
-    >
-      <div className="flex items-start gap-3.5">
-        <div 
-          className="w-10 h-10 rounded-xl flex shrink-0 items-center justify-center text-xl" 
-          style={{ background: 'var(--bg-pressed)' }}
-        >
-          🫣
-        </div>
-        <div className="flex-1">
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <h4 className="font-extrabold text-[15px] m-0" style={{ color: 'var(--text-primary)' }}>Face ID / Touch ID</h4>
-            <span
-              className="text-[10px] font-black px-2 py-0.5 rounded-full"
-              style={{
-                background: enabled ? 'rgba(16,185,129,0.15)' : 'var(--bg-pressed)',
-                color: enabled ? '#10B981' : 'var(--text-muted)',
-                border: `1px solid ${enabled ? 'rgba(16,185,129,0.35)' : 'var(--border-subtle)'}`,
-              }}
-            >
-              {enabled ? 'ACTIVO' : 'INACTIVO'}
-            </span>
-          </div>
-          <p className="text-xs leading-normal m-0 mb-3" style={{ color: 'var(--text-secondary)' }}>
-            Bloqueo con biometría (Face ID / Touch ID). Tu clave de autenticación se almacena de forma segura en este dispositivo.
-          </p>
-          <div className="flex gap-2 flex-wrap">
-            {supported === false ? (
-              <span className="text-[11px] font-semibold" style={{ color: 'var(--text-muted)' }}>No disponible en este dispositivo</span>
-            ) : !enabled ? (
-              <button
-                onClick={enable}
-                disabled={busy}
-                className="rounded-full px-4 py-2 text-[12px] font-black border-none cursor-pointer active:scale-95 transition-transform"
-                style={{ background: '#E91E63', color: '#FFFFFF' }}
-              >
-                {busy ? 'Activando…' : 'Activar Face ID'}
-              </button>
-            ) : (
-              <>
-                <button
-                  onClick={verify}
-                  disabled={busy}
-                  className="rounded-full px-4 py-2 text-[12px] font-black border-none cursor-pointer active:scale-95 transition-transform"
-                  style={{ background: 'rgba(99,102,241,0.2)', color: '#A5B4FC', border: '1px solid rgba(99,102,241,0.4)' }}
-                >
-                  {busy ? 'Verificando…' : 'Probar'}
-                </button>
-                <button
-                  onClick={disable}
-                  disabled={busy}
-                  className="rounded-full px-4 py-2 text-[12px] font-black border-none cursor-pointer active:scale-95 transition-transform"
-                  style={{ background: 'rgba(239,68,68,0.15)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.3)' }}
-                >
-                  Desactivar
-                </button>
-              </>
-            )}
-          </div>
-          {feedback && <p className="text-[11px] font-bold m-0 mt-2.5" style={{ color: 'var(--text-primary)' }}>{feedback}</p>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SecurityPinCard() {
-  const [hasPin, setHasPin] = useState(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        return Boolean(localStorage.getItem('rabbitty_security_pin'));
-      } catch {}
-    }
-    return false;
-  });
-  const [settingPin, setSettingPin] = useState(false);
-  const [pinInput, setPinInput] = useState('');
-  const [confirmPin, setConfirmPin] = useState('');
-  const [feedback, setFeedback] = useState<string | null>(null);
-
-  const handleSavePin = () => {
-    if (pinInput.length !== 4) {
-      setFeedback('El PIN debe contener exactamente 4 dígitos.');
-      return;
-    }
-    if (pinInput !== confirmPin) {
-      setFeedback('Los números de PIN no coinciden.');
-      return;
-    }
-    try {
-      localStorage.setItem('rabbitty_security_pin', pinInput);
-      setHasPin(true);
-      setSettingPin(false);
-      setPinInput('');
-      setConfirmPin('');
-      PlatformBridge.hapticFeedback('success');
-      setFeedback('✅ PIN de seguridad configurado exitosamente.');
-    } catch {}
-  };
-
-  const handleRemovePin = () => {
-    try {
-      localStorage.removeItem('rabbitty_security_pin');
-      setHasPin(false);
-      setSettingPin(false);
-      PlatformBridge.hapticFeedback('medium');
-      setFeedback('PIN de seguridad desactivado.');
-    } catch {}
-  };
-
-  return (
-    <div 
-      className="rounded-2xl p-4 border"
-      style={{
-        background: 'var(--bg-elevated)',
-        borderColor: 'var(--border-subtle)',
-      }}
-    >
-      <div className="flex items-start gap-3.5">
-        <div 
-          className="w-10 h-10 rounded-xl flex shrink-0 items-center justify-center text-xl" 
-          style={{ background: 'var(--bg-pressed)' }}
-        >
-          🔢
-        </div>
-        <div className="flex-1">
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <h4 className="font-extrabold text-[15px] m-0" style={{ color: 'var(--text-primary)' }}>PIN de Seguridad (4 dígitos)</h4>
-            <span
-              className="text-[10px] font-black px-2 py-0.5 rounded-full"
-              style={{
-                background: hasPin ? 'rgba(16,185,129,0.15)' : 'var(--bg-pressed)',
-                color: hasPin ? '#10B981' : 'var(--text-muted)',
-                border: `1px solid ${hasPin ? 'rgba(16,185,129,0.35)' : 'var(--border-subtle)'}`,
-              }}
-            >
-              {hasPin ? 'ACTIVO' : 'INACTIVO'}
-            </span>
-          </div>
-          <p className="text-xs leading-normal m-0 mb-3" style={{ color: 'var(--text-secondary)' }}>
-            Código numérico privado requerido para autorizar envíos de Bunz y operaciones clave con Bunzy.
-          </p>
-
-          {settingPin ? (
-            <div className="flex flex-col gap-2.5 p-3 rounded-xl border mb-2" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-subtle)' }}>
-              <input
-                type="password"
-                inputMode="numeric"
-                maxLength={4}
-                value={pinInput}
-                onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))}
-                placeholder="Ingresa 4 dígitos"
-                className="w-full border rounded-xl px-3 py-2 text-center text-lg tracking-[8px] outline-none"
-                style={{ background: 'var(--bg-elevated)', color: 'var(--text-primary)', borderColor: 'var(--border-subtle)' }}
-              />
-              <input
-                type="password"
-                inputMode="numeric"
-                maxLength={4}
-                value={confirmPin}
-                onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
-                placeholder="Confirma tus 4 dígitos"
-                className="w-full border rounded-xl px-3 py-2 text-center text-lg tracking-[8px] outline-none"
-                style={{ background: 'var(--bg-elevated)', color: 'var(--text-primary)', borderColor: 'var(--border-subtle)' }}
-              />
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleSavePin}
-                  className="flex-1 py-2 rounded-xl text-white font-black text-xs cursor-pointer border-none"
-                  style={{ background: '#E91E63' }}
-                >
-                  Guardar PIN
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSettingPin(false)}
-                  className="px-3 py-2 rounded-xl font-bold text-xs cursor-pointer border-none"
-                  style={{ background: 'var(--bg-pressed)', color: 'var(--text-secondary)' }}
-                >
-                  Cancelar
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex gap-2 flex-wrap">
-              {!hasPin ? (
-                <button
-                  onClick={() => { setSettingPin(true); setFeedback(null); }}
-                  className="rounded-full px-4 py-2 text-[12px] font-black border-none cursor-pointer active:scale-95 transition-transform"
-                  style={{ background: '#E91E63', color: '#FFFFFF' }}
-                >
-                  Configurar PIN
-                </button>
-              ) : (
-                <>
-                  <button
-                    onClick={() => { setSettingPin(true); setFeedback(null); }}
-                    className="rounded-full px-4 py-2 text-[12px] font-black border-none cursor-pointer active:scale-95 transition-transform"
-                    style={{ background: 'var(--bg-pressed)', color: 'var(--text-primary)' }}
-                  >
-                    Cambiar PIN
-                  </button>
-                  <button
-                    onClick={handleRemovePin}
-                    className="rounded-full px-4 py-2 text-[12px] font-black border-none cursor-pointer active:scale-95 transition-transform"
-                    style={{ background: 'rgba(239,68,68,0.15)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.3)' }}
-                  >
-                    Desactivar
-                  </button>
-                </>
-              )}
+    <>
+      <Row
+        icon={ScanFace}
+        title={displayTitle}
+        desc={desc}
+        trailing={<Switch on={enabled} disabled={!available || busy} onChange={toggle} label={displayTitle} />}
+      />
+      {(enabled || note) && (
+        <Panel>
+          {note && <Note text={note.text} tone={note.tone} />}
+          {enabled && (
+            <div className="flex gap-2">
+              <PillButton variant="ghost" onClick={test} disabled={busy}>{busy ? 'Verificando…' : 'Probar'}</PillButton>
             </div>
           )}
-
-          {feedback && <p className="text-[11px] font-bold m-0 mt-2.5" style={{ color: 'var(--text-primary)' }}>{feedback}</p>}
-        </div>
-      </div>
-    </div>
+        </Panel>
+      )}
+    </>
   );
 }
 
-function TwoFactorCard() {
-  const [methods, setMethods] = useState(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = JSON.parse(localStorage.getItem('rabbitty_2fa_config') || '{}');
-        return {
-          email: Boolean(saved.email),
-          phone: Boolean(saved.phone),
-          authenticatorApp: Boolean(saved.authenticatorApp),
-        };
-      } catch {}
-    }
-    return {
-      email: false,
-      phone: false,
-      authenticatorApp: false,
-    };
-  });
-  const [feedback, setFeedback] = useState<string | null>(null);
+/* ───────────── PIN ───────────── */
 
-  const toggleMethod = (key: 'email' | 'phone' | 'authenticatorApp', name: string) => {
-    PlatformBridge.hapticFeedback('medium');
-    setMethods(prev => {
-      const next = { ...prev, [key]: !prev[key] };
-      try {
-        localStorage.setItem('rabbitty_2fa_config', JSON.stringify(next));
-      } catch {}
-      setFeedback(next[key] ? `✅ 2FA por ${name} activado.` : `2FA por ${name} desactivado.`);
-      return next;
+type PinMode = 'idle' | 'set' | 'remove';
+
+function PinRow() {
+  const [active, setActive] = useState(() => hasPin());
+  const [mode, setMode] = useState<PinMode>('idle');
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<{ text: string; tone: 'info' | 'ok' | 'error' } | null>(null);
+
+  const reset = () => { setMode('idle'); setCurrent(''); setNext(''); setConfirm(''); };
+
+  const checkCurrent = async (): Promise<boolean> => {
+    if (!active) return true;
+    if (current.length !== PIN_DIGITS) {
+      setNote({ text: `Ingresa tu PIN actual de ${PIN_DIGITS} dígitos.`, tone: 'error' });
+      return false;
+    }
+    const res = await verifyPin(current);
+    if (res.ok) return true;
+    setNote({
+      text: res.locked
+        ? `Demasiados intentos. Espera ${Math.ceil((res.remainingMs || pinLockRemainingMs()) / 1000)} s.`
+        : `PIN incorrecto. Te quedan ${res.attemptsLeft} intentos.`,
+      tone: 'error',
     });
+    return false;
   };
 
-  const isAnyActive = methods.email || methods.phone || methods.authenticatorApp;
+  const save = async () => {
+    if (busy) return;
+    setNote(null);
+    if (next.length !== PIN_DIGITS) return setNote({ text: `El PIN debe tener ${PIN_DIGITS} dígitos.`, tone: 'error' });
+    if (next !== confirm) return setNote({ text: 'Los PIN no coinciden.', tone: 'error' });
+    setBusy(true);
+    try {
+      if (!(await checkCurrent())) return;
+      await setPin(next);
+      setActive(true);
+      reset();
+      PlatformBridge.hapticFeedback('success');
+      setNote({ text: 'PIN guardado en este dispositivo.', tone: 'ok' });
+    } catch {
+      setNote({ text: 'No se pudo guardar el PIN.', tone: 'error' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    if (busy) return;
+    setNote(null);
+    setBusy(true);
+    try {
+      if (!(await checkCurrent())) return;
+      removePin();
+      setActive(false);
+      reset();
+      PlatformBridge.hapticFeedback('medium');
+      setNote({ text: 'PIN desactivado.', tone: 'info' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onSwitch = () => {
+    setNote(null);
+    PlatformBridge.hapticFeedback('light');
+    if (mode !== 'idle') return reset();
+    setMode(active ? 'remove' : 'set');
+  };
 
   return (
-    <div 
-      className="rounded-2xl p-4 border"
-      style={{
-        background: 'var(--bg-elevated)',
-        borderColor: 'var(--border-subtle)',
-      }}
-    >
-      <div className="flex items-start gap-3.5">
-        <div 
-          className="w-10 h-10 rounded-xl flex shrink-0 items-center justify-center text-xl" 
-          style={{ background: 'var(--bg-pressed)' }}
-        >
-          📲
-        </div>
-        <div className="flex-1">
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <h4 className="font-extrabold text-[15px] m-0" style={{ color: 'var(--text-primary)' }}>Autenticación en Dos Pasos (2FA)</h4>
-            <span
-              className="text-[10px] font-black px-2 py-0.5 rounded-full"
-              style={{
-                background: isAnyActive ? 'rgba(16,185,129,0.15)' : 'var(--bg-pressed)',
-                color: isAnyActive ? '#10B981' : 'var(--text-muted)',
-                border: `1px solid ${isAnyActive ? 'rgba(16,185,129,0.35)' : 'var(--border-subtle)'}`,
-              }}
-            >
-              {isAnyActive ? 'ACTIVO' : 'INACTIVO'}
-            </span>
-          </div>
-          <p className="text-xs leading-normal m-0 mb-3" style={{ color: 'var(--text-secondary)' }}>
-            Verificación adicional para transferencias, canje de cupones y accesos en nuevos dispositivos.
-          </p>
-
-          <div className="flex flex-col gap-2">
-            {/* Opción 1: Correo */}
-            <div 
-              className="flex items-center justify-between p-2.5 rounded-xl border"
-              style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-subtle)' }}
-            >
-              <div>
-                <span className="text-[13px] font-bold block" style={{ color: 'var(--text-primary)' }}>✉️ Correo Electrónico</span>
-                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Código OTP enviado a tu bandeja</span>
+    <>
+      <Row
+        icon={Hash}
+        title={`PIN de seguridad (${PIN_DIGITS} dígitos)`}
+        desc="Código privado para autorizar envíos de Bunz en este dispositivo."
+        trailing={<Switch on={active || mode === 'set'} onChange={onSwitch} label="PIN de seguridad" />}
+      />
+      {(mode !== 'idle' || note || active) && (
+        <Panel>
+          {mode === 'set' && (
+            <>
+              {active && <PinInput value={current} onChange={setCurrent} placeholder="PIN actual" />}
+              <PinInput value={next} onChange={setNext} placeholder="Nuevo PIN" />
+              <PinInput value={confirm} onChange={setConfirm} placeholder="Confirma el nuevo PIN" />
+              <div className="flex gap-2">
+                <PillButton onClick={save} disabled={busy}>Guardar PIN</PillButton>
+                <PillButton variant="ghost" onClick={reset}>Cancelar</PillButton>
               </div>
-              <button
-                type="button"
-                onClick={() => toggleMethod('email', 'Correo')}
-                className="px-3 py-1 rounded-full text-[11px] font-black border-none cursor-pointer"
-                style={{
-                  background: methods.email ? '#10B981' : 'var(--bg-pressed)',
-                  color: methods.email ? '#FFFFFF' : 'var(--text-primary)',
-                }}
-              >
-                {methods.email ? 'Activo' : 'Activar'}
-              </button>
-            </div>
-
-            {/* Opción 2: Teléfono SMS / Telegram */}
-            <div 
-              className="flex items-center justify-between p-2.5 rounded-xl border"
-              style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-subtle)' }}
-            >
-              <div>
-                <span className="text-[13px] font-bold block" style={{ color: 'var(--text-primary)' }}>📱 SMS / WhatsApp / Telegram</span>
-                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Código de 6 dígitos al móvil</span>
+            </>
+          )}
+          {mode === 'remove' && (
+            <>
+              <PinInput value={current} onChange={setCurrent} placeholder="PIN actual para desactivar" />
+              <div className="flex gap-2">
+                <PillButton variant="danger" onClick={remove} disabled={busy}>Desactivar PIN</PillButton>
+                <PillButton variant="ghost" onClick={reset}>Cancelar</PillButton>
               </div>
-              <button
-                type="button"
-                onClick={() => toggleMethod('phone', 'Número de Teléfono')}
-                className="px-3 py-1 rounded-full text-[11px] font-black border-none cursor-pointer"
-                style={{
-                  background: methods.phone ? '#10B981' : 'var(--bg-pressed)',
-                  color: methods.phone ? '#FFFFFF' : 'var(--text-primary)',
-                }}
-              >
-                {methods.phone ? 'Activo' : 'Activar'}
-              </button>
+            </>
+          )}
+          {mode === 'idle' && active && (
+            <div className="flex gap-2">
+              <PillButton variant="ghost" onClick={() => { setMode('set'); setNote(null); }}>Cambiar PIN</PillButton>
             </div>
-
-            {/* Opción 3: Google Authenticator / TOTP */}
-            <div 
-              className="flex items-center justify-between p-2.5 rounded-xl border"
-              style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-subtle)' }}
-            >
-              <div>
-                <span className="text-[13px] font-bold block" style={{ color: 'var(--text-primary)' }}>🔐 Google Authenticator / Authy</span>
-                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Generador de códigos temporales TOTP</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => toggleMethod('authenticatorApp', 'App Authenticator')}
-                className="px-3 py-1 rounded-full text-[11px] font-black border-none cursor-pointer"
-                style={{
-                  background: methods.authenticatorApp ? '#10B981' : 'var(--bg-pressed)',
-                  color: methods.authenticatorApp ? '#FFFFFF' : 'var(--text-primary)',
-                }}
-              >
-                {methods.authenticatorApp ? 'Activo' : 'Activar'}
-              </button>
-            </div>
-          </div>
-
-          {feedback && <p className="text-[11px] font-bold m-0 mt-2.5" style={{ color: 'var(--text-primary)' }}>{feedback}</p>}
-        </div>
-      </div>
-    </div>
+          )}
+          {note && <Note text={note.text} tone={note.tone} />}
+        </Panel>
+      )}
+    </>
   );
 }
 
-const FEATURES = [
+/* ───────────── 2FA (validado en servidor) ───────────── */
+
+type TfMethod = 'email' | 'phone' | 'totp';
+
+interface TfStatus {
+  enabled: TfMethod[];
+  available: { email: string | null; phone: string | null; phoneChannel: 'sms' | 'telegram' | null };
+}
+
+interface TfFlow {
+  kind: 'enable' | 'disable';
+  method: TfMethod;
+  secret?: string;
+  otpauthUrl?: string;
+  proofMethod?: TfMethod;
+  hint?: string;
+}
+
+async function tfPost(payload: Record<string, unknown>) {
+  const headers = await PlatformBridge.getAuthHeaders();
+  const res = await fetch('/api/security/2fa', {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  return { ok: res.ok, data } as { ok: boolean; data: Record<string, string> };
+}
+
+function TwoFactorRows() {
+  const [status, setStatus] = useState<TfStatus | null>(null);
+  const [version, setVersion] = useState(0);
+  const [flow, setFlow] = useState<TfFlow | null>(null);
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<{ text: string; tone: 'info' | 'ok' | 'error' } | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try { localStorage.removeItem('rabbitty_2fa_config'); } catch { /* noop */ }
+      try {
+        const headers = await PlatformBridge.getAuthHeaders();
+        const res = await fetch('/api/security/2fa', { headers });
+        if (res.ok && alive) setStatus(await res.json());
+      } catch { /* sin red */ }
+    })();
+    return () => { alive = false; };
+  }, [version]);
+
+  const items: { method: TfMethod; icon: LucideIcon; title: string; desc: string; avail: boolean }[] = [
+    {
+      method: 'email',
+      icon: Mail,
+      title: 'Código por correo',
+      desc: status?.available.email ? `Se enviará a ${status.available.email}.` : 'Vincula un correo real a tu cuenta para usarlo.',
+      avail: Boolean(status?.available.email),
+    },
+    {
+      method: 'phone',
+      icon: MessageSquare,
+      title: status?.available.phoneChannel === 'sms' ? 'Código por SMS' : 'Código por Telegram',
+      desc: status?.available.phone ? `Se enviará a ${status.available.phone}.` : 'Vincula tu número o Telegram para usarlo.',
+      avail: Boolean(status?.available.phone),
+    },
+    { method: 'totp', icon: KeyRound, title: 'App autenticadora', desc: 'Google Authenticator, Authy o 1Password (código TOTP).', avail: true },
+  ];
+
+  const enabled = status?.enabled ?? [];
+
+  const cancel = () => { setFlow(null); setCode(''); };
+
+  const start = async (method: TfMethod) => {
+    if (busy || !status) return;
+    setNote(null);
+    setCode('');
+    PlatformBridge.hapticFeedback('light');
+
+    if (enabled.includes(method)) {
+      setFlow({ kind: 'disable', method, proofMethod: enabled[0] });
+      return;
+    }
+    setBusy(true);
+    try {
+      if (method === 'totp') {
+        const r = await tfPost({ action: 'totp_setup' });
+        if (!r.ok) return setNote({ text: r.data.error || 'No se pudo iniciar.', tone: 'error' });
+        setFlow({ kind: 'enable', method, secret: r.data.secret, otpauthUrl: r.data.otpauthUrl });
+      } else {
+        const r = await tfPost({ action: 'challenge', method, purpose: 'enroll' });
+        if (!r.ok) return setNote({ text: r.data.error || 'No se pudo enviar el código.', tone: 'error' });
+        setFlow({ kind: 'enable', method, hint: `Código enviado a ${r.data.hint}.` });
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sendProofCode = async () => {
+    if (!flow?.proofMethod || flow.proofMethod === 'totp' || busy) return;
+    setBusy(true);
+    setNote(null);
+    const r = await tfPost({ action: 'challenge', method: flow.proofMethod, purpose: 'action' });
+    setBusy(false);
+    if (!r.ok) return setNote({ text: r.data.error || 'No se pudo enviar el código.', tone: 'error' });
+    setFlow({ ...flow, hint: `Código enviado a ${r.data.hint}.` });
+  };
+
+  const confirm = async () => {
+    if (!flow || busy) return;
+    if (code.length !== 6) return setNote({ text: 'Ingresa el código de 6 dígitos.', tone: 'error' });
+    setBusy(true);
+    setNote(null);
+    try {
+      const r = flow.kind === 'enable'
+        ? await tfPost({ action: 'enable', method: flow.method, code })
+        : await tfPost({ action: 'disable', method: flow.method, proof: { method: flow.proofMethod, code } });
+      if (!r.ok) {
+        PlatformBridge.hapticFeedback('warning');
+        return setNote({ text: r.data.error || 'Código incorrecto.', tone: 'error' });
+      }
+      PlatformBridge.hapticFeedback('success');
+      setNote({ text: flow.kind === 'enable' ? 'Verificación en dos pasos activada.' : 'Método desactivado.', tone: 'ok' });
+      cancel();
+      setVersion((v) => v + 1);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const proofOptions = enabled;
+
+  return (
+    <>
+      {items.map((it) => (
+        <div key={it.method}>
+          <Row
+            icon={it.icon}
+            title={it.title}
+            desc={it.desc}
+            trailing={
+              <Switch
+                on={enabled.includes(it.method) || (flow?.kind === 'enable' && flow.method === it.method)}
+                disabled={!status || busy || (!it.avail && !enabled.includes(it.method))}
+                onChange={() => (flow?.method === it.method ? cancel() : start(it.method))}
+                label={it.title}
+              />
+            }
+          />
+          {flow?.method === it.method && (
+            <Panel>
+              {flow.kind === 'enable' && flow.method === 'totp' && flow.otpauthUrl && (
+                <>
+                  <Note text="Escanea el código con tu app autenticadora y escribe el código de 6 dígitos que genera." />
+                  <div className="self-center p-3 bg-white rounded-xl">
+                    <QRCodeSVG value={flow.otpauthUrl} size={160} />
+                  </div>
+                  <p className="m-0 text-[11px] text-center break-all font-mono select-all" style={{ color: 'var(--text-muted)' }}>
+                    ¿No puedes escanear? Clave: {flow.secret}
+                  </p>
+                </>
+              )}
+              {flow.kind === 'enable' && flow.method !== 'totp' && flow.hint && <Note text={flow.hint} tone="ok" />}
+              {flow.kind === 'disable' && (
+                <>
+                  <Note text="Confirma con un código para desactivar este método." />
+                  {proofOptions.length > 1 && (
+                    <div className="flex gap-2 flex-wrap">
+                      {proofOptions.map((m) => (
+                        <PillButton key={m} variant={m === flow.proofMethod ? 'primary' : 'ghost'} onClick={() => { setFlow({ ...flow, proofMethod: m, hint: undefined }); setCode(''); }}>
+                          {m === 'email' ? 'Correo' : m === 'phone' ? 'Teléfono' : 'Autenticador'}
+                        </PillButton>
+                      ))}
+                    </div>
+                  )}
+                  {flow.proofMethod && flow.proofMethod !== 'totp' && (
+                    <div className="flex gap-2">
+                      <PillButton variant="ghost" onClick={sendProofCode} disabled={busy}>{flow.hint ? 'Reenviar código' : 'Enviar código'}</PillButton>
+                    </div>
+                  )}
+                  {flow.hint && <Note text={flow.hint} tone="ok" />}
+                </>
+              )}
+              <input
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                placeholder="000000"
+                className="w-full rounded-xl px-3 py-2.5 text-center text-lg tracking-[8px] outline-none bg-transparent"
+                style={{ color: 'var(--text-primary)', boxShadow: 'inset 0 0 0 1px var(--border-subtle)' }}
+              />
+              <div className="flex gap-2">
+                <PillButton variant={flow.kind === 'disable' ? 'danger' : 'primary'} onClick={confirm} disabled={busy}>
+                  {flow.kind === 'enable' ? 'Activar' : 'Desactivar'}
+                </PillButton>
+                <PillButton variant="ghost" onClick={cancel}>Cancelar</PillButton>
+              </div>
+            </Panel>
+          )}
+        </div>
+      ))}
+      {note && <div className="px-1 pt-3"><Note text={note.text} tone={note.tone} /></div>}
+      <p className="text-[12px] m-0 px-1 pt-3 leading-normal" style={{ color: 'var(--text-muted)' }}>
+        Con la verificación activa, el servidor exigirá un código válido antes de cada envío de Bunz.
+      </p>
+    </>
+  );
+}
+
+/* ───────────── Contenido informativo ───────────── */
+
+const FEATURES: { icon: LucideIcon; color: string; title: string; desc: string }[] = [
   { icon: Key, color: '#10B981', title: 'Llaves Privadas Locales', desc: 'Tus llaves de TON se generan y protegen localmente con cifrado AES-256. Nunca tocan nuestros servidores.' },
   { icon: ShieldCheck, color: '#6366F1', title: 'Smart Contracts Auditados', desc: 'Contratos inteligentes en TON blockchain verificados por firmas de seguridad independientes.' },
   { icon: Smartphone, color: '#F59E0B', title: 'Cripto-Biometría Nativa', desc: 'Soporte integrado para Secure Enclave, Face ID y Touch ID en tu dispositivo.' },
@@ -615,6 +572,15 @@ const STATS = [
 
 type SettingsSection = 'root' | 'account' | 'security_access' | 'privacy' | 'audit';
 
+function KeyValue({ k, children }: { k: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between px-1 py-3.5" style={{ borderBottom: HAIRLINE }}>
+      <span className="text-[13px] font-medium" style={{ color: 'var(--text-muted)' }}>{k}</span>
+      <span className="text-[14px] font-bold" style={{ color: 'var(--text-primary)' }}>{children}</span>
+    </div>
+  );
+}
+
 export default function SecurityPage() {
   const { user, logout } = useAuth();
   const [currentSection, setCurrentSection] = useState<SettingsSection>('root');
@@ -626,40 +592,17 @@ export default function SecurityPage() {
   };
 
   const MENU_SECTIONS = [
-    {
-      id: 'account' as const,
-      icon: User,
-      title: 'Tu cuenta',
-      desc: 'Consulta los datos de tu cuenta, ID de Telegram y estado de la sesión.',
-    },
-    {
-      id: 'security_access' as const,
-      icon: Lock,
-      title: 'Seguridad y acceso a la cuenta',
-      desc: 'Administra la seguridad de tu cuenta: Face ID, PIN de 4 dígitos y verificación en dos pasos.',
-    },
-    {
-      id: 'privacy' as const,
-      icon: EyeOff,
-      title: 'Privacidad y transacciones',
-      desc: 'Controla la visibilidad de tu saldo Bunz, pagos y protocolos Zero-Knowledge.',
-    },
-    {
-      id: 'audit' as const,
-      icon: Database,
-      title: 'Auditoría y arquitectura TON',
-      desc: 'Verifica los Smart Contracts, auditorías de seguridad y cifrado descentralizado.',
-    },
+    { id: 'account' as const, icon: User, title: 'Tu cuenta', desc: 'Consulta los datos de tu cuenta, ID de Telegram y estado de la sesión.' },
+    { id: 'security_access' as const, icon: Lock, title: 'Seguridad y acceso a la cuenta', desc: 'Administra la seguridad de tu cuenta: Face ID, PIN de 4 dígitos y verificación en dos pasos.' },
+    { id: 'privacy' as const, icon: EyeOff, title: 'Privacidad y transacciones', desc: 'Controla la visibilidad de tu saldo Bunz, pagos y protocolos Zero-Knowledge.' },
+    { id: 'audit' as const, icon: Database, title: 'Auditoría y arquitectura TON', desc: 'Verifica los Smart Contracts, auditorías de seguridad y cifrado descentralizado.' },
   ];
 
-  const filteredSections = MENU_SECTIONS.filter(s => 
-    !searchQuery.trim() || 
-    s.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    s.desc.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const q = searchQuery.trim().toLowerCase();
+  const filteredSections = MENU_SECTIONS.filter((s) => !q || s.title.toLowerCase().includes(q) || s.desc.toLowerCase().includes(q));
 
   return (
-    <ProfileSubpageLayout 
+    <ProfileSubpageLayout
       title={
         currentSection === 'root' ? 'Configuración' :
         currentSection === 'account' ? 'Tu cuenta' :
@@ -669,245 +612,113 @@ export default function SecurityPage() {
       showBack={true}
       onBackCustom={currentSection !== 'root' ? () => navigateTo('root') : undefined}
     >
-      <div className="flex flex-col gap-4 mt-2">
+      <div className="flex flex-col gap-2 mt-2">
 
-        {/* --- VIEW: ROOT SETTINGS (Estilo X/Twitter Screenshots 1, 2, 3) --- */}
         {currentSection === 'root' && (
-          <div className="flex flex-col gap-3">
-            {/* Barra de Búsqueda estilo X/Twitter */}
-            <div className="relative mb-1">
-              <Search 
-                size={18} 
-                className="absolute left-4 top-1/2 -translate-y-1/2" 
-                style={{ color: 'var(--text-muted)' }} 
-              />
+          <div className="flex flex-col">
+            <div className="relative mb-2">
+              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }} />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Buscar en Configuración"
-                className="w-full rounded-full pl-11 pr-4 py-2.5 text-[14px] outline-none border transition-colors"
-                style={{
-                  background: 'var(--bg-elevated)',
-                  color: 'var(--text-primary)',
-                  borderColor: 'var(--border-subtle)',
-                }}
+                className="w-full rounded-full pl-11 pr-4 py-2.5 text-[14px] outline-none border-none"
+                style={{ background: 'var(--bg-pressed)', color: 'var(--text-primary)' }}
               />
             </div>
 
-            {/* Lista Principal de Menús */}
-            <div 
-              className="rounded-2xl overflow-hidden border divide-y"
-              style={{
-                background: 'var(--bg-elevated)',
-                borderColor: 'var(--border-subtle)',
-              }}
-            >
-              {filteredSections.map((item) => {
-                const IconComponent = item.icon;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => navigateTo(item.id)}
-                    className="w-full flex items-center gap-3.5 px-4 py-3.5 text-left border-none cursor-pointer transition-colors active:bg-(--bg-pressed) hover:bg-(--bg-pressed)"
-                    style={{ background: 'transparent' }}
-                  >
-                    <IconComponent 
-                      size={20} 
-                      strokeWidth={2}
-                      className="shrink-0"
-                      style={{ color: 'var(--text-secondary)' }}
-                    />
-                    <div className="flex-1 min-w-0 pr-2">
-                      <h4 className="text-[15px] font-bold m-0 leading-snug" style={{ color: 'var(--text-primary)' }}>
-                        {item.title}
-                      </h4>
-                      <p className="text-[12px] m-0 mt-0.5 leading-normal line-clamp-2" style={{ color: 'var(--text-muted)' }}>
-                        {item.desc}
-                      </p>
-                    </div>
-                    <ChevronRight 
-                      size={18} 
-                      className="shrink-0"
-                      style={{ color: 'var(--text-muted)' }} 
-                    />
-                  </button>
-                );
-              })}
-            </div>
+            {filteredSections.map((item) => (
+              <Row
+                key={item.id}
+                icon={item.icon}
+                title={item.title}
+                desc={item.desc}
+                onClick={() => navigateTo(item.id)}
+                trailing={<ChevronRight size={18} className="shrink-0" style={{ color: 'var(--text-muted)' }} />}
+              />
+            ))}
 
-            {/* SECCIÓN INFORMATIVA TRASLADADA A LA PARTE INFERIOR DEL MENÚ */}
-            <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
-              <div 
-                className="rounded-2xl p-4 border"
-                style={{ 
-                  background: 'var(--bg-elevated)', 
-                  borderColor: 'var(--border-subtle)',
-                }}
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10B981]" />
-                  <span className="text-[11px] font-black uppercase tracking-wider text-emerald-500">
-                    SISTEMA PROTEGIDO · TON NETWORK
-                  </span>
-                </div>
-                <h4 className="text-[15px] font-black m-0 mb-1" style={{ color: 'var(--text-primary)' }}>
-                  Criptografía Descentralizada
-                </h4>
-                <p className="text-xs leading-relaxed m-0" style={{ color: 'var(--text-secondary)' }}>
-                  Rabbitty opera sobre protocolos no-custodiales en la blockchain de TON y cifrado de hardware en tu dispositivo.
-                </p>
-                <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
-                  {STATS.map(({ val, label, color }) => (
-                    <div key={label} className="text-center">
-                      <span className="text-base font-black block" style={{ color }}>{val}</span>
-                      <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>{label}</span>
-                    </div>
-                  ))}
-                </div>
+            <div className="px-1 pt-6">
+              <div className="flex items-center gap-2 mb-1.5">
+                <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                <span className="text-[11px] font-black uppercase tracking-wider text-emerald-500">Sistema protegido · TON Network</span>
+              </div>
+              <h4 className="text-[15px] font-black m-0 mb-1" style={{ color: 'var(--text-primary)' }}>Criptografía Descentralizada</h4>
+              <p className="text-xs leading-relaxed m-0" style={{ color: 'var(--text-secondary)' }}>
+                Rabbitty opera sobre protocolos no-custodiales en la blockchain de TON y cifrado de hardware en tu dispositivo.
+              </p>
+              <div className="grid grid-cols-3 gap-2 mt-4">
+                {STATS.map(({ val, label, color }) => (
+                  <div key={label} className="text-center">
+                    <span className="text-base font-black block" style={{ color }}>{val}</span>
+                    <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>{label}</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
         )}
 
-        {/* --- VIEW: TU CUENTA --- */}
         {currentSection === 'account' && (
-          <div className="flex flex-col gap-3">
-            <p className="text-xs px-1" style={{ color: 'var(--text-muted)' }}>
+          <div className="flex flex-col">
+            <p className="text-xs px-1 mb-2" style={{ color: 'var(--text-muted)' }}>
               Consulta o administra los detalles asociados a tu cuenta de Telegram y perfil Rabbitty.
             </p>
-
-            <div 
-              className="rounded-2xl overflow-hidden border divide-y"
-              style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
-            >
-              <div className="flex items-center justify-between px-4 py-3">
-                <span className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Nombre</span>
-                <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{user?.firstName || 'Explorador'}</span>
-              </div>
-              <div className="flex items-center justify-between px-4 py-3">
-                <span className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Usuario</span>
-                <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>@{user?.username || 'explorador'}</span>
-              </div>
-              <div className="flex items-center justify-between px-4 py-3">
-                <span className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>ID de Telegram</span>
-                <span className="text-sm font-mono font-bold" style={{ color: 'var(--text-primary)' }}>{user?.id || '—'}</span>
-              </div>
-              <div className="flex items-center justify-between px-4 py-3">
-                <span className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Rol de cuenta</span>
-                <span className="text-xs font-black uppercase px-2 py-0.5 rounded-full bg-[#E91E63]/15 text-[#E91E63]">
-                  {user?.role || 'EXPLORADOR'}
-                </span>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                PlatformBridge.hapticFeedback('medium');
-                logout();
-              }}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border font-bold text-sm cursor-pointer mt-2"
-              style={{ 
-                background: 'rgba(239,68,68,0.1)', 
-                color: '#EF4444', 
-                borderColor: 'rgba(239,68,68,0.2)' 
-              }}
-            >
-              <LogOut size={16} />
-              <span>Cerrar sesión en este dispositivo</span>
-            </button>
+            <KeyValue k="Nombre">{user?.firstName || 'Explorador'}</KeyValue>
+            <KeyValue k="Usuario">@{user?.username || 'explorador'}</KeyValue>
+            <KeyValue k="ID de Telegram"><span className="font-mono">{user?.id || '—'}</span></KeyValue>
+            <KeyValue k="Rol de cuenta">
+              <span className="text-xs font-black uppercase px-2 py-0.5 rounded-full bg-[#E91E63]/15 text-[#E91E63]">{user?.role || 'EXPLORADOR'}</span>
+            </KeyValue>
+            <Row
+              icon={LogOut}
+              iconColor="#EF4444"
+              title="Cerrar sesión en este dispositivo"
+              onClick={() => { PlatformBridge.hapticFeedback('medium'); logout(); }}
+            />
           </div>
         )}
 
-        {/* --- VIEW: SEGURIDAD Y ACCESO A LA CUENTA --- */}
         {currentSection === 'security_access' && (
-          <div className="flex flex-col gap-3">
-            <p className="text-xs px-1" style={{ color: 'var(--text-muted)' }}>
-              Configura los métodos de autenticación directa y credenciales de acceso para tu dispositivo.
+          <div className="flex flex-col">
+            <p className="text-xs px-1 mb-2" style={{ color: 'var(--text-muted)' }}>
+              PIN y biometría protegen este dispositivo al autorizar envíos de Bunz.
             </p>
-            <FaceIdCard />
-            <SecurityPinCard />
-            <TwoFactorCard />
+            <BiometricRow />
+            <PinRow />
+            <TwoFactorRows />
           </div>
         )}
 
-        {/* --- VIEW: PRIVACIDAD Y TRANSACCIONES --- */}
         {currentSection === 'privacy' && (
-          <div className="flex flex-col gap-3">
-            <p className="text-xs px-1" style={{ color: 'var(--text-muted)' }}>
+          <div className="flex flex-col">
+            <p className="text-xs px-1 mb-2" style={{ color: 'var(--text-muted)' }}>
               Gestiona qué información ven los comercios afiliados y cómo se resguardan tus actividades.
             </p>
-
-            <div 
-              className="rounded-2xl p-4 border"
-              style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
-            >
-              <div className="flex items-start gap-3">
-                <EyeOff className="text-[#E91E63] shrink-0 mt-0.5" size={20} />
-                <div>
-                  <h4 className="text-[14px] font-extrabold m-0 mb-1" style={{ color: 'var(--text-primary)' }}>
-                    Protocolo Zero-Knowledge
-                  </h4>
-                  <p className="text-xs leading-relaxed m-0" style={{ color: 'var(--text-secondary)' }}>
-                    Tus pagos generan un hash criptográfico de verificación instantáneo en TON. Los comercios no tienen acceso a tu saldo total ni a tu historial general de compras.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div 
-              className="rounded-2xl p-4 border"
-              style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
-            >
-              <div className="flex items-start gap-3">
-                <CheckCircle2 className="text-emerald-500 shrink-0 mt-0.5" size={20} />
-                <div>
-                  <h4 className="text-[14px] font-extrabold m-0 mb-1" style={{ color: 'var(--text-primary)' }}>
-                    Modo Incógnito en Check-ins
-                  </h4>
-                  <p className="text-xs leading-relaxed m-0" style={{ color: 'var(--text-secondary)' }}>
-                    Tu estado de ánimo y respuestas de Rabbitty Mood se procesan de forma anónima para calcular el vibe colectivo sin vincular tu identidad nominal.
-                  </p>
-                </div>
-              </div>
-            </div>
+            <Row
+              icon={EyeOff}
+              iconColor={ACCENT}
+              title="Protocolo Zero-Knowledge"
+              desc="Tus pagos generan un hash criptográfico de verificación instantáneo en TON. Los comercios no tienen acceso a tu saldo total ni a tu historial general de compras."
+            />
+            <Row
+              icon={CheckCircle2}
+              iconColor="#10B981"
+              title="Modo Incógnito en Check-ins"
+              desc="Tu estado de ánimo y respuestas de Rabbitty Mood se procesan de forma anónima para calcular el vibe colectivo sin vincular tu identidad nominal."
+            />
           </div>
         )}
 
-        {/* --- VIEW: AUDITORÍA Y ARQUITECTURA TON --- */}
         {currentSection === 'audit' && (
-          <div className="flex flex-col gap-3">
-            <p className="text-xs px-1" style={{ color: 'var(--text-muted)' }}>
+          <div className="flex flex-col">
+            <p className="text-xs px-1 mb-2" style={{ color: 'var(--text-muted)' }}>
               Infraestructura técnica, Smart Contracts auditados y estándares de seguridad.
             </p>
-
-            <div className="grid grid-cols-1 gap-2.5">
-              {FEATURES.map((feat, i) => {
-                const IconComponent = feat.icon;
-                return (
-                  <div
-                    key={i}
-                    className="border rounded-2xl p-3.5 flex gap-3.5 items-start"
-                    style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}
-                  >
-                    <div 
-                      className="w-9 h-9 rounded-xl flex shrink-0 items-center justify-center mt-0.5"
-                      style={{ background: 'var(--bg-pressed)' }}
-                    >
-                      <IconComponent size={18} style={{ color: feat.color }} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <h4 className="font-extrabold text-[14px] m-0" style={{ color: 'var(--text-primary)' }}>{feat.title}</h4>
-                      </div>
-                      <p className="text-xs leading-normal m-0" style={{ color: 'var(--text-secondary)' }}>{feat.desc}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            {FEATURES.map((f) => (
+              <Row key={f.title} icon={f.icon} iconColor={f.color} title={f.title} desc={f.desc} />
+            ))}
           </div>
         )}
 

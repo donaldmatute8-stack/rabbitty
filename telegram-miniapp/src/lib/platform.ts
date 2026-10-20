@@ -387,7 +387,7 @@ export const PlatformBridge = {
       }
     }
 
-    return { success: true };
+    return { success: false, error: 'unsupported' };
   },
 };
 

@@ -206,4 +206,26 @@ export function getOtpEmailTemplate(code: string) {
   return wrapInRabbittyEmailLayout('Tu Código de Acceso 🔑', 'Inicio de Sesión Seguro Rabbitty', content);
 }
 
+// Plantilla para códigos de verificación en dos pasos (2FA)
+export function getTwoFactorEmailTemplate(code: string, purposeLabel: string) {
+  const content = `
+    <div style="background: rgba(244,63,94,0.06); border-radius: 18px; padding: 24px 16px; margin-bottom: 24px; border: 1px solid rgba(244,63,94,0.25); text-align: center;">
+      <p style="font-size: 15px; line-height: 1.6; color: #E2E8F0; margin: 0 0 18px 0;">
+        Usa este código para ${purposeLabel}:
+      </p>
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin: 0 auto 20px auto; max-width: 100%;">
+        <tr>
+          <td align="center" style="background: #0A0314; border: 2px solid #F43F5E; border-radius: 16px; padding: 14px 24px;">
+            <span style="font-size: 28px; font-weight: 900; letter-spacing: 6px; color: #FFFFFF; white-space: nowrap;">${code}</span>
+          </td>
+        </tr>
+      </table>
+      <p style="font-size: 13px; color: #94A3B8; margin: 0; line-height: 1.5;">
+        ⏱️ Expira en <strong>10 minutos</strong>. Si no fuiste tú, ignora este mensaje y cambia tus métodos de seguridad.
+      </p>
+    </div>
+  `;
+  return wrapInRabbittyEmailLayout('Verificación en dos pasos 🔐', 'Seguridad de tu cuenta Rabbitty', content);
+}
+
 

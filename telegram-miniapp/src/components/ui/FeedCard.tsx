@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useSyncExternalStore } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
@@ -53,32 +53,7 @@ export default function FeedCard({
   const [hopsCount, setHopsCount] = useState<number | null>(initialHops ?? null);
   const [hasHopped, setHasHopped] = useState(false);
 
-  // Long press detection ref
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const isLongPressRef = useRef(false);
-
-  const startPress = () => {
-    isLongPressRef.current = false;
-    timerRef.current = setTimeout(() => {
-      isLongPressRef.current = true;
-      PlatformBridge.hapticFeedback('medium');
-      setMenuOpen(true);
-    }, 550);
-  };
-
-  const cancelPress = () => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-  };
-
-  const handleClick = (e: React.MouseEvent) => {
-    if (isLongPressRef.current) {
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
+  const handleClick = () => {
     router.push(`/affiliate/${id}`);
   };
 
@@ -189,11 +164,6 @@ export default function FeedCard({
     <>
       <motion.div
         onClick={handleClick}
-        onMouseDown={startPress}
-        onMouseUp={cancelPress}
-        onMouseLeave={cancelPress}
-        onTouchStart={startPress}
-        onTouchEnd={cancelPress}
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: index * 0.07, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}

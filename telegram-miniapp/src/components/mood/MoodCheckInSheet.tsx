@@ -1,11 +1,27 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Sparkles, ExternalLink, Headphones, Coffee, Check, ArrowRight, ShieldCheck } from 'lucide-react';
+import { X, Sparkles, ExternalLink, Headphones, Coffee, Check, ArrowRight, ShieldCheck, MapPin, Gift } from 'lucide-react';
 import { MOOD_DEFINITIONS, MoodType, MoodDefinition } from '@/types/mood';
 import { PlatformBridge } from '@/lib/platform';
 import { useTheme } from '@/contexts/ThemeContext';
+
+interface MoodVenue {
+  id: string;
+  name: string;
+  category: string;
+  logoUrl: string | null;
+  reason: 'campaign' | 'category';
+  campaign: { title: string; description: string | null; rewardBunz: number; activeNow: boolean } | null;
+}
+
+interface MoodCampaignInfo {
+  title: string;
+  description: string | null;
+  rewardBunz: number;
+}
 
 interface MoodCheckInProps {
   isOpen: boolean;
@@ -13,6 +29,8 @@ interface MoodCheckInProps {
   businessId?: string;
   businessName?: string;
   onMoodSelected?: (mood: MoodDefinition) => void;
+  /** Llamado por el CTA cuando no hay comercio; por defecto navega a /?tab=Freehands */
+  onExploreMap?: () => void;
 }
 
 export function MoodCheckInSheet({
@@ -21,12 +39,42 @@ export function MoodCheckInSheet({
   businessId,
   businessName,
   onMoodSelected,
+  onExploreMap,
 }: MoodCheckInProps) {
   const { isDark } = useTheme();
+  const router = useRouter();
   const [selectedMood, setSelectedMood] = useState<MoodType | null>(null);
   const [activeExperience, setActiveExperience] = useState<MoodDefinition | null>(null);
   const [loading, setLoading] = useState(false);
   const [dontAskToday, setDontAskToday] = useState(false);
+  const [venues, setVenues] = useState<MoodVenue[]>([]);
+  const [venuesLoading, setVenuesLoading] = useState(false);
+  const [campaign, setCampaign] = useState<MoodCampaignInfo | null>(null);
+
+  // Cada vez que se abre el panel arranca limpio (evita mostrar el resultado de la vez anterior)
+  const [prevOpen, setPrevOpen] = useState(isOpen);
+  if (isOpen !== prevOpen) {
+    setPrevOpen(isOpen);
+    if (isOpen) {
+      setSelectedMood(null);
+      setActiveExperience(null);
+      setVenues([]);
+      setCampaign(null);
+    }
+  }
+
+  const loadVenues = async (moodKey: MoodType) => {
+    setVenuesLoading(true);
+    try {
+      const res = await fetch(`/api/mood/venues?mood=${moodKey}&hour=${new Date().getHours()}`);
+      const data = await res.json();
+      setVenues(data.success ? data.venues : []);
+    } catch {
+      setVenues([]);
+    } finally {
+      setVenuesLoading(false);
+    }
+  };
 
   const handleSelectMood = async (moodKey: MoodType) => {
     setSelectedMood(moodKey);
@@ -36,7 +84,7 @@ export function MoodCheckInSheet({
     try {
       setLoading(true);
       const headers = await PlatformBridge.getAuthHeaders();
-      await fetch('/api/mood/check-in', {
+      const res = await fetch('/api/mood/check-in', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -48,6 +96,9 @@ export function MoodCheckInSheet({
           source: businessId ? 'venue' : 'checkin',
         }),
       });
+      const payload = await res.json().catch(() => null);
+      setCampaign(payload?.campaign ?? null);
+      if (!businessId) loadVenues(moodKey);
 
       if (dontAskToday) {
         try {
@@ -324,7 +375,7 @@ export function MoodCheckInSheet({
                     <ExternalLink className="h-3 w-3" />
                   </a>
                   <a
-                    href={activeExperience.music.appleMusicUrl}
+                    href={`https://music.apple.com/search?term=${encodeURIComponent(`${activeExperience.music.title} ${activeExperience.music.artistOrCurator}`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold border transition-all no-underline"
@@ -338,7 +389,7 @@ export function MoodCheckInSheet({
                     <ExternalLink className="h-3 w-3" />
                   </a>
                   <a
-                    href={activeExperience.music.youtubeUrl}
+                    href={`https://www.youtube.com/results?search_query=${encodeURIComponent(`${activeExperience.music.title} ${activeExperience.music.artistOrCurator}`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold border transition-all no-underline"
@@ -384,15 +435,97 @@ export function MoodCheckInSheet({
                 </div>
               </div>
 
+              {/* Campaña activa del comercio actual */}
+              {businessId && campaign && (
+                <div
+                  className="p-4 rounded-2xl border flex items-start gap-3"
+                  style={{ background: 'rgba(233, 30, 99, 0.10)', borderColor: 'rgba(233, 30, 99, 0.35)' }}
+                >
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl text-[#E91E63] shrink-0 border" style={{ background: 'rgba(233, 30, 99, 0.12)', borderColor: 'rgba(233, 30, 99, 0.25)' }}>
+                    <Gift className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <span className="text-[10px] font-mono font-bold text-[#E91E63] uppercase tracking-widest block">
+                      Campaña de {businessName}
+                    </span>
+                    <h5 className="text-sm font-bold mt-0.5 m-0" style={{ color: 'var(--text-primary)' }}>{campaign.title}</h5>
+                    {campaign.description && (
+                      <p className="text-xs mt-0.5 leading-relaxed m-0" style={{ color: 'var(--text-secondary)' }}>{campaign.description}</p>
+                    )}
+                    {campaign.rewardBunz > 0 && (
+                      <p className="text-[11px] font-bold mt-1 m-0 text-[#E91E63]">+{campaign.rewardBunz} BUNZ por esta visita</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Lugares recomendados para este mood (cuando no estás en un comercio) */}
+              {!businessId && (
+                <div className="p-4 rounded-2xl border space-y-3" style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-subtle)' }}>
+                  <div className="flex items-center gap-2 text-[11px] font-mono font-bold text-[#E91E63] uppercase tracking-widest">
+                    <MapPin className="h-4 w-4" />
+                    <span>Lugares para este mood</span>
+                  </div>
+                  {venuesLoading ? (
+                    <p className="text-xs m-0" style={{ color: 'var(--text-muted)' }}>Buscando lugares…</p>
+                  ) : venues.length === 0 ? (
+                    <p className="text-xs m-0" style={{ color: 'var(--text-muted)' }}>
+                      Aún no hay comercios afiliados para este mood. Explora el mapa para ver los más cercanos.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {venues.map((v) => (
+                        <button
+                          key={v.id}
+                          type="button"
+                          onClick={() => {
+                            PlatformBridge.hapticFeedback('light');
+                            onClose();
+                            router.push(`/affiliate/${v.id}`);
+                          }}
+                          className="w-full flex items-center gap-3 p-2.5 rounded-xl border text-left cursor-pointer"
+                          style={{ background: 'transparent', borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}
+                        >
+                          {v.logoUrl ? (
+                            <>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={v.logoUrl} alt={v.name} className="h-9 w-9 rounded-lg object-cover shrink-0" />
+                            </>
+                          ) : (
+                            <span className="flex h-9 w-9 items-center justify-center rounded-lg shrink-0 bg-[#E91E63]/15 text-[#E91E63]"><Coffee className="h-4 w-4" /></span>
+                          )}
+                          <span className="flex-1 min-w-0">
+                            <span className="block text-sm font-bold truncate">{v.name}</span>
+                            <span className="block text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>
+                              {v.campaign ? `${v.campaign.title}${v.campaign.activeNow ? ' · ahora' : ''}` : v.category}
+                            </span>
+                          </span>
+                          <ArrowRight className="h-4 w-4 shrink-0" style={{ color: 'var(--text-muted)' }} />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Final Confirm Button */}
               <button
-                onClick={handleDismiss}
+                onClick={() => {
+                  if (businessId) {
+                    handleDismiss();
+                    return;
+                  }
+                  PlatformBridge.hapticFeedback('light');
+                  onClose();
+                  if (onExploreMap) onExploreMap();
+                  else router.push('/?tab=Freehands');
+                }}
                 className="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl text-white font-black text-sm shadow-xl shadow-pink-500/25 transition-all cursor-pointer border-none"
                 style={{
                   background: 'linear-gradient(135deg, #E91E63 0%, #D81B60 100%)',
                 }}
               >
-                <span>Disfrutar mi estancia</span>
+                <span>{businessId ? 'Disfrutar mi estancia' : 'Ver en el mapa'}</span>
                 <ArrowRight className="h-4 w-4" />
               </button>
             </motion.div>

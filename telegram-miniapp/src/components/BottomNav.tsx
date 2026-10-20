@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { MessageCircle, ScanLine, User } from 'lucide-react';
 import useSWR from 'swr';
@@ -46,36 +47,40 @@ export default function BottomNav({ isDark }: BottomNavProps = {}) {
     if (isScan) return;
 
     const handleScroll = () => {
-      const currentScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+      const currentScrollY = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
       const diff = currentScrollY - lastScrollY.current;
 
       // Always show when close to top
-      if (currentScrollY < 40) {
+      if (currentScrollY < 60) {
         setIsVisible(true);
         accumulatedDelta.current = 0;
         lastScrollY.current = currentScrollY;
         return;
       }
 
-      // Check scroll direction with threshold buffer to avoid jitter
-      if (diff > 12) {
-        // Scrolling DOWN -> Hide
+      // Check scroll direction
+      if (diff > 8) {
+        // Scrolling DOWN -> accumulate and hide
         accumulatedDelta.current += diff;
-        if (accumulatedDelta.current > 35) {
+        if (accumulatedDelta.current > 25) {
           setIsVisible(false);
           accumulatedDelta.current = 0;
         }
-      } else if (diff < -10) {
-        // Scrolling UP -> Show
+      } else if (diff < -5) {
+        // Scrolling UP -> reveal immediately
         accumulatedDelta.current = 0;
         setIsVisible(true);
       }
 
-      lastScrollY.current = currentScrollY;
+      lastScrollY.current = Math.max(0, currentScrollY);
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
+    document.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      document.removeEventListener('scroll', handleScroll);
+    };
   }, [isScan]);
 
   const getColor = (isActive: boolean) => {
@@ -89,14 +94,14 @@ export default function BottomNav({ isDark }: BottomNavProps = {}) {
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-[100] pointer-events-none flex justify-center px-4 transition-transform duration-300 ease-out"
+      className="fixed bottom-0 left-0 right-0 z-100 pointer-events-none flex justify-center px-4 transition-transform duration-300 ease-out"
       style={{
         transform: navVisible ? 'translateY(0)' : 'translateY(120%)',
         paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)',
       }}
     >
       <nav
-        className="pointer-events-auto w-full max-w-[390px] rounded-[28px] select-none transition-all duration-300 shadow-[0_10px_35px_rgba(0,0,0,0.45)]"
+        className="pointer-events-auto w-full max-w-97.5 rounded-[28px] select-none transition-all duration-300 shadow-[0_10px_35px_rgba(0,0,0,0.45)]"
         style={{
           background: effectiveDark ? 'rgba(18, 18, 22, 0.88)' : 'rgba(255, 255, 255, 0.92)',
           backdropFilter: 'blur(28px)',
@@ -118,10 +123,13 @@ export default function BottomNav({ isDark }: BottomNavProps = {}) {
             }}
             className="flex items-center justify-center w-12 h-12 active:scale-90 transition-transform"
           >
-            <div className="w-[52px] h-[52px] flex items-center justify-center overflow-visible">
-              <img
+            <div className="w-13 h-13 flex items-center justify-center overflow-visible">
+              <Image
                 src="/Ra.png"
                 alt="Ra"
+                width={52}
+                height={52}
+                priority
                 className="w-full h-full object-contain scale-[1.65] transition-transform"
                 style={{
                   filter: isFeed 
@@ -134,10 +142,10 @@ export default function BottomNav({ isDark }: BottomNavProps = {}) {
 
           {/* Chat / Mensajes */}
           <Link href="/chat" onClick={handleTabPress} className="relative flex items-center justify-center w-12 h-12 active:scale-90 transition-all" style={{ color: getColor(isDiscover) }}>
-            <MessageCircle className="w-[25px] h-[25px]" strokeWidth={2.2} />
+            <MessageCircle className="w-6.25 h-6.25" strokeWidth={2.2} />
             {unreadCount > 0 && (
               <span
-                className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center text-[10px] font-black text-white"
+                className="absolute top-1 right-1 min-w-4.5 h-4.5 px-1 rounded-full flex items-center justify-center text-[10px] font-black text-white"
                 style={{ background: '#E91E63', boxShadow: '0 0 10px rgba(233,30,99,0.5)' }}
               >
                 {unreadCount > 99 ? '99+' : unreadCount}
@@ -147,12 +155,12 @@ export default function BottomNav({ isDark }: BottomNavProps = {}) {
 
           {/* Scan */}
           <Link href="/scan" onClick={handleTabPress} className="flex items-center justify-center w-12 h-12 active:scale-90 transition-all" style={{ color: getColor(isScan) }}>
-            <ScanLine className="w-[25px] h-[25px]" strokeWidth={2.2} />
+            <ScanLine className="w-6.25 h-6.25" strokeWidth={2.2} />
           </Link>
 
           {/* Perfil */}
           <Link href="/profile" onClick={handleTabPress} className="flex items-center justify-center w-12 h-12 active:scale-90 transition-all" style={{ color: getColor(isProfile) }}>
-            <User className="w-[25px] h-[25px]" strokeWidth={2.2} />
+            <User className="w-6.25 h-6.25" strokeWidth={2.2} />
           </Link>
 
         </div>

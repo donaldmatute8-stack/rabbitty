@@ -471,23 +471,26 @@ export default function ChatRoomPage() {
       return;
     }
 
-    // Comprobación de seguridad: PIN / Biométricos configurados
-    const savedPin = typeof window !== 'undefined' ? localStorage.getItem('rabbitty_security_pin') : null;
-    const hasBio = typeof window !== 'undefined' ? Boolean(localStorage.getItem('rabbitty_faceid_cred')) : false;
-
-    if (savedPin) {
-      const enteredPin = window.prompt('🔐 Seguridad Rabbitty: Ingresa tu PIN de 4 dígitos para autorizar el envío de Bunz:');
-      if (enteredPin !== savedPin) {
-        showToast('PIN incorrecto. Operación cancelada por seguridad.', 'error');
-        PlatformBridge.hapticFeedback('error');
-        return;
-      }
-      PlatformBridge.hapticFeedback('success');
-    } else if (hasBio) {
-      PlatformBridge.hapticFeedback('medium');
-      showToast('Verificando biometría para autorizar envío...', 'info');
+    // Comprobación de seguridad local: biometría primero, PIN como respaldo
+    const [{ authorizeSensitiveAction }, { promptForPin }] = await Promise.all([
+      import('@/lib/securityVault'),
+      import('@/components/security/PinPromptModal'),
+    ]);
+    const auth = await authorizeSensitiveAction(promptForPin, 'Autoriza el envío de Bunz');
+    if (!auth.ok) {
+      showToast(
+        auth.reason === 'locked'
+          ? 'Demasiados intentos. Operación bloqueada por 1 minuto.'
+          : 'Operación cancelada por seguridad.',
+        'error',
+      );
+      PlatformBridge.hapticFeedback('error');
+      return;
+    }
+    if (auth.reason === 'none') {
+      showToast('Te sugerimos activar PIN o Face ID en Configuración > Seguridad.', 'info');
     } else {
-      showToast('⚠️ Operación procesada. Te sugerimos activar PIN o Face ID en Seguridad y Privacidad.', 'info');
+      PlatformBridge.hapticFeedback('success');
     }
 
     setSending(true);
@@ -497,17 +500,30 @@ export default function ChatRoomPage() {
       await PlatformBridge.hapticFeedback('medium');
       const headers = await PlatformBridge.getAuthHeaders();
       const idempotencyKey = generateChatTxKey(conversationId, attemptId);
-      const res = await fetch('/api/wallet/transfer', {
-        method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          recipient: req.recipient.replace(/^@/, ''),
-          amount: req.amount,
-          note: req.note,
-          idempotencyKey,
-        }),
-      });
-      const data = await res.json();
+      const sendTransfer = (twoFactor?: { method: string; code: string }) =>
+        fetch('/api/wallet/transfer', {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            recipient: req.recipient.replace(/^@/, ''),
+            amount: req.amount,
+            note: req.note,
+            idempotencyKey,
+            twoFactor,
+          }),
+        });
+
+      let res = await sendTransfer();
+      let data = await res.json();
+
+      // Segundo factor exigido por el servidor: pedir código y reintentar con la misma idempotencyKey
+      for (let tries = 0; tries < 3 && res.status === 403 && (data.code === '2FA_REQUIRED' || data.code === '2FA_INVALID'); tries++) {
+        const { promptForTwoFactor } = await import('@/components/security/TwoFactorPromptModal');
+        const proof = await promptForTwoFactor(data.methods, data.code === '2FA_INVALID' ? data.error : undefined);
+        if (!proof) throw new Error('Operación cancelada: falta la verificación en dos pasos.');
+        res = await sendTransfer(proof);
+        data = await res.json();
+      }
       if (!res.ok || !data.success) throw new Error(data.error || 'No se pudo enviar');
       await PlatformBridge.hapticFeedback('success');
       const confirmMsg: Message = {

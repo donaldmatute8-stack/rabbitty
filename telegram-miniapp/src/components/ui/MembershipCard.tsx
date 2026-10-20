@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QrCode, Sparkles, ChevronRight, X, ShieldCheck } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
@@ -23,9 +24,12 @@ interface MembershipCardProps {
   isDark?: boolean;
 }
 
+const emptySubscribe = () => () => {};
+
 export default function MembershipCard({ user, levelName = '1', isDark: isDarkProp }: MembershipCardProps) {
   const { isDark: themeIsDark } = useTheme();
   const isDark = isDarkProp ?? themeIsDark;
+  const isClient = useSyncExternalStore(emptySubscribe, () => true, () => false);
   const [showQrModal, setShowQrModal] = useState(false);
 
   const bunzBalance = (user?.totalBunzEarned || 0) - (user?.totalBunzSpent || 0);
@@ -228,62 +232,65 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
         </button>
       </motion.div>
 
-      {/* ── MODAL QR INTERACTIVO FULLSCREEN / PRESENTACIÓN EN CAJA ── */}
-      <AnimatePresence>
-        {showQrModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-150 bg-black/85 backdrop-blur-xl flex flex-col items-center justify-center p-5 select-none"
-            onClick={handleCloseModal}
-          >
+      {/* ── MODAL QR INTERACTIVO FULLSCREEN / PRESENTACIÓN EN CAJA (Portal al body para no ser afectado por transform de escala) ── */}
+      {isClient && typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {showQrModal && (
             <motion.div
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 260 }}
-              className="w-full max-w-85 bg-[#121214] border border-white/15 rounded-4xl p-6 flex flex-col items-center shadow-[0_20px_50px_rgba(0,0,0,0.9)] relative"
-              onClick={(e) => e.stopPropagation()}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-10000 bg-black/85 backdrop-blur-xl flex flex-col items-center justify-center p-5 select-none"
+              onClick={handleCloseModal}
             >
-              {/* Close Button */}
-              <button
-                onClick={handleCloseModal}
-                className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-white/70 active:scale-90 transition-transform cursor-pointer"
+              <motion.div
+                initial={{ scale: 0.9, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.9, y: 20 }}
+                transition={{ type: 'spring', damping: 25, stiffness: 260 }}
+                className="w-full max-w-85 bg-[#121214] border border-white/15 rounded-4xl p-6 flex flex-col items-center shadow-[0_20px_50px_rgba(0,0,0,0.9)] relative"
+                onClick={(e) => e.stopPropagation()}
               >
-                <X size={18} />
-              </button>
+                {/* Close Button */}
+                <button
+                  onClick={handleCloseModal}
+                  className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-white/70 active:scale-90 transition-transform cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
 
-              <div className="text-center mb-3">
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E91E63]/15 text-[#E91E63] text-[10px] font-black uppercase tracking-[1.5px] border border-[#E91E63]/30 mb-2">
-                  <ShieldCheck size={12} /> Membresía Oficial
+                <div className="text-center mb-3">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E91E63]/15 text-[#E91E63] text-[10px] font-black uppercase tracking-[1.5px] border border-[#E91E63]/30 mb-2">
+                    <ShieldCheck size={12} /> Membresía Oficial
+                  </div>
+                  <h3 className="text-xl font-black text-white m-0">Escanea en Caja</h3>
+                  <p className="text-xs text-white/50 mt-1 mb-0 leading-relaxed">
+                    Presenta tu código en el terminal del negocio para sumar Bunz en tu consumo.
+                  </p>
                 </div>
-                <h3 className="text-xl font-black text-white m-0">Escanea en Caja</h3>
-                <p className="text-xs text-white/50 mt-1 mb-0 leading-relaxed">
-                  Presenta tu código en el terminal del negocio para sumar Bunz en tu consumo.
-                </p>
-              </div>
 
-              {/* Rabbitty Holographic Code presentation */}
-              <div className="py-2 flex items-center justify-center w-full">
-                <RabbittyCode
-                  data={String(qrIdentifier)}
-                  size={190}
-                  showCardFrame={false}
-                />
-              </div>
+                {/* Rabbitty Holographic Code presentation */}
+                <div className="py-2 flex items-center justify-center w-full">
+                  <RabbittyCode
+                    data={String(qrIdentifier)}
+                    size={190}
+                    showCardFrame={false}
+                  />
+                </div>
 
-              {/* Member credentials snippet */}
-              <div className="w-full bg-white/5 rounded-2xl p-3 border border-white/10 text-center mt-3">
-                <p className="text-xs font-black text-white uppercase tracking-wider m-0">{memberName}</p>
-                <p className="text-[11px] text-gray-400 font-mono tracking-widest mt-0.5 m-0">
-                  {username} • {bunzBalance.toLocaleString()} BUNZ
-                </p>
-              </div>
+                {/* Member credentials snippet */}
+                <div className="w-full bg-white/5 rounded-2xl p-3 border border-white/10 text-center mt-3">
+                  <p className="text-xs font-black text-white uppercase tracking-wider m-0">{memberName}</p>
+                  <p className="text-[11px] text-gray-400 font-mono tracking-widest mt-0.5 m-0">
+                    {username} • {bunzBalance.toLocaleString()} BUNZ
+                  </p>
+                </div>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
     </>
   );
 }

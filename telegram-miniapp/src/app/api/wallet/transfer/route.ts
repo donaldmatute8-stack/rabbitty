@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { users, notifications } from "@/db/schema";
 import { eq, or, sql } from "drizzle-orm";
 import { getAuthenticatedUser } from "@/lib/serverAuth";
+import { requireSecondFactor } from "@/lib/twoFactor";
 import { recordLedgerTransaction, findLedgerEntry } from "@/lib/ledgerHelper";
 import { isApnsConfigured, sendPushToUsers } from "@/lib/push/apns";
 
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { recipient, amount, note, idempotencyKey } = body;
+    const { recipient, amount, note, idempotencyKey, twoFactor } = body;
 
     const bunzAmount = Number(amount);
     if (!Number.isInteger(bunzAmount) || bunzAmount <= 0) {
@@ -52,6 +53,10 @@ export async function POST(req: NextRequest) {
         data: { amount: Number(existing.amount) },
       });
     }
+
+    // Segundo factor real (si el usuario lo activó): se valida en servidor antes de mover Bunz.
+    const twoFactorBlock = await requireSecondFactor(caller.id, twoFactor);
+    if (twoFactorBlock) return twoFactorBlock;
 
     // Look up recipient by @username, uuid id, telegramId or TON wallet address.
     const conditions = [

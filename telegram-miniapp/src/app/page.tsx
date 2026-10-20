@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, useRef, useCallback, useSyncExternalStore } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Bell, Sparkles, ChevronRight, Home } from 'lucide-react';
 import Link from 'next/link';
@@ -22,6 +22,7 @@ import RabbittyContourLoader from '@/components/ui/RabbittyContourLoader';
 import { openBunzy } from '@/lib/bunzyLaunch';
 import { MoodCheckInSheet } from '@/components/mood/MoodCheckInSheet';
 import { WelcomeRitual } from '@/components/ui/WelcomeRitual';
+import { SmartBiometricPrompt } from '@/components/security/SmartBiometricPrompt';
 
 const InteractiveMap = dynamic(() => import('@/features/map/InteractiveMap'), {
   ssr: false,
@@ -107,17 +108,6 @@ export default function FeedPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [moodOpen, setMoodOpen] = useState(false);
   const bunzBalance = (user?.totalBunzEarned || 0) - (user?.totalBunzSpent || 0);
-
-  const greeting = useSyncExternalStore(
-    () => () => {},
-    () => {
-      const hour = new Date().getHours();
-      if (hour >= 5 && hour < 12) return 'Buenos días,';
-      if (hour >= 12 && hour < 19) return 'Buenas tardes,';
-      return 'Buenas noches,';
-    },
-    () => 'Buenos días,'
-  );
 
   const handleSpend = async (offerId: string, bunzCost: number, businessName: string, offerTitle: string) => {
     if (user && bunzBalance < bunzCost) {
@@ -232,6 +222,17 @@ export default function FeedPage() {
   }, [posts, userLat, userLng]);
 
   const [showMinimalHeader, setShowMinimalHeader] = useState(false);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [headerHeight, setHeaderHeight] = useState(0);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const measure = () => setHeaderHeight(Math.round(el.getBoundingClientRect().height));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [activeTab]);
   const lastTopScrollY = useRef(0);
   const topDeltaAcc = useRef(0);
 
@@ -363,7 +364,7 @@ export default function FeedPage() {
         className="relative"
         style={{
           transformOrigin: 'center left',
-          willChange: 'transform',
+          willChange: drawerOpen ? 'transform' : 'auto',
           height: drawerOpen ? '100vh' : 'auto',
           minHeight: '100vh',
           background: 'var(--bg-primary)',
@@ -390,6 +391,7 @@ export default function FeedPage() {
         )}
       {/* HEADER COMPLETO INICIAL: Se desplaza naturalmente con el scroll (ya no está fixed/sticky constante) */}
       <div
+        ref={headerRef}
         className="w-full relative z-40"
         style={{
           background: 'var(--bg-primary)',
@@ -400,26 +402,56 @@ export default function FeedPage() {
         {/* Fila Perfil / Saludo + Bunz + Bell + Scan (o Flecha de volver en modo Freehands) */}
         <div className="flex items-center justify-between px-5 pt-2 pb-2">
           {activeTab === 'Freehands' ? (
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  PlatformBridge.hapticFeedback('light');
-                  setActiveTab("bunz'in");
-                }}
-                className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
-                style={{ background: 'var(--bg-pressed)', color: 'var(--text-primary)' }}
-                aria-label="Volver al feed"
-              >
-                <svg width="10" height="18" viewBox="0 0 10 18" fill="none">
-                  <path d="M9 1L1 9L9 17" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-              <div>
-                <span className="text-[10px] font-black uppercase tracking-[1.5px] text-[#E91E63] block">Explorar Mapa</span>
-                <h1 className="text-[17px] font-black m-0 leading-tight" style={{ color: 'var(--text-primary)' }}>Freehands</h1>
+            <>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    PlatformBridge.hapticFeedback('light');
+                    setActiveTab("bunz'in");
+                  }}
+                  className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
+                  style={{ background: 'var(--bg-pressed)', color: 'var(--text-primary)' }}
+                  aria-label="Volver al feed"
+                >
+                  <svg width="10" height="18" viewBox="0 0 10 18" fill="none">
+                    <path d="M9 1L1 9L9 17" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-[1.5px] text-[#E91E63] block">Explorar Mapa</span>
+                  <h1 className="text-[17px] font-black m-0 leading-tight" style={{ color: 'var(--text-primary)' }}>Freehands</h1>
+                </div>
               </div>
-            </div>
+
+              {/* Selector Globo 3D / Local estilizado en el Header */}
+              <div 
+                className="flex items-center bg-white/5 backdrop-blur-[10px] rounded-full border border-white/10 p-1"
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    PlatformBridge.hapticFeedback('light');
+                    setMapMode('globe');
+                  }}
+                  className="px-3 py-1 rounded-full text-[11px] font-bold border-none cursor-pointer active:scale-95 transition-all"
+                  style={{ background: mapMode === 'globe' ? 'rgba(233,30,99,0.25)' : 'transparent', color: mapMode === 'globe' ? '#E91E63' : '#888' }}
+                >
+                  Globo 3D
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    PlatformBridge.hapticFeedback('light');
+                    setMapMode('flat');
+                  }}
+                  className="px-3 py-1 rounded-full text-[11px] font-bold border-none cursor-pointer active:scale-95 transition-all"
+                  style={{ background: mapMode === 'flat' ? 'rgba(255,255,255,0.12)' : 'transparent', color: mapMode === 'flat' ? '#FFF' : '#888' }}
+                >
+                  Local
+                </button>
+              </div>
+            </>
           ) : (
             <button
               type="button"
@@ -433,18 +465,11 @@ export default function FeedPage() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${user?.firstName || 'Rabbitty'}&backgroundColor=E91E63`} alt={user?.firstName || 'User'} className="w-full h-full" />
               </div>
-              <div>
-                <p className="text-[11px] font-extrabold uppercase tracking-[0.5px] mb-0.5" style={{ color: 'var(--text-muted)' }}>{greeting}</p>
-                <h1 className="text-[19px] font-black tracking-[-0.5px] m-0" style={{ color: 'var(--text-primary)' }}>{user?.firstName || 'Explorador'}</h1>
-              </div>
+              <h1 className="sr-only">{user?.firstName || 'Rabbitty'}</h1>
             </button>
           )}
 
           <div className="flex items-center gap-2.5">
-            <div className="px-3 py-1.5 rounded-full flex items-baseline gap-1" style={{ background: 'var(--bg-pressed)', border: '1px solid var(--border-subtle)' }}>
-              <span className="text-[15px] font-black" style={{ color: 'var(--text-primary)' }}>{bunzBalance.toLocaleString()}</span>
-              <span className="text-[11px] font-black text-[#E91E63]">BUNZ</span>
-            </div>
             
             {/* Notification Bell */}
             <Link 
@@ -762,38 +787,16 @@ export default function FeedPage() {
 
           {/* ── Freehands tab ── */}
           {activeTab === 'Freehands' && (
-            <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              className="fixed left-0 right-0 bottom-0 z-10 overflow-hidden bg-black flex items-center justify-center"
-              style={{ top: 'calc(max(var(--safe-top, 0px), 8px) + 56px)' }}
+            <div
+              className="fixed left-0 right-0 bottom-0 z-30 overflow-hidden bg-black flex flex-col"
+              style={{ top: headerHeight > 0 ? headerHeight : 'calc(max(var(--safe-top, 0px), 8px) + 56px)' }}
             >
-              {/* Holographic Toggle */}
-              <div 
-                className="absolute z-2000 flex bg-white/5 backdrop-blur-[10px] rounded-full border border-white/10 p-1" 
-                style={{ top: PlatformBridge.isTelegram() ? 70 : 14, right: 64 }}
-              >
-                <button
-                  onClick={() => setMapMode('globe')}
-                  className="px-3 py-1 rounded-full text-[11px] font-bold border-none cursor-pointer"
-                  style={{ background: mapMode === 'globe' ? 'rgba(233,30,99,0.2)' : 'transparent', color: mapMode === 'globe' ? '#E91E63' : '#888', transition: 'all 0.3s' }}
-                >
-                  Globo 3D
-                </button>
-                <button
-                  onClick={() => setMapMode('flat')}
-                  className="px-3 py-1 rounded-full text-[11px] font-bold border-none cursor-pointer"
-                  style={{ background: mapMode === 'flat' ? 'rgba(255,255,255,0.1)' : 'transparent', color: mapMode === 'flat' ? '#FFF' : '#888', transition: 'all 0.3s' }}
-                >
-                  Local
-                </button>
-              </div>
-
               {mapMode === 'flat' ? (
                 <div className="h-full w-full overflow-hidden">
                   <InteractiveMap businesses={postsWithDistance} userLat={userLat} userLng={userLng} />
                 </div>
               ) : (
-                <div className="h-full w-full relative flex items-center justify-center">
+                <div className="flex-1 w-full h-full relative flex items-center justify-center">
                   {loading ? (
                     <div className="w-10 h-10 rounded-full" style={{ border: '3px solid rgba(233,30,99,0.3)', borderTopColor: '#E91E63', animation: 'spin 1s linear infinite' }} />
                   ) : (
@@ -812,14 +815,14 @@ export default function FeedPage() {
                   )}
                 </div>
               )}
-            </motion.div>
+            </div>
           )}
 
         </div>
       </main>
+      </motion.div>
 
       {activeTab !== 'Freehands' && <BottomNav isDark={isDark} />}
-      </motion.div>
 
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -827,8 +830,13 @@ export default function FeedPage() {
       `}} />
 
       <ProfileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
-      <MoodCheckInSheet isOpen={moodOpen} onClose={() => setMoodOpen(false)} />
+      <MoodCheckInSheet
+        isOpen={moodOpen}
+        onClose={() => setMoodOpen(false)}
+        onExploreMap={() => setActiveTab('Freehands')}
+      />
       <WelcomeRitual />
+      <SmartBiometricPrompt />
     </div>
   );
 }

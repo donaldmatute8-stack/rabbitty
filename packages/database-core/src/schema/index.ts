@@ -31,6 +31,7 @@ export const users = pgTable("users", {
   totpSecret: text("totpSecret"),
   totpEnabled: boolean("totpEnabled").default(false).notNull(),
   requireTotpForLogin: boolean("requireTotpForLogin").default(false).notNull(),
+  twoFactorMethods: text("twoFactorMethods").default("[]").notNull(), // JSON: ["email","phone"] (OTP); TOTP se deriva de totpEnabled
   ...timestamps,
 });
 
