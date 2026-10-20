@@ -52,9 +52,13 @@ export function WelcomeRitual({
     }
   });
 
+  const [isMuted, setIsMuted] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const isNative = !!(window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.();
+    return isNative;
+  });
   const [currentTime, setCurrentTime] = useState(0);
   const [progress, setProgress] = useState(0);
-  const [isMuted, setIsMuted] = useState(false);
   const [isFinalClosing, setIsFinalClosing] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -91,15 +95,15 @@ export function WelcomeRitual({
     }, 450); // Fade medio más rápido hacia la app
   }, [storageKey, onComplete]);
 
-  // Hard safety timeout: jamás permitir que el overlay permanezca abierto más de 17s bajo ninguna circunstancia
+  // Hard safety timeout: jamás permitir que el overlay permanezca abierto más de 12s bajo ninguna circunstancia
   useEffect(() => {
     if (!isOpen) return;
     const safetyTimer = setTimeout(() => {
       if (!hasFinishedRef.current) {
-        console.warn('[WelcomeRitual] Triggered 17s safety auto-close.');
+        console.warn('[WelcomeRitual] Safety auto-close triggered.');
         handleFinish();
       }
-    }, 17000);
+    }, 12000);
     return () => clearTimeout(safetyTimer);
   }, [isOpen, handleFinish]);
 
@@ -107,12 +111,22 @@ export function WelcomeRitual({
   useEffect(() => {
     if (!isOpen) return;
 
-    const audio = new Audio('/assets/lugares-por-descubrir.mp3');
-    audioRef.current = audio;
-    audio.preload = 'auto';
+    let audio: HTMLAudioElement | null = null;
+    try {
+      audio = new Audio('/assets/lugares-por-descubrir.mp3');
+      audioRef.current = audio;
+      audio.preload = 'auto';
+      // En móvil / WKWebView nativo, silenciar por defecto para no ser bloqueado por la política de autoplay
+      const isNative = typeof window !== 'undefined' && !!(window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.();
+      if (isNative) {
+        audio.muted = true;
+      }
+    } catch {
+      // Audio no soportado, proceder sin audio
+    }
 
     const handleTimeUpdate = () => {
-      if (audio.duration) {
+      if (audio && audio.duration) {
         const t = audio.currentTime;
         setCurrentTime(t);
         const pct = (t / audio.duration) * 100;
@@ -130,16 +144,17 @@ export function WelcomeRitual({
       handleFinish();
     };
 
-    audio.addEventListener('timeupdate', handleTimeUpdate);
-    audio.addEventListener('ended', handleEnded);
+    if (audio) {
+      audio.addEventListener('timeupdate', handleTimeUpdate);
+      audio.addEventListener('ended', handleEnded);
+    }
 
-    // Fallback: Si el navegador bloquea el audio o no dispara timeupdate (ej. Safari / Telegram Webview),
+    // Fallback: Si el navegador bloquea el audio o no dispara timeupdate (ej. Safari / Telegram Webview / Native),
     // mantener un reloj interno para avanzar los subtítulos y cerrar automáticamente a los 16s.
     const fallbackTicker = setInterval(() => {
       const aud = audioRef.current;
-      if (!aud) return;
-      if (aud.paused || aud.ended) {
-        setCurrentTime((prev) => {
+      if (!aud || aud.paused || aud.ended) {
+        setCurrentTime((prev: number) => {
           if (prev >= 16.5) {
             clearInterval(fallbackTicker);
             handleFinish();
@@ -156,14 +171,18 @@ export function WelcomeRitual({
       }
     }, 250);
 
-    // Intentar reproducción automática sin mutear
-    const playPromise = audio.play();
-    if (playPromise !== undefined) {
-      playPromise.catch(() => {
-        audio.muted = true;
-        setIsMuted(true);
-        audio.play().catch(() => {});
-      });
+    // Intentar reproducción automática sin mutear si no es nativo
+    if (audio) {
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {
+          if (audio) {
+            audio.muted = true;
+            setIsMuted(true);
+            audio.play().catch(() => {});
+          }
+        });
+      }
     }
 
     const unlockOnFirstTouch = () => {
@@ -179,9 +198,11 @@ export function WelcomeRitual({
     return () => {
       clearInterval(fallbackTicker);
       window.removeEventListener('pointerdown', unlockOnFirstTouch);
-      audio.pause();
-      audio.removeEventListener('timeupdate', handleTimeUpdate);
-      audio.removeEventListener('ended', handleEnded);
+      if (audio) {
+        audio.pause();
+        audio.removeEventListener('timeupdate', handleTimeUpdate);
+        audio.removeEventListener('ended', handleEnded);
+      }
     };
   }, [isOpen, handleFinish]);
 

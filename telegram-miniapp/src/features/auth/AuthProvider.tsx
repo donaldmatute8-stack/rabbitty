@@ -107,9 +107,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       if (storedToken) {
         setSessionToken(storedToken);
         
-        // Timeout de seguridad de 3.5s para evitar cuelgues en arranques nativos o intermitencias de red
+        // Timeout de seguridad de 2.5s para evitar cuelgues en arranques nativos o intermitencias de red
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const timeoutId = setTimeout(() => controller.abort(), 2500);
 
         try {
           const res = await fetch('/api/auth/session', {
@@ -127,8 +127,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
               return;
             }
           } else if (res.status === 401 || res.status === 403) {
-            // Token is explicitly expired or revoked by server
-            console.log('[AuthProvider] Session expired or invalid, clearing local session');
+            console.log('[AuthProvider] Session expired, clearing local session');
             await PlatformBridge.clearSession();
             setSessionToken(null);
           }
@@ -136,11 +135,8 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           clearTimeout(timeoutId);
           const err = fetchErr as { name?: string };
           if (err?.name === 'AbortError') {
-            console.warn('[AuthProvider] Session verification timed out (3.5s). Proceeding to avoid freezing app.');
-          } else {
-            console.warn('[AuthProvider] Network error checking session:', fetchErr);
+            console.warn('[AuthProvider] Session check timed out. Proceeding to prevent hanging.');
           }
-          // Do not delete local token on pure network timeouts so user can retry upon reconnection
         }
       }
 

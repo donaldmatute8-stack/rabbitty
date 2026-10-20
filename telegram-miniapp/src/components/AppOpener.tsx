@@ -1,31 +1,64 @@
-'use client';
-
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import Image from 'next/image';
+
+interface TelegramWebApp {
+  ready: () => void;
+  expand: () => void;
+  initData?: string;
+  initDataUnsafe?: { user?: { id?: number } };
+  safeAreaInsets?: { top?: number };
+  isVersionAtLeast?: (ver: string) => boolean;
+  requestFullscreen?: () => void;
+  onEvent: (event: string, callback: () => void) => void;
+  offEvent: (event: string, callback: () => void) => void;
+}
+
+interface WindowWithPlatform extends Window {
+  Telegram?: {
+    WebApp?: TelegramWebApp;
+  };
+  Capacitor?: {
+    isNativePlatform?: () => boolean;
+  };
+}
 
 export default function AppOpener() {
-  const [showOpener, setShowOpener] = useState(false);
+  const [showOpener, setShowOpener] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const isNative = !!(window as WindowWithPlatform).Capacitor?.isNativePlatform?.();
+    if (isNative) return false;
+    try {
+      const hasSeen = sessionStorage.getItem('rabbitty_opener_shown');
+      if (!hasSeen) {
+        sessionStorage.setItem('rabbitty_opener_shown', 'true');
+        return true;
+      }
+    } catch {
+      return false;
+    }
+    return false;
+  });
+
   const [isRemoving, setIsRemoving] = useState(false);
 
   useEffect(() => {
-    const hasSeenOpener = sessionStorage.getItem('rabbitty_opener_shown');
-    if (!hasSeenOpener) {
-      setShowOpener(true);
-      sessionStorage.setItem('rabbitty_opener_shown', 'true');
-      // Allow animation to play, then remove from DOM
-      setTimeout(() => {
-        setIsRemoving(true);
-        setTimeout(() => {
-          setShowOpener(false);
-        }, 800); // Wait for exit animation
-      }, 1600); // Duration of the hold
-    }
-  }, []);
+    if (!showOpener) return;
+    const hideTimer = setTimeout(() => {
+      setIsRemoving(true);
+      const removeTimer = setTimeout(() => {
+        setShowOpener(false);
+      }, 500);
+      return () => clearTimeout(removeTimer);
+    }, 1200);
+
+    return () => clearTimeout(hideTimer);
+  }, [showOpener]);
 
   useEffect(() => {
     // Config and request fullscreen for Telegram WebApp
     if (typeof window !== 'undefined') {
-      const tg = (window as any).Telegram?.WebApp;
+      const tg = (window as WindowWithPlatform).Telegram?.WebApp;
       if (tg) {
         tg.ready();
         tg.expand();
@@ -100,9 +133,12 @@ export default function AppOpener() {
             transition={{ duration: 2, ease: "easeOut" }}
             style={{ position: 'relative', width: 220, height: 220 }}
           >
-            <img
+            <Image
               src="/logo_conejo.png"
               alt="Rabbitty"
+              width={220}
+              height={220}
+              priority
               style={{
                 width: '100%',
                 height: '100%',
