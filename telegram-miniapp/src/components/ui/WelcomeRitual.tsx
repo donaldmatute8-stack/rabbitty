@@ -121,6 +121,22 @@ export function WelcomeRitual({
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('ended', handleEnded);
 
+    // Fallback: Si el navegador bloquea el audio o no dispara timeupdate (ej. Safari / Telegram Webview),
+    // mantener un reloj interno para avanzar los subtítulos y cerrar automáticamente a los 16s.
+    const fallbackTicker = setInterval(() => {
+      if (audio.paused || !audio.currentTime) {
+        setCurrentTime((prev) => {
+          const next = prev + 0.25;
+          setProgress((next / 16.5) * 100);
+          if (next >= 16.5) {
+            clearInterval(fallbackTicker);
+            handleFinish();
+          }
+          return next;
+        });
+      }
+    }, 250);
+
     // Intentar reproducción automática sin mutear
     const playPromise = audio.play();
     if (playPromise !== undefined) {
@@ -142,6 +158,7 @@ export function WelcomeRitual({
     window.addEventListener('pointerdown', unlockOnFirstTouch);
 
     return () => {
+      clearInterval(fallbackTicker);
       window.removeEventListener('pointerdown', unlockOnFirstTouch);
       audio.pause();
       audio.removeEventListener('timeupdate', handleTimeUpdate);
