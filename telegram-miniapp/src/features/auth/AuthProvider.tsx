@@ -4,8 +4,29 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
 import { useRouter, usePathname } from 'next/navigation';
 import { PlatformBridge } from '@/lib/platform';
 
+export interface UserProfile {
+  id?: string;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  username?: string;
+  telegramId?: string;
+  tonWalletAddress?: string | null;
+  hops?: number;
+  role?: string;
+  totalBunzEarned?: number;
+  totalBunzSpent?: number;
+  visitedBusinesses?: number;
+  level?: {
+    id?: string;
+    name?: string;
+    requiredHops?: number;
+  };
+  [key: string]: unknown; // fallback for unmapped properties while providing rich autocomplete
+}
+
 interface AuthContextType {
-  user: any | null;
+  user: UserProfile | null;
   loading: boolean;
   sessionToken: string | null;
   isTelegram: boolean;
@@ -29,7 +50,7 @@ export const useAuth = () => useContext(AuthContext);
 const PUBLIC_ROUTES = ['/onboarding', '/signup', '/login', '/welcome', '/privacy', '/magic-link'];
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<UserProfile | null>(null);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -85,23 +106,41 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       const storedToken = await PlatformBridge.getSessionToken();
       if (storedToken) {
         setSessionToken(storedToken);
-        const res = await fetch('/api/auth/session', {
-          headers: {
-            'Authorization': `Bearer ${storedToken}`,
-          },
-        });
+        
+        // Timeout de seguridad de 3.5s para evitar cuelgues en arranques nativos o intermitencias de red
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
 
-        if (res.ok) {
-          const data = await res.json();
-          if (data?.profile) {
-            setUser(data.profile);
-            return;
+        try {
+          const res = await fetch('/api/auth/session', {
+            headers: {
+              'Authorization': `Bearer ${storedToken}`,
+            },
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.profile) {
+              setUser(data.profile);
+              return;
+            }
+          } else if (res.status === 401 || res.status === 403) {
+            // Token is explicitly expired or revoked by server
+            console.log('[AuthProvider] Session expired or invalid, clearing local session');
+            await PlatformBridge.clearSession();
+            setSessionToken(null);
           }
-        } else {
-          // Token is expired or revoked by server
-          console.log('[AuthProvider] Session expired or invalid, clearing local session');
-          await PlatformBridge.clearSession();
-          setSessionToken(null);
+        } catch (fetchErr: unknown) {
+          clearTimeout(timeoutId);
+          const err = fetchErr as { name?: string };
+          if (err?.name === 'AbortError') {
+            console.warn('[AuthProvider] Session verification timed out (3.5s). Proceeding to avoid freezing app.');
+          } else {
+            console.warn('[AuthProvider] Network error checking session:', fetchErr);
+          }
+          // Do not delete local token on pure network timeouts so user can retry upon reconnection
         }
       }
 
@@ -145,7 +184,14 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   };
 
   useEffect(() => {
-    checkAuth();
+    let active = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    checkAuth().catch((err) => {
+      if (active) console.error('[AuthProvider] Unhandled auth error:', err);
+    });
+    return () => {
+      active = false;
+    };
   }, [checkAuth]);
 
   // Push Notifications native registration (iOS APNs / Android FCM)

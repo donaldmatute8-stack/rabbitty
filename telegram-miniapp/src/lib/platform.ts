@@ -389,5 +389,27 @@ export const PlatformBridge = {
 
     return { success: false, error: 'unsupported' };
   },
+
+  /**
+   * Limpieza forzada de caché local y recarga (Rescue Mechanism para App Nativa / Web)
+   */
+  async hardResetCache(): Promise<void> {
+    if (typeof window === 'undefined') return;
+    try {
+      if (this.isNative()) {
+        await Preferences.clear();
+      }
+      localStorage.clear();
+      sessionStorage.clear();
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map((name) => caches.delete(name)));
+      }
+    } catch (e) {
+      console.warn('[PlatformBridge] Error clearing caches:', e);
+    } finally {
+      window.location.href = '/?cb=' + Date.now();
+    }
+  },
 };
 

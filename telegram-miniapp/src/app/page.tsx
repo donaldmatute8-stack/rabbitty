@@ -185,37 +185,46 @@ export default function FeedPage() {
 
   useEffect(() => {
     import('@twa-dev/sdk').then((mod) => {
-      const app = mod.default;
-      app.ready(); app.expand();
-
-      // --- DEEP LINKING (SEO Public Landing Pages) ---
-      const startParam = app.initDataUnsafe?.start_param;
-      if (startParam && startParam.startsWith('affiliate_')) {
-        const affiliateId = startParam.split('affiliate_')[1];
-        if (affiliateId) {
-          router.push(`/affiliate/${affiliateId}`);
+      try {
+        const app = mod.default;
+        if (app && typeof app.ready === 'function') {
+          app.ready();
         }
-      }
+        if (app && typeof app.expand === 'function') {
+          app.expand();
+        }
 
-      // --- SEAMLESS TELEGRAM AUTH ---
-      if (app.initData) {
-        fetch('/api/auth/telegram', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            initData: app.initData,
-            startParam: app.initDataUnsafe?.start_param
-          })
-        })
-        .then(res => res.json())
-        .then(data => {
-          if (data.success) {
-            console.log("🐰 Autenticación Rabbitty Exitosa:", data.user);
+        // --- DEEP LINKING (SEO Public Landing Pages) ---
+        const startParam = app?.initDataUnsafe?.start_param;
+        if (startParam && startParam.startsWith('affiliate_')) {
+          const affiliateId = startParam.split('affiliate_')[1];
+          if (affiliateId) {
+            router.push(`/affiliate/${affiliateId}`);
           }
-        })
-        .catch(err => console.error("Error en auth:", err));
+        }
+
+        // --- SEAMLESS TELEGRAM AUTH ---
+        if (app?.initData) {
+          fetch('/api/auth/telegram', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              initData: app.initData,
+              startParam: app.initDataUnsafe?.start_param
+            })
+          })
+          .then(res => res.json())
+          .then(data => {
+            if (data.success) {
+              console.log("🐰 Autenticación Rabbitty Exitosa:", data.user);
+            }
+          })
+          .catch(err => console.error("Error en auth:", err));
+        }
+      } catch (err) {
+        console.warn('[Telegram SDK] Ignored outside Telegram webview:', err);
       }
-    });
+    }).catch(() => {});
   }, [router]);
 
   const postsWithDistance = useMemo(() => {

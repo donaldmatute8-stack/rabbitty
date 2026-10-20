@@ -91,6 +91,18 @@ export function WelcomeRitual({
     }, 450); // Fade medio más rápido hacia la app
   }, [storageKey, onComplete]);
 
+  // Hard safety timeout: jamás permitir que el overlay permanezca abierto más de 17s bajo ninguna circunstancia
+  useEffect(() => {
+    if (!isOpen) return;
+    const safetyTimer = setTimeout(() => {
+      if (!hasFinishedRef.current) {
+        console.warn('[WelcomeRitual] Triggered 17s safety auto-close.');
+        handleFinish();
+      }
+    }, 17000);
+    return () => clearTimeout(safetyTimer);
+  }, [isOpen, handleFinish]);
+
   // Manejo de reproducción de audio y sincronización continua
   useEffect(() => {
     if (!isOpen) return;

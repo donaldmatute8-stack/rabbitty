@@ -227,7 +227,7 @@ export default function BunzGuide({ onClose }: { onClose: () => void }) {
                   <p style={{ margin: 0, fontSize: 13 }}>
                     Datos del ecosistema muestran que un cliente pagando con Bunz 
                     <strong> consume 30% más</strong> que uno que paga en efectivo. 
-                    Porque siente que "no está gastando" — aunque el negocio recibe el valor completo.
+                    Porque siente que &ldquo;no está gastando&rdquo; — aunque el negocio recibe el valor completo.
                   </p>
                 </div>
 
