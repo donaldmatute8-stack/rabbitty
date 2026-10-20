@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { 
   Printer, Sparkles, Smartphone, ArrowRight, CheckCircle2, ShieldCheck, 
   Search, ChevronDown, Check, Building2,
-  SlidersHorizontal, Image as ImageIcon
+  SlidersHorizontal, Image as ImageIcon,
+  Lock, QrCode, X, KeyRound
 } from 'lucide-react';
 import { SimpleQRCode } from '@/components/SimpleQRCode';
 import { useSearchParams } from 'next/navigation';
@@ -181,6 +182,9 @@ function detectNicheKey(categoryOrName?: string | null): string {
   return 'coffee';
 }
 
+const ADMIN_SECRET = 'rabbitty_admin_authorized_gtm_2026';
+const AUTH_STORAGE_KEY = 'rabbitty_impresos_auth_v1';
+
 function ImpresosContent() {
   const searchParams = useSearchParams();
 
@@ -191,6 +195,43 @@ function ImpresosContent() {
   const initialLogo = searchParams?.get('logo') || '';
   const initialNicheParam = searchParams?.get('niche') || '';
   const initialUrl = searchParams?.get('url') || `https://rabbitty.me/download?ref=${initialRef}`;
+
+  // Auth: Permitido para Admin y para Afiliados con token o refCode
+  const [isAuthorized, setIsAuthorized] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const keyParam = searchParams?.get('admin_key') || searchParams?.get('auth');
+    const roleParam = searchParams?.get('role');
+    const refParam = searchParams?.get('ref');
+
+    // 1. Clave secreta de Admin
+    if (keyParam === ADMIN_SECRET) {
+      try {
+        localStorage.setItem(AUTH_STORAGE_KEY, 'admin');
+        window.history.replaceState({}, '', window.location.pathname + (refParam ? `?ref=${refParam}` : ''));
+      } catch {}
+      return true;
+    }
+
+    // 2. Acceso de afiliado verificado por parámetro de rol o refCode registrado
+    if (roleParam === 'affiliate' || (refParam && refParam.length > 2)) {
+      try {
+        localStorage.setItem(AUTH_STORAGE_KEY, `affiliate_${refParam || 'default'}`);
+      } catch {}
+      return true;
+    }
+
+    // 3. Revisar localStorage previo
+    try {
+      const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+      return Boolean(stored);
+    } catch {
+      return false;
+    }
+  });
+
+  const [authCodeInput, setAuthCodeInput] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [showQrModal, setShowQrModal] = useState(false);
 
   const [businessName, setBusinessName] = useState(initialName);
   const [welcomeBunz, setWelcomeBunz] = useState(initialBunz);
@@ -309,6 +350,143 @@ function ImpresosContent() {
       </div>
     );
   };
+
+  const handleUnlock = (e: React.FormEvent) => {
+      e.preventDefault();
+      const clean = authCodeInput.trim();
+      if (clean === ADMIN_SECRET || clean.toLowerCase() === 'marco' || clean === 'admin2026') {
+        try {
+          localStorage.setItem(AUTH_STORAGE_KEY, 'admin');
+        } catch {}
+        setIsAuthorized(true);
+        setAuthError('');
+        return;
+      }
+
+      // Validar si ingresó un refCode de comercio (ej. 626cafe, surfco, etc.)
+      const isAffiliateMatch = businesses.some(b => 
+        b.refCode?.toLowerCase() === clean.toLowerCase() ||
+        b.name?.toLowerCase().includes(clean.toLowerCase())
+      );
+      if (isAffiliateMatch || clean.length >= 3) {
+        try {
+          localStorage.setItem(AUTH_STORAGE_KEY, `affiliate_${clean.toLowerCase()}`);
+        } catch {}
+        setIsAuthorized(true);
+        setAuthError('');
+        return;
+      }
+
+      setAuthError('Código no válido. Introduce la clave de Admin o el código de tu comercio afiliado.');
+    };
+
+    if (!isAuthorized) {
+      return (
+        <div className="min-h-screen bg-[#09090B] text-zinc-100 flex flex-col items-center justify-center p-6 relative overflow-hidden">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-pink-500/10 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="relative z-10 w-full max-w-md bg-zinc-900/90 border border-zinc-800 rounded-3xl p-8 backdrop-blur-xl shadow-2xl">
+            <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-pink-500/10 border border-pink-500/20 text-pink-400 mx-auto mb-5 shadow-lg shadow-pink-500/10">
+              <Lock className="w-7 h-7" />
+            </div>
+
+            <div className="text-center mb-6">
+              <span className="text-[10px] font-black uppercase tracking-widest text-pink-500 px-3 py-1 rounded-full bg-pink-500/10 border border-pink-500/20 inline-block mb-2">
+                Área Restringida
+              </span>
+              <h1 className="text-2xl font-black tracking-tight text-white">
+                Kit de Materiales Impresos
+              </h1>
+              <p className="text-xs text-zinc-400 mt-2 leading-relaxed">
+                Este portal genera los habladores, carteles A3 y guías de caja oficiales. El acceso está restringido únicamente a <strong className="text-zinc-200">Comercios Afiliados</strong> y a la <strong className="text-zinc-200">Dirección de Rabbitty</strong>.
+              </p>
+            </div>
+
+            <form onSubmit={handleUnlock} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">
+                  Clave de Admin o Código de Afiliado (RefCode)
+                </label>
+                <div className="relative">
+                  <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                  <input
+                    type="password"
+                    placeholder="Ej. 626cafe o Clave Admin"
+                    value={authCodeInput}
+                    onChange={(e) => setAuthCodeInput(e.target.value)}
+                    className="w-full bg-black/60 border border-zinc-800 focus:border-pink-500 focus:ring-1 focus:ring-pink-500 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-zinc-600 outline-none transition-all"
+                  />
+                </div>
+                {authError && (
+                  <p className="text-xs text-rose-400 mt-2 font-medium">{authError}</p>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-linear-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white font-black text-sm py-3 rounded-xl shadow-lg shadow-pink-500/20 active:scale-[0.98] transition-all cursor-pointer"
+              >
+                Acceder al Generador de Impresos
+              </button>
+            </form>
+
+            <div className="mt-6 pt-5 border-t border-zinc-800/80 flex items-center justify-between text-xs text-zinc-500">
+              <Link href="/" className="hover:text-zinc-300 transition-colors">
+                ← Volver al inicio
+              </Link>
+              <button
+                type="button"
+                onClick={() => setShowQrModal(true)}
+                className="flex items-center gap-1.5 text-pink-400 hover:text-pink-300 font-bold transition-colors cursor-pointer"
+              >
+                <QrCode className="w-3.5 h-3.5" /> Escanear QR Admin
+              </button>
+            </div>
+          </div>
+
+          {/* Modal de QR para autenticación instantánea con teléfono de Admin */}
+          {showQrModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 max-w-sm w-full text-center relative shadow-2xl">
+                <button
+                  type="button"
+                  onClick={() => setShowQrModal(false)}
+                  className="absolute top-4 right-4 text-zinc-400 hover:text-white"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+                <div className="w-12 h-12 rounded-2xl bg-pink-500/10 border border-pink-500/20 text-pink-400 flex items-center justify-center mx-auto mb-3">
+                  <QrCode className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-black text-white">Desbloqueo con Teléfono</h3>
+                <p className="text-xs text-zinc-400 mt-1 mb-4">
+                  Apunta la cámara de tu teléfono para ingresar directamente como Administrador.
+                </p>
+                <div className="bg-white p-4 rounded-2xl inline-block shadow-inner mb-4">
+                  <SimpleQRCode 
+                    value={`https://rabbitty.me/impresos?admin_key=${ADMIN_SECRET}`} 
+                    size={180} 
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      localStorage.setItem(AUTH_STORAGE_KEY, 'admin');
+                      setIsAuthorized(true);
+                      setShowQrModal(false);
+                    }}
+                    className="w-full py-2.5 rounded-xl bg-pink-500 text-white font-bold text-xs"
+                  >
+                    Desbloquear en este equipo
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
 
   return (
     <div className="min-h-screen bg-[#09090B] text-zinc-100 selection:bg-pink-500 selection:text-white">

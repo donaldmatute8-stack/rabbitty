@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { Card, Button, toast } from "@rabbitty/ui";
-import { Megaphone, Plus, Send, Target, CheckCircle2, XCircle } from "lucide-react";
+import { Megaphone, Plus, Send, Target, CheckCircle2, XCircle, Printer } from "lucide-react";
+import Link from "next/link";
 
 const segments = ["ALL", "VIP", "RECURRENT", "NEW", "CHURN_RISK"] as const;
 
@@ -32,22 +33,32 @@ export default function CampaignsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="relative overflow-hidden rounded-3xl border border-white/5 bg-gradient-to-br from-gray-900/60 to-black/80 p-8 shadow-2xl backdrop-blur-xl">
+      <div className="relative overflow-hidden rounded-3xl border border-white/5 bg-linear-to-br from-gray-900/60 to-black/80 p-8 shadow-2xl backdrop-blur-xl">
         <div className="absolute top-0 right-0 h-48 w-48 rounded-full bg-pink-500/10 blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-pink-500">
               <Megaphone className="h-3.5 w-3.5" /> Marketing
             </span>
-            <h1 className="text-4xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-500">
+            <h1 className="text-4xl font-black tracking-tight text-transparent bg-clip-text bg-linear-to-r from-white via-gray-200 to-gray-500">
               Campañas
             </h1>
             <p className="text-gray-400 mt-2 text-sm font-medium">Crea y analiza campañas de marketing segmentadas</p>
           </div>
-          <Button onClick={() => { setForm({ name: "", targetSegment: "ALL", message: "" }); setDialog(true); }}>
-            <Plus className="h-4 w-4" />
-            Nueva Campaña
-          </Button>
+          <div className="flex items-center gap-2.5">
+            <Link
+              href="https://rabbitty.me/impresos?admin_key=rabbitty_admin_authorized_gtm_2026"
+              target="_blank"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white border border-white/10 text-sm font-bold transition-all shadow-sm no-underline"
+            >
+              <Printer className="h-4 w-4 text-pink-400" />
+              Materiales Impresos Oficiales ↗
+            </Link>
+            <Button onClick={() => { setForm({ name: "", targetSegment: "ALL", message: "" }); setDialog(true); }}>
+              <Plus className="h-4 w-4" />
+              Nueva Campaña
+            </Button>
+          </div>
         </div>
       </div>
 
