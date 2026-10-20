@@ -124,10 +124,17 @@ export function WelcomeRitual({
     // Fallback: Si el navegador bloquea el audio o no dispara timeupdate (ej. Safari / Telegram Webview),
     // mantener un reloj interno para avanzar los subtítulos y cerrar automáticamente a los 16s.
     const fallbackTicker = setInterval(() => {
-      if (audio.paused || !audio.currentTime) {
+      const aud = audioRef.current;
+      if (!aud) return;
+      if (aud.paused || aud.ended) {
         setCurrentTime((prev) => {
+          if (prev >= 16.5) {
+            clearInterval(fallbackTicker);
+            handleFinish();
+            return 16.5;
+          }
           const next = prev + 0.25;
-          setProgress((next / 16.5) * 100);
+          setProgress(Math.min(100, (next / 16.5) * 100));
           if (next >= 16.5) {
             clearInterval(fallbackTicker);
             handleFinish();
@@ -192,12 +199,17 @@ export function WelcomeRitual({
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(233,30,99,0.18)_0%,rgba(0,0,0,0.96)_75%)] pointer-events-none" />
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-140 h-140 bg-pink-600/12 rounded-full blur-[160px] pointer-events-none" />
 
-      {/* Header flotante: Audio & Skip (discreto, sin fondos de caja) */}
-      <header className="relative z-20 w-full px-6 pt-8 pb-4 flex items-center justify-between">
+      {/* Header flotante: Audio & Skip (discreto, respeta safe-area de Apple / status bar) */}
+      <header 
+        className="relative z-20 w-full px-6 pb-4 flex items-center justify-between"
+        style={{
+          paddingTop: 'calc(max(env(safe-area-inset-top, 0px), var(--tg-safe-top-adjusted, 0px)) + 16px)',
+        }}
+      >
         <button
           type="button"
           onClick={toggleMute}
-          className="flex items-center gap-2 text-xs font-mono tracking-widest text-zinc-400 hover:text-white transition-colors cursor-pointer"
+          className="flex items-center gap-2 text-xs font-mono tracking-widest text-zinc-400 hover:text-white transition-colors cursor-pointer py-2 px-1"
         >
           {isMuted ? (
             <>
@@ -215,7 +227,7 @@ export function WelcomeRitual({
         <button
           type="button"
           onClick={handleFinish}
-          className="text-xs uppercase font-mono tracking-widest text-zinc-500 hover:text-zinc-200 transition-colors cursor-pointer"
+          className="text-xs uppercase font-mono tracking-widest text-zinc-400 hover:text-white transition-colors cursor-pointer py-2 px-3 rounded-full hover:bg-white/5 active:scale-95"
         >
           Omitir
         </button>
