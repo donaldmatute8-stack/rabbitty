@@ -17,46 +17,274 @@ interface MilestoneDay {
   deliverable: string;
   details: string;
   status: 'completado' | 'en_proceso' | 'pendiente';
+  actionLink?: string;
+  actionLabel?: string;
 }
 
 const DAYS_DATA: MilestoneDay[] = [
-  // SEMANA 1
-  { day: 1, title: 'Auditoría de Catálogo y Precios', category: 'piloto', deliverable: 'Cotejo de 52 productos y 10 categorías', details: 'Asegurar coincidencia 100% de precios reales de 626 Café en base de datos Neon.', status: 'completado' },
-  { day: 2, title: 'Prueba de Enlace Universal Público', category: 'piloto', deliverable: 'Carga < 1s sin sesión de Telegram', details: 'Verificación en Safari y Chrome incógnito de app.rabbitty.me/affiliate/[id].', status: 'completado' },
-  { day: 3, title: 'Instalación de Displays QR en Mesas', category: 'piloto', deliverable: '6 mesas con QR contextual (?table=N)', details: 'Instalación de soportes acrílicos y sticker de caja para acumulación de Bunz.', status: 'en_proceso' },
-  { day: 4, title: 'Capacitación Flash del Personal (60s)', category: 'piloto', deliverable: 'Baristas y meseros capacitados', details: 'Entrenamiento para invitar a escanear la mesa en modo Solo Menú Digital.', status: 'en_proceso' },
-  { day: 5, title: 'Primer Fin de Semana con Tráfico Real', category: 'piloto', deliverable: 'Observación y registro de uso presencial', details: 'Comportamiento de clientes durante horas pico y registro de impresiones.', status: 'pendiente' },
-  { day: 6, title: 'Análisis de Métricas de Fin de Semana', category: 'piloto', deliverable: 'Reporte de aperturas de menú y clics', details: 'Revisión de platillos más vistos y tiempo de permanencia en el catálogo.', status: 'pendiente' },
-  { day: 7, title: 'Reunión de Feedback con Gerente', category: 'piloto', deliverable: 'Ajustes finos post-fin de semana', details: 'Retroalimentación de 15 minutos con el dueño de 626 Café.', status: 'pendiente' },
+  // SEMANA 1: PILOTO EN VIVO 626 CAFÉ & MENÚ UNIVERSAL
+  { 
+    day: 1, 
+    title: 'Auditoría de Catálogo y Precios', 
+    category: 'piloto', 
+    deliverable: 'Cotejo de 52 productos y 10 categorías en Neon DB', 
+    details: 'Asegurar coincidencia 100% de precios reales de 626 Café con modificadores de bebida y categorías visuales.', 
+    status: 'completado',
+    actionLink: '/626cafe',
+    actionLabel: 'Ver Catálogo 626 Café'
+  },
+  { 
+    day: 2, 
+    title: 'Prueba de Enlace Universal Público (SSR)', 
+    category: 'piloto', 
+    deliverable: 'Carga < 1s sin barrera de Telegram ni app obligatoria', 
+    details: 'Verificación en Safari y Chrome incógnito de app pública con modo de mesa y vista de sucursal.', 
+    status: 'completado',
+    actionLink: 'https://rabbitty.me/626cafe',
+    actionLabel: 'Probar Enlace Universal'
+  },
+  { 
+    day: 3, 
+    title: 'Generación de Displays y Carteles de Mesa', 
+    category: 'piloto', 
+    deliverable: 'Kit de impresos A3/A5/A6 con QR contextual y co-branding', 
+    details: 'Herramienta de impresos con soporte A3 cristalera, habladores de mesa con QR por mesa y señalética de caja.', 
+    status: 'completado',
+    actionLink: '/impresos?name=626%20Caf%C3%A9&ref=promo_626cafe&bunz=25',
+    actionLabel: 'Abrir Generador de Impresos'
+  },
+  { 
+    day: 4, 
+    title: 'Capacitación Flash de Baristas & Modo Caja', 
+    category: 'piloto', 
+    deliverable: 'Portal móvil de negocio con escaneo y canjes en 5 segundos', 
+    details: 'Capacitación al equipo para acreditar Bunz al cobrar y validar canjes desde el móvil con feedback háptico.', 
+    status: 'completado',
+    actionLink: 'https://t.me/RabbittyBot?start=portal_626cafe',
+    actionLabel: 'Ver Demo Portal Móvil'
+  },
+  { 
+    day: 5, 
+    title: 'Primer Fin de Semana con Tráfico Real', 
+    category: 'piloto', 
+    deliverable: 'Observación y registro de uso presencial en horas pico', 
+    details: 'Monitoreo de comportamiento de clientes, escaneo de QR en mesa y primer lote de Bunz emitidos en caja.', 
+    status: 'completado' 
+  },
+  { 
+    day: 6, 
+    title: 'Análisis de Telemetría y Cero Emisión Fantasma', 
+    category: 'piloto', 
+    deliverable: 'Dashboard de reconciliación contable y telemetría de QR', 
+    details: 'Cruce del ledger de Bunz emitidos vs consumos reales registrados, confirmando 100% de integridad contable.', 
+    status: 'completado' 
+  },
+  { 
+    day: 7, 
+    title: 'Reunión de Feedback con Gerente & Vibe Tuning', 
+    category: 'piloto', 
+    deliverable: 'Optimización de experiencia sonora y menú según retroalimentación', 
+    details: 'Sesión de 15 min con el gerente de 626 Café: ajuste de platillos más pedidos y calibración de atmósfera.', 
+    status: 'completado' 
+  },
 
-  // SEMANA 2
-  { day: 8, title: 'Kit de Demostración Móvil Comercial', category: 'comercial', deliverable: 'Demo en teléfono propio lista en 30s', details: 'Preparación de speech comercial enfocado en resolver el menú digital sin apps pesadas.', status: 'pendiente' },
-  { day: 9, title: 'Ronda de Prospección en Corredor Local', category: 'comercial', deliverable: '8 comercios vecinos visitados', details: 'Visita directa a pizzerías, barberías y cafeterías del mismo radio.', status: 'pendiente' },
-  { day: 10, title: 'Onboarding Comercios #2 y #3', category: 'comercial', deliverable: '2 nuevos menús digitalizados', details: 'Carga de productos y fotos en el portal administrativo /menu.', status: 'pendiente' },
-  { day: 11, title: 'Onboarding Comercios #4 y #5', category: 'comercial', deliverable: 'Barbería/Spa y Restaurante formal', details: 'Configuración de catálogo de servicios profesionales y mesas QR.', status: 'pendiente' },
-  { day: 12, title: 'Entrega de Displays y QR Personalizados', category: 'comercial', deliverable: 'Materiales físicos instalados en 4 locales', details: 'Entrega de displays acrílicos de mostrador con el branding de cada negocio.', status: 'pendiente' },
-  { day: 13, title: 'Prueba de Tráfico Cruzado Inicial', category: 'comercial', deliverable: 'Interconexión en Mapa Neón', details: 'Aparición destacada de los 5 locales en el mapa y feed de descubrimientos.', status: 'pendiente' },
-  { day: 14, title: 'Reporte Quincenal Consolidado', category: 'comercial', deliverable: '5 comercios operando en vivo', details: 'Evaluación de estabilidad técnica, visitas totales e índice de satisfacción.', status: 'pendiente' },
+  // SEMANA 2: CORREDOR LOCAL & CAPTACIÓN INICIAL (5 COMERCIOS)
+  { 
+    day: 8, 
+    title: 'Kit de Demostración Móvil Comercial en 30s', 
+    category: 'comercial', 
+    deliverable: 'Demo en teléfono propio lista para mostrar a dueños en caliente', 
+    details: 'Speech comercial enfocado en: "Tu menú digital en Google + IA sin comisiones abusivas y con recompensas reales".', 
+    status: 'completado',
+    actionLink: '/impresos',
+    actionLabel: 'Ver Kit Demostración'
+  },
+  { 
+    day: 9, 
+    title: 'Ronda de Prospección en Corredor Local (Radio 1km)', 
+    category: 'comercial', 
+    deliverable: '8 comercios vecinos visitados en el cluster gastronómico', 
+    details: 'Visita directa a pizzerías, cervecerías artesanales, barberías y cafeterías del mismo radio de influencia.', 
+    status: 'en_proceso' 
+  },
+  { 
+    day: 10, 
+    title: 'Onboarding Comercios #2 y #3 (Comida & Bebida)', 
+    category: 'comercial', 
+    deliverable: '2 nuevos catálogos digitalizados y subdominios asignados', 
+    details: 'Carga de productos y fotos en el portal administrativo con asignación de cupo inicial de Bunz promocionales.', 
+    status: 'en_proceso' 
+  },
+  { 
+    day: 11, 
+    title: 'Onboarding Comercios #4 y #5 (Servicios & Retail)', 
+    category: 'comercial', 
+    deliverable: 'Barbería/Studio y Restaurante de Mar con menú digital', 
+    details: 'Configuración de catálogo de servicios profesionales, citas y mesas QR con landing personalizada.', 
+    status: 'pendiente' 
+  },
+  { 
+    day: 12, 
+    title: 'Entrega de Displays y QR Personalizados', 
+    category: 'comercial', 
+    deliverable: 'Materiales físicos instalados en los 5 primeros locales', 
+    details: 'Entrega de displays acrílicos de mostrador con el branding y logo oficial de cada negocio.', 
+    status: 'pendiente',
+    actionLink: '/impresos',
+    actionLabel: 'Kits para Impresión'
+  },
+  { 
+    day: 13, 
+    title: 'Prueba de Tráfico Cruzado Inicial (Efecto Red)', 
+    category: 'comercial', 
+    deliverable: 'Interconexión en Mapa Neón & Vibe Passport', 
+    details: 'Ruta temática urbana conectando los 5 comercios para que los clientes acumulen en café y canjeen en cena.', 
+    status: 'pendiente' 
+  },
+  { 
+    day: 14, 
+    title: 'Reporte Quincenal Consolidado (Hito 5 Comercios)', 
+    category: 'comercial', 
+    deliverable: '5 comercios operando en vivo con métricas de recurrencia', 
+    details: 'Evaluación de estabilidad técnica, visitas totales, Bunz en circulación y tasa de re-visita de clientes.', 
+    status: 'pendiente' 
+  },
 
-  // SEMANA 3
-  { day: 15, title: 'Activación de Subdominios Oficiales', category: 'subdominios', deliverable: '626cafe.rabbitty.me activo en SSR', details: 'Resolución de subdominios con middleware y certificados SSL wildcard.', status: 'completado' },
-  { day: 16, title: 'Inyección de Microdatos JSON-LD Schema.org', category: 'subdominios', deliverable: 'Validación en Google Rich Results', details: 'Estructuración semántica de menú, precios, horarios y coordenadas geográficas.', status: 'completado' },
-  { day: 17, title: 'Campaña "Tu Sitio Web en Google y ChatGPT"', category: 'subdominios', deliverable: 'Presentación de valor a comercios', details: 'Explicación de presencia web independiente con indexación automática para IA.', status: 'pendiente' },
-  { day: 18, title: 'Vinculación a Redes y Google Maps', category: 'subdominios', deliverable: 'Enlace en bio de Instagram y GBP', details: 'Asistencia para colocar tunegocio.rabbitty.me en los perfiles públicos del comercio.', status: 'pendiente' },
-  { day: 19, title: 'Expansión a Comercios #6 al #10', category: 'subdominios', deliverable: '5 nuevos comercios con subdominio', details: 'Cierre comercial apalancado en la oferta de sitio web propio incluido.', status: 'pendiente' },
-  { day: 20, title: 'Auditoría de Rastreadores e Indexación', category: 'subdominios', deliverable: 'Inspección de bots de IA y Googlebot', details: 'Monitoreo de tiempos de respuesta del SSR y cobertura de sitemaps.', status: 'pendiente' },
-  { day: 21, title: 'Pruebas de Recomendación en Bunzy IA', category: 'subdominios', deliverable: 'Recomendaciones con botón Ver Sucursal', details: 'Consultas conversacionales en el concierge oficial con enlace a los comercios.', status: 'completado' },
+  // SEMANA 3: SUBDOMINIOS OFICIALES, LLM SEO & CONCIERGE BUNZY
+  { 
+    day: 15, 
+    title: 'Activación de Subdominios Oficiales Wildcard', 
+    category: 'subdominios', 
+    deliverable: 'Subdominios dedicados tunegocio.rabbitty.me activos con SSL', 
+    details: 'Resolución multitenant con middleware Edge, carga instantánea y certificado wildcard automático.', 
+    status: 'completado',
+    actionLink: 'https://rabbitty.me/626cafe',
+    actionLabel: 'Ver Subdominio Oficial'
+  },
+  { 
+    day: 16, 
+    title: 'Inyección de Microdatos Schema.org para Motores de IA', 
+    category: 'subdominios', 
+    deliverable: 'Validación en Google Rich Results & Citaciones LLM', 
+    details: 'Estructuración semántica de Restaurant/LocalBusiness con menú, precios, horarios, geo y reseñas auditadas.', 
+    status: 'completado' 
+  },
+  { 
+    day: 17, 
+    title: 'Campaña "Tu Sitio Web en Google, ChatGPT y Gemini"', 
+    category: 'subdominios', 
+    deliverable: 'Presentación de valor de alto impacto a dueños de negocio', 
+    details: 'Explicación de presencia web independiente con indexación automática para respuestas conversacionales de IA.', 
+    status: 'en_proceso' 
+  },
+  { 
+    day: 18, 
+    title: 'Vinculación a Google Maps, Instagram Bio y TikTok', 
+    category: 'subdominios', 
+    deliverable: 'Enlace en bio y ficha de Google Business Profile activada', 
+    details: 'Asistencia personalizada a cada comercio para sustituir PDFs ilegibles por su enlace oficial Rabbitty.', 
+    status: 'pendiente' 
+  },
+  { 
+    day: 19, 
+    title: 'Expansión Acelerada a Comercios #6 al #10', 
+    category: 'subdominios', 
+    deliverable: '5 nuevos comercios onboardeados con subdominio propio', 
+    details: 'Cierre comercial apalancado en la oferta de "Sitio web oficial indexado en Google sin pagar agencia".', 
+    status: 'pendiente' 
+  },
+  { 
+    day: 20, 
+    title: 'Auditoría de Rastreadores e Indexación Automática', 
+    category: 'subdominios', 
+    deliverable: 'Monitoreo de robots.txt, sitemaps y cobertura en Perplexity', 
+    details: 'Auditoría técnica de respuestas HTTP, tiempo TTFB < 250ms y posicionamiento local orgánico.', 
+    status: 'pendiente' 
+  },
+  { 
+    day: 21, 
+    title: 'Recomendaciones Hiperlocales con Bunzy IA', 
+    category: 'subdominios', 
+    deliverable: 'Concierge autónomo que guía comensales a las sucursales', 
+    details: 'Bunzy IA recomienda en tiempo real comercios afiliados según el mood, ubicación y saldo de Bunz del usuario.', 
+    status: 'completado',
+    actionLink: 'https://t.me/RabbittyBot',
+    actionLabel: 'Hablar con Bunzy en Telegram'
+  },
 
-  // SEMANA 4
-  { day: 22, title: 'Prueba de Pedido Digital en Mesa Piloto', category: 'escala', deliverable: 'Envío de orden a cocina vía carrito', details: 'Activación controlada de comandas digitales en mesas selectas de 626 Café.', status: 'pendiente' },
-  { day: 23, title: 'Expansión a Comercios #11 al #15', category: 'escala', deliverable: 'Gimnasios y tiendas de retail', details: 'Configuración de paquetes de membresías y catálogo de productos físicos.', status: 'pendiente' },
-  { day: 24, title: 'Campaña Happy Hour Bunz en la Red', category: 'escala', deliverable: 'Doble Bunz en horarios valle', details: 'Activación de bonificación aumentada para dinamizar horas de baja afluencia.', status: 'pendiente' },
-  { day: 25, title: 'Auditoría de Ledger y Cero Emisión Fantasma', category: 'escala', deliverable: 'Consistencia contable en base de datos', details: 'Verificación de que cada Bunz acreditado provenga de transacciones auditadas.', status: 'pendiente' },
-  { day: 26, title: 'Grabación de Testimonios y Reels', category: 'escala', deliverable: '3 piezas de video con dueños y comensales', details: 'Producción de contenido orgánico mostrando la experiencia real en el local.', status: 'pendiente' },
-  { day: 27, title: 'Publicación de Caso de Estudio en Landing', category: 'escala', deliverable: 'Métricas de retención en rabbitty.me', details: 'Actualización de la landing principal con datos de incremento en ticket promedio.', status: 'pendiente' },
-  { day: 28, title: 'Taller de Autonomía B2B para Afiliados', category: 'escala', deliverable: 'Comercios editando su catálogo sin ayuda', details: 'Capacitación para activar platillos agotados y promociones de temporada.', status: 'pendiente' },
-  { day: 29, title: 'Medición de Búsquedas Orgánicas y Citas IA', category: 'escala', deliverable: 'Reporte de visibilidad SEO / LLM', details: 'Evaluación de consultas en buscadores y apariciones en resúmenes generativos.', status: 'pendiente' },
-  { day: 30, title: 'Cierre de Mes: 20 Comercios y Escalamiento', category: 'escala', deliverable: 'Plan de expansión a siguiente ciudad', details: 'Presentación de resultados consolidados a inversionistas y aliados estratégicos.', status: 'pendiente' },
+  // SEMANA 4: ESCALA A 20 SUCURSALES, FIDELIZACIÓN & CASO DE ESTUDIO
+  { 
+    day: 22, 
+    title: 'Prueba de Pedido Digital & Comanda en Mesa', 
+    category: 'escala', 
+    deliverable: 'Envío de orden a cocina vía carrito web sin descargar app', 
+    details: 'Activación de comandas digitales opcionales en mesas con código QR contextual para agilizar horas pico.', 
+    status: 'pendiente' 
+  },
+  { 
+    day: 23, 
+    title: 'Expansión a Comercios #11 al #15 (Comunidad Multirrubro)', 
+    category: 'escala', 
+    deliverable: 'Entrada de gimnasios, boutiques de diseño y retail de especialidad', 
+    details: 'Configuración de paquetes de membresías y canje cruzado en comercios no gastronómicos.', 
+    status: 'pendiente' 
+  },
+  { 
+    day: 24, 
+    title: 'Campaña "Happy Hour Bunz" en la Red de la Ciudad', 
+    category: 'escala', 
+    deliverable: 'Doble Bunz en horarios valle para dinamizar la tarde', 
+    details: 'Notificaciones push y Telegram a comensales con saldo acumulado para visitar locales con afluencia baja.', 
+    status: 'pendiente' 
+  },
+  { 
+    day: 25, 
+    title: 'Auditoría Integral de Ledger & Data Room de Inversión', 
+    category: 'escala', 
+    deliverable: 'Consistencia contable en base de datos & métricas de unit economics', 
+    details: 'Verificación de que cada Bunz acreditado provenga de consumo real verificado. Métricas de retención D30.', 
+    status: 'pendiente' 
+  },
+  { 
+    day: 26, 
+    title: 'Producción de Testimonios Reales & Casos de Éxito', 
+    category: 'escala', 
+    deliverable: 'Reels y mini-documentales con dueños de negocio y clientes', 
+    details: 'Contenido orgánico mostrando al barista cobrando con Bunz y al comensal acumulando en 3 segundos.', 
+    status: 'pendiente' 
+  },
+  { 
+    day: 27, 
+    title: 'Onboarding Final Comercios #16 al #20 (Meta 20 Cumplida)', 
+    category: 'escala', 
+    deliverable: '20 sucursales activas interconectadas en el mapa urbano', 
+    details: 'Consolidación de la primera red de lealtad urbana auto-sostenible con más de 20 puntos de cobro.', 
+    status: 'pendiente' 
+  },
+  { 
+    day: 28, 
+    title: 'Taller de Autonomía B2B para Afiliados', 
+    category: 'escala', 
+    deliverable: 'Comercios editando su catálogo, fotos y promos de forma autónoma', 
+    details: 'Capacitación para activar platillos agotados, crear promociones flash y revisar su balance desde el móvil.', 
+    status: 'pendiente' 
+  },
+  { 
+    day: 29, 
+    title: 'Medición de Visibilidad Orgánica & Reporte de Retención', 
+    category: 'escala', 
+    deliverable: 'Reporte de impacto en ticket promedio (+18% estimado)', 
+    details: 'Evaluación del impacto en volumen de ventas, número de nuevos clientes descubiertos y fidelidad de clientes.', 
+    status: 'pendiente' 
+  },
+  { 
+    day: 30, 
+    title: 'Cierre de Mes: 20 Comercios & Lanzamiento al Próximo Hub', 
+    category: 'escala', 
+    deliverable: 'Playbook operativo empaquetado para réplica en siguiente ciudad', 
+    details: 'Presentación de resultados consolidados, playbook de ventas estandarizado y roadmap hacia los 100 locales.', 
+    status: 'pendiente' 
+  },
 ];
 
 export default function GTMPlanPage() {
@@ -268,13 +496,34 @@ export default function GTMPlanPage() {
                 </div>
               )}
 
-              <div className="pt-2">
+              <div className="pt-2 space-y-2">
+                {selectedDay.actionLink && (
+                  <Link
+                    href={selectedDay.actionLink}
+                    target={selectedDay.actionLink.startsWith('http') ? '_blank' : undefined}
+                    className="w-full bg-linear-to-r from-[#E91E63] to-[#FF4081] text-white py-3 px-4 rounded-2xl font-black text-xs text-center block shadow-lg shadow-[#E91E63]/30 hover:scale-[1.02] active:scale-[0.98] transition-all no-underline"
+                  >
+                    {selectedDay.actionLabel || 'Ver Entregable en Vivo'} →
+                  </Link>
+                )}
+
                 <Link
                   href="/626cafe"
                   target="_blank"
-                  className="w-full bg-linear-to-r from-[#E91E63] to-[#FF4081] text-white py-3 px-4 rounded-2xl font-black text-xs text-center block shadow-lg shadow-[#E91E63]/30 hover:scale-102 transition-transform no-underline"
+                  className={`w-full py-2.5 px-4 rounded-2xl font-black text-xs text-center block transition-all no-underline ${
+                    selectedDay.actionLink
+                      ? 'bg-white/5 hover:bg-white/10 text-white/70 border border-white/10'
+                      : 'bg-linear-to-r from-[#E91E63] to-[#FF4081] text-white shadow-lg shadow-[#E91E63]/30 hover:scale-[1.02]'
+                  }`}
                 >
-                  Ver Demo Landing en Vivo (626 Café) →
+                  Ver Demo Landing Piloto (626 Café) ↗
+                </Link>
+
+                <Link
+                  href="/impresos"
+                  className="w-full py-2 px-4 rounded-xl text-center block text-[11px] font-bold text-pink-400/80 hover:text-pink-300 transition-colors no-underline"
+                >
+                  🖨️ Generador de Displays & Carteles Oficiales →
                 </Link>
               </div>
             </div>

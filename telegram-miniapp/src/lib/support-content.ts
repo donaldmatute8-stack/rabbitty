@@ -18,7 +18,23 @@ export const FAQS: FaqItem[] = [
   },
   {
     q: '¿Puedo transferir mis Bunz a otra persona?',
-    a: 'Puedes usarlos para invitar la cuenta en un restaurante participante. La transferencia directa peer-to-peer está planeada para futuras actualizaciones, ¡mantente atento a la comunidad!',
+    a: '¡Sí! Puedes transferir Bunz al instante a cualquier usuario por su @usuario, ID o código QR desde el chat de Bunzy o tu Billetera. Las transferencias están protegidas por Face ID / PIN de seguridad y verificación en dos pasos (2FA).',
+  },
+  {
+    q: '¿Cómo protejo mi cuenta con Face ID, PIN y 2FA?',
+    a: 'En Configuración > Seguridad puedes activar Face ID / Touch ID biométrico, PIN de 4 dígitos (con sal y hash seguro PBKDF2), y 2FA real mediante código a tu correo, SignalWire SMS o App Autenticadora TOTP (Google Authenticator / Authy).',
+  },
+  {
+    q: '¿Qué es Rabbitty Mood y cómo funcionan las campañas por Mood?',
+    a: 'Rabbitty Mood permite a los usuarios compartir su estado de ánimo (calma, energía, enfoque, fiesta, etc.) para recibir listas de música curadas y descubrir negocios ideales para su vibra. Los comercios afiliados pueden activar Campañas por Mood para premiar con bunz extras en horas específicas según el ánimo de los clientes.',
+  },
+  {
+    q: '¿Qué es Proof of Atmosphere (PoA)?',
+    a: 'Proof of Atmosphere (PoA) mide cómo la música, iluminación y ambiente físico de un local mejoran la satisfacción y permanencia de los clientes. Los baristas y gerentes registran intervenciones ambientales desde el Portal de Negocios para optimizar sus ventas y retención.',
+  },
+  {
+    q: '¿Qué pueden hacer los negocios afiliados en el Portal de Negocios?',
+    a: 'Pueden emitir recompensas en caja por consumos (Mint), validar y canjear cupones (Redeem), ver su libro contable (Ledger) y crédito, crear Campañas por Mood, registrar recetas de Atmósfera (PoA) y consultar recomendaciones estratégicas con Hermes IA.',
   },
   {
     q: '¿Cómo funciona el programa de referidos?',
@@ -46,6 +62,18 @@ export const DOC_SECTIONS: { title: string; body: string }[] = [
   {
     title: 'Niveles y Referidos',
     body: 'Acumulas Hops (puntos de experiencia por tus visitas) y tu nivel de Madriguera sube, cambiando el borde de tu avatar a colores únicos (Legendario, Épico, Raro). Con el Programa de Referidos invitas a tus amigos y ambos ganan Bunz en la primera transacción del invitado.',
+  },
+  {
+    title: 'Rabbitty Mood y Campañas Dinámicas',
+    body: 'El usuario registra cómo se siente hoy para recibir música y lugares afines. Los negocios afiliados lanzan Campañas por Mood en franjas horarias clave para atraer clientes con bonos especiales de Bunz.',
+  },
+  {
+    title: 'Estrategia Hermes IA & Proof of Atmosphere (PoA)',
+    body: 'Hermes analiza el pulso comercial, horas muertas y optimización de carta para los afiliados. Con Proof of Atmosphere (PoA), los comercios aplican recetas de iluminación, música y ambientación para elevar el tiempo de estancia y satisfacción.',
+  },
+  {
+    title: 'Seguridad de Última Generación',
+    body: 'Protección con biometría nativa (Face ID / Touch ID / WebAuthn), PIN local de 4 dígitos hasheado con PBKDF2 y sal criptográfica, y verificación en dos pasos (2FA) real mediante OTP por correo, SignalWire SMS o App Autenticadora TOTP.',
   },
 ];
 

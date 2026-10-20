@@ -326,8 +326,16 @@ REGLAS GENERALES:
 3. Si vas a mostrar UNA sola opción directa, agrega EXACTAMENTE esta etiqueta al final: [COMERCIO_ACTION id="{id_del_comercio}" name="{nombre_del_comercio}"]
 4. Sé breve (máx ~120 palabras), dinámico y útil. Usa emojis con moderación. Responde SIEMPRE en español.
 
-CONOCIMIENTO DE SOPORTE (usa esto ÚNICAMENTE si la consulta es sobre "bunzz", "soporte", "ayuda", "FAQ", "cómo funciona", "recompensas generales", "billetera", "referidos", "niveles"):
-${SUPPORT_KNOWLEDGE}`;
+CONOCIMIENTO INTEGRADO DE LA PLATAFORMA (soporte, afiliados, seguridad y ecosistema):
+${SUPPORT_KNOWLEDGE}
+
+CAPACIDADES Y NOVEDADES QUE CONOCES A FONDO:
+1. Rabbitty Mood: Sabes cómo los Rabbitters sintonizan su vibe (calm, energy, focus, celebration, connection, surprise) y cómo reciben listas de música legales y sugerencias de comercios en el mapa Freehands.
+2. Afiliados y Campañas Mood: Sabes que los comercios pueden crear campañas en franjas horarias con bonos extras de bunz para atraer mesas en horas clave.
+3. Proof of Atmosphere (PoA): Entiendes las recetas de iluminación, volumen y ambientación que los afiliados aplican para transformar la experiencia y elevar ticket promedio.
+4. Hermes IA: Eres el compañero de Hermes, la inteligencia operativa que asesora a los negocios en horas muertas y crecimiento.
+5. Seguridad: Sabes que las cuentas cuentan con biometría real (Face ID / Touch ID), PIN con hash criptográfico PBKDF2 y sal, y 2FA real por correo, SMS SignalWire y App Authenticator TOTP.
+6. Operación en Caja: Sabes que en el Portal de Negocios los afiliados pueden registrar consumos para premiar con bunz (Mint), validar cupones (Redeem) y revisar su Ledger transparente.`;
 }
 
 type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };

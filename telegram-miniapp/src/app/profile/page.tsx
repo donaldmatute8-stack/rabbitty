@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import Image from 'next/image';
-import { HelpCircle } from 'lucide-react';
+import { HelpCircle, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useToast } from '@/contexts/ToastContext';
@@ -12,6 +12,9 @@ import { PlatformBridge } from '@/lib/platform';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import AdminPanel from '@/features/admin/AdminPanel';
 import BunzGuide from '@/features/business/BunzGuide';
+import { WelcomeRitual } from '@/components/ui/WelcomeRitual';
+import { authorizeSensitiveAction } from '@/lib/securityVault';
+import { promptForPin } from '@/components/security/PinPromptModal';
 
 interface UserProfile {
   id?: string;
@@ -61,6 +64,7 @@ export default function ProfilePage() {
   const [levelGradient, setLevelGradient] = useState(DEFAULT_GRADIENT);
   const [levelName, setLevelName] = useState('1');
   const [hasBusiness, setHasBusiness] = useState(false);
+  const [showRitual, setShowRitual] = useState(false);
 
   useEffect(() => {
     if (user?.id) {
@@ -76,17 +80,55 @@ export default function ProfilePage() {
     }
   }, [user]);
 
-  const handleAvatarTap = () => {
+  const tapCountRef = useRef(0);
+  const lastTapTimeRef = useRef(0);
+
+  const handleAvatarTap = async () => {
+    const now = Date.now();
+    if (now - lastTapTimeRef.current > 3000) {
+      tapCountRef.current = 1;
+    } else {
+      tapCountRef.current += 1;
+    }
+    lastTapTimeRef.current = now;
+
+    PlatformBridge.hapticFeedback('light');
+
     const isOwner = 
       user?.email === 'marco@rabbitty.me' ||
       user?.role === 'ADMIN' ||
       user?.username?.toLowerCase() === 'mardelbull' ||
       user?.username?.toLowerCase() === 'marco';
 
-    if (isOwner) {
-      setShowAdmin(true);
+    // Acceso administrativo: requiere ser admin o activar el gesto de 5 toques
+    if (isOwner || tapCountRef.current >= 5) {
+      tapCountRef.current = 0;
+      PlatformBridge.hapticFeedback('medium');
+
+      // 🛡️ Capa Extra de Seguridad Biométrica: Face ID / Touch ID / PIN
+      const auth = await authorizeSensitiveAction(
+        promptForPin,
+        'Verifica con Face ID para acceder al Panel de Control de Rabbitty'
+      );
+
+      if (auth.ok) {
+        PlatformBridge.hapticFeedback('success');
+        setShowAdmin(true);
+      } else if (auth.reason === 'locked') {
+        showToast('Acceso bloqueado por reintentos de PIN. Espera un momento.', 'error');
+      } else if (auth.reason === 'wrong_pin') {
+        showToast('PIN incorrecto.', 'error');
+      } else {
+        showToast('Verificación de Face ID cancelada.', 'info');
+      }
       return;
     }
+
+    if (tapCountRef.current >= 3) {
+      showToast(`${5 - tapCountRef.current} toques para consola de control...`, 'info');
+      return;
+    }
+
     showToast('Identidad NFT (Próximamente)', 'info');
   };
 
@@ -288,6 +330,31 @@ export default function ProfilePage() {
 
           {showBunzGuide && <BunzGuide onClose={() => setShowBunzGuide(false)} />}
 
+          <button
+            type="button"
+            onClick={() => {
+              PlatformBridge.hapticFeedback('medium');
+              setShowRitual(true);
+            }}
+            className="w-full flex items-center justify-between bg-linear-to-r from-[#E91E63]/15 via-[#240C1A]/40 to-transparent border border-[#E91E63]/30 rounded-[14px] px-4 py-3 mb-2.5 cursor-pointer active:scale-[0.98] transition-all text-left shadow-[0_2px_12px_rgba(233,30,99,0.08)]"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-[#E91E63]/20 text-[#E91E63] border border-[#E91E63]/30 flex items-center justify-center shrink-0">
+                <Sparkles size={16} className="text-[#E91E63]" />
+              </div>
+              <div>
+                <p className="text-[13px] font-extrabold text-(--text-primary) mb-0.5 flex items-center gap-1.5">
+                  <span>Ritual de Bienvenida</span>
+                  <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-[#E91E63]/20 text-[#E91E63] font-black uppercase tracking-wider">
+                    Audio & Vibe
+                  </span>
+                </p>
+                <p className="text-[11px] text-(--text-muted) m-0">Revive la experiencia inmersiva Rabbitty</p>
+              </div>
+            </div>
+            <span className="text-xs font-bold text-[#E91E63]">Revivir ✨</span>
+          </button>
+
           <div className="flex gap-2.5 w-full mb-2.5">
             <Link href="/profile/gamification" style={{ background: "linear-gradient(135deg, #2A2D34 0%, #111 100%)" }} className="flex-1 rounded-[14px] py-4 flex flex-col items-center cursor-pointer gap-0.5 no-underline shadow-[0_4px_12px_rgba(0,0,0,0.1)] active:scale-[0.98] transition-transform">
               <span className="text-lg mb-0.5">🏆</span>
@@ -334,6 +401,11 @@ export default function ProfilePage() {
     {/* ADMIN PANEL OVERLAY */}
     {showAdmin && (
       <AdminPanel onClose={() => setShowAdmin(false)} />
+    )}
+
+    {/* RITUAL DE BIENVENIDA INMERSIVO REPRODUCIBLE */}
+    {showRitual && (
+      <WelcomeRitual forceOpen={true} onComplete={() => setShowRitual(false)} />
     )}
     </>
   );

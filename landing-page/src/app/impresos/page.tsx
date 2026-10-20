@@ -269,28 +269,43 @@ function ImpresosContent() {
   // Helper para renderizar insignia o logo del afiliado con fallback elegante al logo de Ra
   const renderAffiliateBadge = (size: 'sm' | 'md' | 'lg' = 'md', dark = true) => {
     const sizeClasses = {
-      sm: 'h-6 max-w-36 text-[10px]',
-      md: 'h-9 max-w-44 text-xs',
-      lg: 'h-12 max-w-56 text-sm'
+      sm: 'h-8 px-3 text-xs gap-2',
+      md: 'h-11 px-3.5 text-sm gap-2.5',
+      lg: 'h-14 px-4 text-base gap-3'
+    };
+
+    const logoSizes = {
+      sm: 'w-6 h-6 max-h-6',
+      md: 'w-8 h-8 max-h-8',
+      lg: 'w-10 h-10 max-h-10'
     };
 
     const effectiveLogo = businessLogo || '/icon_ra.png';
 
     return (
-      <div className={`flex items-center gap-2 px-2.5 py-1 rounded-xl border ${dark ? 'bg-zinc-900/90 border-zinc-700/80 text-white' : 'bg-white border-zinc-200 text-black shadow-xs'} ${sizeClasses[size]}`}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img 
-          src={effectiveLogo} 
-          alt={businessName} 
-          className="h-full w-auto max-h-7 object-contain rounded-md shrink-0"
-          onError={(e) => {
-            // Si falla la imagen externa, hacer fallback inmediato al Ra de Rabbitty
-            if (e.currentTarget.src !== window.location.origin + '/icon_ra.png') {
-              e.currentTarget.src = '/icon_ra.png';
-            }
-          }}
-        />
-        <span className="font-black truncate tracking-tight">{businessName}</span>
+      <div 
+        className={`flex items-center rounded-2xl border transition-all ${
+          dark 
+            ? 'bg-zinc-900/95 border-zinc-700/80 text-white shadow-lg shadow-black/40' 
+            : 'bg-white border-zinc-200 text-black shadow-sm'
+        } ${sizeClasses[size]}`}
+      >
+        {/* Contenedor del logo con fondo contrastante para logos transparentes u oscuros */}
+        <div className={`rounded-xl flex items-center justify-center p-0.5 shrink-0 overflow-hidden ${dark ? 'bg-white/10' : 'bg-zinc-100'} ${logoSizes[size]}`}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img 
+            src={effectiveLogo} 
+            alt={businessName} 
+            className="w-full h-full object-contain rounded-lg"
+            onError={(e) => {
+              // Si falla la imagen externa, hacer fallback inmediato al Ra de Rabbitty
+              if (e.currentTarget.src !== window.location.origin + '/icon_ra.png') {
+                e.currentTarget.src = '/icon_ra.png';
+              }
+            }}
+          />
+        </div>
+        <span className="font-black whitespace-nowrap tracking-tight">{businessName}</span>
       </div>
     );
   };
@@ -605,18 +620,29 @@ function ImpresosContent() {
                   {/* Co-Branding Estratégico en Cartel Principal */}
                   <div className="flex items-center gap-3">
                     <div className="text-right hidden sm:block">
-                      <span className="block text-[9px] font-mono uppercase tracking-wider text-zinc-500 font-bold">En alianza con</span>
+                      <span className="block text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold">En alianza con</span>
                     </div>
-                    {renderAffiliateBadge('md', true)}
+                    {renderAffiliateBadge('lg', true)}
                   </div>
                 </div>
 
                 {/* Titular Impactante según Nicho */}
                 <div className="mt-10 space-y-4">
                   <div className="flex items-center gap-2">
-                    <span className="inline-block text-xs font-mono font-bold tracking-widest text-pink-500 uppercase px-3 py-1 bg-pink-500/10 rounded-md border border-pink-500/20">
-                      {currentTemplate.posterTag} · {businessName}
-                    </span>
+                    <div className="inline-flex items-center gap-2 text-xs font-mono font-bold tracking-widest text-pink-400 uppercase px-3 py-1.5 bg-pink-500/10 rounded-xl border border-pink-500/25 shadow-xs">
+                      {businessLogo && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={businessLogo}
+                          alt={businessName}
+                          className="w-5 h-5 object-contain rounded-md bg-white/10 p-0.5"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      )}
+                      <span>{currentTemplate.posterTag} · {businessName}</span>
+                    </div>
                   </div>
                   <h1 className="text-4xl md:text-5xl font-black tracking-tight leading-[1.08] text-white">
                     {currentTemplate.posterHeadlinePrefix} <br />
@@ -690,7 +716,7 @@ function ImpresosContent() {
                   </div>
 
                   {/* Logo / Insignia Afiliado Estratégica */}
-                  {renderAffiliateBadge('sm', false)}
+                  {renderAffiliateBadge('md', false)}
                 </div>
 
                 <div className="my-6 text-center">
@@ -729,7 +755,7 @@ function ImpresosContent() {
                     <img src="/logo_conejo.png" alt="Rabbitty" className="w-7 h-7 object-contain" />
                     <span className="font-black tracking-tight text-white text-lg">RABBITTY</span>
                   </div>
-                  {renderAffiliateBadge('sm', true)}
+                  {renderAffiliateBadge('md', true)}
                 </div>
 
                 <div className="my-4 space-y-4">
@@ -795,7 +821,7 @@ function ImpresosContent() {
                   <img src="/logo_conejo.png" alt="Rabbitty" className="w-6 h-6 object-contain" />
                   <span className="font-black text-xs tracking-tight">RABBITTY POINT</span>
                 </div>
-                {renderAffiliateBadge('sm', true)}
+                {renderAffiliateBadge('md', true)}
               </div>
 
               <div className="my-2">
