@@ -318,6 +318,77 @@ export async function getAffiliateBySlug(slug: string): Promise<AffiliateLanding
     };
   } catch (err) {
     console.error('[getAffiliateBySlug Error]:', err);
+    // Si la base de datos no responde o falla la autenticación, servir piloto oficial si coincide
+    if (normalizedSlug === '626cafe') {
+      return {
+        id: '626cafe',
+        name: '626 Café',
+        slug: '626cafe',
+        category: 'Cafetería de Especialidad & Tostaduría',
+        tagline: 'Donde cada taza cuenta una historia de origen.',
+        description: 'Tostaduría de café de especialidad y panadería de masa madre en el corazón de la ciudad. Espacio acústicamente curado para enfoque, lectura y buena conversación.',
+        story: 'Nacimos con la convicción de que el buen café no tiene prisa. Seleccionamos granos de origen único cosechados a más de 1,400 metros de altura en Chiapas y Veracruz, tostados semanalmente en pequeños lotes para preservar sus notas florales y frutales.',
+        address: 'Av. Lázaro Cárdenas #74, Zona Dorada',
+        city: 'Bucerías, Nayarit',
+        phone: '+52 322 102 3028',
+        lat: 20.7567,
+        lng: -105.3341,
+        logoUrl: '/logos/626cafe-logo.png',
+        heroImage: '/626cafe-hero.jpg',
+        gallery: [
+          '/626cafe-hero.jpg',
+          '/menu-flatwhite.jpg',
+          '/menu-croissant.jpg',
+          'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=800&q=80',
+        ],
+        rewardPercentage: 15,
+        welcomeBunz: 25,
+        startTime: '08:00',
+        endTime: '20:00',
+        templateStyle: 'editorial',
+        primaryColor: '#2C1810',
+        accentColor: '#D97706',
+        features: {
+          hasTableOrdering: true,
+          hasTakeaway: true,
+          hasReservations: false,
+          hasRewards: true,
+        },
+        ambienceTags: ['Café de Especialidad', 'Pet Friendly', 'Wi-Fi Alta Velocidad', 'Música Lofi & Acústica', 'Masa Madre'],
+        menuItems: [
+          {
+            id: '1',
+            name: 'Flat White Doble',
+            category: 'Café Caliente',
+            description: 'Extracción doble de espresso origen Chiapas con leche microtexturizada en cerámica artesanal.',
+            price: 65,
+            imageUrl: '/menu-flatwhite.jpg',
+            badge: 'Favorito de la Casa',
+            rewardBunz: 10,
+          },
+          {
+            id: '2',
+            name: 'Croissant Francés de Mantequilla',
+            category: 'Panadería Artesanal',
+            description: 'Hojaldre tradicional fermentado 48 horas con mantequilla pura de rancho. Horneado al amanecer.',
+            price: 48,
+            imageUrl: '/menu-croissant.jpg',
+            badge: 'Horneado Diario',
+            rewardBunz: 7,
+          },
+          {
+            id: '3',
+            name: 'Capuccino Red Velvet',
+            category: 'Signature',
+            description: 'Receta de autor con cacao tabasqueño orgánico, toque de frutos rojos silvestres y canela.',
+            price: 75,
+            imageUrl: '/menu-cappuccino.jpg',
+            badge: 'Especial de Temporada',
+            rewardBunz: 12,
+          },
+        ],
+      };
+    }
     return null;
   }
 }
