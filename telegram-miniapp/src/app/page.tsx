@@ -244,8 +244,8 @@ export default function FeedPage() {
   const topDeltaAcc = useRef(0);
 
   const fetchFeedData = useCallback(async () => {
-    const startedAt = performance.now();
-    setLoading(true);
+    // Solo mostramos loader si NO tenemos ningún post ni oferta en memoria
+    setLoading(prev => (posts.length === 0 ? true : prev));
     try {
       if (activeTab === "bunz'in" || activeTab === 'Freehands') {
         const res = await fetch('/api/feed');
@@ -268,13 +268,9 @@ export default function FeedPage() {
     } catch (err) {
       console.error('[Feed] data fetch error:', err);
     } finally {
-      const elapsed = performance.now() - startedAt;
-      if (elapsed < 500) {
-        await new Promise((r) => setTimeout(r, 500 - elapsed));
-      }
       setLoading(false);
     }
-  }, [activeTab]);
+  }, [activeTab, posts.length]);
 
   useEffect(() => {
     queueMicrotask(() => { fetchFeedData(); });
@@ -626,12 +622,6 @@ export default function FeedPage() {
           {/* ── bunz'in tab ── */}
           {activeTab === "bunz'in" && (
             <>
-              {loading && (
-                <div className="mb-2">
-                  <RabbittyContourLoader size={54} label="Actualizando comercios..." />
-                </div>
-              )}
-
               {/* Digital Pass / Membership Card */}
               <div className="px-1">
                 <MembershipCard user={user} levelName={user?.level?.name || '1'} isDark={isDark} />
@@ -668,7 +658,7 @@ export default function FeedPage() {
                 </Link>
               </div>
 
-              {!loading && postsWithDistance.length > 0 && (
+              {postsWithDistance.length > 0 && (
                 <div className="flex items-center gap-3 mb-4 mt-2">
                   <div className="flex-1 h-px bg-(--border-subtle)" />
                   <span className="text-[11px] font-black text-(--text-muted) tracking-[0.5px]">COMERCIOS CERCA DE TI</span>
