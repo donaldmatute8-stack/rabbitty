@@ -117,7 +117,8 @@ const menuPillars: MenuPillar[] = [
       { href: "/staff/shifts", label: "Turnos y Reloj", icon: Clock },
       { href: "/table-layout", label: "Mapa de Mesas", icon: Table2 },
       { href: "/reservations", label: "Reservaciones", icon: BookUser },
-      { href: "/refunds", label: "Reembolsos", icon: Repeat },
+      { href: "/reports", label: "Reportes & Ingresos", icon: TrendingUp },
+      { href: "/refunds", label: "Reembolsos & Pagos", icon: Repeat },
     ],
   },
   {

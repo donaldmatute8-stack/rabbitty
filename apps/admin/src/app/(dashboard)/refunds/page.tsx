@@ -21,22 +21,40 @@ const METHOD_COLORS: Record<string, string> = {
 
 export default function RefundsPage() {
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
+  const [refundAmount, setRefundAmount] = useState<number | "">("");
   const [refundNote, setRefundNote] = useState("");
 
   const { data: payments, isLoading, refetch } = trpc.payments.list.useQuery({ limit: 100 });
   const todayStr = new Date().toISOString().split("T")[0]!;
   const { data: totals } = trpc.payments.getTotals.useQuery({ startDate: todayStr, endDate: todayStr });
   const { mutate: refundPayment, isPending } = trpc.payments.refund.useMutation({
-    onSuccess: () => { toast.success("Reembolso procesado"); setSelectedPaymentId(null); setRefundNote(""); refetch(); },
+    onSuccess: () => { 
+      toast.success("Reembolso procesado"); 
+      setSelectedPaymentId(null); 
+      setRefundAmount(""); 
+      setRefundNote(""); 
+      refetch(); 
+    },
     onError: (err) => toast.error(err.message),
   });
 
   const completedPayments = payments?.filter(p => p.payment.status !== "REFUNDED") ?? [];
   const refundedPayments = payments?.filter(p => p.payment.status === "REFUNDED") ?? [];
 
+  const selectedPayment = completedPayments.find(p => p.payment.id === selectedPaymentId);
+
+  const handleSelectPayment = (paymentId: string, amount: number) => {
+    setSelectedPaymentId(paymentId);
+    setRefundAmount(amount);
+  };
+
   const handleRefund = () => {
-    if (!selectedPaymentId) return;
-    refundPayment({ paymentId: selectedPaymentId, amount: 0, reason: refundNote || "Sin razón especificada" });
+    if (!selectedPaymentId || !refundAmount || Number(refundAmount) <= 0) return;
+    refundPayment({ 
+      paymentId: selectedPaymentId, 
+      amount: Number(refundAmount), 
+      reason: refundNote || "Sin razón especificada" 
+    });
   };
 
   return (
@@ -92,9 +110,9 @@ export default function RefundsPage() {
                   {completedPayments.map(({ payment, order }) => (
                     <div
                       key={payment.id}
-                      onClick={() => setSelectedPaymentId(payment.id)}
+                      onClick={() => handleSelectPayment(payment.id, payment.amount)}
                       className={`flex items-center justify-between px-6 py-4 transition-colors cursor-pointer hover:bg-white/5 ${
-                        selectedPaymentId === payment.id ? "bg-pink-500/5" : ""
+                        selectedPaymentId === payment.id ? "bg-pink-500/10 border-l-4 border-pink-500" : ""
                       }`}
                     >
                       <div className="flex items-center gap-4">
@@ -102,8 +120,15 @@ export default function RefundsPage() {
                           {METHOD_LABELS[payment.method] ?? payment.method}
                         </div>
                         <div>
-                          <p className="text-sm font-bold text-white">${payment.amount.toFixed(2)}</p>
-                          <p className="text-xs text-gray-500">{order?.customerName ?? "Sin cliente"} · {new Date(payment.createdAt ?? "").toLocaleDateString()}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-bold text-white">${payment.amount.toFixed(2)}</p>
+                            <span className="text-[11px] font-mono text-gray-400 bg-white/5 px-2 py-0.5 rounded">
+                              Ticket #{payment.orderId ? payment.orderId.slice(0, 8) : "N/A"}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            {order?.customerName ? order.customerName : "Público General"} · {new Date(payment.createdAt ?? "").toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })} hrs · {new Date(payment.createdAt ?? "").toLocaleDateString("es-MX")}
+                          </p>
                         </div>
                       </div>
                       <Badge variant={payment.status === "REFUNDED" ? "danger" : "success"}>
@@ -126,9 +151,12 @@ export default function RefundsPage() {
                     <div key={payment.id} className="flex items-center justify-between px-6 py-3">
                       <div className="flex items-center gap-3">
                         <RotateCcw className="h-4 w-4 text-red-400" />
-                        <p className="text-sm text-gray-400">${Math.abs(payment.amount).toFixed(2)} · {payment.reference ?? ""}</p>
+                        <div>
+                          <p className="text-sm text-gray-300 font-bold">-${Math.abs(payment.amount).toFixed(2)}</p>
+                          <p className="text-xs text-gray-500">{payment.reference ?? "Reembolso procesado"}</p>
+                        </div>
                       </div>
-                      <p className="text-xs text-gray-500">{new Date(payment.createdAt ?? "").toLocaleDateString()}</p>
+                      <p className="text-xs text-gray-500">{new Date(payment.createdAt ?? "").toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })} · {new Date(payment.createdAt ?? "").toLocaleDateString("es-MX")}</p>
                     </div>
                   ))}
                 </div>
@@ -153,7 +181,20 @@ export default function RefundsPage() {
                 <div className="space-y-4">
                   <div className="rounded-xl bg-pink-500/10 border border-pink-500/20 p-4">
                     <p className="text-xs text-gray-400 mb-1">Pago seleccionado</p>
-                    <p className="text-sm font-bold text-white">{selectedPaymentId}</p>
+                    <p className="text-sm font-bold text-white">Ticket #{selectedPayment?.order?.id?.slice(0, 8) || selectedPaymentId.slice(0, 8)}</p>
+                    <p className="text-xs text-pink-400 mt-1 font-semibold">Monto cobrado original: ${selectedPayment?.payment?.amount?.toFixed(2)}</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">Monto a Devolver ($ MXN)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      max={selectedPayment?.payment?.amount}
+                      value={refundAmount}
+                      onChange={(e) => setRefundAmount(e.target.value === "" ? "" : parseFloat(e.target.value))}
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-base font-bold text-white placeholder-gray-500 focus:border-pink-500 focus:outline-none"
+                    />
                   </div>
 
                   <div>
@@ -170,20 +211,20 @@ export default function RefundsPage() {
                   <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 border border-amber-500/20 p-3">
                     <CreditCard className="h-5 w-5 text-amber-400" />
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-amber-300">Reembolso automático a Bunz</p>
-                      <p className="text-xs text-amber-400/70">El usuario recibirá Bunz equivalentes al monto reembolsado</p>
+                      <p className="text-sm font-medium text-amber-300">Reembolso seguro</p>
+                      <p className="text-xs text-amber-400/70">Afecta el corte de caja y auditoría del día en tiempo real</p>
                     </div>
                   </div>
 
                   <button
                     onClick={handleRefund}
-                    disabled={isPending || !refundNote}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-pink-600 to-pink-700 px-4 py-3 text-sm font-bold text-white hover:from-pink-500 hover:to-pink-600 disabled:opacity-50 transition-all"
+                    disabled={isPending || !refundNote || !refundAmount || Number(refundAmount) <= 0}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-pink-600 to-pink-700 px-4 py-3 text-sm font-bold text-white hover:from-pink-500 hover:to-pink-600 disabled:opacity-50 transition-all cursor-pointer"
                   >
                     {isPending ? "Procesando..." : (
                       <>
                         <Check className="h-4 w-4" />
-                        Confirmar Reembolso
+                        Confirmar Devolución (${typeof refundAmount === 'number' ? refundAmount.toFixed(2) : "0.00"})
                       </>
                     )}
                   </button>

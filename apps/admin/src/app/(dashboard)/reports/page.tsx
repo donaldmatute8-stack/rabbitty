@@ -5,6 +5,7 @@ import { trpc } from "../../../lib/trpc-client";
 import { Card, cn, Button } from "@rabbitty/ui";
 import { motion } from "framer-motion";
 import { Download, TrendingUp, CreditCard, Activity, UtensilsCrossed } from "lucide-react";
+import { useBranch } from "../../../components/DashboardClientWrapper";
 import {
   AreaChart,
   Area,
@@ -34,10 +35,8 @@ const COLORS = ["#ec4899", "#8b5cf6", "#3b82f6", "#10b981", "#f59e0b"];
 
 export default function ReportsPage() {
   const [daysRange, setDaysRange] = useState(30);
-  const branchId = "default"; // Wait, earlier I used "default". Let's get branchId dynamically or assume it's fetched. 
-  // In `apps/admin/src/app/(dashboard)/page.tsx` they do `trpc.pos.getOrders.useQuery({})` without branchId.
-  // Oh, the pos router uses branchId from context! Let's pass it empty if our analytics router can use context or just "default" if we mock.
-  // Actually, our analyticsRouter requires `branchId`. Let's pass "default" for now.
+  const { branchId: activeBranchId } = useBranch();
+  const branchId = activeBranchId || "default";
 
   const { data: salesTrends, isLoading: loadingSales } = trpc.analytics.getSalesTrends.useQuery({ branchId, days: daysRange });
   const { data: topProducts, isLoading: loadingTop } = trpc.analytics.getTopProducts.useQuery({ branchId, limit: 5 });
@@ -101,13 +100,13 @@ export default function ReportsPage() {
   return (
     <div className="space-y-8 pb-10">
       {/* Header Disruptivo */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-gray-900 via-gray-800 to-black p-8 shadow-2xl border border-white/5">
+      <div className="relative overflow-hidden rounded-3xl bg-linear-to-br from-gray-900 via-gray-800 to-black p-8 shadow-2xl border border-white/5">
         <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-pink-500/20 blur-3xl" />
         <div className="absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-blue-500/20 blur-3xl" />
         
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
-            <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400 flex items-center gap-3">
+            <h1 className="text-4xl font-black text-transparent bg-clip-text bg-linear-to-r from-white to-gray-400 flex items-center gap-3">
               <Activity className="h-10 w-10 text-pink-500" />
               Inteligencia Financiera
             </h1>
@@ -133,7 +132,7 @@ export default function ReportsPage() {
             <Button
               onClick={handleExportCSV}
               disabled={isExporting}
-              className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white rounded-xl shadow-[0_0_20px_rgba(236,72,153,0.3)] border-0"
+              className="bg-linear-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white rounded-xl shadow-[0_0_20px_rgba(236,72,153,0.3)] border-0 cursor-pointer"
             >
               <Download className="mr-2 h-4 w-4" />
               {isExporting ? "Generando..." : "Exportar Contabilidad"}
@@ -146,25 +145,25 @@ export default function ReportsPage() {
         
         {/* Gráfica de Tendencia de Ventas */}
         <motion.div variants={itemVariants} className="md:col-span-2">
-          <Card className="p-6 border border-[var(--border-subtle)] bg-[var(--bg-subtle)] overflow-hidden relative">
+          <Card className="p-6 border border-(--border-subtle) bg-(--bg-subtle) overflow-hidden relative">
             <div className="flex items-center justify-between mb-8">
               <div>
-                <h3 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <h3 className="text-xl font-bold text-(--text-primary) flex items-center gap-2">
                   <TrendingUp className="text-blue-500" /> Tendencia de Ingresos
                 </h3>
-                <p className="text-[var(--text-muted)] text-sm">Evolución de ventas e impuestos</p>
+                <p className="text-(--text-muted) text-sm">Evolución de ventas e impuestos</p>
               </div>
               <div className="text-right">
-                <p className="text-sm text-[var(--text-muted)]">Ingresos Totales ({daysRange}D)</p>
-                <p className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
+                <p className="text-sm text-(--text-muted)">Ingresos Totales ({daysRange}D)</p>
+                <p className="text-3xl font-black text-transparent bg-clip-text bg-linear-to-r from-blue-400 to-emerald-400">
                   ${totalRevenue.toFixed(2)}
                 </p>
               </div>
             </div>
 
-            <div className="h-[350px] w-full">
+            <div className="h-87.5 w-full">
               {loadingSales ? (
-                <div className="w-full h-full animate-pulse bg-[var(--bg-pressed)] rounded-2xl" />
+                <div className="w-full h-full animate-pulse bg-(--bg-pressed) rounded-2xl" />
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={salesTrends} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -175,8 +174,8 @@ export default function ReportsPage() {
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.05} vertical={false} />
-                    <XAxis dataKey="date" stroke="currentColor" className="text-[var(--text-muted)] text-xs" tickMargin={10} axisLine={false} tickLine={false} />
-                    <YAxis stroke="currentColor" className="text-[var(--text-muted)] text-xs" axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
+                    <XAxis dataKey="date" stroke="currentColor" className="text-(--text-muted) text-xs" tickMargin={10} axisLine={false} tickLine={false} />
+                    <YAxis stroke="currentColor" className="text-(--text-muted) text-xs" axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
                     <Tooltip content={<CustomTooltip />} />
                     <Area type="monotone" dataKey="totalSales" stroke="#3b82f6" strokeWidth={4} fillOpacity={1} fill="url(#colorSales)" />
                   </AreaChart>
@@ -188,15 +187,15 @@ export default function ReportsPage() {
 
         {/* Métodos de Pago */}
         <motion.div variants={itemVariants}>
-          <Card className="p-6 h-full border border-[var(--border-subtle)] bg-[var(--bg-subtle)]">
-            <h3 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2 mb-6">
+          <Card className="p-6 h-full border border-(--border-subtle) bg-(--bg-subtle)">
+            <h3 className="text-xl font-bold text-(--text-primary) flex items-center gap-2 mb-6">
               <CreditCard className="text-purple-500" /> Flujo de Caja
             </h3>
-            <div className="h-[250px] w-full flex items-center justify-center">
+            <div className="h-62.5 w-full flex items-center justify-center">
               {loadingPayments ? (
-                <div className="w-48 h-48 rounded-full border-8 border-[var(--bg-pressed)] animate-pulse" />
+                <div className="w-48 h-48 rounded-full border-8 border-(--bg-pressed) animate-pulse" />
               ) : !paymentMethods?.length ? (
-                <p className="text-[var(--text-muted)]">Sin datos</p>
+                <p className="text-(--text-muted)">Sin datos</p>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -223,8 +222,8 @@ export default function ReportsPage() {
               {paymentMethods?.map((entry: any, index: number) => (
                 <div key={entry.method} className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                  <span className="text-sm font-semibold text-[var(--text-primary)]">{entry.method}</span>
-                  <span className="text-sm text-[var(--text-muted)]">${Number(entry.amount).toFixed(2)}</span>
+                  <span className="text-sm font-semibold text-(--text-primary)">{entry.method}</span>
+                  <span className="text-sm text-(--text-muted)">${Number(entry.amount).toFixed(2)}</span>
                 </div>
               ))}
             </div>
@@ -233,21 +232,21 @@ export default function ReportsPage() {
 
         {/* Top Productos */}
         <motion.div variants={itemVariants}>
-          <Card className="p-6 h-full border border-[var(--border-subtle)] bg-[var(--bg-subtle)]">
-            <h3 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2 mb-6">
+          <Card className="p-6 h-full border border-(--border-subtle) bg-(--bg-subtle)">
+            <h3 className="text-xl font-bold text-(--text-primary) flex items-center gap-2 mb-6">
               <UtensilsCrossed className="text-pink-500" /> Platillos Estrella
             </h3>
-            <div className="h-[250px] w-full">
+            <div className="h-62.5 w-full">
               {loadingTop ? (
-                <div className="w-full h-full animate-pulse bg-[var(--bg-pressed)] rounded-2xl" />
+                <div className="w-full h-full animate-pulse bg-(--bg-pressed) rounded-2xl" />
               ) : !topProducts?.length ? (
-                <p className="text-[var(--text-muted)]">Sin datos</p>
+                <p className="text-(--text-muted)">Sin datos</p>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={topProducts} layout="vertical" margin={{ top: 0, right: 0, left: 30, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="currentColor" strokeOpacity={0.05} />
                     <XAxis type="number" hide />
-                    <YAxis dataKey="name" type="category" stroke="currentColor" className="text-[var(--text-primary)] text-xs font-bold" axisLine={false} tickLine={false} width={100} />
+                    <YAxis dataKey="name" type="category" stroke="currentColor" className="text-(--text-primary) text-xs font-bold" axisLine={false} tickLine={false} width={100} />
                     <Tooltip cursor={{fill: 'currentColor', opacity: 0.05}} content={<CustomTooltip />} />
                     <Bar dataKey="revenue" radius={[0, 4, 4, 0]}>
                       {topProducts.map((entry: any, index: number) => (
