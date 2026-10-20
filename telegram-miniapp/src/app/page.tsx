@@ -102,6 +102,7 @@ export default function FeedPage() {
   });
   const [offers, setOffers] = useState<Offer[]>([]);
   const [loading, setLoading] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [purchasing, setPurchasing] = useState(false);
   const [mapMode, setMapMode] = useState<'globe' | 'flat'>('flat');
@@ -243,38 +244,41 @@ export default function FeedPage() {
   const lastTopScrollY = useRef(0);
   const topDeltaAcc = useRef(0);
 
-  const fetchFeedData = useCallback(async () => {
-    // Solo mostramos loader si NO tenemos ningún post ni oferta en memoria
-    setLoading(prev => (posts.length === 0 ? true : prev));
-    try {
-      if (activeTab === "bunz'in" || activeTab === 'Freehands') {
-        const res = await fetch('/api/feed');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success && Array.isArray(data.data)) {
-            setPosts(data.data);
-            try {
-              localStorage.setItem('rabbitty_feed_cache_v1', JSON.stringify(data.data));
-            } catch {}
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        if (activeTab === "bunz'in" || activeTab === 'Freehands') {
+          const res = await fetch('/api/feed');
+          if (res.ok) {
+            const data = await res.json();
+            if (active && data.success && Array.isArray(data.data)) {
+              setPosts(data.data);
+              try {
+                localStorage.setItem('rabbitty_feed_cache_v1', JSON.stringify(data.data));
+              } catch {}
+            }
+          }
+        } else if (activeTab === 'Stock') {
+          const res = await fetch('/api/offers');
+          if (res.ok) {
+            const { success, offers: o } = await res.json();
+            if (active && success) setOffers(o);
           }
         }
-      } else if (activeTab === 'Stock') {
-        const res = await fetch('/api/offers');
-        if (res.ok) {
-          const { success, offers: o } = await res.json();
-          if (success) setOffers(o);
-        }
+      } catch (err) {
+        console.error('[Feed] data fetch error:', err);
+      } finally {
+        if (active) setLoading(false);
       }
-    } catch (err) {
-      console.error('[Feed] data fetch error:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [activeTab, posts.length]);
+    };
 
-  useEffect(() => {
-    queueMicrotask(() => { fetchFeedData(); });
-  }, [fetchFeedData]);
+    load();
+
+    return () => {
+      active = false;
+    };
+  }, [activeTab, refreshKey]);
 
   // Refresh disparado por el botón "Ra" del menú inferior: sube al inicio y recarga
   const handleRefresh = useCallback(() => {
@@ -290,8 +294,8 @@ export default function FeedPage() {
       window.scrollTo(0, 0);
     });
     PlatformBridge.hapticFeedback('light');
-    fetchFeedData();
-  }, [fetchFeedData]);
+    setRefreshKey((k) => k + 1);
+  }, []);
 
   useEffect(() => {
     window.addEventListener('rabbitty:refresh-feed', handleRefresh);
