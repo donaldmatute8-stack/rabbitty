@@ -87,6 +87,9 @@ export const ownedBusinesses = pgTable("ownedBusinesses", {
   endTime: text("endTime").default("23:59").notNull(),
   timezone: text("timezone").default("America/Mexico_City").notNull(),
   slug: text("slug").unique(),
+  hops: integer("hops").default(0).notNull(),
+  savedCount: integer("savedCount").default(0).notNull(),
+  sharedCount: integer("sharedCount").default(0).notNull(),
   ...timestamps,
 });
 

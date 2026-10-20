@@ -79,7 +79,7 @@ export async function GET() {
         category: 'Cafetería de Especialidad',
         rewardPercentage: 25,
         address: 'Av. Lázaro Cárdenas #74, Bucerías, Nayarit',
-        logoUrl: '/icon_ra.png',
+        logoUrl: '/logos/626cafe-logo.png',
         refCode: '626cafe',
       });
     }
@@ -96,6 +96,7 @@ export async function GET() {
           category: 'Cafetería de Especialidad',
           rewardPercentage: 25,
           address: 'Av. Lázaro Cárdenas #74, Bucerías, Nayarit',
+          logoUrl: '/logos/626cafe-logo.png',
           refCode: '626cafe',
         },
       ],

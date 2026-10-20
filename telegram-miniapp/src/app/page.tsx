@@ -46,6 +46,9 @@ interface FeedItem {
   distance?: number;
   reward_percentage: number;
   logo_base64?: string;
+  hops?: number;
+  savedCount?: number;
+  sharedCount?: number;
   activeDays?: number[];
   startTime?: string;
   endTime?: string;
@@ -166,7 +169,7 @@ export default function FeedPage() {
     // Auto-prompt Rabbitty Mood moderado (máximo una vez cada 7 días, si ya vio el ritual de bienvenida)
     try {
       const lastShown = localStorage.getItem('rabbitty_mood_last_shown_time');
-      const ritualSeen = localStorage.getItem('rabbitty_welcome_ritual_seen_v2');
+      const ritualSeen = localStorage.getItem('rabbitty_welcome_ritual_seen_v3');
       const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
       const now = Date.now();
 
@@ -645,6 +648,9 @@ export default function FeedPage() {
                     label={post.distance ? `${post.distance}km` : post.label}
                     bunz={post.reward_percentage}
                     imageUrl={post.imageUrl}
+                    initialHops={post.hops}
+                    initialSavedCount={post.savedCount}
+                    initialSharedCount={post.sharedCount}
                     index={i}
                   />
                 ))

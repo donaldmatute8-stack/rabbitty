@@ -27,7 +27,7 @@ const PHRASES = [
   {
     id: 3,
     start: 13.0,
-    end: 14.8, // Permanece hasta que finaliza el audio
+    end: 14.8, // Finaliza la frase
     subtitle: 'Recompensas reales en cada visita',
     words: ['«Disfruta', 'más', 'cada', 'visita.»'],
   },
@@ -35,7 +35,7 @@ const PHRASES = [
 
 export function WelcomeRitual({
   onComplete,
-  storageKey = 'rabbitty_welcome_ritual_seen_v2',
+  storageKey = 'rabbitty_welcome_ritual_seen_v3',
   forceOpen = false,
 }: WelcomeRitualProps) {
   const [isOpen, setIsOpen] = useState(() => {
@@ -76,7 +76,7 @@ export function WelcomeRitual({
           clearInterval(fadeInterval);
           aud.pause();
         }
-      }, 50);
+      }, 40);
     }
 
     if (typeof window !== 'undefined') {
@@ -88,7 +88,7 @@ export function WelcomeRitual({
     setTimeout(() => {
       setIsOpen(false);
       onComplete?.();
-    }, 900);
+    }, 450); // Fade medio más rápido hacia la app
   }, [storageKey, onComplete]);
 
   // Manejo de reproducción de audio y sincronización continua
@@ -105,6 +105,11 @@ export function WelcomeRitual({
         setCurrentTime(t);
         const pct = (t / audio.duration) * 100;
         setProgress(pct);
+
+        // Si pasa de 16.2 segundos y aún no disparó finish, disparar cierre en fade
+        if (t >= 16.2 && !hasFinishedRef.current) {
+          handleFinish();
+        }
       }
     };
 
@@ -202,9 +207,15 @@ export function WelcomeRitual({
       {/* Escenario Central: Logo protagonista + Tipografía con fade progresivo */}
       <main className="relative z-10 max-w-2xl mx-auto px-6 text-center my-auto flex flex-col items-center justify-center space-y-10 w-full">
         
-        {/* Logo Rabbitty al centro */}
-        <div className="relative inline-block transition-transform duration-1000 ease-out transform">
-          <div className="absolute inset-0 rounded-full bg-pink-500/30 blur-3xl animate-pulse pointer-events-none scale-150" />
+        {/* Logo Rabbitty al centro: Zoom lento heroico al finalizar la última frase */}
+        <div 
+          className={`relative inline-block transition-all duration-1200 ease-out transform ${
+            currentTime >= 14.8 ? 'scale-175 sm:scale-200 z-30' : 'scale-100'
+          }`}
+        >
+          <div className={`absolute inset-0 rounded-full bg-pink-500/30 blur-3xl animate-pulse pointer-events-none transition-all duration-1000 ${
+            currentTime >= 14.8 ? 'scale-250 opacity-80' : 'scale-150'
+          }`} />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/logo_conejo.png"
@@ -213,8 +224,10 @@ export function WelcomeRitual({
           />
         </div>
 
-        {/* Contenedor de Frases: Cada frase permanece visible hasta que va a entrar la siguiente frase */}
-        <div className="min-h-36 flex flex-col items-center justify-center w-full">
+        {/* Contenedor de Frases: Se desvanece suavemente a partir de 14.8s para dejar solo el logo protagonista */}
+        <div className={`min-h-36 flex flex-col items-center justify-center w-full transition-opacity duration-700 ease-in-out ${
+          currentTime >= 14.8 ? 'opacity-0 pointer-events-none' : 'opacity-100'
+        }`}>
           {PHRASES.map((phrase) => {
             const isVisible = currentTime >= phrase.start && currentTime < phrase.end;
             if (!isVisible) return null;

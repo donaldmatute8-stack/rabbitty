@@ -1,4 +1,5 @@
-export * from "@rabbitty/database-core";
+export * from "../../../packages/database-core/src/schema/index";
+export * from "../../../packages/database-core/src/schema/relations";
 export {
   moodEvents,
   moodCampaigns,
