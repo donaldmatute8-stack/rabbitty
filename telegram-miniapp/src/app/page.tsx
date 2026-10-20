@@ -92,9 +92,16 @@ export default function FeedPage() {
     }
     return "bunz'in";
   });
-  const [posts, setPosts] = useState<FeedItem[]>([]);
+  const [posts, setPosts] = useState<FeedItem[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const cached = localStorage.getItem('rabbitty_feed_cache_v1');
+      if (cached) return JSON.parse(cached);
+    } catch {}
+    return [];
+  });
   const [offers, setOffers] = useState<Offer[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [purchasing, setPurchasing] = useState(false);
   const [mapMode, setMapMode] = useState<'globe' | 'flat'>('flat');
@@ -242,21 +249,28 @@ export default function FeedPage() {
     try {
       if (activeTab === "bunz'in" || activeTab === 'Freehands') {
         const res = await fetch('/api/feed');
-        const data = await res.json();
-        if (data.success) {
-          setPosts(data.data);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && Array.isArray(data.data)) {
+            setPosts(data.data);
+            try {
+              localStorage.setItem('rabbitty_feed_cache_v1', JSON.stringify(data.data));
+            } catch {}
+          }
         }
       } else if (activeTab === 'Stock') {
         const res = await fetch('/api/offers');
-        const { success, offers: o } = await res.json();
-        if (success) setOffers(o);
+        if (res.ok) {
+          const { success, offers: o } = await res.json();
+          if (success) setOffers(o);
+        }
       }
     } catch (err) {
       console.error('[Feed] data fetch error:', err);
     } finally {
       const elapsed = performance.now() - startedAt;
-      if (elapsed < 700) {
-        await new Promise((r) => setTimeout(r, 700 - elapsed));
+      if (elapsed < 500) {
+        await new Promise((r) => setTimeout(r, 500 - elapsed));
       }
       setLoading(false);
     }
@@ -661,7 +675,7 @@ export default function FeedPage() {
                   <div className="flex-1 h-px bg-(--border-subtle)" />
                 </div>
               )}
-              {loading ? (
+              {loading && postsWithDistance.length === 0 ? (
                 <><SkeletonCard /><SkeletonCard /><SkeletonCard /></>
               ) : postsWithDistance.length > 0 ? (
                 postsWithDistance.map((post, i) => (

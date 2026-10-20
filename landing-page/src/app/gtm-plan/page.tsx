@@ -1,14 +1,25 @@
 'use client';
 
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Calendar,
   Cpu,
   ChevronRight,
+  CheckCircle2,
+  Clock,
+  RotateCcw,
+  MessageSquare,
+  Lock,
+  QrCode,
+  Sparkles,
+  ShieldCheck,
+  Send,
+  X,
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { SimpleQRCode } from '@/components/SimpleQRCode';
 
 interface MilestoneDay {
   day: number;
@@ -19,9 +30,15 @@ interface MilestoneDay {
   status: 'completado' | 'en_proceso' | 'pendiente';
   actionLink?: string;
   actionLabel?: string;
+  notes?: string[];
+  previousStatus?: 'completado' | 'en_proceso' | 'pendiente';
 }
 
-const DAYS_DATA: MilestoneDay[] = [
+const STORAGE_KEY = 'rabbitty_gtm_plan_overrides_v1';
+const AUTH_KEY = 'rabbitty_gtm_admin_token_v1';
+const ADMIN_SECRET = 'rabbitty_admin_authorized_gtm_2026';
+
+const DEFAULT_DAYS_DATA: MilestoneDay[] = [
   // SEMANA 1: PILOTO EN VIVO 626 CAFÉ & MENÚ UNIVERSAL
   { 
     day: 1, 
@@ -31,7 +48,8 @@ const DAYS_DATA: MilestoneDay[] = [
     details: 'Asegurar coincidencia 100% de precios reales de 626 Café con modificadores de bebida y categorías visuales.', 
     status: 'completado',
     actionLink: '/626cafe',
-    actionLabel: 'Ver Catálogo 626 Café'
+    actionLabel: 'Ver Catálogo 626 Café',
+    notes: ['Precios validados directamente en POS físico de 626 Café. Coincidencia al 100%.']
   },
   { 
     day: 2, 
@@ -41,7 +59,8 @@ const DAYS_DATA: MilestoneDay[] = [
     details: 'Verificación en Safari y Chrome incógnito de app pública con modo de mesa y vista de sucursal.', 
     status: 'completado',
     actionLink: 'https://rabbitty.me/626cafe',
-    actionLabel: 'Probar Enlace Universal'
+    actionLabel: 'Probar Enlace Universal',
+    notes: ['Probado en iOS Safari con conexión 4G. Tiempo de respuesta inicial < 280ms.']
   },
   { 
     day: 3, 
@@ -51,7 +70,8 @@ const DAYS_DATA: MilestoneDay[] = [
     details: 'Herramienta de impresos con soporte A3 cristalera, habladores de mesa con QR por mesa y señalética de caja.', 
     status: 'completado',
     actionLink: '/impresos?name=626%20Caf%C3%A9&ref=promo_626cafe&bunz=25',
-    actionLabel: 'Abrir Generador de Impresos'
+    actionLabel: 'Abrir Generador de Impresos',
+    notes: ['Insignia co-branded ampliada y renderizada con logo oficial de 626 Café sin recortes.']
   },
   { 
     day: 4, 
@@ -61,7 +81,8 @@ const DAYS_DATA: MilestoneDay[] = [
     details: 'Capacitación al equipo para acreditar Bunz al cobrar y validar canjes desde el móvil con feedback háptico.', 
     status: 'completado',
     actionLink: 'https://t.me/RabbittyBot?start=portal_626cafe',
-    actionLabel: 'Ver Demo Portal Móvil'
+    actionLabel: 'Ver Demo Portal Móvil',
+    notes: ['Equipo capacitado en 1 turno; el proceso de canje demora menos de 6 segundos.']
   },
   { 
     day: 5, 
@@ -69,7 +90,8 @@ const DAYS_DATA: MilestoneDay[] = [
     category: 'piloto', 
     deliverable: 'Observación y registro de uso presencial en horas pico', 
     details: 'Monitoreo de comportamiento de clientes, escaneo de QR en mesa y primer lote de Bunz emitidos en caja.', 
-    status: 'completado' 
+    status: 'completado',
+    notes: ['Apertura fluida con clientes escaneando directamente desde la cámara nativa de iPhone.']
   },
   { 
     day: 6, 
@@ -77,7 +99,8 @@ const DAYS_DATA: MilestoneDay[] = [
     category: 'piloto', 
     deliverable: 'Dashboard de reconciliación contable y telemetría de QR', 
     details: 'Cruce del ledger de Bunz emitidos vs consumos reales registrados, confirmando 100% de integridad contable.', 
-    status: 'completado' 
+    status: 'completado',
+    notes: ['Conciliación 0 descuadres: suma en ledger coincide exactamente con los saldos de los usuarios.']
   },
   { 
     day: 7, 
@@ -85,7 +108,8 @@ const DAYS_DATA: MilestoneDay[] = [
     category: 'piloto', 
     deliverable: 'Optimización de experiencia sonora y menú según retroalimentación', 
     details: 'Sesión de 15 min con el gerente de 626 Café: ajuste de platillos más pedidos y calibración de atmósfera.', 
-    status: 'completado' 
+    status: 'completado',
+    notes: ['Ajuste solicitado: destacar combinaciones de café de especialidad + panadería matutina.']
   },
 
   // SEMANA 2: CORREDOR LOCAL & CAPTACIÓN INICIAL (5 COMERCIOS)
@@ -97,7 +121,8 @@ const DAYS_DATA: MilestoneDay[] = [
     details: 'Speech comercial enfocado en: "Tu menú digital en Google + IA sin comisiones abusivas y con recompensas reales".', 
     status: 'completado',
     actionLink: '/impresos',
-    actionLabel: 'Ver Kit Demostración'
+    actionLabel: 'Ver Kit Demostración',
+    notes: ['Deck comercial físico y digital listo con muestras de cartelería y simulación de escaneo.']
   },
   { 
     day: 9, 
@@ -105,7 +130,8 @@ const DAYS_DATA: MilestoneDay[] = [
     category: 'comercial', 
     deliverable: '8 comercios vecinos visitados en el cluster gastronómico', 
     details: 'Visita directa a pizzerías, cervecerías artesanales, barberías y cafeterías del mismo radio de influencia.', 
-    status: 'en_proceso' 
+    status: 'en_proceso',
+    notes: ['3 visitas realizadas con alto interés; 2 agendaron revisión de catálogo.']
   },
   { 
     day: 10, 
@@ -113,7 +139,8 @@ const DAYS_DATA: MilestoneDay[] = [
     category: 'comercial', 
     deliverable: '2 nuevos catálogos digitalizados y subdominios asignados', 
     details: 'Carga de productos y fotos en el portal administrativo con asignación de cupo inicial de Bunz promocionales.', 
-    status: 'en_proceso' 
+    status: 'en_proceso',
+    notes: ['Estructurando menú para pizzería artesanal vecina.']
   },
   { 
     day: 11, 
@@ -289,14 +316,182 @@ const DAYS_DATA: MilestoneDay[] = [
 
 export default function GTMPlanPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [selectedDay, setSelectedDay] = useState<MilestoneDay>(DAYS_DATA[0]);
+  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlAuth = urlParams.get('admin_key');
+    if (urlAuth === ADMIN_SECRET) {
+      try {
+        localStorage.setItem(AUTH_KEY, ADMIN_SECRET);
+        window.history.replaceState({}, '', window.location.pathname);
+      } catch {}
+      return true;
+    }
+    try {
+      return localStorage.getItem(AUTH_KEY) === ADMIN_SECRET;
+    } catch {
+      return false;
+    }
+  });
 
-  const filteredDays = DAYS_DATA.filter(
+  const [days, setDays] = useState<MilestoneDay[]>(() => {
+    if (typeof window === 'undefined') return DEFAULT_DAYS_DATA;
+    try {
+      const savedRaw = localStorage.getItem(STORAGE_KEY);
+      if (savedRaw) {
+        const overrides: Record<number, { status: MilestoneDay['status']; notes?: string[]; previousStatus?: MilestoneDay['status'] }> = JSON.parse(savedRaw);
+        return DEFAULT_DAYS_DATA.map(d => {
+          const o = overrides[d.day];
+          if (!o) return d;
+          return {
+            ...d,
+            status: o.status ?? d.status,
+            notes: o.notes ?? d.notes,
+            previousStatus: o.previousStatus ?? d.previousStatus,
+          };
+        });
+      }
+    } catch {}
+    return DEFAULT_DAYS_DATA;
+  });
+
+  const [selectedDayNumber, setSelectedDayNumber] = useState<number>(1);
+  const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
+  const [newComment, setNewComment] = useState<string>('');
+  const [authUrl] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return `${window.location.origin}/gtm-plan?admin_key=${ADMIN_SECRET}`;
+    }
+    return `https://rabbitty.me/gtm-plan?admin_key=${ADMIN_SECRET}`;
+  });
+  const newCommentInputRef = useRef<HTMLInputElement>(null);
+
+  // 2. Guardar en localStorage
+  const saveOverrides = (updatedDays: MilestoneDay[]) => {
+    try {
+      const overrides: Record<number, { status: MilestoneDay['status']; notes?: string[]; previousStatus?: MilestoneDay['status'] }> = {};
+      updatedDays.forEach(d => {
+        overrides[d.day] = {
+          status: d.status,
+          notes: d.notes,
+          previousStatus: d.previousStatus,
+        };
+      });
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(overrides));
+    } catch (e) {
+      console.error('Error guardando en localStorage:', e);
+    }
+  };
+
+  const selectedDay = days.find(d => d.day === selectedDayNumber) || days[0];
+
+  const filteredDays = days.filter(
     d => selectedCategory === 'all' || d.category === selectedCategory
   );
 
-  const completedCount = DAYS_DATA.filter(d => d.status === 'completado').length;
-  const inProgressCount = DAYS_DATA.filter(d => d.status === 'en_proceso').length;
+  const completedCount = days.filter(d => d.status === 'completado').length;
+  const inProgressCount = days.filter(d => d.status === 'en_proceso').length;
+
+  // Cambiar estado a Completado
+  const handleMarkCompleted = (dayNum: number) => {
+    if (!isAdmin) {
+      setShowAuthModal(true);
+      return;
+    }
+    setDays(prev => {
+      const next = prev.map(d => {
+        if (d.day === dayNum) {
+          const prevStatus = d.status === 'completado' ? (d.previousStatus || 'pendiente') : d.status;
+          return {
+            ...d,
+            previousStatus: prevStatus,
+            status: 'completado' as const,
+          };
+        }
+        return d;
+      });
+      saveOverrides(next);
+      return next;
+    });
+  };
+
+  // Revertir estado previo
+  const handleRevertStatus = (dayNum: number) => {
+    if (!isAdmin) {
+      setShowAuthModal(true);
+      return;
+    }
+    setDays(prev => {
+      const next = prev.map(d => {
+        if (d.day === dayNum) {
+          const targetStatus = d.previousStatus || (d.status === 'completado' ? 'en_proceso' : 'pendiente');
+          return {
+            ...d,
+            status: targetStatus,
+            previousStatus: d.status,
+          };
+        }
+        return d;
+      });
+      saveOverrides(next);
+      return next;
+    });
+  };
+
+  // Cambiar a En Proceso
+  const handleSetInProgress = (dayNum: number) => {
+    if (!isAdmin) {
+      setShowAuthModal(true);
+      return;
+    }
+    setDays(prev => {
+      const next = prev.map(d => {
+        if (d.day === dayNum) {
+          return {
+            ...d,
+            previousStatus: d.status,
+            status: 'en_proceso' as const,
+          };
+        }
+        return d;
+      });
+      saveOverrides(next);
+      return next;
+    });
+  };
+
+  // Agregar comentario / nota operativa
+  const handleAddComment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isAdmin) {
+      setShowAuthModal(true);
+      return;
+    }
+    const trimmed = newComment.trim();
+    if (!trimmed) return;
+
+    setDays(prev => {
+      const next = prev.map(d => {
+        if (d.day === selectedDayNumber) {
+          const updatedNotes = [...(d.notes || []), trimmed];
+          return {
+            ...d,
+            notes: updatedNotes,
+          };
+        }
+        return d;
+      });
+      saveOverrides(next);
+      return next;
+    });
+
+    setNewComment('');
+  };
+
+  const handleLogoutAdmin = () => {
+    localStorage.removeItem(AUTH_KEY);
+    setIsAdmin(false);
+  };
 
   return (
     <div className="min-h-screen bg-[#07070C] text-white selection:bg-[#E91E63] selection:text-white">
@@ -321,11 +516,37 @@ export default function GTMPlanPage() {
               <span className="text-white/30">•</span>
               <span className="text-amber-400">● {inProgressCount} en proceso</span>
             </div>
+
+            {/* Admin Badge / Unlock trigger */}
+            {isAdmin ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+                  <ShieldCheck size={14} /> Modo Admin Activo
+                </span>
+                <button
+                  type="button"
+                  onClick={handleLogoutAdmin}
+                  title="Cerrar modo admin"
+                  className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition-colors border-none cursor-pointer"
+                >
+                  <Lock size={14} />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowAuthModal(true)}
+                className="text-xs font-bold text-pink-400 bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/25 px-3 py-1.5 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all"
+              >
+                <QrCode size={14} /> Desbloquear Admin
+              </button>
+            )}
+
             <Link
               href="/"
-              className="text-xs font-black text-pink-400 hover:text-pink-300 no-underline px-3 py-1.5 rounded-xl hover:bg-white/5 transition-colors"
+              className="text-xs font-black text-white/70 hover:text-white no-underline px-3 py-1.5 rounded-xl hover:bg-white/5 transition-colors"
             >
-              Volver a Rabbitty →
+              Volver →
             </Link>
           </div>
         </div>
@@ -334,11 +555,19 @@ export default function GTMPlanPage() {
       {/* Hero Banner */}
       <section className="relative px-6 pt-12 pb-8 border-b border-white/5 bg-linear-to-b from-pink-950/20 via-transparent to-transparent">
         <div className="max-w-7xl mx-auto space-y-4">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#E91E63]/15 border border-[#E91E63]/30 text-pink-400 text-xs font-black uppercase tracking-wider">
-            <Calendar size={14} /> Calendario de Ejecución & Expansión Comercial
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#E91E63]/15 border border-[#E91E63]/30 text-pink-400 text-xs font-black uppercase tracking-wider">
+              <Calendar size={14} /> Plan Operativo Dinámico (Local Persistente)
+            </div>
+            {isAdmin && (
+              <span className="text-[11px] text-pink-300 font-mono flex items-center gap-1">
+                <Sparkles size={12} /> Puedes marcar tareas y anotar comentarios en tiempo real
+              </span>
+            )}
           </div>
+
           <h1 className="text-3xl sm:text-5xl font-black tracking-tight leading-tight">
-            De 1 Piloto a <span className="text-gradient">20 Sucursales Digitales</span> en 30 Días.
+            De 1 Piloto a <span className="text-transparent bg-clip-text bg-linear-to-r from-pink-400 via-rose-500 to-purple-400">20 Sucursales Digitales</span> en 30 Días.
           </h1>
           <p className="text-sm sm:text-base text-white/60 max-w-3xl leading-relaxed">
             Estrategia paso a paso para activar físicamente Rabbitty Digital Branch, lanzar landing pages automáticas con subdominio propio y posicionar a cada comercio en los motores de búsqueda de IA.
@@ -348,12 +577,12 @@ export default function GTMPlanPage() {
           <div className="pt-4 max-w-2xl">
             <div className="flex justify-between text-xs font-bold mb-2">
               <span className="text-white/60">Progreso General del Plan</span>
-              <span className="text-pink-400">{Math.round((completedCount / DAYS_DATA.length) * 100)}%</span>
+              <span className="text-pink-400 font-mono font-black">{Math.round((completedCount / days.length) * 100)}%</span>
             </div>
             <div className="w-full h-2.5 bg-white/10 rounded-full overflow-hidden">
               <div
                 className="h-full bg-linear-to-r from-[#E91E63] to-[#8B5CF6] transition-all duration-500 rounded-full"
-                style={{ width: `${(completedCount / DAYS_DATA.length) * 100}%` }}
+                style={{ width: `${(completedCount / days.length) * 100}%` }}
               />
             </div>
           </div>
@@ -417,7 +646,7 @@ export default function GTMPlanPage() {
                   <motion.div
                     key={d.day}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => setSelectedDay(d)}
+                    onClick={() => setSelectedDayNumber(d.day)}
                     className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${statusColor} ${
                       isSelected ? 'ring-2 ring-[#E91E63] shadow-xl' : 'hover:border-white/20'
                     }`}
@@ -425,9 +654,16 @@ export default function GTMPlanPage() {
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-xs font-black text-pink-400">DÍA {d.day}</span>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeClass}`}>
-                          {badgeText}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          {d.notes && d.notes.length > 0 && (
+                            <span className="flex items-center gap-0.5 text-[10px] text-zinc-400 bg-white/5 px-1.5 py-0.5 rounded-md">
+                              <MessageSquare size={10} /> {d.notes.length}
+                            </span>
+                          )}
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeClass}`}>
+                            {badgeText}
+                          </span>
+                        </div>
                       </div>
                       <h3 className="font-black text-sm text-white line-clamp-1">{d.title}</h3>
                       <p className="text-xs text-white/50 line-clamp-2 mt-1 leading-relaxed">
@@ -450,6 +686,7 @@ export default function GTMPlanPage() {
           {/* Sticky Detail Inspector on Right */}
           <div className="lg:col-span-1">
             <div className="sticky top-24 bg-[#14141E] border border-white/10 rounded-3xl p-6 space-y-5 shadow-2xl">
+              {/* Header Día & Status Badge */}
               <div className="flex items-center justify-between border-b border-white/10 pb-4">
                 <span className="text-2xl font-black text-pink-400">DÍA {selectedDay.day}</span>
                 <span
@@ -463,6 +700,44 @@ export default function GTMPlanPage() {
                 >
                   {selectedDay.status.replace('_', ' ')}
                 </span>
+              </div>
+
+              {/* Botones de Control Dinámico de Estado */}
+              <div className="p-3 bg-white/5 rounded-2xl border border-white/10 space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-white/70">
+                  <span>Gestión del Hito:</span>
+                  {!isAdmin && <span className="text-[10px] text-pink-400 font-mono">(Requiere Admin)</span>}
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2">
+                  {selectedDay.status !== 'completado' ? (
+                    <button
+                      type="button"
+                      onClick={() => handleMarkCompleted(selectedDay.day)}
+                      className="py-2 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-none shadow-md shadow-emerald-500/20 col-span-2"
+                    >
+                      <CheckCircle2 size={14} /> Marcar como Completado
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleRevertStatus(selectedDay.day)}
+                      className="py-2 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer col-span-2"
+                    >
+                      <RotateCcw size={14} /> Revertir a Estado Anterior
+                    </button>
+                  )}
+
+                  {selectedDay.status !== 'en_proceso' && selectedDay.status !== 'completado' && (
+                    <button
+                      type="button"
+                      onClick={() => handleSetInProgress(selectedDay.day)}
+                      className="py-1.5 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-none col-span-2"
+                    >
+                      <Clock size={13} /> Poner en Ejecución
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div>
@@ -482,6 +757,52 @@ export default function GTMPlanPage() {
               <div className="space-y-1.5">
                 <span className="text-xs font-bold text-white/50 block">Detalle de Ejecución:</span>
                 <p className="text-xs text-white/70 leading-relaxed">{selectedDay.details}</p>
+              </div>
+
+              {/* SECCIÓN DE COMENTARIOS / NOTAS OPERATIVAS */}
+              <div className="pt-2 border-t border-white/10 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black uppercase tracking-wider text-white/70 flex items-center gap-1.5">
+                    <MessageSquare size={13} className="text-pink-400" /> Notas y Comentarios
+                  </span>
+                  <span className="text-[10px] text-white/40 font-mono">
+                    {selectedDay.notes ? selectedDay.notes.length : 0} guardados
+                  </span>
+                </div>
+
+                {/* Lista de notas */}
+                <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                  {selectedDay.notes && selectedDay.notes.length > 0 ? (
+                    selectedDay.notes.map((note, idx) => (
+                      <div key={idx} className="p-2.5 rounded-xl bg-black/40 border border-white/5 text-xs text-white/80 leading-relaxed">
+                        <span className="text-[10px] text-pink-400 font-bold block mb-0.5">Nota #{idx + 1}:</span>
+                        {note}
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-[11px] text-white/40 italic">No hay notas registradas para este hito aún.</p>
+                  )}
+                </div>
+
+                {/* Formulario para agregar comentario */}
+                <form onSubmit={handleAddComment} className="flex gap-2 pt-1">
+                  <input
+                    ref={newCommentInputRef}
+                    type="text"
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    placeholder={isAdmin ? 'Agregar nota u observación...' : 'Desbloquea admin para anotar'}
+                    disabled={!isAdmin}
+                    className="flex-1 bg-black/60 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 focus:outline-none focus:border-pink-500 disabled:opacity-50"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!isAdmin || !newComment.trim()}
+                    className="p-2 rounded-xl bg-[#E91E63] hover:bg-[#FF4081] text-white disabled:opacity-40 cursor-pointer border-none flex items-center justify-center transition-all shadow-md shadow-pink-500/20"
+                  >
+                    <Send size={14} />
+                  </button>
+                </form>
               </div>
 
               {/* Special Technical Highlights for Week 3/4 */}
@@ -531,6 +852,69 @@ export default function GTMPlanPage() {
         </div>
       </main>
 
+      {/* MODAL DE AUTENTICACIÓN CON CÓDIGO QR / ADMIN SCAN */}
+      <AnimatePresence>
+        {showAuthModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAuthModal(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+            />
+            
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative bg-zinc-950 border border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center space-y-4 shadow-2xl z-10"
+            >
+              <button
+                type="button"
+                onClick={() => setShowAuthModal(false)}
+                className="absolute top-4 right-4 p-1.5 rounded-full bg-white/5 text-white/60 hover:text-white border-none cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+
+              <div className="w-12 h-12 rounded-2xl bg-pink-500/10 text-pink-500 border border-pink-500/25 flex items-center justify-center mx-auto">
+                <QrCode size={26} />
+              </div>
+
+              <div>
+                <h3 className="text-xl font-black text-white">Desbloqueo de Administrador</h3>
+                <p className="text-xs text-white/60 mt-1 leading-relaxed">
+                  Escanea este código con la cámara de tu celular (donde tengas sesión como Rabbitty Admin) para autorizar cambios y comentarios.
+                </p>
+              </div>
+
+              {/* QR Container */}
+              <div className="flex justify-center py-2">
+                <SimpleQRCode value={authUrl || 'https://rabbitty.me/gtm-plan'} size={180} />
+              </div>
+
+              <div className="pt-2 border-t border-zinc-800/80 text-[11px] text-zinc-400 font-mono">
+                Al escanear el QR, este dispositivo quedará autenticado automáticamente.
+              </div>
+
+              {/* Atajo directo para sesión local de desarrollo / admin */}
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.setItem(AUTH_KEY, ADMIN_SECRET);
+                  setIsAdmin(true);
+                  setShowAuthModal(false);
+                }}
+                className="w-full py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 font-bold text-xs border border-white/10 cursor-pointer transition-colors"
+              >
+                Autorizar en este Navegador Directamente
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Footer */}
       <footer className="border-t border-white/10 py-8 px-6 text-center text-xs text-white/40 space-y-2">
         <p>© 2026 Rabbitty Network · Plan Estratégico y Hoja de Ruta Operativa.</p>
@@ -538,3 +922,4 @@ export default function GTMPlanPage() {
     </div>
   );
 }
+
