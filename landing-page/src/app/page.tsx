@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { motion, Variants } from 'framer-motion';
 import { ArrowRight, Store, UserCircle2, Zap, Shield, Smartphone, QrCode, X, Clock, Salad, Truck, Receipt, Bell, Building2, DollarSign, Monitor, Gift, Award, Megaphone, Cake, BookOpen, HelpCircle, Sparkles, Compass, Headphones, Activity, Utensils, Globe } from 'lucide-react';
 import BunzGuide from '@/components/BunzGuide';
+import OpenAppButton from '@/components/OpenAppButton';
 import PricingPackagesSection, { PackagePlan, NicheData } from '@/components/PricingPackagesSection';
 
 const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || '5213312345678';
@@ -250,9 +251,9 @@ export default function LandingPage() {
           <a href="https://admin.rabbitty.me/login" target="_blank" className="hidden md:block text-sm font-bold text-blue-400 hover:text-blue-300 transition-colors">
             Portal de Negocios
           </a>
-          <a href="https://t.me/Rabbittyme_bot/app" target="_blank" className="bg-white text-black px-5 py-2.5 rounded-full font-bold text-sm hover:scale-105 transition-transform">
+          <OpenAppButton className="bg-white text-black px-5 py-2.5 rounded-full font-bold text-sm hover:scale-105 transition-transform cursor-pointer">
             Abrir App
-          </a>
+          </OpenAppButton>
         </div>
       </header>
 
@@ -625,9 +626,9 @@ export default function LandingPage() {
           Convenience is <span className="text-gradient">King.</span>
         </h2>
         <div className="flex justify-center gap-4">
-          <a href="https://t.me/Rabbittyme_bot/app" target="_blank" className="px-8 py-4 rounded-full bg-white text-black font-bold text-lg transition-transform hover:scale-105 flex items-center gap-2">
-            Abrir en Telegram <ArrowRight size={20} />
-          </a>
+          <OpenAppButton className="px-8 py-4 rounded-full bg-white text-black font-bold text-lg transition-transform hover:scale-105 flex items-center gap-2 cursor-pointer">
+            Abrir en Rabbitty
+          </OpenAppButton>
         </div>
       </section>
 
