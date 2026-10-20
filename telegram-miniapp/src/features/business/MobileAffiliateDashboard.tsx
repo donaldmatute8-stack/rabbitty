@@ -20,6 +20,8 @@ interface BusinessProfile {
   address?: string;
   logoUrl?: string | null;
   hops?: number;
+  savedCount?: number;
+  sharedCount?: number;
 }
 
 interface ReservationItem {
@@ -801,6 +803,43 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
                         <span className="text-xs text-(--text-secondary)">Clientes Registrados</span>
                         <span className="text-sm font-black text-(--text-primary)">{clientCount.toLocaleString()}</span>
                       </div>
+                    </div>
+
+                    {/* Telemetría y Métricas Sociales del Comercio (Hops, Madriguera, Shares) */}
+                    <div className="p-4 rounded-2xl space-y-3" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-black uppercase text-pink-400 m-0 tracking-wider">Descubrimiento & Tracción Social</h4>
+                        <span className="text-[10px] font-mono text-zinc-400">En vivo</span>
+                      </div>
+                      
+                      <div className="grid grid-cols-3 gap-2 pt-1">
+                        <div className="p-3 rounded-xl flex flex-col items-center justify-center text-center bg-pink-500/10 border border-pink-500/20">
+                          <span className="text-base mb-1">🐾</span>
+                          <span className="text-lg font-black text-(--text-primary)">
+                            {(business?.hops || 0).toLocaleString()}
+                          </span>
+                          <span className="text-[9px] uppercase font-bold text-pink-400 mt-0.5">Hops Dados</span>
+                        </div>
+
+                        <div className="p-3 rounded-xl flex flex-col items-center justify-center text-center bg-amber-500/10 border border-amber-500/20">
+                          <span className="text-base mb-1">🔖</span>
+                          <span className="text-lg font-black text-(--text-primary)">
+                            {(business?.savedCount || 0).toLocaleString()}
+                          </span>
+                          <span className="text-[9px] uppercase font-bold text-amber-400 mt-0.5">Madrigueras</span>
+                        </div>
+
+                        <div className="p-3 rounded-xl flex flex-col items-center justify-center text-center bg-cyan-500/10 border border-cyan-500/20">
+                          <span className="text-base mb-1">↗️</span>
+                          <span className="text-lg font-black text-(--text-primary)">
+                            {(business?.sharedCount || 0).toLocaleString()}
+                          </span>
+                          <span className="text-[9px] uppercase font-bold text-cyan-400 mt-0.5">Compartidos</span>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-(--text-muted) m-0 pt-1">
+                        Métricas de engagement orgánico generadas desde el feed social Rabbitty y redes de mensajería (Telegram y WhatsApp).
+                      </p>
                     </div>
                   </div>
                 )}

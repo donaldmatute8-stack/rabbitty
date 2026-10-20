@@ -216,11 +216,21 @@ function ImpresosContent() {
       .then((data) => {
         if (data?.success && Array.isArray(data.businesses)) {
           setBusinesses(data.businesses);
+          // Si no vino logo en URL o vino vacío, y estamos con el negocio inicial, auto-asignar el logo registrado
+          if (!initialLogo) {
+            const match = data.businesses.find((b: BusinessItem) => 
+              b.name.toLowerCase() === initialName.toLowerCase() || 
+              b.refCode?.toLowerCase() === initialRef.toLowerCase()
+            );
+            if (match?.logoUrl) {
+              setBusinessLogo(match.logoUrl);
+            }
+          }
         }
       })
       .catch((err) => console.error('Error cargando afiliados:', err))
       .finally(() => setLoadingBusinesses(false));
-  }, []);
+  }, [initialLogo, initialName, initialRef]);
 
   // Cerrar dropdown al hacer click fuera
   useEffect(() => {

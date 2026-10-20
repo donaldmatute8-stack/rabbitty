@@ -52,7 +52,7 @@ export async function GET(req: Request) {
       })
       .from(ledgerEntries);
 
-    // 4. Desglose por Negocio Individual (Para ver 626 Café y futuros afiliados)
+    // 4. Desglose por Negocio Individual (Para ver 626 Café y futuros afiliados) con telemetría social
     const businessesBreakdown = await db
       .select({
         id: ownedBusinesses.id,
@@ -61,6 +61,9 @@ export async function GET(req: Request) {
         status: ownedBusinesses.status,
         creditLimit: ownedBusinesses.creditLimit,
         creditUsed: ownedBusinesses.creditUsed,
+        hops: ownedBusinesses.hops,
+        savedCount: ownedBusinesses.savedCount,
+        sharedCount: ownedBusinesses.sharedCount,
         createdAt: ownedBusinesses.createdAt,
       })
       .from(ownedBusinesses)

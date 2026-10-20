@@ -16,12 +16,26 @@ interface FeedCardProps {
   label: string;
   bunz: number;
   imageUrl?: string;
+  initialHops?: number;
+  initialSavedCount?: number;
+  initialSharedCount?: number;
   index: number;
 }
 
 const emptySubscribe = () => () => {};
 
-export default function FeedCard({ id, user, device, label, bunz, imageUrl, index }: FeedCardProps) {
+export default function FeedCard({ 
+  id, 
+  user, 
+  device, 
+  label, 
+  bunz, 
+  imageUrl, 
+  initialHops, 
+  initialSavedCount, 
+  initialSharedCount, 
+  index 
+}: FeedCardProps) {
   const router = useRouter();
   const { showToast } = useToast();
   const { isDark } = useTheme();
@@ -36,7 +50,7 @@ export default function FeedCard({ id, user, device, label, bunz, imageUrl, inde
     }
     return false;
   });
-  const [hopsCount, setHopsCount] = useState<number | null>(null);
+  const [hopsCount, setHopsCount] = useState<number | null>(initialHops ?? null);
   const [hasHopped, setHasHopped] = useState(false);
 
   // Long press detection ref
@@ -285,30 +299,143 @@ export default function FeedCard({ id, user, device, label, bunz, imageUrl, inde
         </div>
 
         {/* Body */}
-        <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontWeight: 900, color: 'var(--text-primary)', fontSize: 17, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {user}
-            </p>
-            <p style={{ color: 'var(--text-muted)', fontSize: 13, fontWeight: 500 }}>{device}</p>
+        <div style={{ padding: '16px 20px 14px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontWeight: 900, color: 'var(--text-primary)', fontSize: 17, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {user}
+              </p>
+              <p style={{ color: 'var(--text-muted)', fontSize: 13, fontWeight: 500 }}>{device}</p>
+            </div>
+            <button 
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                router.push(`/affiliate/${id}`);
+              }}
+              style={{
+                flexShrink: 0,
+                background: 'var(--rabbitty-pink)', color: '#fff',
+                fontSize: 12, fontWeight: 700,
+                padding: '9px 16px', borderRadius: 999,
+                border: 'none', cursor: 'pointer',
+                boxShadow: '0 2px 10px rgba(233,30,99,0.3)',
+              }}
+              className="active:scale-95 transition-transform"
+            >
+              Ver oferta
+            </button>
           </div>
-          <button 
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              router.push(`/affiliate/${id}`);
-            }}
+
+          {/* Barra de Acciones Seamless de Red Social Rabbitty */}
+          <div 
             style={{
-              flexShrink: 0,
-              background: 'var(--rabbitty-pink)', color: '#fff',
-              fontSize: 12, fontWeight: 700,
-              padding: '10px 18px', borderRadius: 999,
-              border: 'none', cursor: 'pointer',
-              boxShadow: '0 2px 10px rgba(233,30,99,0.3)',
+              paddingTop: 10,
+              borderTop: '1px solid var(--border-subtle)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
             }}
+            onClick={(e) => e.stopPropagation()}
           >
-            Ver oferta
-          </button>
+            {/* Acción 1: Dar Hop (Icono Rabbitty Huellita) */}
+            <button
+              type="button"
+              onClick={handleHop}
+              className="group flex items-center gap-1.5 py-1 px-2.5 rounded-full transition-all active:scale-90 cursor-pointer"
+              style={{
+                background: hasHopped ? 'rgba(233,30,99,0.14)' : 'transparent',
+                border: hasHopped ? '1px solid rgba(233,30,99,0.3)' : '1px solid transparent',
+              }}
+              title="Dar Hop (Like)"
+            >
+              <svg 
+                className={`w-4 h-4 transition-transform ${hasHopped ? 'scale-115 text-[#E91E63]' : 'text-(--text-muted) group-hover:text-pink-400'}`}
+                viewBox="0 0 24 24" 
+                fill={hasHopped ? '#E91E63' : 'none'} 
+                stroke={hasHopped ? '#E91E63' : 'currentColor'} 
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round"
+              >
+                {/* Huellita de Conejo Rabbitty Oficial */}
+                <ellipse cx="12" cy="15" rx="5" ry="6" />
+                <circle cx="8" cy="7" r="2.2" />
+                <circle cx="12" cy="5" r="2.2" />
+                <circle cx="16" cy="7" r="2.2" />
+              </svg>
+              <span 
+                className="text-xs font-black tracking-tight"
+                style={{ color: hasHopped ? '#E91E63' : 'var(--text-secondary)' }}
+              >
+                {hopsCount !== null && hopsCount > 0 ? hopsCount : 'Hop'}
+              </span>
+            </button>
+
+            {/* Acción 2: Guardar en Madriguera (Icono Conejito/Madriguera) */}
+            <button
+              type="button"
+              onClick={handleToggleMadriguera}
+              className="group flex items-center gap-1.5 py-1 px-2.5 rounded-full transition-all active:scale-90 cursor-pointer"
+              style={{
+                background: isSaved ? 'rgba(245,158,11,0.14)' : 'transparent',
+                border: isSaved ? '1px solid rgba(245,158,11,0.3)' : '1px solid transparent',
+              }}
+              title="Guardar en Madriguera"
+            >
+              <svg 
+                className={`w-4 h-4 transition-transform ${isSaved ? 'scale-115 text-amber-500' : 'text-(--text-muted) group-hover:text-amber-400'}`}
+                viewBox="0 0 24 24" 
+                fill={isSaved ? '#F59E0B' : 'none'} 
+                stroke={isSaved ? '#F59E0B' : 'currentColor'} 
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round"
+              >
+                {/* Icono de Madriguera/Bóveda personal */}
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                <circle cx="12" cy="10" r="2" fill={isSaved ? '#FFF' : 'currentColor'} stroke="none" />
+              </svg>
+              <span 
+                className="text-xs font-bold tracking-tight"
+                style={{ color: isSaved ? '#F59E0B' : 'var(--text-secondary)' }}
+              >
+                {isSaved ? 'Guardado' : (initialSavedCount && initialSavedCount > 0 ? initialSavedCount : 'Madriguera')}
+              </span>
+            </button>
+
+            {/* Acción 3: Compartir con Amigos (Icono Flecha de Salto) */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                PlatformBridge.hapticFeedback('medium');
+                setMenuOpen(true);
+              }}
+              className="group flex items-center gap-1.5 py-1 px-2.5 rounded-full transition-all active:scale-90 cursor-pointer"
+              style={{ background: 'transparent' }}
+              title="Compartir comercio"
+            >
+              <svg 
+                className="w-4 h-4 text-(--text-muted) group-hover:text-cyan-400 transition-colors"
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round"
+              >
+                <circle cx="18" cy="5" r="3" />
+                <circle cx="6" cy="12" r="3" />
+                <circle cx="18" cy="19" r="3" />
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+              </svg>
+              <span className="text-xs font-bold tracking-tight text-(--text-secondary)">
+                {initialSharedCount && initialSharedCount > 0 ? initialSharedCount : 'Compartir'}
+              </span>
+            </button>
+          </div>
         </div>
       </motion.div>
 

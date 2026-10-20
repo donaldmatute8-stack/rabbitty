@@ -89,7 +89,7 @@ export async function getAffiliateBySlug(slug: string): Promise<AffiliateLanding
         phone: '+52 322 102 3028',
         lat: 20.7567,
         lng: -105.3341,
-        logoUrl: '/icon_ra.png',
+        logoUrl: '/logos/626cafe-logo.png',
         heroImage: '/626cafe-hero.jpg',
         gallery: [
           '/626cafe-hero.jpg',
@@ -166,7 +166,7 @@ export async function getAffiliateBySlug(slug: string): Promise<AffiliateLanding
         "endTime"
       FROM "ownedBusinesses"
       WHERE slug = ${normalizedSlug}
-        AND ("status" = 'active' OR "status" IS NULL)
+        AND ("status" = 'APPROVED' OR "status" = 'ACTIVE' OR "status" = 'active' OR "status" IS NULL)
       LIMIT 1;
     `;
 
@@ -186,7 +186,7 @@ export async function getAffiliateBySlug(slug: string): Promise<AffiliateLanding
           phone: '+52 322 102 3028',
           lat: 20.7567,
           lng: -105.3341,
-          logoUrl: '/icon_ra.png',
+          logoUrl: '/logos/626cafe-logo.png',
           heroImage: '/626cafe-hero.jpg',
           gallery: [
             '/626cafe-hero.jpg',

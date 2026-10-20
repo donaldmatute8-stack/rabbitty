@@ -41,6 +41,9 @@ export async function GET() {
         logo_base64: b.logoUrl,
         lat: b.lat,
         lng: b.lng,
+        hops: b.hops || 0,
+        savedCount: b.savedCount || 0,
+        sharedCount: b.sharedCount || 0,
         activeDays,
         startTime: b.startTime,
         endTime: b.endTime
