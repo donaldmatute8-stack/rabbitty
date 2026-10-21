@@ -160,13 +160,13 @@ export default function FeedCard({
     setMenuOpen(false);
   };
 
+  const [imgError, setImgError] = useState(false);
+
   return (
     <>
       <motion.div
         onClick={handleClick}
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: index * 0.07, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+        initial={{ opacity: 1, y: 0 }}
         style={{
           width: '100%',
           marginBottom: 16,
@@ -182,21 +182,23 @@ export default function FeedCard({
       >
         {/* Image */}
         <div style={{ position: 'relative', width: '100%', aspectRatio: '4/3', overflow: 'hidden', background: 'var(--bg-pressed)' }}>
-          {imageUrl ? (
+          {imageUrl && !imgError ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={imageUrl}
               alt={label}
               loading={index < 2 ? 'eager' : 'lazy'}
+              onError={() => setImgError(true)}
               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', pointerEvents: 'none' }}
             />
           ) : (
             <div style={{
-              position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: 'linear-gradient(135deg, rgba(233,30,99,0.1) 0%, rgba(233,30,99,0.2) 100%)',
-              fontSize: 48,
+              position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              background: 'linear-gradient(135deg, rgba(233,30,99,0.18) 0%, rgba(20,10,18,0.95) 100%)',
+              gap: 8,
             }}>
-              🏪
+              <span style={{ fontSize: 44 }}>🐰</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.7)', letterSpacing: 0.5 }}>{user}</span>
             </div>
           )}
 

@@ -55,15 +55,15 @@ export default function ReportsPage() {
     const headers = ["ID Orden", "Fecha", "Segmento/Cliente", "Subtotal", "Impuesto (IVA)", "Descuento", "Bunz Pagados", "Total", "Status CFDI"];
     
     const rows = data.map((order: any) => [
-      order.orderId.slice(0, 8),
-      new Date(order.date!).toLocaleString("es-MX"),
+      order.orderId ? String(order.orderId).slice(0, 8) : "N/A",
+      order.date ? new Date(order.date).toLocaleString("es-MX") : "N/A",
       order.customerSegment || "General",
-      order.subtotal.toFixed(2),
-      order.tax.toFixed(2),
-      order.discount.toFixed(2),
-      order.bunzPaid?.toString() || "0",
-      order.total.toFixed(2),
-      order.cfdiStatus,
+      (Number(order.subtotal) || 0).toFixed(2),
+      (Number(order.tax) || 0).toFixed(2),
+      (Number(order.discount) || 0).toFixed(2),
+      (Number(order.bunzPaid) || 0).toString(),
+      (Number(order.total) || 0).toFixed(2),
+      order.cfdiStatus || "NONE",
     ]);
 
     const csvContent = [headers.join(","), ...rows.map((e: any[]) => e.join(","))].join("\n");
@@ -77,7 +77,7 @@ export default function ReportsPage() {
     document.body.removeChild(link);
   };
 
-  const totalRevenue = salesTrends?.reduce((sum: number, item: any) => sum + item.totalSales, 0) || 0;
+  const totalRevenue = salesTrends?.reduce((sum: number, item: any) => sum + (Number(item.totalSales) || 0), 0) || 0;
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -87,7 +87,7 @@ export default function ReportsPage() {
           {payload.map((entry: any, index: number) => (
             <p key={index} className="font-bold text-lg" style={{ color: entry.color }}>
               {entry.name === "totalSales" || entry.name === "revenue" || entry.name === "amount" ? "$" : ""}
-              {Number(entry.value).toFixed(2)} 
+              {(Number(entry.value) || 0).toFixed(2)} 
               {entry.name === "ordersCount" ? " órdenes" : ""}
             </p>
           ))}
@@ -115,7 +115,7 @@ export default function ReportsPage() {
           
           <div className="flex items-center gap-4">
             <div className="bg-white/10 backdrop-blur-md rounded-2xl p-1 flex">
-              {[7, 30, 90].map((days) => (
+              {[1, 7, 30, 90].map((days) => (
                 <button
                   key={days}
                   onClick={() => setDaysRange(days)}
@@ -124,7 +124,7 @@ export default function ReportsPage() {
                     daysRange === days ? "bg-white text-black shadow-lg" : "text-white/70 hover:text-white"
                   )}
                 >
-                  {days}D
+                  {days === 1 ? "Hoy" : `${days}D`}
                 </button>
               ))}
             </div>
