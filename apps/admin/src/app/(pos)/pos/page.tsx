@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { Button, Dialog, Input, toast, cn, useWakeLock } from "@rabbitty/ui";
-import { Clock, Wifi, Search, User, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, Table2, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle } from "lucide-react";
+import { Clock, Wifi, Search, User, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, Table2, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, FileText, X } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { TicketTemplate, TicketData } from "../../../components/TicketTemplate";
@@ -117,9 +117,32 @@ export default function PosPage() {
   const { data: tables } = trpc.pos.getTables.useQuery(undefined, { retry: false });
   const { data: ticketContext } = trpc.printing.getTicketData.useQuery(undefined, { retry: false });
   const { data: cashStatus, refetch: refetchCashStatus } = trpc.cashDrops.getStatus.useQuery({}, { refetchInterval: 30000 });
+  const { data: sandboxStatus } = trpc.sandbox.getSandboxStatus.useQuery(undefined, { retry: false });
+  const { data: branches } = trpc.admin.getBranches.useQuery(undefined, { retry: false });
 
   const [cashDropAmount, setCashDropAmount] = useState("");
   const [cashDropNotes, setCashDropNotes] = useState("");
+  const [corteModalOpen, setCorteModalOpen] = useState(false);
+
+  const activeBranchId = ticketContext?.branch?.id;
+  const isSandboxActive =
+    !!sandboxStatus?.hasSandbox &&
+    !!sandboxStatus.sandboxBranch &&
+    activeBranchId === sandboxStatus.sandboxBranch.id;
+
+  const handleExitSandbox = () => {
+    const mainBranch = branches?.find(
+      (b) =>
+        !b.name.toLowerCase().includes("sandbox") &&
+        !b.name.toLowerCase().includes("entrenamiento")
+    ) || branches?.[0];
+
+    if (mainBranch && typeof window !== "undefined") {
+      localStorage.setItem("activeBranchId", mainBranch.id);
+      toast.success("Cambiando a sucursal de producción real...");
+      window.location.reload();
+    }
+  };
 
   const createCashDropMutation = trpc.cashDrops.createDrop.useMutation({
     onSuccess: async (drop) => {
@@ -426,10 +449,10 @@ export default function PosPage() {
   };
 
   return (
-    <div className="flex h-[100dvh] w-full flex-col bg-gray-950 text-white overflow-hidden select-none font-sans">
+    <div className="flex h-dvh w-full flex-col bg-gray-950 text-white overflow-hidden select-none font-sans">
       
       {cashStatus?.requiresDrop && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/95 p-4 backdrop-blur-md">
+        <div className="fixed inset-0 z-100 flex items-center justify-center bg-gray-900/95 p-4 backdrop-blur-md">
           <div className="w-full max-w-md bg-gray-800 rounded-2xl shadow-[0_0_50px_rgba(239,68,68,0.3)] border border-red-500/50 p-8 text-center">
             <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-500/20 mb-4">
               <span className="text-3xl">⚠️</span>
@@ -466,7 +489,7 @@ export default function PosPage() {
                   createCashDropMutation.mutate({ amount: Number(cashDropAmount), notes: cashDropNotes });
                 }}
                 disabled={createCashDropMutation.isPending}
-                className="w-full mt-4 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-bold py-4 rounded-xl text-xl shadow-lg shadow-red-500/20 transition-all active:scale-95 disabled:opacity-50"
+                className="w-full mt-4 bg-linear-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-bold py-4 rounded-xl text-xl shadow-lg shadow-red-500/20 transition-all active:scale-95 disabled:opacity-50"
               >
                 {createCashDropMutation.isPending ? "Procesando..." : "Registrar Retiro y Continuar"}
               </button>
@@ -475,26 +498,63 @@ export default function PosPage() {
         </div>
       )}
 
+      {/* ── Sandbox Alert Banner in POS ── */}
+      {isSandboxActive && (
+        <div className="relative z-30 flex items-center justify-between border-b border-amber-500/30 bg-linear-to-r from-amber-950 via-black to-amber-950 px-6 py-2.5 backdrop-blur-xl shadow-[0_4px_25px_rgba(245,158,11,0.25)]">
+          <div className="flex items-center gap-3">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/40 animate-pulse">
+              <FlaskConical className="h-4 w-4" />
+            </div>
+            <div>
+              <span className="text-xs font-black uppercase tracking-wider text-amber-400">
+                🧪 MODO ENTRENAMIENTO ACTIVO (SANDBOX)
+              </span>
+              <span className="text-[11px] text-amber-200/80 ml-2 font-medium hidden sm:inline">
+                Las ventas cobradas aquí son de práctica y no se reflejan en tu reporte real de ingresos.
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleExitSandbox}
+            className="flex items-center gap-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black px-3.5 py-1 text-xs font-black transition-all shadow-md active:scale-95 cursor-pointer"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            Salir a Ventas Reales
+          </button>
+        </div>
+      )}
+
       {/* ── Top Header ── */}
-      <header className="flex h-[88px] shrink-0 items-center justify-between bg-black/60 backdrop-blur-2xl px-6 border-b border-white/5 relative z-20">
-        <div className="flex items-center gap-6">
-          <Link href="/" className="flex items-center gap-3 rounded-2xl bg-white/5 p-2 pr-6 border border-white/5 hover:bg-white/10 hover:border-white/20 transition-all cursor-pointer shadow-lg active:scale-95">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 shadow-[0_0_20px_rgba(6,182,212,0.5)]">
+      <header className="flex h-22 shrink-0 items-center justify-between bg-black/60 backdrop-blur-2xl px-6 border-b border-white/5 relative z-20">
+        <div className="flex items-center gap-4 lg:gap-6">
+          <Link href="/" className="flex items-center gap-3 rounded-2xl bg-white/5 p-2 pr-4 lg:pr-6 border border-white/5 hover:bg-white/10 hover:border-white/20 transition-all cursor-pointer shadow-lg active:scale-95">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-linear-to-br from-cyan-500 to-blue-600 shadow-[0_0_20px_rgba(6,182,212,0.5)]">
               <ChevronLeft className="h-6 w-6 text-white" />
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-cyan-400 font-bold mb-0.5">Rabbitty OS</div>
-              <div className="font-black text-lg leading-none tracking-wide">POS Touch</div>
+              <div className="text-[10px] uppercase tracking-widest text-cyan-400 font-bold mb-0.5">Cerrar Terminal</div>
+              <div className="font-black text-base lg:text-lg leading-none tracking-wide">Salir a Dashboard</div>
             </div>
           </Link>
 
-          <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 px-4 py-2 border border-emerald-500/20 shadow-[inset_0_0_12px_rgba(16,185,129,0.1)]">
+          <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 px-3.5 py-2 border border-emerald-500/20 shadow-[inset_0_0_12px_rgba(16,185,129,0.1)]">
             <div className="relative flex h-3 w-3">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
             </div>
-            <span className="text-sm font-bold text-emerald-400 uppercase tracking-widest">Online</span>
+            <span className="text-xs lg:text-sm font-bold text-emerald-400 uppercase tracking-widest">Online</span>
           </div>
+
+          {/* Botón Corte de Caja / Resumen del Día */}
+          <button
+            onClick={() => setCorteModalOpen(true)}
+            className="flex items-center gap-2 rounded-xl bg-white/5 hover:bg-white/10 px-3.5 py-2.5 border border-white/10 text-cyan-400 text-xs font-bold transition-all cursor-pointer shadow-sm active:scale-95"
+            title="Ver corte parcial del turno y efectivo en caja"
+          >
+            <FileText className="h-4 w-4 text-cyan-400" />
+            <span>Corte de Caja</span>
+          </button>
 
           {/* Bluetooth Thermal Printer Indicator / Connect */}
           {btConnected ? (
@@ -530,24 +590,24 @@ export default function PosPage() {
           )}
         </div>
 
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-4 lg:gap-6">
           <div className="relative group">
-            <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-cyan-500 to-purple-500 opacity-0 group-focus-within:opacity-30 blur transition duration-500"></div>
-            <div className="relative flex items-center bg-gray-900 border border-white/10 rounded-full h-14 w-80 px-4 shadow-inner">
+            <div className="absolute -inset-1 rounded-full bg-linear-to-r from-cyan-500 to-purple-500 opacity-0 group-focus-within:opacity-30 blur transition duration-500"></div>
+            <div className="relative flex items-center bg-gray-900 border border-white/10 rounded-full h-14 w-60 lg:w-80 px-4 shadow-inner">
               <Search className="h-5 w-5 text-gray-400 mr-3 shrink-0" />
               <input 
                 type="text" 
-                placeholder="Buscar platillo (Toca para escribir)..." 
+                placeholder="Buscar platillo..." 
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-transparent text-lg text-white placeholder-gray-500 focus:outline-none"
+                className="w-full bg-transparent text-base lg:text-lg text-white placeholder-gray-500 focus:outline-none"
               />
             </div>
           </div>
           
           <PosClock />
           
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-pink-500/20 to-purple-500/20 border border-pink-500/30 text-pink-400 shadow-[inset_0_0_20px_rgba(236,72,153,0.2)]">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-linear-to-br from-pink-500/20 to-purple-500/20 border border-pink-500/30 text-pink-400 shadow-[inset_0_0_20px_rgba(236,72,153,0.2)]">
             <User className="h-6 w-6" />
           </div>
         </div>
@@ -556,18 +616,18 @@ export default function PosPage() {
       {/* ── Main Workspace ── */}
       <div className="flex flex-1 overflow-hidden relative">
         {/* Background Gradients */}
-        <div className="absolute top-[-20%] right-[30%] h-[800px] w-[800px] rounded-full bg-cyan-900/20 blur-[150px] pointer-events-none" />
-        <div className="absolute bottom-[-10%] left-[-10%] h-[800px] w-[800px] rounded-full bg-blue-900/20 blur-[150px] pointer-events-none" />
+        <div className="absolute top-[-20%] right-[30%] h-200 w-200 rounded-full bg-cyan-900/20 blur-[150px] pointer-events-none" />
+        <div className="absolute bottom-[-10%] left-[-10%] h-200 w-200 rounded-full bg-blue-900/20 blur-[150px] pointer-events-none" />
 
         {/* Left: Categories Sidebar */}
         {!search && (
-          <aside className="w-[100px] md:w-[120px] lg:w-[140px] shrink-0 overflow-y-auto bg-black/40 backdrop-blur-md border-r border-white/5 p-2 lg:p-3 flex flex-col gap-2 lg:gap-3 custom-scrollbar z-10">
+          <aside className="w-25 md:w-30 lg:w-35 shrink-0 overflow-y-auto bg-black/40 backdrop-blur-md border-r border-white/5 p-2 lg:p-3 flex flex-col gap-2 lg:gap-3 custom-scrollbar z-10">
             {categories?.map((cat, i) => (
               <button
                 key={cat.id}
                 onClick={() => setActiveCategory(cat.id)}
                 className={cn(
-                  "relative flex flex-col items-center justify-center gap-2 lg:gap-3 rounded-[18px] lg:rounded-[24px] p-2 lg:p-4 h-24 lg:h-32 transition-all duration-300 group",
+                  "relative flex flex-col items-center justify-center gap-2 lg:gap-3 rounded-[18px] lg:rounded-3xl p-2 lg:p-4 h-24 lg:h-32 transition-all duration-300 group",
                   activeCategory === cat.id 
                     ? "bg-cyan-500 shadow-[0_10px_30px_rgba(6,182,212,0.4)] border-none scale-105 z-10" 
                     : "bg-gray-900/80 border border-white/5 hover:bg-gray-800 hover:border-white/20 active:scale-95"
@@ -632,12 +692,12 @@ export default function PosPage() {
               <button
                 key={item.id}
                 onClick={() => addToCart(item)}
-                className="group relative flex aspect-square md:aspect-[4/5] flex-col justify-between overflow-hidden rounded-[1.5rem] lg:rounded-[2rem] bg-gray-900 border border-white/5 p-1 text-left transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_20px_40px_rgba(0,0,0,0.6)] hover:border-cyan-500/40 active:scale-95 cursor-pointer"
+                className="group relative flex aspect-square md:aspect-4/5 flex-col justify-between overflow-hidden rounded-3xl lg:rounded-4xl bg-gray-900 border border-white/5 p-1 text-left transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_20px_40px_rgba(0,0,0,0.6)] hover:border-cyan-500/40 active:scale-95 cursor-pointer"
               >
                 {/* Big Image Top */}
                 <div className="relative h-[55%] lg:h-[65%] w-full rounded-[1.25rem] lg:rounded-[1.75rem] overflow-hidden bg-gray-800">
                   <div className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105" style={{ backgroundImage: `url(${PLACEHOLDER_IMG})` }} />
-                  <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-transparent opacity-80" />
+                  <div className="absolute inset-0 bg-linear-to-t from-gray-900 via-transparent to-transparent opacity-80" />
                   
                   {/* Subtle centered '+' in fade mode */}
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -663,7 +723,7 @@ export default function PosPage() {
         </main>
 
         {/* Right: Cart / Ticket Panel */}
-        <aside className="w-[300px] md:w-[340px] lg:w-[420px] shrink-0 bg-gray-950/80 backdrop-blur-3xl border-l border-white/10 flex flex-col z-20 shadow-[-20px_0_50px_rgba(0,0,0,0.5)]">
+        <aside className="w-75 md:w-85 lg:w-105 shrink-0 bg-gray-950/80 backdrop-blur-3xl border-l border-white/10 flex flex-col z-20 shadow-[-20px_0_50px_rgba(0,0,0,0.5)]">
           {/* Cart Header with Table Selector & Order Type */}
           <div className="flex flex-col border-b border-white/10 p-4 bg-black/40 gap-3">
             <div className="flex items-center justify-between">
@@ -726,7 +786,7 @@ export default function PosPage() {
                   setSelectedTableId(null);
                 }}
                 className={cn(
-                  "flex items-center justify-center gap-1 min-h-[44px] py-2 rounded-lg text-xs font-black transition-all cursor-pointer",
+                  "flex items-center justify-center gap-1 min-h-11 py-2 rounded-lg text-xs font-black transition-all cursor-pointer",
                   orderType === "COUNTER"
                     ? "bg-amber-500 text-gray-950 shadow-md"
                     : "text-gray-400 hover:text-white hover:bg-white/5"
@@ -744,7 +804,7 @@ export default function PosPage() {
                   }
                 }}
                 className={cn(
-                  "flex items-center justify-center gap-1 min-h-[44px] py-2 rounded-lg text-xs font-black transition-all cursor-pointer",
+                  "flex items-center justify-center gap-1 min-h-11 py-2 rounded-lg text-xs font-black transition-all cursor-pointer",
                   orderType === "DINE_IN"
                     ? "bg-cyan-500 text-gray-950 shadow-md"
                     : "text-gray-400 hover:text-white hover:bg-white/5"
@@ -760,7 +820,7 @@ export default function PosPage() {
                   setSelectedTableId(null);
                 }}
                 className={cn(
-                  "flex items-center justify-center gap-1 min-h-[44px] py-2 rounded-lg text-xs font-black transition-all cursor-pointer",
+                  "flex items-center justify-center gap-1 min-h-11 py-2 rounded-lg text-xs font-black transition-all cursor-pointer",
                   orderType === "TAKEAWAY"
                     ? "bg-purple-500 text-white shadow-md"
                     : "text-gray-400 hover:text-white hover:bg-white/5"
@@ -776,7 +836,7 @@ export default function PosPage() {
                   setSelectedTableId(null);
                 }}
                 className={cn(
-                  "flex items-center justify-center gap-1 min-h-[44px] py-2 rounded-lg text-xs font-black transition-all cursor-pointer",
+                  "flex items-center justify-center gap-1 min-h-11 py-2 rounded-lg text-xs font-black transition-all cursor-pointer",
                   orderType === "DELIVERY"
                     ? "bg-emerald-500 text-gray-950 shadow-md"
                     : "text-gray-400 hover:text-white hover:bg-white/5"
@@ -790,7 +850,7 @@ export default function PosPage() {
           {/* Cart Items Area */}
           <div className="flex-1 overflow-y-auto p-2 lg:p-4 space-y-2 lg:space-y-3 custom-scrollbar">
             {cart.map((item) => (
-              <div key={item.id} className="group flex items-center justify-between rounded-[1rem] lg:rounded-[1.5rem] bg-gray-900 border border-white/5 p-3 lg:p-4 shadow-lg transition-all hover:border-white/20 gap-2 lg:gap-3">
+              <div key={item.id} className="group flex items-center justify-between rounded-2xl lg:rounded-3xl bg-gray-900 border border-white/5 p-3 lg:p-4 shadow-lg transition-all hover:border-white/20 gap-2 lg:gap-3">
                 <div className="flex-1 min-w-0">
                   <h4 className="text-[13px] lg:text-base font-black text-white leading-tight truncate">{item.name}</h4>
                   <div className="mt-0.5 text-[13px] lg:text-base font-black text-emerald-400">${item.price.toFixed(2)}</div>
@@ -924,9 +984,9 @@ export default function PosPage() {
             <button 
               onClick={() => handleCheckout("VENTA DIRECTA")}
               disabled={cart.length === 0}
-              className="relative w-full overflow-hidden rounded-[1.5rem] bg-cyan-500 py-4 text-xl font-black text-gray-950 shadow-[0_15px_40px_rgba(6,182,212,0.4)] transition-all hover:bg-cyan-400 active:scale-95 disabled:opacity-50 disabled:shadow-none group cursor-pointer"
+              className="relative w-full overflow-hidden rounded-3xl bg-cyan-500 py-4 text-xl font-black text-gray-950 shadow-[0_15px_40px_rgba(6,182,212,0.4)] transition-all hover:bg-cyan-400 active:scale-95 disabled:opacity-50 disabled:shadow-none group cursor-pointer"
             >
-              <div className="absolute inset-0 bg-white/20 translate-y-[100%] group-hover:translate-y-[0%] transition-transform duration-300 ease-out" />
+              <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-[0%] transition-transform duration-300 ease-out" />
               <span className="relative z-10 flex items-center justify-center gap-2">
                 <Check className="h-6 w-6" /> COBRAR ORDEN (${total.toFixed(2)})
               </span>
@@ -1216,35 +1276,50 @@ export default function PosPage() {
           setCart([]);
         }}
         title="Ticket de Venta Generado"
+        className="max-h-[92dvh] flex flex-col p-4 sm:p-6"
       >
-        <div className="space-y-4">
-          <div className="text-center mb-4">
-            <div className="inline-flex items-center justify-center h-16 w-16 rounded-full bg-emerald-500/20 text-emerald-400 mb-4 shadow-[0_0_30px_rgba(16,185,129,0.3)]">
-              <CheckCircle2 className="h-8 w-8" />
-            </div>
-            <h2 className="text-2xl font-black text-white">¡Cobro Exitoso!</h2>
-            <p className="text-gray-400 text-sm mt-1">El ticket ha sido emitido.</p>
-          </div>
-
-          {/* Scaled ticket preview */}
-          <div className="flex justify-center mx-auto mb-6 w-full max-w-[400px]">
-            <div className="w-full max-h-[60vh] overflow-y-auto overflow-x-hidden custom-scrollbar">
-              <div className="transform scale-[0.85] origin-top flex justify-center w-full">
-                {paidTicketData && (
-                  <TicketTemplate data={paidTicketData} />
-                )}
+        <div className="flex flex-col max-h-[82dvh]">
+          {/* Header del Modal con botón directo de Nueva Orden */}
+          <div className="flex items-center justify-between pb-3 border-b border-white/10 shrink-0">
+            <div className="flex items-center gap-2.5">
+              <div className="inline-flex items-center justify-center h-9 w-9 rounded-full bg-emerald-500/20 text-emerald-400">
+                <CheckCircle2 className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-black text-white leading-tight">¡Cobro Exitoso!</h2>
+                <p className="text-gray-400 text-xs">El ticket ha sido emitido.</p>
               </div>
             </div>
+            <button
+              onClick={() => {
+                setReceiptModal(false);
+                setCart([]);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-gray-950 text-xs font-black transition-all cursor-pointer shadow-md active:scale-95"
+            >
+              <span>Nueva Orden</span>
+              <Check className="h-4 w-4" />
+            </button>
           </div>
 
-          <div className="flex flex-col gap-3 pt-3 border-t border-white/5">
-            <div className="flex flex-col gap-2">
+          {/* Scaled ticket preview con scroll acotado */}
+          <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar py-3 my-2 flex justify-center max-h-[42vh] sm:max-h-[46vh] bg-black/40 rounded-xl border border-white/5">
+            <div className="transform scale-[0.8] sm:scale-[0.85] origin-top flex justify-center w-full">
+              {paidTicketData && (
+                <TicketTemplate data={paidTicketData} />
+              )}
+            </div>
+          </div>
+
+          {/* Acciones de WhatsApp y Nueva Orden */}
+          <div className="flex flex-col gap-2 pt-2 border-t border-white/5 shrink-0">
+            <div className="flex items-center gap-2">
               <Input
-                placeholder="Número de WhatsApp (Ej. 5512345678)"
+                placeholder="WhatsApp (10 dígitos)"
                 type="tel"
                 value={waPhone}
                 onChange={(e) => setWaPhone(e.target.value.replace(/\D/g, ''))}
-                className="w-full text-center"
+                className="flex-1 text-center py-2 text-sm"
               />
               <Button
                 onClick={() => {
@@ -1261,21 +1336,91 @@ export default function PosPage() {
                     toast.error("Ingresa un número válido a 10 dígitos");
                   }
                 }}
-                className="w-full bg-green-500 hover:bg-green-400 text-white font-bold flex items-center justify-center gap-2"
+                className="bg-green-500 hover:bg-green-400 text-white font-bold text-xs px-4 py-2 shrink-0 flex items-center gap-1.5"
               >
-                <MessageCircle className="h-4 w-4" /> Enviar por WhatsApp
+                <MessageCircle className="h-4 w-4" /> Enviar
               </Button>
             </div>
             
             <Button
               variant="secondary"
-              className="w-full"
+              className="w-full font-bold py-2.5 text-sm bg-white/10 hover:bg-white/15 text-white border border-white/10"
               onClick={() => {
                 setReceiptModal(false);
                 setCart([]);
               }}
             >
-              Nueva Orden (Cerrar)
+              Nueva Orden (Cerrar Pantalla)
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* Modal de Corte de Caja / Resumen del Turno */}
+      <Dialog
+        open={corteModalOpen}
+        onClose={() => setCorteModalOpen(false)}
+        title="Corte de Caja / Resumen del Turno"
+      >
+        <div className="space-y-4">
+          <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs uppercase tracking-wider text-gray-400 font-bold">Sucursal Activa</span>
+              <span className="text-xs font-black text-cyan-400">{ticketContext?.restaurant?.name || "626 Cafe"}</span>
+            </div>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs uppercase tracking-wider text-gray-400 font-bold">Entorno</span>
+              <span className={cn("text-xs font-black px-2 py-0.5 rounded-full", isSandboxActive ? "bg-amber-500/20 text-amber-400 border border-amber-500/30" : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30")}>
+                {isSandboxActive ? "🧪 Modo Entrenamiento" : "🟢 Producción Real"}
+              </span>
+            </div>
+            <div className="pt-3 border-t border-white/10 flex items-center justify-between">
+              <span className="text-sm font-bold text-white">Efectivo Actual en Gaveta:</span>
+              <span className="text-2xl font-black text-emerald-400">
+                ${(cashStatus?.currentCash ?? 0).toFixed(2)}
+              </span>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400">Retiro Parcial de Efectivo</h4>
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="number"
+                placeholder="Monto ($)"
+                value={cashDropAmount}
+                onChange={(e) => setCashDropAmount(e.target.value)}
+                className="w-full rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
+              />
+              <input
+                type="text"
+                placeholder="Entregado a / Nota"
+                value={cashDropNotes}
+                onChange={(e) => setCashDropNotes(e.target.value)}
+                className="w-full rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+            <Button
+              onClick={() => {
+                if (Number(cashDropAmount) <= 0) return toast.error("Monto inválido");
+                createCashDropMutation.mutate({ amount: Number(cashDropAmount), notes: cashDropNotes });
+              }}
+              disabled={createCashDropMutation.isPending || !cashDropAmount}
+              className="w-full bg-cyan-500 hover:bg-cyan-400 text-gray-950 font-bold text-xs py-2.5"
+            >
+              {createCashDropMutation.isPending ? "Registrando..." : "Registrar Retiro de Efectivo e Imprimir Comprobante"}
+            </Button>
+          </div>
+
+          <div className="flex justify-between items-center pt-3 border-t border-white/5">
+            <Link
+              href="/reports"
+              className="text-xs text-cyan-400 hover:underline flex items-center gap-1 font-semibold"
+            >
+              Ver reporte detallado en Dashboard →
+            </Link>
+            <Button variant="secondary" onClick={() => setCorteModalOpen(false)}>
+              Cerrar
             </Button>
           </div>
         </div>
@@ -1304,7 +1449,7 @@ export default function PosPage() {
               <img 
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(`https://t.me/RabbittyBot/app?startapp=pay_${qrPaymentModal.intentId}`)}`} 
                 alt="QR Code para pagar con Bunz" 
-                className="w-[200px] h-[200px] sm:w-[250px] sm:h-[250px]"
+                className="w-50 h-50 sm:w-62.5 sm:h-62.5"
               />
             </div>
 
