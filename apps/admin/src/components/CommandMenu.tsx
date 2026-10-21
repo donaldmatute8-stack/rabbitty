@@ -138,12 +138,12 @@ export function CommandMenu() {
       {/* Search trigger button for top bar */}
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-3.5 py-2 text-xs text-gray-400 hover:border-pink-500/30 hover:bg-white/10 hover:text-white transition-all shadow-inner cursor-pointer"
+        className="flex items-center gap-2 sm:gap-3 rounded-xl border border-white/10 bg-white/5 px-2.5 sm:px-3.5 py-2 text-xs text-gray-400 hover:border-pink-500/30 hover:bg-white/10 hover:text-white transition-all shadow-inner cursor-pointer shrink min-w-0"
       >
-        <Search className="h-4 w-4 text-pink-500" />
-        <span className="hidden md:inline font-medium">Buscar comando o sección...</span>
-        <span className="inline md:hidden font-medium">Buscar...</span>
-        <kbd className="hidden sm:flex items-center gap-0.5 rounded border border-white/10 bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-gray-400">
+        <Search className="h-4 w-4 text-pink-500 shrink-0" />
+        <span className="hidden xl:inline font-medium truncate">Buscar comando o sección...</span>
+        <span className="inline xl:hidden font-medium truncate">Buscar...</span>
+        <kbd className="hidden md:flex items-center gap-0.5 rounded border border-white/10 bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-gray-400 shrink-0">
           <Command className="h-3 w-3" /> K
         </kbd>
       </button>
@@ -175,7 +175,7 @@ export function CommandMenu() {
             </div>
 
             {/* Results List */}
-            <div className="max-h-[380px] overflow-y-auto p-2 space-y-1">
+            <div className="max-h-95 overflow-y-auto p-2 space-y-1">
               {filteredCommands.length === 0 ? (
                 <div className="py-12 text-center text-sm text-gray-500">
                   No se encontraron resultados para "<span className="text-white">{query}</span>"
@@ -192,7 +192,7 @@ export function CommandMenu() {
                       className={cn(
                         "w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-left text-sm transition-all cursor-pointer",
                         isSelected
-                          ? "bg-gradient-to-r from-pink-500/20 to-purple-500/10 text-white border border-pink-500/30"
+                          ? "bg-linear-to-r from-pink-500/20 to-purple-500/10 text-white border border-pink-500/30"
                           : "text-gray-300 hover:bg-white/5"
                       )}
                     >

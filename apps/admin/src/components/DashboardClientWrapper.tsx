@@ -152,11 +152,11 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
   return (
     <BranchContext.Provider value={{ branchId, setBranchId }}>
       <SidebarContext.Provider value={{ isCollapsed, setIsCollapsed }}>
-        <div className="relative flex h-screen w-full overflow-hidden bg-black text-[var(--text-primary)]">
+        <div className="relative flex h-screen w-full overflow-hidden bg-black text-(--text-primary)">
           {/* Neon Glow Accents */}
-          <div className="absolute top-[-10%] right-[-10%] h-[500px] w-[500px] rounded-full bg-pink-500/10 blur-[120px] pointer-events-none" />
-          <div className="absolute bottom-[-10%] left-[-10%] h-[500px] w-[500px] rounded-full bg-purple-500/10 blur-[120px] pointer-events-none" />
-          <div className="absolute top-[30%] left-[20%] h-[300px] w-[300px] rounded-full bg-blue-500/5 blur-[100px] pointer-events-none" />
+          <div className="absolute top-[-10%] right-[-10%] h-125 w-125 rounded-full bg-pink-500/10 blur-[120px] pointer-events-none" />
+          <div className="absolute bottom-[-10%] left-[-10%] h-125 w-125 rounded-full bg-purple-500/10 blur-[120px] pointer-events-none" />
+          <div className="absolute top-[30%] left-[20%] h-75 w-75 rounded-full bg-blue-500/5 blur-[100px] pointer-events-none" />
 
           {/*
             SIDEBAR STRATEGY:
@@ -212,14 +212,14 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                 </button>
                 <CommandMenu />
               </div>
-              <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 shrink-0">
                 <button
                   onClick={() => setChatDrawerOpen(true)}
-                  className="relative flex items-center gap-2 rounded-xl bg-pink-500/10 px-3 py-2 text-xs font-bold text-pink-400 hover:bg-pink-500/20 active:scale-95 transition-all border border-pink-500/20 cursor-pointer"
+                  className="relative flex items-center gap-1.5 sm:gap-2 rounded-xl bg-pink-500/10 px-2.5 sm:px-3 py-2 text-xs font-bold text-pink-400 hover:bg-pink-500/20 active:scale-95 transition-all border border-pink-500/20 cursor-pointer"
                   title="Mensajes de clientes B2C"
                 >
                   <MessageSquare className="h-4 w-4 shrink-0 text-pink-400" />
-                  <span className="hidden sm:inline whitespace-nowrap">Chats Clientes</span>
+                  <span className="hidden md:inline whitespace-nowrap">Chats Clientes</span>
                   <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-pink-500"></span>
@@ -227,17 +227,17 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                 </button>
                 <button
                   onClick={() => setPairModalOpen(true)}
-                  className="flex items-center gap-2 rounded-xl bg-pink-500/10 px-3 py-2 text-xs font-bold text-pink-400 hover:bg-pink-500/20 active:scale-95 transition-all border border-pink-500/20 cursor-pointer"
+                  className="flex items-center gap-1.5 sm:gap-2 rounded-xl bg-pink-500/10 px-2.5 sm:px-3 py-2 text-xs font-bold text-pink-400 hover:bg-pink-500/20 active:scale-95 transition-all border border-pink-500/20 cursor-pointer"
                   title="Vincular teléfono móvil como terminal de escaneo"
                 >
                   <Smartphone className="h-4 w-4 shrink-0 text-pink-400" />
-                  <span className="hidden sm:inline whitespace-nowrap">Vincular Celular</span>
+                  <span className="hidden lg:inline whitespace-nowrap">Vincular Celular</span>
                 </button>
                 <Link
                   href="/pos"
                   target={isNativeApp ? undefined : "_blank"}
                   rel={isNativeApp ? undefined : "noopener noreferrer"}
-                  className="flex items-center gap-2 rounded-xl bg-cyan-500/10 px-3 py-2 text-xs font-bold text-cyan-400 hover:bg-cyan-500/20 active:scale-95 transition-all border border-cyan-500/20"
+                  className="flex items-center gap-1.5 sm:gap-2 rounded-xl bg-cyan-500/10 px-2.5 sm:px-3 py-2 text-xs font-bold text-cyan-400 hover:bg-cyan-500/20 active:scale-95 transition-all border border-cyan-500/20"
                 >
                   <TerminalSquare className="h-4 w-4 shrink-0" />
                   <span className="hidden sm:inline whitespace-nowrap">Caja POS</span>
@@ -246,12 +246,12 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                   href="/kiosk"
                   target={isNativeApp ? undefined : "_blank"}
                   rel={isNativeApp ? undefined : "noopener noreferrer"}
-                  className="flex items-center gap-2 rounded-xl bg-purple-500/10 px-3 py-2 text-xs font-bold text-purple-400 hover:bg-purple-500/20 active:scale-95 transition-all border border-purple-500/20"
+                  className="flex items-center gap-1.5 sm:gap-2 rounded-xl bg-purple-500/10 px-2.5 sm:px-3 py-2 text-xs font-bold text-purple-400 hover:bg-purple-500/20 active:scale-95 transition-all border border-purple-500/20"
                 >
                   <TabletSmartphone className="h-4 w-4 shrink-0" />
                   <span className="hidden sm:inline whitespace-nowrap">Kiosko</span>
                 </Link>
-                <div className="w-px h-6 bg-white/10 mx-1 hidden sm:block" />
+                <div className="w-px h-6 bg-white/10 mx-0.5 hidden sm:block" />
                 <BranchSelector />
               </div>
             </header>
@@ -314,7 +314,7 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                           <div
                             key={conv.id}
                             onClick={() => setActiveCustomerChat(conv.id)}
-                            className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-pink-500/40 transition-all cursor-pointer"
+                            className="p-3.5 rounded-2xl bg-white/3 border border-white/10 hover:border-pink-500/40 transition-all cursor-pointer"
                           >
                             <div className="flex items-center justify-between mb-1.5">
                               <span className="text-xs font-bold text-white">{conv.customerName}</span>
@@ -349,8 +349,8 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                           const mine = msg.senderId === thread.businessId;
                           return (
                             <div key={msg.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-                              <div className={`max-w-[80%] rounded-2xl px-3.5 py-2 ${mine ? "bg-pink-600 text-white" : "bg-white/[0.06] text-gray-100 border border-white/10"}`}>
-                                <p className="text-xs m-0 whitespace-pre-wrap break-words">{msg.content}</p>
+                              <div className={`max-w-[80%] rounded-2xl px-3.5 py-2 ${mine ? "bg-pink-600 text-white" : "bg-white/6 text-gray-100 border border-white/10"}`}>
+                                <p className="text-xs m-0 whitespace-pre-wrap wrap-break-word">{msg.content}</p>
                                 <span className={`text-[9px] mt-1 block ${mine ? "text-pink-100/80" : "text-gray-500"}`}>
                                   {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" }) : ""}
                                 </span>
