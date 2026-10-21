@@ -15,13 +15,21 @@ export const analyticsRouter = router({
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - input.days);
 
+      // Local date string helper (YYYY-MM-DD in local time)
+      const toLocalDateStr = (d: Date) => {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+      };
+
       const ordersList = await ctx.restaurantDb
         .select()
         .from(orders)
         .where(
           and(
             eq(orders.branchId, resolveBranchId(ctx, input.branchId)),
-            eq(orders.status, "COMPLETED"),
+            inArray(orders.status, ["COMPLETED", "PAID"]),
             gte(orders.createdAt, startDate)
           )
         );
@@ -33,15 +41,14 @@ export const analyticsRouter = router({
       for (let i = input.days - 1; i >= 0; i--) {
         const d = new Date();
         d.setDate(d.getDate() - i);
-        const dateStr = d.toISOString().split("T")[0]!;
-        dailySalesMap.set(dateStr, 0);
+        dailySalesMap.set(toLocalDateStr(d), 0);
       }
 
       for (const order of ordersList) {
         if (!order.createdAt) continue;
-        const dateStr = order.createdAt.toISOString().split("T")[0]!;
+        const dateStr = toLocalDateStr(order.createdAt);
         const currentSales = dailySalesMap.get(dateStr) || 0;
-        dailySalesMap.set(dateStr, currentSales + Number(order.total));
+        dailySalesMap.set(dateStr, currentSales + (Number(order.total) || 0));
       }
 
       const trends = Array.from(dailySalesMap.entries()).map(([date, totalSales]) => ({
@@ -69,7 +76,7 @@ export const analyticsRouter = router({
         .where(
           and(
             eq(orders.branchId, resolveBranchId(ctx, input.branchId)),
-            eq(orders.status, "COMPLETED"),
+            inArray(orders.status, ["COMPLETED", "PAID"]),
             gte(orders.createdAt, startDate)
           )
         );
@@ -79,7 +86,7 @@ export const analyticsRouter = router({
       for (const order of ordersList) {
         if (!order.createdAt) continue;
         const hour = order.createdAt.getHours();
-        hourlySales[hour]!.sales += Number(order.total);
+        hourlySales[hour]!.sales += (Number(order.total) || 0);
         hourlySales[hour]!.orderCount += 1;
       }
 
@@ -100,7 +107,7 @@ export const analyticsRouter = router({
         .where(
           and(
             eq(orders.branchId, resolveBranchId(ctx, input.branchId)),
-            eq(orders.status, "COMPLETED")
+            inArray(orders.status, ["COMPLETED", "PAID"])
           )
         );
 
@@ -119,10 +126,12 @@ export const analyticsRouter = router({
 
       const productRevenueMap = new Map<string, number>();
       for (const item of itemsList) {
+        // Skip voided items
+        if (item.status === "VOIDED" || item.voidedAt) continue;
         const menuItem = menuItemsList.find((mi) => mi.id === item.menuItemId);
         const name = menuItem?.name || `Item ${item.menuItemId}`;
         const rev = productRevenueMap.get(name) || 0;
-        productRevenueMap.set(name, rev + Number(item.totalPrice));
+        productRevenueMap.set(name, rev + (Number(item.totalPrice) || 0));
       }
 
       const result = Array.from(productRevenueMap.entries())
@@ -153,6 +162,7 @@ export const analyticsRouter = router({
         .where(
           and(
             eq(orders.branchId, resolveBranchId(ctx, input.branchId)),
+            inArray(orders.status, ["COMPLETED", "PAID"]),
             gte(orders.createdAt, startDate)
           )
         );
@@ -163,7 +173,12 @@ export const analyticsRouter = router({
       const paymentsList = await ctx.restaurantDb
         .select()
         .from(payments)
-        .where(inArray(payments.orderId, orderIds));
+        .where(
+          and(
+            inArray(payments.orderId, orderIds),
+            eq(payments.status, "COMPLETED")
+          )
+        );
 
       const methodMap = new Map<string, number>();
       for (const pay of paymentsList) {
@@ -177,7 +192,7 @@ export const analyticsRouter = router({
         }
 
         const amt = methodMap.get(method) || 0;
-        methodMap.set(method, amt + Number(pay.amount));
+        methodMap.set(method, amt + (Number(pay.amount) || 0));
       }
 
       return Array.from(methodMap.entries()).map(([method, amount]) => ({
@@ -209,6 +224,7 @@ export const analyticsRouter = router({
         .where(
           and(
             eq(orders.branchId, resolveBranchId(ctx, input.branchId)),
+            inArray(orders.status, ["COMPLETED", "PAID"]),
             gte(orders.createdAt, startDate)
           )
         );
@@ -226,11 +242,11 @@ export const analyticsRouter = router({
           orderId: order.id,
           date: order.createdAt,
           customerSegment: customer?.segment || "General",
-          subtotal: order.subtotal,
-          tax: order.tax,
-          discount: order.discount,
-          bunzPaid: order.bunzPaid,
-          total: order.total,
+          subtotal: Number(order.subtotal) || 0,
+          tax: Number(order.tax) || 0,
+          discount: Number(order.discount) || 0,
+          bunzPaid: Number(order.bunzPaid) || 0,
+          total: Number(order.total) || 0,
           cfdiStatus: order.cfdiStatus,
         };
       });

@@ -101,7 +101,7 @@ export default function FeedPage() {
     return [];
   });
   const [offers, setOffers] = useState<Offer[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => posts.length === 0);
   const [refreshKey, setRefreshKey] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [purchasing, setPurchasing] = useState(false);
@@ -372,8 +372,13 @@ export default function FeedPage() {
 
   return (
     <div
-      className="page-wrap pb-16 relative overflow-x-hidden min-h-screen"
-      style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)', transition: 'background 0.5s' }}
+      className="page-wrap pb-28 relative overflow-x-hidden min-h-screen"
+      style={{
+        background: 'var(--bg-primary)',
+        color: 'var(--text-primary)',
+        transition: 'background 0.5s',
+        WebkitOverflowScrolling: 'touch',
+      }}
     >
       {/* Contenedor animado con efecto X/Twitter al abrir el Drawer lateral */}
       <motion.div
@@ -384,12 +389,11 @@ export default function FeedPage() {
           filter: drawerOpen ? (isDark ? 'brightness(0.65)' : 'brightness(0.97)') : 'none',
         }}
         transition={{ type: 'spring', damping: 30, stiffness: 280 }}
-        className="relative"
+        className="relative w-full"
         style={{
           transformOrigin: 'center left',
           willChange: drawerOpen ? 'transform' : 'auto',
           height: drawerOpen ? '100vh' : 'auto',
-          minHeight: '100vh',
           background: 'var(--bg-primary)',
           overflow: drawerOpen ? 'hidden' : 'visible',
           pointerEvents: drawerOpen ? 'none' : 'auto',
@@ -622,7 +626,7 @@ export default function FeedPage() {
       </div>
       )}
 
-      <main className="flex-1 w-full max-w-150 mx-auto" style={{ paddingLeft: isDark ? 0 : 16, paddingRight: isDark ? 0 : 16 }}>
+      <main className="flex-1 w-full max-w-150 mx-auto px-4">
         <div className="pt-4">
 
           {/* Loader del conejo (global, se muestra al actualizar desde cualquier pestaña) */}
