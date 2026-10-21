@@ -257,6 +257,7 @@ export default function FeedPage() {
     let active = true;
     const load = async () => {
       try {
+        setLoading(true);
         if (activeTab === "bunz'in" || activeTab === 'Freehands') {
           const res = await fetch('/api/feed');
           if (res.ok) {
@@ -382,20 +383,22 @@ export default function FeedPage() {
     >
       {/* Contenedor animado con efecto X/Twitter al abrir el Drawer lateral */}
       <motion.div
-        animate={{
-          scale: drawerOpen ? 0.90 : 1,
-          x: drawerOpen ? '74%' : 0,
-          borderRadius: drawerOpen ? 36 : 0,
-          filter: drawerOpen ? (isDark ? 'brightness(0.65)' : 'brightness(0.97)') : 'none',
+        animate={drawerOpen ? {
+          scale: 0.90,
+          x: '74%',
+          borderRadius: 36,
+          filter: isDark ? 'brightness(0.65)' : 'brightness(0.97)',
+        } : {
+          scale: 1,
+          x: 0,
+          borderRadius: 0,
+          filter: 'none',
         }}
         transition={{ type: 'spring', damping: 30, stiffness: 280 }}
         className="relative w-full"
         style={{
           transformOrigin: 'center left',
-          willChange: drawerOpen ? 'transform' : 'auto',
-          height: drawerOpen ? '100vh' : 'auto',
           background: 'var(--bg-primary)',
-          overflow: drawerOpen ? 'hidden' : 'visible',
           pointerEvents: drawerOpen ? 'none' : 'auto',
           border: drawerOpen ? (isDark ? '1.5px solid rgba(255,255,255,0.18)' : '1.5px solid rgba(0,0,0,0.12)') : 'none',
           boxShadow: drawerOpen ? (isDark ? '-12px 0 45px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.08)' : '-10px 0 40px rgba(0,0,0,0.18)') : 'none',
@@ -558,7 +561,9 @@ export default function FeedPage() {
           Aparece solo al hacer scroll hacia arriba y permanece oculto al bajar */}
       {activeTab !== 'Freehands' && (
       <div
-        className="fixed top-0 left-0 right-0 z-80 transition-all duration-300 ease-out select-none"
+        className={`fixed top-0 left-0 right-0 z-80 transition-all duration-300 ease-out select-none ${
+          showMinimalHeader ? 'pointer-events-auto' : 'pointer-events-none'
+        }`}
         style={{
           transform: showMinimalHeader ? 'translateY(0)' : 'translateY(-110%)',
           background: 'var(--glass-bg)',
