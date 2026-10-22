@@ -36,12 +36,16 @@ export async function archiveAccountToPandorasIpfs(
   const pandorasNodeEndpoint =
     process.env.PANDORAS_IPFS_RPC_URL ||
     process.env.PANDORAS_IPFS_GATEWAY ||
-    "http://127.0.0.1:5001/api/v0/add";
+    "https://rpc.ipfs.pandoras.finance/api/v0/add";
+
+  const pandorasAuthToken =
+    process.env.PANDORAS_IPFS_AUTH_TOKEN ||
+    "c9dcb0fa224698754b52cbfa69899c41d360e476fb623092973d89de52ea3118";
 
   try {
     // Intentar anclar directamente en el Nodo IPFS de Pandoras si el endpoint está disponible
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2500); // 2.5s max para no degradar UX
+    const timeout = setTimeout(() => controller.abort(), 4000); // 4s para subir sin degradar UX
 
     const formData = new FormData();
     const blob = new Blob([jsonContent], { type: "application/json" });
@@ -50,8 +54,8 @@ export async function archiveAccountToPandorasIpfs(
     const response = await fetch(pandorasNodeEndpoint, {
       method: "POST",
       body: formData,
-      headers: process.env.PANDORAS_IPFS_AUTH_TOKEN
-        ? { Authorization: `Bearer ${process.env.PANDORAS_IPFS_AUTH_TOKEN}` }
+      headers: pandorasAuthToken
+        ? { Authorization: `Bearer ${pandorasAuthToken}` }
         : undefined,
       signal: controller.signal,
     });
