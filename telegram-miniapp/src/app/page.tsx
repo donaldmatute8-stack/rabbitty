@@ -100,6 +100,10 @@ export default function FeedPage() {
     } catch {}
     return [];
   });
+  const postsRef = useRef(posts);
+  useEffect(() => {
+    postsRef.current = posts;
+  }, [posts]);
   const [offers, setOffers] = useState<Offer[]>([]);
   const [loading, setLoading] = useState(() => posts.length === 0);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -257,7 +261,9 @@ export default function FeedPage() {
     let active = true;
     const load = async () => {
       try {
-        setLoading(true);
+        if (postsRef.current.length === 0) {
+          setLoading(true);
+        }
         if (activeTab === "bunz'in" || activeTab === 'Freehands') {
           const res = await fetch('/api/feed');
           if (res.ok) {

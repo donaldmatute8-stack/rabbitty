@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { MessageCircle, ScanLine, User } from 'lucide-react';
 import useSWR from 'swr';
@@ -124,12 +123,15 @@ export default function BottomNav({ isDark }: BottomNavProps = {}) {
             className="flex items-center justify-center w-12 h-12 active:scale-90 transition-transform"
           >
             <div className="w-13 h-13 flex items-center justify-center overflow-visible">
-              <Image
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
                 src="/Ra.png"
                 alt="Ra"
                 width={52}
                 height={52}
-                priority
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = '/logo_conejo.png';
+                }}
                 className="w-full h-full object-contain scale-[1.65] transition-transform"
                 style={{
                   filter: isFeed 

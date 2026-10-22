@@ -20,6 +20,7 @@ export function SmartBiometricPrompt() {
 
   useEffect(() => {
     let alive = true;
+    let timer: NodeJS.Timeout | null = null;
 
     const checkEligibility = async () => {
       // 1. Si ya se manejó (aceptó o descartó/omitió), no volver a molestar
@@ -44,18 +45,38 @@ export function SmartBiometricPrompt() {
       setIsApple(appleDevice);
       setLabel(appleDevice ? 'Face ID / Apple ID' : support.label || 'Biometría');
 
-      // Esperar 2.5s después de cargar para no saturar al usuario inmediatamente
-      const timer = setTimeout(() => {
-        if (alive) setShow(true);
-      }, 2500);
+      const triggerPrompt = () => {
+        if (timer) clearTimeout(timer);
+        // Dar 4s de respiro natural para que el usuario explore el feed
+        timer = setTimeout(() => {
+          if (alive) setShow(true);
+        }, 4000);
+      };
 
-      return () => clearTimeout(timer);
+      // Si el ritual de bienvenida aún no se ha visto, esperar a que termine
+      const ritualSeen = typeof window !== 'undefined' && localStorage.getItem('rabbitty_welcome_ritual_seen_v3');
+      if (!ritualSeen) {
+        const onRitualFinished = () => {
+          window.removeEventListener('rabbitty:welcome-ritual-completed', onRitualFinished);
+          triggerPrompt();
+        };
+        window.addEventListener('rabbitty:welcome-ritual-completed', onRitualFinished);
+        // Respaldo de seguridad por si no hubo ritual (ej. nativo o omitido)
+        timer = setTimeout(() => {
+          window.removeEventListener('rabbitty:welcome-ritual-completed', onRitualFinished);
+          if (alive) setShow(true);
+        }, 14000);
+      } else {
+        // Si el ritual ya fue visto en visitas anteriores, esperar 4s después de entrar al home
+        triggerPrompt();
+      }
     };
 
     checkEligibility();
 
     return () => {
       alive = false;
+      if (timer) clearTimeout(timer);
     };
   }, []);
 
