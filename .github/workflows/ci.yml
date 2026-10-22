@@ -16,9 +16,9 @@ env:
 
 jobs:
   lint:
-    name: Lint
+    name: Lint & Code Style
     runs-on: ubuntu-latest
-    continue-on-error: true
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -29,11 +29,31 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec turbo run lint || true
+      - run: pnpm exec turbo run lint
+
+  typecheck:
+    name: Typecheck Guard (Mobile & Admin POS)
+    needs: [lint]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Typecheck Telegram MiniApp (User Mobile)
+        run: pnpm --filter telegram-miniapp typecheck
+      - name: Typecheck Rabbitty Admin / POS (Affiliates)
+        run: pnpm --filter @rabbitty/admin typecheck
 
   test:
-    name: Tests
-    needs: []
+    name: Tests (Bunz & API Ledger)
+    needs: [typecheck]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -54,7 +74,7 @@ jobs:
         working-directory: packages/api
 
   build:
-    name: Build
+    name: Build Guard (Isolated Apps)
     needs: [test]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -68,5 +88,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: npm install -g turbo
-      - run: turbo run build
+      - name: Build Mobile App (telegram-miniapp)
+        run: pnpm --filter telegram-miniapp build
+      - name: Build Admin & POS (@rabbitty/admin)
+        run: pnpm --filter @rabbitty/admin build
+
