@@ -93,10 +93,12 @@ Colecciona sellos digitales en cada parada gastronómica, completa circuitos urb
 
 > **CRÍTICO:** Los revisores de Apple rechazan apps si no pueden iniciar sesión de inmediato sin recibir SMS o enlaces externos de Telegram. Debe proporcionarse este acceso demo directo.
 
-### Información de Inicio de Sesión Demo (Sign-in information)
+### Información de Inicio de Sesión Demo (Sign-in information en App Store Connect)
 - **¿Requiere inicio de sesión?**: Sí (marcar casilla).
-- **Nombre de usuario / Teléfono demo:** `+52 958 100 0000` (o usuario demo fijado en base de datos).
-- **Código OTP / Contraseña demo:** `123456` *(Configurado en backend/bypass de testing).*
+- **Nombre de usuario / Email:** `tester@rabbitty.me`  *(o simplemente la palabra `tester`)*
+- **Contraseña / Código OTP de 6 dígitos:** `123456`
+- **Notas adicionales para el Revisor:**  
+  *El usuario ingresa `tester@rabbitty.me` en la pantalla de bienvenida y el código fijo de 6 dígitos `123456` para acceso instantáneo sin requerir SMS ni Telegram.*
 
 ### Notas de Revisión (Review Notes para el equipo de Cupertino)
 ```text
@@ -105,11 +107,14 @@ Dear Apple Review Team,
 Rabbitty is a local rewards, loyalty, and QR payment companion app for curated coffee shops and restaurants. 
 
 To easily test all features of version 2.2:
-1. Launch the app and enter the demo phone number / test credentials provided above.
+1. Launch the app and sign in using the demo account credentials provided above:
+   - Email: tester@rabbitty.me
+   - OTP Code: 123456
 2. The Home screen features the Rabbitty Pass, active Bunz balance, and nearby featured venues.
 3. Tap the "Pagar" (Pay) button or QR icon to display the dynamic member Rabbitty Code intended for counter scanning at POS terminals.
 4. Tap the "Bunzy AI" tab to interact with our local venue recommendation assistant.
 5. In the "Vibe Passport" section, reviewers can explore themed urban dining routes and rewards progression.
+6. Under the "Profile" tab, reviewers can also verify the "Eliminar cuenta permanentemente" (Account Deletion) feature compliant with App Store Guideline 5.1.1(v).
 
 Note on permissions:
 - Camera: Used exclusively for scanning partner QR codes at store locations.
