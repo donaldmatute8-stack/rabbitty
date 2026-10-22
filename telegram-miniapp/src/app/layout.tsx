@@ -40,25 +40,7 @@ export default function RootLayout({
     <html lang="es" suppressHydrationWarning data-scroll-behavior="smooth" className={inter.variable}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
-        {/* Auto-recuperación de chunks desactualizados en WKWebView / Native iOS */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){
-              window.addEventListener('error', function(e) {
-                var msg = (e && e.message) ? e.message.toLowerCase() : '';
-                if (msg.indexOf('chunkloaderror') !== -1 || msg.indexOf('loading chunk') !== -1 || msg.indexOf('failed to fetch dynamically imported module') !== -1) {
-                  var lastReload = sessionStorage.getItem('rabbitty_chunk_reload_ts');
-                  var now = Date.now();
-                  if (!lastReload || now - parseInt(lastReload, 10) > 10000) {
-                    sessionStorage.setItem('rabbitty_chunk_reload_ts', String(now));
-                    console.warn('[Rabbitty Recovery] Chunk load failure detected. Reloading with cache bust...');
-                    window.location.reload();
-                  }
-                }
-              });
-            })();`,
-          }}
-        />
+        {/* Telegram WebApp Script */}
         <script
           src="https://telegram.org/js/telegram-web-app.js"
           async

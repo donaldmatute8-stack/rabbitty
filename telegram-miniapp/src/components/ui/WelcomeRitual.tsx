@@ -89,6 +89,7 @@ export function WelcomeRitual({
     if (typeof window !== 'undefined') {
       try {
         localStorage.setItem(storageKey, 'true');
+        window.dispatchEvent(new CustomEvent('rabbitty:welcome-ritual-completed'));
       } catch {}
     }
 
