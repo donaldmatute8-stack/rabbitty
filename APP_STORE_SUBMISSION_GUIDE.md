@@ -150,3 +150,100 @@ En tu Mac:
 4. Selecciona el archivo versión **2.2 (Build 6)** y haz clic en **Distribute App**.
 5. Selecciona **App Store Connect** -> **Upload** -> Deja las casillas predeterminadas de símbolos y firma automática -> Haz clic en **Upload**.
 6. En 10 a 15 minutos el build aparecerá en App Store Connect listo para adjuntarse a la versión 2.2.
+
+---
+
+# 🏢 PARTE II: Kit Oficial para Rabbitty POS (iPad & Mac)
+
+**Aplicación:** Rabbitty POS (Terminal de Punto de Venta y Gestión para Afiliados)  
+**Bundle Identifier:** `com.rabbitty.pos`  
+**Dispositivos Destino:** iPad (iPadOS 15.0+) y Mac con procesador Apple Silicon (Designed for iPad / Mac Catalyst)  
+**Proyecto Local:** `apps/admin/ios/App/App.xcodeproj`  
+**Servidor Remoto:** `https://admin.rabbitty.me`  
+
+### Estado de Compilación:
+* Verificado con `xcodebuild`: **BUILD SUCCEEDED**. No requiere cambios de código adicionales.
+
+---
+
+## 📝 1. Metadatos de Ficha para Rabbitty POS
+
+### Nombre de la App (Máx. 30 caracteres)
+```text
+Rabbitty POS — Afiliados y Caja
+```
+*(29 caracteres)*
+
+### Subtítulo (Máx. 30 caracteres)
+```text
+Terminal y fidelización Bunz
+```
+*(28 caracteres)*
+
+### Categoría Principal
+- **Principal:** Empresa (Business).
+- **Secundaria:** Comida y Bebida (Food & Drink) o Finanzas (Finance).
+
+### Palabras Clave / Keywords (Máx. 100 caracteres)
+```text
+pos,punto de venta,restaurante,cafeteria,caja,tickets,recompensas,fidelizacion,bunz,afiliados,huatulco
+```
+*(100 caracteres)*
+
+### Descripción de la App
+```text
+Rabbitty POS es la terminal oficial de cobro, fidelización y gestión de recompensas diseñada exclusivamente para comercios, cafeterías y restaurantes afiliados a la red Rabbitty.
+
+CARACTERÍSTICAS PRINCIPALES:
+⚡ REGISTRO Y RECOMPENSA EN CAJA
+Escanea el Rabbitty Code de tus clientes al instante para otorgar Bunz por su consumo o cobrar mediante saldo digital.
+
+📊 CONTROL DE COMERCIO EN TIEMPO REAL
+Monitorea tu volumen de ventas, número de clientes fidelizados, tickets emitidos y tasa de recompensa configurada (de 2% a 50%).
+
+🖨️ IMPRESIÓN Y EXPORTACIÓN DE MATERIAL
+Genera e imprime el Kit de Impresos para tu local: carteles A3 con tu código QR oficial, habladores de mesa y material para caja en formato PDF de alta resolución.
+
+🧪 MODO ENTRENAMIENTO (SANDBOX)
+Capacita a tus cajeros y personal de servicio en un entorno simulado seguro sin alterar la contabilidad real de tu negocio.
+
+Diseñado optimizado para iPad y estaciones de cobro fijas. Requiere una cuenta de comercio previamente aprobada por Rabbitty.
+```
+
+---
+
+## 🕵️‍♂️ 2. Información para el Revisor de Apple (POS Review Notes)
+
+### Credenciales Demo para el Revisor:
+* **¿Requiere inicio de sesión?**: Sí.
+* **Email / Usuario Demo:** `demo.pos@rabbitty.me` (o el número telefónico configurado para el comercio demo).
+* **Contraseña / PIN Demo:** `RabbittyPos2026!` / PIN: `1234`
+
+### Review Notes (Texto en inglés para el revisor en Cupertino):
+```text
+Dear Apple Review Team,
+
+Rabbitty POS is a companion business tool for merchants and affiliated venue managers (restaurants, coffee shops) to manage loyalty points (Bunz) and process member transactions at checkout.
+
+Review Instructions:
+1. Open Rabbitty POS on iPad.
+2. Sign in using the demo merchant credentials provided in the Sign-In Info section.
+3. Reviewers can explore the POS Dashboard (displaying sales, active tickets, and reward rate settings).
+4. Tap "Generar código QR" to simulate counter QR generation for customer rewards.
+5. Reviewers can toggle the "Modo Entrenamiento (Sandbox)" at any time to verify that mock sales do not affect production accounting.
+
+Permissions Used:
+- Bluetooth (LE): Optional, used to connect with thermal receipt printers.
+- Camera: Used for barcode / ticket scanning.
+
+If you have any questions or require additional assistance, please reach out at support@rabbitty.me.
+```
+
+---
+
+## 🔒 3. Privacidad para Rabbitty POS (Nutrition Labels)
+* **Datos de Contacto:** Email/teléfono comercial para autenticación del personal del establecimiento.
+* **Identificadores:** Business ID y User ID del afiliado.
+* **Datos de Uso:** Analítica técnica interna para rendimiento del POS.
+* **Tracking:** **NO**, no se realiza tracking publicitario cruzado entre apps de terceros.
+
