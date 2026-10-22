@@ -15,6 +15,7 @@ import BunzGuide from '@/features/business/BunzGuide';
 import { WelcomeRitual } from '@/components/ui/WelcomeRitual';
 import { authorizeSensitiveAction } from '@/lib/securityVault';
 import { promptForPin } from '@/components/security/PinPromptModal';
+import { DeleteAccountModal } from '@/components/profile/DeleteAccountModal';
 
 interface UserProfile {
   id?: string;
@@ -65,6 +66,7 @@ export default function ProfilePage() {
   const [levelName, setLevelName] = useState('1');
   const [hasBusiness, setHasBusiness] = useState(false);
   const [showRitual, setShowRitual] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   useEffect(() => {
     if (user?.id) {
@@ -391,13 +393,36 @@ export default function ProfilePage() {
 
         <button
           onClick={logout}
-          className="w-full mt-6 flex items-center justify-center gap-2 py-3.5 rounded-[14px] bg-rose-500/10 text-rose-500 border border-rose-500/20 font-bold text-sm cursor-pointer active:scale-[0.98] transition-transform"
+          className="w-full mt-6 flex items-center justify-center gap-2 py-3.5 rounded-[14px] bg-white/5 text-(--text-muted) border border-(--border-subtle) font-bold text-sm cursor-pointer active:scale-[0.98] transition-transform"
         >
           <span>🚪</span>
           <span>Cerrar Sesión</span>
         </button>
+
+        <button
+          onClick={() => {
+            PlatformBridge.hapticFeedback('medium');
+            setShowDeleteModal(true);
+          }}
+          className="w-full mt-3 flex items-center justify-center gap-2 py-3.5 rounded-[14px] bg-rose-500/10 text-rose-500 border border-rose-500/20 font-bold text-xs cursor-pointer active:scale-[0.98] transition-transform"
+        >
+          <span>🗑️</span>
+          <span>Eliminar cuenta permanentemente</span>
+        </button>
       </div>
     </ProfileSubpageLayout>
+
+    {/* MODAL DE ELIMINACIÓN DE CUENTA CON TRASPASO A TESORERÍA */}
+    <DeleteAccountModal
+      isOpen={showDeleteModal}
+      onClose={() => setShowDeleteModal(false)}
+      userBunzBalance={Math.max(0, (user?.totalBunzEarned || 0) - (user?.visitedBusinesses || 0))}
+      onDeleted={() => {
+        setShowDeleteModal(false);
+        logout();
+      }}
+    />
+
     {/* ADMIN PANEL OVERLAY */}
     {showAdmin && (
       <AdminPanel onClose={() => setShowAdmin(false)} />
