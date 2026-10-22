@@ -8,25 +8,24 @@
 
 ---
 
-## 📸 1. Capturas Oficiales Generadas para la Ficha (App Store Display)
+## 📸 1. Capturas Oficiales de la App (App Store Screenshots)
 
-Las 4 capturas han sido diseñadas con estética premium (tema oscuro, contrastes neón, métricas de alto impacto y copy de conversión):
+El paquete gráfico consta de **7 capturas de pantalla de la interfaz de Rabbitty**:
 
-1. **Pantalla 1 — Tu pase diario y recompensas en tus lugares favoritos:**  
-   ![Hero Home Rabbitty](/Users/Marco/.gemini/antigravity-ide/brain/1d65ed07-e6d1-465f-9652-5cc7aa95546d/appstore_screen_1_hero_1792702521531.jpg)
-   *Destaca el Rabbitty Pass Lvl. 1, saldo de 250 Bunz y los comercios afiliados destacados (626 Café).*
-
-2. **Pantalla 2 — Paga escaneando al instante con Rabbitty Code:**  
-   ![QR Payment](/Users/Marco/.gemini/antigravity-ide/brain/1d65ed07-e6d1-465f-9652-5cc7aa95546d/appstore_screen_2_qr_1792702538609.jpg)
-   *Enfoque en velocidad, cashback automático acumulado y pago seguro en terminales de afiliados.*
-
-3. **Pantalla 3 — Bunzy AI: Tu asistente local de recomendaciones y reservas:**  
-   ![Bunzy Asistente IA](/Users/Marco/.gemini/antigravity-ide/brain/1d65ed07-e6d1-465f-9652-5cc7aa95546d/appstore_screen_3_bunzy_1792702557791.jpg)
-   *Muestra la inteligencia conversacional recomendando mesas, platos y reservas en Huatulco/locales asociados.*
-
-4. **Pantalla 4 — Rabbitty Vibe Passport: Rutas urbanas y multiplicadores:**  
-   ![Vibe Passport](/Users/Marco/.gemini/antigravity-ide/brain/1d65ed07-e6d1-465f-9652-5cc7aa95546d/appstore_screen_4_vibe_1792702575545.jpg)
-   *Gamificación pura: stamps coleccionables, multiplicadores 2X Bunz y recompensas desbloqueables.*
+1. **Pantalla 1 — Pase Digital & Home:**  
+   *Muestra el Rabbitty Pass Lvl. 1, el saldo de Bunz y el feed de cafeterías y restaurantes cercanos con multiplicadores (+20% Bunz).*
+2. **Pantalla 2 — Pago QR Dinámico & Rabbitty ID:**  
+   *Muestra el código visual con identificador animado, diseñado para escanear en caja con velocidad y brillo optimizado.*
+3. **Pantalla 3 — Bunzy AI (Asistente Local Inteligente):**  
+   *Muestra la conversación fluida con Bunzy respondiendo dudas sobre el ecosistema, locales asociados y preguntas frecuentes.*
+4. **Pantalla 4 — Rabbitty Mood:**  
+   *Selector ambiental y sensorial (Calma, Energía, Enfoque, Celebración, Conexión, Sorpresa) para personalizar la experiencia culinaria y musical.*
+5. **Pantalla 5 — Rabbitty Vibe Passport (Rutas Urbanas):**  
+   *Muestra la Ruta Creativa & Deep Work con sellos coleccionables en cafeterías de especialidad, bistros y espacios silenciosos.*
+6. **Pantalla 6 — Portal de Afiliados (Comercios):**  
+   *Muestra la vista de negocio (Ka13), métricas de tickets/clientes, crédito de minteo y control de la tasa de recompensa en tiempo real.*
+7. **Pantalla 7 — Stock de Ofertas & Cupones:**  
+   *Muestra las ofertas disponibles canjeables directamente con Bunz en comercios destacados (626 Café, Surf & Co).*
 
 ---
 
