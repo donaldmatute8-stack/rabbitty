@@ -1,6 +1,6 @@
 import { db } from '@/db';
 import { messages, ownedBusinesses, users, levels } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 
 type BusinessRow = typeof ownedBusinesses.$inferSelect;
 type MessageRow = typeof messages.$inferSelect;
@@ -247,7 +247,10 @@ interface BunzyContext {
 
 async function loadContext(input: BunzyInput): Promise<BunzyContext> {
   const allBusinesses = await db.query.ownedBusinesses
-    .findMany({ where: eq(ownedBusinesses.status, 'VERIFIED'), limit: 60 })
+    .findMany({
+      where: inArray(ownedBusinesses.status, ['VERIFIED', 'APPROVED']),
+      limit: 60,
+    })
     .catch(() => [] as BusinessRow[]);
 
   const ranked = rankBusinesses(allBusinesses, input.content, input.lat, input.lng).slice(0, 5);
@@ -359,7 +362,7 @@ function heuristicReply(content: string, ctx: BunzyContext, lat?: number | null,
   const nc = normalizeText(content);
 
   // 1. Pregunta sobre ganar bunz / qué son los bunz
-  if (/como gano bunz|que son los bunz|como ganar|ganar bunz|recompens|mis bunz/.test(nc)) {
+  if (/como gano bunz|que son los bunz|como ganar bunz|que es un bunz|para que sirven los bunz|explicame los bunz/.test(nc)) {
     const balanceInfo = ctx.user ? ` Actualmente tienes **${ctx.user.balance} bunz** disponibles.` : '';
     return {
       content:
@@ -493,14 +496,21 @@ function heuristicReply(content: string, ctx: BunzyContext, lat?: number | null,
     };
   }
 
+  const topFeatured = ctx.allBusinesses.slice(0, 3);
+  const featuredLines = topFeatured.length > 0
+    ? '\n\nAquí tienes algunos de los favoritos de la comunidad:\n' +
+      topFeatured.map((b, i) => `${i + 1}. **${b.name}** (${b.category}) · +${b.rewardPercentage}% bunz`).join('\n')
+    : '';
+
   return {
     content:
-      '¡Qué onda! 🐰 En Rabbitty ganas y canjeas bunz en nuestros comercios aliados. ' +
-      'Dime qué se te antoja (café, pizza, tacos, burger...) o pídeme una recomendación.',
-    type: 'TEXT',
+      '¡Qué onda! 🐰 Soy Bunzy, tu asistente de Rabbitty. ' +
+      'Dime qué se te antoja hoy (café, pizza, mariscos, tacos, cocteles...) o qué necesitas (ver mi saldo, transferir bunz, cómo llegar a un lugar).' +
+      featuredLines,
+    type: topFeatured.length > 0 ? 'OPTIONS' : 'TEXT',
     metadata: null,
-    suggestions: suggestionsFor(content, false),
-    options: [],
+    suggestions: ['Cafés cerca ☕', 'Restaurantes 🍽️', '¿Cómo gano bunz?', 'Mi QR de pago'],
+    options: mapToOptions(topFeatured, lat, lng),
     orderDraft: null,
   };
 }

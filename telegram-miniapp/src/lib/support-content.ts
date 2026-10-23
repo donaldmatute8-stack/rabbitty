@@ -116,9 +116,23 @@ function supportTokens(text: string): string[] {
 
 /**
  * Devuelve la mejor FAQ para una consulta de soporte, o null si no hay match claro.
- * Se usa como fallback sin IA para el asistente Bunzy.
+ * Requiere score >= 4 o coincidencia directa con la pregunta clave para no secuestrar
+ * conversaciones generales sobre negocios o comida.
  */
 export function matchFaq(content: string): FaqItem | null {
+  const norm = (content || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  
+  // Pregunta directa obligatoria de soporte
+  if (/\b(que son los bunz|para que sirven los bunz|que es un bunz)\b/.test(norm)) {
+    return FAQS[0]; // ¿Qué son los Bunz?
+  }
+  if (/\b(como ganar bunz|como gano bunz|como conseguir bunz)\b/.test(norm)) {
+    return FAQS[1]; // ¿Cómo gano Bunz?
+  }
+  if (/\b(vencen|vence|caducan|caduca|expiran|expira|vigencia)\b/.test(norm) && /bunz/.test(norm)) {
+    return FAQS[2]; // ¿Tienen fecha de vencimiento?
+  }
+
   const tokens = new Set(supportTokens(content));
   if (tokens.size === 0) return null;
 
@@ -126,14 +140,15 @@ export function matchFaq(content: string): FaqItem | null {
   let bestScore = 0;
 
   for (const faq of FAQS) {
-    const hay = new Set(supportTokens(`${faq.q} ${faq.a}`));
+    const hay = new Set(supportTokens(faq.q));
     let score = 0;
-    for (const t of tokens) if (hay.has(t)) score += t.length >= 6 ? 2 : 1;
+    for (const t of tokens) if (hay.has(t)) score += t.length >= 6 ? 3 : 2;
     if (score > bestScore) {
       bestScore = score;
       best = faq;
     }
   }
 
-  return bestScore >= 2 ? best : null;
+  // Solo si hay coincidencia real con la pregunta de FAQ (score >= 4)
+  return bestScore >= 4 ? best : null;
 }
