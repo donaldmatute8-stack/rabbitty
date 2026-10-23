@@ -66,11 +66,22 @@ export function SandboxBanner() {
     ) || branches?.[0];
 
     if (mainBranch) {
-      setBranchId(mainBranch.id);
+      // Persist the real branch before reload
       if (typeof window !== "undefined") {
         localStorage.setItem("activeBranchId", mainBranch.id);
       }
-      toast.info("Regresaste a la sucursal de producción.");
+      setBranchId(mainBranch.id);
+      // Invalidate all cached TRPC queries so nothing stale from sandbox remains
+      utils.invalidate();
+      toast.info("Regresando a producción...");
+      // Hard navigate to dashboard root so all state resets cleanly
+      setTimeout(() => {
+        if (typeof window !== "undefined") {
+          window.location.href = "/";
+        }
+      }, 600);
+    } else {
+      toast.error("No se encontró una sucursal de producción. Recarga la página manualmente.");
     }
   };
 
