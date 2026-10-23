@@ -255,14 +255,14 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
               </div>
             </div>
 
-            {/* Bottom section: reduced bottom space, theme toggle + logout */}
+            {/* Bottom section: theme toggle + logout, perfectly vertically centered */}
             <div 
-              className="px-4 pt-1.5 pb-0.5 shrink-0 flex items-center justify-between gap-3"
+              className="px-4 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom,0px))] shrink-0 flex items-center justify-between gap-3"
               style={{ borderTop: '1px solid var(--border-subtle)' }}
             >
               {/* Dark / Light Toggle */}
               <div
-                className="flex items-center gap-1 p-0.5 rounded-xl"
+                className="flex items-center gap-1 p-1 rounded-xl"
                 style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
               >
                 <button
@@ -272,14 +272,14 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                     PlatformBridge.hapticFeedback('light');
                     setTheme('light');
                   }}
-                  className="w-6.5 h-6.5 rounded-lg flex items-center justify-center transition-all border-none cursor-pointer"
+                  className="w-7 h-7 rounded-lg flex items-center justify-center transition-all border-none cursor-pointer"
                   style={{
                     background: resolvedTheme === 'light' ? 'var(--bg-primary)' : 'transparent',
                     color: resolvedTheme === 'light' ? '#E91E63' : 'var(--text-muted)',
                     boxShadow: resolvedTheme === 'light' ? 'var(--shadow-sm)' : 'none',
                   }}
                 >
-                  <Sun size={13} strokeWidth={2.4} />
+                  <Sun size={14} strokeWidth={2.4} />
                 </button>
                 <button
                   type="button"
@@ -288,14 +288,14 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                     PlatformBridge.hapticFeedback('light');
                     setTheme('dark');
                   }}
-                  className="w-6.5 h-6.5 rounded-lg flex items-center justify-center transition-all border-none cursor-pointer"
+                  className="w-7 h-7 rounded-lg flex items-center justify-center transition-all border-none cursor-pointer"
                   style={{
                     background: resolvedTheme === 'dark' ? 'var(--bg-primary)' : 'transparent',
                     color: resolvedTheme === 'dark' ? '#E91E63' : 'var(--text-muted)',
                     boxShadow: resolvedTheme === 'dark' ? 'var(--shadow-sm)' : 'none',
                   }}
                 >
-                  <Moon size={13} strokeWidth={2.4} />
+                  <Moon size={14} strokeWidth={2.4} />
                 </button>
               </div>
 
@@ -309,9 +309,9 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                 }}
                 title="Cerrar Sesión"
                 aria-label="Cerrar Sesión"
-                className="h-7.5 px-2.5 rounded-xl flex items-center gap-1.5 bg-rose-500/10 text-rose-500 border border-rose-500/20 font-bold text-[11px] cursor-pointer active:scale-95 transition-transform"
+                className="h-8.5 px-3.5 rounded-xl flex items-center gap-1.5 bg-rose-500/10 text-rose-500 border border-rose-500/20 font-bold text-[12px] cursor-pointer active:scale-95 transition-transform"
               >
-                <LogOut size={12} strokeWidth={2.2} />
+                <LogOut size={13} strokeWidth={2.2} />
                 <span>Cerrar sesión</span>
               </button>
             </div>

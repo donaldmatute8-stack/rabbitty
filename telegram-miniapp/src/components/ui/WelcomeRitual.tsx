@@ -42,13 +42,10 @@ export function WelcomeRitual({
     if (forceOpen) return true;
     if (typeof window === 'undefined') return false;
     try {
-      // En app nativa (iOS/Android), no bloquear el feed ni el inicio de la app con el ritual
-      const isNative = !!(window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.();
       const params = new URLSearchParams(window.location.search);
       if (params.get('ritual') === '1' || params.get('welcome') === '1') {
         return true;
       }
-      if (isNative) return false;
       return !localStorage.getItem(storageKey);
     } catch {
       return false;

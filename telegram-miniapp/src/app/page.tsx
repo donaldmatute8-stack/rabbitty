@@ -10,7 +10,6 @@ import FeedCard from '@/components/ui/FeedCard';
 import EmptyState from '@/components/ui/EmptyState';
 import { SkeletonCard } from '@/components/ui/Skeleton';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { Globe3D } from '@/components/ui/3d-globe';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/contexts/ToastContext';
@@ -109,7 +108,6 @@ export default function FeedPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [purchasing, setPurchasing] = useState(false);
-  const [mapMode, setMapMode] = useState<'globe' | 'flat'>('flat');
   const { showToast } = useToast();
 
   const { user } = useAuth();
@@ -168,7 +166,7 @@ export default function FeedPage() {
       );
     }
 
-    // Auto-prompt Rabbitty Mood moderado (máximo una vez cada 7 días, si ya vio el ritual de bienvenida)
+    // Auto-prompt Rabbitty Mood moderado y escalonado (espera 12s tras entrar al feed para no chocar con Face ID ni el ritual)
     try {
       const lastShown = localStorage.getItem('rabbitty_mood_last_shown_time');
       const ritualSeen = localStorage.getItem('rabbitty_welcome_ritual_seen_v3');
@@ -181,7 +179,7 @@ export default function FeedPage() {
           try {
             localStorage.setItem('rabbitty_mood_last_shown_time', String(Date.now()));
           } catch {}
-        }, 2000);
+        }, 12000);
         return () => clearTimeout(timer);
       }
     } catch {}
@@ -460,94 +458,81 @@ export default function FeedPage() {
                 </div>
               </div>
 
-              {/* Selector Globo 3D / Local estilizado en el Header */}
-              <div 
-                className="flex items-center bg-white/5 backdrop-blur-[10px] rounded-full border border-white/10 p-1"
-              >
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => {
                     PlatformBridge.hapticFeedback('light');
-                    setMapMode('globe');
+                    setActiveTab("bunz'in");
                   }}
-                  className="px-3 py-1 rounded-full text-[11px] font-bold border-none cursor-pointer active:scale-95 transition-all"
-                  style={{ background: mapMode === 'globe' ? 'rgba(233,30,99,0.25)' : 'transparent', color: mapMode === 'globe' ? '#E91E63' : '#888' }}
+                  className="px-3 py-1.5 rounded-full text-[12px] font-bold border-none cursor-pointer active:scale-95 transition-all"
+                  style={{ background: 'var(--bg-pressed)', color: 'var(--text-secondary)' }}
                 >
-                  Globo 3D
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    PlatformBridge.hapticFeedback('light');
-                    setMapMode('flat');
-                  }}
-                  className="px-3 py-1 rounded-full text-[11px] font-bold border-none cursor-pointer active:scale-95 transition-all"
-                  style={{ background: mapMode === 'flat' ? 'rgba(255,255,255,0.12)' : 'transparent', color: mapMode === 'flat' ? '#FFF' : '#888' }}
-                >
-                  Local
+                  Cerrar
                 </button>
               </div>
             </>
           ) : (
-            <button
-              type="button"
-              onClick={() => {
-                PlatformBridge.hapticFeedback('light');
-                setDrawerOpen(true);
-              }}
-              className="flex items-center gap-3 bg-transparent border-none cursor-pointer p-0 text-left active:scale-[0.98] transition-transform"
-            >
-              <div className="w-11 h-11 rounded-full overflow-hidden" style={{ background: 'var(--bg-pressed)', border: '1px solid var(--border-subtle)' }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${user?.firstName || 'Rabbitty'}&backgroundColor=E91E63`} alt={user?.firstName || 'User'} className="w-full h-full" />
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  PlatformBridge.hapticFeedback('light');
+                  setDrawerOpen(true);
+                }}
+                className="flex items-center gap-3 bg-transparent border-none cursor-pointer p-0 text-left active:scale-[0.98] transition-transform"
+              >
+                <div className="w-11 h-11 rounded-full overflow-hidden" style={{ background: 'var(--bg-pressed)', border: '1px solid var(--border-subtle)' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${user?.firstName || 'Rabbitty'}&backgroundColor=E91E63`} alt={user?.firstName || 'User'} className="w-full h-full" />
+                </div>
+                <h1 className="sr-only">{user?.firstName || 'Rabbitty'}</h1>
+              </button>
+
+              <div className="flex items-center gap-2.5">
+                {/* Notification Bell */}
+                <Link 
+                  href="/notifications" 
+                  onClick={() => PlatformBridge.hapticFeedback('light')}
+                  className="relative w-9 h-9 rounded-full flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.04)] active:scale-95 transition-transform" 
+                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
+                >
+                  <Bell size={18} strokeWidth={2.5} style={{ color: 'var(--text-primary)' }} />
+                  <div className="absolute top-2 right-2.25 w-1.5 h-1.5 bg-[#E91E63] rounded-full" style={{ border: '1.5px solid var(--bg-elevated)' }} />
+                </Link>
+
+                {/* Rabbitty Mood Trigger */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    PlatformBridge.hapticFeedback('medium');
+                    setMoodOpen(true);
+                  }}
+                  className="w-9 h-9 rounded-full flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.04)] active:scale-95 transition-transform bg-linear-to-tr from-amber-500/20 to-orange-500/20 border border-amber-400/30 text-amber-400"
+                  aria-label="Rabbitty Mood"
+                  title="Tu vibra y experiencia de hoy"
+                >
+                  <Sparkles size={16} strokeWidth={2.5} />
+                </button>
+
+                <Link 
+                  href="/chat/bot" 
+                  onClick={(e) => { e.preventDefault(); PlatformBridge.hapticFeedback('medium'); openBunzy(); }}
+                  className="w-9 h-9 rounded-full flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.04)] active:scale-95 transition-transform" 
+                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
+                  aria-label="Hablar con Bunzy"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img 
+                    src="/logo_conejo.png" 
+                    alt="Bunzy" 
+                    className="w-4 h-5 object-contain"
+                    style={{ filter: isDark ? 'grayscale(100%) brightness(10)' : 'grayscale(100%) brightness(0)' }} 
+                  />
+                </Link>
               </div>
-              <h1 className="sr-only">{user?.firstName || 'Rabbitty'}</h1>
-            </button>
+            </>
           )}
-
-          <div className="flex items-center gap-2.5">
-            
-            {/* Notification Bell */}
-            <Link 
-              href="/notifications" 
-              onClick={() => PlatformBridge.hapticFeedback('light')}
-              className="relative w-9 h-9 rounded-full flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.04)] active:scale-95 transition-transform" 
-              style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
-            >
-              <Bell size={18} strokeWidth={2.5} style={{ color: 'var(--text-primary)' }} />
-              <div className="absolute top-2 right-2.25 w-1.5 h-1.5 bg-[#E91E63] rounded-full" style={{ border: '1.5px solid var(--bg-elevated)' }} />
-            </Link>
-
-            {/* Rabbitty Mood Trigger */}
-            <button
-              type="button"
-              onClick={() => {
-                PlatformBridge.hapticFeedback('medium');
-                setMoodOpen(true);
-              }}
-              className="w-9 h-9 rounded-full flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.04)] active:scale-95 transition-transform bg-linear-to-tr from-amber-500/20 to-orange-500/20 border border-amber-400/30 text-amber-400"
-              aria-label="Rabbitty Mood"
-              title="Tu vibra y experiencia de hoy"
-            >
-              <Sparkles size={16} strokeWidth={2.5} />
-            </button>
-
-            <Link 
-              href="/chat/bot" 
-              onClick={(e) => { e.preventDefault(); PlatformBridge.hapticFeedback('medium'); openBunzy(); }}
-              className="w-9 h-9 rounded-full flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.04)] active:scale-95 transition-transform" 
-              style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
-              aria-label="Hablar con Bunzy"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img 
-                src="/logo_conejo.png" 
-                alt="Bunzy" 
-                className="w-4 h-5 object-contain"
-                style={{ filter: isDark ? 'grayscale(100%) brightness(10)' : 'grayscale(100%) brightness(0)' }} 
-              />
-            </Link>
-          </div>
         </div>
 
         {activeTab !== 'Freehands' && (
@@ -823,30 +808,9 @@ export default function FeedPage() {
               className="fixed left-0 right-0 bottom-0 z-30 overflow-hidden bg-black flex flex-col"
               style={{ top: headerHeight > 0 ? headerHeight : 'calc(max(var(--safe-top, 0px), 8px) + 56px)' }}
             >
-              {mapMode === 'flat' ? (
-                <div className="h-full w-full overflow-hidden">
-                  <InteractiveMap businesses={postsWithDistance} userLat={userLat} userLng={userLng} />
-                </div>
-              ) : (
-                <div className="flex-1 w-full h-full relative flex items-center justify-center">
-                  {loading ? (
-                    <div className="w-10 h-10 rounded-full" style={{ border: '3px solid rgba(233,30,99,0.3)', borderTopColor: '#E91E63', animation: 'spin 1s linear infinite' }} />
-                  ) : (
-                    <Globe3D 
-                      markers={postsWithDistance.filter(p => p.lat && p.lng).map(p => ({ 
-                        id: p.id,
-                        lat: p.lat!, 
-                        lng: p.lng!, 
-                        label: p.user, 
-                        src: p.logo_base64 || p.imageUrl 
-                      }))} 
-                      onMarkerClick={(m) => {
-                        console.log("Clicked:", m.label);
-                      }}
-                    />
-                  )}
-                </div>
-              )}
+              <div className="h-full w-full overflow-hidden">
+                <InteractiveMap businesses={postsWithDistance} userLat={userLat} userLng={userLng} />
+              </div>
             </div>
           )}
 
