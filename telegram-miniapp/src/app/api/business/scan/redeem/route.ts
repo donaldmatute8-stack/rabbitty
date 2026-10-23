@@ -4,6 +4,7 @@ import { users, ownedBusinesses, transactions } from '@/db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { parseTelegramUser, validateTelegramInitData } from '@/lib/telegramAuth';
 import { recordLedgerTransaction, findLedgerEntry } from '@/lib/ledgerHelper';
+import { sendEcosystemNotification } from '@/lib/push/notify';
 import crypto from 'crypto';
 
 export async function POST(req: NextRequest) {
@@ -101,6 +102,32 @@ export async function POST(req: NextRequest) {
       const newBalance = (updatedUser.totalBunzEarned ?? 0) - (updatedUser.totalBunzSpent ?? 0);
       return { tx: appTx, newBalance, idempotent: false };
     });
+
+    if (!result.idempotent) {
+      // 1. Notificación push al usuario que canjeó
+      await sendEcosystemNotification({
+        userId: user.id,
+        title: '🎉 ¡Canje Exitoso!',
+        message: `Has canjeado "${title}" en ${business.name}. Tu nuevo saldo es de ${result.newBalance.toLocaleString()} Bunz.`,
+        type: 'REWARD',
+        route: '/profile/wallet',
+        pushData: { businessId: business.id, bunzCost, newBalance: result.newBalance },
+        threadId: 'coupons',
+      });
+
+      // 2. Notificación push al dueño del negocio afiliado
+      if (business.ownerId && business.ownerId !== user.id) {
+        await sendEcosystemNotification({
+          userId: business.ownerId,
+          title: `🎁 ¡Canje Realizado en Caja! - ${business.name}`,
+          message: `${user.firstName || user.username || 'Un cliente'} acaba de canjear "${title}" (${bunzCost.toLocaleString()} Bunz).`,
+          type: 'AFFILIATE',
+          route: '/business',
+          pushData: { businessId: business.id, bunzCost, customerId: user.id },
+          threadId: 'business_redemptions',
+        });
+      }
+    }
 
     // Notify business owner via Telegram Bot
     if (botToken && business.ownerId) {

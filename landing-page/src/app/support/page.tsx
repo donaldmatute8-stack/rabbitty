@@ -49,10 +49,22 @@ const EXTENDED_FAQS = [
     icon: Lock,
   },
   {
-    category: 'Comercios',
+    category: 'Comercios & Afiliados',
     q: '¿Cómo afilio mi restaurante o cafetería?',
     a: 'Puedes registrar tu negocio desde el portal de afiliados en https://rabbitty.me/affiliates o contactar al equipo en Telegram @rabbittyhub para recibir la terminal Rabbitty POS en iPad y tu kit de carteles impresos.',
     icon: Building2,
+  },
+  {
+    category: 'Comercios & Afiliados',
+    q: '¿Cómo accedo al Panel de Administración de mi negocio?',
+    a: 'Ingresa a https://admin.rabbitty.me con tu correo o número telefónico registrado para gestionar menús, ver métricas de comensales, configurar porcentajes de recompensa Bunz y descargar reportes contables.',
+    icon: ShieldCheck,
+  },
+  {
+    category: 'Terminal POS & Hardware',
+    q: '¿Cómo configuro mi impresora térmica en Rabbitty POS?',
+    a: 'En la app Rabbitty POS para iPad o Mac, toca el ícono de impresora en la esquina superior para enlazar cualquier impresora térmica compatible con ESC/POS (58mm o 80mm) vía Bluetooth Low Energy o red local.',
+    icon: QrCode,
   },
   {
     category: 'Transferencias',
@@ -67,9 +79,9 @@ const EXTENDED_FAQS = [
     icon: Gift,
   },
   {
-    category: 'App Móvil',
-    q: '¿Dónde descargo la app oficial?',
-    a: 'Rabbitty está disponible para iPhone en TestFlight / App Store en https://rabbitty.me/download, y también puedes acceder instantáneamente sin instalación desde la Web App en https://app.rabbitty.me.',
+    category: 'App Móvil & POS',
+    q: '¿Dónde descargo las apps oficiales?',
+    a: 'Rabbitty para clientes está disponible para iPhone en https://rabbitty.me/download, y Rabbitty POS para iPad/Mac está disponible en la App Store para gestión de caja y comandas en restaurantes.',
     icon: Smartphone,
   },
   {
@@ -85,7 +97,7 @@ export default function SupportPage() {
     {
       id: '1',
       sender: 'bunzy',
-      text: '¡Hola! 🐰 Soy Bunzy, tu asistente inteligente de soporte en Rabbitty. ¿En qué te puedo orientar hoy? Puedes preguntarme sobre tus Bunz, pagos con QR, comercios afiliados o cómo eliminar tu cuenta.',
+      text: '¡Hola! 🐰 Soy Bunzy, tu asistente inteligente de soporte en Rabbitty. ¿En qué te puedo orientar hoy? Puedes preguntarme sobre tus Bunz, pagos con QR, soporte para comercios y panel de afiliados, o cómo usar la terminal Rabbitty POS.',
       time: 'Ahora',
     },
   ]);

@@ -4,6 +4,7 @@ import { users, ownedBusinesses } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { parseTelegramUser, validateTelegramInitData } from '@/lib/telegramAuth';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
+import { sendEcosystemNotification } from '@/lib/push/notify';
 
 const ADMIN_TELEGRAM_IDS = (process.env.ADMIN_TELEGRAM_IDS || '798431743').split(',');
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -16,7 +17,19 @@ export async function PATCH(req: Request) {
     }
 
     const body = await req.json();
-    const { rewardPercentage, businessId, name, description, address, category, logoUrl } = body;
+    const {
+      rewardPercentage,
+      businessId,
+      name,
+      description,
+      address,
+      category,
+      logoUrl,
+      creditLimit,
+      creditUsed,
+      bunzBalance,
+      resetLowIncentiveAlert,
+    } = body;
 
     const ownerId = caller.id;
 
@@ -29,6 +42,10 @@ export async function PATCH(req: Request) {
       if (business && business.ownerId !== ownerId && caller.role !== 'ADMIN') {
         return NextResponse.json({ error: 'No autorizado para editar este negocio' }, { status: 403 });
       }
+    } else {
+      business = await db.query.ownedBusinesses.findFirst({
+        where: eq(ownedBusinesses.ownerId, ownerId),
+      });
     }
 
     const whereClause = businessId
@@ -45,6 +62,39 @@ export async function PATCH(req: Request) {
     if (address !== undefined) updateFields.address = String(address).trim();
     if (category !== undefined) updateFields.category = String(category).trim();
     if (logoUrl !== undefined) updateFields.logoUrl = String(logoUrl).trim();
+    if (creditLimit !== undefined && caller.role === 'ADMIN') updateFields.creditLimit = parseInt(creditLimit);
+    if (creditUsed !== undefined && caller.role === 'ADMIN') updateFields.creditUsed = parseInt(creditUsed);
+    if (bunzBalance !== undefined && caller.role === 'ADMIN') updateFields.bunzBalance = parseInt(bunzBalance);
+
+    // Si se recarga/modifica el crédito o se solicita el reset explícito,
+    // comprobar si el saldo restante supera el 15% (o si se fuerza reset) para eliminar lastLowIncentiveAlertAt
+    const nextLimit = creditLimit !== undefined ? parseInt(creditLimit) : business?.creditLimit || 0;
+    const nextUsed = creditUsed !== undefined ? parseInt(creditUsed) : business?.creditUsed || 0;
+    const isRechargeAction =
+      resetLowIncentiveAlert === true ||
+      creditLimit !== undefined ||
+      creditUsed !== undefined ||
+      bunzBalance !== undefined;
+
+    if (isRechargeAction && business) {
+      const remaining = nextLimit > 0 ? nextLimit - nextUsed : 0;
+      const ratio = nextLimit > 0 ? remaining / nextLimit : 1;
+
+      // Si el ratio recuperado vuelve a ser > 15%, o se solicitó reset, limpiar cooldown anti-spam
+      if (ratio > 0.15 || resetLowIncentiveAlert === true) {
+        let vData: Record<string, unknown> = {};
+        try {
+          if (business.verificationData) {
+            vData = JSON.parse(business.verificationData);
+          }
+        } catch {}
+
+        if ('lastLowIncentiveAlertAt' in vData) {
+          delete vData.lastLowIncentiveAlertAt;
+          updateFields.verificationData = JSON.stringify(vData);
+        }
+      }
+    }
 
     const [updated] = await db.update(ownedBusinesses)
       .set(updateFields)
@@ -148,6 +198,20 @@ export async function POST(req: Request) {
       verificationMethod: isGoogleVerified ? "google" : null,
       verificationData: isGoogleVerified ? JSON.stringify({ verified: true, claimedAt: new Date().toISOString() }) : null
     }).returning();
+
+    // Notificación Push & in-app al dueño del negocio
+    if (owner?.id) {
+      await sendEcosystemNotification({
+        userId: owner.id,
+        title: isGoogleVerified ? '🎉 ¡Tu Negocio está Aprobado en Rabbitty!' : '⏳ Registro de Negocio Recibido',
+        message: isGoogleVerified
+          ? `¡Felicitaciones! "${name}" ya está activo en Rabbitty y visible en el mapa para miles de usuarios.`
+          : `Hemos recibido el registro de "${name}". Tu perfil está en revisión y pronto estará activo en el feed.`,
+        type: 'AFFILIATE',
+        pushData: { businessId: business.id, status: business.status },
+        threadId: 'business_status',
+      });
+    }
 
     if (TELEGRAM_BOT_TOKEN) {
       for (const adminId of ADMIN_TELEGRAM_IDS) {

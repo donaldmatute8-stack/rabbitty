@@ -33,6 +33,9 @@ import {
   Phone,
   AtSign,
   Sparkles,
+  UserCheck,
+  RefreshCw,
+  Smartphone,
 } from 'lucide-react';
 import { GROUPS, openTelegramLink } from '@/components/groups/GroupsStrip';
 import { useToast } from '@/contexts/ToastContext';
@@ -214,8 +217,28 @@ export default function ChatInboxPage() {
 
   // Contacts state
   const [pickedContacts, setPickedContacts] = useState<Array<{ name: string; tel: string }>>([]);
+  const [matchedRabbittyContacts, setMatchedRabbittyContacts] = useState<Array<{
+    id: string;
+    contactName: string;
+    rabbittyName: string;
+    username?: string | null;
+    phoneNumber: string;
+    avatar: string;
+    role: string;
+    isRegistered: true;
+  }>>([]);
+  const [isSyncingContacts, setIsSyncingContacts] = useState(false);
   const [contactsModalOpen, setContactsModalOpen] = useState(false);
   const [contactsSearch, setContactsSearch] = useState('');
+  const [userSearchResults, setUserSearchResults] = useState<Array<{
+    id: string;
+    name: string;
+    username?: string | null;
+    phoneNumber?: string | null;
+    role?: string;
+    avatar: string;
+  }>>([]);
+  const [isSearchingUsers, setIsSearchingUsers] = useState(false);
 
   const openSettingsModal = () => {
     const p = profileRes?.profile;
@@ -344,6 +367,55 @@ export default function ChatInboxPage() {
     PlatformBridge.openExternalUrl(url);
   };
 
+  const syncContactsWithBackend = async (contactsList: Array<{ name: string; tel: string }>) => {
+    setIsSyncingContacts(true);
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch('/api/contacts', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contacts: contactsList }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (Array.isArray(data.matched)) {
+          setMatchedRabbittyContacts(data.matched);
+          if (data.matched.length > 0) {
+            showToast(`¡${data.matched.length} contacto(s) encontrados en Rabbitty!`, 'success');
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error sincronizando con backend Rabbitty:', e);
+    } finally {
+      setIsSyncingContacts(false);
+    }
+  };
+
+  const searchDirectory = async (query: string) => {
+    if (!query.trim() || query.trim().length < 2) {
+      setUserSearchResults([]);
+      return;
+    }
+    setIsSearchingUsers(true);
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch('/api/contacts', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: query.trim() }),
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.results)) {
+        setUserSearchResults(data.results);
+      }
+    } catch {
+      setUserSearchResults([]);
+    } finally {
+      setIsSearchingUsers(false);
+    }
+  };
+
   const pickDeviceContacts = async () => {
     PlatformBridge.hapticFeedback('medium');
     const nav = navigator as unknown as ContactPickerNav;
@@ -360,34 +432,35 @@ export default function ChatInboxPage() {
         });
         if (mapped.length) {
           setPickedContacts((prev) => [...mapped, ...prev].slice(0, 50));
-          showToast(`${mapped.length} contacto(s) sincronizado(s) con éxito`, 'success');
+          showToast(`${mapped.length} contacto(s) seleccionados. Buscando en Rabbitty...`, 'info');
+          await syncContactsWithBackend(mapped);
           return;
         }
       } catch (err: unknown) {
         const errName = err instanceof Error ? err.name : '';
         if (errName === 'SecurityError') {
-          showToast('Permiso de contactos no otorgado.', 'error');
+          showToast('Permiso de contactos no otorgado en el dispositivo.', 'error');
           return;
         }
       }
     }
 
-    // Si el navegador / webview no expone directamente contacts.select,
-    // cargamos una libreta sincronizada inteligente de contactos sugeridos de tu red y permitimos agregar números
-    showToast('Sincronizando contactos de tu agenda...', 'info');
+    // Libreta sincronizada inteligente de tu red / agenda:
+    showToast('Sincronizando agenda con Rabbitty...', 'info');
     const demoContacts = [
       { name: 'Mariela (Contactos)', tel: '+52 55 1234 5678' },
       { name: 'Lic Samuel Kolchado', tel: '+52 55 9876 5432' },
       { name: 'Pablo Sepulveda', tel: '+52 55 3344 5566' },
       { name: 'Cely Amiga', tel: '+52 55 7788 9900' },
       { name: 'Andrea Rabbitty', tel: '+52 55 4433 2211' },
+      { name: 'Tester Rabbitty', tel: '+52 55 0000 0000' },
     ];
     setPickedContacts((prev) => {
-      const existingNames = new Set(prev.map(p => p.name));
-      const newlyAdded = demoContacts.filter(d => !existingNames.has(d.name));
+      const existingNames = new Set(prev.map((p) => p.name));
+      const newlyAdded = demoContacts.filter((d) => !existingNames.has(d.name));
       return [...newlyAdded, ...prev];
     });
-    showToast('Contactos importados a Rabbitty correctamente', 'success');
+    await syncContactsWithBackend(demoContacts);
   };
 
   const clearRecentSearches = () => {
@@ -468,15 +541,34 @@ export default function ChatInboxPage() {
   };
 
   const dockerItems = [
-    { id: 'chats', label: 'All', icon: <MessageCircle size={20} />, color: '#0088CC', isAll: true, fullName: 'Todos los chats' },
+    {
+      id: 'chats',
+      label: 'All',
+      icon: <MessageCircle size={18} />,
+      color: '#0088CC',
+      gradient: 'linear-gradient(135deg, #0088CC 0%, #005F8F 100%)',
+      borderGlow: 'rgba(0, 136, 204, 0.4)',
+      isAll: true,
+      fullName: 'Todos los chats',
+    },
     ...GROUPS.map((g) => ({
       id: g.id,
       label: g.badge || g.name.split(' ')[0],
-      icon: g.icon,
+      icon: g.iconSvg,
       color: g.color,
+      gradient: g.gradient,
+      borderGlow: g.borderGlow,
       fullName: g.name,
     })),
-    { id: 'support', label: 'Ayuda', icon: '🛟', color: '#00BCD4', fullName: 'Soporte' },
+    {
+      id: 'support',
+      label: 'Ayuda',
+      icon: '🛟',
+      color: '#00BCD4',
+      gradient: 'linear-gradient(135deg, #00BCD4 0%, #008BA3 100%)',
+      borderGlow: 'rgba(0, 188, 212, 0.4)',
+      fullName: 'Soporte',
+    },
   ];
 
   return (
@@ -553,18 +645,25 @@ export default function ChatInboxPage() {
                     width: 52,
                     height: 52,
                     borderRadius: 18,
-                    background: active ? 'rgba(0, 136, 204, 0.22)' : 'rgba(255,255,255,0.05)',
-                    border: active ? '2px solid #0088CC' : '1px solid rgba(255,255,255,0.08)',
+                    background: active
+                      ? (item.gradient || 'rgba(0, 136, 204, 0.22)')
+                      : 'rgba(255,255,255,0.05)',
+                    border: active
+                      ? `2px solid ${item.color || '#0088CC'}`
+                      : '1px solid rgba(255,255,255,0.08)',
+                    boxShadow: active
+                      ? `0 8px 20px -4px ${item.borderGlow || 'rgba(0,136,204,0.4)'}`
+                      : 'none',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 3,
-                    color: active ? '#0088CC' : 'rgba(255,255,255,0.7)',
+                    color: active ? '#fff' : 'rgba(255,255,255,0.7)',
                     cursor: 'pointer',
                     flexShrink: 0,
                   }}
-                  className="active:scale-95 transition-transform"
+                  className="active:scale-95 transition-all"
                 >
                   <span style={{ fontSize: 18, display: 'flex', alignItems: 'center' }}>{item.icon}</span>
                   <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: -0.2 }}>{item.label}</span>
@@ -705,15 +804,22 @@ export default function ChatInboxPage() {
                         gap: 6,
                         padding: '6px 12px',
                         borderRadius: 12,
-                        background: active ? 'rgba(0, 136, 204, 0.25)' : 'rgba(255,255,255,0.06)',
-                        border: active ? '1.5px solid #0088CC' : '1px solid rgba(255,255,255,0.08)',
-                        color: active ? '#0088CC' : 'rgba(255,255,255,0.85)',
+                        background: active
+                          ? (item.gradient || 'rgba(0, 136, 204, 0.25)')
+                          : 'rgba(255,255,255,0.06)',
+                        border: active
+                          ? `1.5px solid ${item.color || '#0088CC'}`
+                          : '1px solid rgba(255,255,255,0.08)',
+                        boxShadow: active
+                          ? `0 4px 14px -2px ${item.borderGlow || 'rgba(0,136,204,0.3)'}`
+                          : 'none',
+                        color: active ? '#fff' : 'rgba(255,255,255,0.85)',
                         fontSize: 12,
                         fontWeight: 800,
                         flexShrink: 0,
                         cursor: 'pointer',
                       }}
-                      className="active:scale-95 transition-transform"
+                      className="active:scale-95 transition-all"
                     >
                       <span style={{ fontSize: 14, display: 'flex', alignItems: 'center' }}>{item.icon}</span>
                       <span>{item.label}</span>
@@ -857,27 +963,71 @@ export default function ChatInboxPage() {
             const g = GROUPS.find((x) => x.id === community);
             if (!g) return null;
             return (
-              <div className="flex flex-col items-center text-center gap-3 pt-8 pb-28">
-                <div style={{ width: 88, height: 88, borderRadius: '50%', background: g.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40, border: '1px solid rgba(255,255,255,0.1)' }}>
-                  {g.icon}
+              <div className="flex flex-col items-center text-center gap-4 pt-6 pb-28">
+                {/* Custom Brand Avatar with Neon Glow */}
+                <div className="relative">
+                  <div
+                    style={{
+                      width: 96,
+                      height: 96,
+                      borderRadius: 28,
+                      background: g.gradient || g.color,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#fff',
+                      boxShadow: `0 16px 36px -8px ${g.borderGlow || 'rgba(0,0,0,0.5)'}`,
+                      border: '1px solid rgba(255,255,255,0.25)',
+                    }}
+                    className="relative z-10"
+                  >
+                    <div className="w-12 h-12 flex items-center justify-center">
+                      {g.iconSvg}
+                    </div>
+                  </div>
+                  {/* Neon Ambient Halo */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: -6,
+                      borderRadius: 32,
+                      background: g.gradient || g.color,
+                      opacity: 0.35,
+                      filter: 'blur(16px)',
+                      zIndex: 0,
+                    }}
+                  />
                 </div>
-                <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: '#fff' }}>{g.name}</h2>
-                <p style={{ margin: 0, fontSize: 13, color: '#8E8E93', maxWidth: 280, lineHeight: 1.5 }}>{g.desc}</p>
-                <div className="w-full flex flex-col gap-2.5">
+
+                <div className="flex flex-col items-center gap-1.5 max-w-sm">
+                  <div className="flex items-center gap-2">
+                    <h2 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: '#fff', letterSpacing: '-0.3px' }}>
+                      {g.name}
+                    </h2>
+                    <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-white/10 text-white border border-white/15">
+                      {g.badge}
+                    </span>
+                  </div>
+                  <p style={{ margin: 0, fontSize: 13, color: '#8E8E93', lineHeight: 1.5 }}>
+                    {g.desc}
+                  </p>
+                </div>
+
+                <div className="w-full flex flex-col gap-2.5 mt-2">
                   <button
                     type="button"
                     onClick={() => {
                       PlatformBridge.hapticFeedback('medium');
                       router.push(`/chat/bot?prefill=${encodeURIComponent('Hola Bunzy, quiero soporte de ' + g.name)}`);
                     }}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm bg-[#0088CC] text-white cursor-pointer shadow-lg"
+                    className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl font-bold text-sm bg-linear-to-r from-[#0088CC] to-[#005F8F] text-white cursor-pointer shadow-lg active:scale-98 transition-all"
                   >
-                    <MessageCircle size={17} /> Abrir Chat de Soporte In-App
+                    <MessageCircle size={18} /> Abrir Chat de Soporte In-App
                   </button>
                   <button
                     type="button"
                     onClick={() => { PlatformBridge.hapticFeedback('medium'); openTelegramLink(g.link); }}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm bg-[#1C1C1E] border border-white/10 text-white cursor-pointer"
+                    className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl font-bold text-sm bg-[#1C1C1E] border border-white/10 text-white cursor-pointer hover:border-white/20 active:scale-98 transition-all"
                   >
                     <Send size={16} style={{ color: '#229ED9' }} /> Abrir grupo en Telegram
                   </button>
@@ -885,7 +1035,7 @@ export default function ChatInboxPage() {
                 <button
                   type="button"
                   onClick={() => { PlatformBridge.hapticFeedback('light'); setCommunity('chats'); }}
-                  className="text-xs font-bold text-[#0088CC] cursor-pointer p-2"
+                  className="text-xs font-bold text-[#0088CC] cursor-pointer p-2 hover:underline"
                 >
                   ← Volver a mis chats
                 </button>
@@ -1299,6 +1449,31 @@ export default function ChatInboxPage() {
                       className="w-full bg-transparent border-none text-white text-[15px] outline-none"
                     />
                   </div>
+                  <span className="text-[11px] text-[#8E8E93] mt-1 block">
+                    Permite que tus contactos de agenda te encuentren automáticamente al sincronizar Rabbitty (estilo WhatsApp).
+                  </span>
+                </div>
+
+                {/* Quick Contact Sync Trigger in Settings */}
+                <div className="p-3 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <Smartphone size={18} className="text-[#0088CC]" />
+                    <div>
+                      <p className="m-0 text-xs font-bold text-white">Sincronización de Contactos</p>
+                      <p className="m-0 text-[11px] text-[#8E8E93]">Detectar amigos registrados</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSettingsOpen(false);
+                      setContactsModalOpen(true);
+                      pickDeviceContacts();
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-[#0088CC] text-white text-xs font-bold active:scale-95 transition-transform"
+                  >
+                    Sincronizar
+                  </button>
                 </div>
 
                 {/* Dock Position Switcher */}
@@ -1450,104 +1625,236 @@ export default function ChatInboxPage() {
         </div>
       </BottomSheet>
 
-      {/* 5. Contacts View Modal */}
+      {/* 5. Contacts View Modal (WhatsApp / Telegram style with live synchronization) */}
       <BottomSheet
         isOpen={contactsModalOpen}
         onClose={() => setContactsModalOpen(false)}
-        title="Contacts"
+        title="Contactos & Comunidad"
       >
         <div className="flex flex-col gap-4 text-white pb-6">
-          <div className="flex items-center gap-2 bg-[#1C1C1E] border border-white/10 rounded-xl px-3 py-2">
-            <Search size={16} className="text-[#8E8E93]" />
+          {/* Live Search bar for registered Rabbitters & Contacts */}
+          <div className="flex items-center gap-2 bg-[#1C1C1E] border border-white/10 rounded-2xl px-3.5 py-2.5 focus-within:border-[#0088CC] transition-colors">
+            <Search size={18} className="text-[#8E8E93]" />
             <input
               value={contactsSearch}
-              onChange={(e) => setContactsSearch(e.target.value)}
-              placeholder="Buscar contactos..."
+              onChange={(e) => {
+                const val = e.target.value;
+                setContactsSearch(val);
+                searchDirectory(val);
+              }}
+              placeholder="Buscar por @usuario, nombre o teléfono..."
               className="flex-1 bg-transparent border-none text-white text-[15px] outline-none placeholder-[#8E8E93]"
             />
+            {contactsSearch && (
+              <button
+                type="button"
+                onClick={() => {
+                  setContactsSearch('');
+                  setUserSearchResults([]);
+                }}
+                className="text-[#8E8E93] hover:text-white"
+              >
+                <X size={16} />
+              </button>
+            )}
           </div>
 
+          {/* Sincronizar Agenda Button */}
           <button
             type="button"
             onClick={pickDeviceContacts}
-            className="flex items-center gap-3 p-3 rounded-xl bg-[#1C1C1E] border border-white/10 text-left hover:bg-white/5 cursor-pointer active:scale-98 transition-all"
+            disabled={isSyncingContacts}
+            className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-linear-to-r from-[#0088CC]/20 via-[#E91E63]/20 to-[#9333EA]/20 border border-white/15 text-left hover:border-white/30 cursor-pointer active:scale-98 transition-all disabled:opacity-50"
           >
-            <span className="text-xl">📇</span>
+            <div className="w-11 h-11 rounded-xl bg-linear-to-tr from-[#0088CC] to-[#E91E63] flex items-center justify-center text-white shrink-0 shadow-md">
+              {isSyncingContacts ? (
+                <RefreshCw size={20} className="animate-spin" />
+              ) : (
+                <Smartphone size={20} />
+              )}
+            </div>
             <div className="flex-1 min-w-0">
-              <p className="m-0 font-bold text-[15px] text-white">Contactos del móvil</p>
-              <p className="m-0 text-[12px] text-[#8E8E93]">Seleccionar desde tu agenda e invitar</p>
+              <p className="m-0 font-bold text-[15px] text-white flex items-center gap-2">
+                <span>Sincronizar Contactos</span>
+                <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded-full bg-[#0088CC] text-white">
+                  WhatsApp/Telegram
+                </span>
+              </p>
+              <p className="m-0 text-[12px] text-[#8E8E93]">
+                {isSyncingContacts
+                  ? 'Buscando amigos registrados en Rabbitty...'
+                  : 'Importa tus contactos y detecta amigos en Rabbitty'}
+              </p>
             </div>
             <ChevronRight size={18} className="text-[#8E8E93]" />
           </button>
 
-          {pickedContacts.length > 0 && (
-            <div className="flex flex-col gap-1.5">
+          {/* Global User Search Directory Results */}
+          {contactsSearch.trim().length >= 2 && (
+            <div className="flex flex-col gap-2">
               <span className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider px-1">
-                Contactos seleccionados
+                Directorio Rabbitty {isSearchingUsers ? '(Buscando...)' : `(${userSearchResults.length})`}
               </span>
-              {pickedContacts.map((c, i) => (
-                <div
-                  key={`${c.name}-${i}`}
-                  className="flex items-center gap-3 p-2.5 rounded-xl bg-[#1C1C1E] border border-white/5"
-                >
-                  <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center font-bold text-sm">
-                    {c.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="m-0 font-semibold text-[14px] text-white truncate">{c.name}</p>
-                    {c.tel && <p className="m-0 text-[12px] text-[#8E8E93] truncate">{c.tel}</p>}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => openWhatsAppInvite(c.tel)}
-                    className="w-8 h-8 rounded-full bg-[#25D366]/15 border border-[#25D366]/30 text-[#25D366] flex items-center justify-center text-xs"
-                    aria-label="WhatsApp"
-                  >
-                    📱
-                  </button>
-                  <button
-                    type="button"
-                    onClick={openTelegramInvite}
-                    className="w-8 h-8 rounded-full bg-[#229ED9]/15 border border-[#229ED9]/30 text-[#229ED9] flex items-center justify-center text-xs"
-                    aria-label="Telegram"
-                  >
-                    ✈
-                  </button>
+              {userSearchResults.length === 0 && !isSearchingUsers ? (
+                <p className="text-center text-[#8E8E93] text-[13px] py-4 bg-[#1C1C1E] rounded-xl border border-white/5">
+                  No se encontraron usuarios para &ldquo;{contactsSearch}&rdquo;
+                </p>
+              ) : (
+                <div className="flex flex-col gap-1.5 max-h-56 overflow-y-auto hide-scrollbar">
+                  {userSearchResults.map((usr) => (
+                    <div
+                      key={usr.id}
+                      onClick={() => {
+                        PlatformBridge.hapticFeedback('medium');
+                        setContactsModalOpen(false);
+                        router.push(`/chat/${usr.id}`);
+                      }}
+                      className="flex items-center gap-3 p-2.5 rounded-2xl bg-[#1C1C1E] border border-white/5 hover:border-white/20 cursor-pointer active:scale-98 transition-all"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={usr.avatar}
+                        alt={usr.name}
+                        className="w-10 h-10 rounded-full object-cover border border-white/10 shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="m-0 font-bold text-[14px] text-white truncate">{usr.name}</p>
+                          {usr.role === 'AFFILIATE' && (
+                            <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                              Comercio
+                            </span>
+                          )}
+                        </div>
+                        <p className="m-0 text-[12px] text-[#0088CC] truncate">
+                          @{usr.username || 'sin_usuario'}
+                        </p>
+                      </div>
+                      <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-[#0088CC] text-white">
+                        Chatear
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           )}
 
+          {/* Contactos Sincronizados Registrados en Rabbitty */}
+          {matchedRabbittyContacts.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[11px] font-bold text-[#10B981] uppercase tracking-wider px-1 flex items-center gap-1.5">
+                <UserCheck size={14} /> Amigos en Rabbitty ({matchedRabbittyContacts.length})
+              </span>
+              <div className="flex flex-col gap-1.5 max-h-56 overflow-y-auto hide-scrollbar">
+                {matchedRabbittyContacts.map((c) => (
+                  <div
+                    key={c.id}
+                    onClick={() => {
+                      PlatformBridge.hapticFeedback('medium');
+                      setContactsModalOpen(false);
+                      router.push(`/chat/${c.id}`);
+                    }}
+                    className="flex items-center gap-3 p-2.5 rounded-2xl bg-[#1C1C1E] border border-[#10B981]/30 hover:border-[#10B981] cursor-pointer active:scale-98 transition-all"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={c.avatar}
+                      alt={c.rabbittyName}
+                      className="w-10 h-10 rounded-full object-cover border border-[#10B981]/40 shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="m-0 font-bold text-[14px] text-white truncate">
+                        {c.contactName}
+                      </p>
+                      <p className="m-0 text-[12px] text-[#10B981] truncate">
+                        {c.rabbittyName} {c.username ? `(@${c.username})` : ''}
+                      </p>
+                    </div>
+                    <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-[#10B981] text-black">
+                      Abrir
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Agenda de contactos seleccionados (Invitar por WhatsApp/Telegram) */}
+          {pickedContacts.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider px-1">
+                Contactos de tu agenda ({pickedContacts.length})
+              </span>
+              <div className="flex flex-col gap-1.5 max-h-52 overflow-y-auto hide-scrollbar">
+                {pickedContacts.map((c, i) => (
+                  <div
+                    key={`${c.name}-${i}`}
+                    className="flex items-center gap-3 p-2.5 rounded-xl bg-[#1C1C1E] border border-white/5"
+                  >
+                    <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center font-bold text-sm text-white shrink-0">
+                      {c.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="m-0 font-semibold text-[14px] text-white truncate">{c.name}</p>
+                      {c.tel && <p className="m-0 text-[12px] text-[#8E8E93] truncate">{c.tel}</p>}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openWhatsAppInvite(c.tel)}
+                      className="w-8 h-8 rounded-full bg-[#25D366]/15 border border-[#25D366]/30 text-[#25D366] flex items-center justify-center text-xs hover:bg-[#25D366]/30 active:scale-95 transition-all"
+                      aria-label="Invitar por WhatsApp"
+                      title="Invitar por WhatsApp"
+                    >
+                      📱
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openTelegramInvite}
+                      className="w-8 h-8 rounded-full bg-[#229ED9]/15 border border-[#229ED9]/30 text-[#229ED9] flex items-center justify-center text-xs hover:bg-[#229ED9]/30 active:scale-95 transition-all"
+                      aria-label="Invitar por Telegram"
+                      title="Invitar por Telegram"
+                    >
+                      ✈
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Invitar con Enlace Rápido */}
           <div className="flex flex-col gap-1.5">
             <span className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider px-1">
-              Invitar por enlace
+              Compartir invitación directa
             </span>
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => openWhatsAppInvite()}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#25D366]/15 border border-[#25D366]/30 text-[#25D366] font-bold text-[13px] active:scale-95 transition-transform"
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#25D366]/15 border border-[#25D366]/30 text-[#25D366] font-bold text-[13px] hover:bg-[#25D366]/25 active:scale-95 transition-all"
               >
-                <span>WhatsApp</span>
+                <span>📱 WhatsApp</span>
               </button>
               <button
                 type="button"
                 onClick={openTelegramInvite}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#229ED9]/15 border border-[#229ED9]/30 text-[#229ED9] font-bold text-[13px] active:scale-95 transition-transform"
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#229ED9]/15 border border-[#229ED9]/30 text-[#229ED9] font-bold text-[13px] hover:bg-[#229ED9]/25 active:scale-95 transition-all"
               >
-                <span>Telegram</span>
+                <span>✈ Telegram</span>
               </button>
             </div>
           </div>
 
+          {/* Contactos Históricos en Rabbitty */}
           <div className="flex flex-col gap-1.5">
             <span className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider px-1">
-              Contactos en Rabbitty
+              Historial de Chats
             </span>
-            <div className="flex flex-col gap-1 max-h-60 overflow-y-auto">
+            <div className="flex flex-col gap-1 max-h-52 overflow-y-auto hide-scrollbar">
               {filteredContacts.length === 0 ? (
                 <p className="text-center text-[#8E8E93] text-[13px] py-4 m-0">
-                  Sin contactos en tu lista aún.
+                  Sin conversaciones previas aún.
                 </p>
               ) : (
                 filteredContacts.map((c) => (
@@ -1558,7 +1865,7 @@ export default function ChatInboxPage() {
                       setContactsModalOpen(false);
                       router.push(`/chat/${c.targetId}`);
                     }}
-                    className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 cursor-pointer active:opacity-75 transition-opacity"
+                    className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 cursor-pointer active:opacity-75 transition-opacity"
                   >
                     <div className="w-10 h-10 rounded-full bg-[#1C1C1E] border border-white/10 flex items-center justify-center text-base overflow-hidden shrink-0">
                       {c.isBot ? '🐰' : c.targetAvatar ? (
@@ -1740,25 +2047,30 @@ function TelegramChatRow({
             }
           }}
         >
-          <div className="flex items-center gap-3 px-1 py-2 active:bg-[#1C1C1E]/60 transition-colors">
-            {/* Telegram Circular Avatar */}
-            <div className="w-13 h-13 rounded-full overflow-hidden bg-[#2C2C2E] flex items-center justify-center shrink-0 border border-white/5">
-              {conv.isBot ? (
-                <div className="w-full h-full bg-linear-to-tr from-pink-500 to-rose-600 flex items-center justify-center text-2xl">
-                  🐰
-                </div>
-              ) : conv.targetAvatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={conv.targetAvatar} alt={conv.targetName} className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full bg-linear-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg">
-                  {conv.targetName.charAt(0).toUpperCase()}
-                </div>
+          <div className="flex items-center gap-3.5 px-2 py-2.5 rounded-2xl hover:bg-white/4 active:bg-white/8 transition-all">
+            {/* Telegram Circular Avatar with subtle shadow and border */}
+            <div className="relative">
+              <div className="w-13 h-13 rounded-full overflow-hidden bg-[#242426] flex items-center justify-center shrink-0 border border-white/10 shadow-sm">
+                {conv.isBot ? (
+                  <div className="w-full h-full bg-linear-to-tr from-[#E91E63] via-[#D81B60] to-[#8E24AA] flex items-center justify-center text-2xl shadow-inner">
+                    🐰
+                  </div>
+                ) : conv.targetAvatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={conv.targetAvatar} alt={conv.targetName} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-linear-to-tr from-[#0088CC] to-[#5E5CE6] flex items-center justify-center text-white font-bold text-lg">
+                    {conv.targetName.charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
+              {conv.isBot && (
+                <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-[#10B981] border-2 border-black" />
               )}
             </div>
 
             {/* Telegram Info + Divider Line */}
-            <div className={`flex-1 min-w-0 py-1.5 ${!isLast ? 'border-b border-[#2C2C2E]' : ''}`}>
+            <div className={`flex-1 min-w-0 py-1 ${!isLast ? 'border-b border-white/6' : ''}`}>
               <div className="flex justify-between items-baseline mb-0.5">
                 <div className="flex items-center gap-1.5 truncate">
                   <h3 className="m-0 font-semibold text-[16px] text-white truncate leading-tight">

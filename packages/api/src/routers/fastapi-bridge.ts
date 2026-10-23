@@ -160,8 +160,22 @@ export const fastapiBridgeRouter = router({
       const [business] = await ctx.coreDb.select().from(ownedBusinesses).where(eq(ownedBusinesses.id, input.businessId));
       if (!business) throw new TRPCError({ code: "NOT_FOUND", message: "Negocio no encontrado" });
 
+      let vData: Record<string, unknown> = {};
+      try {
+        if (business.verificationData) {
+          vData = JSON.parse(business.verificationData);
+        }
+      } catch {}
+
+      if ('lastLowIncentiveAlertAt' in vData) {
+        delete vData.lastLowIncentiveAlertAt;
+      }
+
       await ctx.coreDb.update(ownedBusinesses)
-        .set({ bunzBalance: sql`${ownedBusinesses.bunzBalance} + ${input.amount}` })
+        .set({
+          bunzBalance: sql`${ownedBusinesses.bunzBalance} + ${input.amount}`,
+          verificationData: JSON.stringify(vData),
+        })
         .where(eq(ownedBusinesses.id, input.businessId));
 
       return { success: true, bunzBalance: business.bunzBalance + input.amount };

@@ -8,6 +8,7 @@ import { sendToOracle } from '@/lib/oracle-client';
 import { parseTelegramUser, validateTelegramInitData } from '@/lib/telegramAuth';
 import { recordLedgerTransaction, findLedgerEntry } from '@/lib/ledgerHelper';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
+import { sendEcosystemNotification } from '@/lib/push/notify';
 import crypto from 'crypto';
 import { z } from 'zod';
 
@@ -201,6 +202,65 @@ export async function POST(req: NextRequest) {
       purchaseAmount: fiatAmount,
       receiptHash,
     });
+
+    // Push & In-app Notification para el cliente
+    await sendEcosystemNotification({
+      userId: customer.id,
+      title: `🎉 ¡Ganaste ${bunzReward.toLocaleString()} Bunz! 🐰`,
+      message: `Tu compra de $${fiatAmount.toLocaleString()} MXN en ${business.name} te generó ${bunzReward.toLocaleString()} Bunz.`,
+      type: "REWARD",
+      route: "/profile/wallet",
+      pushData: { businessId: business.id, fiatAmount, bunzReward },
+      threadId: "rewards",
+    });
+
+    // Check if business credit limit is running low (< 15% remaining) con guard anti-spam de 24h
+    if (business.creditLimit > 0 && business.ownerId) {
+      const remainingCredit = business.creditLimit - ((business.creditUsed || 0) + bunzReward);
+      const ratio = remainingCredit / business.creditLimit;
+      if (ratio <= 0.15) {
+        let shouldSendAlert = true;
+        let vData: Record<string, unknown> = {};
+        try {
+          if (business.verificationData) {
+            vData = JSON.parse(business.verificationData);
+            const lastAlert = vData.lastLowIncentiveAlertAt ? Number(vData.lastLowIncentiveAlertAt) : 0;
+            // Cooldown de 24 horas para no spamear al dueño
+            const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+            if (Date.now() - lastAlert < TWENTY_FOUR_HOURS_MS) {
+              shouldSendAlert = false;
+            }
+          }
+        } catch {}
+
+        if (shouldSendAlert) {
+          // Enviar push y alerta al dueño del negocio
+          await sendEcosystemNotification({
+            userId: business.ownerId,
+            title: `⚠️ Saldo bajo de recompensas - ${business.name}`,
+            message: `Te quedan solo ${remainingCredit.toLocaleString()} Bunz (${Math.round(ratio * 100)}%) para premiar a tus clientes. Recarga desde tu panel.`,
+            type: "AFFILIATE",
+            route: "/business",
+            pushData: { businessId: business.id, remainingCredit, ratio },
+            threadId: "business_alerts",
+          });
+
+          // Guardar timestamp de la alerta enviada
+          try {
+            await db.update(ownedBusinesses)
+              .set({
+                verificationData: JSON.stringify({
+                  ...vData,
+                  lastLowIncentiveAlertAt: Date.now(),
+                }),
+              })
+              .where(eq(ownedBusinesses.id, business.id));
+          } catch (updateErr) {
+            console.warn('[LOW_INCENTIVE_ALERT_TIMESTAMP_ERROR]', updateErr);
+          }
+        }
+      }
+    }
 
     // Telegram Bot Push Notification (EARN Event)
     const activeBotToken = process.env.TELEGRAM_BOT_TOKEN;

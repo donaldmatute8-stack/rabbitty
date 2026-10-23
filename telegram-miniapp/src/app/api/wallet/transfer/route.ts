@@ -171,7 +171,7 @@ export async function POST(req: NextRequest) {
         await sendPushToUsers([targetUser.id], {
           title: "¡Recibiste Bunz! 🐰✨",
           body: `${caller.username ? `@${caller.username}` : "Un amigo"} te envió ${bunzAmount} BUNZ${cleanNote ? `: "${cleanNote}"` : "."}`,
-          data: { type: "TRANSFER", amount: bunzAmount },
+          data: { type: "TRANSFER", amount: bunzAmount, route: "/profile/wallet", link: "/profile/wallet" },
           threadId: "transfers",
         });
       } catch (pushError) {

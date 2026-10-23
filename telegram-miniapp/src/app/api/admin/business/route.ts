@@ -5,6 +5,7 @@ import { users, ownedBusinesses, webSessions } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import crypto from 'crypto';
 import { getVerifiedAdminId, isAdminAllowed } from '@/lib/adminAuth';
+import { sendEcosystemNotification } from '@/lib/push/notify';
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Business not found' }, { status: 404 });
   }
 
-  let existingVerificationData: any = {};
+  let existingVerificationData: Record<string, unknown> = {};
   try {
     if (currentBiz.verificationData) {
       existingVerificationData = JSON.parse(currentBiz.verificationData);
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest) {
     where: eq(users.id, updated.ownerId),
   });
 
-  const targetEmail = owner?.email || existingVerificationData?.email || 'iaherrerav10@gmail.com';
+  const targetEmail: string = String(owner?.email || existingVerificationData?.email || 'iaherrerav10@gmail.com');
 
   let magicUrl = 'https://admin.rabbitty.me/login';
   if (owner?.id) {
@@ -198,6 +199,19 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Notificación Push & In-App al dueño del negocio
+    if (owner?.id) {
+      await sendEcosystemNotification({
+        userId: owner.id,
+        title: `🎉 ¡Negocio Aprobado: ${updated.name}!`,
+        message: `Tu comercio ya está activo en Rabbitty. Tus clientes ya pueden escanear y ganar Bunz.`,
+        type: 'AFFILIATE',
+        route: '/business',
+        pushData: { businessId: updated.id, status: 'APPROVED' },
+        threadId: 'business_status',
+      });
+    }
+
     // Notificación vía Correo Electrónico
     if (targetEmail) {
       try {
@@ -215,6 +229,19 @@ export async function POST(req: NextRequest) {
   }
 
   if (status === 'REJECTED') {
+    // Notificación Push & In-App al dueño del negocio
+    if (owner?.id) {
+      await sendEcosystemNotification({
+        userId: owner.id,
+        title: `⚠️ Solicitud de Negocio: ${updated.name}`,
+        message: `Tu solicitud necesita ajustes para ser aprobada. Revisa los detalles en el soporte.`,
+        type: 'AFFILIATE',
+        route: '/support',
+        pushData: { businessId: updated.id, status: 'REJECTED' },
+        threadId: 'business_status',
+      });
+    }
+
     // Notificación Telegram si aplica
     if (owner?.telegramId && TELEGRAM_BOT_TOKEN) {
       const message =

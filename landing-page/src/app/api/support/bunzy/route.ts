@@ -29,8 +29,23 @@ const KNOWLEDGE_BASE: KnowledgeItem[] = [
   },
   {
     category: 'affiliates',
-    keywords: ['afiliar', 'afiliado', 'afiliados', 'restaurante', 'cafeteria', 'mi negocio', 'sumar mi local', 'pos', 'terminal restaurante', 'vender con rabbitty'],
-    answer: '🏢 **Afiliar tu comercio a Rabbitty:**\n\n• Únete a los negocios de especialidad que premian la lealtad de sus clientes.\n• Te entregamos la terminal Rabbitty POS en iPad lista para operar y tu kit de bienvenida con habladores de mesa QR para tus clientes.\n• Puedes iniciar tu registro en https://rabbitty.me/affiliates o escribir directamente a nuestro canal de soporte en Telegram **@rabbittyhub**.',
+    keywords: ['afiliar', 'afiliado', 'afiliados', 'restaurante', 'cafeteria', 'mi negocio', 'sumar mi local', 'pos', 'terminal restaurante', 'vender con rabbitty', 'alta negocio'],
+    answer: '🏢 **Afiliar tu comercio a Rabbitty:**\n\n• Premia el consumo de tus clientes y atrae comensales recurrentes.\n• Recibes acceso a **Rabbitty POS** (en iPad o Mac) y tu kit oficial de bienvenida con material QR para mostrador y mesas.\n• Inicia tu registro en https://rabbitty.me/affiliates o contáctanos por Telegram en **@rabbittyhub**.',
+  },
+  {
+    category: 'affiliate_admin',
+    keywords: ['panel admin', 'admin afiliados', 'dashboard negocio', 'login admin', 'como entro al admin', 'acceso comercio', 'gestionar negocio', 'ver ventas comercio', 'cambiar porcentaje'],
+    answer: '💼 **Panel de Administración para Afiliados:**\n\n• **Acceso web:** Ingresa a https://admin.rabbitty.me con tu correo o número de teléfono registrado.\n• **Funcionalidades:** Desde el panel puedes ajustar el porcentaje de recompensa Bunz (2% a 50%), ver métricas de comensales, historial de tickets emitidos, gestionar personal y descargar el Kit de Impresión oficial en PDF.\n• **Acceso 1-Clic:** También puedes escanear el código QR de la pantalla de login desde tu app Rabbitty en tu celular.',
+  },
+  {
+    category: 'pos_hardware',
+    keywords: ['impresora', 'impresora termica', 'bluetooth', 'pos-58', 'pos-80', 'tickets no imprimen', 'conectar impresora', 'hardware pos'],
+    answer: '🖨️ **Soporte de Impresoras Térmicas y Hardware POS:**\n\n• **Modelos compatibles:** Impresoras térmicas de 58mm y 80mm con protocolo ESC/POS vía Bluetooth Low Energy (BLE) o red local.\n• **Conexión:** En tu terminal Rabbitty POS, toca el botón de impresora arriba a la derecha para emparejar tu dispositivo.\n• **Recomendación:** Si la impresora no aparece en el escaneo, apágala 5 segundos, enciéndela y verifica que el Bluetooth del iPad esté activo.',
+  },
+  {
+    category: 'pos_cash_drop',
+    keywords: ['corte de caja', 'arqueo', 'retiro de efectivo', 'gaveta', 'sangria de caja', 'cierre de turno'],
+    answer: '💵 **Corte de Caja y Retiro de Efectivo en Rabbitty POS:**\n\n• Toca el botón **"Corte de Caja"** en la barra superior de la terminal POS.\n• Podrás ver en tiempo real el desglose de: Efectivo cobrado hoy, retiros realizados y el saldo neto que debe haber físicamente en gaveta.\n• Presiona **"Imprimir Ticket de Corte Actual"** para generar el comprobante físico con firmas de cajero y gerencia.',
   },
   {
     category: 'rabbitters',
@@ -40,7 +55,7 @@ const KNOWLEDGE_BASE: KnowledgeItem[] = [
   {
     category: 'download',
     keywords: ['descargar', 'app store', 'testflight', 'ios', 'iphone', 'bajar app', 'donde descargo', 'link descarga'],
-    answer: '📲 **Acceso y descarga de Rabbitty:**\n\n• **iOS / TestFlight:** Puedes descargar la versión nativa para iPhone mediante el enlace oficial en https://rabbitty.me/download.\n• **Web App / Telegram Mini App:** También puedes usarla al instante sin instalar nada entrando a https://app.rabbitty.me o desde nuestro bot en Telegram.',
+    answer: '📲 **Acceso y descarga de Rabbitty:**\n\n• **iOS / TestFlight:** Puedes descargar la versión nativa para iPhone mediante el enlace oficial en https://rabbitty.me/download.\n• **Rabbitty POS:** Para iPad y Mac disponible en App Store.\n• **Web App / Telegram Mini App:** También puedes usarla al instante sin instalar nada entrando a https://app.rabbitty.me o desde nuestro bot en Telegram.',
   },
   {
     category: 'transfers',
@@ -54,11 +69,38 @@ const KNOWLEDGE_BASE: KnowledgeItem[] = [
   },
 ];
 
+const ipRateMap = new Map<string, { count: number; resetAt: number }>();
+
 export async function POST(req: Request) {
   try {
+    // 1. Rate Limiting por IP (Ventana deslizante de 20 preguntas por minuto)
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    const now = Date.now();
+    const entry = ipRateMap.get(ip);
+
+    if (entry && entry.resetAt > now) {
+      if (entry.count >= 20) {
+        return NextResponse.json(
+          { reply: '⚠️ Has alcanzado el límite de preguntas por minuto. Por favor espera un momento antes de consultar nuevamente a Bunzy.' },
+          { status: 429, headers: { 'Retry-After': '60' } }
+        );
+      }
+      entry.count += 1;
+    } else {
+      ipRateMap.set(ip, { count: 1, resetAt: now + 60_000 });
+    }
+
     const { query } = (await req.json()) as { query?: string };
     if (!query || typeof query !== 'string') {
       return NextResponse.json({ error: 'Pregunta requerida' }, { status: 400 });
+    }
+
+    // 2. Longitud máxima para prevenir desbordamientos o payloads maliciosos
+    if (query.trim().length > 500) {
+      return NextResponse.json(
+        { reply: 'Tu consulta es muy extensa. Por favor escribe una pregunta más concisa o escríbenos a support@rabbitty.me.' },
+        { status: 400 }
+      );
     }
 
     const clean = query.toLowerCase().trim();

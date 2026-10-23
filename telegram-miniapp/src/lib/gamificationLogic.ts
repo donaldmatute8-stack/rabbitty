@@ -2,6 +2,7 @@ import { db } from '@/db';
 import { users, hatTricks, userHatTricks } from '@/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { recordLedgerTransaction } from '@/lib/ledgerHelper';
+import { sendEcosystemNotification } from '@/lib/push/notify';
 
 /**
  * Otorgar Hops a un usuario y verificar si subió de nivel.
@@ -28,6 +29,8 @@ export async function awardHops(userId: string, isNewBusiness: boolean) {
       }
     }
 
+    const leveledUp = newLevelId !== user.levelId;
+
     await db.update(users)
       .set({
         hops: sql`${users.hops} + ${hopsToAward}`,
@@ -35,7 +38,21 @@ export async function awardHops(userId: string, isNewBusiness: boolean) {
       })
       .where(eq(users.id, userId));
 
-    return { awardedHops: hopsToAward, newTotalHops: newTotalHops, newLevelId, leveledUp: newLevelId !== user.levelId };
+    if (leveledUp && newLevelId) {
+      const reachedLevel = sortedLevels.find(l => l.id === newLevelId);
+      const levelName = reachedLevel?.name || 'Nuevo Nivel';
+      await sendEcosystemNotification({
+        userId,
+        title: `🏆 ¡Subiste al Nivel ${levelName}!`,
+        message: `¡Tu Madriguera ha evolucionado! Con ${newTotalHops} Hops desbloqueaste un multiplicador de ${reachedLevel?.bunzMultiplier || 1}x en recompensas.`,
+        type: 'MADRIGUERA',
+        route: '/profile/gamification',
+        pushData: { newLevelId, newTotalHops, levelName },
+        threadId: 'gamification',
+      });
+    }
+
+    return { awardedHops: hopsToAward, newTotalHops: newTotalHops, newLevelId, leveledUp };
   } catch (error) {
     console.error('Error awarding Hops:', error);
   }
@@ -126,6 +143,17 @@ export async function evaluateHatTricks(userId: string, actionContext: { type: s
               tx
             );
           }
+
+          // Notificar al usuario misión completada
+          await sendEcosystemNotification({
+            userId,
+            title: `🎩 ¡Misión Completada: ${trick.title}!`,
+            message: `Ganaste +${trick.rewardHops} Hops${trick.rewardBunz > 0 ? ` y ${trick.rewardBunz} Bunz` : ''}. ¡Sigue conquistando la ciudad!`,
+            type: 'HOPS',
+            route: '/profile/gamification',
+            pushData: { trickId: trick.id, rewardHops: trick.rewardHops, rewardBunz: trick.rewardBunz },
+            threadId: 'missions',
+          });
         }
       });
     }
