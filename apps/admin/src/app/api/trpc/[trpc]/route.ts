@@ -28,7 +28,7 @@ const handler = async (req: Request) => {
       }
 
       const headerBranchId = req.headers.get("x-branch-id");
-      let activeBranchId = staffBranchId || (headerBranchId && headerBranchId !== "b1" ? headerBranchId : null);
+      let activeBranchId = (headerBranchId && headerBranchId !== "b1" ? headerBranchId : null) || staffBranchId;
 
       if (!activeBranchId) {
         const [firstBranch] = await restaurantDb.select({ id: branches.id }).from(branches).limit(1);

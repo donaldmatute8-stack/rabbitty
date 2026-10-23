@@ -580,21 +580,26 @@ export const posRouter = router({
         });
       }
 
-      const calculatedTax = Math.round(calculatedSubtotal * 0.16 * 100) / 100;
-      const originalTotal = calculatedSubtotal + calculatedTax;
-      let finalAmount = originalTotal;
+      // Precios de menú en México tienen el IVA incluido (precios redondos)
+      const taxRate = 0.16;
+      let originalTotal = Math.round(calculatedSubtotal * 100) / 100;
       let calculatedDiscount = 0;
+      let finalAmount = originalTotal;
 
       if (input.discountPercent && input.discountPercent > 0) {
-        calculatedDiscount = (input.discountPercent / 100) * originalTotal;
+        calculatedDiscount = Math.round(((input.discountPercent / 100) * originalTotal) * 100) / 100;
         finalAmount = Math.max(0, originalTotal - calculatedDiscount);
       }
 
+      // Desglose fiscal exacto: Base = Total / 1.16, IVA = Total - Base
+      const calculatedBaseSubtotal = Math.round((finalAmount / (1 + taxRate)) * 100) / 100;
+      const calculatedTax = Math.round((finalAmount - calculatedBaseSubtotal) * 100) / 100;
+
       await ctx.restaurantDb.update(orders).set({
-        subtotal: calculatedSubtotal,
+        subtotal: calculatedBaseSubtotal,
         tax: calculatedTax,
         discount: calculatedDiscount,
-        total: originalTotal,
+        total: finalAmount,
       }).where(eq(orders.id, order.id));
 
       // 3. Delegate to payOrder logic (insert payment, deduct inventory, trigger Bunz and CRM)
@@ -604,6 +609,7 @@ export const posRouter = router({
         amount: finalAmount,
         verificationMethod: "CASHIER_CONFIRMED",
       }).returning();
+
 
       await ctx.restaurantDb.update(orders).set({ status: "COMPLETED" }).where(eq(orders.id, order.id));
 
