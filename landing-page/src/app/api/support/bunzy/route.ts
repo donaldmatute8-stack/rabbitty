@@ -1,45 +1,56 @@
 import { NextResponse } from 'next/server';
 
-const KNOWLEDGE_BASE: { keywords: string[]; answer: string }[] = [
+interface KnowledgeItem {
+  keywords: string[];
+  answer: string;
+  category: string;
+}
+
+const KNOWLEDGE_BASE: KnowledgeItem[] = [
   {
-    keywords: ['que son los bunz', 'que es un bunz', 'para que sirven los bunz', 'explicame los bunz'],
-    answer: 'Los Bunz son la moneda digital exclusiva del ecosistema Rabbitty. Sirven para recibir recompensas automáticas al consumir en cafeterías y restaurantes afiliados y usarlos como pago real en tus siguientes visitas.',
+    category: 'bunz',
+    keywords: ['que son los bunz', 'que es un bunz', 'para que sirven los bunz', 'explicame los bunz', 'bunz', 'puntos', 'moneda'],
+    answer: '🪙 **Los Bunz son la moneda de recompensas oficial de Rabbitty.**\n\n• **¿Cómo funcionan?** Cada vez que pagas en una cafetería, bar o restaurante afiliado mostrando tu Rabbitty Code (QR), acumulas un porcentaje directo en Bunz (por ejemplo, el 10% o 15% de tu consumo).\n• **¿Para qué sirven?** Los Bunz acumulados tienen valor real dentro del ecosistema y los puedes usar para pagar cuentas futuras, invitar amigos o canjear productos en comercios de la red.\n• **¿Caducan?** No, en cuentas activas tus Bunz se preservan siempre.',
   },
   {
-    keywords: ['ganar', 'acumular', 'obtener', 'como gano'],
-    answer: 'Ganas Bunz de forma inmediata cada vez que pagas en un comercio participante. Solo muestra tu Rabbitty Code (QR) o proporciona tu teléfono en caja al pagar tu cuenta en locales afiliados.',
+    category: 'earnings',
+    keywords: ['como gano', 'ganar bunz', 'acumular', 'obtener bunz', 'recompensas', 'cashback', 'porcentaje'],
+    answer: '🎉 **Ganar Bunz es automático:**\n\n1. Visita cualquier comercio afiliado de la red Rabbitty.\n2. Al momento de pedir tu cuenta o pagar en barra, dile al barista/cajero que tienes Rabbitty.\n3. Abre tu app y presiona **"Ver QR"** para que lo escaneen con su terminal Rabbitty POS, o dile tu número de teléfono registrado.\n4. ¡Listo! Los Bunz se abonan inmediatamente a tu billetera y recibes una notificación en tiempo real.',
   },
   {
-    keywords: ['afiliar', 'afiliado', 'afiliados', 'restaurante', 'cafeteria', 'mi negocio', 'sumar mi local', 'pos', 'terminal'],
-    answer: '¡Excelente! Para unir tu cafetería o restaurante a la red de Afiliados Rabbitty:\n• Puedes postularte directamente en nuestro portal: https://rabbitty.me/affiliates\n• O escribirnos por WhatsApp para darte de alta y enviarte tu terminal Rabbitty POS en iPad junto con tu Kit de Cartelería y habladores de mesa con tu QR oficial.',
+    category: 'qr_pay',
+    keywords: ['como pago', 'pagar con qr', 'codigo qr', 'rabbitty code', 'escanear', 'caja', 'terminal', 'pos'],
+    answer: '📲 **Para pagar o identificarte en caja:**\n\n• En la pantalla de inicio de tu app Rabbitty, presiona tu tarjeta de usuario o el botón **"Ver QR"**.\n• Muestra el código en la pantalla de tu móvil al personal del local para que lo lean con la cámara del iPad/terminal Rabbitty POS.\n• Si vas a liquidar parte de tu cuenta con Bunz, indícale al cajero la cantidad que deseas aplicar.',
   },
   {
-    keywords: ['descargar', 'bajar', 'app', 'iphone', 'ios', 'app store', 'android'],
-    answer: 'Puedes descargar Rabbitty directamente en tu dispositivo:\n• Enlace de descarga oficial: https://rabbitty.me/download\n• También puedes usarla al instante en la web o Telegram sin necesidad de instalar nada desde https://app.rabbitty.me.',
+    category: 'delete_account',
+    keywords: ['eliminar cuenta', 'borrar cuenta', 'dar de baja', 'eliminar mi cuenta', 'cancelar cuenta', 'privacidad cuenta'],
+    answer: '🔒 **Eliminación permanente de cuenta:**\n\n• Puedes solicitar la baja irreversible directamente en la app desde **Perfil > Configuración > Eliminar cuenta permanentemente**.\n• Por seguridad y normativas fiscales, los saldos de Bunz no redimidos se traspasan irrevocablemente a la tesorería del protocolo (`sys_rabbitty_treasury`).\n• Todos tus datos personales se expurgan de nuestros servidores activos y se emite un certificado inmutable de liquidación en el nodo IPFS de Pandoras Finance para cumplimiento legal.',
   },
   {
-    keywords: ['rabbitters', 'comunidad', 'usuarios', 'quienes son', 'rabbitter'],
-    answer: 'Los «Rabbitters» son los miembros de nuestra comunidad que exploran su ciudad, visitan cafeterías de especialidad y restaurantes locales, ganan Bunz en cada parada y coleccionan sellos en su Vibe Passport.',
+    category: 'affiliates',
+    keywords: ['afiliar', 'afiliado', 'afiliados', 'restaurante', 'cafeteria', 'mi negocio', 'sumar mi local', 'pos', 'terminal restaurante', 'vender con rabbitty'],
+    answer: '🏢 **Afiliar tu comercio a Rabbitty:**\n\n• Únete a los negocios de especialidad que premian la lealtad de sus clientes.\n• Te entregamos la terminal Rabbitty POS en iPad lista para operar y tu kit de bienvenida con habladores de mesa QR para tus clientes.\n• Puedes iniciar tu registro en https://rabbitty.me/affiliates o escribir directamente a nuestro canal de soporte en Telegram **@rabbittyhub**.',
   },
   {
-    keywords: ['vencer', 'caducan', 'vencimiento', 'expiran'],
-    answer: 'Tus Bunz en una cuenta activa de Rabbitty no tienen fecha de vencimiento. Si un negocio te otorgó Bunz a tu número antes de registrarte, tienes 3 meses para crear tu cuenta y reclamarlos en tu billetera.',
+    category: 'rabbitters',
+    keywords: ['rabbitters', 'rabbitter', 'comunidad', 'quienes son', 'vibe passport', 'mood'],
+    answer: '🐰 **Los Rabbitters son la comunidad viva de Rabbitty:**\n\nClientes que aman descubrir spots gastronómicos y culturales únicos, registrar sus visitas en su Vibe Passport, apoyar comercios locales y disfrutar de dinámicas de atmósfera en cada experiencia.',
   },
   {
-    keywords: ['eliminar', 'cuenta', 'borrar', 'baja'],
-    answer: 'Puedes solicitar la baja permanente de tu cuenta desde Perfil > "Eliminar cuenta permanentemente". Toma en cuenta que por términos de servicio, los Bunz que tengas acumulados se ceden a la tesorería de Rabbitty y se expurgan tus datos personales con un comprobante inmutable de liquidación contable en IPFS.',
+    category: 'download',
+    keywords: ['descargar', 'app store', 'testflight', 'ios', 'iphone', 'bajar app', 'donde descargo', 'link descarga'],
+    answer: '📲 **Acceso y descarga de Rabbitty:**\n\n• **iOS / TestFlight:** Puedes descargar la versión nativa para iPhone mediante el enlace oficial en https://rabbitty.me/download.\n• **Web App / Telegram Mini App:** También puedes usarla al instante sin instalar nada entrando a https://app.rabbitty.me o desde nuestro bot en Telegram.',
   },
   {
-    keywords: ['transferir', 'enviar', 'amigo', 'mandar'],
-    answer: '¡Sí! Puedes enviar Bunz al instante a cualquier usuario mediante su @usuario o escaneando su código desde tu billetera o dentro del chat de la app con autorización de Face ID / PIN.',
+    category: 'transfers',
+    keywords: ['transferir', 'enviar bunz', 'pasar bunz', 'amigo', 'mandar saldo'],
+    answer: '💸 **Transferencias entre Rabbitters:**\n\n• Puedes enviar Bunz al instante y sin comisiones a tus amigos.\n• Entra a la sección de Billetera > Transferir, busca su @usuario o escanea su Rabbitty Code personal.\n• La operación se autoriza con Face ID o tu PIN de seguridad.',
   },
   {
-    keywords: ['privacidad', 'terminos', 'seguridad', 'legal', 'datos'],
-    answer: 'Puedes consultar nuestro Aviso de Privacidad integral y Términos de Servicio bajo las leyes mexicanas (LFPDPPP) en https://rabbitty.me/privacy.',
-  },
-  {
-    keywords: ['contacto', 'humano', 'whatsapp', 'telefono', 'correo', 'email', 'hablar'],
-    answer: 'Puedes escribirnos directamente a nuestro equipo de atención en support@rabbitty.me o por WhatsApp oficial al https://wa.me/529581000000. Estamos disponibles de lunes a domingo de 8:00 AM a 10:00 PM.',
+    category: 'human_support',
+    keywords: ['humano', 'contacto', 'telegram', 'soporte humano', 'hablar con alguien', 'agente', 'telefono', 'ayuda'],
+    answer: '💬 **Atención y Soporte con el Equipo:**\n\n• Puedes contactar al equipo en tiempo real a través de nuestro bot/canal oficial en Telegram: **@rabbittyhub** (https://t.me/rabbittyhub).\n• También puedes escribirnos a **support@rabbitty.me**.\n• Nuestro horario de atención humana es de Lunes a Domingo de 8:00 AM a 10:00 PM (Hora CDMX).',
   },
 ];
 
@@ -52,24 +63,45 @@ export async function POST(req: Request) {
 
     const clean = query.toLowerCase().trim();
 
-    // Buscar coincidencia en base de conocimiento
+    // 1. Scoring semántico / ponderado por palabras clave
+    let bestMatch: KnowledgeItem | null = null;
+    let maxScore = 0;
+
     for (const item of KNOWLEDGE_BASE) {
-      if (item.keywords.some((kw) => clean.includes(kw))) {
-        return NextResponse.json({
-          reply: item.answer,
-          source: 'bunzy_knowledge',
-        });
+      let score = 0;
+      for (const kw of item.keywords) {
+        if (clean === kw) {
+          score += 10;
+        } else if (clean.includes(kw)) {
+          score += kw.length > 5 ? 4 : 2;
+        }
+      }
+      if (score > maxScore) {
+        maxScore = score;
+        bestMatch = item;
       }
     }
 
-    // Respuesta conversacional inteligente por defecto
+    if (bestMatch && maxScore >= 2) {
+      return NextResponse.json({
+        reply: bestMatch.answer,
+        source: 'bunzy_knowledge',
+        category: bestMatch.category,
+      });
+    }
+
+    // 2. Respuesta conversacional útil y precisa (evita el "siempre contesta lo mismo")
     return NextResponse.json({
-      reply: `¡Hola! Soy Bunzy 🐰. Veo que preguntas: "${query}". Para asistirte de forma personalizada:
-• Si es sobre tu cuenta o saldo de Bunz, puedes revisarlo en la app móvil.
-• Para consultas sobre un comercio específico o reportar un ticket, puedes escribir a nuestro equipo directo en support@rabbitty.me o pulsar el botón de WhatsApp abajo.`,
+      reply: `¡Hola! Soy Bunzy 🐰. Recibí tu consulta sobre: "${query}".
+
+Para ayudarte con precisión:
+• **¿Dudas de saldo o transacciones en caja?** Puedes ver tu historial en tiempo real dentro de tu app en la sección Billetera.
+• **¿Soporte directo con un agente?** Escríbenos en Telegram a **@rabbittyhub** (https://t.me/rabbittyhub) o envíanos un correo a **support@rabbitty.me**.
+• También puedes hacer clic en una de las preguntas frecuentes aquí abajo para responderte al instante.`,
       source: 'bunzy_fallback',
     });
   } catch {
     return NextResponse.json({ error: 'Error al procesar la solicitud' }, { status: 500 });
   }
 }
+
