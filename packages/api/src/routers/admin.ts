@@ -545,24 +545,38 @@ export const adminRouter = router({
   }),
 
   getLoyaltyStats: protectedProcedure.query(async ({ ctx }) => {
-    const allUsers = await ctx.coreDb.select().from(users);
-    const allLevels = await ctx.coreDb.select().from(levels);
-    const totalBunzEarned = allUsers.reduce((s, u) => s + (u.totalBunzEarned ?? 0), 0);
-    const totalSpent = allUsers.reduce((s, u) => s + (u.totalBunzSpent ?? 0), 0);
-    const totalHops = allUsers.reduce((s, u) => s + (u.hops ?? 0), 0);
-    const topUsers = allUsers.sort((a, b) => (b.hops ?? 0) - (a.hops ?? 0)).slice(0, 10);
-    const levelsWithCount = allLevels.map((l) => ({
-      ...l,
-      userCount: allUsers.filter((u) => u.levelId === l.id).length,
-    }));
-    return {
-      totalUsers: allUsers.length,
-      totalBunzEarned,
-      totalSpent,
-      totalHops,
-      levels: levelsWithCount,
-      topUsers,
-    };
+    try {
+      const allUsers = await ctx.coreDb.select().from(users);
+      const allLevels = await ctx.coreDb.select().from(levels);
+      const totalBunzEarned = allUsers.reduce((s, u) => s + (u.totalBunzEarned ?? 0), 0);
+      const totalSpent = allUsers.reduce((s, u) => s + (u.totalBunzSpent ?? 0), 0);
+      const totalHops = allUsers.reduce((s, u) => s + (u.hops ?? 0), 0);
+      // Sort on a copy to avoid mutating the original array
+      const topUsers = [...allUsers].sort((a, b) => (b.hops ?? 0) - (a.hops ?? 0)).slice(0, 10);
+      const levelsWithCount = allLevels.map((l) => ({
+        ...l,
+        userCount: allUsers.filter((u) => u.levelId === l.id).length,
+      }));
+      return {
+        totalUsers: allUsers.length,
+        totalBunzEarned,
+        totalSpent,
+        totalHops,
+        levels: levelsWithCount,
+        topUsers,
+      };
+    } catch (err) {
+      // Return safe defaults so the loyalty page renders with mock data instead of crashing
+      console.error("[getLoyaltyStats] DB error:", err);
+      return {
+        totalUsers: 0,
+        totalBunzEarned: 0,
+        totalSpent: 0,
+        totalHops: 0,
+        levels: [],
+        topUsers: [],
+      };
+    }
   }),
 
   getBirthdaySettings: protectedProcedure.query(async ({ ctx }) => {

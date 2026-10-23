@@ -73,7 +73,7 @@ export function SmartAppAction({
           <div
             role="dialog"
             aria-modal="true"
-            className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto"
+            className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto"
             onClick={() => setShowQRModal(false)}
           >
             <div
