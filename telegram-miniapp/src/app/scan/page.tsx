@@ -107,12 +107,16 @@ export default function ScanPage() {
             mod.default.HapticFeedback.notificationOccurred('success');
           }).catch(()=>{});
 
-          // P2P payment link → prefill the Ra Wallet send flow
+          // P2P payment link or POS intent link
           if (/^rabbitty:\/\/pay/i.test(decodedText.trim())) {
             try {
               const parsed = new URL(decodedText.trim());
               const to = parsed.searchParams.get('to');
-              if (to) {
+              const intent = parsed.searchParams.get('intent');
+              if (intent) {
+                // If it's a POS payment intent from Rabbitty POS
+                decodedText = intent;
+              } else if (to) {
                 await stopScanning();
                 router.push(`/profile/wallet?to=${encodeURIComponent(to)}`);
                 return;
@@ -163,11 +167,13 @@ export default function ScanPage() {
           }
 
           // 2. Extract intent ID and resolve it (POS Payment)
-          let intentId = decodedText;
-          if (decodedText.includes('pay_pi_')) {
-            intentId = 'pi_' + decodedText.split('pay_pi_')[1];
-          } else if (decodedText.includes('pi_')) {
-            intentId = 'pi_' + decodedText.split('pi_')[1];
+          let intentId = decodedText.trim();
+          if (intentId.includes('pay_')) {
+            const rawAfterPay = intentId.split('pay_')[1];
+            intentId = rawAfterPay.split(/[&?#\s]/)[0];
+          } else if (intentId.includes('pi_')) {
+            const rawAfterPi = 'pi_' + intentId.split('pi_')[1];
+            intentId = rawAfterPi.split(/[&?#\s]/)[0];
           }
 
           await stopScanning();

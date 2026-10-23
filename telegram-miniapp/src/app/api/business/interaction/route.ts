@@ -3,6 +3,7 @@ import { db } from '@/db';
 import { users, ownedBusinesses } from '@/db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
+import { sendEcosystemNotification } from '@/lib/push/notify';
 
 export async function POST(req: Request) {
   try {
@@ -44,6 +45,19 @@ export async function POST(req: Request) {
           .where(eq(users.id, caller.id))
           .catch(() => {});
       }
+
+      // Notificar al dueño del negocio sobre el nuevo Hop
+      if (business.ownerId && business.ownerId !== caller?.id) {
+        await sendEcosystemNotification({
+          userId: business.ownerId,
+          title: `🔥 ¡Nuevo Hop en ${business.name}!`,
+          message: `${caller?.username ? `@${caller.username}` : 'Un usuario'} le dio Hop a tu negocio. ¡Tu popularidad sube en el mapa!`,
+          type: 'HOPS',
+          route: '/business',
+          pushData: { businessId: business.id, action: 'HOP' },
+          threadId: 'business_hops',
+        });
+      }
     } else if (action === 'SAVE') {
       const isSaved = meta?.saved ?? true;
       updatedSaved = isSaved ? updatedSaved + 1 : Math.max(0, updatedSaved - 1);
@@ -55,6 +69,19 @@ export async function POST(req: Request) {
         })
         .where(eq(ownedBusinesses.id, businessId))
         .catch(() => {});
+
+      // Notificar al dueño del negocio cuando lo guardan en Madriguera
+      if (isSaved && business.ownerId && business.ownerId !== caller?.id) {
+        await sendEcosystemNotification({
+          userId: business.ownerId,
+          title: `🐰 ¡Guardado en Madriguera!`,
+          message: `Un explorador guardó ${business.name} en sus Madrigueras favoritas.`,
+          type: 'MADRIGUERA',
+          route: '/business',
+          pushData: { businessId: business.id, action: 'SAVE' },
+          threadId: 'business_saves',
+        });
+      }
     } else if (action === 'SHARE') {
       updatedShared += 1;
       await db.update(ownedBusinesses)

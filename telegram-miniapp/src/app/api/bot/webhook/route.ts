@@ -209,6 +209,20 @@ export async function POST(req: NextRequest) {
               magicUrl = `https://admin.rabbitty.me/magic?token=${qrToken}&sid=${session.id}`;
             }
 
+            // Notificación Push & In-App al dueño del negocio
+            if (owner?.id) {
+              const { sendEcosystemNotification } = await import("@/lib/push/notify");
+              await sendEcosystemNotification({
+                userId: owner.id,
+                title: `🎉 ¡Negocio Aprobado: ${business.name}!`,
+                message: `Tu comercio ya está activo en Rabbitty. Tus clientes ya pueden escanear y ganar Bunz.`,
+                type: "AFFILIATE",
+                route: "/business",
+                pushData: { businessId: business.id, status: "APPROVED" },
+                threadId: "business_status",
+              });
+            }
+
             if (owner?.telegramId && botToken) {
               const msg =
                 `🎉 *¡Felicidades! Tu negocio ${business.name} ha sido APROBADO.*\n\n` +
@@ -225,6 +239,20 @@ export async function POST(req: NextRequest) {
               });
             }
           } else {
+            // Notificación Push & In-App de rechazo
+            if (owner?.id) {
+              const { sendEcosystemNotification } = await import("@/lib/push/notify");
+              await sendEcosystemNotification({
+                userId: owner.id,
+                title: `⚠️ Solicitud de Negocio: ${business.name}`,
+                message: `Tu solicitud necesita ajustes para ser aprobada. Revisa los detalles con soporte.`,
+                type: "AFFILIATE",
+                route: "/support",
+                pushData: { businessId: business.id, status: "REJECTED" },
+                threadId: "business_status",
+              });
+            }
+
             if (owner?.telegramId && botToken) {
               const msg = `❌ *Solicitud de Negocio no aprobada para ${business.name}*\n\nTu registro ha sido revisado y no cumple con los requisitos actuales. Contacta a soporte para más detalles.`;
               await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
@@ -288,7 +316,7 @@ export async function POST(req: NextRequest) {
       const payloadStr = payment.invoice_payload; // "order_123_amount_100_tip_10"
       
       let orderId = "";
-      let amountPaid = payment.total_amount;
+      const amountPaid = payment.total_amount;
       
       if (payloadStr.startsWith("order_")) {
         const parts = payloadStr.split("_");
@@ -313,7 +341,7 @@ export async function POST(req: NextRequest) {
 
           const [orderAfter] = await restaurantDb.select().from(orders).where(eq(orders.id, orderId));
           const allPayments = await restaurantDb.select().from(payments).where(eq(payments.orderId, orderId));
-          const sumPayments = allPayments.reduce((s: number, p: any) => s + p.amount, 0);
+          const sumPayments = allPayments.reduce((s: number, p: { amount: number }) => s + p.amount, 0);
 
           if (sumPayments >= orderAfter.total) {
             await restaurantDb.update(orders).set({ status: 'PAID' }).where(eq(orders.id, orderId));

@@ -2,6 +2,7 @@ import { db } from '@/db';
 import { users, referrals, notifications } from '@/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { recordLedgerTransaction } from '@/lib/ledgerHelper';
+import { sendEcosystemNotification } from '@/lib/push/notify';
 
 /**
  * Triggers the referral reward for the inviter if this is the invited user's first consumption/earn.
@@ -21,11 +22,13 @@ export async function processReferralAndNotifications(userId: string, type: 'EAR
     if (type === 'EARN' && !user.hasEarnedFirstBunz) {
       await db.update(users).set({ hasEarnedFirstBunz: true }).where(eq(users.id, userId));
       
-      await db.insert(notifications).values({
+      await sendEcosystemNotification({
         userId,
-        title: '¡Tus primeros Bunz!',
-        message: 'Felicidades por recibir tus primeros Bunz. Sigue descubriendo lugares en la ciudad.',
-        type: 'REWARD'
+        title: '🌟 ¡Tus primeros Bunz!',
+        message: '¡Felicidades por recibir tus primeros Bunz! Sigue descubriendo lugares en Rabbitty.',
+        type: 'REWARD',
+        route: '/profile/wallet',
+        threadId: 'first_milestones',
       });
       
       shouldTriggerReferral = true;
@@ -35,11 +38,13 @@ export async function processReferralAndNotifications(userId: string, type: 'EAR
     if (type === 'SPEND' && !user.hasMadeFirstTransaction) {
       await db.update(users).set({ hasMadeFirstTransaction: true }).where(eq(users.id, userId));
       
-      await db.insert(notifications).values({
+      await sendEcosystemNotification({
         userId,
-        title: '¡Tu primer canje!',
-        message: 'Felicidades por realizar tu primera reservación. ¡Disfruta tu recompensa!',
-        type: 'REWARD'
+        title: '🎟️ ¡Tu primer canje!',
+        message: '¡Felicidades por tu primera reservación! Disfruta tu beneficio en el negocio.',
+        type: 'REWARD',
+        route: '/profile/inventory',
+        threadId: 'first_milestones',
       });
       
       shouldTriggerReferral = true;
@@ -110,13 +115,24 @@ export async function processReferralAndNotifications(userId: string, type: 'EAR
             tx
           );
 
-          // 4. Notify inviter
+          // 4. Notify inviter (in-app)
           await tx.insert(notifications).values({
             userId: inviter.id,
-            title: '¡Bono de referido!',
+            title: '¡Bono de referido! 🎁',
             message: `Acabas de ganar ${lockedReferral.rewardAmount} Bunz porque tu amigo ${user.firstName || 'invitado'} hizo su primer consumo.`,
             type: 'REFERRAL',
           });
+        });
+
+        // 5. Native push al invitador
+        await sendEcosystemNotification({
+          userId: referral.inviterId,
+          title: '🎁 ¡Bono de referido recibido!',
+          message: `¡Ganaste ${referral.rewardAmount} Bunz! Tu amigo ${user.firstName || 'invitado'} realizó su primer consumo en Rabbitty.`,
+          type: 'REFERRAL',
+          route: '/referral',
+          pushData: { rewardAmount: referral.rewardAmount, invitedUserId: userId },
+          threadId: 'referrals',
         });
       }
     }

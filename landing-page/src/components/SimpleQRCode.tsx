@@ -32,10 +32,17 @@ export function SimpleQRCode({
         className="w-full h-full object-contain"
         loading="lazy"
       />
-      {/* Rabbitty Center Micro Badge */}
-      <div className="absolute inset-0 m-auto w-8 h-8 rounded-full bg-black border-2 border-pink-500 flex items-center justify-center shadow-lg">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo_conejo.png" alt="Rabbitty" className="w-5 h-5 object-contain" />
+      {/* Rabbitty Center Micro Badge with Ra or Rabbit icon */}
+      <div 
+        className="absolute inset-0 m-auto rounded-full bg-black border-2 border-[#E91E63] flex items-center justify-center shadow-lg"
+        style={{ width: Math.max(34, size * 0.18), height: Math.max(34, size * 0.18) }}
+      >
+        <span 
+          className="font-black text-white tracking-tighter select-none"
+          style={{ fontSize: Math.max(15, size * 0.08), color: '#FFF' }}
+        >
+          <span className="text-[#E91E63]">R</span>a
+        </span>
       </div>
     </div>
   );

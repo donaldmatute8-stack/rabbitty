@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { users, pendingVaults, transactions, ownedBusinesses } from "@/db/schema";
 import { eq, and, gte, sql, or } from "drizzle-orm";
 import { recordLedgerTransaction, findLedgerEntry } from "@/lib/ledgerHelper";
+import { sendEcosystemNotification } from "@/lib/push/notify";
 import crypto from "crypto";
 
 export async function POST(request: Request) {
@@ -167,6 +168,17 @@ export async function POST(request: Request) {
           },
           tx
         );
+      });
+
+      // Push notification al usuario que recibió los Bunz en POS
+      await sendEcosystemNotification({
+        userId: existingUser.id,
+        title: `✨ ¡Recibiste +${bunzToMint.toLocaleString()} Bunz!`,
+        message: `Por tu compra de $${amount_usd} en caja se han acreditado ${bunzToMint.toLocaleString()} Bunz a tu cuenta.`,
+        type: 'REWARD',
+        route: '/profile/wallet',
+        pushData: { bunzAmount: bunzToMint, orderId: order_id || '' },
+        threadId: 'rewards',
       });
 
       return NextResponse.json({ 

@@ -1,6 +1,7 @@
 import { db } from '@/db';
-import { users, ownedBusinesses, notifications } from '@/db/schema';
+import { users, ownedBusinesses } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+import { sendEcosystemNotification } from '@/lib/push/notify';
 
 export type TypingColumn = 'participant1TypingAt' | 'participant2TypingAt';
 
@@ -138,10 +139,14 @@ export async function notifyChatRecipient(params: {
   const { recipientUserId, recipientTelegramId, senderName, preview } = params;
   const clean = cleanMessagePreview(preview) || 'Nuevo mensaje';
   if (recipientUserId) {
-    await db
-      .insert(notifications)
-      .values({ userId: recipientUserId, title: `💬 ${senderName}`, message: clean, type: 'CHAT' })
-      .catch(() => {});
+    await sendEcosystemNotification({
+      userId: recipientUserId,
+      title: `💬 ${senderName}`,
+      message: clean,
+      type: 'CHAT',
+      route: '/chat',
+      threadId: 'chat',
+    });
   }
   if (recipientTelegramId) {
     const appUrl = process.env.RABBITTY_APP_URL || 'https://t.me/Rabbittyme_bot/app';

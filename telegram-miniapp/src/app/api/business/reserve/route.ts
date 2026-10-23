@@ -4,6 +4,7 @@ import { users, ownedBusinesses, reservations } from '@/db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { recordLedgerTransaction, findLedgerEntry } from '@/lib/ledgerHelper';
 import { parseTelegramUser, validateTelegramInitData } from '@/lib/telegramAuth';
+import { sendEcosystemNotification } from '@/lib/push/notify';
 import crypto from 'crypto';
 
 export async function POST(req: NextRequest) {
@@ -117,6 +118,30 @@ export async function POST(req: NextRequest) {
 
     if (!reservation) {
       return NextResponse.json({ success: true, message: 'Reserva ya procesada.' });
+    }
+
+    // 1. Notificación push al usuario que reservó
+    await sendEcosystemNotification({
+      userId: user.id,
+      title: '🎟️ ¡Cupón Reservado!',
+      message: `Has reservado "${title}" en ${business.name} por ${bunzCost.toLocaleString()} Bunz. Encuéntralo en "Mis Cupones".`,
+      type: 'REWARD',
+      route: '/profile/inventory',
+      pushData: { businessId: business.id, reservationId: reservation.id, title },
+      threadId: 'coupons',
+    });
+
+    // 2. Notificación push al dueño del negocio afiliado
+    if (business.ownerId && business.ownerId !== user.id) {
+      await sendEcosystemNotification({
+        userId: business.ownerId,
+        title: `📢 Nueva Reserva en ${business.name}`,
+        message: `Un cliente reservó el cupón "${title}" (${bunzCost.toLocaleString()} Bunz).`,
+        type: 'AFFILIATE',
+        route: '/business',
+        pushData: { businessId: business.id, reservationId: reservation.id },
+        threadId: 'business_coupons',
+      });
     }
 
     return NextResponse.json({ success: true, reservation });

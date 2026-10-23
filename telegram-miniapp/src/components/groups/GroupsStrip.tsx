@@ -12,51 +12,98 @@ interface TelegramWebApp {
   openInvoice?: (url: string, cb: (status: string) => void) => void;
 }
 
-export const GROUPS = [
+export interface GroupDefinition {
+  id: string;
+  name: string;
+  desc: string;
+  badge: string;
+  link: string;
+  color: string;
+  gradient: string;
+  borderGlow: string;
+  iconSvg: React.ReactNode;
+}
+
+export const GROUPS: GroupDefinition[] = [
   {
     id: 'general',
-    name: 'General',
-    desc: 'Comunidad oficial y anuncios globales',
-    icon: '#',
+    name: 'General & Anuncios',
+    desc: 'Comunidad oficial global y lanzamientos exclusivos de Rabbitty',
     badge: 'General',
     link: 'https://t.me/rabbittyhub',
-    color: '#3B82F6',
+    color: '#0088CC',
+    gradient: 'linear-gradient(135deg, #0088CC 0%, #005F8F 100%)',
+    borderGlow: 'rgba(0, 136, 204, 0.4)',
+    iconSvg: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m3 11 18-5v12L3 13v-2z" />
+        <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
+      </svg>
+    ),
   },
   {
     id: 'tech-support',
     name: 'Soporte Técnico',
-    desc: 'Ayuda, resolución de dudas y tickets',
-    icon: 'S',
+    desc: 'Mesa de ayuda directa, resolución de dudas, tickets y hardware POS',
     badge: 'Soporte',
     link: 'https://t.me/rabbittyhub/5',
-    color: '#A855F7',
+    color: '#9333EA',
+    gradient: 'linear-gradient(135deg, #A855F7 0%, #7E22CE 100%)',
+    borderGlow: 'rgba(168, 85, 247, 0.4)',
+    iconSvg: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+      </svg>
+    ),
   },
   {
     id: 'demo-support',
-    name: 'Soporte Demos',
-    desc: 'Demos guiadas y onboarding',
-    icon: 'S',
+    name: 'Soporte Demos & Onboarding',
+    desc: 'Sesiones guiadas de onboarding, tutoriales y acompañamiento en vivo',
     badge: 'Demos',
     link: 'https://t.me/rabbittyhub/10',
     color: '#EC4899',
+    gradient: 'linear-gradient(135deg, #EC4899 0%, #BE185D 100%)',
+    borderGlow: 'rgba(236, 72, 153, 0.4)',
+    iconSvg: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="5 3 19 12 5 21 5 3" fill="currentColor" fillOpacity="0.2" />
+        <polygon points="5 3 19 12 5 21 5 3" />
+      </svg>
+    ),
   },
   {
     id: 'affiliates-circle',
-    name: 'Affiliates Circle',
-    desc: 'Comunidad exclusiva de comercios y negocios',
-    icon: 'A',
+    name: 'Affiliates Business Circle',
+    desc: 'Comunidad selecta de comercios afiliados, restaurantes y dueños de negocio',
     badge: 'Afiliados',
     link: 'https://t.me/rabbittyhub/4',
-    color: '#F43F5E',
+    color: '#FF8A00',
+    gradient: 'linear-gradient(135deg, #FF8A00 0%, #D9534F 100%)',
+    borderGlow: 'rgba(255, 138, 0, 0.4)',
+    iconSvg: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7" />
+        <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+        <path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4" />
+        <path d="M2 7h20" />
+      </svg>
+    ),
   },
   {
     id: 'rabbitters-zone',
-    name: 'Rabbitters Zone',
-    desc: 'Espacio de colaboración para Rabbitters (Nodos)',
-    icon: 'R',
+    name: 'Rabbitters Zone & Loyalty Lounge',
+    desc: 'Espacio de recompensas Bunz, experiencias gourmet y comunidad activa',
     badge: 'Rabbitters',
     link: 'https://t.me/rabbittyhub/3',
     color: '#10B981',
+    gradient: 'linear-gradient(135deg, #10B981 0%, #047857 100%)',
+    borderGlow: 'rgba(16, 185, 129, 0.4)',
+    iconSvg: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+      </svg>
+    ),
   },
 ];
 
@@ -127,7 +174,7 @@ export default function GroupsStrip() {
               minWidth: 220,
               scrollSnapAlign: 'start',
               border: '1px solid var(--border-subtle)',
-              background: g.color,
+              background: g.gradient || g.color,
               color: '#fff',
               borderRadius: 18,
               padding: '14px 16px',
@@ -136,7 +183,7 @@ export default function GroupsStrip() {
               gap: 12,
               cursor: 'pointer',
               textAlign: 'left',
-              boxShadow: 'var(--shadow-sm)',
+              boxShadow: `0 8px 24px -6px ${g.borderGlow || 'rgba(0,0,0,0.4)'}`,
             }}
           >
             <div
@@ -145,14 +192,16 @@ export default function GroupsStrip() {
                 height: 44,
                 borderRadius: 14,
                 background: 'rgba(255,255,255,0.2)',
+                backdropFilter: 'blur(8px)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: 22,
+                fontSize: 20,
                 flexShrink: 0,
+                border: '1px solid rgba(255,255,255,0.3)',
               }}
             >
-              {g.icon}
+              {g.iconSvg}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
               <span style={{ fontWeight: 900, fontSize: 15, lineHeight: 1.1, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>

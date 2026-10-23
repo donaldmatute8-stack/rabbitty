@@ -125,6 +125,42 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
   if (data.phone) addText(`Tel: ${data.phone}\n`);
   addText(divider);
 
+  if (data.isCorteDeCaja) {
+    chunks.push(alignCenter);
+    chunks.push(boldOn);
+    addText(`\nCORTE DE CAJA / TURNO\n`);
+    chunks.push(boldOff);
+    addText(divider);
+    chunks.push(alignLeft);
+    addText(`Fecha: ${new Date().toLocaleString("es-MX")}\n`);
+    if (data.staffName) addText(`Cajero / Supervisor: ${data.staffName}\n`);
+    addText(divider);
+    addText(`(+) Cobrado Efectivo Hoy:  $${Number(data.totalCashReceived || 0).toFixed(2)}\n`);
+    addText(`(-) Retiros de Caja:       $${Number(data.totalDropped || 0).toFixed(2)}\n`);
+    addText(divider);
+    chunks.push(boldOn);
+    addText(`TOTAL EFECTIVO EN GAVETA:  $${Number(data.currentCash || 0).toFixed(2)}\n`);
+    chunks.push(boldOff);
+    addText(divider);
+    addText(`Firma Cajero:\n\n\n___________________\n\n`);
+    addText(`Firma Gerencia:\n\n\n___________________\n\n\n`);
+
+    // Line feed & Cut paper
+    chunks.push(new Uint8Array([0x0a, 0x0a, 0x0a, 0x0a, 0x0a]));
+    const cut = new Uint8Array([0x1d, 0x56, 0x41, 0x00]);
+    chunks.push(cut);
+
+    let totalLength = 0;
+    for (const c of chunks) totalLength += c.length;
+    const result = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const c of chunks) {
+      result.set(c, offset);
+      offset += c.length;
+    }
+    return result;
+  }
+
   if (data.isCashDrop) {
     chunks.push(alignLeft);
     addText(`\nRETIRO DE EFECTIVO\n`);
@@ -206,10 +242,9 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
       addText(`¡Ganas +${earnedBunz.toFixed(2)} Bunz Recompensa!\n`);
       chunks.push(boldOff);
       addText(`Escanea tu ticket en la mini app de\nTelegram o Rabbitty para recibir tu cashback.\n\n`);
-      
       try {
-        // Create QR Code
-        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`https://t.me/RabbittyBot/app?startapp=claim_${data.orderNumber || "0000"}`)}`;
+        // Create QR Code (Universal rabbitty.me URL compatible with native app and web)
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`https://rabbitty.me/scan?claim=${data.orderNumber || "0000"}`)}`;
         const qrBytes = await rasterizeImage(qrUrl, 200);
         if (qrBytes) {
           chunks.push(qrBytes);

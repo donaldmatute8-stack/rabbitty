@@ -51,9 +51,20 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 1. Generar código OTP numérico de 6 dígitos
-    const otpCode = crypto.randomInt(100000, 999999).toString();
-    const expires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutos
+    const cleanInput = rawInput.toLowerCase();
+    const isReviewerDemo =
+      cleanInput === "pos-reviewer@rabbitty.me" ||
+      cleanInput === "pos-reviewer" ||
+      cleanInput === "tester@rabbitty.me" ||
+      cleanInput === "tester";
+
+    if (isReviewerDemo) {
+      email = cleanInput.includes("@") ? cleanInput : `${cleanInput}@rabbitty.me`;
+    }
+
+    // 1. Generar código OTP (123456 fijo para el revisor de Apple, aleatorio para usuarios reales)
+    const otpCode = isReviewerDemo ? "123456" : crypto.randomInt(100000, 999999).toString();
+    const expires = new Date(Date.now() + (isReviewerDemo ? 24 * 60 * 60 * 1000 : 15 * 60 * 1000)); // 24h para demo
 
     // 2. Limpiar tokens anteriores para este identificador/email
     await db.delete(verificationTokens).where(

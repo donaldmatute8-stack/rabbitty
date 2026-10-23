@@ -1363,65 +1363,134 @@ export default function PosPage() {
         title="Corte de Caja / Resumen del Turno"
       >
         <div className="space-y-4">
-          <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs uppercase tracking-wider text-gray-400 font-bold">Sucursal Activa</span>
+          {/* Tarjeta de Flujo Contable Claro */}
+          <div className="p-4 rounded-2xl bg-linear-to-br from-white/8 to-white/2 border border-white/10 space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-white/10">
+              <span className="text-xs uppercase tracking-wider text-gray-400 font-bold">Sucursal</span>
               <span className="text-xs font-black text-cyan-400">{ticketContext?.restaurant?.name || "626 Cafe"}</span>
             </div>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs uppercase tracking-wider text-gray-400 font-bold">Entorno</span>
-              <span className={cn("text-xs font-black px-2 py-0.5 rounded-full", isSandboxActive ? "bg-amber-500/20 text-amber-400 border border-amber-500/30" : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30")}>
-                {isSandboxActive ? "🧪 Modo Entrenamiento" : "🟢 Producción Real"}
-              </span>
+
+            {/* Desglose de ingresos vs retiros */}
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <div className="p-2.5 rounded-xl bg-black/40 border border-emerald-500/20">
+                <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Cobrado en Efectivo Hoy</span>
+                <span className="text-base font-black text-emerald-400">
+                  +${Number(cashStatus?.totalCashReceived ?? 0).toFixed(2)}
+                </span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-black/40 border border-amber-500/20">
+                <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Retiros de Caja Realizados</span>
+                <span className="text-base font-black text-amber-400">
+                  -${Number(cashStatus?.totalDropped ?? 0).toFixed(2)}
+                </span>
+              </div>
             </div>
-            <div className="pt-3 border-t border-white/10 flex items-center justify-between">
-              <span className="text-sm font-bold text-white">Efectivo Actual en Gaveta:</span>
+
+            {/* Total Neto en Gaveta */}
+            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between">
+              <div>
+                <span className="text-xs font-black uppercase tracking-wider text-emerald-300 block">
+                  Efectivo Físico en Gaveta
+                </span>
+                <span className="text-[10px] text-gray-400">
+                  Balance actual neto que debe haber en caja física
+                </span>
+              </div>
               <span className="text-2xl font-black text-emerald-400">
                 ${(cashStatus?.currentCash ?? 0).toFixed(2)}
               </span>
             </div>
+
+            <div className="flex items-center justify-between pt-1 text-[11px] text-gray-400">
+              <span>Límite preventivo de caja:</span>
+              <span className="font-semibold text-white">${Number(cashStatus?.threshold ?? 5000).toFixed(2)} MXN</span>
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400">Retiro Parcial de Efectivo</h4>
+          {/* Formulario de Retiro Parcial de Efectivo */}
+          <div className="p-4 rounded-2xl bg-white/3 border border-white/10 space-y-3">
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-white">Retiro de Efectivo / Sangría de Caja</h4>
+              <p className="text-[11px] text-gray-400 mt-0.5">
+                Usa esta opción cuando vayas a retirar dinero para resguardo en caja fuerte o entrega a gerencia.
+              </p>
+            </div>
             <div className="grid grid-cols-2 gap-2">
-              <input
-                type="number"
-                placeholder="Monto ($)"
-                value={cashDropAmount}
-                onChange={(e) => setCashDropAmount(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
-              />
-              <input
-                type="text"
-                placeholder="Entregado a / Nota"
-                value={cashDropNotes}
-                onChange={(e) => setCashDropNotes(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
-              />
+              <div>
+                <label className="text-[10px] font-bold text-gray-400 block mb-1">Monto a retirar ($)</label>
+                <input
+                  type="number"
+                  placeholder="0.00"
+                  value={cashDropAmount}
+                  onChange={(e) => setCashDropAmount(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-gray-400 block mb-1">Entregado a / Justificación</label>
+                <input
+                  type="text"
+                  placeholder="Ej. Gerente Juan / Caja fuerte"
+                  value={cashDropNotes}
+                  onChange={(e) => setCashDropNotes(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
+                />
+              </div>
             </div>
             <Button
               onClick={() => {
                 if (Number(cashDropAmount) <= 0) return toast.error("Monto inválido");
+                if (Number(cashDropAmount) > (cashStatus?.currentCash ?? 0)) {
+                  return toast.error("El monto de retiro supera el efectivo disponible en caja");
+                }
                 createCashDropMutation.mutate({ amount: Number(cashDropAmount), notes: cashDropNotes });
               }}
               disabled={createCashDropMutation.isPending || !cashDropAmount}
-              className="w-full bg-cyan-500 hover:bg-cyan-400 text-gray-950 font-bold text-xs py-2.5"
+              className="w-full bg-cyan-500 hover:bg-cyan-400 text-gray-950 font-bold text-xs py-2.5 shadow-md active:scale-95 transition-all"
             >
-              {createCashDropMutation.isPending ? "Registrando..." : "Registrar Retiro de Efectivo e Imprimir Comprobante"}
+              {createCashDropMutation.isPending ? "Registrando..." : "Registrar Retiro e Imprimir Comprobante Físico"}
             </Button>
           </div>
 
-          <div className="flex justify-between items-center pt-3 border-t border-white/5">
-            <Link
-              href="/reports"
-              className="text-xs text-cyan-400 hover:underline flex items-center gap-1 font-semibold"
+          {/* Acciones de Cierre e Impresión de Corte */}
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={async () => {
+                const corteTicket = {
+                  isCorteDeCaja: true,
+                  totalCashReceived: cashStatus?.totalCashReceived ?? 0,
+                  totalDropped: cashStatus?.totalDropped ?? 0,
+                  currentCash: cashStatus?.currentCash ?? 0,
+                  timestamp: new Date().toISOString(),
+                  ...ticketContext,
+                };
+                const res = await printEngine.printTicket(corteTicket, true);
+                if (res.success) {
+                  toast.success("¡Ticket de Corte de Caja impreso!");
+                } else if (res.queued) {
+                  toast.info(res.error || "Corte de caja enviado a la cola de impresión.");
+                } else {
+                  toast.error("No se pudo imprimir el comprobante. Verifica la conexión.");
+                }
+              }}
+              className="w-full sm:w-auto text-xs font-bold border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10"
             >
-              Ver reporte detallado en Dashboard →
-            </Link>
-            <Button variant="secondary" onClick={() => setCorteModalOpen(false)}>
-              Cerrar
+              🖨️ Imprimir Ticket de Corte Actual
             </Button>
+
+            <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+              <Link
+                href="/reports"
+                className="text-xs text-gray-400 hover:text-cyan-400 hover:underline flex items-center gap-1 font-semibold"
+              >
+                Auditoría Completa →
+              </Link>
+              <Button variant="secondary" onClick={() => setCorteModalOpen(false)}>
+                Listo
+              </Button>
+            </div>
           </div>
         </div>
       </Dialog>
@@ -1447,7 +1516,7 @@ export default function PosPage() {
                 </div>
               ) : null}
               <img 
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(`https://t.me/RabbittyBot/app?startapp=pay_${qrPaymentModal.intentId}`)}`} 
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(`rabbitty://pay?intent=${qrPaymentModal.intentId}&fallback=https://rabbitty.me/scan`)}`} 
                 alt="QR Code para pagar con Bunz" 
                 className="w-50 h-50 sm:w-62.5 sm:h-62.5"
               />
