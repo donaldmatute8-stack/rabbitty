@@ -143,7 +143,7 @@ export default function SupportPage() {
   const renderBunzyChatContent = () => (
     <div className="flex flex-col h-full">
       {/* Messages Scroll Area */}
-      <div className="flex-1 overflow-y-auto space-y-3.5 pr-1 text-xs md:text-sm">
+      <div className="flex-1 overflow-y-auto space-y-3.5 pr-1.5 text-xs md:text-sm custom-scrollbar">
         {messages.map((m) => (
           <div
             key={m.id}
@@ -175,6 +175,7 @@ export default function SupportPage() {
           </div>
         )}
       </div>
+
 
       {/* Quick Prompts */}
       <div className="flex gap-1.5 py-2.5 overflow-x-auto text-[11px] no-scrollbar shrink-0">
@@ -264,9 +265,10 @@ export default function SupportPage() {
       <div className="max-w-7xl mx-auto px-6 py-6 lg:h-[calc(100vh-5rem)] lg:overflow-hidden">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full items-start">
           
-          {/* Columna Principal: Hero, Contact Channels & Extended FAQs (7 cols - Scrollable independiente en Desktop) */}
-          <div className="lg:col-span-7 space-y-10 lg:h-full lg:overflow-y-auto lg:pr-4 scrollbar-thin">
+          {/* Columna Principal: Hero, Contact Channels & Extended FAQs (7 cols - Scrollable independiente con barra Rabbitty estilizada) */}
+          <div className="lg:col-span-7 space-y-10 lg:h-full lg:overflow-y-auto lg:pr-5 custom-scrollbar">
             {/* Hero */}
+
             <div>
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#E91E63]/10 border border-[#E91E63]/30 text-xs font-bold text-[#E91E63] mb-4">
                 <Sparkles size={14} />
