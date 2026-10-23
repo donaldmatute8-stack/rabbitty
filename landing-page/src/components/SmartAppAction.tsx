@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Smartphone, X, ArrowUpRight } from 'lucide-react';
 import { SimpleQRCode } from '@/components/SimpleQRCode';
 
@@ -67,16 +68,16 @@ export function SmartAppAction({
           <ArrowUpRight size={15} />
         </button>
 
-        {/* Interactive Content-Aware QR Modal for Desktop Visitors */}
-        {showQRModal && (
+        {/* Interactive Content-Aware QR Modal for Desktop Visitors (Portaled to document.body) */}
+        {showQRModal && typeof document !== 'undefined' && createPortal(
           <div
             role="dialog"
             aria-modal="true"
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200"
+            className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto"
             onClick={() => setShowQRModal(false)}
           >
             <div
-              className="relative w-full max-w-sm rounded-3xl bg-[#121218] text-white p-7 sm:p-8 shadow-2xl border border-pink-500/30 text-center space-y-5 animate-in zoom-in-95 duration-200"
+              className="relative w-full max-w-sm rounded-3xl bg-[#121218] text-white p-7 sm:p-8 shadow-2xl border border-pink-500/30 text-center space-y-5 animate-in zoom-in-95 duration-200 my-auto"
               onClick={e => e.stopPropagation()}
             >
               <button
@@ -121,7 +122,8 @@ export function SmartAppAction({
                 </a>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </>
     );

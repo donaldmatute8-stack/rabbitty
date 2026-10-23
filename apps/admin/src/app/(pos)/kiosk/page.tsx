@@ -102,7 +102,11 @@ export default function KioskPage() {
 
         <div className="relative z-10 flex flex-col items-center text-center px-12">
           <div className="h-40 w-40 rounded-[2.5rem] bg-linear-to-br from-purple-500 via-pink-500 to-rose-500 flex items-center justify-center mb-10 shadow-[0_0_80px_rgba(236,72,153,0.5)] transform transition-transform duration-500 group-hover:-translate-y-4">
-            <span className="font-black text-8xl text-white">R</span>
+            <img
+              src="/Ra.png"
+              alt="Rabbitty Ra"
+              className="h-28 w-28 object-contain drop-shadow-[0_0_20px_rgba(255,255,255,0.4)] select-none"
+            />
           </div>
           <h1 className="text-7xl font-black mb-6 tracking-tight text-white drop-shadow-2xl">Diseña tu pedido</h1>
           <p className="text-3xl text-gray-300 font-medium max-w-2xl mb-16 drop-shadow-md">
