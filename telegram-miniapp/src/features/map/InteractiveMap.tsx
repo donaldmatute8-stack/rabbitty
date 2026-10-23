@@ -42,6 +42,8 @@ interface InteractiveMapProps {
   businesses: MapBusiness[];
   userLat?: number | null;
   userLng?: number | null;
+  onRequestLocation?: () => void;
+  isLocating?: boolean;
 }
 
 const RARITY = {
@@ -109,10 +111,11 @@ function userMarkerHTML() {
     </div>`;
 }
 
-export default function InteractiveMap({ businesses, userLat, userLng }: InteractiveMapProps) {
+export default function InteractiveMap({ businesses, userLat, userLng, onRequestLocation, isLocating }: InteractiveMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInst = useRef<L.Map | null>(null);
   const layerGroup = useRef<L.LayerGroup | null>(null);
+  const userMarkerGroup = useRef<L.LayerGroup | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const { resolvedTheme } = useTheme();
@@ -174,17 +177,8 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
 
     // Basemap se agrega/actualiza en el efecto dependiente del tema (dark/light).
 
-    // Add destination marker (from affiliate 'Llegar')
-    if (userLat != null && userLng != null) {
-      const uIcon = L.divIcon({ html: userMarkerHTML(), className:'', iconSize:[26,26], iconAnchor:[13,13] });
-      L.marker([userLat, userLng], { icon: uIcon, zIndexOffset: 2000 }).addTo(map);
-
-      L.circle([userLat, userLng], {
-        radius:90, color:'#E91E63', fillColor:'#E91E63', fillOpacity:0.04, weight:1, dashArray:'3 5',
-      }).addTo(map);
-    }
-
     layerGroup.current = L.layerGroup().addTo(map);
+    userMarkerGroup.current = L.layerGroup().addTo(map);
     mapInst.current = map;
     setMapReady(true);
     
@@ -194,6 +188,7 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
       map.remove(); 
       mapInst.current = null; 
       tileLayerRef.current = null;
+      userMarkerGroup.current = null;
       setMapReady(false);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -215,10 +210,29 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
     tileLayerRef.current = layer;
   }, [isDark, mapReady]);
 
-  // Pan to target location if coordinates come in after mount
+  // Actualiza reactivamente el pin del usuario y centra el mapa
   useEffect(() => {
-    if (!mapInst.current || userLat == null || userLng == null) return;
-    mapInst.current.setView([userLat, userLng], 16, { animate: true });
+    const map = mapInst.current;
+    const group = userMarkerGroup.current;
+    if (!map || !group) return;
+
+    group.clearLayers();
+
+    if (userLat != null && userLng != null) {
+      const uIcon = L.divIcon({ html: userMarkerHTML(), className: '', iconSize: [26, 26], iconAnchor: [13, 13] });
+      L.marker([userLat, userLng], { icon: uIcon, zIndexOffset: 2000 }).addTo(group);
+
+      L.circle([userLat, userLng], {
+        radius: 90,
+        color: '#E91E63',
+        fillColor: '#E91E63',
+        fillOpacity: 0.05,
+        weight: 1,
+        dashArray: '3 5',
+      }).addTo(group);
+
+      map.flyTo([userLat, userLng], 15.5, { duration: 1.2 });
+    }
   }, [userLat, userLng]);
 
   // Render Business Markers
@@ -424,17 +438,46 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
         )}
       </div>
 
-      {/* Locate Me Button - Moved Up and Aligned */}
-      <button 
-        onClick={() => {
-          if (userLat && userLng && mapInst.current) {
-            mapInst.current.panTo([userLat, userLng], { animate: true, duration: 1 });
-          }
-        }}
-        style={{ position: 'absolute', top: PlatformBridge.isTelegram() ? 70 : 14, right: 16, zIndex: 2000, width: 36, height: 36, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', cursor: 'pointer' }}
-      >
-        <Crosshair size={18} />
-      </button>
+      {/* Locate Me Button & Activate Location Prompt */}
+      <div style={{ position: 'absolute', top: PlatformBridge.isTelegram() ? 70 : 14, right: 16, zIndex: 2000, display: 'flex', alignItems: 'center', gap: 8 }}>
+        {!userLat && onRequestLocation && (
+          <button
+            type="button"
+            onClick={onRequestLocation}
+            disabled={isLocating}
+            style={{
+              background: 'linear-gradient(135deg, #E91E63 0%, #D81B60 100%)',
+              color: '#fff',
+              border: '1px solid rgba(255,255,255,0.3)',
+              borderRadius: 999,
+              padding: '6px 12px',
+              fontSize: 11,
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              boxShadow: '0 4px 16px rgba(233,30,99,0.5)',
+              cursor: 'pointer',
+            }}
+          >
+            <span>📍 {isLocating ? 'Buscando GPS…' : 'Activar Ubicación'}</span>
+          </button>
+        )}
+
+        <button 
+          onClick={() => {
+            if (userLat && userLng && mapInst.current) {
+              mapInst.current.flyTo([userLat, userLng], 16, { duration: 1 });
+            } else if (onRequestLocation) {
+              onRequestLocation();
+            }
+          }}
+          style={{ width: 36, height: 36, borderRadius: '50%', background: userLat ? 'rgba(0,0,0,0.6)' : 'rgba(233,30,99,0.2)', backdropFilter: 'blur(10px)', border: `1px solid ${userLat ? 'rgba(255,255,255,0.2)' : '#E91E63'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: userLat ? '#fff' : '#E91E63', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', cursor: 'pointer' }}
+          title={userLat ? "Centrar en mi ubicación" : "Activar GPS"}
+        >
+          <Crosshair size={18} className={isLocating ? 'animate-spin' : ''} />
+        </button>
+      </div>
 
       {/* Selected Business Floating Card */}
       {selected && (
@@ -460,6 +503,7 @@ export default function InteractiveMap({ businesses, userLat, userLng }: Interac
           >
             <div style={{ width: 68, height: 68, borderRadius: 18, background: '#12121E', overflow: 'hidden', flexShrink: 0, border: '1px solid rgba(255,255,255,0.1)' }}>
               {selected.imageUrl ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
                 <img src={selected.imageUrl} alt={selected.user} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
                 <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30 }}>{getIcon(selected.device)}</div>

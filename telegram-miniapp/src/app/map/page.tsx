@@ -8,6 +8,7 @@ import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import BottomNav from '@/components/BottomNav';
 import Header from '@/components/ui/Header';
+import { PlatformBridge } from '@/lib/platform';
 
 const InteractiveMap = dynamic(() => import('@/features/map/InteractiveMap'), {
   ssr: false,
@@ -30,6 +31,11 @@ type Biz = {
 
 const FILTERS = ['Todos', 'Cafés', 'Restaurantes', 'Gimnasios', 'Retail', 'Belleza'];
 
+type FeedResponse = {
+  success?: boolean;
+  data?: Biz[];
+};
+
 // Inner component that uses useSearchParams — must be inside Suspense
 function MapPageInner() {
   const searchParams = useSearchParams();
@@ -51,16 +57,43 @@ function MapPageInner() {
 
   useEffect(() => {
     fetch('/api/feed')
-      .then(r => r.json())
-      .then((data: any) => {
-        if (data.success) {
-          const withCoords = data.data.filter((b: any) => b.lat && b.lng);
+      .then(r => r.json() as Promise<FeedResponse>)
+      .then((data) => {
+        if (data?.success && Array.isArray(data.data)) {
+          const withCoords = data.data.filter((b): b is Biz => typeof b?.lat === 'number' && typeof b?.lng === 'number');
           setBusinesses(withCoords);
         }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  const [userCoords, setUserCoords] = useState<{ lat: number | null; lng: number | null }>({
+    lat: targetLat,
+    lng: targetLng,
+  });
+  const [isLocating, setIsLocating] = useState(false);
+
+  const requestLocation = async () => {
+    setIsLocating(true);
+    try {
+      const loc = await PlatformBridge.getLocation();
+      if (loc.success && loc.lat != null && loc.lng != null) {
+        setUserCoords({ lat: loc.lat, lng: loc.lng });
+      }
+    } finally {
+      setIsLocating(false);
+    }
+  };
+
+  useEffect(() => {
+    if (targetLat != null && targetLng != null) return;
+    PlatformBridge.getLocation().then((loc) => {
+      if (loc.success && loc.lat != null && loc.lng != null) {
+        setUserCoords({ lat: loc.lat, lng: loc.lng });
+      }
+    });
+  }, [targetLat, targetLng]);
 
   const filtered = activeFilter === 'Todos'
     ? businesses
@@ -73,7 +106,13 @@ function MapPageInner() {
 
       <main className="flex-1 relative">
         <div className="h-[50vh] bg-[#0D0D1A] relative overflow-hidden">
-          <InteractiveMap businesses={businesses} userLat={targetLat} userLng={targetLng} />
+          <InteractiveMap
+            businesses={businesses}
+            userLat={userCoords.lat}
+            userLng={userCoords.lng}
+            onRequestLocation={requestLocation}
+            isLocating={isLocating}
+          />
         </div>
 
         <motion.div
@@ -83,9 +122,14 @@ function MapPageInner() {
             className="rounded-t-3xl shadow-[0_-4px_20px_rgba(0,0,0,0.1)]"
             style={{ background: 'var(--bg-primary)' }}
         >
-          <div className="flex justify-center pt-3 pb-2">
+          <button
+            type="button"
+            onClick={() => setShowList(!showList)}
+            className="w-full flex justify-center pt-3 pb-2 focus:outline-none"
+            aria-label="Toggle list view"
+          >
             <div className="w-12 h-1 bg-gray-300 rounded-full" />
-          </div>
+          </button>
 
           <div className="px-4 pb-3">
             <div className="relative mb-3">
@@ -93,7 +137,7 @@ function MapPageInner() {
               <input
                 type="text"
                 placeholder="Buscar negocios..."
-                className="w-full rounded-xl pl-12 pr-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-[var(--border-focus)]/20"
+                className="w-full rounded-xl pl-12 pr-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-(--border-focus)/20"
                 style={{ background: 'var(--bg-elevated)', color: 'var(--text-primary)', border: '1px solid var(--border-subtle)' }}
               />
             </div>
@@ -127,7 +171,7 @@ function MapPageInner() {
                 className="flex items-center gap-4 rounded-xl p-4 no-underline active:scale-[0.98] transition-transform"
                 style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
               >
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#E91E63] to-[#C2185B] flex items-center justify-center text-white text-lg font-bold shrink-0">
+                <div className="w-12 h-12 rounded-full bg-linear-to-br from-[#E91E63] to-[#C2185B] flex items-center justify-center text-white text-lg font-bold shrink-0">
                   {business.name[0]}
                 </div>
                 <div className="flex-1 min-w-0">
