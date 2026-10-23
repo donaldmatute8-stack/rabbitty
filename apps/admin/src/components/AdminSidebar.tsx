@@ -42,7 +42,8 @@ import {
   TabletSmartphone,
   TerminalSquare,
   Brain,
-  FlaskConical
+  FlaskConical,
+  BookOpen
 } from "lucide-react";
 import { useSidebar } from "./DashboardClientWrapper";
 
@@ -146,6 +147,7 @@ const menuPillars: MenuPillar[] = [
       { href: "/referrals", label: "Red de Referidos", icon: Gift },
       { href: "/birthdays", label: "Cumpleaños", icon: Cake },
       { href: "/catering", label: "Eventos & Catering", icon: CalendarCheck },
+      { href: "/academy", label: "Guías & Academy", icon: BookOpen, badge: "Docs" },
     ],
   },
   {

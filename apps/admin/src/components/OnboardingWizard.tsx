@@ -58,14 +58,34 @@ const STEPS: Step[] = [
     color: "from-amber-500 to-emerald-500",
   },
   {
-    id: "sync",
-    title: "5. Sincronización POS e Impresoras",
-    description: "Conecta tu pantalla de cocina KDS, terminales físicas y sincroniza en tiempo real.",
-    link: "/restaurant-sync",
-    linkText: "Ir a Sincronización",
+    id: "cash-cut",
+    title: "5. Corte de Caja y Fondo Inicial",
+    description: "Configura el fondo de gaveta, arqueo ciego diario y formato de Ticket Z térmico.",
+    link: "/pos",
+    linkText: "Probar en POS",
     icon: RefreshCw,
-    priority: "Estratégica",
+    priority: "Alta",
     color: "from-emerald-500 to-teal-500",
+  },
+  {
+    id: "sync",
+    title: "6. Pantalla KDS e Impresoras Térmicas",
+    description: "Conecta tu pantalla de cocina KDS, terminales físicas y sincroniza comandas en tiempo real.",
+    link: "/kitchen",
+    linkText: "Abrir KDS",
+    icon: Monitor,
+    priority: "Estratégica",
+    color: "from-orange-500 to-amber-500",
+  },
+  {
+    id: "academy",
+    title: "7. Capacitación y Guías Academy",
+    description: "Consulta las guías interactivas del sistema para capacitar a cajeros, cocineros y gerentes.",
+    link: "/academy",
+    linkText: "Ver Guías",
+    icon: Sparkles,
+    priority: "Estratégica",
+    color: "from-pink-500 to-purple-500",
   },
 ];
 
@@ -96,24 +116,24 @@ export function OnboardingWizard() {
   const progressPercent = Math.round((completedCount / STEPS.length) * 100);
 
   return (
-    <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-gray-900/80 via-black to-gray-900/90 p-6 shadow-2xl backdrop-blur-xl">
+    <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-linear-to-br from-gray-900/80 via-black to-gray-900/90 p-6 shadow-2xl backdrop-blur-xl">
       <div className="absolute top-0 right-0 h-64 w-64 rounded-full bg-pink-500/10 blur-[100px] pointer-events-none" />
 
       {/* Header Bar */}
       <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-5">
         <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-pink-500 to-purple-600 shadow-[0_0_20px_rgba(236,72,153,0.3)]">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-linear-to-tr from-pink-500 to-purple-600 shadow-[0_0_20px_rgba(236,72,153,0.3)]">
             <Trophy className="h-6 w-6 text-white" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-black text-white">Guía de Inicio Rápido</h2>
+              <h2 className="text-xl font-black text-white">Preparación del Negocio (Business Readiness)</h2>
               <span className="rounded-full bg-pink-500/10 border border-pink-500/20 px-2.5 py-0.5 text-xs font-bold text-pink-400">
-                Paso a Paso
+                {progressPercent}% Listo
               </span>
             </div>
             <p className="text-xs text-gray-400 mt-0.5 font-medium">
-              Sigue estas 5 prioridades para poner en marcha tu restaurante en minutos
+              Indicador inteligente de 7 pasos para asegurar que tu local esté 100% listo para operar y auditar ventas
             </p>
           </div>
         </div>
@@ -123,7 +143,7 @@ export function OnboardingWizard() {
             <span className="text-xs font-bold text-gray-300">{progressPercent}% completado</span>
             <div className="w-24 h-2 bg-white/10 rounded-full overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-pink-500 to-purple-500 transition-all duration-500"
+                className="h-full bg-linear-to-r from-pink-500 to-purple-500 transition-all duration-500"
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
@@ -194,7 +214,7 @@ export function OnboardingWizard() {
                           </span>
                         </button>
 
-                        <div className={`p-2 rounded-xl bg-gradient-to-tr ${step.color} text-white shadow-md`}>
+                        <div className={`p-2 rounded-xl bg-linear-to-tr ${step.color} text-white shadow-md`}>
                           <Icon className="h-4 w-4" />
                         </div>
                       </div>

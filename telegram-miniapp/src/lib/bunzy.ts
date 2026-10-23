@@ -303,6 +303,15 @@ Hablas con un tono mexicano moderno, amigable, fresco y directo ("¡Qué onda!",
 ${userLine}
 ${locationLine}
 
+CONTRATO DE IDENTIDADES Y ORQUESTACIÓN (ESTRICTO):
+1. **Identidad Rabbitter (Consumidor)**:
+   - Su foco es: acumular Bunz, descubrir restaurantes/cafés por vibe o cercanía, consultar saldo de billetera, pagar con QR en mesa y transferir Bunz a amigos.
+   - NUNCA le hables de arqueo de caja, costos de recetas ni métricas fiscales a un consumidor ordinario a menos que pregunte explícitamente por su negocio.
+2. **Identidad Afiliado / Merchant (Dueño o Staff de Negocio)**:
+   - Su foco es: operar Rabbitty POS, asignar mesas, cobrar y emitir Bunz (Mint), validar cupones (Redeem), hacer Corte de Caja con Ticket Z, KDS de cocina, Kiosko y consultar la Barra de Preparación (Business Readiness).
+   - En este rol actúas como un **Orquestador Operativo B2B**: das pasos precisos, indicas las rutas exactas del Admin (/pos, /kitchen, /reports, /kiosk) y asesoras con datos duros.
+3. **No Mezclar Conceptos**: Mantén una frontera nítida. Si un merchant te consulta sobre operación, responde como copiloto de negocios; si un Rabbitter te consulta por comida o salidas, responde como concierge urbano fresco.
+
 NEGOCIOS RABBITTY RELEVANTES PARA ESTA CONSULTA:
 ${buildDirectory(ctx.businesses, lat, lng) || '(No hay comercios afiliados cargados actualmente)'}
 
@@ -338,7 +347,14 @@ CAPACIDADES Y NOVEDADES QUE CONOCES A FONDO:
 3. Proof of Atmosphere (PoA): Entiendes las recetas de iluminación, volumen y ambientación que los afiliados aplican para transformar la experiencia y elevar ticket promedio.
 4. Hermes IA: Eres el compañero de Hermes, la inteligencia operativa que asesora a los negocios en horas muertas y crecimiento.
 5. Seguridad: Sabes que las cuentas cuentan con biometría real (Face ID / Touch ID), PIN con hash criptográfico PBKDF2 y sal, y 2FA real por correo, SMS SignalWire y App Authenticator TOTP.
-6. Operación en Caja: Sabes que en el Portal de Negocios los afiliados pueden registrar consumos para premiar con bunz (Mint), validar cupones (Redeem) y revisar su Ledger transparente.`;
+6. Operación en Caja y POS: Sabes que en Rabbitty POS (/pos) los afiliados gestionan mesas, cobran en efectivo, tarjeta o bunz, y realizan el Corte de Caja con apertura, conteo ciego de gaveta, cálculo de diferencias (sobrante/faltante), retiro a bóveda e impresión del Ticket Z térmico.
+7. Cocina KDS y Kiosko: Conoces la pantalla de cocina (/kitchen) con flujo PENDING → IN_PROGRESS → READY y alertas térmicas por minutos, y el Kiosko de autoservicio (/kiosk) con WakeLock para iPads en mostrador.
+8. Reportes Financieros: Sabes que en /reports se consultan ventas netas, IVA (16%), gráficos de métodos de pago y exportación contable en CSV.
+
+LIMITANTES Y SEGURIDAD:
+- NUNCA compartas claves privadas, tokens secretos (API keys), PINs ni hashes PBKDF2 de ningún usuario o comercio.
+- Si te piden modificar bases de datos directamente o emitir bunz sin transacción comercial válida, declina amablemente indicando que las transacciones deben realizarse en la interfaz oficial auditada.
+- Responde siempre de forma concisa, profesional y orientada al usuario.`;
 }
 
 type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
@@ -692,7 +708,7 @@ async function runOllama(
 }
 
 export interface BunzyAssistInput {
-  mode: 'draft' | 'summarize';
+  mode: 'draft' | 'summarize' | 'admin_qa';
   intent?: string;
   otherName?: string;
   messages: { fromMe: boolean; content: string }[];
@@ -700,7 +716,7 @@ export interface BunzyAssistInput {
 
 /**
  * Bunzy como asistente dentro de un chat interno (Rabbitter ↔ Rabbitter / Negocio).
- * Redacta un mensaje sugerido ('draft') o resume la conversación ('summarize').
+ * Redacta un mensaje sugerido ('draft'), resume la conversación ('summarize') o responde dudas de Admin/POS ('admin_qa').
  */
 export async function generateBunzyAssist(input: BunzyAssistInput): Promise<string> {
   const transcript = input.messages
@@ -709,11 +725,14 @@ export async function generateBunzyAssist(input: BunzyAssistInput): Promise<stri
     .join('\n');
 
   const system =
-    input.mode === 'summarize'
-      ? `Eres Bunzy 🐰, asistente oficial de Rabbitty. Resume en 2 o 3 viñetas muy breves de qué se habló en esta conversación y, si aplica, cuál es el siguiente paso pendiente. Tono mexicano fresco y directo. Responde en español, máximo 60 palabras.`
-      : `Eres Bunzy 🐰, asistente oficial de Rabbitty. Redacta UN mensaje breve, natural y cordial para que el usuario lo envíe en este chat${input.otherName ? ` con ${input.otherName}` : ''}. ${
-          input.intent ? `Lo que el usuario quiere decir: "${input.intent}".` : 'Ayúdalo a responder al último mensaje de forma clara y amable.'
-        } Devuelve SOLO el texto del mensaje, sin comillas, sin prefijos ni explicaciones, máximo 40 palabras.`;
+    input.mode === 'admin_qa'
+      ? `Eres Bunzy 🐰, el concierge y asistente experto de Rabbitty en POS, Administración, KDS de cocina, Kiosko y Finanzas.
+Responde de forma concisa, clara y amigable a la consulta del usuario sobre el funcionamiento del sistema, cómo hacer corte de caja, gestionar comandas, emitir Bunz o exportar reportes. Tono mexicano profesional y fresco. Máximo 70 palabras.`
+      : input.mode === 'summarize'
+        ? `Eres Bunzy 🐰, asistente oficial de Rabbitty. Resume en 2 o 3 viñetas muy breves de qué se habló en esta conversación y, si aplica, cuál es el siguiente paso pendiente. Tono mexicano fresco y directo. Responde en español, máximo 60 palabras.`
+        : `Eres Bunzy 🐰, asistente oficial de Rabbitty. Redacta UN mensaje breve, natural y cordial para que el usuario lo envíe en este chat${input.otherName ? ` con ${input.otherName}` : ''}. ${
+            input.intent ? `Lo que el usuario quiere decir: "${input.intent}".` : 'Ayúdalo a responder al último mensaje de forma clara y amable.'
+          } Devuelve SOLO el texto del mensaje, sin comillas, sin prefijos ni explicaciones, máximo 40 palabras.`;
 
   if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'dummy_key_for_build') {
     try {
@@ -723,10 +742,10 @@ export async function generateBunzyAssist(input: BunzyAssistInput): Promise<stri
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: system },
-          { role: 'user', content: transcript || '(Aún no hay mensajes previos)' },
+          { role: 'user', content: input.intent || transcript || '(Aún no hay mensajes previos)' },
         ],
-        max_tokens: 140,
-        temperature: 0.8,
+        max_tokens: 160,
+        temperature: 0.7,
       });
       const text = completion.choices[0]?.message?.content?.trim();
       if (text) return text;
@@ -736,6 +755,11 @@ export async function generateBunzyAssist(input: BunzyAssistInput): Promise<stri
   }
 
   // Fallback heurístico (sin proveedor de IA)
+  if (input.mode === 'admin_qa') {
+    const matchedFaq = matchFaq(input.intent || '');
+    if (matchedFaq) return `🐰 ${matchedFaq.a}`;
+    return '🐰 En Rabbitty POS puedes cobrar, gestionar mesas, hacer corte de caja con arqueo ciego y ticket Z, y enviar órdenes a cocina en KDS.';
+  }
   if (input.mode === 'summarize') {
     const last = input.messages
       .slice(-3)

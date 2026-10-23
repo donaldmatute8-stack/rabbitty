@@ -1901,9 +1901,29 @@ export default function ChatInboxPage() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="m-0 font-bold text-[15px] text-white flex items-center gap-1.5">
-                Bunzy AI <Sparkles size={14} className="text-[#0088CC]" />
+                Bunzy Concierge <Sparkles size={14} className="text-[#0088CC]" />
               </p>
-              <p className="m-0 text-[12px] text-[#8E8E93]">Asistente oficial inteligente de Rabbitty</p>
+              <p className="m-0 text-[12px] text-[#8E8E93]">Lugares, saldo de Bunz, transferencias y reservas</p>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              PlatformBridge.hapticFeedback('medium');
+              setNewOpen(false);
+              router.push('/chat/bot?prefill=Hola%20Bunzy%2C%20necesito%20ayuda%20con%20el%20POS%20y%20corte%20de%20caja');
+            }}
+            className="flex items-center gap-3 p-3 rounded-2xl bg-linear-to-r from-pink-500/15 to-purple-500/15 border border-pink-500/30 text-left active:scale-98 transition-all"
+          >
+            <div className="w-11 h-11 rounded-full bg-linear-to-br from-pink-500 to-rose-600 flex items-center justify-center text-xl shrink-0 shadow-lg shadow-pink-500/25">
+              🏪
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="m-0 font-bold text-[15px] text-white flex items-center gap-1.5">
+                Bunzy Admin & POS <Sparkles size={14} className="text-pink-400" />
+              </p>
+              <p className="m-0 text-[12px] text-pink-300/80">Soporte experto en corte de caja, KDS, Kiosko y reportes</p>
             </div>
           </button>
 

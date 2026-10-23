@@ -5,6 +5,10 @@ import { eq } from 'drizzle-orm';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 import { getOwnedBusinessIds, resolveConversationAccess, resolveTelegramRecipient } from '@/lib/chat';
 import { generateBunzyAssist } from '@/lib/bunzy';
+import { checkRateLimit } from '@/lib/rateLimit';
+
+const RATE_LIMIT_WINDOW_SECONDS = 60;
+const MAX_REQUESTS_PER_WINDOW = 10;
 
 export async function POST(req: Request) {
   try {
@@ -13,9 +17,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
+    // Rate limiting compartido entre instancias (Redis si REDIS_URL existe; memoria si no)
+    const limit = await checkRateLimit(
+      `bunzy-assist:${caller.id}`,
+      MAX_REQUESTS_PER_WINDOW,
+      RATE_LIMIT_WINDOW_SECONDS,
+    );
+    if (!limit.allowed) {
+      return NextResponse.json(
+        { error: 'Límite de solicitudes alcanzado. Espera un momento antes de invocar a Bunzy de nuevo.' },
+        { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } },
+      );
+    }
+
     const body = (await req.json()) as {
       conversationId?: string;
-      mode?: 'draft' | 'summarize';
+      mode?: 'draft' | 'summarize' | 'admin_qa';
       intent?: string;
     };
 
@@ -46,8 +63,22 @@ export async function POST(req: Request) {
 
     const other = await resolveTelegramRecipient(access.otherParticipantId).catch(() => null);
 
+    // Roles reales en la app: 'USER' (Rabbitter) y 'AFFILIATE' (negocio).
+    const isMerchantOrAdmin =
+      businessIds.length > 0 ||
+      caller.role === 'AFFILIATE' ||
+      access.isBusinessInbox;
+
+    // Si un usuario ordinario intenta invocar admin_qa, degradar limpiamente a draft
+    const effectiveMode = body.mode === 'admin_qa' && !isMerchantOrAdmin ? 'draft' : (body.mode || 'draft');
+
+    // Telemetría ligera de auditoría
+    if (body.mode === 'admin_qa') {
+      console.log(`[BunzyAssist Audit] admin_qa query by user=${caller.id} isMerchant=${isMerchantOrAdmin} intent="${body.intent || ''}"`);
+    }
+
     const text = await generateBunzyAssist({
-      mode: body.mode === 'summarize' ? 'summarize' : 'draft',
+      mode: effectiveMode,
       intent: body.intent,
       otherName: other?.displayName,
       messages: rows

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Card } from "@rabbitty/ui";
-import { BookOpen, ChevronRight, Building2, DollarSign, Monitor, Store, Award, Megaphone, Cake, QrCode, Gift, Store as StoreIcon, Salad, Truck, Receipt as ReceiptIcon, Clock, Users, Sparkles, Activity, Compass, Headphones } from "lucide-react";
+import { BookOpen, ChevronRight, Building2, DollarSign, Monitor, Store, Award, Megaphone, Cake, QrCode, Gift, Store as StoreIcon, Salad, Truck, Receipt as ReceiptIcon, Clock, Users, Sparkles, Activity, Compass, Headphones, Flame } from "lucide-react";
 
 type GuideRole = "all" | "admin" | "pos" | "marketing" | "phygital";
 
@@ -159,6 +159,38 @@ const guides: Guide[] = [
     desc: "Gestiona el programa de referidos y analiza su rendimiento",
     role: "marketing",
     content: `## Programa de Referidos\n\nLos clientes pueden invitar a amigos y ganar recompensas.\n\n### KPIs disponibles:\n- Invitadores únicos\n- Invitados registrados\n- Total de referidos\n- Bunz en recompensas\n\n### Historial:\n- Lista completa de referidos\n- Estado: PENDING / COMPLETED / CANCELLED\n- Recompensa en Bunz por cada referido\n\n### Ubicación:\nMenú lateral → Referidos`,
+  },
+  {
+    id: "cash-cut",
+    icon: ReceiptIcon,
+    label: "Corte de Caja (Cierre de Turno)",
+    desc: "Cómo realizar arqueo ciego, comparar lo esperado vs contado y registrar retiros",
+    role: "pos",
+    content: `## Guía Operativa de Corte de Caja (Cierre de Turno)\n\nEl corte de caja en Rabbitty garantiza la cuadratura exacta entre las ventas cobradas y el dinero físico en gaveta.\n\n### Pasos para un Cierre Exitoso:\n1. **Apertura de Turno**: Al iniciar la jornada, ingresa el 'Fondo Inicial de Caja' (cambio para dar cambio).\n2. **Durante la Operación**: Cada venta registrada en Efectivo, Tarjeta o Bunz se suma automáticamente al balance esperado.\n3. **Arqueo de Caja**: Al finalizar el turno o jornada, el cajero cuenta los billetes y monedas físicos e introduce el monto en el campo 'Efectivo Contado'.\n4. **Comparativa Automática**: El sistema calcula la diferencia (Sobrante o Faltante). Si hay descuadre, solicita una nota justificativa.\n5. **Retiro de Efectivo / Depósito**: Registra el monto que se retira a bóveda segura o depósito bancario y deja el fondo para el siguiente turno.\n6. **Impresión del Ticket Z**: Toca 'Cerrar Caja e Imprimir Ticket' para generar el corte Z térmico para auditoría contable.`,
+  },
+  {
+    id: "financial-reports",
+    icon: Activity,
+    label: "Reportes de Ventas, Métodos y CSV",
+    desc: "Análisis de tendencias de ventas, ticket promedio, IVA desglosado y exportación contable",
+    role: "admin",
+    content: `## Reportes Financieros y Métricas de Negocio\n\nEl módulo de Reportes consolida la salud comercial y fiscal de tu sucursal o grupo de restaurantes.\n\n### Indicadores Clave (KPIs):\n- **Ventas Netas vs Impuestos**: Visualiza el subtotal, el IVA (16%) y las ventas brutas separadas para contabilidad clara.\n- **Distribución de Métodos de Pago**: Proporción real de cobros en Efectivo, Terminales de Tarjeta bancaria y Recompensas Bunz.\n- **Top Platillos y Horas Pico**: Identifica tus productos estrella por margen de contribución y horas de mayor afluencia.\n- **Exportación Contable en CSV**: Descarga el archivo de auditoría con un solo clic conteniendo ID de orden, fecha, cliente, subtotal, impuestos y estatus CFDI para tu contador.`,
+  },
+  {
+    id: "kiosk-guide",
+    icon: Monitor,
+    label: "Kiosko Autoservicio en iPad / Stand",
+    desc: "Configuración de pantalla táctil autónoma para que los comensales ordenen y paguen sin filas",
+    role: "pos",
+    content: `## Kiosko Autoservicio Rabbitty\n\nConvierte cualquier iPad o pantalla táctil en una terminal de pedidos autónoma para evitar cuellos de botella en mostrador.\n\n### Características del Kiosko:\n- **Pantalla Siempre Activa**: Integra WakeLock API para evitar que la pantalla del iPad entre en reposo durante el horario comercial.\n- **Experiencia de Menú Visual**: Categorías claras, fotografías en alta definición, modificadores de tamaño y agregados personalizados.\n- **Pago en Mostrador o QR**: El cliente puede pagar al instante con su QR Rabbitty para ganar Bunz o generar un ticket para pagar en caja física.\n- **Ruta de Acceso**: Menú superior de Admin → Kiosko (o directamente en \`/kiosk\`).`,
+  },
+  {
+    id: "kds-kitchen",
+    icon: Flame,
+    label: "KDS (Pantalla Digital de Cocina / Bar)",
+    desc: "Flujo de comandas en tiempo real con alertas térmicas por tiempo de espera",
+    role: "pos",
+    content: `## KDS - Kitchen Display System\n\nElimina el papel en cocina y agiliza los tiempos de preparación con el display de cocina digital interactivo.\n\n### Estados de Comanda:\n- **PENDING (Pendiente)**: Nueva orden recibida desde el POS, QR de mesa o Kiosko.\n- **IN_PROGRESS (En Preparación)**: El cocinero o barista toca el platillo para avisar al salón que está en marcha.\n- **READY (Listo para Entrega)**: Notifica automáticamente a los meseros que la mesa está servida.\n\n### Alertas Térmicas por Colores:\n- **Verde (<5 min)**: Tiempo óptimo de preparación.\n- **Naranja (5-12 min)**: Tiempo estándar en atención.\n- **Rojo Pulsante (>12 min)**: Alerta visual de retraso crítico para priorizar la mesa.`,
   },
   {
     id: "customers",
