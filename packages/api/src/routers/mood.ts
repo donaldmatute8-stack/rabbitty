@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, gte, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { router, adminOnlyProcedure } from "../trpc";
-import { moodCampaigns, ownedBusinesses, users } from "@rabbitty/database-core";
+import { moodCampaigns, moodEvents, ownedBusinesses, users } from "@rabbitty/database-core";
 import type { Context } from "../trpc";
 
 const MOODS = ["calm", "energy", "focus", "celebration", "connection", "surprise"] as const;
@@ -34,6 +34,80 @@ export const moodRouter = router({
     const { rows, isPlatformAdmin } = await scopedBusinesses(ctx);
     return { businesses: rows, isPlatformAdmin };
   }),
+
+  /** Métricas de telemetría de red para Rabbitty Mood */
+  metrics: adminOnlyProcedure
+    .input(z.object({ days: z.number().int().min(1).max(90).default(30), businessId: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const { rows, isPlatformAdmin } = await scopedBusinesses(ctx);
+      const days = input?.days ?? 30;
+      const sinceDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+      const conditions = [gte(moodEvents.createdAt, sinceDate)];
+      if (input?.businessId) {
+        conditions.push(eq(moodEvents.businessId, input.businessId));
+      } else if (!isPlatformAdmin && rows.length > 0) {
+        conditions.push(inArray(moodEvents.businessId, rows.map((b) => b.id)));
+      }
+
+      // 1. Distribución por Mood
+      const moodCounts = await ctx.coreDb
+        .select({
+          mood: moodEvents.mood,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(moodEvents)
+        .where(and(...conditions))
+        .groupBy(moodEvents.mood);
+
+      // 2. Origen (Bunzy vs Grid de selección vs Venue)
+      const sourceCounts = await ctx.coreDb
+        .select({
+          source: moodEvents.source,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(moodEvents)
+        .where(and(...conditions))
+        .groupBy(moodEvents.source);
+
+      // 3. Total general
+      const totalEvents = moodCounts.reduce((acc, row) => acc + (row.count || 0), 0);
+
+      // 4. Últimos check-ins en tiempo real (anónimos)
+      const recentEvents = await ctx.coreDb
+        .select({
+          id: moodEvents.id,
+          mood: moodEvents.mood,
+          source: moodEvents.source,
+          businessId: moodEvents.businessId,
+          createdAt: moodEvents.createdAt,
+        })
+        .from(moodEvents)
+        .where(and(...conditions))
+        .orderBy(desc(moodEvents.createdAt))
+        .limit(10);
+
+      const bizNames = new Map(rows.map((b) => [b.id, b.name]));
+
+      return {
+        totalEvents,
+        timeframeDays: days,
+        distribution: moodCounts.map((m) => ({
+          mood: m.mood,
+          count: Number(m.count),
+          percentage: totalEvents > 0 ? Math.round((Number(m.count) / totalEvents) * 100) : 0,
+        })),
+        sources: sourceCounts.map((s) => ({
+          source: s.source,
+          count: Number(s.count),
+          percentage: totalEvents > 0 ? Math.round((Number(s.count) / totalEvents) * 100) : 0,
+        })),
+        recent: recentEvents.map((r) => ({
+          ...r,
+          businessName: r.businessId ? bizNames.get(r.businessId) ?? "Local de red" : "Global / Fuera de local",
+        })),
+      };
+    }),
 
   listCampaigns: adminOnlyProcedure.query(async ({ ctx }) => {
     const { rows } = await scopedBusinesses(ctx);

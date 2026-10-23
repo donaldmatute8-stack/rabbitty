@@ -14,6 +14,7 @@ interface Campaign {
   startHour: number;
   endHour: number;
   isActive: boolean;
+  matches30d?: number;
 }
 
 const MOODS = Object.keys(MOOD_DEFINITIONS) as MoodType[];
@@ -129,6 +130,7 @@ export function MoodCampaignsManager({ businessId }: { businessId?: string }) {
                   <p className="text-[11px] text-gray-500 m-0">
                     {def?.label ?? c.targetMood} · {c.startHour}:00–{c.endHour}:59
                     {c.rewardBunz > 0 && ` · +${c.rewardBunz} BUNZ`}
+                    {typeof c.matches30d === 'number' && ` · 🎯 ${c.matches30d} coincidencias`}
                   </p>
                 </div>
                 <button
