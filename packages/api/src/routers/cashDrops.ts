@@ -2,6 +2,7 @@ import { z } from "zod";
 import { router, protectedProcedure, resolveBranchId } from "../trpc";
 import { eq, and, gte, sql } from "drizzle-orm";
 import { branches, cashDrops, payments, orders } from "@rabbitty/database-restaurant/schema";
+import { getOpenShift, computeShiftTotals } from "../services/cashShift";
 import { TRPCError } from "@trpc/server";
 
 export const cashDropsRouter = router({
@@ -13,6 +14,7 @@ export const cashDropsRouter = router({
         .select({
           cashDropEnabled: branches.cashDropEnabled,
           cashDropThreshold: branches.cashDropThreshold,
+          cashDropManagerThreshold: branches.cashDropManagerThreshold,
         })
         .from(branches)
         .where(eq(branches.id, branchId));
@@ -25,6 +27,7 @@ export const cashDropsRouter = router({
       branchId: z.string().optional(),
       cashDropEnabled: z.boolean(),
       cashDropThreshold: z.number().min(0),
+      cashDropManagerThreshold: z.number().min(0).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const branchId = resolveBranchId(ctx, input.branchId);
@@ -33,6 +36,7 @@ export const cashDropsRouter = router({
         .set({
           cashDropEnabled: input.cashDropEnabled,
           cashDropThreshold: input.cashDropThreshold,
+          ...(input.cashDropManagerThreshold !== undefined ? { cashDropManagerThreshold: input.cashDropManagerThreshold } : {}),
         })
         .where(eq(branches.id, branchId));
       return { success: true };
@@ -53,49 +57,33 @@ export const cashDropsRouter = router({
 
       if (!branch) throw new TRPCError({ code: "NOT_FOUND", message: "Branch not found" });
 
-      // Calculate cash received today
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      // Join payments with orders to ensure it's for this branch
-      const paymentsList = await ctx.restaurantDb
-        .select({ amount: payments.amount })
-        .from(payments)
-        .innerJoin(orders, eq(payments.orderId, orders.id))
-        .where(
-          and(
-            eq(orders.branchId, branchId),
-            eq(payments.method, "CASH"),
-            eq(payments.status, "COMPLETED"),
-            gte(payments.createdAt, today)
-          )
-        );
-
-      const totalCashReceived = paymentsList.reduce((sum, p) => sum + Number(p.amount), 0);
-
-      const dropsList = await ctx.restaurantDb
-        .select({ amount: cashDrops.amount })
-        .from(cashDrops)
-        .where(
-          and(
-            eq(cashDrops.branchId, branchId),
-            gte(cashDrops.createdAt, today)
-          )
-        );
-
-      const totalDropped = dropsList.reduce((sum, d) => sum + Number(d.amount), 0);
-
-      const currentCash = totalCashReceived - totalDropped;
-
+      // Estado por turno abierto: fondo + ventas efectivo - retiros (+ ajustes). Sin turno => caja cerrada.
+      const shift = await getOpenShift(ctx.restaurantDb, branchId);
+      if (!shift) {
+        return {
+          enabled: branch.cashDropEnabled,
+          threshold: branch.cashDropThreshold,
+          shiftOpen: false,
+          currentCash: 0,
+          requiresDrop: false,
+          totalCashReceived: 0,
+          totalDropped: 0,
+          openingFloat: 0,
+        };
+      }
+      const totals = await computeShiftTotals(ctx.restaurantDb, shift);
+      const currentCash = totals.expectedCash;
       const requiresDrop = branch.cashDropEnabled && currentCash >= branch.cashDropThreshold;
 
       return {
         enabled: branch.cashDropEnabled,
         threshold: branch.cashDropThreshold,
+        shiftOpen: true,
         currentCash,
         requiresDrop,
-        totalCashReceived,
-        totalDropped
+        totalCashReceived: totals.cashSales,
+        totalDropped: totals.withdrawals,
+        openingFloat: totals.openingFloat,
       };
     }),
 
@@ -126,6 +114,13 @@ export const cashDropsRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const branchId = resolveBranchId(ctx, input.branchId);
+      // DEPRECADO: los retiros requieren turno abierto y PIN. Usar cashShifts.withdraw.
+      if (branchId) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Los retiros ahora requieren turno abierto y PIN (cashShifts.withdraw).",
+        });
+      }
 
       // Verify they don't drop more than they have
       const today = new Date();

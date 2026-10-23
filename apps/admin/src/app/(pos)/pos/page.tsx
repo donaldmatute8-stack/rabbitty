@@ -7,6 +7,7 @@ import { Clock, Wifi, Search, User, CreditCard, Banknote, QrCode, SplitSquareHor
 import Link from "next/link";
 import Image from "next/image";
 import { TicketTemplate, TicketData } from "../../../components/TicketTemplate";
+import { CashShiftModal, CashShiftBadge } from "../../../components/CashShiftModal";
 import { 
   printEngine,
   generateEscPosTicketPayload
@@ -47,6 +48,9 @@ export default function PosPage() {
   const [orderType, setOrderType] = useState<"COUNTER" | "DINE_IN" | "TAKEAWAY" | "DELIVERY">("COUNTER");
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [receiptModal, setReceiptModal] = useState(false);
+  // Método elegido pendiente de confirmación (el cobro NO se ejecuta hasta confirmar)
+  const [pendingMethod, setPendingMethod] = useState<string | null>(null);
+  const [isCharging, setIsCharging] = useState(false);
   const [paidTicketData, setPaidTicketData] = useState<TicketData | null>(null);
   const [btConnected, setBtConnected] = useState(false);
   const [btDeviceName, setBtDeviceName] = useState<string | null>(null);
@@ -144,29 +148,21 @@ export default function PosPage() {
     }
   };
 
-  const createCashDropMutation = trpc.cashDrops.createDrop.useMutation({
-    onSuccess: async (drop) => {
-      toast.success("Retiro de efectivo registrado con éxito");
-      const dropTicket = {
-        isCashDrop: true,
-        amount: drop.amount,
-        notes: drop.notes,
-        ...ticketContext,
-      };
-      const res = await printEngine.printTicket(dropTicket, true);
-      if (res.success) {
-        toast.success("¡Ticket de retiro impreso!");
-      } else if (res.queued) {
-        toast.info(res.error || "Comprobante guardado en cola de impresión.");
-      }
-      setCashDropAmount("");
-      setCashDropNotes("");
-      refetchCashStatus();
-    },
-    onError: (err) => {
-      toast.error(err.message || "Error al registrar retiro");
-    }
-  });
+  // El generador ESC/POS espera campos planos; ticketContext viene anidado (restaurant/branch)
+  const buildTicketHeader = () => {
+    const rest: any = ticketContext?.restaurant;
+    const branch: any = ticketContext?.branch;
+    return {
+      restaurantName: rest?.name || "Rabbitty POS",
+      legalName: rest?.legalName || undefined,
+      rfc: rest?.rfc || undefined,
+      taxRegime: rest?.taxRegime || undefined,
+      logoUrl: rest?.logoUrl || undefined,
+      address: branch?.address || undefined,
+      phone: rest?.phone || branch?.phone || undefined,
+      staffName: "Caja Principal",
+    };
+  };
 
   // Auto-select first table when tables load if DINE_IN
   useEffect(() => {
@@ -380,11 +376,35 @@ export default function PosPage() {
     if (printResult.success) {
       toast.success("¡Ticket impreso correctamente!");
     } else if (printResult.queued) {
-      toast.info(printResult.error || "Ticket guardado en cola para impresión automática.");
+      toast.warning((printResult.error || "Ticket guardado en cola.") + " Puedes reintentar con el botón Imprimir.");
     }
 
     setCart([]);
     setSelectedTableId(null);
+  };
+
+  const requestCheckout = (method: string) => {
+    if (cart.length === 0 || isCharging) return;
+    setPendingMethod(method);
+  };
+
+  const confirmCheckout = async () => {
+    if (!pendingMethod || isCharging) return;
+    const method = pendingMethod;
+    setPendingMethod(null);
+    setIsCharging(true);
+    try {
+      await handleCheckout(method);
+    } finally {
+      setIsCharging(false);
+    }
+  };
+
+  const handlePrintReceipt = async () => {
+    if (!paidTicketData) return;
+    const r = await printEngine.printTicket(paidTicketData, true);
+    if (r.success) toast.success("¡Ticket impreso correctamente!");
+    else toast.warning(r.error || "No se pudo imprimir. Revisa la impresora.");
   };
 
   const handleCheckout = async (method: string = "EFECTIVO") => {
@@ -440,7 +460,13 @@ export default function PosPage() {
         }
         toast.success(`Orden #${realOrderNumber} registrada y pagada en el sistema`);
       }
-    } catch {
+    } catch (err: any) {
+      const msg = String(err?.message || "");
+      if (msg.includes("TURNO_CERRADO")) {
+        toast.error("La caja está cerrada. Abre turno para cobrar en efectivo.");
+        setCorteModalOpen(true);
+        return;
+      }
       if (mappedMethod === "BUNZ") return; // If createIntent fails, stop
       // Allow ticket generation even if backend offline (graceful degradation)
     }
@@ -451,49 +477,23 @@ export default function PosPage() {
   return (
     <div className="flex h-dvh w-full flex-col bg-gray-950 text-white overflow-hidden select-none font-sans">
       
-      {cashStatus?.requiresDrop && (
+      {cashStatus?.requiresDrop && !corteModalOpen && (
         <div className="fixed inset-0 z-100 flex items-center justify-center bg-gray-900/95 p-4 backdrop-blur-md">
           <div className="w-full max-w-md bg-gray-800 rounded-2xl shadow-[0_0_50px_rgba(239,68,68,0.3)] border border-red-500/50 p-8 text-center">
             <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-500/20 mb-4">
               <span className="text-3xl">⚠️</span>
             </div>
-            <h2 className="text-3xl font-black text-red-400 mb-2">Corte Requerido</h2>
+            <h2 className="text-3xl font-black text-red-400 mb-2">Retiro Requerido</h2>
             <p className="text-gray-300 mb-6 text-lg">
-              Has alcanzado el límite de efectivo en caja (${cashStatus.threshold.toFixed(2)}). <br/><br/>
-              Efectivo actual: <b className="text-white text-xl">${cashStatus.currentCash.toFixed(2)}</b>
+              Has alcanzado el límite de efectivo en caja (${cashStatus.threshold.toFixed(2)}).
             </p>
-            <div className="space-y-4 text-left">
-              <div>
-                <label className="block text-sm font-bold text-gray-400 mb-1">Monto a retirar *</label>
-                <input 
-                  type="number"
-                  value={cashDropAmount}
-                  onChange={e => setCashDropAmount(e.target.value)}
-                  className="w-full bg-black border border-white/10 rounded-xl p-4 text-xl text-white focus:outline-none focus:border-red-500"
-                  placeholder="Ej. 3000"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-400 mb-1">Notas / Entregado a</label>
-                <input 
-                  type="text"
-                  value={cashDropNotes}
-                  onChange={e => setCashDropNotes(e.target.value)}
-                  className="w-full bg-black border border-white/10 rounded-xl p-4 text-xl text-white focus:outline-none focus:border-red-500"
-                  placeholder="Gerente en turno"
-                />
-              </div>
-              <button
-                onClick={() => {
-                  if (Number(cashDropAmount) <= 0) return toast.error("Monto inválido");
-                  createCashDropMutation.mutate({ amount: Number(cashDropAmount), notes: cashDropNotes });
-                }}
-                disabled={createCashDropMutation.isPending}
-                className="w-full mt-4 bg-linear-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-bold py-4 rounded-xl text-xl shadow-lg shadow-red-500/20 transition-all active:scale-95 disabled:opacity-50"
-              >
-                {createCashDropMutation.isPending ? "Procesando..." : "Registrar Retiro y Continuar"}
-              </button>
-            </div>
+            <button
+              id="cash-forced-withdraw"
+              onClick={() => setCorteModalOpen(true)}
+              className="w-full bg-linear-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-bold py-4 rounded-xl text-xl shadow-lg shadow-red-500/20 transition-all active:scale-95"
+            >
+              Hacer retiro con PIN
+            </button>
           </div>
         </div>
       )}
@@ -546,15 +546,8 @@ export default function PosPage() {
             <span className="text-xs lg:text-sm font-bold text-emerald-400 uppercase tracking-widest">Online</span>
           </div>
 
-          {/* Botón Corte de Caja / Resumen del Día */}
-          <button
-            onClick={() => setCorteModalOpen(true)}
-            className="flex items-center gap-2 rounded-xl bg-white/5 hover:bg-white/10 px-3.5 py-2.5 border border-white/10 text-cyan-400 text-xs font-bold transition-all cursor-pointer shadow-sm active:scale-95"
-            title="Ver corte parcial del turno y efectivo en caja"
-          >
-            <FileText className="h-4 w-4 text-cyan-400" />
-            <span>Corte de Caja</span>
-          </button>
+          {/* Estado de caja (abrir / ver turno) */}
+          <CashShiftBadge onClick={() => setCorteModalOpen(true)} />
 
           {/* Bluetooth Thermal Printer Indicator / Connect */}
           {btConnected ? (
@@ -947,7 +940,7 @@ export default function PosPage() {
             {/* Quick Payment Methods */}
             <div className="grid grid-cols-4 gap-3 mb-3">
               <button 
-                onClick={() => handleCheckout("EFECTIVO")}
+                onClick={() => requestCheckout("EFECTIVO")}
                 disabled={cart.length === 0}
                 className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-3 border border-white/10 hover:bg-emerald-500/20 hover:border-emerald-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
               >
@@ -955,7 +948,7 @@ export default function PosPage() {
                 <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 group-hover:text-emerald-400">Efectivo</span>
               </button>
               <button 
-                onClick={() => handleCheckout("TARJETA")}
+                onClick={() => requestCheckout("TARJETA")}
                 disabled={cart.length === 0}
                 className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-3 border border-white/10 hover:bg-blue-500/20 hover:border-blue-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
               >
@@ -963,7 +956,7 @@ export default function PosPage() {
                 <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 group-hover:text-blue-400">Tarjeta</span>
               </button>
               <button 
-                onClick={() => handleCheckout("QR BUNZ")}
+                onClick={() => requestCheckout("QR BUNZ")}
                 disabled={cart.length === 0}
                 className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-3 border border-white/10 hover:bg-purple-500/20 hover:border-purple-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
               >
@@ -971,7 +964,7 @@ export default function PosPage() {
                 <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 group-hover:text-purple-400">QR Bunz</span>
               </button>
               <button 
-                onClick={() => handleCheckout("DIVIDIDA")}
+                onClick={() => requestCheckout("DIVIDIDA")}
                 disabled={cart.length === 0}
                 className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-3 border border-white/10 hover:bg-orange-500/20 hover:border-orange-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
               >
@@ -982,7 +975,7 @@ export default function PosPage() {
 
             {/* Massive Checkout Button */}
             <button 
-              onClick={() => handleCheckout("VENTA DIRECTA")}
+              onClick={() => requestCheckout("VENTA DIRECTA")}
               disabled={cart.length === 0}
               className="relative w-full overflow-hidden rounded-3xl bg-cyan-500 py-4 text-xl font-black text-gray-950 shadow-[0_15px_40px_rgba(6,182,212,0.4)] transition-all hover:bg-cyan-400 active:scale-95 disabled:opacity-50 disabled:shadow-none group cursor-pointer"
             >
@@ -1268,6 +1261,26 @@ export default function PosPage() {
         </div>
       </Dialog>
 
+      {/* Confirmación de cobro: el cobro y la impresión ocurren solo al confirmar */}
+      <Dialog open={!!pendingMethod} onClose={() => setPendingMethod(null)} title="Confirmar cobro">
+        <div className="flex flex-col gap-4 p-2">
+          <div className="text-center">
+            <p className="text-gray-400 text-sm">Método de pago</p>
+            <p className="text-white text-lg font-black">
+              {pendingMethod === "VENTA DIRECTA" ? "EFECTIVO" : pendingMethod === "DIVIDIDA" ? "EFECTIVO (dividida)" : pendingMethod}
+            </p>
+            <p className="text-emerald-400 text-4xl font-black mt-2">${total.toFixed(2)}</p>
+            <p className="text-gray-500 text-xs mt-1">{cart.reduce((s, i) => s + i.quantity, 0)} artículo(s) · impuestos incluidos</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Button variant="secondary" id="pos-cancel-charge" onClick={() => setPendingMethod(null)}>Cancelar</Button>
+            <Button id="pos-confirm-charge" onClick={confirmCheckout} className="bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-black">
+              Confirmar y cobrar
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
       {/* Modal de Ticket de Venta / Comprobante de Cobro */}
       <Dialog
         open={receiptModal}
@@ -1313,6 +1326,14 @@ export default function PosPage() {
 
           {/* Acciones de WhatsApp y Nueva Orden */}
           <div className="flex flex-col gap-2 pt-2 border-t border-white/5 shrink-0">
+            <Button
+              id="pos-print-receipt"
+              variant="secondary"
+              onClick={handlePrintReceipt}
+              className="w-full font-bold py-2 text-sm bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/30"
+            >
+              Imprimir ticket
+            </Button>
             <div className="flex items-center gap-2">
               <Input
                 placeholder="WhatsApp (10 dígitos)"
@@ -1324,14 +1345,15 @@ export default function PosPage() {
               <Button
                 onClick={() => {
                   if (paidTicketData && ticketContext?.restaurant && waPhone.length >= 10) {
-                    const itemsSummary = paidTicketData.items.map(i => `${i.quantity}x ${i.name} - $${i.totalPrice.toFixed(2)}`).join('%0A');
-                    const message = `¡Hola! Aquí está tu ticket de compra en *${ticketContext.restaurant.name}*%0A%0A` +
-                      `📅 Fecha: ${encodeURIComponent(paidTicketData.date || "")}%0A` +
-                      `🔖 Folio: #${paidTicketData.orderNumber}%0A%0A` +
-                      `*Artículos:*%0A${itemsSummary}%0A%0A` +
-                      `*Total:* $${paidTicketData.total.toFixed(2)} ${paidTicketData.currency}%0A%0A` +
+                    const itemsSummary = paidTicketData.items.map(i => `${i.quantity}x ${i.name} - $${i.totalPrice.toFixed(2)}`).join('\n');
+                    const message = `¡Hola! Aquí está tu ticket de compra en *${ticketContext.restaurant.name}*\n\n` +
+                      `📅 Fecha: ${paidTicketData.date || ""}\n` +
+                      `🔖 Folio: #${paidTicketData.orderNumber}\n\n` +
+                      `*Artículos:*\n${itemsSummary}\n\n` +
+                      `*Total:* $${paidTicketData.total.toFixed(2)} ${paidTicketData.currency}\n\n` +
                       `¡Gracias por tu preferencia! 🐰`;
-                    window.open(`https://wa.me/52${waPhone}?text=${message}`, "_blank");
+                    // encodeURIComponent codifica #, $, emojis y saltos de línea (un # sin codificar truncaba el mensaje)
+                    window.open(`https://wa.me/52${waPhone}?text=${encodeURIComponent(message)}`, "_blank");
                   } else {
                     toast.error("Ingresa un número válido a 10 dígitos");
                   }
@@ -1356,144 +1378,12 @@ export default function PosPage() {
         </div>
       </Dialog>
 
-      {/* Modal de Corte de Caja / Resumen del Turno */}
-      <Dialog
+      {/* Caja / Turnos: apertura, retiro, arqueo X, traspaso y cierre Z (todo con PIN) */}
+      <CashShiftModal
         open={corteModalOpen}
         onClose={() => setCorteModalOpen(false)}
-        title="Corte de Caja / Resumen del Turno"
-      >
-        <div className="space-y-4">
-          {/* Tarjeta de Flujo Contable Claro */}
-          <div className="p-4 rounded-2xl bg-linear-to-br from-white/8 to-white/2 border border-white/10 space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-white/10">
-              <span className="text-xs uppercase tracking-wider text-gray-400 font-bold">Sucursal</span>
-              <span className="text-xs font-black text-cyan-400">{ticketContext?.restaurant?.name || "626 Cafe"}</span>
-            </div>
-
-            {/* Desglose de ingresos vs retiros */}
-            <div className="grid grid-cols-2 gap-3 pt-1">
-              <div className="p-2.5 rounded-xl bg-black/40 border border-emerald-500/20">
-                <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Cobrado en Efectivo Hoy</span>
-                <span className="text-base font-black text-emerald-400">
-                  +${Number(cashStatus?.totalCashReceived ?? 0).toFixed(2)}
-                </span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-black/40 border border-amber-500/20">
-                <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Retiros de Caja Realizados</span>
-                <span className="text-base font-black text-amber-400">
-                  -${Number(cashStatus?.totalDropped ?? 0).toFixed(2)}
-                </span>
-              </div>
-            </div>
-
-            {/* Total Neto en Gaveta */}
-            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between">
-              <div>
-                <span className="text-xs font-black uppercase tracking-wider text-emerald-300 block">
-                  Efectivo Físico en Gaveta
-                </span>
-                <span className="text-[10px] text-gray-400">
-                  Balance actual neto que debe haber en caja física
-                </span>
-              </div>
-              <span className="text-2xl font-black text-emerald-400">
-                ${(cashStatus?.currentCash ?? 0).toFixed(2)}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between pt-1 text-[11px] text-gray-400">
-              <span>Límite preventivo de caja:</span>
-              <span className="font-semibold text-white">${Number(cashStatus?.threshold ?? 5000).toFixed(2)} MXN</span>
-            </div>
-          </div>
-
-          {/* Formulario de Retiro Parcial de Efectivo */}
-          <div className="p-4 rounded-2xl bg-white/3 border border-white/10 space-y-3">
-            <div>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-white">Retiro de Efectivo / Sangría de Caja</h4>
-              <p className="text-[11px] text-gray-400 mt-0.5">
-                Usa esta opción cuando vayas a retirar dinero para resguardo en caja fuerte o entrega a gerencia.
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[10px] font-bold text-gray-400 block mb-1">Monto a retirar ($)</label>
-                <input
-                  type="number"
-                  placeholder="0.00"
-                  value={cashDropAmount}
-                  onChange={(e) => setCashDropAmount(e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-gray-400 block mb-1">Entregado a / Justificación</label>
-                <input
-                  type="text"
-                  placeholder="Ej. Gerente Juan / Caja fuerte"
-                  value={cashDropNotes}
-                  onChange={(e) => setCashDropNotes(e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-            </div>
-            <Button
-              onClick={() => {
-                if (Number(cashDropAmount) <= 0) return toast.error("Monto inválido");
-                if (Number(cashDropAmount) > (cashStatus?.currentCash ?? 0)) {
-                  return toast.error("El monto de retiro supera el efectivo disponible en caja");
-                }
-                createCashDropMutation.mutate({ amount: Number(cashDropAmount), notes: cashDropNotes });
-              }}
-              disabled={createCashDropMutation.isPending || !cashDropAmount}
-              className="w-full bg-cyan-500 hover:bg-cyan-400 text-gray-950 font-bold text-xs py-2.5 shadow-md active:scale-95 transition-all"
-            >
-              {createCashDropMutation.isPending ? "Registrando..." : "Registrar Retiro e Imprimir Comprobante Físico"}
-            </Button>
-          </div>
-
-          {/* Acciones de Cierre e Impresión de Corte */}
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-2">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={async () => {
-                const corteTicket = {
-                  isCorteDeCaja: true,
-                  totalCashReceived: cashStatus?.totalCashReceived ?? 0,
-                  totalDropped: cashStatus?.totalDropped ?? 0,
-                  currentCash: cashStatus?.currentCash ?? 0,
-                  timestamp: new Date().toISOString(),
-                  ...ticketContext,
-                };
-                const res = await printEngine.printTicket(corteTicket, true);
-                if (res.success) {
-                  toast.success("¡Ticket de Corte de Caja impreso!");
-                } else if (res.queued) {
-                  toast.info(res.error || "Corte de caja enviado a la cola de impresión.");
-                } else {
-                  toast.error("No se pudo imprimir el comprobante. Verifica la conexión.");
-                }
-              }}
-              className="w-full sm:w-auto text-xs font-bold border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10"
-            >
-              🖨️ Imprimir Ticket de Corte Actual
-            </Button>
-
-            <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
-              <Link
-                href="/reports"
-                className="text-xs text-gray-400 hover:text-cyan-400 hover:underline flex items-center gap-1 font-semibold"
-              >
-                Auditoría Completa →
-              </Link>
-              <Button variant="secondary" onClick={() => setCorteModalOpen(false)}>
-                Listo
-              </Button>
-            </div>
-          </div>
-        </div>
-      </Dialog>
+        buildTicketHeader={buildTicketHeader}
+      />
       <Dialog
         open={!!qrPaymentModal}
         onClose={() => setQrPaymentModal(null)}

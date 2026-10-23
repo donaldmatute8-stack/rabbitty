@@ -77,14 +77,14 @@ export default function KioskPage() {
   if (view === "welcome") {
     return (
       <div 
-        className="flex h-[100dvh] w-full flex-col items-center justify-center bg-gray-950 text-white select-none cursor-pointer relative overflow-hidden group"
+        className="flex h-dvh w-full flex-col items-center justify-center bg-gray-950 text-white select-none cursor-pointer relative overflow-hidden group"
         onClick={() => {
           if (categories && categories.length > 0) setActiveCategory(categories[0].id);
           setView("menu");
         }}
       >
         <div className="absolute inset-0 bg-cover bg-center opacity-40 transition-transform duration-[10s] group-hover:scale-110" style={{ backgroundImage: `url(${BG_VIDEO_PLACEHOLDER})` }} />
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent" />
+        <div className="absolute inset-0 bg-linear-to-t from-black via-black/60 to-transparent" />
         
         <div className="absolute top-6 left-6 z-30">
           <button
@@ -101,7 +101,7 @@ export default function KioskPage() {
         </div>
 
         <div className="relative z-10 flex flex-col items-center text-center px-12">
-          <div className="h-40 w-40 rounded-[2.5rem] bg-gradient-to-br from-purple-500 via-pink-500 to-rose-500 flex items-center justify-center mb-10 shadow-[0_0_80px_rgba(236,72,153,0.5)] transform transition-transform duration-500 group-hover:-translate-y-4">
+          <div className="h-40 w-40 rounded-[2.5rem] bg-linear-to-br from-purple-500 via-pink-500 to-rose-500 flex items-center justify-center mb-10 shadow-[0_0_80px_rgba(236,72,153,0.5)] transform transition-transform duration-500 group-hover:-translate-y-4">
             <span className="font-black text-8xl text-white">R</span>
           </div>
           <h1 className="text-7xl font-black mb-6 tracking-tight text-white drop-shadow-2xl">Diseña tu pedido</h1>
@@ -120,15 +120,15 @@ export default function KioskPage() {
   // 2. SUCCESS SCREEN
   if (view === "success") {
     return (
-      <div className="flex h-[100dvh] w-full flex-col items-center justify-center bg-gray-950 text-white select-none relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-purple-500/20 via-black to-pink-500/20" />
+      <div className="flex h-dvh w-full flex-col items-center justify-center bg-gray-950 text-white select-none relative overflow-hidden">
+        <div className="absolute inset-0 bg-linear-to-br from-purple-500/20 via-black to-pink-500/20" />
         
         <div className="relative z-10 flex flex-col items-center text-center px-12 max-w-3xl">
           <div className="h-48 w-48 rounded-full bg-emerald-500/10 border-2 border-emerald-500 flex items-center justify-center mb-10 shadow-[0_0_100px_rgba(16,185,129,0.3)]">
             <CheckCircle2 className="h-24 w-24 text-emerald-400" />
           </div>
           <h1 className="text-7xl font-black mb-6 tracking-tight">¡Orden Pagada!</h1>
-          <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2rem] p-10 w-full mb-12">
+          <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-4xl p-10 w-full mb-12">
             <p className="text-2xl text-gray-400 font-medium mb-2">Tu número de orden es</p>
             <p className="text-[6rem] font-black text-emerald-400 leading-none">842</p>
           </div>
@@ -147,8 +147,8 @@ export default function KioskPage() {
   // 3. QR PAYMENT SCREEN
   if (view === "qr_payment") {
     return (
-      <div className="flex h-[100dvh] w-full flex-col items-center justify-center bg-gray-950 text-white select-none relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-tr from-purple-900/30 to-black" />
+      <div className="flex h-dvh w-full flex-col items-center justify-center bg-gray-950 text-white select-none relative overflow-hidden">
+        <div className="absolute inset-0 bg-linear-to-tr from-purple-900/30 to-black" />
         
         {/* Header */}
         <header className="absolute top-0 left-0 w-full p-8 flex justify-between items-center">
@@ -158,7 +158,7 @@ export default function KioskPage() {
           >
             <ChevronLeft className="h-8 w-8" />
           </button>
-          <div className="text-3xl font-black text-purple-400">${(total * 1.16).toFixed(2)}</div>
+          <div className="text-3xl font-black text-purple-400">${total.toFixed(2)}</div>
         </header>
 
         <div className="relative z-10 flex flex-col items-center text-center max-w-3xl">
@@ -167,7 +167,7 @@ export default function KioskPage() {
           
           {/* Mock QR */}
           <div className="bg-white p-6 rounded-[3rem] shadow-[0_0_100px_rgba(168,85,247,0.3)] mb-12">
-            <div className="w-[400px] h-[400px] bg-black rounded-3xl flex items-center justify-center relative overflow-hidden">
+            <div className="w-100 h-100 bg-black rounded-3xl flex items-center justify-center relative overflow-hidden">
               <QrCode className="h-48 w-48 text-white/20" />
               <div className="absolute top-0 left-0 w-full h-2 bg-purple-500 shadow-[0_0_20px_#a855f7] animate-[scan_2s_ease-in-out_infinite]" />
             </div>
@@ -186,7 +186,7 @@ export default function KioskPage() {
 
   // 4. MAIN MENU & CHECKOUT
   return (
-    <div className="flex h-[100dvh] w-full flex-col bg-gray-950 text-white font-sans overflow-hidden select-none">
+    <div className="flex h-dvh w-full flex-col bg-gray-950 text-white font-sans overflow-hidden select-none">
       
       {/* ── Immersive Header ── */}
       <header className="flex h-28 shrink-0 items-center justify-between px-10 bg-black/40 backdrop-blur-3xl border-b border-white/5 z-20 shadow-xl">
@@ -206,9 +206,9 @@ export default function KioskPage() {
         {view === "menu" && (
           <button 
             onClick={() => setView("checkout")}
-            className="group relative flex items-center gap-4 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 px-8 py-5 text-2xl font-black text-white shadow-[0_15px_40px_rgba(168,85,247,0.4)] active:scale-95 transition-all overflow-hidden"
+            className="group relative flex items-center gap-4 rounded-full bg-linear-to-r from-purple-600 to-pink-600 px-8 py-5 text-2xl font-black text-white shadow-[0_15px_40px_rgba(168,85,247,0.4)] active:scale-95 transition-all overflow-hidden"
           >
-            <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[0%] transition-transform duration-300" />
+            <div className="absolute inset-0 bg-white/20 -translate-x-full group-hover:translate-x-[0%] transition-transform duration-300" />
             <ShoppingBag className="h-8 w-8 relative z-10" />
             <span className="relative z-10">Ver Orden (${total.toFixed(2)})</span>
             
@@ -224,7 +224,7 @@ export default function KioskPage() {
       {view === "menu" && (
         <div className="flex flex-1 overflow-hidden relative">
           {/* Subtle Background Elements */}
-          <div className="absolute top-0 right-0 h-[600px] w-[600px] rounded-full bg-purple-900/10 blur-[150px] pointer-events-none" />
+          <div className="absolute top-0 right-0 h-150 w-150 rounded-full bg-purple-900/10 blur-[150px] pointer-events-none" />
 
           {/* Categories Sidebar */}
           <aside className="w-[320px] shrink-0 overflow-y-auto border-r border-white/5 bg-black/20 backdrop-blur-md custom-scrollbar py-8 pl-8 pr-6 space-y-4 z-10">
@@ -233,13 +233,13 @@ export default function KioskPage() {
                 key={cat.id}
                 onClick={() => setActiveCategory(cat.id)}
                 className={cn(
-                  "w-full rounded-[2rem] px-8 py-6 text-left transition-all border shadow-lg group relative overflow-hidden",
+                  "w-full rounded-4xl px-8 py-6 text-left transition-all border shadow-lg group relative overflow-hidden",
                   activeCategory === cat.id 
                     ? "bg-purple-500 border-purple-400 scale-105" 
                     : "bg-white/5 border-white/5 active:bg-white/10 hover:border-white/20"
                 )}
               >
-                {activeCategory === cat.id && <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent" />}
+                {activeCategory === cat.id && <div className="absolute inset-0 bg-linear-to-r from-white/20 to-transparent" />}
                 <span className={cn("relative z-10 text-2xl font-black", activeCategory === cat.id ? "text-white" : "text-gray-300 group-hover:text-white")}>
                   {cat.name}
                 </span>
@@ -256,9 +256,9 @@ export default function KioskPage() {
                   onClick={() => setSelectedItem(item)} // Opens Item Modal
                   className="group relative flex flex-col overflow-hidden rounded-[2.5rem] border border-white/5 bg-gray-900/80 backdrop-blur-md text-left transition-all active:scale-95 active:border-purple-500/50 hover:shadow-[0_20px_50px_rgba(0,0,0,0.5)] hover:-translate-y-2"
                 >
-                  <div className="relative aspect-[4/3] w-full overflow-hidden bg-gray-800">
+                  <div className="relative aspect-4/3 w-full overflow-hidden bg-gray-800">
                     <div className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110" style={{ backgroundImage: `url(${PLACEHOLDER_IMG})` }} />
-                    <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-transparent opacity-90" />
+                    <div className="absolute inset-0 bg-linear-to-t from-gray-900 via-transparent to-transparent opacity-90" />
                     
                     {/* Price Tag */}
                     <div className="absolute top-4 right-4 rounded-2xl bg-black/60 backdrop-blur-xl px-5 py-2 border border-white/10 shadow-2xl">
@@ -290,7 +290,7 @@ export default function KioskPage() {
             {/* Left Image */}
             <div className="w-1/2 relative bg-gray-800">
               <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${PLACEHOLDER_IMG})` }} />
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent to-gray-900" />
+              <div className="absolute inset-0 bg-linear-to-r from-transparent to-gray-900" />
             </div>
             {/* Right Content */}
             <div className="w-1/2 flex flex-col p-12 relative">
@@ -317,7 +317,7 @@ export default function KioskPage() {
 
               <button 
                 onClick={() => addToCart(selectedItem)}
-                className="mt-8 w-full rounded-[2rem] bg-purple-500 py-6 text-2xl font-black text-white shadow-[0_15px_40px_rgba(168,85,247,0.4)] hover:bg-purple-400 active:scale-95 transition-all"
+                className="mt-8 w-full rounded-4xl bg-purple-500 py-6 text-2xl font-black text-white shadow-[0_15px_40px_rgba(168,85,247,0.4)] hover:bg-purple-400 active:scale-95 transition-all"
               >
                 AGREGAR A LA ORDEN
               </button>
@@ -339,7 +339,7 @@ export default function KioskPage() {
                     <h3 className="text-3xl font-bold mb-2">{item.name}</h3>
                     <p className="text-purple-400 text-2xl font-black">${item.price.toFixed(2)}</p>
                   </div>
-                  <div className="flex items-center gap-6 bg-black/60 rounded-[2rem] p-3 border border-white/5 shadow-inner">
+                  <div className="flex items-center gap-6 bg-black/60 rounded-4xl p-3 border border-white/5 shadow-inner">
                     <button 
                       onClick={() => {
                         if (item.quantity === 1) setCart(prev => prev.filter(i => i.id !== item.id));
@@ -399,7 +399,7 @@ export default function KioskPage() {
               <button 
                 disabled={cart.length === 0}
                 onClick={() => setView("qr_payment")}
-                className="flex items-center gap-4 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 px-16 py-6 text-3xl font-black text-white shadow-[0_20px_50px_rgba(168,85,247,0.5)] active:scale-95 disabled:opacity-50 transition-all hover:-translate-y-1"
+                className="flex items-center gap-4 rounded-full bg-linear-to-r from-purple-500 to-pink-500 px-16 py-6 text-3xl font-black text-white shadow-[0_20px_50px_rgba(168,85,247,0.5)] active:scale-95 disabled:opacity-50 transition-all hover:-translate-y-1"
               >
                 PAGAR ORDEN <ChevronRight className="h-8 w-8" />
               </button>

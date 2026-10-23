@@ -1,4 +1,4 @@
-import { pgTable, text, integer, real, timestamp, boolean, jsonb, check } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, real, numeric, timestamp, boolean, jsonb, check, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import crypto from "crypto";
 
@@ -9,6 +9,8 @@ function genId(): string {
 const id = () => text("id").primaryKey().$defaultFn(() => genId());
 const fkId = (field: string) => text(field).notNull();
 const fkIdOpt = (field: string) => text(field);
+// Dinero exacto (sin errores de coma flotante): numeric(12,2) leído como number
+const money = (name: string) => numeric(name, { precision: 12, scale: 2, mode: "number" });
 const timestamps = {
   createdAt: timestamp("createdAt").defaultNow(),
   updatedAt: timestamp("updatedAt").defaultNow(),
@@ -50,6 +52,8 @@ export const branches = pgTable("branches", {
   lng: real("lng"),
   cashDropEnabled: boolean("cashDropEnabled").default(false).notNull(),
   cashDropThreshold: real("cashDropThreshold").default(3000).notNull(),
+  // Retiros mayores a este monto exigen PIN de manager/admin
+  cashDropManagerThreshold: real("cashDropManagerThreshold").default(1000).notNull(),
   isActive: boolean("isActive").default(true).notNull(),
   ...timestamps,
 });
@@ -430,10 +434,61 @@ export const cashDrops = pgTable("cash_drops", {
   id: id(),
   branchId: fkId("branchId").references(() => branches.id),
   staffId: fkIdOpt("staffId").references(() => staff.id),
-  amount: real("amount").notNull(),
+  shiftId: fkIdOpt("shiftId").references(() => cashShifts.id),
+  amount: money("amount").notNull(),
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow(),
-});
+}, (t) => [index("cash_drops_shift_idx").on(t.shiftId)]);
+
+// Sesión de caja/gaveta (contable). NO confundir con staff_shifts (asistencia/RRHH).
+export const cashShifts = pgTable(
+  "cash_shifts",
+  {
+    id: id(),
+    branchId: fkId("branchId").references(() => branches.id),
+    registerId: text("registerId").default("MAIN").notNull(),
+    status: text("status").default("OPEN").notNull(), // OPEN | CLOSED
+    openedByStaffId: fkId("openedByStaffId").references(() => staff.id),
+    currentStaffId: fkId("currentStaffId").references(() => staff.id), // cajero que tiene la gaveta ahora
+    openingFloat: money("openingFloat").notNull(),
+    openedAt: timestamp("openedAt").defaultNow().notNull(),
+    closedAt: timestamp("closedAt"),
+    closedByStaffId: fkIdOpt("closedByStaffId").references(() => staff.id),
+    authorizedByStaffId: fkIdOpt("authorizedByStaffId").references(() => staff.id),
+    expectedCash: money("expectedCash"),
+    countedCash: money("countedCash"),
+    difference: money("difference"),
+    closeNotes: text("closeNotes"),
+  },
+  (t) => [
+    // Un solo turno OPEN por caja
+    uniqueIndex("cash_shifts_one_open_per_register")
+      .on(t.branchId, t.registerId)
+      .where(sql`${t.status} = 'OPEN'`),
+    index("cash_shifts_branch_opened_idx").on(t.branchId, t.openedAt),
+  ]
+);
+
+// Bitácora inmutable: solo INSERT, nunca UPDATE/DELETE.
+export const cashShiftEvents = pgTable(
+  "cash_shift_events",
+  {
+    id: id(),
+    shiftId: fkId("shiftId").references(() => cashShifts.id),
+    branchId: fkId("branchId").references(() => branches.id),
+    type: text("type").notNull(), // OPEN | WITHDRAWAL | PARTIAL_CLOSE | HANDOVER | CLOSE
+    staffId: fkIdOpt("staffId").references(() => staff.id),
+    toStaffId: fkIdOpt("toStaffId").references(() => staff.id),
+    authorizedById: fkIdOpt("authorizedById").references(() => staff.id),
+    amount: money("amount"),
+    expectedAmount: money("expectedAmount"),
+    countedAmount: money("countedAmount"),
+    difference: money("difference"),
+    notes: text("notes"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [index("cash_shift_events_shift_idx").on(t.shiftId, t.createdAt)]
+);
 
 export const ledgerEntries = pgTable("ledger_entries", {
   id: id(),
@@ -499,4 +554,12 @@ export const settlementOperations = pgTable("settlement_operations", {
   retryCount: integer("retryCount").default(0).notNull(),
   settledAt: timestamp("settledAt"),
   createdAt: timestamp("createdAt").defaultNow(),
+});
+
+// Intentos fallidos de PIN por sucursal (persistente: sobrevive deploys y es compartido entre instancias)
+export const pinAttempts = pgTable("pin_attempts", {
+  scopeKey: text("scopeKey").primaryKey(),
+  failCount: integer("failCount").default(0).notNull(),
+  lastFailAt: timestamp("lastFailAt").defaultNow().notNull(),
+  lockedUntil: timestamp("lockedUntil"),
 });
