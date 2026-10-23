@@ -391,6 +391,42 @@ export const PlatformBridge = {
   },
 
   /**
+   * Obtiene la ubicación del usuario de forma unificada (Native/Web/Telegram)
+   * Maneja permisos, timeouts y devuelve estado claro
+   */
+  async getLocation(): Promise<{
+    success: boolean;
+    lat?: number;
+    lng?: number;
+    accuracy?: number;
+    error?: 'PERMISSION_DENIED' | 'POSITION_UNAVAILABLE' | 'TIMEOUT' | 'UNSUPPORTED';
+  }> {
+    if (typeof window === 'undefined' || !('geolocation' in navigator)) {
+      return { success: false, error: 'UNSUPPORTED' };
+    }
+
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          resolve({
+            success: true,
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+          });
+        },
+        (err) => {
+          let code: 'PERMISSION_DENIED' | 'POSITION_UNAVAILABLE' | 'TIMEOUT' = 'POSITION_UNAVAILABLE';
+          if (err.code === err.PERMISSION_DENIED) code = 'PERMISSION_DENIED';
+          else if (err.code === err.TIMEOUT) code = 'TIMEOUT';
+          resolve({ success: false, error: code });
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+      );
+    });
+  },
+
+  /**
    * Limpieza forzada de caché local y recarga (Rescue Mechanism para App Nativa / Web)
    */
   async hardResetCache(): Promise<void> {

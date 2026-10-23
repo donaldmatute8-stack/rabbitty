@@ -157,16 +157,62 @@ export default function FeedPage() {
 
 
 
-  useEffect(() => {
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => { setUserLat(pos.coords.latitude); setUserLng(pos.coords.longitude); },
-        () => {},
-        { enableHighAccuracy: true, timeout: 5000 }
-      );
+  const [isLocating, setIsLocating] = useState(false);
+
+  const requestLocation = async () => {
+    setIsLocating(true);
+    PlatformBridge.hapticFeedback('light');
+    try {
+      const loc = await PlatformBridge.getLocation();
+      if (loc.success && loc.lat != null && loc.lng != null) {
+        setUserLat(loc.lat);
+        setUserLng(loc.lng);
+        PlatformBridge.hapticFeedback('success');
+      } else if (loc.error === 'PERMISSION_DENIED') {
+        showToast('Ubicación denegada. Puedes habilitarla en los ajustes de tu navegador.', 'info');
+      } else {
+        showToast('No se pudo obtener la señal GPS exacta.', 'error');
+      }
+    } catch {
+      showToast('Error al conectar con el sensor GPS.', 'error');
+    } finally {
+      setIsLocating(false);
     }
+  };
+
+  useEffect(() => {
+    // Si el permiso ya está concedido previamente o en entorno compatible, recupera silenciosamente
+    if (typeof window !== 'undefined' && 'permissions' in navigator) {
+      navigator.permissions?.query?.({ name: 'geolocation' as PermissionName }).then((res) => {
+        if (res.state === 'granted') {
+          PlatformBridge.getLocation().then((loc) => {
+            if (loc.success && loc.lat && loc.lng) {
+              setUserLat(loc.lat);
+              setUserLng(loc.lng);
+            }
+          });
+        }
+      }).catch(() => {
+        // Fallback estándar silencioso
+        PlatformBridge.getLocation().then((loc) => {
+          if (loc.success && loc.lat && loc.lng) {
+            setUserLat(loc.lat);
+            setUserLng(loc.lng);
+          }
+        });
+      });
+    } else {
+      PlatformBridge.getLocation().then((loc) => {
+        if (loc.success && loc.lat && loc.lng) {
+          setUserLat(loc.lat);
+          setUserLng(loc.lng);
+        }
+      });
+    }
+  }, []);
 
     // Auto-prompt Rabbitty Mood moderado y escalonado (espera 12s tras entrar al feed para no chocar con Face ID ni el ritual)
+  useEffect(() => {
     try {
       const lastShown = localStorage.getItem('rabbitty_mood_last_shown_time');
       const ritualSeen = localStorage.getItem('rabbitty_welcome_ritual_seen_v3');
@@ -809,7 +855,13 @@ export default function FeedPage() {
               style={{ top: headerHeight > 0 ? headerHeight : 'calc(max(var(--safe-top, 0px), 8px) + 56px)' }}
             >
               <div className="h-full w-full overflow-hidden">
-                <InteractiveMap businesses={postsWithDistance} userLat={userLat} userLng={userLng} />
+                <InteractiveMap
+                  businesses={postsWithDistance}
+                  userLat={userLat}
+                  userLng={userLng}
+                  onRequestLocation={requestLocation}
+                  isLocating={isLocating}
+                />
               </div>
             </div>
           )}
