@@ -41,6 +41,30 @@ export const FAQS: FaqItem[] = [
     a: 'En tu perfil encontrarás un enlace único. Compártelo con tus amigos y, cuando ellos creen su cuenta y realicen su primera transacción, tú recibirás Bunz automáticamente en tu billetera.',
   },
   {
+    q: '¿Cómo funciona el Corte de Caja y Cierre de Turno en Rabbitty POS?',
+    a: 'En Rabbitty POS, el corte de caja se realiza al finalizar el turno: 1. Ingresas el Fondo Inicial de Caja. 2. El sistema calcula en tiempo real las ventas en Efectivo, Tarjeta y Bunz. 3. Realizas el arqueo físico y escribes el Efectivo Contado. 4. El sistema compara lo esperado vs contado y muestra si hay Sobrante o Faltante. 5. Indicas el Retiro a Bóveda/Depósito y tocas "Cerrar Caja e Imprimir Ticket" para emitir el Ticket Z térmico.',
+  },
+  {
+    q: '¿Cómo funcionan los Reportes de Ventas y exportación contable?',
+    a: 'En el menú lateral de Admin > Reportes, accedes al desglose de ventas netas, el IVA (16%), la proporción de pagos por Efectivo, Tarjeta o Bunz, los platillos más vendidos y el botón de exportación CSV con formato contable oficial.',
+  },
+  {
+    q: '¿Qué es el KDS (Kitchen Display System)?',
+    a: 'El KDS es la pantalla digital para cocina y barra (/kitchen). Las órdenes recibidas en el POS o Kiosko avanzan en tiempo real: PENDING (amarillo) → IN_PROGRESS (naranja) → READY (verde). Cuenta con alertas térmicas por colores según los minutos de espera del ticket.',
+  },
+  {
+    q: '¿Cómo se configura el Kiosko Autoservicio?',
+    a: 'El Kiosko (/kiosk) está diseñado para colocarse en iPads o pantallas táctiles en mostrador. Utiliza la WakeLock API para evitar que la pantalla se apague, permitiendo a los comensales armar su orden visualmente y pagar con QR Rabbitty o ticket para caja.',
+  },
+  {
+    q: '¿Cómo evalúo el nivel de preparación (% Readiness) de mi negocio en Rabbitty Admin?',
+    a: 'En la pantalla principal del Admin (/), cuentas con la "Barra de Preparación Inteligente (Business Readiness)". Evalúa 7 pilares operativos: 1. Menú y platillos (/menu), 2. Personal y roles (/staff), 3. Menú digital TV y QR de mesa (/menu-boards), 4. Cashback Bunz (/loyalty), 5. Corte de caja y fondo de gaveta (/pos), 6. Pantalla KDS e impresoras (/kitchen), y 7. Capacitación en Academy (/academy). Cada paso completado incrementa el % de preparación hacia el 100%.',
+  },
+  {
+    q: '¿Dónde encuentro cada función en el Admin de Rabbitty?',
+    a: 'El Admin se organiza en 4 pilares: 1. Operación En Vivo (Dashboard, POS /pos, Kiosko /kiosk, Cocina KDS /kitchen, Turnos /staff/shifts, Mesas /table-layout, Reportes /reports). 2. Carta & Productos (Menú /menu, Recetas /recipes, Inventario /inventory, Proveedores /suppliers, Gastos /expenses). 3. Crecimiento (Lealtad /loyalty, Clientes /customers, Campañas /campaigns, Referidos /referrals, Guías /academy). 4. Configuración (Sucursales, Hardware, Sincronización POS).',
+  },
+  {
     q: '¿Dónde veo qué negocios aceptan Bunz?',
     a: "En la pantalla principal (Stock o Feed) y en la pestaña Freehands (nuestro mapa inteligente), verás en tiempo real todos los negocios afiliados cercanos a tu ubicación.",
   },
@@ -70,6 +94,14 @@ export const DOC_SECTIONS: { title: string; body: string }[] = [
   {
     title: 'Estrategia Hermes IA & Proof of Atmosphere (PoA)',
     body: 'Hermes analiza el pulso comercial, horas muertas y optimización de carta para los afiliados. Con Proof of Atmosphere (PoA), los comercios aplican recetas de iluminación, música y ambientación para elevar el tiempo de estancia y satisfacción.',
+  },
+  {
+    title: 'Rabbitty POS y Corte de Caja',
+    body: 'El sistema POS opera en iPad, Mac y Web. Permite asignación de mesas, apertura de turnos con fondo inicial, cobro multidivisa (Efectivo, Tarjeta, Bunz) y arqueo ciego con cierre Z térmico para conciliar diferencias de gaveta.',
+  },
+  {
+    title: 'KDS Cocina y Kiosko Autoservicio',
+    body: 'El KDS digitaliza las comandas de cocina con alertas visuales de tiempo (verde, naranja, rojo). El Kiosko autoservicio en pantalla táctil acelera pedidos con catálogo interactivo y pago con QR o ticket de mostrador.',
   },
   {
     title: 'Seguridad de Última Generación',
@@ -129,8 +161,24 @@ export function matchFaq(content: string): FaqItem | null {
   if (/\b(como ganar bunz|como gano bunz|como conseguir bunz)\b/.test(norm)) {
     return FAQS[1]; // ¿Cómo gano Bunz?
   }
-  if (/\b(vencen|vence|caducan|caduca|expiran|expira|vigencia)\b/.test(norm) && /bunz/.test(norm)) {
-    return FAQS[2]; // ¿Tienen fecha de vencimiento?
+  // Preguntas directas de POS, Corte de Caja y Admin
+  if (/\b(corte de caja|cierre de caja|cierre de turno|arqueo|ticket z)\b/.test(norm)) {
+    return FAQS.find((f) => f.q.includes('Corte de Caja')) || FAQS[0];
+  }
+  if (/\b(reporte|reportes|exportar csv|metricas de venta|p&l|iva)\b/.test(norm)) {
+    return FAQS.find((f) => f.q.includes('Reportes de Ventas')) || FAQS[0];
+  }
+  if (/\b(kds|cocina digital|comanda digital|pantalla de cocina)\b/.test(norm)) {
+    return FAQS.find((f) => f.q.includes('KDS')) || FAQS[0];
+  }
+  if (/\b(kiosko|kiosk|autoservicio|terminal de autoservicio)\b/.test(norm)) {
+    return FAQS.find((f) => f.q.includes('Kiosko')) || FAQS[0];
+  }
+  if (/\b(readiness|preparacion|porcentaje|nivel de preparacion|barra de preparacion|onboarding)\b/.test(norm)) {
+    return FAQS.find((f) => f.q.includes('Readiness')) || FAQS[0];
+  }
+  if (/\b(donde encuentro|donde esta|como llegar a|que funciones|donde se encuentran|mapa del admin)\b/.test(norm)) {
+    return FAQS.find((f) => f.q.includes('dónde encuentro cada función') || f.q.includes('Dónde encuentro')) || FAQS[0];
   }
 
   const tokens = new Set(supportTokens(content));
