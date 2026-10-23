@@ -15,6 +15,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx src/seed.ts",
     "db:seed:review": "tsx src/seed-app-review.ts",
+    "db:reconcile": "tsx src/reconcile-orders.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
