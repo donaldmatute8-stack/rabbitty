@@ -14,11 +14,13 @@ function AppleOfficialIcon({ className = 'w-5 h-5' }: { className?: string }) {
 
 function DownloadContent() {
   const searchParams = useSearchParams();
-  const ref = searchParams?.get('ref') || '626cafe';
+  const ref = searchParams?.get('ref') || '';
   const queryBunz = searchParams?.get('bunz');
 
   // Enlace iOS: Si existe en ENV usa el real, si no usa fallback seguro o TestFlight link
-  const IOS_APP_URL = process.env.NEXT_PUBLIC_IOS_APP_URL || 'https://apps.apple.com/app/rabbitty/id6739891234';
+  // Al publicar en App Store, solo cambia NEXT_PUBLIC_IOS_APP_URL (el texto del botón se adapta solo).
+  const IOS_APP_URL = process.env.NEXT_PUBLIC_IOS_APP_URL || '/support';
+  const IS_TESTFLIGHT = IOS_APP_URL.includes('testflight.apple.com');
   const ANDROID_APK_URL = process.env.NEXT_PUBLIC_ANDROID_APP_URL || 'https://rabbitty.me/rabbitty-app.apk';
   const TELEGRAM_MINIAPP_URL = `https://t.me/Rabbittyme_bot/app?startapp=promo_${ref}`;
 
@@ -26,10 +28,9 @@ function DownloadContent() {
   const SHOW_TELEGRAM = false;
   const SHOW_ANDROID = false;
 
-  const [affiliateName, setAffiliateName] = useState('626 Café');
-  const [welcomeBunz, setWelcomeBunz] = useState(queryBunz || '25');
-
-  // Carga dinámica de datos del afiliado según el ref
+  const [affiliateName, setAffiliateName] = useState('');
+  const [welcomeBunz, setWelcomeBunz] = useState(queryBunz || '');
+  const isAffiliate = Boolean(affiliateName);
   useEffect(() => {
     if (!ref) return;
     let isCancelled = false;
@@ -102,16 +103,27 @@ function DownloadContent() {
           
           <div className="text-center space-y-3 mb-8">
             <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 font-bold block">
-              Bienvenido a {affiliateName}
+              {isAffiliate ? `Bienvenido a ${affiliateName}` : 'Lealtad que te premia'}
             </span>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight leading-tight">
-              Activa tus <br />
-              <span className="text-transparent bg-clip-text bg-linear-to-r from-pink-400 via-rose-500 to-pink-500">
-                ${welcomeBunz} Bunz de Bienvenida
-              </span>
-            </h1>
+            {isAffiliate && welcomeBunz ? (
+              <h1 className="text-2xl sm:text-3xl font-black tracking-tight leading-tight">
+                Activa tus <br />
+                <span className="text-transparent bg-clip-text bg-linear-to-r from-pink-400 via-rose-500 to-pink-500">
+                  ${welcomeBunz} Bunz de Bienvenida
+                </span>
+              </h1>
+            ) : (
+              <h1 className="text-2xl sm:text-3xl font-black tracking-tight leading-tight">
+                Descarga <br />
+                <span className="text-transparent bg-clip-text bg-linear-to-r from-pink-400 via-rose-500 to-pink-500">
+                  la app de Rabbitty
+                </span>
+              </h1>
+            )}
             <p className="text-xs text-zinc-400 leading-relaxed max-w-xs mx-auto">
-              Descarga la app oficial de Rabbitty en tu iPhone para recibir tu saldo de bienvenida y comenzar a acumular beneficios hoy mismo.
+              {isAffiliate
+                ? 'Descarga la app oficial de Rabbitty en tu iPhone para recibir tu saldo de bienvenida y comenzar a acumular beneficios hoy mismo.'
+                : 'Descarga la app oficial de Rabbitty en tu iPhone y acumula Bunz en tus restaurantes favoritos.'}
             </p>
           </div>
 
@@ -131,7 +143,7 @@ function DownloadContent() {
                     iOS / iPhone
                   </span>
                   <span className="text-base font-black tracking-tight block">
-                    Descargar en App Store
+                    {IS_TESTFLIGHT ? 'Instalar en TestFlight' : 'Descargar en App Store'}
                   </span>
                 </div>
               </div>
@@ -186,7 +198,7 @@ function DownloadContent() {
 
       {/* Footer */}
       <footer className="w-full max-w-md py-4 text-center text-xs text-zinc-500 font-mono">
-        Rabbitty Loyalty Network · {affiliateName} Punto Afiliado Oficial
+        Rabbitty Loyalty Network{isAffiliate ? ` · ${affiliateName} Punto Afiliado Oficial` : ''}
       </footer>
     </div>
   );
