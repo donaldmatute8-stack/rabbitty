@@ -46,3 +46,33 @@ body {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
+
+/* 🎨 Creative Rabbitty Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 9999px;
+  margin: 8px 0;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #E91E63 0%, #9C27B0 100%);
+  border-radius: 9999px;
+  box-shadow: 0 0 10px rgba(233, 30, 99, 0.4);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #ff4081 0%, #ba68c8 100%);
+  box-shadow: 0 0 14px rgba(233, 30, 99, 0.7);
+}
+
+/* Firefox */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #E91E63 rgba(255, 255, 255, 0.02);
+}
+
