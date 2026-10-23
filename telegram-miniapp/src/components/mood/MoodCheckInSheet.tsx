@@ -50,6 +50,9 @@ export function MoodCheckInSheet({
   const [venues, setVenues] = useState<MoodVenue[]>([]);
   const [venuesLoading, setVenuesLoading] = useState(false);
   const [campaign, setCampaign] = useState<MoodCampaignInfo | null>(null);
+  const [freeText, setFreeText] = useState('');
+  const [interpreting, setInterpreting] = useState(false);
+  const [bunzyReply, setBunzyReply] = useState<string | null>(null);
 
   // Cada vez que se abre el panel arranca limpio (evita mostrar el resultado de la vez anterior)
   const [prevOpen, setPrevOpen] = useState(isOpen);
@@ -60,6 +63,8 @@ export function MoodCheckInSheet({
       setActiveExperience(null);
       setVenues([]);
       setCampaign(null);
+      setFreeText('');
+      setBunzyReply(null);
     }
   }
 
@@ -76,7 +81,7 @@ export function MoodCheckInSheet({
     }
   };
 
-  const handleSelectMood = async (moodKey: MoodType) => {
+  const handleSelectMood = async (moodKey: MoodType, via: 'grid' | 'bunzy' = 'grid') => {
     setSelectedMood(moodKey);
     const def = MOOD_DEFINITIONS[moodKey];
     PlatformBridge.hapticFeedback('medium');
@@ -93,7 +98,7 @@ export function MoodCheckInSheet({
         body: JSON.stringify({
           mood: moodKey,
           businessId: businessId || null,
-          source: businessId ? 'venue' : 'checkin',
+          source: via === 'bunzy' ? 'bunzy' : businessId ? 'venue' : 'checkin',
         }),
       });
       const payload = await res.json().catch(() => null);
@@ -114,6 +119,33 @@ export function MoodCheckInSheet({
       setActiveExperience(def);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Bunzy interpreta texto libre y elige el mood (el texto no se guarda)
+  const handleBunzySubmit = async () => {
+    const text = freeText.trim();
+    if (text.length < 2 || interpreting) return;
+    setInterpreting(true);
+    setBunzyReply(null);
+    PlatformBridge.hapticFeedback('light');
+    try {
+      const res = await fetch('/api/mood/interpret', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json();
+      if (data?.success && data.mood in MOOD_DEFINITIONS) {
+        setBunzyReply(data.reply || null);
+        await handleSelectMood(data.mood as MoodType, 'bunzy');
+      } else {
+        setBunzyReply('No logré entenderte, elige una opción de abajo 🐰');
+      }
+    } catch {
+      setBunzyReply('No logré conectarme, elige una opción de abajo 🐰');
+    } finally {
+      setInterpreting(false);
     }
   };
 
@@ -222,6 +254,57 @@ export function MoodCheckInSheet({
                   Personaliza la atmósfera, curaduría musical y recomendaciones para tu visita.
                 </p>
               </div>
+
+              {/* Bunzy: expresión libre */}
+              <div
+                className="mb-4 p-3 rounded-2xl border"
+                style={{
+                  background: isDark ? 'rgba(233, 30, 99, 0.08)' : 'rgba(233, 30, 99, 0.05)',
+                  borderColor: 'rgba(233, 30, 99, 0.25)',
+                }}
+              >
+                <label htmlFor="mood-free-text" className="text-[11px] font-mono font-bold text-[#E91E63] uppercase tracking-widest block mb-2">
+                  🐰 Cuéntale a Bunzy
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    id="mood-free-text"
+                    type="text"
+                    value={freeText}
+                    maxLength={300}
+                    onChange={(e) => setFreeText(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleBunzySubmit(); }}
+                    placeholder="¿Cómo te sientes hoy?"
+                    disabled={interpreting || loading}
+                    className="flex-1 min-w-0 rounded-xl px-3 py-2.5 text-sm outline-none border"
+                    style={{
+                      background: isDark ? 'rgba(255,255,255,0.05)' : '#FFFFFF',
+                      borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+                      color: 'var(--text-primary)',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleBunzySubmit}
+                    disabled={interpreting || loading || freeText.trim().length < 2}
+                    className="flex items-center justify-center rounded-xl px-3.5 text-white font-bold text-sm border-none cursor-pointer disabled:opacity-50"
+                    style={{ background: 'linear-gradient(135deg, #E91E63 0%, #D81B60 100%)' }}
+                    aria-label="Enviar a Bunzy"
+                  >
+                    {interpreting ? '…' : <ArrowRight className="h-4 w-4" />}
+                  </button>
+                </div>
+                {bunzyReply && (
+                  <p className="text-xs mt-2 m-0 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{bunzyReply}</p>
+                )}
+                <p className="text-[10px] font-mono mt-2 m-0" style={{ color: 'var(--text-muted)' }}>
+                  Tu texto no se guarda; solo se usa para elegir tu mood.
+                </p>
+              </div>
+
+              <p className="text-[11px] font-mono text-center mb-3 m-0" style={{ color: 'var(--text-muted)' }}>
+                — o elige directamente —
+              </p>
 
               {/* 6 Grid Cards */}
               <div className="grid grid-cols-2 gap-3">
@@ -339,6 +422,9 @@ export function MoodCheckInSheet({
                 <p className="text-xs mt-1.5 max-w-sm mx-auto leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
                   {activeExperience.description}
                 </p>
+                {bunzyReply && (
+                  <p className="text-xs mt-2 max-w-sm mx-auto leading-relaxed font-bold m-0" style={{ color: '#E91E63' }}>🐰 {bunzyReply}</p>
+                )}
               </div>
 
               {/* Music Recommendation Card */}
@@ -371,37 +457,10 @@ export function MoodCheckInSheet({
                       borderColor: 'rgba(29, 185, 84, 0.25)',
                     }}
                   >
-                    <span>Spotify</span>
+                    <span>Escuchar en Spotify</span>
                     <ExternalLink className="h-3 w-3" />
                   </a>
-                  <a
-                    href={`https://music.apple.com/search?term=${encodeURIComponent(`${activeExperience.music.title} ${activeExperience.music.artistOrCurator}`)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold border transition-all no-underline"
-                    style={{
-                      background: 'rgba(233, 30, 99, 0.12)',
-                      color: '#E91E63',
-                      borderColor: 'rgba(233, 30, 99, 0.25)',
-                    }}
-                  >
-                    <span>Apple Music</span>
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
-                  <a
-                    href={`https://www.youtube.com/results?search_query=${encodeURIComponent(`${activeExperience.music.title} ${activeExperience.music.artistOrCurator}`)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold border transition-all no-underline"
-                    style={{
-                      background: 'rgba(239, 68, 68, 0.12)',
-                      color: '#EF4444',
-                      borderColor: 'rgba(239, 68, 68, 0.25)',
-                    }}
-                  >
-                    <span>YouTube</span>
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
+                  {/* Apple Music / YouTube ocultos por ahora (pendiente: preferencia de usuario en config) */}
                 </div>
               </div>
 

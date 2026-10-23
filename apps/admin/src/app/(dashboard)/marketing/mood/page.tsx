@@ -3,15 +3,15 @@
 import { useMemo, useState } from "react";
 import { trpc } from "../../../../lib/trpc-client";
 import { Card, Button, toast } from "@rabbitty/ui";
-import { Sparkles, Plus, Trash2, Pause, Play, Clock, Gift, Store } from "lucide-react";
+import { Sparkles, Plus, Trash2, Pause, Play, Clock, Gift, Store, Activity, Bot, Layers, BarChart3 } from "lucide-react";
 
 const MOODS = [
-  { id: "calm", label: "Calma", emoji: "🌿" },
-  { id: "energy", label: "Energía", emoji: "⚡" },
-  { id: "focus", label: "Enfoque", emoji: "🎯" },
-  { id: "celebration", label: "Celebración", emoji: "🎉" },
-  { id: "connection", label: "Conexión", emoji: "💞" },
-  { id: "surprise", label: "Sorpresa", emoji: "✨" },
+  { id: "calm", label: "Calma", emoji: "🌿", hex: "#38BDF8" },
+  { id: "energy", label: "Energía", emoji: "⚡", hex: "#F59E0B" },
+  { id: "focus", label: "Enfoque", emoji: "🎯", hex: "#10B981" },
+  { id: "celebration", label: "Celebración", emoji: "🎉", hex: "#EC4899" },
+  { id: "connection", label: "Conexión", emoji: "💞", hex: "#A855F7" },
+  { id: "surprise", label: "Sorpresa", emoji: "✨", hex: "#FBBF24" },
 ] as const;
 
 type MoodId = (typeof MOODS)[number]["id"];
@@ -32,6 +32,7 @@ export default function MoodCampaignsPage() {
   const utils = trpc.useUtils();
   const { data: biz } = trpc.mood.businesses.useQuery();
   const { data: campaigns, isLoading } = trpc.mood.listCampaigns.useQuery();
+  const { data: metrics, isLoading: loadingMetrics } = trpc.mood.metrics.useQuery({ days: 30 });
 
   const invalidate = () => utils.mood.listCampaigns.invalidate();
   const create = trpc.mood.createCampaign.useMutation({
@@ -44,6 +45,7 @@ export default function MoodCampaignsPage() {
     onError: (e) => toast.error(e.message),
   });
 
+  const [activeTab, setActiveTab] = useState<"campaigns" | "telemetry">("campaigns");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [filterMood, setFilterMood] = useState<MoodId | "all">("all");
@@ -60,6 +62,9 @@ export default function MoodCampaignsPage() {
     setOpen(true);
   };
 
+  const totalBunzy = metrics?.sources?.find((s) => s.source === "bunzy")?.count ?? 0;
+  const bunzyPct = metrics?.totalEvents ? Math.round((totalBunzy / metrics.totalEvents) * 100) : 0;
+
   return (
     <div className="space-y-6 pb-10">
       <div className="relative overflow-hidden rounded-3xl border border-white/5 bg-linear-to-br from-gray-900/60 to-black/80 p-8 shadow-2xl backdrop-blur-xl">
@@ -67,48 +72,200 @@ export default function MoodCampaignsPage() {
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-pink-500">
-              <Sparkles className="h-3.5 w-3.5" /> Marketing · Rabbitty Mood
+              <Sparkles className="h-3.5 w-3.5" /> Marketing & Telemetría · Rabbitty Mood
             </span>
-            <h1 className="text-4xl font-black tracking-tight text-white">Campañas por Mood</h1>
+            <h1 className="text-4xl font-black tracking-tight text-white">Rabbitty Mood</h1>
             <p className="text-gray-400 mt-2 text-sm font-medium max-w-2xl">
-              Activa promociones según el estado de ánimo de los Rabbitters y la hora. Aparecen en el panel Mood y en el mapa para quienes elijan ese mood.
+              Monitorea el estado sensorial de la red, telemetría de interacción con Bunzy y gestiona campañas contextuales por sucursal.
             </p>
           </div>
-          <Button onClick={openCreate} disabled={businesses.length === 0}>
-            <Plus className="h-4 w-4" /> Nueva campaña
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant={activeTab === "campaigns" ? "primary" : "secondary"}
+              onClick={() => setActiveTab("campaigns")}
+            >
+              <Layers className="h-4 w-4" /> Campañas
+            </Button>
+            <Button
+              variant={activeTab === "telemetry" ? "primary" : "secondary"}
+              onClick={() => setActiveTab("telemetry")}
+            >
+              <BarChart3 className="h-4 w-4" /> Telemetría en Vivo
+            </Button>
+            {activeTab === "campaigns" && (
+              <Button onClick={openCreate} disabled={businesses.length === 0}>
+                <Plus className="h-4 w-4" /> Nueva campaña
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      {/* KPI Cards Globales */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="bg-gray-950 border-white/10 p-5 rounded-2xl">
-          <p className="text-xs font-bold uppercase text-gray-500">Campañas</p>
-          <p className="text-3xl font-black text-white">{campaigns?.length ?? "…"}</p>
+          <p className="text-xs font-bold uppercase text-gray-500">Check-ins Mood (30d)</p>
+          <p className="text-3xl font-black text-white">{loadingMetrics ? "…" : metrics?.totalEvents ?? 0}</p>
+          <p className="text-[11px] text-gray-400 mt-1">Interacciones de usuarios</p>
         </Card>
         <Card className="bg-gray-950 border-white/10 p-5 rounded-2xl">
-          <p className="text-xs font-bold uppercase text-gray-500">Activas</p>
+          <p className="text-xs font-bold uppercase text-gray-500">Vía Bunzy AI</p>
+          <p className="text-3xl font-black text-pink-400">
+            {loadingMetrics ? "…" : `${bunzyPct}%`}
+          </p>
+          <p className="text-[11px] text-gray-400 mt-1">{totalBunzy} con lenguaje natural</p>
+        </Card>
+        <Card className="bg-gray-950 border-white/10 p-5 rounded-2xl">
+          <p className="text-xs font-bold uppercase text-gray-500">Campañas Activas</p>
           <p className="text-3xl font-black text-emerald-400">{isLoading ? "…" : activeCount}</p>
+          <p className="text-[11px] text-gray-400 mt-1">{campaigns?.length ?? 0} registradas</p>
         </Card>
         <Card className="bg-gray-950 border-white/10 p-5 rounded-2xl">
-          <p className="text-xs font-bold uppercase text-gray-500">Negocios</p>
-          <p className="text-3xl font-black text-white">{businesses.length}</p>
+          <p className="text-xs font-bold uppercase text-gray-500">Negocios con Cobertura</p>
+          <p className="text-3xl font-black text-cyan-400">{businesses.length}</p>
+          <p className="text-[11px] text-gray-400 mt-1">Sucursales habilitadas</p>
         </Card>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {[{ id: "all", label: "Todos", emoji: "🌈" }, ...MOODS].map((m) => (
-          <button
-            key={m.id}
-            type="button"
-            onClick={() => setFilterMood(m.id as MoodId | "all")}
-            className={`rounded-full px-3.5 py-1.5 text-xs font-bold border transition-colors cursor-pointer ${
-              filterMood === m.id ? "bg-pink-500 border-pink-500 text-white" : "border-white/10 text-gray-400 hover:text-white"
-            }`}
-          >
-            {m.emoji} {m.label}
-          </button>
-        ))}
-      </div>
+      {activeTab === "telemetry" && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* Distribución de Moods */}
+            <Card className="bg-gray-950 border-white/10 p-6 rounded-3xl space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-extrabold text-white text-base flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-pink-500" />
+                  Distribución de Moods (Red Completa)
+                </h3>
+                <span className="text-xs text-gray-500 font-mono">Últimos 30 días</span>
+              </div>
+              <div className="space-y-3">
+                {MOODS.map((m) => {
+                  const item = metrics?.distribution?.find((d) => d.mood === m.id);
+                  const count = item?.count ?? 0;
+                  const pct = item?.percentage ?? 0;
+                  return (
+                    <div key={m.id} className="space-y-1">
+                      <div className="flex items-center justify-between text-xs font-bold">
+                        <span className="text-gray-300 flex items-center gap-1.5">
+                          <span>{m.emoji}</span>
+                          <span>{m.label}</span>
+                        </span>
+                        <span className="text-gray-400 font-mono">
+                          {count} ({pct}%)
+                        </span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-white/5 overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{ width: `${pct}%`, backgroundColor: m.hex }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+
+            {/* Canal de Elección: Bunzy vs Directo */}
+            <Card className="bg-gray-950 border-white/10 p-6 rounded-3xl space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-extrabold text-white text-base flex items-center gap-2">
+                  <Bot className="h-4 w-4 text-cyan-400" />
+                  Canal de Expresión del Usuario
+                </h3>
+                <span className="text-xs text-gray-500 font-mono">Bunzy vs Grid</span>
+              </div>
+              <div className="p-4 rounded-2xl bg-white/5 border border-white/5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-bold text-pink-400 flex items-center gap-2">
+                    🐰 Bunzy AI ("¿Cómo te sientes?")
+                  </span>
+                  <span className="font-mono text-sm font-extrabold text-white">{totalBunzy}</span>
+                </div>
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  Rabbitters que prefirieron escribir libremente lo que sentían para que la IA calibrara su experiencia.
+                </p>
+              </div>
+              <div className="p-4 rounded-2xl bg-white/5 border border-white/5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-bold text-white flex items-center gap-2">
+                    🎛️ Selección Directa / Tarjetas
+                  </span>
+                  <span className="font-mono text-sm font-extrabold text-white">
+                    {(metrics?.totalEvents ?? 0) - totalBunzy}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  Rabbitters que pulsaron directamente una de las 6 tarjetas de la retícula sensorial.
+                </p>
+              </div>
+            </Card>
+          </div>
+
+          {/* Feed de Actividad Reciente */}
+          <Card className="bg-gray-950 border-white/10 p-6 rounded-3xl space-y-4">
+            <h3 className="font-extrabold text-white text-base flex items-center gap-2">
+              <Clock className="h-4 w-4 text-emerald-400" />
+              Últimas Conexiones Sensoriales (Anónimas)
+            </h3>
+            <div className="divide-y divide-white/5">
+              {metrics?.recent && metrics.recent.length > 0 ? (
+                metrics.recent.map((ev) => {
+                  const m = MOODS.find((item) => item.id === ev.mood);
+                  const isBunzy = ev.source === "bunzy";
+                  return (
+                    <div key={ev.id} className="py-3 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">{m?.emoji ?? "✨"}</span>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-white text-sm">Modo {m?.label ?? ev.mood}</span>
+                            <span
+                              className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                                isBunzy
+                                  ? "bg-pink-500/10 text-pink-400 border border-pink-500/20"
+                                  : "bg-white/5 text-gray-400 border border-white/10"
+                              }`}
+                            >
+                              {isBunzy ? "🐰 Bunzy AI" : "🎛️ Grid"}
+                            </span>
+                          </div>
+                          <span className="text-xs text-gray-500">{ev.businessName}</span>
+                        </div>
+                      </div>
+                      <span className="text-xs font-mono text-gray-500">
+                        {new Date(ev.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-sm text-gray-500 py-4 text-center">
+                  Aún no hay check-ins registrados en la ventana de tiempo.
+                </p>
+              )}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {activeTab === "campaigns" && (
+        <>
+          <div className="flex flex-wrap gap-2">
+            {[{ id: "all", label: "Todos", emoji: "🌈" }, ...MOODS].map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => setFilterMood(m.id as MoodId | "all")}
+                className={`rounded-full px-3.5 py-1.5 text-xs font-bold border transition-colors cursor-pointer ${
+                  filterMood === m.id ? "bg-pink-500 border-pink-500 text-white" : "border-white/10 text-gray-400 hover:text-white"
+                }`}
+              >
+                {m.emoji} {m.label}
+              </button>
+            ))}
+          </div>
 
       <div className="space-y-3">
         {isLoading && <p className="text-gray-500 text-sm">Cargando…</p>}
@@ -153,6 +310,8 @@ export default function MoodCampaignsPage() {
           );
         })}
       </div>
+      </>
+      )}
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setOpen(false)}>

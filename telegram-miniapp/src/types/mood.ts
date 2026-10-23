@@ -114,7 +114,7 @@ export const MOOD_DEFINITIONS: Record<MoodType, MoodDefinition> = {
     music: {
       title: 'Peaceful Ambient & Lo-Fi Chill',
       artistOrCurator: 'Rabbitty Acoustic Curations',
-      spotifyUrl: 'https://open.spotify.com/playlist/37i9dQZF1DX4WYpdgoIcn6',
+      spotifyUrl: 'https://open.spotify.com/playlist/10RPNFnZIwx4cvjSZmXKO6',
       appleMusicUrl: 'https://music.apple.com/playlist/lo-fi-jazz/pl.u-38oWZ4EFP2Z8v',
       youtubeUrl: 'https://www.youtube.com/watch?v=jfKfPfyJRdk',
     },
@@ -135,7 +135,7 @@ export const MOOD_DEFINITIONS: Record<MoodType, MoodDefinition> = {
     music: {
       title: 'Morning Motivation & Upbeat Rhythms',
       artistOrCurator: 'Rabbitty Energetic Beats',
-      spotifyUrl: 'https://open.spotify.com/playlist/37i9dQZF1DXdxcBWuJwBLq',
+      spotifyUrl: 'https://open.spotify.com/playlist/5zJZwPFV6Ozb9FVwTMb5RP',
       appleMusicUrl: 'https://music.apple.com/playlist/pure-workout/pl.u-a6BllfK8v3zJ1',
       youtubeUrl: 'https://www.youtube.com/watch?v=5qap5aO4i9A',
     },
@@ -156,7 +156,7 @@ export const MOOD_DEFINITIONS: Record<MoodType, MoodDefinition> = {
     music: {
       title: 'Deep Focus & Minimal Piano',
       artistOrCurator: 'Rabbitty Deep Work Sessions',
-      spotifyUrl: 'https://open.spotify.com/playlist/37i9dQZF1DWZeKCadgRdKQ',
+      spotifyUrl: 'https://open.spotify.com/playlist/4MGlQHnU4JzCLXdYFC4IoT',
       appleMusicUrl: 'https://music.apple.com/playlist/pure-focus/pl.u-38oWZMzCP2Z8v',
       youtubeUrl: 'https://www.youtube.com/watch?v=DWcJFNfaw9c',
     },
@@ -177,7 +177,7 @@ export const MOOD_DEFINITIONS: Record<MoodType, MoodDefinition> = {
     music: {
       title: 'Nu-Disco & Golden Hour Grooves',
       artistOrCurator: 'Rabbitty Party Sessions',
-      spotifyUrl: 'https://open.spotify.com/playlist/37i9dQZF1DX1BzILRveYHb',
+      spotifyUrl: 'https://open.spotify.com/playlist/4brS7twNzO8R83fZJIQPoj',
       appleMusicUrl: 'https://music.apple.com/playlist/dance-party/pl.u-Ymb00p5CPN3pM',
       youtubeUrl: 'https://www.youtube.com/watch?v=7NOSDKb0HlU',
     },
@@ -198,7 +198,7 @@ export const MOOD_DEFINITIONS: Record<MoodType, MoodDefinition> = {
     music: {
       title: 'Warm Acoustic & Soulful Melodies',
       artistOrCurator: 'Rabbitty Acoustic Intimate',
-      spotifyUrl: 'https://open.spotify.com/playlist/37i9dQZF1DX4E3UdUs7fUx',
+      spotifyUrl: 'https://open.spotify.com/playlist/14cJUNppsCUM17JDJ3Q4H6',
       appleMusicUrl: 'https://music.apple.com/playlist/coffee-shop-acoustic/pl.u-V9D7m88tBkL3V',
       youtubeUrl: 'https://www.youtube.com/watch?v=lTRiuFIWV54',
     },
@@ -219,7 +219,7 @@ export const MOOD_DEFINITIONS: Record<MoodType, MoodDefinition> = {
     music: {
       title: 'Eclectic Indie & Global Explorations',
       artistOrCurator: 'Rabbitty Sonic Discovery',
-      spotifyUrl: 'https://open.spotify.com/playlist/37i9dQZF1DXdbXrPNafg9d',
+      spotifyUrl: 'https://open.spotify.com/playlist/4CkkBYkJbHpp5sa0xbOXlw',
       appleMusicUrl: 'https://music.apple.com/playlist/indie-mix/pl.u-9N9lv4DC4J6x3',
       youtubeUrl: 'https://www.youtube.com/watch?v=CF9X53Z82z0',
     },

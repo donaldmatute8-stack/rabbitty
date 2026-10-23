@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { ownedBusinesses, moodCampaigns } from '@/db/schema';
-import { and, desc, eq } from 'drizzle-orm';
+import { ownedBusinesses, moodCampaigns, moodEvents } from '@/db/schema';
+import { and, desc, eq, gte } from 'drizzle-orm';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 import { MoodType } from '@/types/mood';
 
@@ -35,7 +35,39 @@ export async function GET(req: NextRequest) {
     const campaigns = await db.select().from(moodCampaigns)
       .where(eq(moodCampaigns.businessId, businessId!))
       .orderBy(desc(moodCampaigns.createdAt));
-    return NextResponse.json({ success: true, campaigns });
+
+    // Métricas por campaña: check-ins coincidentes en los últimos 30 días
+    const sinceDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const events = await db.query.moodEvents.findMany({
+      where: and(
+        eq(moodEvents.businessId, businessId!),
+        gte(moodEvents.createdAt, sinceDate)
+      ),
+      columns: {
+        mood: true,
+        metadata: true,
+      },
+    });
+
+    const campaignsWithMetrics = campaigns.map((c) => {
+      const matchCount = events.filter((e) => {
+        if (e.mood !== c.targetMood) return false;
+        const meta = e.metadata as Record<string, unknown> | null;
+        const rawHour = meta?.hourOfDay;
+        const hour = typeof rawHour === 'number' && rawHour >= 0 && rawHour <= 23 ? rawHour : new Date().getHours();
+        if (c.startHour <= c.endHour) {
+          return hour >= c.startHour && hour <= c.endHour;
+        }
+        return hour >= c.startHour || hour <= c.endHour;
+      }).length;
+
+      return {
+        ...c,
+        matches30d: matchCount,
+      };
+    });
+
+    return NextResponse.json({ success: true, campaigns: campaignsWithMetrics });
   } catch (err) {
     console.error('[mood-campaigns GET]', err);
     return NextResponse.json({ error: 'INTERNAL_ERROR' }, { status: 500 });
