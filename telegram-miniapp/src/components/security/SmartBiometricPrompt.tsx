@@ -47,10 +47,10 @@ export function SmartBiometricPrompt() {
 
       const triggerPrompt = () => {
         if (timer) clearTimeout(timer);
-        // Dar 4s de respiro natural para que el usuario explore el feed
+        // Dar 5.5s de respiro natural para que el usuario explore el feed
         timer = setTimeout(() => {
           if (alive) setShow(true);
-        }, 4000);
+        }, 5500);
       };
 
       // Si el ritual de bienvenida aún no se ha visto, esperar a que termine
@@ -61,13 +61,13 @@ export function SmartBiometricPrompt() {
           triggerPrompt();
         };
         window.addEventListener('rabbitty:welcome-ritual-completed', onRitualFinished);
-        // Respaldo de seguridad por si no hubo ritual (ej. nativo o omitido)
+        // Respaldo de seguridad por si no hubo evento
         timer = setTimeout(() => {
           window.removeEventListener('rabbitty:welcome-ritual-completed', onRitualFinished);
           if (alive) setShow(true);
-        }, 14000);
+        }, 16000);
       } else {
-        // Si el ritual ya fue visto en visitas anteriores, esperar 4s después de entrar al home
+        // Si el ritual ya fue visto en visitas anteriores, esperar 5.5s después de entrar al feed
         triggerPrompt();
       }
     };
