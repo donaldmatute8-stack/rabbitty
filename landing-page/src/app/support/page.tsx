@@ -260,12 +260,12 @@ export default function SupportPage() {
         </div>
       </header>
 
-      {/* Main Two-Column Layout (Centro Contenido + Sidebar Fijo en Desktop) */}
-      <div className="max-w-7xl mx-auto px-6 py-10">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      {/* Main Two-Column Layout (Centro Contenido con scroll independiente + Sidebar Fijo en Desktop) */}
+      <div className="max-w-7xl mx-auto px-6 py-6 lg:h-[calc(100vh-5rem)] lg:overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full items-start">
           
-          {/* Columna Principal: Hero, Contact Channels & Extended FAQs (7 cols en Desktop) */}
-          <div className="lg:col-span-7 space-y-10">
+          {/* Columna Principal: Hero, Contact Channels & Extended FAQs (7 cols - Scrollable independiente en Desktop) */}
+          <div className="lg:col-span-7 space-y-10 lg:h-full lg:overflow-y-auto lg:pr-4 scrollbar-thin">
             {/* Hero */}
             <div>
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#E91E63]/10 border border-[#E91E63]/30 text-xs font-bold text-[#E91E63] mb-4">
@@ -332,7 +332,7 @@ export default function SupportPage() {
             </div>
 
             {/* Preguntas Frecuentes Extendidas (Acordeón Interactivo) */}
-            <div className="pt-4">
+            <div className="pt-2 pb-12">
               <div className="flex items-center gap-2 mb-6">
                 <HelpCircle size={22} className="text-[#E91E63]" />
                 <h2 className="text-xl md:text-2xl font-black text-white m-0">Base de Conocimiento & Preguntas Frecuentes</h2>
@@ -380,9 +380,9 @@ export default function SupportPage() {
             </div>
           </div>
 
-          {/* Columna Derecha: Bunzy Sidebar Fijo en Desktop (5 cols) */}
-          <div className="hidden lg:block lg:col-span-5 sticky top-28">
-            <div className="bg-[#101018] border border-white/10 rounded-3xl p-5 shadow-2xl flex flex-col h-170">
+          {/* Columna Derecha: Bunzy Sidebar Fijo en Desktop (5 cols - Fixed height, nunca se desplaza) */}
+          <div className="hidden lg:block lg:col-span-5 lg:h-full">
+            <div className="bg-[#101018] border border-white/10 rounded-3xl p-5 shadow-2xl flex flex-col h-full max-h-[calc(100vh-7rem)]">
               {/* Header de Bunzy */}
               <div className="flex items-center justify-between pb-3.5 border-b border-white/10 mb-3 shrink-0">
                 <div className="flex items-center gap-3">
@@ -408,6 +408,7 @@ export default function SupportPage() {
           </div>
         </div>
       </div>
+
 
       {/* Mobile Floating Bunzy Bubble */}
       <div className="lg:hidden fixed bottom-6 right-6 z-40">
