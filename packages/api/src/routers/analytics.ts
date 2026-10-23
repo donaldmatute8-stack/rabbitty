@@ -34,26 +34,32 @@ export const analyticsRouter = router({
           )
         );
 
-      // Group by date
-      const dailySalesMap = new Map<string, number>();
+      // Group by date — include tax and base breakdown for fiscal reconciliation
+      type DayBucket = { totalSales: number; taxTotal: number; baseTotal: number };
+      const dailySalesMap = new Map<string, DayBucket>();
       
       // Initialize daily sales map with all days in range to avoid gaps
       for (let i = input.days - 1; i >= 0; i--) {
         const d = new Date();
         d.setDate(d.getDate() - i);
-        dailySalesMap.set(toLocalDateStr(d), 0);
+        dailySalesMap.set(toLocalDateStr(d), { totalSales: 0, taxTotal: 0, baseTotal: 0 });
       }
 
       for (const order of ordersList) {
         if (!order.createdAt) continue;
         const dateStr = toLocalDateStr(order.createdAt);
-        const currentSales = dailySalesMap.get(dateStr) || 0;
-        dailySalesMap.set(dateStr, currentSales + (Number(order.total) || 0));
+        const bucket = dailySalesMap.get(dateStr) ?? { totalSales: 0, taxTotal: 0, baseTotal: 0 };
+        bucket.totalSales += Number(order.total) || 0;
+        bucket.taxTotal += Number(order.tax) || 0;
+        bucket.baseTotal += Number(order.subtotal) || 0;
+        dailySalesMap.set(dateStr, bucket);
       }
 
-      const trends = Array.from(dailySalesMap.entries()).map(([date, totalSales]) => ({
+      const trends = Array.from(dailySalesMap.entries()).map(([date, bucket]) => ({
         date,
-        totalSales,
+        totalSales: Math.round(bucket.totalSales * 100) / 100,
+        taxTotal: Math.round(bucket.taxTotal * 100) / 100,
+        baseTotal: Math.round(bucket.baseTotal * 100) / 100,
       })).sort((a, b) => a.date.localeCompare(b.date));
 
       return trends;
@@ -156,29 +162,22 @@ export const analyticsRouter = router({
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - input.days);
 
-      const ordersList = await ctx.restaurantDb
-        .select()
-        .from(orders)
+      // Same rule as the cash register (computeShiftTotals): COMPLETED payments
+      // of the branch, bucketed by payment date, regardless of order status
+      // (so partially paid orders are counted too).
+      const paymentsList = await ctx.restaurantDb
+        .select({ method: payments.method, amount: payments.amount })
+        .from(payments)
+        .innerJoin(orders, eq(payments.orderId, orders.id))
         .where(
           and(
             eq(orders.branchId, resolveBranchId(ctx, input.branchId)),
-            inArray(orders.status, ["COMPLETED", "PAID"]),
-            gte(orders.createdAt, startDate)
+            eq(payments.status, "COMPLETED"),
+            gte(payments.createdAt, startDate)
           )
         );
 
-      if (ordersList.length === 0) return [];
-      const orderIds = ordersList.map((o) => o.id);
-
-      const paymentsList = await ctx.restaurantDb
-        .select()
-        .from(payments)
-        .where(
-          and(
-            inArray(payments.orderId, orderIds),
-            eq(payments.status, "COMPLETED")
-          )
-        );
+      if (paymentsList.length === 0) return [];
 
       const methodMap = new Map<string, number>();
       for (const pay of paymentsList) {
@@ -197,7 +196,7 @@ export const analyticsRouter = router({
 
       return Array.from(methodMap.entries()).map(([method, amount]) => ({
         method,
-        amount,
+        amount: Math.round((amount + Number.EPSILON) * 100) / 100,
       }));
     }),
 

@@ -9,6 +9,30 @@ import { users as coreUsers } from "@rabbitty/database-core/schema";
 import { miniappClient } from "../services/miniapp-client";
 import { assertOpenShiftForCash } from "../services/cashShift";
 
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPER FISCAL CANÓNICO (México IVA 16% incluido en precio)
+//
+// Regla: los precios del menú ya incluyen IVA (precio de venta al público).
+//   total    = suma exacta de los items (sin redondeo adicional)
+//   subtotal = Math.round((total / 1.16) * 100) / 100   → base gravable
+//   tax      = total - subtotal                          → IVA exacto (NO redondear)
+//
+// Nunca redondear `tax` por separado. Así subtotal + tax === total siempre,
+// sin centavos perdidos o inventados.
+// ─────────────────────────────────────────────────────────────────────────────
+const TAX_RATE = 0.16;
+const r2 = (n: number) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+
+/** Calcula base (subtotal), IVA y total a partir de los items de una orden.
+ *  Garantía: subtotal + tax === total (sin discrepancias de redondeo). */
+export function calcTax(itemsTotal: number): { total: number; subtotal: number; tax: number } {
+  const total = r2(itemsTotal);
+  const subtotal = r2(total / (1 + TAX_RATE));
+  const tax = r2(total - subtotal); // derived, never independently rounded from scratch
+  return { total, subtotal, tax };
+}
+
+
 export const posRouter = router({
   getTables: protectedProcedure.query(async ({ ctx }) => {
     const tables = await ctx.restaurantDb.select().from(tablesTable).where(eq(tablesTable.branchId, ctx.branchId));
@@ -128,10 +152,7 @@ export const posRouter = router({
         notes: input.notes ?? null,
       }).returning();
       const allItems = await ctx.restaurantDb.select().from(orderItems).where(eq(orderItems.orderId, input.orderId));
-      // Precios de menú con IVA incluido: total = suma, base e IVA se derivan hacia atrás
-      const total = Math.round(allItems.reduce((s, i) => s + Number(i.totalPrice), 0) * 100) / 100;
-      const subtotal = Math.round((total / 1.16) * 100) / 100;
-      const tax = Math.round((total - subtotal) * 100) / 100;
+      const { total, subtotal, tax } = calcTax(allItems.reduce((s, i) => s + Number(i.totalPrice), 0));
       await ctx.restaurantDb.update(orders).set({ subtotal, tax, total }).where(eq(orders.id, input.orderId));
       return orderItem;
     }),
@@ -148,9 +169,7 @@ export const posRouter = router({
       const [removed] = await ctx.restaurantDb.delete(orderItems).where(eq(orderItems.id, input.id)).returning();
       if (removed) {
         const allItems = await ctx.restaurantDb.select().from(orderItems).where(eq(orderItems.orderId, removed.orderId));
-        const total = Math.round(allItems.reduce((s, i) => s + Number(i.totalPrice), 0) * 100) / 100;
-        const subtotal = Math.round((total / 1.16) * 100) / 100;
-        const tax = Math.round((total - subtotal) * 100) / 100;
+        const { total, subtotal, tax } = calcTax(allItems.reduce((s, i) => s + Number(i.totalPrice), 0));
         await ctx.restaurantDb.update(orders).set({ subtotal, tax, total }).where(eq(orders.id, removed.orderId));
         return removed;
       }
@@ -167,9 +186,7 @@ export const posRouter = router({
       )).returning();
       
       const allItems = await ctx.restaurantDb.select().from(orderItems).where(eq(orderItems.orderId, input.orderId));
-      const total = Math.round(allItems.reduce((s, i) => s + Number(i.totalPrice), 0) * 100) / 100;
-      const subtotal = Math.round((total / 1.16) * 100) / 100;
-      const tax = Math.round((total - subtotal) * 100) / 100;
+      const { total, subtotal, tax } = calcTax(allItems.reduce((s, i) => s + Number(i.totalPrice), 0));
       await ctx.restaurantDb.update(orders).set({ subtotal, tax, total }).where(eq(orders.id, input.orderId));
       
       return { success: true };
@@ -216,9 +233,7 @@ export const posRouter = router({
 
       if (item) {
         const allItems = await ctx.restaurantDb.select().from(orderItems).where(eq(orderItems.orderId, item.orderId));
-        const total = Math.round(allItems.reduce((s, i) => s + Number(i.totalPrice), 0) * 100) / 100;
-        const subtotal = Math.round((total / 1.16) * 100) / 100;
-        const tax = Math.round((total - subtotal) * 100) / 100;
+        const { total, subtotal, tax } = calcTax(allItems.reduce((s, i) => s + Number(i.totalPrice), 0));
         await ctx.restaurantDb.update(orders).set({ subtotal, tax, total }).where(eq(orders.id, item.orderId));
       }
 
@@ -245,17 +260,23 @@ export const posRouter = router({
       }
 
       // Server-side discount calculation (trust the server, not the client)
-      let finalAmount = input.amount;
+      // orders.total is always the amount actually owed (net of discount).
+      // Gross is recovered as total + stored discount to avoid double discounting.
+      let finalAmount = r2(input.amount);
       let calculatedDiscount = orderRow.discount || 0;
+      let orderNetTotal = orderRow.total;
       if (input.discountPercent && input.discountPercent > 0) {
-        const serverCalculated = orderRow.total * (1 - input.discountPercent / 100);
-        if (Math.abs(serverCalculated - input.amount) > 1) {
+        const gross = r2(orderRow.total + (orderRow.discount || 0));
+        const net = r2(gross * (1 - input.discountPercent / 100));
+        if (Math.abs(net - input.amount) > 1) {
           throw new Error("Monto de descuento inválido");
         }
-        finalAmount = serverCalculated;
-        calculatedDiscount = (input.discountPercent / 100) * orderRow.total;
+        finalAmount = net;
+        calculatedDiscount = r2(gross - net);
+        orderNetTotal = net;
+        const t = calcTax(net);
         await ctx.restaurantDb.update(orders)
-          .set({ discount: calculatedDiscount })
+          .set({ discount: calculatedDiscount, total: t.total, subtotal: t.subtotal, tax: t.tax })
           .where(eq(orders.id, input.orderId));
       }
 
@@ -275,8 +296,8 @@ export const posRouter = router({
           .where(eq(orders.id, input.orderId));
       }
 
-      const targetPayableAmount = Math.max(0, orderRow.total - calculatedDiscount);
-      if (totalPaid >= targetPayableAmount) {
+      const targetPayableAmount = Math.max(0, orderNetTotal);
+      if (r2(totalPaid) >= targetPayableAmount) {
         await ctx.restaurantDb.update(orders).set({ status: "COMPLETED" }).where(eq(orders.id, input.orderId));
 
         // INVENTORY DEDUCTION LOGIC (recursive for sub-recipes)
@@ -589,25 +610,23 @@ export const posRouter = router({
       }
 
       // Precios de menú en México tienen el IVA incluido (precios redondos)
-      const taxRate = 0.16;
-      let originalTotal = Math.round(calculatedSubtotal * 100) / 100;
+      let originalTotal = r2(calculatedSubtotal);
       let calculatedDiscount = 0;
       let finalAmount = originalTotal;
 
       if (input.discountPercent && input.discountPercent > 0) {
-        calculatedDiscount = Math.round(((input.discountPercent / 100) * originalTotal) * 100) / 100;
-        finalAmount = Math.max(0, originalTotal - calculatedDiscount);
+        calculatedDiscount = r2((input.discountPercent / 100) * originalTotal);
+        finalAmount = r2(Math.max(0, originalTotal - calculatedDiscount));
       }
 
-      // Desglose fiscal exacto: Base = Total / 1.16, IVA = Total - Base
-      const calculatedBaseSubtotal = Math.round((finalAmount / (1 + taxRate)) * 100) / 100;
-      const calculatedTax = Math.round((finalAmount - calculatedBaseSubtotal) * 100) / 100;
+      // Desglose fiscal canónico: subtotal + tax = total (sin discrepancias)
+      const { total: calcTotal, subtotal: calcSubtotal, tax: calcTaxAmt } = calcTax(finalAmount);
 
       await ctx.restaurantDb.update(orders).set({
-        subtotal: calculatedBaseSubtotal,
-        tax: calculatedTax,
+        subtotal: calcSubtotal,
+        tax: calcTaxAmt,
         discount: calculatedDiscount,
-        total: finalAmount,
+        total: calcTotal,
       }).where(eq(orders.id, order.id));
 
       // 3. Delegate to payOrder logic (insert payment, deduct inventory, trigger Bunz and CRM)
@@ -707,9 +726,9 @@ export const posRouter = router({
         success: true,
         orderId: order.id,
         orderNumber: order.id.slice(-4).toUpperCase(),
-        total: finalAmount,
-        subtotal: calculatedSubtotal,
-        tax: calculatedTax,
+        total: calcTotal,
+        subtotal: calcSubtotal,
+        tax: calcTaxAmt,
       };
     }),
 
@@ -767,23 +786,22 @@ export const posRouter = router({
       }
 
       // Precios con IVA incluido: el total es la suma exacta (sin centavos de IVA añadido)
-      const originalTotal = Math.round(calculatedSubtotal * 100) / 100;
+      const originalTotal = r2(calculatedSubtotal);
       let finalAmount = originalTotal;
       let calculatedDiscount = 0;
 
       if (input.discountPercent && input.discountPercent > 0) {
-        calculatedDiscount = Math.round(((input.discountPercent / 100) * originalTotal) * 100) / 100;
-        finalAmount = Math.max(0, originalTotal - calculatedDiscount);
+        calculatedDiscount = r2((input.discountPercent / 100) * originalTotal);
+        finalAmount = r2(Math.max(0, originalTotal - calculatedDiscount));
       }
 
-      const baseAfterDiscount = Math.round((finalAmount / 1.16) * 100) / 100;
-      const calculatedTax = Math.round((finalAmount - baseAfterDiscount) * 100) / 100;
+      const { total: intentTotal, subtotal: intentBase, tax: intentTax } = calcTax(finalAmount);
 
       await ctx.restaurantDb.update(orders).set({
-        subtotal: baseAfterDiscount,
-        tax: calculatedTax,
+        subtotal: intentBase,
+        tax: intentTax,
         discount: calculatedDiscount,
-        total: finalAmount,
+        total: intentTotal,
       }).where(eq(orders.id, order.id));
 
       // 3. Create Payment Intent

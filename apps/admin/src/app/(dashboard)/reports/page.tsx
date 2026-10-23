@@ -78,17 +78,24 @@ export default function ReportsPage() {
   };
 
   const totalRevenue = salesTrends?.reduce((sum: number, item: any) => sum + (Number(item.totalSales) || 0), 0) || 0;
+  const totalIVA = salesTrends?.reduce((sum: number, item: any) => sum + (Number(item.taxTotal) || 0), 0) || 0;
+  const totalBase = salesTrends?.reduce((sum: number, item: any) => sum + (Number(item.baseTotal) || 0), 0) || 0;
+  // Defensive: recalculate base from total if stored subtotals are zero (legacy orders)
+  const displayBase = totalBase > 0 ? totalBase : Math.round((totalRevenue / 1.16) * 100) / 100;
+  const displayIVA = totalIVA > 0 ? totalIVA : Math.round((totalRevenue - displayBase) * 100) / 100;
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-black/80 backdrop-blur-xl border border-white/10 p-4 rounded-2xl shadow-2xl text-white">
-          <p className="text-gray-400 text-sm mb-1">{label}</p>
+          <p className="text-gray-400 text-sm mb-2">{label}</p>
           {payload.map((entry: any, index: number) => (
-            <p key={index} className="font-bold text-lg" style={{ color: entry.color }}>
-              {entry.name === "totalSales" || entry.name === "revenue" || entry.name === "amount" ? "$" : ""}
-              {(Number(entry.value) || 0).toFixed(2)} 
-              {entry.name === "ordersCount" ? " órdenes" : ""}
+            <p key={index} className="font-bold text-sm" style={{ color: entry.color }}>
+              {entry.name === "totalSales" ? `Total: $${(Number(entry.value) || 0).toFixed(2)}` :
+               entry.name === "taxTotal" ? `IVA (16%): $${(Number(entry.value) || 0).toFixed(2)}` :
+               entry.name === "baseTotal" ? `Base: $${(Number(entry.value) || 0).toFixed(2)}` :
+               entry.name === "revenue" || entry.name === "amount" ? `$${(Number(entry.value) || 0).toFixed(2)}` :
+               `${(Number(entry.value) || 0).toFixed(2)}`}
             </p>
           ))}
         </div>
@@ -138,6 +145,25 @@ export default function ReportsPage() {
               {isExporting ? "Generando..." : "Exportar Contabilidad"}
             </Button>
           </div>
+        </div>
+      </div>
+
+      {/* ── Tarjetas Fiscales de Resumen ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="rounded-2xl border border-white/5 bg-gray-900/60 p-5 backdrop-blur-xl">
+          <p className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-1">Base Gravable</p>
+          <p className="text-2xl font-black text-white">${displayBase.toFixed(2)}</p>
+          <p className="text-[11px] text-gray-500 mt-1">Ingresos sin IVA ({daysRange}D)</p>
+        </div>
+        <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 p-5 backdrop-blur-xl">
+          <p className="text-xs font-bold uppercase tracking-widest text-blue-400 mb-1">IVA Trasladado 16%</p>
+          <p className="text-2xl font-black text-blue-300">${displayIVA.toFixed(2)}</p>
+          <p className="text-[11px] text-blue-400/60 mt-1">Para declaración fiscal ({daysRange}D)</p>
+        </div>
+        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-5 backdrop-blur-xl">
+          <p className="text-xs font-bold uppercase tracking-widest text-emerald-400 mb-1">Total Cobrado (c/ IVA)</p>
+          <p className="text-2xl font-black text-emerald-300">${totalRevenue.toFixed(2)}</p>
+          <p className="text-[11px] text-emerald-400/60 mt-1">Base + IVA = Total ✓ ({daysRange}D)</p>
         </div>
       </div>
 
