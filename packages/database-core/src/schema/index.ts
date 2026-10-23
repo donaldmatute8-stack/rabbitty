@@ -1,4 +1,4 @@
-import { pgTable, text, integer, real, timestamp, boolean, uuid, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, real, timestamp, boolean, uuid, jsonb, customType, uniqueIndex } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
 const id = () => uuid("id").defaultRandom().$defaultFn(() => crypto.randomUUID()).primaryKey();
@@ -345,5 +345,89 @@ export const vibePassportStamps = pgTable("vibePassportStamps", {
   transactionId: text("transactionId"), // optional link to verified payment transaction
   stampedAt: timestamp("stampedAt").defaultNow().notNull(),
 });
+
+// Custom pgvector type compatible with Neon PostgreSQL
+const vectorType = customType<{ data: number[] }>({
+  dataType() {
+    return "vector(1536)";
+  },
+});
+
+/**
+ * 🧠 Knowledge Chunks (RAG Semántico Aislado)
+ * Fragmentos indexados con control estricto de ámbito y tenant/business.
+ */
+export const knowledgeChunks = pgTable(
+  "knowledgeChunks",
+  {
+    id: id(),
+    businessId: text("businessId").references(() => ownedBusinesses.id, { onDelete: "cascade" }),
+    scope: text("scope").notNull(), // 'GLOBAL' | 'AFFILIATE' | 'SUPPORT' | 'LEGAL'
+    sourceType: text("sourceType").notNull(), // 'BUSINESS_PROFILE' | 'FAQ' | 'MENU_ITEM' | 'POLICY'
+    sourceId: text("sourceId").notNull(),
+    content: text("content").notNull(),
+    contentHash: text("contentHash").notNull(),
+    embedding: vectorType("embedding"),
+    embeddingModel: text("embeddingModel").default("text-embedding-3-small").notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("knowledge_chunks_source_uidx").on(table.sourceType, table.sourceId),
+  ]
+);
+
+/**
+ * 👤 User Memories (MAG Seguro y Controlado)
+ * Preferencias declaradas o deducidas de los Rabbitters, con procedencia y expiración.
+ */
+export const userMemories = pgTable(
+  "userMemories",
+  {
+    id: id(),
+    userId: text("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    key: text("key").notNull(), // e.g. 'dietary_vegan', 'favorite_drink', 'ambiance_preference'
+    value: text("value").notNull(),
+    confidenceScore: real("confidenceScore").default(1.0).notNull(), // 1.0 = Explícito, <0.8 = Inferencia
+    source: text("source").default("EXPLICIT_USER_INPUT").notNull(), // 'EXPLICIT_USER_INPUT' | 'OBSERVED_BEHAVIOR'
+    expiresAt: timestamp("expiresAt"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("user_memories_user_key_uidx").on(table.userId, table.key),
+  ]
+);
+
+/**
+ * 🏢 Business Learning Insights
+ * Patrones comerciales agregados con muestra, periodo y confianza verificables.
+ */
+export const businessLearningInsights = pgTable("businessLearningInsights", {
+  id: id(),
+  businessId: text("businessId").notNull().references(() => ownedBusinesses.id, { onDelete: "cascade" }),
+  insightType: text("insightType").notNull(), // 'OPTIMAL_REWARD_RATE' | 'PEAK_MOOD_HOURS' | 'ATMOSPHERE_LIFT'
+  periodAnalyzed: text("periodAnalyzed").notNull(), // e.g. 'LAST_30_DAYS'
+  sampleSize: integer("sampleSize").notNull(),
+  confidenceScore: real("confidenceScore").notNull(),
+  recommendation: text("recommendation").notNull(),
+  metricsBasis: jsonb("metricsBasis").notNull(),
+  calculatedAt: timestamp("calculatedAt").defaultNow().notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+});
+
+/**
+ * 📥 Memory Candidates
+ * Búfer de extracción asíncrona para no bloquear latencia de chat ni llamadas al LLM.
+ */
+export const memoryCandidates = pgTable("memoryCandidates", {
+  id: id(),
+  userId: text("userId").references(() => users.id, { onDelete: "cascade" }),
+  businessId: text("businessId").references(() => ownedBusinesses.id, { onDelete: "cascade" }),
+  rawInput: text("rawInput").notNull(),
+  extractedKey: text("extractedKey").notNull(),
+  extractedValue: text("extractedValue").notNull(),
+  status: text("status").default("PENDING").notNull(), // 'PENDING' | 'CONSOLIDATED' | 'DISCARDED'
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 
 
