@@ -3,6 +3,7 @@ import { and, eq, inArray, gte, lt, sql } from "drizzle-orm";
 import { router, protectedProcedure, publicLimitedProcedure, resolveBranchId } from "../trpc";
 import { orders, payments, tables, orderItems } from "@rabbitty/database-restaurant/schema";
 import { bus, EventTypes } from "@rabbitty/events";
+import { assertOpenShiftForCash } from "../services/cashShift";
 
 export const paymentsRouter = router({
   refund: protectedProcedure
@@ -40,6 +41,9 @@ export const paymentsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      if (input.method === "CASH") {
+        await assertOpenShiftForCash(ctx.restaurantDb, ctx.branchId);
+      }
       const order = await ctx.restaurantDb.select().from(orders).where(eq(orders.id, input.orderId));
       if (!order) throw new Error("Orden no encontrada");
 
@@ -62,7 +66,7 @@ export const paymentsRouter = router({
       splits: z.array(z.object({
         customerName: z.string().optional(),
         amount: z.number().min(1),
-        method: z.enum(["CASH", "CREDIT_CARD", "DEBIT_CARD", "BUNZ"]).default("CASH"),
+        method: z.enum(["CASH", "CREDIT_CARD", "DEBIT_CARD", "BUNZ"]),
       })).min(2),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -76,6 +80,9 @@ export const paymentsRouter = router({
 
       const results = [];
       for (const split of input.splits) {
+        if (split.method === "CASH") {
+          await assertOpenShiftForCash(ctx.restaurantDb, ctx.branchId);
+        }
         const [payment] = await ctx.restaurantDb.insert(payments).values({
           orderId: input.orderId,
           method: split.method,
@@ -97,6 +104,9 @@ export const paymentsRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       if (input.tip <= 0) throw new Error("La propina debe ser mayor a 0");
+      if (input.method === "CASH") {
+        await assertOpenShiftForCash(ctx.restaurantDb, ctx.branchId);
+      }
 
       const [payment] = await ctx.restaurantDb.insert(payments).values({
         orderId: input.orderId,

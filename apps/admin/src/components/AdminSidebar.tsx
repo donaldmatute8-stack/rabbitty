@@ -7,6 +7,7 @@ import { signOut } from "next-auth/react";
 import { cn } from "@rabbitty/ui";
 import { 
   LayoutDashboard, 
+  Banknote,
   Store, 
   Users, 
   Settings, 
@@ -119,6 +120,7 @@ const menuPillars: MenuPillar[] = [
       { href: "/table-layout", label: "Mapa de Mesas", icon: Table2 },
       { href: "/reservations", label: "Reservaciones", icon: BookUser },
       { href: "/reports", label: "Reportes & Ingresos", icon: TrendingUp },
+      { href: "/cash-shifts", label: "Turnos de Caja", icon: Banknote },
       { href: "/refunds", label: "Reembolsos & Pagos", icon: Repeat },
     ],
   },

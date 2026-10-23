@@ -99,6 +99,13 @@
       "when": 1791838637416,
       "tag": "0013_giant_cobalt_man",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792782323089,
+      "tag": "0014_cash_shifts",
+      "breakpoints": true
     }
   ]
 }

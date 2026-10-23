@@ -7,6 +7,7 @@ import { bus, EventTypes } from "@rabbitty/events";
 import { tables as tablesTable, menuCategories, menuItems, orders, orderItems, payments, menuItemModifiers, restaurants } from "@rabbitty/database-restaurant/schema";
 import { users as coreUsers } from "@rabbitty/database-core/schema";
 import { miniappClient } from "../services/miniapp-client";
+import { assertOpenShiftForCash } from "../services/cashShift";
 
 export const posRouter = router({
   getTables: protectedProcedure.query(async ({ ctx }) => {
@@ -127,9 +128,10 @@ export const posRouter = router({
         notes: input.notes ?? null,
       }).returning();
       const allItems = await ctx.restaurantDb.select().from(orderItems).where(eq(orderItems.orderId, input.orderId));
-      const subtotal = allItems.reduce((s, i) => s + Number(i.totalPrice), 0);
-      const tax = Math.round(subtotal * 0.16 * 100) / 100;
-      const total = subtotal + tax;
+      // Precios de menú con IVA incluido: total = suma, base e IVA se derivan hacia atrás
+      const total = Math.round(allItems.reduce((s, i) => s + Number(i.totalPrice), 0) * 100) / 100;
+      const subtotal = Math.round((total / 1.16) * 100) / 100;
+      const tax = Math.round((total - subtotal) * 100) / 100;
       await ctx.restaurantDb.update(orders).set({ subtotal, tax, total }).where(eq(orders.id, input.orderId));
       return orderItem;
     }),
@@ -146,9 +148,9 @@ export const posRouter = router({
       const [removed] = await ctx.restaurantDb.delete(orderItems).where(eq(orderItems.id, input.id)).returning();
       if (removed) {
         const allItems = await ctx.restaurantDb.select().from(orderItems).where(eq(orderItems.orderId, removed.orderId));
-        const subtotal = allItems.reduce((s, i) => s + Number(i.totalPrice), 0);
-        const tax = Math.round(subtotal * 0.16 * 100) / 100;
-        const total = subtotal + tax;
+        const total = Math.round(allItems.reduce((s, i) => s + Number(i.totalPrice), 0) * 100) / 100;
+        const subtotal = Math.round((total / 1.16) * 100) / 100;
+        const tax = Math.round((total - subtotal) * 100) / 100;
         await ctx.restaurantDb.update(orders).set({ subtotal, tax, total }).where(eq(orders.id, removed.orderId));
         return removed;
       }
@@ -165,9 +167,9 @@ export const posRouter = router({
       )).returning();
       
       const allItems = await ctx.restaurantDb.select().from(orderItems).where(eq(orderItems.orderId, input.orderId));
-      const subtotal = allItems.reduce((s, i) => s + Number(i.totalPrice), 0);
-      const tax = Math.round(subtotal * 0.16 * 100) / 100;
-      const total = subtotal + tax;
+      const total = Math.round(allItems.reduce((s, i) => s + Number(i.totalPrice), 0) * 100) / 100;
+      const subtotal = Math.round((total / 1.16) * 100) / 100;
+      const tax = Math.round((total - subtotal) * 100) / 100;
       await ctx.restaurantDb.update(orders).set({ subtotal, tax, total }).where(eq(orders.id, input.orderId));
       
       return { success: true };
@@ -214,9 +216,9 @@ export const posRouter = router({
 
       if (item) {
         const allItems = await ctx.restaurantDb.select().from(orderItems).where(eq(orderItems.orderId, item.orderId));
-        const subtotal = allItems.reduce((s, i) => s + Number(i.totalPrice), 0);
-        const tax = Math.round(subtotal * 0.16 * 100) / 100;
-        const total = subtotal + tax;
+        const total = Math.round(allItems.reduce((s, i) => s + Number(i.totalPrice), 0) * 100) / 100;
+        const subtotal = Math.round((total / 1.16) * 100) / 100;
+        const tax = Math.round((total - subtotal) * 100) / 100;
         await ctx.restaurantDb.update(orders).set({ subtotal, tax, total }).where(eq(orders.id, item.orderId));
       }
 
@@ -234,6 +236,9 @@ export const posRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      if (input.method === "CASH") {
+        await assertOpenShiftForCash(ctx.restaurantDb, ctx.branchId);
+      }
       const [orderRow] = await ctx.restaurantDb.select().from(orders).where(eq(orders.id, input.orderId));
       if (!orderRow) {
         throw new Error("Orden no encontrada");
@@ -539,6 +544,9 @@ export const posRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      if (input.paymentMethod === "CASH") {
+        await assertOpenShiftForCash(ctx.restaurantDb, ctx.branchId);
+      }
       if (input.paymentMethod === "BUNZ") {
         throw new TRPCError({ 
           code: "BAD_REQUEST", 
@@ -758,21 +766,24 @@ export const posRouter = router({
         });
       }
 
-      const calculatedTax = Math.round(calculatedSubtotal * 0.16 * 100) / 100;
-      const originalTotal = calculatedSubtotal + calculatedTax;
+      // Precios con IVA incluido: el total es la suma exacta (sin centavos de IVA añadido)
+      const originalTotal = Math.round(calculatedSubtotal * 100) / 100;
       let finalAmount = originalTotal;
       let calculatedDiscount = 0;
 
       if (input.discountPercent && input.discountPercent > 0) {
-        calculatedDiscount = (input.discountPercent / 100) * originalTotal;
+        calculatedDiscount = Math.round(((input.discountPercent / 100) * originalTotal) * 100) / 100;
         finalAmount = Math.max(0, originalTotal - calculatedDiscount);
       }
 
+      const baseAfterDiscount = Math.round((finalAmount / 1.16) * 100) / 100;
+      const calculatedTax = Math.round((finalAmount - baseAfterDiscount) * 100) / 100;
+
       await ctx.restaurantDb.update(orders).set({
-        subtotal: calculatedSubtotal,
+        subtotal: baseAfterDiscount,
         tax: calculatedTax,
         discount: calculatedDiscount,
-        total: originalTotal,
+        total: finalAmount,
       }).where(eq(orders.id, order.id));
 
       // 3. Create Payment Intent

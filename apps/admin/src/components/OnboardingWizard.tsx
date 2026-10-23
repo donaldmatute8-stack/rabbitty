@@ -59,8 +59,8 @@ const STEPS: Step[] = [
   },
   {
     id: "cash-cut",
-    title: "5. Corte de Caja y Fondo Inicial",
-    description: "Configura el fondo de gaveta, arqueo ciego diario y formato de Ticket Z térmico.",
+    title: "5. Turnos de Caja y PINs",
+    description: "Crea PINs de cajero y manager en Personal, abre caja con fondo inicial y practica un cierre Z con arqueo ciego.",
     link: "/pos",
     linkText: "Probar en POS",
     icon: RefreshCw,

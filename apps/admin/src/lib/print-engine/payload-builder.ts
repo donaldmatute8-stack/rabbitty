@@ -161,6 +161,67 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
     return result;
   }
 
+  if (data.isShiftReport) {
+    const titles: Record<string, string> = {
+      OPEN: "APERTURA DE CAJA",
+      X: "CIERRE PARCIAL - TURNO ABIERTO",
+      HANDOVER: "TRASPASO DE TURNO",
+      Z: "CIERRE DE TURNO - DEFINITIVO",
+    };
+    const money = (n: any) => `$${Number(n || 0).toFixed(2)}`;
+    const line = (label: string, value: string) =>
+      addText(`${label.padEnd(Math.max(1, width - value.length - 1))} ${value}\n`);
+    chunks.push(alignCenter, boldOn);
+    addText(`\n${titles[data.kind] || "CAJA"}\n`);
+    chunks.push(boldOff);
+    addText(divider);
+    chunks.push(alignLeft);
+    addText(`Fecha: ${new Date().toLocaleString("es-MX")}\n`);
+    if (data.openedAt) addText(`Apertura: ${new Date(data.openedAt).toLocaleString("es-MX")}\n`);
+    if (data.closedAt) addText(`Cierre: ${new Date(data.closedAt).toLocaleString("es-MX")}\n`);
+    if (data.cashierName) addText(`Cajero: ${data.cashierName}\n`);
+    if (data.incomingName) addText(`Recibe: ${data.incomingName}\n`);
+    addText(divider);
+    line("Fondo inicial:", money(data.openingFloat));
+    if (data.kind !== "OPEN") {
+      line("(+) Ventas efectivo:", money(data.cashSales));
+      line("(-) Retiros:", money(data.withdrawals));
+      if (Number(data.adjustments || 0) !== 0) line("(+/-) Ajustes traspaso:", money(data.adjustments));
+      addText(divider);
+      chunks.push(boldOn);
+      line("EFECTIVO ESPERADO:", money(data.expectedCash));
+      line("EFECTIVO CONTADO:", money(data.countedCash));
+      const diff = Number(data.difference || 0);
+      line(diff === 0 ? "DIFERENCIA:" : diff > 0 ? "SOBRANTE:" : "FALTANTE:", money(Math.abs(diff)));
+      chunks.push(boldOff);
+      if (data.kind === "X" && Math.abs(diff) >= 0.01) {
+        chunks.push(alignCenter, boldOn);
+        addText("** DESCUADRE DETECTADO **\n");
+        chunks.push(boldOff, alignLeft);
+      }
+      addText(divider);
+      line("Ventas tarjeta:", money(data.cardSales));
+      line("Ventas Bunz:", money(data.bunzSales));
+    }
+    if (data.notes) addText(`Notas: ${data.notes}\n`);
+    if (data.authorizedByName) addText(`Autorizo: ${data.authorizedByName}\n`);
+    addText(divider);
+    addText(`Firma Cajero:\n\n\n___________________\n\n`);
+    if (data.kind === "Z" || data.kind === "HANDOVER") addText(`Firma Gerencia / Recibe:\n\n\n___________________\n\n`);
+    chunks.push(new Uint8Array([0x0a, 0x0a, 0x0a, 0x0a, 0x0a]));
+    chunks.push(new Uint8Array([0x1d, 0x56, 0x41, 0x00]));
+
+    let totalLength = 0;
+    for (const c of chunks) totalLength += c.length;
+    const result = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const c of chunks) {
+      result.set(c, offset);
+      offset += c.length;
+    }
+    return result;
+  }
+
   if (data.isCashDrop) {
     chunks.push(alignLeft);
     addText(`\nRETIRO DE EFECTIVO\n`);

@@ -4,7 +4,7 @@
 **Bundle Identifier:** `com.rabbitty.app`  
 **Versión Actualizada:** `2.2` (Build `6`)  
 **Equipo Apple Developer:** `FW97275K5X`  
-**Target:** iOS 15.0+ (iPhone & iPad)  
+**Target:** iOS 15.0+ (iPhone & iPad)
 
 ---
 
@@ -13,52 +13,61 @@
 El paquete gráfico consta de **7 capturas de pantalla de la interfaz de Rabbitty**:
 
 1. **Pantalla 1 — Pase Digital & Home:**  
-   *Muestra el Rabbitty Pass Lvl. 1, el saldo de Bunz y el feed de cafeterías y restaurantes cercanos con multiplicadores (+20% Bunz).*
+   _Muestra el Rabbitty Pass Lvl. 1, el saldo de Bunz y el feed de cafeterías y restaurantes cercanos con multiplicadores (+20% Bunz)._
 2. **Pantalla 2 — Pago QR Dinámico & Rabbitty ID:**  
-   *Muestra el código visual con identificador animado, diseñado para escanear en caja con velocidad y brillo optimizado.*
+   _Muestra el código visual con identificador animado, diseñado para escanear en caja con velocidad y brillo optimizado._
 3. **Pantalla 3 — Bunzy AI (Asistente Local Inteligente):**  
-   *Muestra la conversación fluida con Bunzy respondiendo dudas sobre el ecosistema, locales asociados y preguntas frecuentes.*
+   _Muestra la conversación fluida con Bunzy respondiendo dudas sobre el ecosistema, locales asociados y preguntas frecuentes._
 4. **Pantalla 4 — Rabbitty Mood:**  
-   *Selector ambiental y sensorial (Calma, Energía, Enfoque, Celebración, Conexión, Sorpresa) para personalizar la experiencia culinaria y musical.*
+   _Selector ambiental y sensorial (Calma, Energía, Enfoque, Celebración, Conexión, Sorpresa) para personalizar la experiencia culinaria y musical._
 5. **Pantalla 5 — Rabbitty Vibe Passport (Rutas Urbanas):**  
-   *Muestra la Ruta Creativa & Deep Work con sellos coleccionables en cafeterías de especialidad, bistros y espacios silenciosos.*
+   _Muestra la Ruta Creativa & Deep Work con sellos coleccionables en cafeterías de especialidad, bistros y espacios silenciosos._
 6. **Pantalla 6 — Portal de Afiliados (Comercios):**  
-   *Muestra la vista de negocio (Ka13), métricas de tickets/clientes, crédito de minteo y control de la tasa de recompensa en tiempo real.*
+   _Muestra la vista de negocio (Ka13), métricas de tickets/clientes, crédito de minteo y control de la tasa de recompensa en tiempo real._
 7. **Pantalla 7 — Stock de Ofertas & Cupones:**  
-   *Muestra las ofertas disponibles canjeables directamente con Bunz en comercios destacados (626 Café, Surf & Co).*
+   _Muestra las ofertas disponibles canjeables directamente con Bunz en comercios destacados (626 Café, Surf & Co)._
 
 ---
 
 ## 📝 2. Textos Oficiales de la Ficha (Metadatos de App Store Connect)
 
 ### Nombre de la App (Máx. 30 caracteres)
+
 ```text
 Rabbitty — Gana Bunz y Paga
 ```
-*(27 caracteres)*
+
+_(27 caracteres)_
 
 ### Subtítulo (Máx. 30 caracteres)
+
 ```text
 Recompensas y cashback local
 ```
-*(28 caracteres)*
+
+_(28 caracteres)_
 
 ### Categoría Principal
+
 - **Principal:** Estilo de vida (Lifestyle) o Comida y Bebida (Food & Drink).
 - **Secundaria:** Finanzas (Finance) o Compras (Shopping).
 
 ### Palabras Clave / Keywords (Máx. 100 caracteres separados por coma, sin espacios extras)
+
 ```text
 bunz,cashback,puntos,lealtad,restaurantes,cafeterias,descuentos,huatulco,recompensas,pagos,qr,wallet
 ```
-*(99 caracteres)*
+
+_(99 caracteres)_
 
 ### Texto Promocional (Máx. 170 caracteres - editable sin nueva versión)
+
 ```text
 ¡Llegó la versión 2.2! Descubre cafeterías y restaurantes locales, acumula Bunz en cada consumo, conversa con Bunzy tu asistente IA y canjea beneficios reales al instante.
 ```
 
 ### Descripción Completa de la App (Para la Ficha Pública)
+
 ```text
 Bienvenido a Rabbitty, la forma más inteligente y divertida de descubrir tu ciudad, disfrutar de tus cafeterías y restaurantes favoritos y recibir recompensas reales por cada consumo.
 
@@ -83,6 +92,7 @@ Colecciona sellos digitales en cada parada gastronómica, completa circuitos urb
 ```
 
 ### URLs Requeridas por Apple
+
 - **URL de Soporte:** `https://rabbitty.me/support` (o `https://app.rabbitty.me`)
 - **URL de Marketing:** `https://rabbitty.me`
 - **URL de Política de Privacidad:** `https://rabbitty.me/privacy`
@@ -94,17 +104,19 @@ Colecciona sellos digitales en cada parada gastronómica, completa circuitos urb
 > **CRÍTICO:** Los revisores de Apple rechazan apps si no pueden iniciar sesión de inmediato sin recibir SMS o enlaces externos de Telegram. Debe proporcionarse este acceso demo directo.
 
 ### Información de Inicio de Sesión Demo (Sign-in information en App Store Connect)
+
 - **¿Requiere inicio de sesión?**: Sí (marcar casilla).
-- **Nombre de usuario / Email:** `tester@rabbitty.me`  *(o simplemente la palabra `tester`)*
+- **Nombre de usuario / Email:** `tester@rabbitty.me` _(o simplemente la palabra `tester`)_
 - **Contraseña / Código OTP de 6 dígitos:** `123456`
 - **Notas adicionales para el Revisor:**  
-  *El usuario ingresa `tester@rabbitty.me` en la pantalla de bienvenida y el código fijo de 6 dígitos `123456` para acceso instantáneo sin requerir SMS ni Telegram.*
+  _El usuario ingresa `tester@rabbitty.me` en la pantalla de bienvenida y el código fijo de 6 dígitos `123456` para acceso instantáneo sin requerir SMS ni Telegram._
 
 ### Notas de Revisión (Review Notes para el equipo de Cupertino)
+
 ```text
 Dear Apple Review Team,
 
-Rabbitty is a local rewards, loyalty, and QR payment companion app for curated coffee shops and restaurants. 
+Rabbitty is a local rewards, loyalty, and QR payment companion app for curated coffee shops and restaurants.
 
 To easily test all features of version 2.2:
 1. Launch the app and sign in using the demo account credentials provided above:
@@ -131,11 +143,11 @@ Thank you for your review. If you have any questions or require additional test 
 Al responder las preguntas de privacidad de datos en App Store Connect:
 
 1. **Información de Contacto:**
-   - *Teléfono / Nombre:* Sí, para autenticación y cuenta de usuario (vinculado a la identidad del usuario). No se comparte con terceros ni para rastreo publicitario.
+   - _Teléfono / Nombre:_ Sí, para autenticación y cuenta de usuario (vinculado a la identidad del usuario). No se comparte con terceros ni para rastreo publicitario.
 2. **Identificadores:**
-   - *User ID:* Sí, para identificar la cuenta y sincronizar los saldos de Bunz y transacciones.
+   - _User ID:_ Sí, para identificar la cuenta y sincronizar los saldos de Bunz y transacciones.
 3. **Datos de Uso / Analítica:**
-   - *Interacciones con el producto:* Sí (App Analytics básico para estabilidad y diagnóstico de fallos).
+   - _Interacciones con el producto:_ Sí (App Analytics básico para estabilidad y diagnóstico de fallos).
 4. **¿Los datos se usan para rastreo (Tracking across apps/websites)?**:
    - **NO**. Rabbitty no rastrea al usuario a través de aplicaciones o sitios web de terceros (no requiere framework App Tracking Transparency ATT).
 
@@ -144,6 +156,7 @@ Al responder las preguntas de privacidad de datos en App Store Connect:
 ## 🛠️ 5. Pasos para Compilar y Subir el Archivo a App Store Connect
 
 En tu Mac:
+
 1. Abre el proyecto en Xcode:
    ```bash
    pnpm --filter telegram-miniapp exec cap open ios
@@ -164,10 +177,11 @@ En tu Mac:
 **Bundle Identifier:** `com.rabbitty.pos`  
 **Dispositivos Destino:** iPad (iPadOS 15.0+) y Mac con procesador Apple Silicon (Designed for iPad / Mac Catalyst)  
 **Proyecto Local:** `apps/admin/ios/App/App.xcodeproj`  
-**Servidor Remoto:** `https://admin.rabbitty.me`  
+**Servidor Remoto:** `https://admin.rabbitty.me`
 
 ### Estado de Compilación:
-* Verificado con `xcodebuild`: **BUILD SUCCEEDED**. No requiere cambios de código adicionales.
+
+- Verificado con `xcodebuild`: **BUILD SUCCEEDED**. No requiere cambios de código adicionales.
 
 ---
 
@@ -176,18 +190,23 @@ En tu Mac:
 ## 📝 1. Metadatos de Ficha para Rabbitty POS (App Information)
 
 ### Nombre de la App (App Name — Máx. 30 caracteres)
+
 ```text
 Rabbitty POS — Afiliados y Caja
 ```
-*(29 caracteres)*
+
+_(29 caracteres)_
 
 ### Subtítulo (Subtitle — Máx. 30 caracteres)
+
 ```text
 Terminal y fidelización Bunz
 ```
-*(28 caracteres)*
+
+_(28 caracteres)_
 
 ### Categorías
+
 - **Categoría Principal (Primary Category):** Empresa (Business)
 - **Categoría Secundaria (Secondary Category):** Comida y Bebida (Food & Drink)
 
@@ -196,20 +215,25 @@ Terminal y fidelización Bunz
 ## 🚀 2. Formulario de Versión de App Store (Version Release Fields)
 
 ### Header Asset (0 of 1 Header Asset)
+
 > **Estado:** Opcional. No es requerido para enviar a revisión. Solo se usa para features promocionales destacados en la App Store (5244 × 2950px o 3840 × 1646px). Puedes dejarlo vacío.
 
 ### Texto Promocional (Promotional Text — Máx. 170 caracteres)
+
 ```text
 Terminal inteligente de comandas, cobro rápido y recompensas Bunz para restaurantes y cafeterías.
 ```
 
 ### Palabras Clave (Keywords — Máx. 100 caracteres)
+
 ```text
 pos,punto de venta,restaurante,cafeteria,caja,tickets,recompensas,fidelizacion,bunz,afiliados,huatulco
 ```
-*(100 caracteres exactos)*
+
+_(100 caracteres exactos)_
 
 ### Descripción (Description — Máx. 4,000 caracteres)
+
 ```text
 Rabbitty POS es la terminal oficial de cobro, comandas y gestión de lealtad diseñada exclusivamente para comercios, cafeterías de especialidad y restaurantes afiliados a la red Rabbitty.
 
@@ -237,20 +261,24 @@ Diseñado optimizado para iPad y estaciones de cobro fijas. Requiere una cuenta 
 ```
 
 ### Enlaces Requeridos (URLs)
-- **Support URL:** `https://admin.rabbitty.me/support` *(o `https://rabbitty.me/support`)*
+
+- **Support URL:** `https://admin.rabbitty.me/support` _(o `https://rabbitty.me/support`)_
 - **Marketing URL (Opcional):** `https://rabbitty.me`
 
 ### Versión & Copyright
-- **Version:** `1.0` *(o `1.0.0`)*
+
+- **Version:** `1.0` _(o `1.0.0`)_
 - **Copyright:** `2026 Rabbitty Technologies Inc.`
 
 ### Campos Opcionales / No Requeridos
+
 - **Routing App Coverage File:** Dejar vacío (solo aplica a apps de navegación/mapas paso a paso).
 - **App Clip:** Dejar vacío (no aplica).
 - **iMessage App:** Dejar vacío (no aplica).
 - **Game Center:** Dejar desmarcado / apagado.
 
 ### Compilación (Build)
+
 - Dale clic a **Add Build** y selecciona la compilación que subas de `com.rabbitty.pos` desde Xcode.
 
 ---
@@ -258,19 +286,22 @@ Diseñado optimizado para iPad y estaciones de cobro fijas. Requiere una cuenta 
 ## 🕵️‍♂️ 3. Información para el Revisor de Apple (App Review Information)
 
 ### Información de Inicio de Sesión (Sign-In Information)
+
 - **¿Requiere inicio de sesión? (Sign-in required):** ☑️ **Marcar casilla**
 - **User Name:** `pos-reviewer@rabbitty.me`
 - **Password:** `123456`
 - **Notas adicionales sobre el login:**  
-  *El revisor ingresa `pos-reviewer@rabbitty.me` en la pantalla de bienvenida y el código fijo de 6 dígitos `123456` para acceso instantáneo a la terminal POS sin requerir SMS ni teléfono real.*
+  _El revisor ingresa `pos-reviewer@rabbitty.me` en la pantalla de bienvenida y el código fijo de 6 dígitos `123456` para acceso instantáneo a la terminal POS sin requerir SMS ni teléfono real._
 
 ### Información de Contacto (Contact Information)
+
 - **First Name:** `Marco`
 - **Last Name:** `Del Toro`
-- **Phone Number:** `+52 958 123 4567` *(tu número con código de país)*
-- **Email Address:** `marco@rabbitty.me` *(o tu correo de desarrollador)*
+- **Phone Number:** `+52 958 123 4567` _(tu número con código de país)_
+- **Email Address:** `marco@rabbitty.me` _(o tu correo de desarrollador)_
 
 ### Notas para el Revisor (Review Notes — Máx. 4,000 caracteres)
+
 ```text
 Dear Apple Review Team,
 
@@ -285,10 +316,19 @@ Review Instructions:
    - Code: 123456
    - Tap "Entrar" (Enter).
 4. The main POS interface displays the restaurant menu categories, item grid, and active ticket sidebar.
-5. Reviewers can tap on any menu item to add it to the ticket and test payment or counter checkout.
-6. Reviewers can explore table management by tapping the "Mesas" (Tables) view to inspect floor plan statuses.
-7. In the top bar, reviewers can tap "Corte de Caja" to view cash flow accounting, drawer balance, and test receipt printing.
-8. Reviewers can toggle the "Modo Entrenamiento (Sandbox)" at any time to verify that mock orders do not affect live accounting.
+5. Cash register shifts: cash payments require an open cash shift. Tap the "Caja cerrada · Abrir" button in the top bar, enter the demo manager/cashier PIN 1234 and an opening float (e.g. 500), then confirm. Card and Bunz payments do not require an open shift.
+6. Processing orders & confirmation:
+   - Tap menu items to add them to the ticket.
+   - Select a payment method (Efectivo / Tarjeta / QR Bunz / Dividida).
+   - A charge confirmation modal appears displaying the chosen method and exact total amount. Tap "Confirmar y cobrar" to finalize.
+   - Upon confirmation, the order is registered and the "Ticket de Venta Generado" modal opens, allowing thermal printing ("Imprimir ticket") or sending the receipt via WhatsApp.
+7. Table management: tap the "Mesas" (Tables) view to inspect floor plan statuses.
+8. Cash register operations (Top Bar):
+   - Withdraw cash: Cashier PIN 1234 (withdrawals above threshold ask for manager PIN 1234).
+   - Partial audit count (Ticket X): Blind count entry; reveals expected vs counted cash and prints an X ticket.
+   - Shift handover: Double-PIN flow (outgoing cashier PIN 1234, incoming cashier PIN 5678).
+   - End-of-day close (Ticket Z): Cashier PIN 1234 + Manager PIN 1234; discrepancy note required if difference != 0.
+9. Sandbox Mode: toggle "Modo Entrenamiento (Sandbox)" at any time to verify that mock orders do not affect live accounting.
 
 Permissions Used:
 - Bluetooth (LE): Optional, used to connect with thermal receipt and kitchen printers (POS-58/80).
@@ -299,7 +339,31 @@ Attachment: Not needed (full demo access is configured).
 If you have any questions or require additional assistance, please reach out at support@rabbitty.me.
 ```
 
+### 📋 Checklist interno del equipo (Estado de Producción)
+
+El sistema de caja y turnos está blindado con las siguientes verificaciones completadas en la base de datos de producción (Neon):
+
+1. **Migración 0014 (`0014_cash_shifts.sql`)**:  
+   - ✅ **Aplicada exitosamente en producción** en una sola transacción segura.
+   - Tablas `cash_shifts`, `cash_shift_events` y `pin_attempts` activas.
+   - Trigger `cash_shift_events_no_update_delete` activo (bitácora inmutable).
+   - Columnas `numeric(12,2)` para cantidades de dinero (sin errores de redondeo de punto flotante).
+   - Llave foránea e índice `cash_drops_shift_idx` activos.
+2. **Empleados Demo (`db:seed:review`)**:  
+   - ✅ **Sembrados y verificados en producción** en todas las sucursales (*Sucursal Principal* y *Modo Entrenamiento*):
+     - **Cajero Demo (Gerente)**: Rol `MANAGER`, PIN `1234`.
+     - **Cajera Demo**: Rol `CASHIER`, PIN `5678`.
+3. **Flujo de Cobro y Tickets**:  
+   - ✅ Confirmación previa requerida antes de disparar cobro (`requestCheckout` → modal con monto y método → `confirmCheckout`).
+   - ✅ Botón explícito **"Imprimir ticket"** en el comprobante final de venta para reimpresión manual en impresora térmica.
+   - ✅ Mensaje de WhatsApp codificado con `encodeURIComponent` para garantizar envío íntegro de artículos, total, folio con `#` y emojis.
+4. **Verificación final antes de grabar el video de review**:
+   - Iniciar sesión con `pos-reviewer@rabbitty.me` / `123456`.
+   - Probar: Abrir caja (1234 + $500) → Cobrar orden en efectivo con confirmación → Retiro → Arqueo X → Traspaso (1234 a 5678) → Cierre Z.
+   - Probar que Tarjeta y QR Bunz operan sin requerir turno abierto.
+
 ### Adjunto (Attachment)
+
 - Dejar vacío (Opcional).
 
 ---
@@ -307,15 +371,18 @@ If you have any questions or require additional assistance, please reach out at 
 ## 📅 4. Publicación de la Versión (App Store Version Release)
 
 Selecciona la opción recomendada:
+
 - 🔘 **Manually release this version** (Recomendado para tener control total de cuándo publicar en la tienda después de que Apple la apruebe).  
-  *O si prefieres que se lance sola al instante:* 🔘 **Automatically release this version**.
+  _O si prefieres que se lance sola al instante:_ 🔘 **Automatically release this version**.
 
 ---
 
 ## 🖼️ 5. Capturas de Pantalla Oficiales de iPad (iPad 13-inch Display)
+
 Ya generadas con la resolución oficial exigida por Apple (**2732 × 2048 px** en horizontal / landscape):
-1. [Rabbitty_POS_iPad_Screen1.png](file:///Users/Marco/Documents/Company/Rabbitty/dApp/Rabbitty_POS_iPad_Screen1.png) *(Terminal POS, Comandas y Descuento Bunz)*
-2. [Rabbitty_POS_iPad_Screen2.png](file:///Users/Marco/Documents/Company/Rabbitty/dApp/Rabbitty_POS_iPad_Screen2.png) *(Impresora Térmica, Gestión de Mesas en Vivo)*
+
+1. [Rabbitty_POS_iPad_Screen1.png](file:///Users/Marco/Documents/Company/Rabbitty/dApp/Rabbitty_POS_iPad_Screen1.png) _(Terminal POS, Comandas y Descuento Bunz)_
+2. [Rabbitty_POS_iPad_Screen2.png](file:///Users/Marco/Documents/Company/Rabbitty/dApp/Rabbitty_POS_iPad_Screen2.png) _(Impresora Térmica, Gestión de Mesas en Vivo)_
 
 ---
 
@@ -324,29 +391,30 @@ Ya generadas con la resolución oficial exigida por Apple (**2732 × 2048 px** e
 - **¿Recopila datos?**: **Yes, we collect data from this app**
 - **Categorías a declarar:**
   1. **Contact Info (Email Address, Name):**
-     - *Propósito:* `App Functionality`
-     - *Linked to identity:* `Yes`
-     - *Tracking:* `No`
+     - _Propósito:_ `App Functionality`
+     - _Linked to identity:_ `Yes`
+     - _Tracking:_ `No`
   2. **Identifiers (User ID):**
-     - *Propósito:* `App Functionality`
-     - *Linked to identity:* `Yes`
-     - *Tracking:* `No`
+     - _Propósito:_ `App Functionality`
+     - _Linked to identity:_ `Yes`
+     - _Tracking:_ `No`
   3. **Usage Data (Product Interaction):**
-     - *Propósito:* `Analytics` & `App Functionality`
-     - *Linked to identity:* `Yes`
-     - *Tracking:* `No`
+     - _Propósito:_ `Analytics` & `App Functionality`
+     - _Linked to identity:_ `Yes`
+     - _Tracking:_ `No`
   4. **Diagnostics (Crash Data):**
-     - *Propósito:* `App Functionality`
-     - *Linked to identity:* `No`
-     - *Tracking:* `No`
+     - _Propósito:_ `App Functionality`
+     - _Linked to identity:_ `No`
+     - _Tracking:_ `No`
 
 ---
 
 ## 🔞 7. Clasificación por Edad (Age Rating)
+
 - Controles parentales: **No**
 - Acceso web irrestricto: **No**
 - Chat / Mensajería: **No**
-- Alcohol, tabaco o drogas: **Infrequent / Mild** *(los restaurantes afiliados ofrecen bebidas en su menú)*
+- Alcohol, tabaco o drogas: **Infrequent / Mild** _(los restaurantes afiliados ofrecen bebidas en su menú)_
 - Violencia / Sexualidad / Apuestas: **None** / **No**
 - **Resultado calculado esperado:** **4+** o **12+**
 
@@ -422,6 +490,3 @@ Marco Del Toro
 Rabbitty Technologies
 support@rabbitty.me
 ```
-
-
-

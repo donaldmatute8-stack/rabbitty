@@ -42,7 +42,7 @@ export const FAQS: FaqItem[] = [
   },
   {
     q: '¿Cómo funciona el Corte de Caja y Cierre de Turno en Rabbitty POS?',
-    a: 'En Rabbitty POS, el corte de caja se realiza al finalizar el turno: 1. Ingresas el Fondo Inicial de Caja. 2. El sistema calcula en tiempo real las ventas en Efectivo, Tarjeta y Bunz. 3. Realizas el arqueo físico y escribes el Efectivo Contado. 4. El sistema compara lo esperado vs contado y muestra si hay Sobrante o Faltante. 5. Indicas el Retiro a Bóveda/Depósito y tocas "Cerrar Caja e Imprimir Ticket" para emitir el Ticket Z térmico.',
+    a: 'En Rabbitty POS la caja funciona por turnos con PIN: 1. Abres caja (botón "Caja cerrada · Abrir") con tu PIN y el fondo inicial; sin turno abierto no se cobra en efectivo. 2. Los retiros piden tu PIN y, sobre el umbral configurado, también PIN de manager/admin. 3. El cierre parcial (Ticket X) es un arqueo ciego que deja el turno abierto. 4. En el cambio de cajero, el que sale y el que entra confirman con su PIN. 5. El cierre Z pide arqueo ciego, PIN del cajero y PIN de manager/admin; si hay sobrante o faltante la nota es obligatoria. Todo queda en la bitácora de Turnos de Caja del admin (/cash-shifts).',
   },
   {
     q: '¿Cómo funcionan los Reportes de Ventas y exportación contable?',
@@ -97,7 +97,7 @@ export const DOC_SECTIONS: { title: string; body: string }[] = [
   },
   {
     title: 'Rabbitty POS y Corte de Caja',
-    body: 'El sistema POS opera en iPad, Mac y Web. Permite asignación de mesas, apertura de turnos con fondo inicial, cobro multidivisa (Efectivo, Tarjeta, Bunz) y arqueo ciego con cierre Z térmico para conciliar diferencias de gaveta.',
+    body: 'El sistema POS opera en iPad, Mac y Web. Permite asignación de mesas y cobro multidivisa (Efectivo, Tarjeta, Bunz). La caja opera por turnos con PIN: apertura con fondo inicial (obligatoria para cobrar en efectivo), retiros con PIN, cierre parcial X, cambio de cajero con doble PIN y cierre Z con arqueo ciego y PIN de manager/admin. La bitácora inmutable está en el admin en Turnos de Caja.',
   },
   {
     title: 'KDS Cocina y Kiosko Autoservicio',

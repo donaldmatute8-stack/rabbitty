@@ -45,7 +45,7 @@ const KNOWLEDGE_BASE: KnowledgeItem[] = [
   {
     category: 'pos_cash_drop',
     keywords: ['corte de caja', 'arqueo', 'retiro de efectivo', 'gaveta', 'sangria de caja', 'cierre de turno'],
-    answer: '💵 **Corte de Caja y Retiro de Efectivo en Rabbitty POS:**\n\n• Toca el botón **"Corte de Caja"** en la barra superior de la terminal POS.\n• Podrás ver en tiempo real el desglose de: Efectivo cobrado hoy, retiros realizados y el saldo neto que debe haber físicamente en gaveta.\n• Presiona **"Imprimir Ticket de Corte Actual"** para generar el comprobante físico con firmas de cajero y gerencia.',
+    answer: '💵 **Caja por turnos en Rabbitty POS:**\\n\\n• Toca el botón de caja en la barra superior (**"Caja cerrada · Abrir"**) e ingresa tu PIN y el fondo inicial. Sin turno abierto no se cobra en efectivo.\\n• **Retiros**: piden tu PIN; si superan el umbral configurado, también el PIN de manager/admin.\\n• **Cierre parcial (Ticket X)**: arqueo ciego sin cerrar turno. **Cambio de cajero**: sale y entra con su PIN.\\n• **Cierre Z**: arqueo ciego + PIN de cajero y de manager/admin; si hay sobrante o faltante, la nota es obligatoria.\\n• La auditoría completa está en el admin, sección **Turnos de Caja**.',
   },
   {
     category: 'rabbitters',

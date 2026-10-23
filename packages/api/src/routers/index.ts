@@ -29,6 +29,7 @@ import { trustedSessionsRouter } from "./trustedSessions";
 import { aiRouter } from "./ai";
 import { sandboxRouter } from "./sandbox";
 import { cashDropsRouter } from "./cashDrops";
+import { cashShiftsRouter } from "./cashShifts";
 import { customerChatRouter } from "./customerChat";
 import { moodRouter } from "./mood";
 
@@ -65,6 +66,7 @@ export const appRouter = router({
   ai: aiRouter,
   sandbox: sandboxRouter,
   cashDrops: cashDropsRouter,
+  cashShifts: cashShiftsRouter,
   customerChat: customerChatRouter,
   mood: moodRouter,
 });

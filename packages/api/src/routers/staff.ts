@@ -28,6 +28,17 @@ export const staffRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      if (input.pinCode) {
+        const list = await ctx.restaurantDb
+          .select({ pinCode: staffTable.pinCode })
+          .from(staffTable)
+          .where(eq(staffTable.branchId, ctx.branchId));
+        for (const s of list) {
+          if (s.pinCode && verifyPin(input.pinCode, s.pinCode)) {
+            throw new TRPCError({ code: "CONFLICT", message: "Este PIN ya está en uso por otro empleado." });
+          }
+        }
+      }
       const [result] = await ctx.restaurantDb.insert(staffTable).values({
         userId: ctx.userId,
         branchId: ctx.branchId,
@@ -50,12 +61,25 @@ export const staffRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const branchId = resolveBranchId(ctx, undefined);
       const [existing] = await ctx.restaurantDb
         .select()
         .from(staffTable)
-        .where(and(eq(staffTable.id, input.id), eq(staffTable.branchId, resolveBranchId(ctx, undefined))));
+        .where(and(eq(staffTable.id, input.id), eq(staffTable.branchId, branchId)));
       if (!existing) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Empleado no encontrado en esta sucursal" });
+      }
+      if (input.pinCode) {
+        const list = await ctx.restaurantDb
+          .select({ id: staffTable.id, pinCode: staffTable.pinCode })
+          .from(staffTable)
+          .where(eq(staffTable.branchId, branchId));
+        for (const s of list) {
+          if (s.id === input.id) continue;
+          if (s.pinCode && verifyPin(input.pinCode, s.pinCode)) {
+            throw new TRPCError({ code: "CONFLICT", message: "Este PIN ya está en uso por otro empleado." });
+          }
+        }
       }
       const data: Record<string, unknown> = {};
       if (input.name) data.name = input.name;
