@@ -49,10 +49,10 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
 
   // Bunzy Co-Pilot conversation state
   const [bunzyInput, setBunzyInput] = useState("");
-  const [bunzyMessages, setBunzyMessages] = useState<Array<{ role: "assistant" | "user"; text: string; action?: string }>>([
+  const [bunzyMessages, setBunzyMessages] = useState<Array<{ role: "assistant" | "user"; text: string; modelUsed?: string }>>([
     {
       role: "assistant",
-      text: "¡Hola! 🐰 Soy Bunzy. Mientras conecto el motor de inteligencia con tus datos en vivo, usa las herramientas operativas de abajo.",
+      text: "¡Hola! 🐰 Soy Bunzy Co-Pilot. Estoy conectado a los datos en vivo de tu sucursal (caja, ventas y lealtad). ¿En qué te puedo asesorar hoy?",
     },
   ]);
 
@@ -121,6 +121,31 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
       setChatReply("");
       refetchThread();
       refetchConversations();
+    },
+  });
+
+  const bunzyChat = trpc.bunzy.chat.useMutation({
+    onSuccess: (res) => {
+      setBunzyMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          text: res.reply,
+          modelUsed: res.metadata?.modelUsed,
+        },
+      ]);
+    },
+    onError: (err) => {
+      const isSecurityReject = err.message.includes("políticas de seguridad");
+      setBunzyMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          text: isSecurityReject
+            ? "⚠️ Tu consulta no pudo ser procesada por contener términos no permitidos o exceder el límite de seguridad."
+            : "⚠️ En este momento no pude conectar con el asistente. Por favor intenta de nuevo en unos segundos.",
+        },
+      ]);
     },
   });
 
@@ -350,35 +375,39 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                                 }`}
                               >
                                 {msg.role === "assistant" && (
-                                  <span className="text-[10px] font-black uppercase text-pink-400 block mb-1">
-                                    🐰 Bunzy Co-Pilot
-                                  </span>
+                                  <div className="flex items-center justify-between mb-1 gap-2">
+                                    <span className="text-[10px] font-black uppercase text-pink-400 block">
+                                      🐰 Bunzy Co-Pilot
+                                    </span>
+                                    {msg.modelUsed && (
+                                      <span className="text-[9px] font-mono text-gray-500 bg-white/5 px-1.5 py-0.5 rounded border border-white/5">
+                                        {msg.modelUsed}
+                                      </span>
+                                    )}
+                                  </div>
                                 )}
                                 <p className="m-0 whitespace-pre-wrap">{msg.text}</p>
                               </div>
                             </div>
                           ))}
-                        </div>
-
-                        <div className="space-y-3">
-                          <div className="rounded-2xl border border-pink-500/30 bg-pink-500/10 p-4 text-left">
-                            <span className="text-[10px] font-black uppercase tracking-wider text-pink-400 block mb-1">
-                              🐰 Bunzy Co-Pilot • En Desarrollo
-                            </span>
-                            <p className="text-xs text-gray-200 leading-relaxed m-0">
-                              Estamos unificando el motor de inteligencia de Bunzy con los datos fiscales y de comensales en vivo. Muy pronto podrás pedirle acciones por chat como activar promociones automáticas y consultar análisis sin inventar datos.
-                            </p>
-                          </div>
+                          {bunzyChat.isPending && (
+                            <div className="flex justify-start">
+                              <div className="rounded-2xl px-4 py-2.5 text-xs bg-white/5 border border-pink-500/30 text-pink-300 flex items-center gap-2">
+                                <Sparkles className="w-3.5 h-3.5 animate-spin text-pink-400" />
+                                <span>Bunzy está analizando los datos de tu sucursal...</span>
+                              </div>
+                            </div>
+                          )}
                         </div>
 
                         {/* Quick Navigation Chips to Real Tools */}
                         <div className="pt-3 border-t border-white/10 space-y-2">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2">Herramientas Operativas Activas:</p>
-                          <div className="flex flex-col gap-2">
+                          <div className="grid grid-cols-1 gap-2">
                             <Link
                               href="/reports/audit"
                               onClick={() => setChatDrawerOpen(false)}
-                              className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white border border-white/10 text-xs font-bold transition-all flex items-center justify-between no-underline"
+                              className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white border border-white/10 text-xs font-bold transition-all flex items-center justify-between no-underline"
                             >
                               <span>🧾 Cuadre de Caja & Auditoría</span>
                               <span className="text-[10px] text-pink-400 font-mono">Verificado →</span>
@@ -386,7 +415,7 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                             <Link
                               href="/campaigns"
                               onClick={() => setChatDrawerOpen(false)}
-                              className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white border border-white/10 text-xs font-bold transition-all flex items-center justify-between no-underline"
+                              className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white border border-white/10 text-xs font-bold transition-all flex items-center justify-between no-underline"
                             >
                               <span>📍 Radar de Proximidad & Bunz'in</span>
                               <span className="text-[10px] text-emerald-400 font-mono">Abrir →</span>
@@ -394,7 +423,7 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                             <Link
                               href="/marketing/mood"
                               onClick={() => setChatDrawerOpen(false)}
-                              className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white border border-white/10 text-xs font-bold transition-all flex items-center justify-between no-underline"
+                              className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white border border-white/10 text-xs font-bold transition-all flex items-center justify-between no-underline"
                             >
                               <span>✨ Rabbitty Mood Telemetría</span>
                               <span className="text-[10px] text-purple-400 font-mono">En Vivo →</span>
@@ -470,6 +499,60 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                       </>
                     )}
                   </div>
+
+                  {/* Input Bar for Bunzy Co-Pilot */}
+                  {drawerTab === "bunzy" && (
+                    <div className="p-3 border-t border-white/10 bg-black/40">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          placeholder="Pregúntale a Bunzy sobre tu caja, ventas o lealtad..."
+                          value={bunzyInput}
+                          onChange={(e) => setBunzyInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && bunzyInput.trim() && !bunzyChat.isPending) {
+                              const text = bunzyInput.trim();
+                              setBunzyInput("");
+                              setBunzyMessages((prev) => [...prev, { role: "user", text }]);
+                              bunzyChat.mutate({
+                                branchId,
+                                message: text,
+                                mode: "strategist",
+                                history: bunzyMessages.slice(-4).map((m) => ({
+                                  role: m.role,
+                                  content: m.text,
+                                })),
+                              });
+                            }
+                          }}
+                          disabled={bunzyChat.isPending}
+                          className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 outline-none focus:border-pink-500 disabled:opacity-50"
+                        />
+                        <button
+                          onClick={() => {
+                            if (!bunzyInput.trim() || bunzyChat.isPending) return;
+                            const text = bunzyInput.trim();
+                            setBunzyInput("");
+                            setBunzyMessages((prev) => [...prev, { role: "user", text }]);
+                            bunzyChat.mutate({
+                              branchId,
+                              message: text,
+                              mode: "strategist",
+                              history: bunzyMessages.slice(-4).map((m) => ({
+                                role: m.role,
+                                content: m.text,
+                              })),
+                            });
+                          }}
+                          disabled={bunzyChat.isPending || !bunzyInput.trim()}
+                          className="bg-pink-600 hover:bg-pink-500 disabled:opacity-50 text-white font-bold text-xs px-3.5 py-2 rounded-xl border-none cursor-pointer active:scale-95 transition-transform flex items-center gap-1.5"
+                        >
+                          <Sparkles size={12} />
+                          <span>{bunzyChat.isPending ? "..." : "Consultar"}</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Quick Reply Bar for Customer Chat */}
                   {drawerTab === "customers" && activeCustomerChat && (
