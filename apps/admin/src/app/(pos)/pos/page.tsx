@@ -863,35 +863,35 @@ export default function PosPage() {
           </div>
 
           {/* Cart Items Area: Adaptive 1-Column List (<= 5 items) or 2-Column Compact Grid (>= 6 items) */}
-          <div className="flex-1 overflow-y-auto p-2.5 lg:p-3 custom-scrollbar">
+          <div className="flex-1 overflow-y-auto p-2 lg:p-2.5 custom-scrollbar min-h-0">
             {cart.length > 0 ? (
               cart.length <= 5 ? (
-                /* ── Modo Listado Elegante (1 a 5 productos) ── */
-                <div className="space-y-2">
+                /* ── Modo Listado Elegante Ultra-Optimizado (caben los 5 sin forzar scroll) ── */
+                <div className="space-y-1.5">
                   {cart.map((item) => (
                     <div 
                       key={item.id} 
-                      className="group flex items-center justify-between rounded-2xl bg-gray-900/90 border border-white/10 p-2.5 lg:p-3 shadow-md hover:border-cyan-500/40 hover:bg-gray-850 transition-all gap-2.5"
+                      className="group flex items-center justify-between rounded-xl bg-gray-900/90 border border-white/10 px-2.5 py-1.5 shadow-sm hover:border-cyan-500/40 hover:bg-gray-850 transition-all gap-2"
                     >
                       {/* Left: Thumbnail & Name & Unit Price */}
-                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                        <div className="h-11 w-11 shrink-0 rounded-xl overflow-hidden bg-black/60 border border-white/10 flex items-center justify-center">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <div className="h-8.5 w-8.5 shrink-0 rounded-lg overflow-hidden bg-black/60 border border-white/10 flex items-center justify-center">
                           {item.imageUrl ? (
                             <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
                           ) : (
-                            <img src="/Ra.png" alt="Ra" className="h-7 w-7 object-contain grayscale opacity-40" />
+                            <img src="/Ra.png" alt="Ra" className="h-5 w-5 object-contain grayscale opacity-40" />
                           )}
                         </div>
                         <div className="min-w-0 flex-1 pr-1">
-                          <h4 className="text-xs lg:text-sm font-black text-white leading-tight truncate" title={item.name}>
+                          <h4 className="text-xs font-black text-white leading-tight truncate" title={item.name}>
                             {item.name}
                           </h4>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[11px] lg:text-xs font-bold text-gray-400">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-bold text-gray-400">
                               ${item.price.toFixed(2)} c/u
                             </span>
                             {item.quantity > 1 && (
-                              <span className="text-[10px] font-black text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded-md border border-cyan-500/20">
+                              <span className="text-[9px] font-black text-cyan-400 bg-cyan-500/10 px-1 py-0.2 rounded border border-cyan-500/20">
                                 x{item.quantity}
                               </span>
                             )}
@@ -900,8 +900,8 @@ export default function PosPage() {
                       </div>
 
                       {/* Right: Subtotal + Stepper + Trash */}
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-xs lg:text-sm font-black text-emerald-400 w-16 text-right">
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-xs font-black text-emerald-400 w-14 text-right">
                           ${(item.price * item.quantity).toFixed(2)}
                         </span>
 
@@ -914,17 +914,17 @@ export default function PosPage() {
                               setManagerPin("");
                             }}
                             title="Disminuir (Requiere PIN)"
-                            className="flex h-7 w-7 items-center justify-center rounded-md bg-white/5 text-gray-400 hover:bg-red-500/30 hover:text-red-300 transition-all active:scale-90 cursor-pointer"
+                            className="flex h-6 w-6 items-center justify-center rounded-md bg-white/5 text-gray-400 hover:bg-red-500/30 hover:text-red-300 transition-all active:scale-90 cursor-pointer"
                           >
-                            <Minus className="h-3 w-3" />
+                            <Minus className="h-2.5 w-2.5" />
                           </button>
-                          <span className="w-6 text-center text-xs font-black text-white">{item.quantity}</span>
+                          <span className="w-5 text-center text-xs font-black text-white">{item.quantity}</span>
                           <button
                             type="button"
                             onClick={() => updateQuantity(item.id, 1)}
-                            className="flex h-7 w-7 items-center justify-center rounded-md bg-white/5 text-white hover:bg-cyan-500 hover:text-black transition-all active:scale-90 cursor-pointer"
+                            className="flex h-6 w-6 items-center justify-center rounded-md bg-white/5 text-white hover:bg-cyan-500 hover:text-black transition-all active:scale-90 cursor-pointer"
                           >
-                            <Plus className="h-3 w-3" />
+                            <Plus className="h-2.5 w-2.5" />
                           </button>
                         </div>
 
@@ -936,7 +936,7 @@ export default function PosPage() {
                             setManagerPin("");
                           }}
                           title="Eliminar artículo (Requiere PIN)"
-                          className="text-gray-500 hover:text-red-400 p-1.5 rounded-lg hover:bg-red-500/10 transition-colors cursor-pointer"
+                          className="text-gray-500 hover:text-red-400 p-1 rounded-lg hover:bg-red-500/10 transition-colors cursor-pointer"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -945,27 +945,27 @@ export default function PosPage() {
                   ))}
                 </div>
               ) : (
-                /* ── Modo Cuadrícula Compacta 2 Columnas (6 productos en adelante) ── */
-                <div className="grid grid-cols-2 gap-2">
+                /* ── Modo Cuadrícula Compacta 2 Columnas (6 a 10+ productos adaptados) ── */
+                <div className="grid grid-cols-2 gap-1.5">
                   {cart.map((item) => (
                     <div 
                       key={item.id} 
-                      className="group relative flex flex-col justify-between rounded-2xl bg-gray-900/90 border border-white/10 p-2.5 shadow-md hover:border-cyan-500/40 hover:bg-gray-850 transition-all"
+                      className="group relative flex flex-col justify-between rounded-xl bg-gray-900/90 border border-white/10 p-2 shadow-sm hover:border-cyan-500/40 hover:bg-gray-850 transition-all"
                     >
                       {/* Header: Photo Thumbnail + Name + Trash */}
-                      <div className="flex items-start gap-2">
-                        <div className="h-10 w-10 shrink-0 rounded-xl overflow-hidden bg-black/60 border border-white/10 flex items-center justify-center">
+                      <div className="flex items-start gap-1.5">
+                        <div className="h-7 w-7 shrink-0 rounded-lg overflow-hidden bg-black/60 border border-white/10 flex items-center justify-center">
                           {item.imageUrl ? (
                             <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
                           ) : (
-                            <img src="/Ra.png" alt="Ra" className="h-6 w-6 object-contain grayscale opacity-40" />
+                            <img src="/Ra.png" alt="Ra" className="h-4.5 w-4.5 object-contain grayscale opacity-40" />
                           )}
                         </div>
-                        <div className="flex-1 min-w-0 pr-1">
-                          <h4 className="text-xs font-black text-white leading-tight line-clamp-2" title={item.name}>
+                        <div className="flex-1 min-w-0 pr-0.5">
+                          <h4 className="text-[11px] font-black text-white leading-tight line-clamp-1" title={item.name}>
                             {item.name}
                           </h4>
-                          <div className="text-[11px] font-black text-emerald-400 mt-0.5">
+                          <div className="text-[10px] font-black text-emerald-400 mt-0.5">
                             ${(item.price * item.quantity).toFixed(2)}
                           </div>
                         </div>
@@ -977,18 +977,18 @@ export default function PosPage() {
                             setManagerPin("");
                           }}
                           title="Eliminar artículo (Requiere PIN)"
-                          className="text-gray-500 hover:text-red-400 p-1 rounded-lg hover:bg-red-500/10 transition-colors cursor-pointer shrink-0"
+                          className="text-gray-500 hover:text-red-400 p-0.5 rounded hover:bg-red-500/10 transition-colors cursor-pointer shrink-0"
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          <Trash2 className="h-3 w-3" />
                         </button>
                       </div>
 
                       {/* Bottom: Stepper Controls */}
-                      <div className="mt-2.5 pt-2 border-t border-white/5 flex items-center justify-between">
-                        <span className="text-[10px] text-gray-500 font-bold">
-                          ${item.price.toFixed(2)} c/u
+                      <div className="mt-1.5 pt-1 border-t border-white/5 flex items-center justify-between">
+                        <span className="text-[9px] text-gray-500 font-bold truncate max-w-16">
+                          ${item.price.toFixed(2)}
                         </span>
-                        <div className="flex items-center rounded-lg bg-black/80 border border-white/10 p-0.5 shadow-inner">
+                        <div className="flex items-center rounded-md bg-black/80 border border-white/10 p-0.5 shadow-inner">
                           <button
                             type="button"
                             onClick={() => {
@@ -997,17 +997,17 @@ export default function PosPage() {
                               setManagerPin("");
                             }}
                             title="Disminuir (Requiere PIN)"
-                            className="flex h-7 w-7 items-center justify-center rounded-md bg-white/5 text-gray-400 hover:bg-red-500/30 hover:text-red-300 transition-all active:scale-90 cursor-pointer"
+                            className="flex h-5 w-5 items-center justify-center rounded bg-white/5 text-gray-400 hover:bg-red-500/30 hover:text-red-300 transition-all active:scale-90 cursor-pointer"
                           >
-                            <Minus className="h-3 w-3" />
+                            <Minus className="h-2 w-2" />
                           </button>
-                          <span className="w-6 text-center text-xs font-black text-white">{item.quantity}</span>
+                          <span className="w-4.5 text-center text-[11px] font-black text-white">{item.quantity}</span>
                           <button
                             type="button"
                             onClick={() => updateQuantity(item.id, 1)}
-                            className="flex h-7 w-7 items-center justify-center rounded-md bg-white/5 text-white hover:bg-cyan-500 hover:text-black transition-all active:scale-90 cursor-pointer"
+                            className="flex h-5 w-5 items-center justify-center rounded bg-white/5 text-white hover:bg-cyan-500 hover:text-black transition-all active:scale-90 cursor-pointer"
                           >
-                            <Plus className="h-3 w-3" />
+                            <Plus className="h-2 w-2" />
                           </button>
                         </div>
                       </div>
@@ -1016,20 +1016,20 @@ export default function PosPage() {
                 </div>
               )
             ) : (
-              <div className="flex h-full flex-col items-center justify-center text-center px-8 opacity-50 py-16">
-                <div className="h-20 w-20 rounded-full border-4 border-dashed border-gray-700 flex items-center justify-center mb-4">
-                  <CheckCircle2 className="h-8 w-8 text-gray-600" />
+              <div className="flex h-full flex-col items-center justify-center text-center px-8 opacity-50 py-12">
+                <div className="h-16 w-16 rounded-full border-4 border-dashed border-gray-700 flex items-center justify-center mb-3">
+                  <CheckCircle2 className="h-7 w-7 text-gray-600" />
                 </div>
-                <h3 className="text-xl font-black text-gray-400 mb-1">Orden Vacía</h3>
+                <h3 className="text-lg font-black text-gray-400 mb-0.5">Orden Vacía</h3>
                 <p className="text-xs font-medium text-gray-500">Toca cualquier platillo del menú para agregarlo.</p>
               </div>
             )}
           </div>
 
           {/* Cart Footer (Totals & Actions) - Adaptable y con presencia sólida */}
-          <div className="p-4 lg:p-5 bg-black/70 border-t border-white/10 shrink-0 flex flex-col justify-end">
+          <div className="p-3.5 lg:p-4 bg-black/75 border-t border-white/10 shrink-0 flex flex-col justify-end shadow-2xl">
             {/* Quick action to zoom order */}
-            <div className="flex justify-between items-center mb-2.5">
+            <div className="flex justify-between items-center mb-2">
               <span className="text-[11px] text-gray-400 uppercase tracking-widest font-black">Resumen de Orden</span>
               <button 
                 onClick={() => setOrderZoomModal(true)}
@@ -1040,16 +1040,16 @@ export default function PosPage() {
               </button>
             </div>
             
-            <div className="space-y-2 mb-4 bg-white/2 p-3 rounded-2xl border border-white/5">
-              <div className="flex justify-between text-xs lg:text-sm text-gray-400 font-bold">
+            <div className="space-y-1.5 mb-3 bg-white/2 p-2.5 rounded-2xl border border-white/5">
+              <div className="flex justify-between text-xs text-gray-400 font-bold">
                 <span>Subtotal (Base)</span>
                 <span>${subtotal.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-xs lg:text-sm text-cyan-400 font-bold">
+              <div className="flex justify-between text-xs text-cyan-400 font-bold">
                 <span>IVA (16% Incluido)</span>
                 <span>${tax.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-xl lg:text-2xl font-black text-white pt-2 border-t border-white/10">
+              <div className="flex justify-between text-xl lg:text-2xl font-black text-white pt-1.5 border-t border-white/10">
                 <div className="flex flex-col">
                   <span>Total</span>
                   <span className="text-[10px] text-gray-500 font-bold tracking-widest uppercase">Impuestos incluidos</span>
@@ -1059,11 +1059,11 @@ export default function PosPage() {
             </div>
 
             {/* Quick Payment Methods */}
-            <div className="grid grid-cols-4 gap-2.5 lg:gap-3 mb-3.5">
+            <div className="grid grid-cols-4 gap-2 mb-3">
               <button 
                 onClick={() => requestCheckout("EFECTIVO")}
                 disabled={cart.length === 0}
-                className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-3 lg:py-3.5 border border-white/10 hover:bg-emerald-500/20 hover:border-emerald-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
+                className="group flex flex-col items-center justify-center gap-1.5 rounded-2xl bg-white/5 py-2.5 lg:py-3 border border-white/10 hover:bg-emerald-500/20 hover:border-emerald-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
               >
                 <Banknote className="h-5 w-5 text-gray-400 group-hover:text-emerald-400" />
                 <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 group-hover:text-emerald-400">Efectivo</span>
@@ -1071,7 +1071,7 @@ export default function PosPage() {
               <button 
                 onClick={() => requestCheckout("TARJETA")}
                 disabled={cart.length === 0}
-                className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-3 lg:py-3.5 border border-white/10 hover:bg-blue-500/20 hover:border-blue-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
+                className="group flex flex-col items-center justify-center gap-1.5 rounded-2xl bg-white/5 py-2.5 lg:py-3 border border-white/10 hover:bg-blue-500/20 hover:border-blue-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
               >
                 <CreditCard className="h-5 w-5 text-gray-400 group-hover:text-blue-400" />
                 <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 group-hover:text-blue-400">Tarjeta</span>
@@ -1079,7 +1079,7 @@ export default function PosPage() {
               <button 
                 onClick={() => requestCheckout("QR BUNZ")}
                 disabled={cart.length === 0}
-                className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-3 lg:py-3.5 border border-white/10 hover:bg-purple-500/20 hover:border-purple-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
+                className="group flex flex-col items-center justify-center gap-1.5 rounded-2xl bg-white/5 py-2.5 lg:py-3 border border-white/10 hover:bg-purple-500/20 hover:border-purple-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
               >
                 <QrCode className="h-5 w-5 text-gray-400 group-hover:text-purple-400" />
                 <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 group-hover:text-purple-400">QR Bunz</span>
@@ -1087,7 +1087,7 @@ export default function PosPage() {
               <button 
                 onClick={() => requestCheckout("DIVIDIDA")}
                 disabled={cart.length === 0}
-                className="group flex flex-col items-center justify-center gap-2 rounded-2xl bg-white/5 py-3 lg:py-3.5 border border-white/10 hover:bg-orange-500/20 hover:border-orange-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
+                className="group flex flex-col items-center justify-center gap-1.5 rounded-2xl bg-white/5 py-2.5 lg:py-3 border border-white/10 hover:bg-orange-500/20 hover:border-orange-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
               >
                 <SplitSquareHorizontal className="h-5 w-5 text-gray-400 group-hover:text-orange-400" />
                 <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 group-hover:text-orange-400">Dividir</span>
@@ -1098,7 +1098,7 @@ export default function PosPage() {
             <button 
               onClick={() => requestCheckout("VENTA DIRECTA")}
               disabled={cart.length === 0}
-              className="relative w-full overflow-hidden rounded-2xl lg:rounded-3xl bg-cyan-500 py-4 lg:py-4.5 text-lg lg:text-xl font-black text-gray-950 shadow-[0_15px_40px_rgba(6,182,212,0.4)] transition-all hover:bg-cyan-400 active:scale-95 disabled:opacity-50 disabled:shadow-none group cursor-pointer"
+              className="relative w-full overflow-hidden rounded-2xl lg:rounded-3xl bg-cyan-500 py-3.5 lg:py-4 text-lg lg:text-xl font-black text-gray-950 shadow-[0_15px_40px_rgba(6,182,212,0.4)] transition-all hover:bg-cyan-400 active:scale-95 disabled:opacity-50 disabled:shadow-none group cursor-pointer"
             >
               <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-[0%] transition-transform duration-300 ease-out" />
               <span className="relative z-10 flex items-center justify-center gap-2">
