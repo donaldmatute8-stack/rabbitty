@@ -49,15 +49,16 @@ body {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   THERMAL RECEIPT PRINT MEDIA RULES (80mm / 58mm)
+   THERMAL RECEIPT & AUDIT REPORT PRINT MEDIA RULES
    ───────────────────────────────────────────────────────────── */
 @media print {
-  body * {
+  /* Si existe un recibo térmico (#thermal-printable-receipt) en el DOM, aislar sólo ese elemento */
+  body:has(#thermal-printable-receipt) * {
     visibility: hidden !important;
   }
 
-  #thermal-printable-receipt,
-  #thermal-printable-receipt * {
+  body:has(#thermal-printable-receipt) #thermal-printable-receipt,
+  body:has(#thermal-printable-receipt) #thermal-printable-receipt * {
     visibility: visible !important;
   }
 
@@ -76,9 +77,26 @@ body {
     font-family: 'Courier New', Courier, monospace !important;
   }
 
+  /* Si NO es un recibo térmico, mostrar el documento normalmente en A4 */
+  body:not(:has(#thermal-printable-receipt)) {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  body:not(:has(#thermal-printable-receipt)) * {
+    visibility: visible !important;
+  }
+
+  body:not(:has(#thermal-printable-receipt)) aside,
+  body:not(:has(#thermal-printable-receipt)) header,
+  body:not(:has(#thermal-printable-receipt)) .no-print {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
   @page {
-    size: 80mm auto;
-    margin: 0;
+    size: auto;
+    margin: 1cm;
   }
 }
 

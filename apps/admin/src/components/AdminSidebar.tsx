@@ -115,7 +115,7 @@ const menuPillars: MenuPillar[] = [
     items: [
       { href: "/", label: "Dashboard", icon: LayoutDashboard },
       { href: "/sandbox", label: "Modo Sandbox", icon: FlaskConical, badge: "Test" },
-      { href: "/strategy", label: "Estrategia Hermes", icon: Brain, badge: "IA" },
+      { href: "/strategy", label: "Estrategia Bunzy", icon: Brain, badge: "IA" },
       { href: "/kitchen", label: "Cocina / KDS", icon: ChefHat },
       { href: "/staff/shifts", label: "Turnos y Reloj", icon: Clock },
       { href: "/table-layout", label: "Mapa de Mesas", icon: Table2 },
@@ -146,8 +146,9 @@ const menuPillars: MenuPillar[] = [
     icon: TrendingUp,
     items: [
       { href: "/loyalty", label: "Cashback Bunz", icon: Award },
+      { href: "/campaigns", label: "Marketing & Campañas", icon: Megaphone },
+      { href: "/marketing/mood", label: "Rabbitty Mood & Telemetría", icon: Sparkles, badge: "IA" },
       { href: "/customers", label: "Clientes Rabbitters", icon: UserRound },
-      { href: "/campaigns", label: "Campañas", icon: Megaphone },
       { href: "/referrals", label: "Red de Referidos", icon: Gift },
       { href: "/birthdays", label: "Cumpleaños", icon: Cake },
       { href: "/catering", label: "Eventos & Catering", icon: CalendarCheck },
