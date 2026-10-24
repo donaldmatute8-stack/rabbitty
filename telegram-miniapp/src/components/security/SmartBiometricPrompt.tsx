@@ -8,7 +8,8 @@ import { detectBiometric, isBiometricEnabled, enableBiometric } from '@/lib/secu
 import { PlatformBridge } from '@/lib/platform';
 import { useToast } from '@/contexts/ToastContext';
 
-const BIOMETRIC_PROMPT_KEY = 'rabbitty_biometric_prompt_handled_v1';
+const BIOMETRIC_PROMPT_KEY = 'rabbitty_biometric_prompt_handled_v2';
+const DISMISSED_COOLDOWN_MS = 24 * 60 * 60 * 1000; // Si el usuario descartó, volver a recordar tras 24h si sigue sin Face ID
 
 export function SmartBiometricPrompt() {
   const [show, setShow] = useState(false);
@@ -23,21 +24,29 @@ export function SmartBiometricPrompt() {
     let timer: NodeJS.Timeout | null = null;
 
     const checkEligibility = async () => {
-      // 1. Si ya se manejó (aceptó o descartó/omitió), no volver a molestar
+      // 1. Si ya tiene biometría activa, no mostrar nada
+      const enabled = await isBiometricEnabled();
+      if (!alive) return;
+      if (enabled) {
+        localStorage.setItem(BIOMETRIC_PROMPT_KEY, 'enabled');
+        return;
+      }
+
+      // 2. Si ya fue manejado recientemente (ej: habilitado o descartado con cooldown de 24h)
       const handled = localStorage.getItem(BIOMETRIC_PROMPT_KEY);
-      if (handled) return;
+      if (handled === 'enabled') return;
+      if (handled) {
+        const dismissedAt = parseInt(handled, 10);
+        if (!isNaN(dismissedAt) && Date.now() - dismissedAt < DISMISSED_COOLDOWN_MS) {
+          return;
+        }
+      }
 
-      // 2. Verificar si el dispositivo soporta biometría y si no está ya activa
-      const [support, enabled] = await Promise.all([
-        detectBiometric(),
-        isBiometricEnabled(),
-      ]);
-
+      // 3. Verificar si el dispositivo soporta biometría
+      const support = await detectBiometric();
       if (!alive) return;
 
-      if (!support.available || enabled) {
-        // Si no está disponible o ya está activado, marcar como atendido
-        if (enabled) localStorage.setItem(BIOMETRIC_PROMPT_KEY, 'enabled');
+      if (!support.available) {
         return;
       }
 
@@ -47,10 +56,10 @@ export function SmartBiometricPrompt() {
 
       const triggerPrompt = () => {
         if (timer) clearTimeout(timer);
-        // Dar 5.5s de respiro natural para que el usuario explore el feed
+        // Dar 4.5s de respiro natural para que el usuario explore el feed
         timer = setTimeout(() => {
           if (alive) setShow(true);
-        }, 5500);
+        }, 4500);
       };
 
       // Si el ritual de bienvenida aún no se ha visto, esperar a que termine
@@ -61,13 +70,13 @@ export function SmartBiometricPrompt() {
           triggerPrompt();
         };
         window.addEventListener('rabbitty:welcome-ritual-completed', onRitualFinished);
-        // Respaldo de seguridad por si no hubo evento
+        // Respaldo de seguridad por si no hubo evento (WelcomeRitual dura ~15.5s + fade)
         timer = setTimeout(() => {
           window.removeEventListener('rabbitty:welcome-ritual-completed', onRitualFinished);
           if (alive) setShow(true);
-        }, 16000);
+        }, 18000);
       } else {
-        // Si el ritual ya fue visto en visitas anteriores, esperar 5.5s después de entrar al feed
+        // Si el ritual ya fue visto en visitas anteriores, esperar 4.5s después de entrar al feed
         triggerPrompt();
       }
     };
@@ -82,7 +91,7 @@ export function SmartBiometricPrompt() {
 
   const handleDismiss = () => {
     PlatformBridge.hapticFeedback('light');
-    localStorage.setItem(BIOMETRIC_PROMPT_KEY, 'dismissed');
+    localStorage.setItem(BIOMETRIC_PROMPT_KEY, String(Date.now()));
     setShow(false);
   };
 

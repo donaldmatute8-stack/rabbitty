@@ -227,24 +227,47 @@ export default function FeedPage() {
     }
   }, []);
 
-    // Auto-prompt Rabbitty Mood moderado y escalonado (espera 12s tras entrar al feed para no chocar con Face ID ni el ritual)
+  // Auto-prompt Rabbitty Mood diario (abre cada nuevo día al entrar al feed o tras terminar el ritual)
   useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
     try {
-      const lastShown = localStorage.getItem('rabbitty_mood_last_shown_time');
-      const ritualSeen = localStorage.getItem('rabbitty_welcome_ritual_seen_v3');
-      const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
-      const now = Date.now();
+      const today = new Date().toISOString().slice(0, 10);
+      const lastDate = localStorage.getItem('rabbitty_mood_last_shown_date');
+      const dismissedDate = localStorage.getItem('rabbitty_mood_dismissed_date');
 
-      if (ritualSeen && (!lastShown || now - parseInt(lastShown, 10) > SEVEN_DAYS_MS)) {
-        const timer = setTimeout(() => {
+      // Si ya se mostró hoy o se eligió "no preguntar hoy", esperar a mañana
+      if (lastDate === today || dismissedDate === today) return;
+
+      const triggerMood = (delay = 7000) => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => {
           setMoodOpen(true);
           try {
-            localStorage.setItem('rabbitty_mood_last_shown_time', String(Date.now()));
+            localStorage.setItem('rabbitty_mood_last_shown_date', today);
           } catch {}
-        }, 12000);
-        return () => clearTimeout(timer);
+        }, delay);
+      };
+
+      const ritualSeen = localStorage.getItem('rabbitty_welcome_ritual_seen_v3');
+      if (!ritualSeen) {
+        // Si hay ritual de bienvenida activo, esperar a que termine antes de abrir Mood
+        const onRitualFinished = () => {
+          window.removeEventListener('rabbitty:welcome-ritual-completed', onRitualFinished);
+          triggerMood(4000);
+        };
+        window.addEventListener('rabbitty:welcome-ritual-completed', onRitualFinished);
+        timer = setTimeout(() => {
+          window.removeEventListener('rabbitty:welcome-ritual-completed', onRitualFinished);
+          triggerMood(1000);
+        }, 19000);
+      } else {
+        triggerMood(5000);
       }
     } catch {}
+
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
   }, []);
 
   useEffect(() => {

@@ -54,3 +54,37 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Error creating notification" }, { status: 500 });
   }
 }
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const caller = await getAuthenticatedUser(req);
+    if (!caller) {
+      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    }
+
+    const { id, all } = await req.json();
+
+    if (all) {
+      await db
+        .update(notifications)
+        .set({ isRead: true })
+        .where(eq(notifications.userId, caller.id));
+      return NextResponse.json({ success: true, all: true });
+    }
+
+    if (!id || typeof id !== "string") {
+      return NextResponse.json({ error: "ID requerido" }, { status: 400 });
+    }
+
+    await db
+      .update(notifications)
+      .set({ isRead: true })
+      .where(eq(notifications.id, id));
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("[NOTIFICATIONS_PATCH]", error);
+    return NextResponse.json({ error: "Error actualizando notificación" }, { status: 500 });
+  }
+}
+

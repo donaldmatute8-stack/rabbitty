@@ -177,13 +177,13 @@ function getTgBiometric(): TgBiometricManager | null {
   if (typeof window === 'undefined') return null;
   const w = window as unknown as { Telegram?: { WebApp?: { BiometricManager?: TgBiometricManager; initData?: string } } };
   const wa = w.Telegram?.WebApp;
-  return wa?.initData && wa.BiometricManager ? wa.BiometricManager : null;
+  return wa && wa.BiometricManager ? wa.BiometricManager : null;
 }
 
 function tgInit(bm: TgBiometricManager): Promise<void> {
   return new Promise((resolve) => {
     if (bm.isInited) return resolve();
-    const timer = setTimeout(resolve, 4000);
+    const timer = setTimeout(resolve, 3000);
     bm.init(() => { clearTimeout(timer); resolve(); });
   });
 }
@@ -215,9 +215,15 @@ export async function detectBiometric(): Promise<BiometricSupport> {
 
   const bm = getTgBiometric();
   if (bm) {
-    await tgInit(bm);
-    const label = bm.biometricType === 'face' ? 'Face ID' : bm.biometricType === 'finger' ? 'Huella digital' : 'Biometría del dispositivo';
-    return { backend: 'telegram', available: bm.isBiometricAvailable, label };
+    try {
+      await tgInit(bm);
+      if (bm.isBiometricAvailable) {
+        const label = bm.biometricType === 'face' ? 'Face ID' : bm.biometricType === 'finger' ? 'Huella digital' : 'Biometría del dispositivo';
+        return { backend: 'telegram', available: true, label };
+      }
+    } catch {
+      // Fallback a webauthn
+    }
   }
 
   if (typeof PublicKeyCredential !== 'undefined' && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {

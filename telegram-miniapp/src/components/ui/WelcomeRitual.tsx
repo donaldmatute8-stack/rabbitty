@@ -96,7 +96,7 @@ export function WelcomeRitual({
     }, 450); // Fade medio más rápido hacia la app
   }, [storageKey, onComplete]);
 
-  // Hard safety timeout: jamás permitir que el overlay permanezca abierto más de 12s bajo ninguna circunstancia
+  // Hard safety timeout: jamás permitir que el overlay permanezca abierto más de 17.5s (el audio dura ~14.8s + fade)
   useEffect(() => {
     if (!isOpen) return;
     const safetyTimer = setTimeout(() => {
@@ -104,7 +104,7 @@ export function WelcomeRitual({
         console.warn('[WelcomeRitual] Safety auto-close triggered.');
         handleFinish();
       }
-    }, 12000);
+    }, 17500);
     return () => clearTimeout(safetyTimer);
   }, [isOpen, handleFinish]);
 
@@ -133,8 +133,8 @@ export function WelcomeRitual({
         const pct = (t / audio.duration) * 100;
         setProgress(pct);
 
-        // Si pasa de 16.2 segundos y aún no disparó finish, disparar cierre en fade
-        if (t >= 16.2 && !hasFinishedRef.current) {
+        // Si pasa de 15.5 segundos y aún no disparó finish, disparar cierre en fade
+        if (t >= 15.5 && !hasFinishedRef.current) {
           handleFinish();
         }
       }
@@ -156,14 +156,14 @@ export function WelcomeRitual({
       const aud = audioRef.current;
       if (!aud || aud.paused || aud.ended) {
         setCurrentTime((prev: number) => {
-          if (prev >= 16.5) {
+          if (prev >= 15.8) {
             clearInterval(fallbackTicker);
             handleFinish();
-            return 16.5;
+            return 15.8;
           }
           const next = prev + 0.25;
-          setProgress(Math.min(100, (next / 16.5) * 100));
-          if (next >= 16.5) {
+          setProgress(Math.min(100, (next / 15.8) * 100));
+          if (next >= 15.8) {
             clearInterval(fallbackTicker);
             handleFinish();
           }
