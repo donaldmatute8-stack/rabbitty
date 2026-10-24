@@ -205,6 +205,7 @@ export default function ChatInboxPage() {
   const [userLastName, setUserLastName] = useState('');
   const [userUsername, setUserUsername] = useState('');
   const [userPhone, setUserPhone] = useState('');
+  const [userAvatar, setUserAvatar] = useState<string>('');
   const [isSavingUser, setIsSavingUser] = useState(false);
 
   // Business Settings State
@@ -213,6 +214,7 @@ export default function ChatInboxPage() {
   const [bizDescription, setBizDescription] = useState('');
   const [bizAddress, setBizAddress] = useState('');
   const [bizReward, setBizReward] = useState('10');
+  const [bizLogo, setBizLogo] = useState<string>('');
   const [isSavingBiz, setIsSavingBiz] = useState(false);
 
   // Contacts state
@@ -237,8 +239,20 @@ export default function ChatInboxPage() {
     phoneNumber?: string | null;
     role?: string;
     avatar: string;
+    isBusiness?: boolean;
   }>>([]);
   const [isSearchingUsers, setIsSearchingUsers] = useState(false);
+
+  useEffect(() => {
+    if (searchQuery.trim().length >= 2) {
+      const handler = setTimeout(() => {
+        searchDirectory(searchQuery.trim());
+      }, 250);
+      return () => clearTimeout(handler);
+    } else {
+      setUserSearchResults([]);
+    }
+  }, [searchQuery]);
 
   const openSettingsModal = () => {
     const p = profileRes?.profile;
@@ -247,6 +261,11 @@ export default function ChatInboxPage() {
       setUserLastName(p.lastName || '');
       setUserUsername(p.username || '');
       setUserPhone(p.phoneNumber || '');
+      try {
+        const storedAvatar = localStorage.getItem(`rabbitty_avatar_${p.id}`);
+        if (storedAvatar) setUserAvatar(storedAvatar);
+      } catch {}
+
       if (p.ownedBusiness) {
         const b = p.ownedBusiness;
         setBizName(b.name || '');
@@ -254,8 +273,15 @@ export default function ChatInboxPage() {
         setBizDescription(b.description || '');
         setBizAddress(b.address || '');
         setBizReward(String(b.rewardPercentage || 10));
+        setBizLogo(b.logoUrl || '');
       }
     }
+    try {
+      const savedPos = localStorage.getItem('rabbitty_dock_position');
+      if (savedPos === 'bottom' || savedPos === 'top' || savedPos === 'left') {
+        setDockPosition(savedPos);
+      }
+    } catch {}
     setSettingsIdentity(activeTab === 'business' ? 'business' : 'rabbitter');
     setSettingsOpen(true);
   };
@@ -484,6 +510,11 @@ export default function ChatInboxPage() {
     setIsSavingUser(true);
     PlatformBridge.hapticFeedback('medium');
     try {
+      if (user?.id && userAvatar) {
+        try {
+          localStorage.setItem(`rabbitty_avatar_${user.id}`, userAvatar);
+        } catch {}
+      }
       const headers = await PlatformBridge.getAuthHeaders();
       const res = await fetch(`/api/auth/profile`, {
         method: 'PATCH',
@@ -524,6 +555,7 @@ export default function ChatInboxPage() {
           description: bizDescription,
           address: bizAddress,
           rewardPercentage: parseInt(bizReward) || 10,
+          logoUrl: bizLogo || undefined,
         }),
       });
       const data = await res.json();
@@ -572,7 +604,7 @@ export default function ChatInboxPage() {
   ];
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-black text-white select-none">
+    <div className="relative min-h-screen overflow-x-hidden bg-(--bg-primary) text-(--text-primary) select-none">
       {/* 1. Lateral Vertical Docker (Empuja contenido) */}
       <AnimatePresence>
         {drawerOpen && dockerOrientation === 'vertical' && (
@@ -587,10 +619,10 @@ export default function ChatInboxPage() {
               bottom: 'calc(80px + env(safe-area-inset-bottom))',
               left: 10,
               width: 70,
-              background: 'rgba(20, 20, 28, 0.96)',
+              background: 'var(--bg-elevated)',
               backdropFilter: 'blur(24px)',
               WebkitBackdropFilter: 'blur(24px)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
+              border: '1px solid var(--border-subtle)',
               borderRadius: 22,
               zIndex: 100,
               padding: '10px 4px',
@@ -600,7 +632,7 @@ export default function ChatInboxPage() {
               gap: 10,
               overflowY: 'auto',
               scrollbarWidth: 'none',
-              boxShadow: '0 16px 40px rgba(0,0,0,0.45)',
+              boxShadow: 'var(--shadow-lg)',
             }}
             className="hide-scrollbar"
           >
@@ -684,7 +716,7 @@ export default function ChatInboxPage() {
       >
         <ProfileSubpageLayout
           title={
-            <span className="font-bold text-[17px] tracking-tight text-white">
+            <span className="font-bold text-[17px] tracking-tight text-(--text-primary)">
               {activeTab === 'business'
                 ? 'Mi Negocio'
                 : community === 'chats'
@@ -703,7 +735,7 @@ export default function ChatInboxPage() {
                   setDrawerOpen((v) => !v);
                 }}
                 aria-label="Comunidades"
-                className="w-9 h-9 rounded-full bg-white/5 border border-white/10 text-white flex items-center justify-center active:scale-95 transition-transform"
+                className="w-9 h-9 rounded-full bg-(--bg-elevated) border border-(--border-subtle) text-(--text-primary) flex items-center justify-center active:scale-95 transition-transform shadow-xs"
               >
                 <svg width="17" height="13" viewBox="0 0 18 14" fill="none">
                   <path d="M1 3.5h16" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
@@ -721,7 +753,7 @@ export default function ChatInboxPage() {
                   setRevealed(null);
                   setEditMode((v) => !v);
                 }}
-                className="text-white text-[15px] font-normal hover:text-white/80 active:opacity-70 transition-opacity px-1"
+                className="text-(--text-primary) text-[15px] font-normal hover:opacity-80 active:opacity-70 transition-opacity px-1"
               >
                 {editMode ? 'Done' : 'Edit'}
               </button>
@@ -732,7 +764,7 @@ export default function ChatInboxPage() {
                   setNewOpen(true);
                 }}
                 aria-label="Nuevo mensaje"
-                className="w-9 h-9 rounded-full bg-white/5 border border-white/10 text-white flex items-center justify-center active:scale-95 transition-transform"
+                className="w-9 h-9 rounded-full bg-(--bg-elevated) border border-(--border-subtle) text-(--text-primary) flex items-center justify-center active:scale-95 transition-transform shadow-xs"
               >
                 <SquarePen size={18} />
               </button>
@@ -748,10 +780,10 @@ export default function ChatInboxPage() {
                 exit={{ height: 0, opacity: 0, marginBottom: 0 }}
                 transition={{ duration: 0.2 }}
                 style={{
-                  background: 'rgba(28, 28, 30, 0.95)',
+                  background: 'var(--bg-elevated)',
                   backdropFilter: 'blur(16px)',
                   WebkitBackdropFilter: 'blur(16px)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  border: '1px solid var(--border-subtle)',
                   borderRadius: 16,
                   padding: '7px 10px',
                   display: 'flex',
@@ -759,6 +791,7 @@ export default function ChatInboxPage() {
                   gap: 8,
                   overflowX: 'auto',
                   scrollbarWidth: 'none',
+                  boxShadow: 'var(--shadow-md)',
                 }}
                 className="hide-scrollbar"
               >
@@ -771,8 +804,8 @@ export default function ChatInboxPage() {
                     width: 32,
                     height: 32,
                     borderRadius: 10,
-                    background: 'rgba(255,255,255,0.08)',
-                    border: '1px solid rgba(255,255,255,0.1)',
+                    background: 'var(--bg-subtle)',
+                    border: '1px solid var(--border-subtle)',
                     color: '#0088CC',
                     display: 'flex',
                     alignItems: 'center',
@@ -838,10 +871,10 @@ export default function ChatInboxPage() {
                   PlatformBridge.hapticFeedback('light');
                   setSearchOverlayOpen(true);
                 }}
-                className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-[#1C1C1E] border border-white/5 cursor-pointer active:opacity-80 transition-opacity"
+                className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-(--bg-elevated) border border-(--border-subtle) cursor-pointer active:opacity-80 transition-opacity shadow-xs"
               >
-                <Search size={16} className="text-[#8E8E93]" />
-                <span className="text-[16px] text-[#8E8E93]">Search</span>
+                <Search size={16} className="text-(--text-muted)" />
+                <span className="text-[16px] text-(--text-muted)">Search</span>
               </div>
 
               {/* Filtro archivados */}
@@ -855,9 +888,9 @@ export default function ChatInboxPage() {
                   }}
                   className="self-start flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold"
                   style={{
-                    background: archived ? '#0088CC' : '#1C1C1E',
-                    color: archived ? '#fff' : '#8E8E93',
-                    border: '1px solid rgba(255,255,255,0.08)',
+                    background: archived ? '#0088CC' : 'var(--bg-elevated)',
+                    color: archived ? '#fff' : 'var(--text-secondary)',
+                    border: '1px solid var(--border-subtle)',
                     cursor: 'pointer',
                   }}
                 >
@@ -875,7 +908,7 @@ export default function ChatInboxPage() {
               )}
 
               {!isLoading && visible.length === 0 && (
-                <div className="py-16 text-center text-[#8E8E93] text-[15px]">
+                <div className="py-16 text-center text-(--text-muted) text-[15px]">
                   {archived
                     ? 'No tienes chats archivados.'
                     : activeTab === 'business'
@@ -889,10 +922,10 @@ export default function ChatInboxPage() {
                 <Reorder.Group axis="y" values={visible} onReorder={onReorder} style={{ display: 'flex', flexDirection: 'column', gap: 4, listStyle: 'none', padding: 0, margin: 0 }}>
                   {visible.map((conv) => (
                     <Reorder.Item key={conv.id} value={conv} style={{ listStyle: 'none' }}>
-                      <div className="flex items-center gap-3.5 p-3 rounded-2xl bg-[#1C1C1E] border border-white/5">
-                        <div className="cursor-grab text-[#8E8E93] text-lg select-none">⠿</div>
+                      <div className="flex items-center gap-3.5 p-3 rounded-2xl bg-(--bg-elevated) border border-(--border-subtle) shadow-xs">
+                        <div className="cursor-grab text-(--text-muted) text-lg select-none">⠿</div>
                         <div className="flex-1 min-w-0">
-                          <h3 className="m-0 font-semibold text-[16px] text-white truncate">{conv.targetName}</h3>
+                          <h3 className="m-0 font-semibold text-[16px] text-(--text-primary) truncate">{conv.targetName}</h3>
                         </div>
                         <button
                           type="button"
@@ -903,9 +936,9 @@ export default function ChatInboxPage() {
                           }}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
                           style={{
-                            background: prefs[conv.id]?.pinned ? '#0088CC' : 'rgba(255,255,255,0.08)',
-                            color: '#fff',
-                            border: '1px solid rgba(255,255,255,0.1)',
+                            background: prefs[conv.id]?.pinned ? '#0088CC' : 'var(--bg-subtle)',
+                            color: prefs[conv.id]?.pinned ? '#fff' : 'var(--text-secondary)',
+                            border: '1px solid var(--border-subtle)',
                           }}
                         >
                           {prefs[conv.id]?.pinned ? <Pin size={13} /> : <PinOff size={13} />}
@@ -1056,7 +1089,7 @@ export default function ChatInboxPage() {
         }`}
       >
         <div
-          className={`pointer-events-auto flex items-center gap-1.5 p-2 rounded-full bg-[#1C1C1E]/92 backdrop-blur-2xl border border-white/10 shadow-[0_16px_36px_rgba(0,0,0,0.65)] ${
+          className={`pointer-events-auto flex items-center gap-1.5 p-2 rounded-full bg-(--bg-elevated)/95 backdrop-blur-2xl border border-(--border-subtle) shadow-(--shadow-lg) ${
             dockPosition === 'left' ? 'flex-col py-3 px-2 rounded-3xl' : 'px-3 py-2'
           }`}
         >
@@ -1067,7 +1100,7 @@ export default function ChatInboxPage() {
               PlatformBridge.hapticFeedback('light');
               setContactsModalOpen(true);
             }}
-            className={`flex flex-col items-center justify-center text-[#8E8E93] hover:text-white transition-colors ${
+            className={`flex flex-col items-center justify-center text-(--text-muted) hover:text-(--text-primary) transition-colors ${
               dockPosition === 'left' ? 'w-11 py-1.5' : 'w-14 py-1'
             }`}
           >
@@ -1084,7 +1117,7 @@ export default function ChatInboxPage() {
             }}
             className={`flex flex-col items-center justify-center relative transition-colors ${
               dockPosition === 'left' ? 'w-11 py-1.5' : 'w-14 py-1'
-            } ${activeTab === 'chats' ? 'text-[#0088CC]' : 'text-[#8E8E93]'}`}
+            } ${activeTab === 'chats' ? 'text-[#0088CC]' : 'text-(--text-muted)'}`}
           >
             <div className="relative">
               <MessageCircle size={dockPosition === 'left' ? 19 : 21} />
@@ -1107,7 +1140,7 @@ export default function ChatInboxPage() {
               }}
               className={`flex flex-col items-center justify-center transition-colors ${
                 dockPosition === 'left' ? 'w-11 py-1.5' : 'w-14 py-1'
-              } ${activeTab === 'business' ? 'text-[#0088CC]' : 'text-[#8E8E93]'}`}
+              } ${activeTab === 'business' ? 'text-[#0088CC]' : 'text-(--text-muted)'}`}
             >
               <Store size={dockPosition === 'left' ? 19 : 21} />
               <span className="text-[10px] font-medium mt-1">Negocio</span>
@@ -1121,7 +1154,7 @@ export default function ChatInboxPage() {
               PlatformBridge.hapticFeedback('light');
               openSettingsModal();
             }}
-            className={`flex flex-col items-center justify-center text-[#8E8E93] hover:text-white transition-colors relative ${
+            className={`flex flex-col items-center justify-center text-(--text-muted) hover:text-(--text-primary) transition-colors relative ${
               dockPosition === 'left' ? 'w-11 py-1.5' : 'w-14 py-1'
             }`}
           >
@@ -1136,7 +1169,7 @@ export default function ChatInboxPage() {
               PlatformBridge.hapticFeedback('light');
               setSearchOverlayOpen(true);
             }}
-            className={`flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/15 active:scale-95 transition-all ${
+            className={`flex items-center justify-center rounded-full bg-(--bg-subtle) text-(--text-primary) hover:bg-(--bg-pressed) active:scale-95 transition-all ${
               dockPosition === 'left' ? 'w-9 h-9 mt-1' : 'w-10 h-10 ml-1'
             }`}
             aria-label="Buscar"
@@ -1208,45 +1241,112 @@ export default function ChatInboxPage() {
                   )}
                 </div>
               ) : (
-                <div>
-                  {searchResults.length === 0 ? (
+                <div className="flex flex-col gap-4">
+                  {/* Chats locales encontrados */}
+                  {searchResults.length > 0 && (
+                    <div>
+                      <p className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider mb-2 px-1">
+                        Chats ({searchResults.length})
+                      </p>
+                      {searchResults.map((conv) => (
+                        <div
+                          key={conv.id}
+                          onClick={() => {
+                            addRecentSearch({
+                              id: conv.targetId,
+                              name: conv.targetName,
+                              subtitle: conv.lastMessage || 'Conversación',
+                              avatar: conv.targetAvatar,
+                              isBot: conv.isBot,
+                            });
+                            PlatformBridge.hapticFeedback('light');
+                            setSearchOverlayOpen(false);
+                            router.push(`/chat/${conv.targetId}`);
+                          }}
+                          className="flex items-center gap-3 py-2.5 border-b border-white/5 cursor-pointer active:opacity-75 transition-opacity"
+                        >
+                          <div className="w-11 h-11 rounded-full bg-[#1C1C1E] border border-white/10 flex items-center justify-center text-lg overflow-hidden shrink-0">
+                            {conv.isBot ? '🐰' : conv.targetAvatar ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={conv.targetAvatar} alt={conv.targetName} className="w-full h-full object-cover" />
+                            ) : (
+                              conv.targetName.charAt(0).toUpperCase()
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="m-0 font-medium text-[16px] text-white truncate">{conv.targetName}</p>
+                            <p className="m-0 text-[13px] text-[#8E8E93] truncate">
+                              {cleanPreview(conv.lastMessage, conv.lastMessageType) || 'Sin mensajes'}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Resultados Globales del Directorio / Comercios */}
+                  {userSearchResults.length > 0 && (
+                    <div>
+                      <p className="text-[11px] font-bold text-[#0088CC] uppercase tracking-wider mb-2 px-1 flex items-center gap-1.5">
+                        <span>Directorio Rabbitty & Comercios</span>
+                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#0088CC]/20 text-[#0088CC]">
+                          {userSearchResults.length}
+                        </span>
+                      </p>
+                      {userSearchResults.map((usr) => (
+                        <div
+                          key={usr.id}
+                          onClick={() => {
+                            addRecentSearch({
+                              id: usr.id,
+                              name: usr.name,
+                              subtitle: usr.isBusiness ? 'Comercio Rabbitty' : `@${usr.username || 'usuario'}`,
+                              avatar: usr.avatar,
+                              isBot: false,
+                            });
+                            PlatformBridge.hapticFeedback('medium');
+                            setSearchOverlayOpen(false);
+                            router.push(`/chat/${usr.id}`);
+                          }}
+                          className="flex items-center gap-3 py-2.5 border-b border-white/5 cursor-pointer active:opacity-75 transition-opacity"
+                        >
+                          <div className="w-11 h-11 rounded-full bg-[#1C1C1E] border border-white/10 flex items-center justify-center text-lg overflow-hidden shrink-0">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={usr.avatar} alt={usr.name} className="w-full h-full object-cover" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="m-0 font-medium text-[16px] text-white truncate">{usr.name}</p>
+                              {usr.isBusiness && (
+                                <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                  Comercio
+                                </span>
+                              )}
+                            </div>
+                            <p className="m-0 text-[13px] text-[#0088CC] truncate">
+                              {usr.isBusiness ? usr.username || 'Afiliado verificado' : `@${usr.username || 'sin_usuario'}`}
+                            </p>
+                          </div>
+                          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-[#0088CC]/20 text-[#0088CC] border border-[#0088CC]/30">
+                            Iniciar Chat
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Sin resultados en absoluto */}
+                  {searchResults.length === 0 && userSearchResults.length === 0 && !isSearchingUsers && (
                     <div className="py-20 text-center text-[#8E8E93] text-sm">
                       No se encontraron resultados para &ldquo;{searchQuery}&rdquo;
                     </div>
-                  ) : (
-                    searchResults.map((conv) => (
-                      <div
-                        key={conv.id}
-                        onClick={() => {
-                          addRecentSearch({
-                            id: conv.targetId,
-                            name: conv.targetName,
-                            subtitle: conv.lastMessage || 'Conversación',
-                            avatar: conv.targetAvatar,
-                            isBot: conv.isBot,
-                          });
-                          PlatformBridge.hapticFeedback('light');
-                          setSearchOverlayOpen(false);
-                          router.push(`/chat/${conv.targetId}`);
-                        }}
-                        className="flex items-center gap-3 py-2.5 border-b border-white/5 cursor-pointer active:opacity-75 transition-opacity"
-                      >
-                        <div className="w-11 h-11 rounded-full bg-[#1C1C1E] border border-white/10 flex items-center justify-center text-lg overflow-hidden shrink-0">
-                          {conv.isBot ? '🐰' : conv.targetAvatar ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={conv.targetAvatar} alt={conv.targetName} className="w-full h-full object-cover" />
-                          ) : (
-                            conv.targetName.charAt(0).toUpperCase()
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="m-0 font-medium text-[16px] text-white truncate">{conv.targetName}</p>
-                          <p className="m-0 text-[13px] text-[#8E8E93] truncate">
-                            {cleanPreview(conv.lastMessage, conv.lastMessageType) || 'Sin mensajes'}
-                          </p>
-                        </div>
-                      </div>
-                    ))
+                  )}
+
+                  {isSearchingUsers && userSearchResults.length === 0 && searchResults.length === 0 && (
+                    <div className="py-20 text-center text-[#8E8E93] text-sm flex items-center justify-center gap-2">
+                      <div className="w-4 h-4 border-2 border-[#0088CC]/30 border-t-[#0088CC] rounded-full animate-spin" />
+                      <span>Buscando en directorio Rabbitty...</span>
+                    </div>
                   )}
                 </div>
               )}
@@ -1327,10 +1427,10 @@ export default function ChatInboxPage() {
         onClose={() => setSettingsOpen(false)}
         title="Settings"
       >
-        <div className="flex flex-col gap-4 text-white pb-6">
+        <div className="flex flex-col gap-4 text-(--text-primary) pb-6">
           {/* Identity Switcher Tabs (If affiliate / has business) */}
           {isAffiliate && (
-            <div className="flex p-1 rounded-xl bg-[#1C1C1E] border border-white/10">
+            <div className="flex p-1 rounded-xl bg-(--bg-subtle) border border-(--border-subtle)">
               <button
                 type="button"
                 onClick={() => {
@@ -1338,7 +1438,7 @@ export default function ChatInboxPage() {
                   setSettingsIdentity('rabbitter');
                 }}
                 className={`flex-1 py-2 text-xs font-bold rounded-lg border-none cursor-pointer transition-all ${
-                  settingsIdentity === 'rabbitter' ? 'bg-[#0088CC] text-white shadow' : 'bg-transparent text-[#8E8E93]'
+                  settingsIdentity === 'rabbitter' ? 'bg-[#0088CC] text-white shadow' : 'bg-transparent text-(--text-muted)'
                 }`}
               >
                 🐰 Perfil Rabbitter
@@ -1350,7 +1450,7 @@ export default function ChatInboxPage() {
                   setSettingsIdentity('business');
                 }}
                 className={`flex-1 py-2 text-xs font-bold rounded-lg border-none cursor-pointer transition-all ${
-                  settingsIdentity === 'business' ? 'bg-[#0088CC] text-white shadow' : 'bg-transparent text-[#8E8E93]'
+                  settingsIdentity === 'business' ? 'bg-[#0088CC] text-white shadow' : 'bg-transparent text-(--text-muted)'
                 }`}
               >
                 🏪 Mi Negocio
@@ -1361,32 +1461,57 @@ export default function ChatInboxPage() {
           {settingsIdentity === 'rabbitter' ? (
             /* Rabbitter Profile Settings */
             <div className="flex flex-col gap-4">
-              {/* Telegram User Card */}
-              <div className="flex items-center gap-3.5 p-3 rounded-2xl bg-[#1C1C1E] border border-white/10">
-                <div className="relative">
-                  <div className="w-16 h-16 rounded-full overflow-hidden bg-linear-to-tr from-pink-500 to-purple-600 flex items-center justify-center text-2xl font-bold border border-white/20">
+              {/* Telegram User Card with Working Avatar Upload */}
+              <div className="flex items-center gap-3.5 p-3 rounded-2xl bg-(--bg-subtle) border border-(--border-subtle)">
+                <label className="relative cursor-pointer group">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (file.size > 4 * 1024 * 1024) {
+                        showToast('La imagen no debe pesar más de 4MB', 'error');
+                        return;
+                      }
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        const b64 = reader.result as string;
+                        setUserAvatar(b64);
+                        if (user?.id) {
+                          try {
+                            localStorage.setItem(`rabbitty_avatar_${user.id}`, b64);
+                          } catch {}
+                        }
+                        showToast('Foto actualizada (recuerda presionar Guardar Perfil)', 'success');
+                      };
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                  <div className="w-16 h-16 rounded-full overflow-hidden bg-linear-to-tr from-pink-500 to-purple-600 flex items-center justify-center text-2xl font-bold border border-(--border-subtle) group-hover:opacity-90 transition-opacity">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={`https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(
+                      src={userAvatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(
                         userUsername || userFirstName || 'Rabbitter'
                       )}&backgroundColor=E91E63`}
                       alt={userFirstName || 'Usuario'}
                       className="w-full h-full object-cover"
                     />
                   </div>
-                  <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[#0088CC] flex items-center justify-center text-white text-xs border border-black shadow">
+                  <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[#0088CC] flex items-center justify-center text-white text-xs border border-(--bg-elevated) shadow group-hover:scale-110 transition-transform">
                     <Camera size={12} />
                   </div>
-                </div>
+                </label>
 
                 <div className="flex-1 min-w-0">
-                  <h3 className="m-0 text-[18px] font-bold text-white truncate">
+                  <h3 className="m-0 text-[18px] font-bold text-(--text-primary) truncate">
                     {userFirstName} {userLastName}
                   </h3>
                   <p className="m-0 text-[13px] text-[#0088CC] truncate">
                     @{userUsername || 'sin_usuario'}
                   </p>
-                  <p className="m-0 text-[12px] text-[#8E8E93] truncate">
+                  <p className="m-0 text-[12px] text-(--text-muted) truncate">
                     {userPhone || 'Sin número registrado'}
                   </p>
                 </div>
@@ -1395,72 +1520,72 @@ export default function ChatInboxPage() {
               {/* Form fields */}
               <div className="flex flex-col gap-3">
                 <div>
-                  <label className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider block mb-1">
+                  <label className="text-[11px] font-bold text-(--text-muted) uppercase tracking-wider block mb-1">
                     Nombre
                   </label>
                   <input
                     value={userFirstName}
                     onChange={(e) => setUserFirstName(e.target.value)}
                     placeholder="Nombre"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#1C1C1E] border border-white/10 text-white text-[15px] outline-none focus:border-[#0088CC]"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-(--bg-subtle) border border-(--border-subtle) text-(--text-primary) text-[15px] outline-none focus:border-[#0088CC]"
                   />
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider block mb-1">
+                  <label className="text-[11px] font-bold text-(--text-muted) uppercase tracking-wider block mb-1">
                     Apellido
                   </label>
                   <input
                     value={userLastName}
                     onChange={(e) => setUserLastName(e.target.value)}
                     placeholder="Apellido"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#1C1C1E] border border-white/10 text-white text-[15px] outline-none focus:border-[#0088CC]"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-(--bg-subtle) border border-(--border-subtle) text-(--text-primary) text-[15px] outline-none focus:border-[#0088CC]"
                   />
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider block mb-1">
+                  <label className="text-[11px] font-bold text-(--text-muted) uppercase tracking-wider block mb-1">
                     Usuario único (@ estilo X/Meta)
                   </label>
-                  <div className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#1C1C1E] border border-white/10 focus-within:border-[#0088CC]">
-                    <AtSign size={16} className="text-[#8E8E93]" />
+                  <div className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-(--bg-subtle) border border-(--border-subtle) focus-within:border-[#0088CC]">
+                    <AtSign size={16} className="text-(--text-muted)" />
                     <input
                       value={userUsername}
                       onChange={(e) => setUserUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
                       placeholder="usuario_unico"
-                      className="w-full bg-transparent border-none text-white text-[15px] outline-none"
+                      className="w-full bg-transparent border-none text-(--text-primary) text-[15px] outline-none"
                     />
                   </div>
-                  <span className="text-[11px] text-[#8E8E93] mt-1 block">
+                  <span className="text-[11px] text-(--text-muted) mt-1 block">
                     Solo letras, números y guiones bajos (mínimo 3 caracteres).
                   </span>
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider block mb-1">
+                  <label className="text-[11px] font-bold text-(--text-muted) uppercase tracking-wider block mb-1">
                     Número (WhatsApp / Móvil)
                   </label>
-                  <div className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#1C1C1E] border border-white/10 focus-within:border-[#0088CC]">
-                    <Phone size={16} className="text-[#8E8E93]" />
+                  <div className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-(--bg-subtle) border border-(--border-subtle) focus-within:border-[#0088CC]">
+                    <Phone size={16} className="text-(--text-muted)" />
                     <input
                       value={userPhone}
                       onChange={(e) => setUserPhone(e.target.value)}
                       placeholder="+52 55 1234 5678"
-                      className="w-full bg-transparent border-none text-white text-[15px] outline-none"
+                      className="w-full bg-transparent border-none text-(--text-primary) text-[15px] outline-none"
                     />
                   </div>
-                  <span className="text-[11px] text-[#8E8E93] mt-1 block">
+                  <span className="text-[11px] text-(--text-muted) mt-1 block">
                     Permite que tus contactos de agenda te encuentren automáticamente al sincronizar Rabbitty (estilo WhatsApp).
                   </span>
                 </div>
 
                 {/* Quick Contact Sync Trigger in Settings */}
-                <div className="p-3 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between">
+                <div className="p-3 rounded-xl bg-(--bg-subtle) border border-(--border-subtle) flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
                     <Smartphone size={18} className="text-[#0088CC]" />
                     <div>
-                      <p className="m-0 text-xs font-bold text-white">Sincronización de Contactos</p>
-                      <p className="m-0 text-[11px] text-[#8E8E93]">Detectar amigos registrados</p>
+                      <p className="m-0 text-xs font-bold text-(--text-primary)">Sincronización de Contactos</p>
+                      <p className="m-0 text-[11px] text-(--text-muted)">Detectar amigos registrados</p>
                     </div>
                   </div>
                   <button
@@ -1478,15 +1603,15 @@ export default function ChatInboxPage() {
 
                 {/* Dock Position Switcher */}
                 <div>
-                  <label className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider block mb-1">
+                  <label className="text-[11px] font-bold text-(--text-muted) uppercase tracking-wider block mb-1">
                     Posición de la barra de navegación (Dock)
                   </label>
-                  <div className="flex gap-2 p-1 rounded-xl bg-[#1C1C1E] border border-white/10">
+                  <div className="flex gap-2 p-1 rounded-xl bg-(--bg-subtle) border border-(--border-subtle)">
                     <button
                       type="button"
                       onClick={() => changeDockPosition('bottom')}
                       className={`flex-1 py-2 text-xs font-bold rounded-lg border-none cursor-pointer transition-all ${
-                        dockPosition === 'bottom' ? 'bg-[#0088CC] text-white shadow' : 'bg-transparent text-[#8E8E93]'
+                        dockPosition === 'bottom' ? 'bg-[#0088CC] text-white shadow' : 'bg-transparent text-(--text-muted)'
                       }`}
                     >
                       👇 Inferior
@@ -1495,7 +1620,7 @@ export default function ChatInboxPage() {
                       type="button"
                       onClick={() => changeDockPosition('top')}
                       className={`flex-1 py-2 text-xs font-bold rounded-lg border-none cursor-pointer transition-all ${
-                        dockPosition === 'top' ? 'bg-[#0088CC] text-white shadow' : 'bg-transparent text-[#8E8E93]'
+                        dockPosition === 'top' ? 'bg-[#0088CC] text-white shadow' : 'bg-transparent text-(--text-muted)'
                       }`}
                     >
                       👆 Superior
@@ -1504,7 +1629,7 @@ export default function ChatInboxPage() {
                       type="button"
                       onClick={() => changeDockPosition('left')}
                       className={`flex-1 py-2 text-xs font-bold rounded-lg border-none cursor-pointer transition-all ${
-                        dockPosition === 'left' ? 'bg-[#0088CC] text-white shadow' : 'bg-transparent text-[#8E8E93]'
+                        dockPosition === 'left' ? 'bg-[#0088CC] text-white shadow' : 'bg-transparent text-(--text-muted)'
                       }`}
                     >
                       👈 Lateral
@@ -1529,46 +1654,75 @@ export default function ChatInboxPage() {
           ) : (
             /* Affiliate Business Profile Settings */
             <div className="flex flex-col gap-4">
-              {/* Business Header Card */}
-              <div className="flex items-center gap-3.5 p-3 rounded-2xl bg-[#1C1C1E] border border-white/10">
-                <div className="w-16 h-16 rounded-2xl bg-linear-to-tr from-amber-500 to-orange-600 flex items-center justify-center text-2xl font-bold border border-white/20 shrink-0">
-                  🏪
-                </div>
+              {/* Business Header Card with Logo Display & Upload */}
+              <div className="flex items-center gap-3.5 p-3 rounded-2xl bg-(--bg-subtle) border border-(--border-subtle)">
+                <label className="relative cursor-pointer group shrink-0">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (file.size > 4 * 1024 * 1024) {
+                        showToast('El logo no debe pesar más de 4MB', 'error');
+                        return;
+                      }
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        setBizLogo(reader.result as string);
+                        showToast('Logo seleccionado (recuerda presionar Guardar Perfil de Negocio)', 'success');
+                      };
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                  <div className="w-16 h-16 rounded-2xl bg-linear-to-tr from-amber-500 to-orange-600 flex items-center justify-center text-2xl font-bold border border-white/20 overflow-hidden group-hover:opacity-90 transition-opacity">
+                    {bizLogo ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={bizLogo} alt={bizName || 'Logo Negocio'} className="w-full h-full object-cover" />
+                    ) : (
+                      '🏪'
+                    )}
+                  </div>
+                  <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[#0088CC] flex items-center justify-center text-white text-xs border border-(--bg-elevated) shadow group-hover:scale-110 transition-transform">
+                    <Camera size={12} />
+                  </div>
+                </label>
                 <div className="flex-1 min-w-0">
-                  <h3 className="m-0 text-[18px] font-bold text-white truncate">{bizName || 'Mi Negocio'}</h3>
+                  <h3 className="m-0 text-[18px] font-bold text-(--text-primary) truncate">{bizName || 'Mi Negocio'}</h3>
                   <p className="m-0 text-[13px] text-[#FF8A00] truncate">{bizCategory || 'Categoría no definida'}</p>
-                  <p className="m-0 text-[12px] text-[#8E8E93] truncate">{bizAddress || 'Dirección no definida'}</p>
+                  <p className="m-0 text-[12px] text-(--text-muted) truncate">{bizAddress || 'Dirección no definida'}</p>
                 </div>
               </div>
 
               {/* Form fields */}
               <div className="flex flex-col gap-3">
                 <div>
-                  <label className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider block mb-1">
+                  <label className="text-[11px] font-bold text-(--text-muted) uppercase tracking-wider block mb-1">
                     Nombre del Negocio
                   </label>
                   <input
                     value={bizName}
                     onChange={(e) => setBizName(e.target.value)}
                     placeholder="Ej. Rabbitty Café"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#1C1C1E] border border-white/10 text-white text-[15px] outline-none focus:border-[#0088CC]"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-(--bg-subtle) border border-(--border-subtle) text-(--text-primary) text-[15px] outline-none focus:border-[#0088CC]"
                   />
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider block mb-1">
+                  <label className="text-[11px] font-bold text-(--text-muted) uppercase tracking-wider block mb-1">
                     Categoría
                   </label>
                   <input
                     value={bizCategory}
                     onChange={(e) => setBizCategory(e.target.value)}
                     placeholder="Restaurante / Bar / Gimnasio..."
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#1C1C1E] border border-white/10 text-white text-[15px] outline-none focus:border-[#0088CC]"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-(--bg-subtle) border border-(--border-subtle) text-(--text-primary) text-[15px] outline-none focus:border-[#0088CC]"
                   />
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider block mb-1">
+                  <label className="text-[11px] font-bold text-(--text-muted) uppercase tracking-wider block mb-1">
                     Descripción / Bio del Negocio
                   </label>
                   <textarea
@@ -1576,24 +1730,24 @@ export default function ChatInboxPage() {
                     onChange={(e) => setBizDescription(e.target.value)}
                     rows={3}
                     placeholder="Describe tu negocio a los clientes..."
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#1C1C1E] border border-white/10 text-white text-[15px] outline-none focus:border-[#0088CC] resize-none"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-(--bg-subtle) border border-(--border-subtle) text-(--text-primary) text-[15px] outline-none focus:border-[#0088CC] resize-none"
                   />
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider block mb-1">
+                  <label className="text-[11px] font-bold text-(--text-muted) uppercase tracking-wider block mb-1">
                     Dirección
                   </label>
                   <input
                     value={bizAddress}
                     onChange={(e) => setBizAddress(e.target.value)}
                     placeholder="Calle, número, colonia, ciudad"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#1C1C1E] border border-white/10 text-white text-[15px] outline-none focus:border-[#0088CC]"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-(--bg-subtle) border border-(--border-subtle) text-(--text-primary) text-[15px] outline-none focus:border-[#0088CC]"
                   />
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider block mb-1">
+                  <label className="text-[11px] font-bold text-(--text-muted) uppercase tracking-wider block mb-1">
                     Recompensa Bunz (%)
                   </label>
                   <input
@@ -1603,7 +1757,7 @@ export default function ChatInboxPage() {
                     value={bizReward}
                     onChange={(e) => setBizReward(e.target.value)}
                     placeholder="10"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#1C1C1E] border border-white/10 text-white text-[15px] outline-none focus:border-[#0088CC]"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-(--bg-subtle) border border-(--border-subtle) text-(--text-primary) text-[15px] outline-none focus:border-[#0088CC]"
                   />
                 </div>
               </div>
@@ -1626,15 +1780,16 @@ export default function ChatInboxPage() {
       </BottomSheet>
 
       {/* 5. Contacts View Modal (WhatsApp / Telegram style with live synchronization) */}
+      {/* 5. Contacts View Modal (WhatsApp / Telegram style with live synchronization) */}
       <BottomSheet
         isOpen={contactsModalOpen}
         onClose={() => setContactsModalOpen(false)}
         title="Contactos & Comunidad"
       >
-        <div className="flex flex-col gap-4 text-white pb-6">
+        <div className="flex flex-col gap-4 text-(--text-primary) pb-6">
           {/* Live Search bar for registered Rabbitters & Contacts */}
-          <div className="flex items-center gap-2 bg-[#1C1C1E] border border-white/10 rounded-2xl px-3.5 py-2.5 focus-within:border-[#0088CC] transition-colors">
-            <Search size={18} className="text-[#8E8E93]" />
+          <div className="flex items-center gap-2 bg-(--bg-subtle) border border-(--border-subtle) rounded-2xl px-3.5 py-2.5 focus-within:border-[#0088CC] transition-colors">
+            <Search size={18} className="text-(--text-muted)" />
             <input
               value={contactsSearch}
               onChange={(e) => {
@@ -1643,7 +1798,7 @@ export default function ChatInboxPage() {
                 searchDirectory(val);
               }}
               placeholder="Buscar por @usuario, nombre o teléfono..."
-              className="flex-1 bg-transparent border-none text-white text-[15px] outline-none placeholder-[#8E8E93]"
+              className="flex-1 bg-transparent border-none text-(--text-primary) text-[15px] outline-none placeholder-(--text-muted)"
             />
             {contactsSearch && (
               <button
@@ -1652,7 +1807,7 @@ export default function ChatInboxPage() {
                   setContactsSearch('');
                   setUserSearchResults([]);
                 }}
-                className="text-[#8E8E93] hover:text-white"
+                className="text-(--text-muted) hover:text-(--text-primary)"
               >
                 <X size={16} />
               </button>
@@ -1664,7 +1819,7 @@ export default function ChatInboxPage() {
             type="button"
             onClick={pickDeviceContacts}
             disabled={isSyncingContacts}
-            className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-linear-to-r from-[#0088CC]/20 via-[#E91E63]/20 to-[#9333EA]/20 border border-white/15 text-left hover:border-white/30 cursor-pointer active:scale-98 transition-all disabled:opacity-50"
+            className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-linear-to-r from-[#0088CC]/15 via-[#E91E63]/15 to-[#9333EA]/15 border border-(--border-subtle) text-left hover:border-[#0088CC]/40 cursor-pointer active:scale-98 transition-all disabled:opacity-50"
           >
             <div className="w-11 h-11 rounded-xl bg-linear-to-tr from-[#0088CC] to-[#E91E63] flex items-center justify-center text-white shrink-0 shadow-md">
               {isSyncingContacts ? (
@@ -1674,29 +1829,29 @@ export default function ChatInboxPage() {
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="m-0 font-bold text-[15px] text-white flex items-center gap-2">
+              <p className="m-0 font-bold text-[15px] text-(--text-primary) flex items-center gap-2">
                 <span>Sincronizar Contactos</span>
                 <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded-full bg-[#0088CC] text-white">
                   WhatsApp/Telegram
                 </span>
               </p>
-              <p className="m-0 text-[12px] text-[#8E8E93]">
+              <p className="m-0 text-[12px] text-(--text-muted)">
                 {isSyncingContacts
                   ? 'Buscando amigos registrados en Rabbitty...'
                   : 'Importa tus contactos y detecta amigos en Rabbitty'}
               </p>
             </div>
-            <ChevronRight size={18} className="text-[#8E8E93]" />
+            <ChevronRight size={18} className="text-(--text-muted)" />
           </button>
 
           {/* Global User Search Directory Results */}
           {contactsSearch.trim().length >= 2 && (
             <div className="flex flex-col gap-2">
-              <span className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider px-1">
+              <span className="text-[11px] font-bold text-(--text-muted) uppercase tracking-wider px-1">
                 Directorio Rabbitty {isSearchingUsers ? '(Buscando...)' : `(${userSearchResults.length})`}
               </span>
               {userSearchResults.length === 0 && !isSearchingUsers ? (
-                <p className="text-center text-[#8E8E93] text-[13px] py-4 bg-[#1C1C1E] rounded-xl border border-white/5">
+                <p className="text-center text-(--text-muted) text-[13px] py-4 bg-(--bg-subtle) rounded-xl border border-(--border-subtle)">
                   No se encontraron usuarios para &ldquo;{contactsSearch}&rdquo;
                 </p>
               ) : (
@@ -1709,19 +1864,19 @@ export default function ChatInboxPage() {
                         setContactsModalOpen(false);
                         router.push(`/chat/${usr.id}`);
                       }}
-                      className="flex items-center gap-3 p-2.5 rounded-2xl bg-[#1C1C1E] border border-white/5 hover:border-white/20 cursor-pointer active:scale-98 transition-all"
+                      className="flex items-center gap-3 p-2.5 rounded-2xl bg-(--bg-subtle) border border-(--border-subtle) hover:border-[#0088CC]/40 cursor-pointer active:scale-98 transition-all"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={usr.avatar}
                         alt={usr.name}
-                        className="w-10 h-10 rounded-full object-cover border border-white/10 shrink-0"
+                        className="w-10 h-10 rounded-full object-cover border border-(--border-subtle) shrink-0"
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
-                          <p className="m-0 font-bold text-[14px] text-white truncate">{usr.name}</p>
+                          <p className="m-0 font-bold text-[14px] text-(--text-primary) truncate">{usr.name}</p>
                           {usr.role === 'AFFILIATE' && (
-                            <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                            <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-500 border border-amber-500/30">
                               Comercio
                             </span>
                           )}
@@ -1755,7 +1910,7 @@ export default function ChatInboxPage() {
                       setContactsModalOpen(false);
                       router.push(`/chat/${c.id}`);
                     }}
-                    className="flex items-center gap-3 p-2.5 rounded-2xl bg-[#1C1C1E] border border-[#10B981]/30 hover:border-[#10B981] cursor-pointer active:scale-98 transition-all"
+                    className="flex items-center gap-3 p-2.5 rounded-2xl bg-(--bg-subtle) border border-[#10B981]/30 hover:border-[#10B981] cursor-pointer active:scale-98 transition-all"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
@@ -1764,7 +1919,7 @@ export default function ChatInboxPage() {
                       className="w-10 h-10 rounded-full object-cover border border-[#10B981]/40 shrink-0"
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="m-0 font-bold text-[14px] text-white truncate">
+                      <p className="m-0 font-bold text-[14px] text-(--text-primary) truncate">
                         {c.contactName}
                       </p>
                       <p className="m-0 text-[12px] text-[#10B981] truncate">
@@ -1783,22 +1938,43 @@ export default function ChatInboxPage() {
           {/* Agenda de contactos seleccionados (Invitar por WhatsApp/Telegram) */}
           {pickedContacts.length > 0 && (
             <div className="flex flex-col gap-1.5">
-              <span className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider px-1">
+              <span className="text-[11px] font-bold text-(--text-muted) uppercase tracking-wider px-1">
                 Contactos de tu agenda ({pickedContacts.length})
               </span>
               <div className="flex flex-col gap-1.5 max-h-52 overflow-y-auto hide-scrollbar">
                 {pickedContacts.map((c, i) => (
                   <div
                     key={`${c.name}-${i}`}
-                    className="flex items-center gap-3 p-2.5 rounded-xl bg-[#1C1C1E] border border-white/5"
+                    className="flex items-center gap-3 p-2.5 rounded-xl bg-(--bg-subtle) border border-(--border-subtle) hover:border-[#0088CC]/40 transition-colors"
                   >
-                    <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center font-bold text-sm text-white shrink-0">
+                    <div className="w-9 h-9 rounded-full bg-(--bg-elevated) border border-(--border-subtle) flex items-center justify-center font-bold text-sm text-(--text-primary) shrink-0">
                       {c.name.charAt(0).toUpperCase()}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="m-0 font-semibold text-[14px] text-white truncate">{c.name}</p>
-                      {c.tel && <p className="m-0 text-[12px] text-[#8E8E93] truncate">{c.tel}</p>}
+                    <div 
+                      className="flex-1 min-w-0 cursor-pointer"
+                      onClick={() => {
+                        PlatformBridge.hapticFeedback('medium');
+                        setContactsModalOpen(false);
+                        // Open direct chat modal / conversation thread for this contact
+                        const targetSlug = encodeURIComponent(c.tel?.replace(/[^0-9]/g, '') || c.name);
+                        router.push(`/chat/${targetSlug}`);
+                      }}
+                    >
+                      <p className="m-0 font-semibold text-[14px] text-(--text-primary) truncate hover:text-[#0088CC] transition-colors">{c.name}</p>
+                      {c.tel && <p className="m-0 text-[12px] text-(--text-muted) truncate">{c.tel}</p>}
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        PlatformBridge.hapticFeedback('medium');
+                        setContactsModalOpen(false);
+                        const targetSlug = encodeURIComponent(c.tel?.replace(/[^0-9]/g, '') || c.name);
+                        router.push(`/chat/${targetSlug}`);
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg bg-[#0088CC]/15 border border-[#0088CC]/30 text-[#0088CC] font-bold text-xs hover:bg-[#0088CC]/25 active:scale-95 transition-all"
+                    >
+                      Mensaje
+                    </button>
                     <button
                       type="button"
                       onClick={() => openWhatsAppInvite(c.tel)}
@@ -1825,7 +2001,7 @@ export default function ChatInboxPage() {
 
           {/* Invitar con Enlace Rápido */}
           <div className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider px-1">
+            <span className="text-[11px] font-bold text-(--text-muted) uppercase tracking-wider px-1">
               Compartir invitación directa
             </span>
             <div className="flex gap-2">
@@ -1848,12 +2024,12 @@ export default function ChatInboxPage() {
 
           {/* Contactos Históricos en Rabbitty */}
           <div className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-bold text-[#8E8E93] uppercase tracking-wider px-1">
+            <span className="text-[11px] font-bold text-(--text-muted) uppercase tracking-wider px-1">
               Historial de Chats
             </span>
             <div className="flex flex-col gap-1 max-h-52 overflow-y-auto hide-scrollbar">
               {filteredContacts.length === 0 ? (
-                <p className="text-center text-[#8E8E93] text-[13px] py-4 m-0">
+                <p className="text-center text-(--text-muted) text-[13px] py-4 m-0">
                   Sin conversaciones previas aún.
                 </p>
               ) : (
@@ -1865,9 +2041,9 @@ export default function ChatInboxPage() {
                       setContactsModalOpen(false);
                       router.push(`/chat/${c.targetId}`);
                     }}
-                    className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 cursor-pointer active:opacity-75 transition-opacity"
+                    className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-(--bg-subtle) cursor-pointer active:opacity-75 transition-colors"
                   >
-                    <div className="w-10 h-10 rounded-full bg-[#1C1C1E] border border-white/10 flex items-center justify-center text-base overflow-hidden shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-(--bg-subtle) border border-(--border-subtle) flex items-center justify-center text-base overflow-hidden shrink-0">
                       {c.isBot ? '🐰' : c.targetAvatar ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={c.targetAvatar} alt={c.targetName} className="w-full h-full object-cover" />
@@ -1875,7 +2051,7 @@ export default function ChatInboxPage() {
                         c.targetName.charAt(0).toUpperCase()
                       )}
                     </div>
-                    <span className="font-semibold text-[15px] text-white truncate flex-1">{c.targetName}</span>
+                    <span className="font-semibold text-[15px] text-(--text-primary) truncate flex-1">{c.targetName}</span>
                   </div>
                 ))
               )}
@@ -1900,10 +2076,10 @@ export default function ChatInboxPage() {
               🐰
             </div>
             <div className="flex-1 min-w-0">
-              <p className="m-0 font-bold text-[15px] text-white flex items-center gap-1.5">
+              <p className="m-0 font-bold text-[15px] text-(--text-primary) flex items-center gap-1.5">
                 Bunzy Concierge <Sparkles size={14} className="text-[#0088CC]" />
               </p>
-              <p className="m-0 text-[12px] text-[#8E8E93]">Lugares, saldo de Bunz, transferencias y reservas</p>
+              <p className="m-0 text-[12px] text-(--text-muted)">Lugares, saldo de Bunz, transferencias y reservas</p>
             </div>
           </button>
 
@@ -2055,7 +2231,7 @@ function TelegramChatRow({
             close();
           }
         }}
-        className="relative z-10 bg-black"
+        className="relative z-10 bg-(--bg-primary)"
       >
         <Link
           href={`/chat/${conv.targetId}${conv.id && conv.id !== 'bunzy-initial' ? `?c=${conv.id}` : ''}`}
@@ -2067,10 +2243,10 @@ function TelegramChatRow({
             }
           }}
         >
-          <div className="flex items-center gap-3.5 px-2 py-2.5 rounded-2xl hover:bg-white/4 active:bg-white/8 transition-all">
+          <div className="flex items-center gap-3.5 px-2 py-2.5 rounded-2xl hover:bg-(--bg-elevated) active:bg-(--bg-pressed) transition-all">
             {/* Telegram Circular Avatar with subtle shadow and border */}
             <div className="relative">
-              <div className="w-13 h-13 rounded-full overflow-hidden bg-[#242426] flex items-center justify-center shrink-0 border border-white/10 shadow-sm">
+              <div className="w-13 h-13 rounded-full overflow-hidden bg-(--bg-elevated) flex items-center justify-center shrink-0 border border-(--border-subtle) shadow-xs">
                 {conv.isBot ? (
                   <div className="w-full h-full bg-linear-to-tr from-[#E91E63] via-[#D81B60] to-[#8E24AA] flex items-center justify-center text-2xl shadow-inner">
                     🐰
@@ -2085,32 +2261,32 @@ function TelegramChatRow({
                 )}
               </div>
               {conv.isBot && (
-                <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-[#10B981] border-2 border-black" />
+                <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-[#10B981] border-2 border-(--bg-primary)" />
               )}
             </div>
 
             {/* Telegram Info + Divider Line */}
-            <div className={`flex-1 min-w-0 py-1 ${!isLast ? 'border-b border-white/6' : ''}`}>
+            <div className={`flex-1 min-w-0 py-1 ${!isLast ? 'border-b border-(--border-subtle)' : ''}`}>
               <div className="flex justify-between items-baseline mb-0.5">
                 <div className="flex items-center gap-1.5 truncate">
-                  <h3 className="m-0 font-semibold text-[16px] text-white truncate leading-tight">
+                  <h3 className="m-0 font-semibold text-[16px] text-(--text-primary) truncate leading-tight">
                     {conv.targetName}
                   </h3>
-                  {pref.muted && <BellOff size={12} className="text-[#8E8E93] shrink-0" />}
+                  {pref.muted && <BellOff size={12} className="text-(--text-muted) shrink-0" />}
                 </div>
 
                 <div className="flex items-center gap-1 shrink-0 ml-2">
                   {conv.lastMessageTime && (
-                    <span className="text-[12px] text-[#8E8E93]">
+                    <span className="text-[12px] text-(--text-muted)">
                       {formatTelegramTime(conv.lastMessageTime)}
                     </span>
                   )}
-                  {pref.pinned && <Pin size={12} className="text-[#8E8E93] ml-0.5 shrink-0" />}
+                  {pref.pinned && <Pin size={12} className="text-(--text-muted) ml-0.5 shrink-0" />}
                 </div>
               </div>
 
               <div className="flex justify-between items-center gap-2">
-                <p className="m-0 text-[14px] text-[#8E8E93] truncate leading-normal">
+                <p className="m-0 text-[14px] text-(--text-muted) truncate leading-normal">
                   {cleanPreview(conv.lastMessage, conv.lastMessageType) || 'Sin mensajes aún'}
                 </p>
 

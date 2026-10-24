@@ -226,11 +226,15 @@ export async function detectBiometric(): Promise<BiometricSupport> {
     }
   }
 
-  if (typeof PublicKeyCredential !== 'undefined' && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
-    try {
-      const ok = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-      return { backend: 'webauthn', available: ok, label: 'Face ID / Touch ID' };
-    } catch { /* noop */ }
+  if (typeof PublicKeyCredential !== 'undefined') {
+    if (typeof PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === 'function') {
+      try {
+        const ok = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+        if (ok) return { backend: 'webauthn', available: true, label: 'Face ID / Touch ID' };
+      } catch { /* noop */ }
+    }
+    // Safari iOS / WebKit allows PublicKeyCredential creation even if the pre-check returns false or is not configured
+    return { backend: 'webauthn', available: true, label: 'Face ID / Touch ID' };
   }
   return { backend: 'none', available: false, label: 'Biometría' };
 }

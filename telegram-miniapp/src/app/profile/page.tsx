@@ -38,7 +38,7 @@ interface GamificationLevelResponse {
 const MENU_ITEMS = [
   { icon: "💳", label: "Mi Billetera", badge: null, href: '/profile/wallet' },
   { icon: "📜", label: "Historial de transacciones", badge: null, href: '/history' },
-  { icon: "🤝", label: "Afiliados", badge: null, href: '/affiliate' },
+  { icon: "🤝", label: "Afiliados (Comercios)", badge: null, href: '/business' },
   { icon: "👥", label: "Programa de referidos", badge: null, href: '/referral' },
   { icon: "🔔", label: "Notificaciones", badge: null, href: '/notifications' },
   { icon: "🛡", label: "Seguridad y Privacidad", badge: null, href: '/security' },

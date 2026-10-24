@@ -401,29 +401,81 @@ export const PlatformBridge = {
     accuracy?: number;
     error?: 'PERMISSION_DENIED' | 'POSITION_UNAVAILABLE' | 'TIMEOUT' | 'UNSUPPORTED';
   }> {
-    if (typeof window === 'undefined' || !('geolocation' in navigator)) {
+    if (typeof window === 'undefined') {
       return { success: false, error: 'UNSUPPORTED' };
     }
 
-    return new Promise((resolve) => {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          resolve({
-            success: true,
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            accuracy: pos.coords.accuracy,
-          });
-        },
-        (err) => {
-          let code: 'PERMISSION_DENIED' | 'POSITION_UNAVAILABLE' | 'TIMEOUT' = 'POSITION_UNAVAILABLE';
-          if (err.code === err.PERMISSION_DENIED) code = 'PERMISSION_DENIED';
-          else if (err.code === err.TIMEOUT) code = 'TIMEOUT';
-          resolve({ success: false, error: code });
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-      );
-    });
+    // Check Telegram WebApp LocationManager (Bot API 8.0+)
+    try {
+      const tg = (window as WindowWithTelegram).Telegram?.WebApp as unknown as {
+        LocationManager?: {
+          init: (cb: () => void) => void;
+          getLocation: (cb: (data: { latitude?: number; longitude?: number }) => void) => void;
+        };
+      };
+      if (tg?.LocationManager && typeof tg.LocationManager.getLocation === 'function') {
+        const locMgr = tg.LocationManager;
+        const tgLoc = await new Promise<{ lat?: number; lng?: number } | null>((res) => {
+          try {
+            locMgr.init(() => {
+              locMgr.getLocation((data) => {
+                if (data && data.latitude != null && data.longitude != null) {
+                  res({ lat: data.latitude, lng: data.longitude });
+                } else {
+                  res(null);
+                }
+              });
+            });
+            setTimeout(() => res(null), 4000);
+          } catch {
+            res(null);
+          }
+        });
+        if (tgLoc?.lat != null && tgLoc?.lng != null) {
+          return { success: true, lat: tgLoc.lat, lng: tgLoc.lng };
+        }
+      }
+    } catch {}
+
+    if (!('geolocation' in navigator)) {
+      return { success: false, error: 'UNSUPPORTED' };
+    }
+
+    // Try primary high-accuracy position first with 6s timeout
+    const getPos = (enableHigh: boolean, timeoutMs: number) =>
+      new Promise<{
+        success: boolean;
+        lat?: number;
+        lng?: number;
+        accuracy?: number;
+        error?: 'PERMISSION_DENIED' | 'POSITION_UNAVAILABLE' | 'TIMEOUT';
+      }>((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            resolve({
+              success: true,
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+              accuracy: pos.coords.accuracy,
+            });
+          },
+          (err) => {
+            let code: 'PERMISSION_DENIED' | 'POSITION_UNAVAILABLE' | 'TIMEOUT' = 'POSITION_UNAVAILABLE';
+            if (err.code === err.PERMISSION_DENIED) code = 'PERMISSION_DENIED';
+            else if (err.code === err.TIMEOUT) code = 'TIMEOUT';
+            resolve({ success: false, error: code });
+          },
+          { enableHighAccuracy: enableHigh, timeout: timeoutMs, maximumAge: 300000 }
+        );
+      });
+
+    const primary = await getPos(true, 5000);
+    if (primary.success) return primary;
+    if (primary.error === 'PERMISSION_DENIED') return primary;
+
+    // Retry with low accuracy (wifi/cell triangulation) if timeout or position unavailable
+    const fallback = await getPos(false, 6000);
+    return fallback;
   },
 
   /**

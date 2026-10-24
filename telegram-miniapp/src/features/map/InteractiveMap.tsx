@@ -183,8 +183,16 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
     setMapReady(true);
     
     map.on('click', () => setSelected(null));
-    
+
+    // Fix Captura 5: Ensure Leaflet recalculates dimensions after parent CSS/animation mounts
+    const t1 = setTimeout(() => map.invalidateSize(), 50);
+    const t2 = setTimeout(() => map.invalidateSize(), 250);
+    const t3 = setTimeout(() => map.invalidateSize(), 600);
+
     return () => { 
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
       map.remove(); 
       mapInst.current = null; 
       tileLayerRef.current = null;

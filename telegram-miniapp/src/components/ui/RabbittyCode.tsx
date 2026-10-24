@@ -58,12 +58,6 @@ export default function RabbittyCode({ data, size = 260, showCardFrame = true, c
             />
           </div>
 
-          {/* Rabbitty Branding Label */}
-          <div className="absolute top-[82px] z-20 flex items-center gap-1.5 opacity-90">
-            <span className="text-[10px] tracking-[0.28em] font-black text-white uppercase flex items-center gap-1.5 drop-shadow-[0_0_8px_rgba(244,63,94,0.6)]">
-              <img src="/logo_conejo.png" alt="Rabbitty Logo" className="w-4 h-4 object-contain inline-block" /> RABBITTY
-            </span>
-          </div>
         </>
       )}
 

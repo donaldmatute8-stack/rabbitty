@@ -91,29 +91,26 @@ export default function ReferralPage() {
           <>
             {/* Level + Pending Bunz */}
             <div
-              className="rounded-[28px] px-5 py-6 relative overflow-hidden border border-white/5 shadow-[0_12px_40px_rgba(45,16,96,0.4)]"
-              style={{ background: 'linear-gradient(135deg, #1A0540 0%, #2D1060 55%, #3D0F80 100%)' }}
+              className="rounded-[28px] px-5 py-6 relative overflow-hidden border border-(--border-subtle) shadow-(--shadow-md) bg-(--bg-elevated)"
             >
-              <div className="absolute right-[-10%] top-[-10%] w-44 h-44 bg-white/6 rounded-full blur-[30px]" />
-
               <div className="flex justify-between items-start relative z-10">
                 <div>
-                  <p className="text-white/50 text-[10px] font-black tracking-[1.5px] uppercase mb-2">Tu Nivel</p>
+                  <p className="text-(--text-muted) text-[10px] font-black tracking-[1.5px] uppercase mb-2">Tu Nivel</p>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-[52px] font-black leading-none tracking-[-2px] text-white">{levelName}</span>
+                    <span className="text-[52px] font-black leading-none tracking-[-2px] text-(--text-primary)">{levelName}</span>
                     <span className="text-xl text-[#FCD34D]">⭐</span>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-white/50 text-[10px] font-black tracking-[1.5px] uppercase mb-2">Bunz Pendientes</p>
+                  <p className="text-(--text-muted) text-[10px] font-black tracking-[1.5px] uppercase mb-2">Bunz Pendientes</p>
                   <p className="text-[42px] font-black text-[#E91E63] tracking-[-1px] leading-none m-0">
                     {profile?.pendingBunz ?? 0}
                   </p>
                 </div>
               </div>
 
-              <div className="mt-5 bg-black/25 rounded-2xl p-3.5 relative z-10">
-                <p className="text-xs leading-normal text-white/70 m-0">
+              <div className="mt-5 bg-(--bg-subtle) border border-(--border-subtle) rounded-2xl p-3.5 relative z-10">
+                <p className="text-xs leading-normal text-(--text-secondary) m-0">
                   <span className="font-bold text-[#FCD34D]">💡 </span>
                   Sube de nivel consumiendo en negocios afiliados para desbloquear tus Bunz de referidos.
                 </p>
@@ -121,28 +118,28 @@ export default function ReferralPage() {
             </div>
 
             {/* Invite card */}
-            <div className="bg-[#161022] rounded-[28px] p-6 border border-white/10 shadow-[0_12px_40px_rgba(0,0,0,0.35)] text-center">
+            <div className="bg-(--bg-elevated) rounded-[28px] p-6 border border-(--border-subtle) shadow-(--shadow-sm) text-center">
               <div className="w-16 h-16 bg-[#E91E63]/15 border border-[#E91E63]/25 rounded-[20px] flex items-center justify-center mx-auto mb-4 text-[28px]">👥</div>
-              <h2 className="text-[22px] font-black text-white mb-2 tracking-[-0.5px]">Invita y Gana</h2>
-              <p className="text-white/60 text-[13px] leading-[1.6] mb-6">
+              <h2 className="text-[22px] font-black text-(--text-primary) mb-2 tracking-[-0.5px]">Invita y Gana</h2>
+              <p className="text-(--text-secondary) text-[13px] leading-[1.6] mb-6">
                 Obtén <span className="font-black text-[#E91E63]">50 Bunz</span> por cada amigo que invites,
                 una vez que realicen su primer consumo.
               </p>
 
               {/* Link box */}
-              <div className="bg-black/25 border-2 border-dashed border-white/10 rounded-[20px] p-4 flex flex-col gap-3 mb-4">
-                <p className="text-[9px] font-black text-white/40 tracking-[1.5px] uppercase m-0">Tu Link Único</p>
-                <div className="flex items-center justify-between gap-2 bg-white/6 rounded-[14px] p-3 border border-white/10">
+              <div className="bg-(--bg-subtle) border-2 border-dashed border-(--border-subtle) rounded-[20px] p-4 flex flex-col gap-3 mb-4">
+                <p className="text-[9px] font-black text-(--text-muted) tracking-[1.5px] uppercase m-0">Tu Link Único</p>
+                <div className="flex items-center justify-between gap-2 bg-(--bg-elevated) rounded-[14px] p-3 border border-(--border-subtle)">
                   <div className="overflow-hidden text-left">
                     <span className="text-[11px] font-black text-[#E91E63] uppercase tracking-[0.5px] block mb-1">TU CÓDIGO</span>
-                    <span className="text-xl font-black text-white font-mono truncate block">{referralCode}</span>
+                    <span className="text-xl font-black text-(--text-primary) font-mono truncate block">{referralCode}</span>
                   </div>
                   <button
                     onClick={copyToClipboard}
                     disabled={!referralLink}
-                    className="w-12 h-12 rounded-full bg-white/10 border border-white/10 flex items-center justify-center shrink-0 cursor-pointer"
+                    className="w-12 h-12 rounded-full bg-(--bg-subtle) border border-(--border-subtle) text-(--text-primary) flex items-center justify-center shrink-0 cursor-pointer active:scale-95 transition-transform"
                     style={{
-                      color: copied ? '#4CAF50' : '#fff',
+                      color: copied ? '#4CAF50' : 'var(--text-primary)',
                     }}
                   >
                     {copied ? <CheckCircle2 size={20} /> : <Copy size={20} />}
@@ -151,8 +148,7 @@ export default function ReferralPage() {
 
               {/* Título de compartir (sin estilo botón) */}
               <p
-                className="text-[12px] font-black uppercase tracking-[1.5px] text-center mb-3 m-0"
-                style={{ color: 'rgba(255,255,255,0.45)' }}
+                className="text-[12px] font-black uppercase tracking-[1.5px] text-center mb-3 m-0 text-(--text-muted)"
               >
                 Compartir con amigos
               </p>
@@ -163,8 +159,8 @@ export default function ReferralPage() {
                   disabled={!referralLink}
                   className="flex-1 font-black text-[13px] py-3.5 rounded-2xl border-0 flex items-center justify-center gap-2 active:scale-95 transition-transform"
                   style={{
-                    background: referralLink ? '#2AABEE' : 'rgba(255,255,255,0.08)',
-                    color: referralLink ? '#fff' : 'rgba(255,255,255,0.35)',
+                    background: referralLink ? '#2AABEE' : 'var(--bg-subtle)',
+                    color: referralLink ? '#fff' : 'var(--text-muted)',
                     cursor: referralLink ? 'pointer' : 'not-allowed',
                     boxShadow: referralLink ? '0 4px 12px rgba(42,171,238,0.3)' : 'none',
                   }}
@@ -177,8 +173,8 @@ export default function ReferralPage() {
                   disabled={!referralLink}
                   className="flex-1 font-black text-[13px] py-3.5 rounded-2xl border-0 flex items-center justify-center gap-2 active:scale-95 transition-transform"
                   style={{
-                    background: referralLink ? '#25D366' : 'rgba(255,255,255,0.08)',
-                    color: referralLink ? '#fff' : 'rgba(255,255,255,0.35)',
+                    background: referralLink ? '#25D366' : 'var(--bg-subtle)',
+                    color: referralLink ? '#fff' : 'var(--text-muted)',
                     cursor: referralLink ? 'pointer' : 'not-allowed',
                     boxShadow: referralLink ? '0 4px 12px rgba(37,211,102,0.3)' : 'none',
                   }}

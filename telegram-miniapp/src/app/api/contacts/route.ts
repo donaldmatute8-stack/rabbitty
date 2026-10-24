@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { users } from '@/db/schema';
+import { users, ownedBusinesses } from '@/db/schema';
 import { or, ilike } from 'drizzle-orm';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
       query?: string;
     };
 
-    // 1. If searching by query (username, phone, or name)
+    // 1. If searching by query (username, phone, name, or business)
     if (query && typeof query === 'string' && query.trim().length >= 2) {
       const q = query.trim();
       const cleanDigits = cleanPhone(q);
@@ -37,12 +37,22 @@ export async function POST(req: Request) {
         searchConditions.push(ilike(users.phoneNumber, `%${cleanDigits}%`));
       }
 
-      const foundUsers = await db.query.users.findMany({
-        where: or(...searchConditions),
-        limit: 20,
-      });
+      const [foundUsers, foundBusinesses] = await Promise.all([
+        db.query.users.findMany({
+          where: or(...searchConditions),
+          limit: 15,
+        }),
+        db.query.ownedBusinesses.findMany({
+          where: or(
+            ilike(ownedBusinesses.name, `%${q}%`),
+            ilike(ownedBusinesses.category, `%${q}%`),
+            ilike(ownedBusinesses.description, `%${q}%`)
+          ),
+          limit: 10,
+        }).catch(() => []),
+      ]);
 
-      const results = foundUsers
+      const userResults = foundUsers
         .filter((u) => u.id !== caller.id)
         .map((u) => {
           const fullName = `${u.firstName || 'Rabbitter'} ${u.lastName || ''}`.trim();
@@ -60,10 +70,22 @@ export async function POST(req: Request) {
             role: u.role,
             avatar,
             isRegistered: true,
+            isBusiness: false,
           };
         });
 
-      return NextResponse.json({ success: true, results });
+      const bizResults = foundBusinesses.map((b) => ({
+        id: b.id,
+        name: b.name,
+        username: b.category,
+        phoneNumber: b.address,
+        role: 'AFFILIATE',
+        avatar: b.logoUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(b.name)}`,
+        isRegistered: true,
+        isBusiness: true,
+      }));
+
+      return NextResponse.json({ success: true, results: [...bizResults, ...userResults] });
     }
 
     // 2. If syncing contacts payload (like WhatsApp / Telegram address book check)

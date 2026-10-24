@@ -129,17 +129,19 @@ function Note({ text, tone = 'info' }: { text: string; tone?: 'info' | 'ok' | 'e
 
 function PinInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
   return (
-    <input
-      type="password"
-      inputMode="numeric"
-      autoComplete="off"
-      maxLength={PIN_DIGITS}
-      value={value}
-      onChange={(e) => onChange(e.target.value.replace(/\D/g, ''))}
-      placeholder={placeholder}
-      className="w-full rounded-xl px-3 py-2.5 text-center text-lg tracking-[8px] outline-none bg-transparent"
-      style={{ color: 'var(--text-primary)', boxShadow: 'inset 0 0 0 1px var(--border-subtle)' }}
-    />
+    <div className="w-full relative">
+      <input
+        type="password"
+        inputMode="numeric"
+        autoComplete="off"
+        maxLength={PIN_DIGITS}
+        value={value}
+        onChange={(e) => onChange(e.target.value.replace(/\D/g, ''))}
+        placeholder={placeholder}
+        className="w-full rounded-2xl px-4 py-3 text-center text-xl tracking-[10px] outline-none font-mono bg-(--bg-subtle) border border-(--border-subtle) focus:border-[#E91E63] transition-colors placeholder:text-[13px] placeholder:tracking-normal placeholder:font-sans placeholder:text-(--text-muted)"
+        style={{ color: 'var(--text-primary)' }}
+      />
+    </div>
   );
 }
 

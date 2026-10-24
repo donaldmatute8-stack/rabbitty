@@ -10,6 +10,7 @@ import BottomNav from '@/components/BottomNav';
 import Button from '@/components/ui/Button';
 import { useWallet } from '@/contexts/WalletContext';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { useTheme } from '@/contexts/ThemeContext';
 
 import { PlatformBridge } from '@/lib/platform';
 
@@ -28,6 +29,7 @@ export default function ScanPage() {
 
   const { address } = useWallet();
   const { user } = useAuth();
+  const { isDark } = useTheme();
   
   const qrValue = user?.id || user?.telegramId || address || 'rabbitty_guest';
   const API_SERVER_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
@@ -56,9 +58,13 @@ export default function ScanPage() {
     import('@twa-dev/sdk').then((mod) => {
       const app = mod.default;
       app.ready(); app.expand();
-      try { app.setBackgroundColor('#111111'); app.setHeaderColor('#111111'); } catch {}
+      try { 
+        const bg = isDark ? '#111111' : '#F8F9FA';
+        app.setBackgroundColor(bg); 
+        app.setHeaderColor(bg); 
+      } catch {}
     });
-  }, []);
+  }, [isDark]);
 
   const requestCameraAccess = async () => {
     if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
@@ -228,12 +234,16 @@ export default function ScanPage() {
 
   return (
     <div 
-      className={`page-wrap ${activeTab === 'scan' ? 'bg-black' : 'bg-[#111111]'} text-white relative min-h-dvh flex flex-col justify-between transition-colors duration-200`} 
-      style={{ paddingTop: 'calc(var(--safe-top, 0px) + 8px)' }}
+      className="page-wrap relative min-h-dvh flex flex-col justify-between transition-colors duration-200" 
+      style={{ 
+        paddingTop: 'calc(var(--safe-top, 0px) + 8px)',
+        background: activeTab === 'scan' ? (isDark ? '#000000' : '#F1F5F9') : 'var(--bg-primary)',
+        color: 'var(--text-primary)'
+      }}
     >
       {/* Background glow only on my-code tab */}
       {activeTab === 'my-code' && (
-        <div className="absolute inset-0 pointer-events-none z-0 bg-[radial-gradient(ellipse_at_50%_40%,rgba(233,30,99,0.06)_0%,transparent_65%)]" />
+        <div className="absolute inset-0 pointer-events-none z-0 bg-[radial-gradient(ellipse_at_50%_40%,rgba(233,30,99,0.08)_0%,transparent_65%)]" />
       )}
 
       {/* Header bar */}
@@ -241,26 +251,30 @@ export default function ScanPage() {
         <div className="flex items-center justify-between w-full">
           <button
             onClick={() => router.back()}
-            className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center cursor-pointer"
+            className="w-10 h-10 rounded-full bg-(--bg-elevated) backdrop-blur-md border border-(--border-subtle) text-(--text-primary) flex items-center justify-center cursor-pointer shadow-xs active:scale-95 transition-transform"
           >
-            <ArrowLeft size={20} color="#fff" />
+            <ArrowLeft size={20} />
           </button>
-          <span className="text-xs font-extrabold tracking-[2px] text-white/75 uppercase">Escanear QR</span>
+          <span className="text-xs font-extrabold tracking-[2px] text-(--text-primary) uppercase">Escanear QR</span>
           <button
             onClick={() => setShowManualInput(!showManualInput)}
-            className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer ${showManualInput ? 'bg-[#E91E63] border-0' : 'bg-white/10 border border-white/10'}`}
+            className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer transition-colors shadow-xs ${
+              showManualInput ? 'bg-[#E91E63] text-white border-0' : 'bg-(--bg-elevated) border border-(--border-subtle) text-(--text-primary)'
+            }`}
           >
-            <Keyboard size={18} color="#fff" />
+            <Keyboard size={18} />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="bg-black/40 backdrop-blur-2xl border border-white/10 p-1 rounded-full flex w-60">
+        <div className="bg-(--bg-elevated) backdrop-blur-2xl border border-(--border-subtle) p-1 rounded-full flex w-60 shadow-xs">
           {(['scan', 'my-code'] as const).map((t, i) => (
             <button
               key={t}
               onClick={() => setActiveTab(t)}
-              className={`flex-1 py-2 text-[11px] font-extrabold rounded-full border-0 cursor-pointer transition-colors duration-200 ${activeTab === t ? 'bg-white text-[#111]' : 'bg-transparent text-white/50'}`}
+              className={`flex-1 py-2 text-[11px] font-extrabold rounded-full border-0 cursor-pointer transition-all duration-200 ${
+                activeTab === t ? 'bg-[#E91E63] text-white shadow-md' : 'bg-transparent text-(--text-muted) hover:text-(--text-primary)'
+              }`}
             >
               {i === 0 ? 'Cámara' : 'Mi Código'}
             </button>
@@ -276,7 +290,7 @@ export default function ScanPage() {
           <div className="flex flex-col items-center justify-center w-full max-w-85 z-20">
             <div className="text-center mb-6 px-2">
               <span className="text-[11px] font-black uppercase tracking-[2px] text-[#E91E63] block mb-1">Mi Identificador Rabbitty</span>
-              <p className="text-white/60 text-xs leading-relaxed m-0">Muestra este código en caja para acumular Bunz o autorizar consumo.</p>
+              <p className="text-(--text-muted) text-xs leading-relaxed m-0">Muestra este código en caja para acumular Bunz o autorizar consumo.</p>
             </div>
             
             <div className="flex flex-col items-center justify-center pt-8">
@@ -286,10 +300,10 @@ export default function ScanPage() {
                 showCardFrame={true} 
               />
               <div className="mt-3 text-center">
-                <span className="text-sm font-black tracking-[1.5px] text-white uppercase block">
+                <span className="text-sm font-black tracking-[1.5px] text-(--text-primary) uppercase block">
                   {user?.firstName ? user.firstName : 'Miembro Rabbitty'}
                 </span>
-                <span className="text-[11px] text-gray-400 font-mono tracking-wider block mt-0.5">
+                <span className="text-[11px] text-(--text-muted) font-mono tracking-wider block mt-0.5">
                   ID: {String(qrValue || '').slice(0, 16)}
                 </span>
               </div>
@@ -345,7 +359,7 @@ export default function ScanPage() {
               )}
             </div>
 
-            <p className="text-center text-[13px] text-white/60 z-10 px-8 pointer-events-none mb-6">
+            <p className="text-center text-[13px] text-(--text-muted) z-10 px-8 pointer-events-none mb-6">
               Alinea el código QR dentro del recuadro
             </p>
 
@@ -354,7 +368,7 @@ export default function ScanPage() {
               <button
                 type="button"
                 onClick={() => setShowManualInput(!showManualInput)}
-                className="w-full py-3 px-4 bg-white/10 hover:bg-white/15 backdrop-blur-xl border border-white/15 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold text-white transition-colors cursor-pointer"
+                className="w-full py-3 px-4 bg-(--bg-elevated) hover:bg-(--bg-subtle) backdrop-blur-xl border border-(--border-subtle) rounded-2xl flex items-center justify-center gap-2 text-xs font-bold text-(--text-primary) transition-colors cursor-pointer shadow-xs"
               >
                 <Keyboard size={16} />
                 <span>{showManualInput ? 'Ocultar ingreso manual' : '¿No puedes escanear? Escribe el código'}</span>
@@ -373,7 +387,7 @@ export default function ScanPage() {
                       placeholder="Código de 8 dígitos..."
                       value={manualCode}
                       onChange={e => setManualCode(e.target.value.toUpperCase())}
-                      className="w-full bg-black/70 border border-white/20 rounded-xl px-4 py-3 text-white text-center font-mono font-bold text-base tracking-[2px] outline-none"
+                      className="w-full bg-(--bg-elevated) border border-(--border-subtle) rounded-xl px-4 py-3 text-(--text-primary) text-center font-mono font-bold text-base tracking-[2px] outline-none"
                     />
                     <button
                       onClick={() => {
@@ -395,9 +409,9 @@ export default function ScanPage() {
               {result && (
                 <motion.div
                   initial={{ opacity: 0, y: 80 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 80 }}
-                  className="absolute bottom-32 left-4 right-4 bg-white rounded-[28px] p-6 z-30 shadow-[0_20px_60px_rgba(0,0,0,0.3)] border border-[#F0F0F0]"
+                  className="absolute bottom-32 left-4 right-4 bg-(--bg-elevated) rounded-[28px] p-6 z-30 shadow-[0_20px_60px_rgba(0,0,0,0.3)] border border-(--border-subtle)"
                 >
-                  <p className="text-[#111] font-extrabold text-lg mb-1.5 flex items-center justify-between">
+                  <p className="text-(--text-primary) font-extrabold text-lg mb-1.5 flex items-center justify-between">
                     <span className="flex items-center gap-2">
                       <span className="w-2.5 h-2.5 rounded-full bg-[#10B981] inline-block" />
                       Autorizar Pago
@@ -405,14 +419,14 @@ export default function ScanPage() {
                     <span className="text-xl">${result.amountMxn?.toFixed(2)} MXN</span>
                   </p>
                   
-                  <div className="bg-gray-100 rounded-xl p-3 mb-4">
-                    <p className="text-[#555] text-[13px]">
+                  <div className="bg-(--bg-subtle) rounded-xl p-3 mb-4">
+                    <p className="text-(--text-muted) text-[13px]">
                       <strong>Monto Bunz requerido:</strong> {result.bunzAmount?.toFixed(2)} Bunz
                     </p>
-                    <p className="text-[#555] text-[13px]">
+                    <p className="text-(--text-muted) text-[13px]">
                       <strong>Establecimiento:</strong> {result.tenantId}
                     </p>
-                    <p className="text-[#555] text-[13px]">
+                    <p className="text-(--text-muted) text-[13px]">
                       <strong>Estado:</strong> {result.status}
                     </p>
                   </div>
@@ -461,7 +475,7 @@ export default function ScanPage() {
                   
                   <button 
                     onClick={() => { setResult(null); startScanning(); }}
-                    className="w-full mt-3 py-2 text-[#888] font-bold text-sm bg-transparent border-0 cursor-pointer"
+                    className="w-full mt-3 py-2 text-(--text-muted) font-bold text-sm bg-transparent border-0 cursor-pointer hover:text-(--text-primary)"
                   >
                     Cancelar
                   </button>
@@ -472,7 +486,7 @@ export default function ScanPage() {
         )}
 
       </div>
-      <BottomNav />
+      <BottomNav isDark={isDark} />
     </div>
   );
 }
