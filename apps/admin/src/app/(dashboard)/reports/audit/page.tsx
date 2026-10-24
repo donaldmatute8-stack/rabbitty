@@ -66,6 +66,7 @@ interface BusinessMeta {
   branchName?: string;
   branchAddress?: string;
   rewardPercentage?: number;
+  logoUrl?: string;
 }
 
 export default function AuditReportPage() {
@@ -162,10 +163,18 @@ export default function AuditReportPage() {
             color: black !important;
             overflow: visible !important;
             height: auto !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
-          aside, header, nav, .no-print {
+          /* Ocultar elementos globales del layout (sidebar, header, sandbox banner, modales) */
+          aside, header, nav, footer, [role="banner"], .no-print, [class*="SandboxBanner"] {
             display: none !important;
             visibility: hidden !important;
+            height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
           }
           #audit-printable-report,
           #audit-printable-report * {
@@ -177,18 +186,22 @@ export default function AuditReportPage() {
             top: 0 !important;
             width: 100% !important;
             margin: 0 !important;
-            padding: 0 !important;
+            padding: 0.5cm !important;
             background: white !important;
             color: black !important;
+            font-size: 11pt !important;
+            line-height: 1.4 !important;
           }
           .print-border {
-            border: 1px solid #e5e7eb !important;
+            border: 1px solid #d1d5db !important;
           }
           .print-card {
             box-shadow: none !important;
             background: #f9fafb !important;
             border: 1px solid #e5e7eb !important;
             color: black !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
           .print-text-dark {
             color: #111827 !important;
@@ -196,8 +209,21 @@ export default function AuditReportPage() {
           .print-text-muted {
             color: #4b5563 !important;
           }
+          table {
+            page-break-inside: auto !important;
+          }
+          tr {
+            page-break-inside: avoid !important;
+            page-break-after: auto !important;
+          }
+          thead {
+            display: table-header-group !important;
+          }
+          tfoot {
+            display: table-footer-group !important;
+          }
           @page {
-            margin: 1.2cm;
+            margin: 1.5cm 1.2cm 1.5cm 1.2cm;
             size: A4 portrait;
           }
         }
@@ -236,20 +262,28 @@ export default function AuditReportPage() {
         {/* Document Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-8 border-b border-white/10 print:border-gray-200 gap-6">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-linear-to-tr from-pink-500 via-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-2xl shadow-lg shrink-0 print:border print:border-gray-300">
-              🐰
-            </div>
+            {business?.logoUrl ? (
+              <img
+                src={business.logoUrl}
+                alt={business.restaurantName || business.businessName || "Tenant Logo"}
+                className="w-16 h-16 rounded-2xl object-cover border border-white/10 shadow-lg shrink-0 print:border-gray-300 print:shadow-none"
+              />
+            ) : (
+              <div className="w-16 h-16 rounded-2xl bg-linear-to-tr from-pink-500 via-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-2xl shadow-lg shrink-0 print:border print:border-gray-300">
+                🐰
+              </div>
+            )}
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl sm:text-2xl font-black text-white print:text-black m-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-xl sm:text-2xl font-black text-white print:text-black m-0 tracking-tight">
                   {business?.restaurantName || business?.businessName || "626 Café"}
                 </h2>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 print:border-emerald-600 print:text-emerald-700">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 print:border-emerald-600 print:text-emerald-800 print:bg-emerald-50">
                   Cuadre Verificado
                 </span>
               </div>
               <p className="text-xs text-gray-400 print:text-gray-600 mt-1 flex items-center gap-1.5">
-                <Store size={13} className="text-pink-400" />
+                <Store size={13} className="text-pink-400 print:text-gray-500" />
                 {business?.branchName ? `${business.branchName} • ` : ""}
                 {business?.businessAddress || business?.branchAddress || "Bucerías, Nayarit, México"}
               </p>
@@ -257,11 +291,11 @@ export default function AuditReportPage() {
           </div>
 
           <div className="text-left sm:text-right text-xs text-gray-400 print:text-gray-600">
-            <p className="font-mono text-gray-300 print:text-gray-800 font-semibold mb-0.5">
+            <p className="font-mono text-gray-300 print:text-gray-900 font-bold mb-0.5 text-xs">
               Folio: AUD-{new Date(generatedAt).getTime().toString().slice(-8)}
             </p>
             <p className="flex items-center gap-1 sm:justify-end">
-              <Calendar size={13} className="text-purple-400" />
+              <Calendar size={13} className="text-purple-400 print:text-gray-500" />
               Fecha Emisión: {new Date(generatedAt).toLocaleString("es-MX", { dateStyle: "long", timeStyle: "short" })}
             </p>
             {report.shift && (

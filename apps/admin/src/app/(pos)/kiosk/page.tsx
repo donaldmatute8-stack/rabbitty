@@ -101,11 +101,11 @@ export default function KioskPage() {
         </div>
 
         <div className="relative z-10 flex flex-col items-center text-center px-12">
-          <div className="h-40 w-40 rounded-[2.5rem] bg-linear-to-br from-purple-500 via-pink-500 to-rose-500 flex items-center justify-center mb-10 shadow-[0_0_80px_rgba(236,72,153,0.5)] transform transition-transform duration-500 group-hover:-translate-y-4">
+          <div className="h-40 w-40 rounded-[2.5rem] bg-black/90 border border-white/20 flex items-center justify-center mb-10 shadow-[0_0_80px_rgba(236,72,153,0.35)] backdrop-blur-2xl transform transition-transform duration-500 group-hover:-translate-y-4">
             <img
               src="/Ra.png"
               alt="Rabbitty Ra"
-              className="h-28 w-28 object-contain drop-shadow-[0_0_20px_rgba(255,255,255,0.4)] select-none"
+              className="h-28 w-28 object-contain drop-shadow-[0_0_25px_rgba(236,72,153,0.5)] select-none"
             />
           </div>
           <h1 className="text-7xl font-black mb-6 tracking-tight text-white drop-shadow-2xl">Diseña tu pedido</h1>
@@ -258,26 +258,32 @@ export default function KioskPage() {
                 <button
                   key={item.id}
                   onClick={() => setSelectedItem(item)} // Opens Item Modal
-                  className="group relative flex flex-col overflow-hidden rounded-[2.5rem] border border-white/5 bg-gray-900/80 backdrop-blur-md text-left transition-all active:scale-95 active:border-purple-500/50 hover:shadow-[0_20px_50px_rgba(0,0,0,0.5)] hover:-translate-y-2"
+                  className="group relative flex flex-col overflow-hidden rounded-[2.5rem] border border-white/10 bg-gray-900/90 backdrop-blur-md text-left transition-all active:scale-95 active:border-purple-500/50 hover:shadow-[0_20px_50px_rgba(0,0,0,0.6)] hover:-translate-y-2 hover:border-white/20"
                 >
-                  <div className="relative aspect-4/3 w-full overflow-hidden bg-gray-800">
-                    <div className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110" style={{ backgroundImage: `url(${PLACEHOLDER_IMG})` }} />
+                  <div className="relative aspect-4/3 w-full overflow-hidden bg-black/60 flex items-center justify-center">
+                    {item.imageUrl ? (
+                      <div className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110" style={{ backgroundImage: `url(${item.imageUrl})` }} />
+                    ) : (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-radial from-gray-800 to-black p-6">
+                        <img src="/Ra.png" alt="Rabbitty" className="h-20 w-20 object-contain grayscale opacity-30 select-none group-hover:scale-105 transition-transform" />
+                      </div>
+                    )}
                     <div className="absolute inset-0 bg-linear-to-t from-gray-900 via-transparent to-transparent opacity-90" />
                     
                     {/* Price Tag */}
-                    <div className="absolute top-4 right-4 rounded-2xl bg-black/60 backdrop-blur-xl px-5 py-2 border border-white/10 shadow-2xl">
+                    <div className="absolute top-4 right-4 rounded-2xl bg-black/80 backdrop-blur-xl px-5 py-2 border border-white/20 shadow-2xl">
                       <span className="text-xl font-black text-emerald-400">${item.price.toFixed(2)}</span>
                     </div>
                   </div>
 
-                  <div className="flex flex-col justify-between p-8 pt-6 h-48">
+                  <div className="flex flex-col justify-between p-8 pt-6 min-h-52">
                     <div>
-                      <h3 className="text-3xl font-black leading-tight text-white line-clamp-2">{item.name}</h3>
-                      <p className="mt-2 text-lg text-gray-400 line-clamp-2">{item.description || "Ingredientes frescos y de la más alta calidad."}</p>
+                      <h3 className="text-2xl xl:text-3xl font-black leading-tight text-white line-clamp-2 drop-shadow-sm group-hover:text-purple-300 transition-colors">{item.name}</h3>
+                      <p className="mt-2.5 text-base text-gray-300 font-medium leading-relaxed line-clamp-2">{item.description || "Ingredientes frescos y de la más alta calidad."}</p>
                     </div>
                     
-                    <div className="mt-4 flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-white/5 border border-white/5 text-lg font-bold text-gray-300 group-hover:bg-purple-500 group-hover:border-purple-400 group-hover:text-white transition-all">
-                      <Plus className="h-6 w-6" /> Toca para Agregar
+                    <div className="mt-6 flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-white/10 border border-white/10 text-base font-bold text-gray-100 group-hover:bg-purple-600 group-hover:border-purple-400 group-hover:text-white transition-all shadow-md">
+                      <Plus className="h-5 w-5" /> Toca para Agregar
                     </div>
                   </div>
                 </button>
@@ -289,11 +295,17 @@ export default function KioskPage() {
 
       {/* Item Modifiers Modal (Overlays menu) */}
       {selectedItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-8 animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-8 animate-in fade-in zoom-in-95 duration-200">
           <div className="flex w-full max-w-5xl h-[80vh] overflow-hidden rounded-[3rem] bg-gray-900 border border-white/10 shadow-[0_0_100px_rgba(0,0,0,0.5)]">
             {/* Left Image */}
-            <div className="w-1/2 relative bg-gray-800">
-              <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${PLACEHOLDER_IMG})` }} />
+            <div className="w-1/2 relative bg-black/60 flex items-center justify-center overflow-hidden">
+              {selectedItem.imageUrl ? (
+                <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${selectedItem.imageUrl})` }} />
+              ) : (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-radial from-gray-800 to-black p-10">
+                  <img src="/Ra.png" alt="Rabbitty" className="h-32 w-32 object-contain grayscale opacity-30 select-none" />
+                </div>
+              )}
               <div className="absolute inset-0 bg-linear-to-r from-transparent to-gray-900" />
             </div>
             {/* Right Content */}

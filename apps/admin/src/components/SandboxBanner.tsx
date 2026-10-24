@@ -100,7 +100,7 @@ export function SandboxBanner() {
   if (isSandboxActive) {
     return (
       <>
-        <div className="relative z-30 flex items-center justify-between border-b border-amber-500/30 bg-linear-to-r from-amber-950/90 via-black to-amber-950/90 px-6 py-2 backdrop-blur-xl shadow-[0_4px_25px_rgba(245,158,11,0.15)]">
+        <div className="relative z-30 flex items-center justify-between border-b border-amber-500/30 bg-linear-to-r from-amber-950/90 via-black to-amber-950/90 px-6 py-2 backdrop-blur-xl shadow-[0_4px_25px_rgba(245,158,11,0.15)] no-print">
           <div className="flex items-center gap-3">
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse">
               <FlaskConical className="h-4 w-4" />

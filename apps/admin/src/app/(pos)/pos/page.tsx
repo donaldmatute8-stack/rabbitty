@@ -685,30 +685,36 @@ export default function PosPage() {
               <button
                 key={item.id}
                 onClick={() => addToCart(item)}
-                className="group relative flex aspect-square md:aspect-4/5 flex-col justify-between overflow-hidden rounded-3xl lg:rounded-4xl bg-gray-900 border border-white/5 p-1 text-left transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_20px_40px_rgba(0,0,0,0.6)] hover:border-cyan-500/40 active:scale-95 cursor-pointer"
+                className="group relative flex aspect-square md:aspect-4/5 flex-col justify-between overflow-hidden rounded-3xl lg:rounded-4xl bg-gray-900 border border-white/10 p-1 text-left transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_20px_40px_rgba(0,0,0,0.6)] hover:border-cyan-500/40 active:scale-95 cursor-pointer"
               >
                 {/* Big Image Top */}
-                <div className="relative h-[55%] lg:h-[65%] w-full rounded-[1.25rem] lg:rounded-[1.75rem] overflow-hidden bg-gray-800">
-                  <div className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105" style={{ backgroundImage: `url(${PLACEHOLDER_IMG})` }} />
-                  <div className="absolute inset-0 bg-linear-to-t from-gray-900 via-transparent to-transparent opacity-80" />
+                <div className="relative h-[55%] lg:h-[65%] w-full rounded-[1.25rem] lg:rounded-[1.75rem] overflow-hidden bg-black/60 flex items-center justify-center">
+                  {item.imageUrl ? (
+                    <div className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105" style={{ backgroundImage: `url(${item.imageUrl})` }} />
+                  ) : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-radial from-gray-800 to-black p-4">
+                      <img src="/Ra.png" alt="Rabbitty" className="h-14 w-14 lg:h-16 lg:w-16 object-contain grayscale opacity-35 select-none group-hover:scale-105 transition-transform" />
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-linear-to-t from-gray-950 via-transparent to-transparent opacity-85" />
                   
                   {/* Subtle centered '+' in fade mode */}
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="flex h-8 w-8 lg:h-11 lg:w-11 items-center justify-center rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white/30 group-hover:text-white/90 group-hover:bg-cyan-500/20 group-hover:border-cyan-500/40 group-hover:scale-110 transition-all duration-300 shadow-2xl">
+                    <div className="flex h-8 w-8 lg:h-11 lg:w-11 items-center justify-center rounded-full bg-black/50 backdrop-blur-md border border-white/15 text-white/40 group-hover:text-white group-hover:bg-cyan-500/30 group-hover:border-cyan-500/50 group-hover:scale-110 transition-all duration-300 shadow-2xl">
                       <Plus className="h-4 w-4 lg:h-5 lg:w-5" />
                     </div>
                   </div>
 
                   {/* Price Tag Badge */}
-                  <div className="absolute top-2 right-2 lg:top-3 lg:right-3 rounded-full bg-black/60 backdrop-blur-md px-2 lg:px-3 py-1 lg:py-1.5 border border-white/10 shadow-xl">
+                  <div className="absolute top-2 right-2 lg:top-3 lg:right-3 rounded-full bg-black/75 backdrop-blur-md px-2 lg:px-3 py-1 lg:py-1.5 border border-white/15 shadow-xl">
                     <span className="text-xs lg:text-sm font-black text-emerald-400">${item.price.toFixed(2)}</span>
                   </div>
                 </div>
                 
                 {/* Content Bottom */}
                 <div className="flex flex-col justify-center h-[45%] lg:h-[35%] px-3 py-2 lg:p-4 lg:pt-2">
-                  <h3 className="text-[13px] lg:text-base font-black leading-tight text-white line-clamp-2 lg:line-clamp-2 group-hover:text-cyan-400 transition-colors">{item.name}</h3>
-                  <p className="mt-0.5 lg:mt-1 text-[10px] lg:text-[11px] text-gray-500 font-medium line-clamp-1 lg:line-clamp-2">{item.description || "Delicioso y preparado al momento."}</p>
+                  <h3 className="text-sm lg:text-base font-black leading-tight text-white line-clamp-2 group-hover:text-cyan-300 transition-colors drop-shadow-sm">{item.name}</h3>
+                  <p className="mt-1 text-[11px] lg:text-xs text-gray-400 font-medium line-clamp-1 lg:line-clamp-2 leading-relaxed">{item.description || "Delicioso y preparado al momento."}</p>
                 </div>
               </button>
             ))}

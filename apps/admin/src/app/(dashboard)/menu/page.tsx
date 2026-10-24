@@ -5,11 +5,44 @@ import { trpc } from "../../../lib/trpc-client";
 import { Card, Badge, Button, Dialog, Input, Select, toast } from "@rabbitty/ui";
 import { Plus, Pencil, Trash2, Search, Tag } from "lucide-react";
 
-type ItemForm = { name: string; description: string; price: number; categoryId: string; isAvailable: boolean };
+type ItemForm = { name: string; description: string; price: number; categoryId: string; isAvailable: boolean; imageUrl?: string };
 type CatForm = { name: string; description: string };
 
-const defaultItemForm: ItemForm = { name: "", description: "", price: 0, categoryId: "", isAvailable: true };
+const defaultItemForm: ItemForm = { name: "", description: "", price: 0, categoryId: "", isAvailable: true, imageUrl: "" };
 const defaultCatForm: CatForm = { name: "", description: "" };
+
+const MAX_IMAGE_BYTES = 300 * 1024; // 300 KB límite para dataURLs en PostgreSQL
+const MAX_IMAGE_EDGE = 800; // lado máximo (px) tras redimensionar
+
+async function processImageFile(file: File): Promise<string> {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("El archivo no es una imagen");
+  }
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const img = document.createElement("img");
+    img.src = objectUrl;
+    await img.decode();
+    let { width } = img;
+    let { height } = img;
+    const scale = Math.min(1, MAX_IMAGE_EDGE / Math.max(width, height));
+    width = Math.round(width * scale);
+    height = Math.round(height * scale);
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas no disponible");
+    ctx.drawImage(img, 0, 0, width, height);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+    if (dataUrl.length > MAX_IMAGE_BYTES) {
+      throw new Error("La imagen es demasiado pesada incluso tras optimizarla. Usa una imagen más pequeña.");
+    }
+    return dataUrl;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
 
 export default function MenuPage() {
   const utils = trpc.useUtils();
@@ -32,7 +65,14 @@ export default function MenuPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: "item" | "category"; id: string; name: string } | null>(null);
 
   const openItemEdit = (item: NonNullable<typeof items>[number]) => {
-    setItemForm({ name: item.name, description: item.description ?? "", price: item.price, categoryId: item.categoryId, isAvailable: item.isAvailable });
+    setItemForm({
+      name: item.name,
+      description: item.description ?? "",
+      price: item.price,
+      categoryId: item.categoryId,
+      isAvailable: item.isAvailable,
+      imageUrl: item.imageUrl ?? "",
+    });
     setItemDialog({ mode: "edit", id: item.id });
   };
 
@@ -59,11 +99,11 @@ export default function MenuPage() {
 
   return (
     <div className="space-y-8 pb-10">
-      <div className="relative overflow-hidden rounded-3xl border border-white/5 bg-gradient-to-br from-gray-900/60 to-black/80 p-8 shadow-2xl backdrop-blur-xl">
+      <div className="relative overflow-hidden rounded-3xl border border-white/5 bg-linear-to-br from-gray-900/60 to-black/80 p-8 shadow-2xl backdrop-blur-xl">
         <div className="absolute top-0 right-0 h-48 w-48 rounded-full bg-pink-500/10 blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-500">
+            <h1 className="text-4xl font-black tracking-tight text-transparent bg-clip-text bg-linear-to-r from-white via-gray-200 to-gray-500">
               Menú
             </h1>
             <p className="text-gray-400 mt-2 text-sm font-medium">Gestiona los platillos y categorías de tu restaurante</p>
@@ -140,8 +180,15 @@ export default function MenuPage() {
           .map((item) => (
             <Card key={item.id} className="p-5 border border-white/5 bg-white/5 backdrop-blur-md hover:border-pink-500/20 hover:shadow-[0_0_20px_rgba(236,72,153,0.05)] transition-all duration-300 rounded-2xl flex flex-col justify-between">
               <div>
-                <div className="mb-4 flex aspect-video items-center justify-center rounded-xl bg-white/5 text-gray-400 border border-white/5 font-semibold text-sm">
-                  <span>Sin imagen</span>
+                <div className="mb-4 flex aspect-video items-center justify-center rounded-xl bg-black/40 text-gray-400 border border-white/5 font-semibold text-sm overflow-hidden relative">
+                  {item.imageUrl ? (
+                    <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center gap-1.5 opacity-60">
+                      <img src="/Ra.png" alt="Rabbitty Ra" className="h-10 w-10 object-contain grayscale opacity-40 select-none" />
+                      <span className="text-[10px] text-gray-500 font-mono">Sin foto</span>
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-start justify-between gap-2">
                   <div>
@@ -210,6 +257,49 @@ export default function MenuPage() {
               placeholder="Seleccionar categoría"
             />
           </div>
+
+          {/* Imagen del Producto */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Foto del Producto (URL o Archivo)</label>
+            <div className="flex items-center gap-3">
+              <div className="w-16 h-16 rounded-xl bg-black/60 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
+                {itemForm.imageUrl ? (
+                  <img src={itemForm.imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                ) : (
+                  <img src="/Ra.png" alt="Rabbitty" className="w-8 h-8 object-contain grayscale opacity-30 select-none" />
+                )}
+              </div>
+              <div className="flex-1 space-y-1.5">
+                <Input
+                  label=""
+                  placeholder="https://ejemplo.com/platillo.jpg o pegar enlace"
+                  value={itemForm.imageUrl || ""}
+                  onChange={(e) => setItemForm((f) => ({ ...f, imageUrl: e.target.value }))}
+                />
+                <label className="inline-block text-[11px] text-pink-400 hover:text-pink-300 font-bold cursor-pointer">
+                  <span>Subir imagen desde este dispositivo</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (file) {
+                        try {
+                          const dataUrl = await processImageFile(file);
+                          setItemForm((f) => ({ ...f, imageUrl: dataUrl }));
+                        } catch (err) {
+                          toast.error(err instanceof Error ? err.message : "No se pudo procesar la imagen");
+                        }
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
+
           <label className="flex items-center gap-2.5 text-sm text-gray-300 font-semibold cursor-pointer">
             <input
               type="checkbox"

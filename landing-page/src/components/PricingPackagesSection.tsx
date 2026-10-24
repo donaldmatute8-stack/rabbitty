@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, Sparkles, ArrowRight, X } from 'lucide-react';
 
@@ -231,6 +231,20 @@ export default function PricingPackagesSection({ onSelectPlan }: PricingProps) {
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('yearly');
   const [showComparisonModal, setShowComparisonModal] = useState(false);
 
+  // Close modal on Escape key and prevent background scroll
+  useEffect(() => {
+    if (!showComparisonModal) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowComparisonModal(false);
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showComparisonModal]);
+
   const currentNiche = NICHES_DATA.find((n) => n.id === selectedNicheId) || NICHES_DATA[0];
 
   return (
@@ -417,78 +431,95 @@ export default function PricingPackagesSection({ onSelectPlan }: PricingProps) {
       {/* MODAL COMPARATIVA VS SOFT RESTAURANT */}
       <AnimatePresence>
         {showComparisonModal && (
-          <div className="fixed inset-0 z-120 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+          <div
+            onClick={() => setShowComparisonModal(false)}
+            className="fixed inset-0 z-150 flex items-center justify-center bg-black/90 backdrop-blur-xl p-4 sm:p-6"
+          >
             <motion.div
-              initial={{ scale: 0.92, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.92, opacity: 0 }}
-              className="bg-[#0E0E18] border border-white/15 rounded-3xl max-w-3xl w-full p-6 sm:p-8 relative max-h-[90vh] overflow-y-auto shadow-2xl"
+              initial={{ scale: 0.95, opacity: 0, y: 15 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 15 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[#0D0D16] border border-white/20 rounded-3xl max-w-4xl w-full p-6 sm:p-10 relative max-h-[88vh] overflow-y-auto shadow-[0_0_60px_rgba(0,0,0,0.9)] my-auto"
             >
               <button
-                onClick={() => setShowComparisonModal(false)}
-                className="absolute top-5 right-5 text-white/50 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors border-none bg-transparent cursor-pointer"
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowComparisonModal(false);
+                }}
+                className="absolute top-4 right-4 z-20 text-white/60 hover:text-white p-2.5 rounded-full hover:bg-white/10 transition-all border border-white/10 bg-white/5 cursor-pointer flex items-center justify-center active:scale-90"
+                aria-label="Cerrar modal"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
 
-              <div className="text-center mb-6">
-                <span className="text-xs font-black text-pink-500 uppercase tracking-widest">Análisis de Retorno de Inversión (ROI)</span>
-                <h3 className="text-2xl sm:text-3xl font-black text-white mt-1">Rabbitty vs Software Tradicional</h3>
+              <div className="text-center mb-8 pr-8 sm:pr-0">
+                <span className="text-[11px] font-black text-pink-500 uppercase tracking-widest px-3 py-1 rounded-full bg-pink-500/10 border border-pink-500/20 inline-block mb-2">
+                  Análisis de Retorno de Inversión (ROI)
+                </span>
+                <h3 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
+                  Rabbitty vs Software Tradicional
+                </h3>
+                <p className="text-xs sm:text-sm text-white/50 mt-1 max-w-lg mx-auto">
+                  Por qué las marcas líderes gastronómicas y de ocio están migrando a Rabbitty OS.
+                </p>
               </div>
 
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto rounded-2xl border border-white/10 bg-black/40">
                 <table className="w-full text-left text-xs sm:text-sm border-collapse">
                   <thead>
-                    <tr className="border-b border-white/10 text-white/50 uppercase tracking-wider text-[11px]">
-                      <th className="py-3 px-3">Característica</th>
-                      <th className="py-3 px-3 text-red-400">Soft Restaurant / Micros</th>
-                      <th className="py-3 px-3 text-pink-400 font-black">Rabbitty Ecosystem 🐰</th>
+                    <tr className="border-b border-white/15 bg-white/5 text-white/60 uppercase tracking-wider text-[11px] font-bold">
+                      <th className="py-3.5 px-4">Característica</th>
+                      <th className="py-3.5 px-4 text-red-400">Soft Restaurant / Micros</th>
+                      <th className="py-3.5 px-4 text-pink-400 font-black">Rabbitty Ecosystem 🐰</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/5 text-white/80">
-                    <tr>
-                      <td className="py-3.5 px-3 font-bold">Costo de Licencia / Setup Inicial</td>
-                      <td className="py-3.5 px-3 text-red-400">$25,000 a $45,000 MXN en efectivo</td>
-                      <td className="py-3.5 px-3 text-emerald-400 font-bold">$0 MXN (Iniciación en BUNZ)</td>
+                  <tbody className="divide-y divide-white/10 text-white/85">
+                    <tr className="hover:bg-white/3 transition-colors">
+                      <td className="py-3.5 px-4 font-bold text-white">Costo de Licencia / Setup Inicial</td>
+                      <td className="py-3.5 px-4 text-red-400 font-medium">$25,000 a $45,000 MXN en efectivo</td>
+                      <td className="py-3.5 px-4 text-emerald-400 font-bold">$0 MXN (Iniciación en BUNZ)</td>
                     </tr>
-                    <tr>
-                      <td className="py-3.5 px-3 font-bold">Cuota Mensual / Soporte</td>
-                      <td className="py-3.5 px-3 text-red-400">$1,200 a $2,500 MXN / mes</td>
-                      <td className="py-3.5 px-3 text-emerald-400 font-bold">5,000 BUNZ (Costo absorbido en consumo)</td>
+                    <tr className="hover:bg-white/3 transition-colors">
+                      <td className="py-3.5 px-4 font-bold text-white">Cuota Mensual / Soporte</td>
+                      <td className="py-3.5 px-4 text-red-400 font-medium">$1,200 a $2,500 MXN / mes</td>
+                      <td className="py-3.5 px-4 text-emerald-400 font-bold">5,000 BUNZ (Costo absorbido en consumo)</td>
                     </tr>
-                    <tr>
-                      <td className="py-3.5 px-3 font-bold">Atracción de Clientes Nuevos</td>
-                      <td className="py-3.5 px-3 text-white/40">❌ Cero clientes. Solo cobran.</td>
-                      <td className="py-3.5 px-3 text-emerald-400 font-bold">✅ Motor activo: Mapa Freehands y Rabbitters</td>
+                    <tr className="hover:bg-white/3 transition-colors">
+                      <td className="py-3.5 px-4 font-bold text-white">Atracción de Clientes Nuevos</td>
+                      <td className="py-3.5 px-4 text-white/40">❌ Cero clientes. Solo cobran.</td>
+                      <td className="py-3.5 px-4 text-emerald-400 font-bold">✅ Motor activo: Mapa Freehands y Rabbitters</td>
                     </tr>
-                    <tr>
-                      <td className="py-3.5 px-3 font-bold">Comandas de Voz IA (Whisper)</td>
-                      <td className="py-3.5 px-3 text-white/40">❌ No existe</td>
-                      <td className="py-3.5 px-3 text-emerald-400 font-bold">✅ Dicta órdenes directo en la mesa</td>
+                    <tr className="hover:bg-white/3 transition-colors">
+                      <td className="py-3.5 px-4 font-bold text-white">Comandas de Voz IA (Whisper)</td>
+                      <td className="py-3.5 px-4 text-white/40">❌ No existe</td>
+                      <td className="py-3.5 px-4 text-emerald-400 font-bold">✅ Dicta órdenes directo en la mesa</td>
                     </tr>
-                    <tr>
-                      <td className="py-3.5 px-3 font-bold">Kiosko Autoservicio & QR BYOD</td>
-                      <td className="py-3.5 px-3 text-white/40">❌ Módulos extras caros ($15,000+)</td>
-                      <td className="py-3.5 px-3 text-emerald-400 font-bold">✅ Incluido nativamente sin hardware propietario</td>
+                    <tr className="hover:bg-white/3 transition-colors">
+                      <td className="py-3.5 px-4 font-bold text-white">Kiosko Autoservicio & QR BYOD</td>
+                      <td className="py-3.5 px-4 text-white/40">❌ Módulos extras caros ($15,000+)</td>
+                      <td className="py-3.5 px-4 text-emerald-400 font-bold">✅ Incluido nativamente sin hardware propietario</td>
                     </tr>
-                    <tr>
-                      <td className="py-3.5 px-3 font-bold">Landing Page & SEO para IAs (ChatGPT/Gemini)</td>
-                      <td className="py-3.5 px-3 text-white/40">❌ No incluye. Requiere pagar agencia o Wix ($3,000+/mes)</td>
-                      <td className="py-3.5 px-3 text-emerald-400 font-bold">✅ Incluida con subdominio, Schema.org y GEO Search</td>
+                    <tr className="hover:bg-white/3 transition-colors">
+                      <td className="py-3.5 px-4 font-bold text-white">Landing Page & SEO para IAs (ChatGPT/Gemini)</td>
+                      <td className="py-3.5 px-4 text-white/40">❌ No incluye. Requiere pagar agencia o Wix ($3,000+/mes)</td>
+                      <td className="py-3.5 px-4 text-emerald-400 font-bold">✅ Incluida con subdominio, Schema.org y GEO Search</td>
                     </tr>
-                    <tr>
-                      <td className="py-3.5 px-3 font-bold">Hardware Requerido</td>
-                      <td className="py-3.5 px-3 text-white/40">Torres Windows viejas y monitores pesados</td>
-                      <td className="py-3.5 px-3 text-emerald-400 font-bold">Cualquier iPad, Tablet Android, Mac o PC</td>
+                    <tr className="hover:bg-white/3 transition-colors">
+                      <td className="py-3.5 px-4 font-bold text-white">Hardware Requerido</td>
+                      <td className="py-3.5 px-4 text-white/40">Torres Windows viejas y monitores pesados</td>
+                      <td className="py-3.5 px-4 text-emerald-400 font-bold">Cualquier iPad, Tablet Android, Mac o PC</td>
                     </tr>
                   </tbody>
                 </table>
               </div>
 
-              <div className="mt-8 text-center">
+              <div className="mt-8 text-center flex flex-col sm:flex-row items-center justify-center gap-3">
                 <button
+                  type="button"
                   onClick={() => setShowComparisonModal(false)}
-                  className="px-8 py-3 rounded-full bg-pink-600 hover:bg-pink-500 text-white font-black text-xs uppercase tracking-wider transition-colors cursor-pointer border-none"
+                  className="w-full sm:w-auto px-8 py-3.5 rounded-full bg-linear-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-black text-xs uppercase tracking-wider transition-all shadow-lg shadow-pink-500/25 cursor-pointer border-none active:scale-95"
                 >
                   Cerrar y Elegir mi Paquete
                 </button>
