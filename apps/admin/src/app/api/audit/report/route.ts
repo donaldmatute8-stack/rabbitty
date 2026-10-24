@@ -59,6 +59,7 @@ export async function GET(req: NextRequest) {
           b.address as "branchAddress",
           r.id as "restaurantId",
           r.name as "restaurantName",
+          COALESCE(r."logoUrl", ob."logoUrl") as "logoUrl",
           ob.id as "businessId",
           ob.name as "businessName",
           ob.address as "businessAddress",
@@ -76,6 +77,7 @@ export async function GET(req: NextRequest) {
         SELECT 
           r.id as "restaurantId",
           r.name as "restaurantName",
+          COALESCE(r."logoUrl", ob."logoUrl") as "logoUrl",
           ob.id as "businessId",
           ob.name as "businessName",
           ob.address as "businessAddress",

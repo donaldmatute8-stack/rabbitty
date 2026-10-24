@@ -616,46 +616,98 @@ export default function LandingPage() {
       </section>
 
       {/* PHASE 11-12: POWER FEATURES */}
-      <section className="relative z-10 py-32 px-6 bg-linear-to-b from-transparent via-blue-950/10 to-transparent">
+      <section className="relative z-10 py-32 px-6 bg-linear-to-b from-transparent via-blue-950/15 to-transparent">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <div className="text-primary font-bold tracking-widest text-sm uppercase mb-3">V2.0 Power Features</div>
+          <div className="text-center mb-12">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-pink-500/10 border border-pink-500/20 text-pink-400 text-xs font-black tracking-widest uppercase mb-4">
+              <Sparkles size={14} /> V2.0 Power Features
+            </div>
             <h2 className="text-4xl md:text-5xl font-black tracking-tight leading-tight">
               Tu negocio, <span className="text-gradient">potenciado.</span>
             </h2>
-            <p className="text-white/60 text-lg mt-4 max-w-2xl mx-auto">
-              Herramientas que transforman la forma de administrar y hacer crecer tu negocio.
+            <p className="text-white/60 text-lg mt-3 max-w-2xl mx-auto">
+              La suite operativa, sensorial y de inteligencia más avanzada para marcas independientes.
             </p>
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[
-              { icon: Utensils, title: 'Rabbitty Digital Branch', desc: 'Convierte tu perfil en una sucursal digital interactiva: menú estructurado, pedidos para recoger o en mesa por QR y personalización antes de llegar.', color: 'text-pink-400' },
-              { icon: Globe, title: 'Landing Pages Automáticas & SEO LLM', desc: 'Tu negocio con subdominio propio (ej: tunegocio.rabbitty.me), microdatos Schema.org estructurados y optimización GEO para motores de IA como ChatGPT y Gemini.', color: 'text-emerald-400' },
-              { icon: Sparkles, title: 'Rabbitty Mood & Atmósfera', desc: 'Descubre qué experiencias prefieren tus clientes y adapta el ambiente con información agregada (Calma, Enfoque, Energía). Sugerencias acústicas y maridajes para fidelizar.', color: 'text-amber-400' },
-              { icon: Activity, title: 'Proof of Atmosphere (PoA)', desc: 'Mide empíricamente el impacto de tu ambiente: correlaciona intervenciones acústicas con satisfacción, ticket promedio y retención de clientes.', color: 'text-emerald-400' },
-              { icon: Compass, title: 'Rabbitty Vibe Passport', desc: 'Rutas comunitarias entre comercios. Los Rabbitters descubren tu local completando pasaportes temáticos de bienestar y experiencia en la ciudad.', color: 'text-cyan-400' },
-              { icon: Headphones, title: 'The Collective Sonic Room', desc: 'Identidad sonora inteligente por franjas horarias. Sintoniza tu espacio con curadurías musicales autorizadas según la vibra predominante de la sala.', color: 'text-violet-400' },
-              { icon: Building2, title: 'Rabbitty Vibe Graph', desc: 'Inteligencia de red: descubre qué experiencias generan mayor recurrencia y crea colaboraciones de alto impacto con otros afiliados de tu zona.', color: 'text-blue-400' },
-              { icon: Building2, title: 'Eventos & Catering', desc: 'Gestiona eventos con menús personalizados, depósitos y seguimiento de estado.', color: 'text-pink-400' },
-              { icon: DollarSign, title: 'Precios Dinámicos IA', desc: 'Reglas automáticas de precio por hora, día y demanda. Sin perder el control.', color: 'text-amber-400' },
-              { icon: Monitor, title: 'Menú Digital TV', desc: 'Convierte cualquier pantalla HDMI en un menú digital actualizado en tiempo real.', color: 'text-emerald-400' },
-              { icon: Store, title: 'Dashboard Multi-Sucursal', desc: 'Todas tus sucursales, un solo panel. KPIs consolidados en tiempo real.', color: 'text-blue-400' },
-              { icon: Award, title: 'Programa de Lealtad', desc: 'Niveles, Bunz y gamificación. Tus clientes vuelven porque les encanta.', color: 'text-purple-400' },
-              { icon: Gift, title: 'Referidos Inteligentes', desc: 'Tus clientes traen más clientes. Tracking completo y recompensas automáticas.', color: 'text-rose-400' },
-              { icon: Megaphone, title: 'Campañas Segmentadas', desc: 'Segmenta por comportamiento (VIP, recurrente, riesgo de fuga) y envía notificaciones.', color: 'text-orange-400' },
-              { icon: Cake, title: 'Cumpleaños Automáticos', desc: 'Recompensas de cumpleaños automáticas. Tus clientes se sienten especiales.', color: 'text-pink-400' },
-              { icon: QrCode, title: 'Pagos QR en Mesa', desc: 'Paga, divide cuenta y agrega propina desde el celular. Sin apps ni fichas.', color: 'text-cyan-400' },
-              { icon: BookOpen, title: 'Academy Integrada', desc: 'Centro de aprendizaje con guías interactivas para cada funcionalidad del sistema.', color: 'text-indigo-400' },
-            ].map((f, i) => (
-              <div key={i} className="group rounded-3xl border border-white/5 bg-white/3 p-6 backdrop-blur-sm hover:border-white/10 hover:bg-white/6 transition-all duration-500">
-                <div className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 ${f.color} mb-4 group-hover:scale-110 transition-transform`}>
-                  <f.icon size={24} />
-                </div>
-                <h3 className="text-lg font-bold text-white mb-2">{f.title}</h3>
-                <p className="text-sm text-white/50 leading-relaxed">{f.desc}</p>
+          {/* Categorized Power Feature Grid */}
+          <div className="space-y-12">
+            {/* Category 1: Operación & Punto de Venta */}
+            <div>
+              <div className="flex items-center gap-3 mb-6">
+                <span className="h-2 w-2 rounded-full bg-pink-500" />
+                <h3 className="text-xs font-black uppercase tracking-widest text-pink-400 m-0">Operación & Punto de Venta (POS / KDS)</h3>
               </div>
-            ))}
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {[
+                  { icon: Utensils, title: 'Rabbitty Digital Branch', desc: 'Convierte tu perfil en una sucursal digital interactiva: menú estructurado, pedidos para recoger o en mesa por QR y personalización antes de llegar.', color: 'text-pink-400' },
+                  { icon: QrCode, title: 'Pagos QR en Mesa (BYOD)', desc: 'Paga, divide cuenta y agrega propina desde el celular del comensal. Sin apps pesadas ni fichas plásticas.', color: 'text-cyan-400' },
+                  { icon: Store, title: 'Dashboard Multi-Sucursal', desc: 'Todas tus sucursales en un solo panel ejecutivo con KPIs consolidados y auditoría en tiempo real.', color: 'text-blue-400' },
+                  { icon: Monitor, title: 'Menú Digital TV & Kiosko', desc: 'Convierte cualquier pantalla HDMI o iPad en un menú dinámico o kiosko autoservicio actualizado al segundo.', color: 'text-emerald-400' },
+                  { icon: DollarSign, title: 'Precios Dinámicos IA', desc: 'Reglas automáticas de cashback y multiplicadores por hora, día y afluencia sin perder margen.', color: 'text-amber-400' },
+                  { icon: Building2, title: 'Eventos & Catering', desc: 'Gestiona reservaciones corporativas con menús cotizados, depósitos y seguimiento de comandas.', color: 'text-purple-400' },
+                ].map((f, i) => (
+                  <div key={i} className="group rounded-3xl border border-white/5 bg-white/2 p-6 backdrop-blur-md hover:border-pink-500/30 hover:bg-white/5 transition-all duration-300">
+                    <div className={`flex h-11 w-11 items-center justify-center rounded-2xl bg-white/5 ${f.color} mb-4 group-hover:scale-110 transition-transform`}>
+                      <f.icon size={22} />
+                    </div>
+                    <h4 className="text-base font-bold text-white mb-2">{f.title}</h4>
+                    <p className="text-xs text-white/50 leading-relaxed m-0">{f.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Category 2: Fidelización, Crecimiento & SEO LLM */}
+            <div>
+              <div className="flex items-center gap-3 mb-6">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                <h3 className="text-xs font-black uppercase tracking-widest text-emerald-400 m-0">Fidelización, Crecimiento & SEO de Nueva Generación</h3>
+              </div>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {[
+                  { icon: Globe, title: 'Landing Pages & SEO LLM', desc: 'Subdominio propio (tunegocio.rabbitty.me), microdatos Schema.org estructurados y optimización GEO para ChatGPT y Gemini.', color: 'text-emerald-400' },
+                  { icon: Award, title: 'Programa de Lealtad & Niveles', desc: 'Niveles, Bunz y gamificación inmutable. Tus clientes vuelven con incentivos reales que no sangran tu flujo.', color: 'text-purple-400' },
+                  { icon: Gift, title: 'Referidos Inteligentes', desc: 'Tus comensales invitan a sus amigos en un clic por Telegram. Tracking completo y bonificaciones automáticas.', color: 'text-rose-400' },
+                  { icon: Megaphone, title: 'Campañas Segmentadas (HITL)', desc: 'Detecta clientes inactivos o VIPs y activa ofertas flash geocercadas con aprobación humana de un clic.', color: 'text-orange-400' },
+                  { icon: Cake, title: 'Cumpleaños Automáticos', desc: 'Incentivos de aniversario y cumpleaños automáticos para asegurar la mesa grande del festejo.', color: 'text-pink-400' },
+                  { icon: BookOpen, title: 'Academy & Onboarding 1-Clic', desc: 'Centro de formación interactivo para capacitar cajeros, baristas y gerentes en minutos.', color: 'text-indigo-400' },
+                ].map((f, i) => (
+                  <div key={i} className="group rounded-3xl border border-white/5 bg-white/2 p-6 backdrop-blur-md hover:border-emerald-500/30 hover:bg-white/5 transition-all duration-300">
+                    <div className={`flex h-11 w-11 items-center justify-center rounded-2xl bg-white/5 ${f.color} mb-4 group-hover:scale-110 transition-transform`}>
+                      <f.icon size={22} />
+                    </div>
+                    <h4 className="text-base font-bold text-white mb-2">{f.title}</h4>
+                    <p className="text-xs text-white/50 leading-relaxed m-0">{f.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Category 3: Atmósfera, Música & Red Comunitaria */}
+            <div>
+              <div className="flex items-center gap-3 mb-6">
+                <span className="h-2 w-2 rounded-full bg-cyan-500" />
+                <h3 className="text-xs font-black uppercase tracking-widest text-cyan-400 m-0">Atmósfera, Identidad Sonora & Red Comunitaria</h3>
+              </div>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {[
+                  { icon: Sparkles, title: 'Rabbitty Mood & Telemetría', desc: 'Descubre qué estado de ánimo buscan tus clientes (Calma, Enfoque, Fiesta) y sincroniza el servicio en tiempo real.', color: 'text-amber-400' },
+                  { icon: Activity, title: 'Proof of Atmosphere (PoA)', desc: 'Mide empíricamente el impacto del ambiente: correlaciona intervenciones acústicas con ticket promedio y retención.', color: 'text-emerald-400' },
+                  { icon: Headphones, title: 'The Collective Sonic Room', desc: 'Curadurías musicales autorizadas por franja horaria. Sintoniza tu sala con la atmósfera ideal de tu audiencia.', color: 'text-violet-400' },
+                  { icon: Compass, title: 'Rabbitty Vibe Passport', desc: 'Rutas comunitarias entre comercios. Los Rabbitters descubren tu local completando pasaportes temáticos en la ciudad.', color: 'text-cyan-400' },
+                  { icon: Building2, title: 'Rabbitty Vibe Graph', desc: 'Inteligencia de red descentralizada: identifica colaboraciones cruzadas de alto impacto con negocios de tu zona.', color: 'text-blue-400' },
+                ].map((f, i) => (
+                  <div key={i} className="group rounded-3xl border border-white/5 bg-white/2 p-6 backdrop-blur-md hover:border-cyan-500/30 hover:bg-white/5 transition-all duration-300">
+                    <div className={`flex h-11 w-11 items-center justify-center rounded-2xl bg-white/5 ${f.color} mb-4 group-hover:scale-110 transition-transform`}>
+                      <f.icon size={22} />
+                    </div>
+                    <h4 className="text-base font-bold text-white mb-2">{f.title}</h4>
+                    <p className="text-xs text-white/50 leading-relaxed m-0">{f.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="text-center mt-12">
