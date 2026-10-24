@@ -78,12 +78,11 @@ export default function ReportsPage() {
     document.body.removeChild(link);
   };
 
-  const totalRevenue = salesTrends?.reduce((sum: number, item: any) => sum + (Number(item.totalSales) || 0), 0) || 0;
-  const totalIVA = salesTrends?.reduce((sum: number, item: any) => sum + (Number(item.taxTotal) || 0), 0) || 0;
-  const totalBase = salesTrends?.reduce((sum: number, item: any) => sum + (Number(item.baseTotal) || 0), 0) || 0;
-  // Defensive: recalculate base from total if stored subtotals are zero (legacy orders)
-  const displayBase = totalBase > 0 ? totalBase : Math.round((totalRevenue / 1.16) * 100) / 100;
-  const displayIVA = totalIVA > 0 ? totalIVA : Math.round((totalRevenue - displayBase) * 100) / 100;
+  const totalRevenue = Math.round((salesTrends?.reduce((sum: number, item: any) => sum + (Number(item.totalSales) || 0), 0) || 0) * 100) / 100;
+  const rawTotalBase = Math.round((salesTrends?.reduce((sum: number, item: any) => sum + (Number(item.baseTotal) || 0), 0) || 0) * 100) / 100;
+  // Canónico: Si totalBase viene en la base de datos se respeta, si no, se deriva con exactitud: base + IVA === total
+  const displayBase = rawTotalBase > 0 ? rawTotalBase : Math.round((totalRevenue / 1.16) * 100) / 100;
+  const displayIVA = Math.round((totalRevenue - displayBase) * 100) / 100;
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {

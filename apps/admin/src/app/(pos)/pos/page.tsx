@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { Button, Dialog, Input, toast, cn, useWakeLock } from "@rabbitty/ui";
-import { Clock, Wifi, Search, User, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, Table2, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, FileText, X } from "lucide-react";
+import { Clock, Wifi, Search, User, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, Table2, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, FileText, X, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { TicketTemplate, TicketData } from "../../../components/TicketTemplate";
@@ -311,7 +311,15 @@ export default function PosPage() {
       if (existing) {
         return prev.map((i) => (i.menuItemId === item.id ? { ...i, quantity: i.quantity + 1 } : i));
       }
-      return [...prev, { id: Math.random().toString(36).substr(2, 9), menuItemId: item.id, name: item.name, price: item.price, quantity: 1 }];
+      return [...prev, { 
+        id: Math.random().toString(36).substr(2, 9), 
+        menuItemId: item.id, 
+        name: item.name, 
+        price: item.price, 
+        quantity: 1,
+        imageUrl: item.imageUrl || null,
+        categoryId: item.categoryId || null
+      }];
     });
   };
 
@@ -327,8 +335,8 @@ export default function PosPage() {
 
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const taxRate = ticketContext?.restaurant?.taxRate ?? 0.16;
-  const subtotal = total / (1 + taxRate);
-  const tax = total - subtotal;
+  const subtotal = Math.round((total / (1 + taxRate)) * 100) / 100;
+  const tax = Math.round((total - subtotal) * 100) / 100;
 
   const finalizeCheckout = async (realOrderNumber: string, method: string) => {
     const rest = ticketContext?.restaurant;
@@ -692,22 +700,22 @@ export default function PosPage() {
                   {item.imageUrl ? (
                     <div className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105" style={{ backgroundImage: `url(${item.imageUrl})` }} />
                   ) : (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-radial from-gray-800 to-black p-4">
-                      <img src="/Ra.png" alt="Rabbitty" className="h-14 w-14 lg:h-16 lg:w-16 object-contain grayscale opacity-35 select-none group-hover:scale-105 transition-transform" />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-radial from-gray-850 via-gray-900 to-black p-4">
+                      <img src="/Ra.png" alt="Rabbitty" className="h-16 w-16 lg:h-20 lg:w-20 object-contain grayscale opacity-60 select-none group-hover:opacity-85 group-hover:scale-105 transition-all" />
                     </div>
                   )}
                   <div className="absolute inset-0 bg-linear-to-t from-gray-950 via-transparent to-transparent opacity-85" />
                   
-                  {/* Subtle centered '+' in fade mode */}
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="flex h-8 w-8 lg:h-11 lg:w-11 items-center justify-center rounded-full bg-black/50 backdrop-blur-md border border-white/15 text-white/40 group-hover:text-white group-hover:bg-cyan-500/30 group-hover:border-cyan-500/50 group-hover:scale-110 transition-all duration-300 shadow-2xl">
-                      <Plus className="h-4 w-4 lg:h-5 lg:w-5" />
-                    </div>
-                  </div>
-
                   {/* Price Tag Badge */}
                   <div className="absolute top-2 right-2 lg:top-3 lg:right-3 rounded-full bg-black/75 backdrop-blur-md px-2 lg:px-3 py-1 lg:py-1.5 border border-white/15 shadow-xl">
                     <span className="text-xs lg:text-sm font-black text-emerald-400">${item.price.toFixed(2)}</span>
+                  </div>
+
+                  {/* Add action indicator: bottom right corner */}
+                  <div className="absolute bottom-2 right-2 lg:bottom-2.5 lg:right-2.5 flex items-center justify-center">
+                    <div className="flex h-7 w-7 lg:h-8 lg:w-8 items-center justify-center rounded-xl bg-black/70 backdrop-blur-md border border-white/20 text-gray-400 group-hover:text-black group-hover:bg-cyan-400 group-hover:border-cyan-300 group-hover:translate-x-0.5 transition-all duration-200 shadow-lg">
+                      <ArrowRight className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
+                    </div>
                   </div>
                 </div>
                 
@@ -722,9 +730,10 @@ export default function PosPage() {
         </main>
 
         {/* Right: Cart / Ticket Panel */}
-        <aside className="w-75 md:w-85 lg:w-105 shrink-0 bg-gray-950/80 backdrop-blur-3xl border-l border-white/10 flex flex-col z-20 shadow-[-20px_0_50px_rgba(0,0,0,0.5)]">
+        {/* Right: Cart / Ticket Panel (Optimized 2-Column Visual Blocks) */}
+        <aside className="w-80 md:w-96 lg:w-115 2xl:w-125 shrink-0 bg-gray-950/90 backdrop-blur-3xl border-l border-white/10 flex flex-col z-20 shadow-[-20px_0_50px_rgba(0,0,0,0.5)]">
           {/* Cart Header with Table Selector & Order Type */}
-          <div className="flex flex-col border-b border-white/10 p-4 bg-black/40 gap-3">
+          <div className="flex flex-col border-b border-white/10 p-3.5 lg:p-4 bg-black/40 gap-2.5 lg:gap-3">
             <div className="flex items-center justify-between">
               {/* Table Selector Button */}
               <button
@@ -764,16 +773,23 @@ export default function PosPage() {
                 </div>
               </button>
 
-              <button 
-                onClick={() => {
-                  if (cart.length > 0) setConfirmClearCart(true);
-                }} 
-                disabled={cart.length === 0}
-                title="Vaciar orden actual"
-                className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white border border-red-500/20 transition-all active:scale-95 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                {cart.length > 0 && (
+                  <span className="hidden sm:inline-flex px-2.5 py-1 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-[11px] font-black text-cyan-300">
+                    {cart.reduce((s, i) => s + i.quantity, 0)} uds
+                  </span>
+                )}
+                <button 
+                  onClick={() => {
+                    if (cart.length > 0) setConfirmClearCart(true);
+                  }} 
+                  disabled={cart.length === 0}
+                  title="Vaciar orden actual"
+                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white border border-red-500/20 transition-all active:scale-95 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             </div>
 
             {/* Order Type Segmented Control (4 Options) */}
@@ -785,7 +801,7 @@ export default function PosPage() {
                   setSelectedTableId(null);
                 }}
                 className={cn(
-                  "flex items-center justify-center gap-1 min-h-11 py-2 rounded-lg text-xs font-black transition-all cursor-pointer",
+                  "flex items-center justify-center gap-1 min-h-9 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer",
                   orderType === "COUNTER"
                     ? "bg-amber-500 text-gray-950 shadow-md"
                     : "text-gray-400 hover:text-white hover:bg-white/5"
@@ -803,7 +819,7 @@ export default function PosPage() {
                   }
                 }}
                 className={cn(
-                  "flex items-center justify-center gap-1 min-h-11 py-2 rounded-lg text-xs font-black transition-all cursor-pointer",
+                  "flex items-center justify-center gap-1 min-h-9 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer",
                   orderType === "DINE_IN"
                     ? "bg-cyan-500 text-gray-950 shadow-md"
                     : "text-gray-400 hover:text-white hover:bg-white/5"
@@ -819,7 +835,7 @@ export default function PosPage() {
                   setSelectedTableId(null);
                 }}
                 className={cn(
-                  "flex items-center justify-center gap-1 min-h-11 py-2 rounded-lg text-xs font-black transition-all cursor-pointer",
+                  "flex items-center justify-center gap-1 min-h-9 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer",
                   orderType === "TAKEAWAY"
                     ? "bg-purple-500 text-white shadow-md"
                     : "text-gray-400 hover:text-white hover:bg-white/5"
@@ -835,7 +851,7 @@ export default function PosPage() {
                   setSelectedTableId(null);
                 }}
                 className={cn(
-                  "flex items-center justify-center gap-1 min-h-11 py-2 rounded-lg text-xs font-black transition-all cursor-pointer",
+                  "flex items-center justify-center gap-1 min-h-9 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer",
                   orderType === "DELIVERY"
                     ? "bg-emerald-500 text-gray-950 shadow-md"
                     : "text-gray-400 hover:text-white hover:bg-white/5"
@@ -846,67 +862,84 @@ export default function PosPage() {
             </div>
           </div>
 
-          {/* Cart Items Area */}
-          <div className="flex-1 overflow-y-auto p-2 lg:p-4 space-y-2 lg:space-y-3 custom-scrollbar">
-            {cart.map((item) => (
-              <div key={item.id} className="group flex items-center justify-between rounded-2xl lg:rounded-3xl bg-gray-900 border border-white/5 p-3 lg:p-4 shadow-lg transition-all hover:border-white/20 gap-2 lg:gap-3">
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-[13px] lg:text-base font-black text-white leading-tight truncate">{item.name}</h4>
-                  <div className="mt-0.5 text-[13px] lg:text-base font-black text-emerald-400">${item.price.toFixed(2)}</div>
-                  {item.quantity > 1 && (
-                    <div className="text-[10px] lg:text-xs text-gray-500 font-bold mt-0.5">Subtotal: ${(item.price * item.quantity).toFixed(2)}</div>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-1.5 lg:gap-2">
-                  {/* Dedicated Delete Button */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setVoidingItem(item);
-                      setVoidReason("");
-                      setManagerPin("");
-                    }}
-                    title="Eliminar artículo (Requiere PIN)"
-                    className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white border border-red-500/20 transition-all active:scale-90 cursor-pointer"
+          {/* Cart Items Area: 2-Column Compact Visual Blocks */}
+          <div className="flex-1 overflow-y-auto p-2.5 lg:p-3 custom-scrollbar">
+            {cart.length > 0 ? (
+              <div className="grid grid-cols-2 gap-2">
+                {cart.map((item) => (
+                  <div 
+                    key={item.id} 
+                    className="group relative flex flex-col justify-between rounded-2xl bg-gray-900/90 border border-white/10 p-2.5 shadow-md hover:border-cyan-500/40 hover:bg-gray-850 transition-all"
                   >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                    {/* Header: Photo Thumbnail + Name + Trash */}
+                    <div className="flex items-start gap-2">
+                      <div className="h-10 w-10 shrink-0 rounded-xl overflow-hidden bg-black/60 border border-white/10 flex items-center justify-center">
+                        {item.imageUrl ? (
+                          <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
+                        ) : (
+                          <img src="/Ra.png" alt="Ra" className="h-6 w-6 object-contain grayscale opacity-40" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0 pr-1">
+                        <h4 className="text-xs font-black text-white leading-tight line-clamp-2" title={item.name}>
+                          {item.name}
+                        </h4>
+                        <div className="text-[11px] font-black text-emerald-400 mt-0.5">
+                          ${(item.price * item.quantity).toFixed(2)}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVoidingItem(item);
+                          setVoidReason("");
+                          setManagerPin("");
+                        }}
+                        title="Eliminar artículo (Requiere PIN)"
+                        className="text-gray-500 hover:text-red-400 p-1 rounded-lg hover:bg-red-500/10 transition-colors cursor-pointer shrink-0"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
 
-                  {/* Stepper */}
-                  <div className="flex items-center rounded-xl bg-black border border-white/10 p-1 shrink-0 shadow-inner">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setVoidingItem({ ...item, isDecrease: item.quantity > 1 });
-                        setVoidReason("");
-                        setManagerPin("");
-                      }}
-                      title="Disminuir / Eliminar (Requiere PIN)"
-                      className="flex h-11 w-11 items-center justify-center rounded-lg bg-white/5 text-gray-400 hover:bg-red-500 hover:text-white transition-all active:scale-90 cursor-pointer"
-                    >
-                      <Minus className="h-4 w-4" />
-                    </button>
-                    <span className="px-3 text-base font-black text-white">{item.quantity}</span>
-                    <button
-                      type="button"
-                      onClick={() => updateQuantity(item.id, 1)}
-                      className="flex h-11 w-11 items-center justify-center rounded-lg bg-white/5 text-white hover:bg-cyan-500 hover:text-black transition-all active:scale-90 cursor-pointer"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
+                    {/* Bottom: Stepper Controls */}
+                    <div className="mt-2.5 pt-2 border-t border-white/5 flex items-center justify-between">
+                      <span className="text-[10px] text-gray-500 font-bold">
+                        ${item.price.toFixed(2)} c/u
+                      </span>
+                      <div className="flex items-center rounded-lg bg-black/80 border border-white/10 p-0.5 shadow-inner">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setVoidingItem({ ...item, isDecrease: item.quantity > 1 });
+                            setVoidReason("");
+                            setManagerPin("");
+                          }}
+                          title="Disminuir (Requiere PIN)"
+                          className="flex h-7 w-7 items-center justify-center rounded-md bg-white/5 text-gray-400 hover:bg-red-500/30 hover:text-red-300 transition-all active:scale-90 cursor-pointer"
+                        >
+                          <Minus className="h-3 w-3" />
+                        </button>
+                        <span className="w-6 text-center text-xs font-black text-white">{item.quantity}</span>
+                        <button
+                          type="button"
+                          onClick={() => updateQuantity(item.id, 1)}
+                          className="flex h-7 w-7 items-center justify-center rounded-md bg-white/5 text-white hover:bg-cyan-500 hover:text-black transition-all active:scale-90 cursor-pointer"
+                        >
+                          <Plus className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                ))}
               </div>
-            ))}
-            
-            {cart.length === 0 && (
-              <div className="flex h-full flex-col items-center justify-center text-center px-8 opacity-50">
-                <div className="h-24 w-24 rounded-full border-4 border-dashed border-gray-700 flex items-center justify-center mb-4">
-                  <CheckCircle2 className="h-10 w-10 text-gray-600" />
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center text-center px-8 opacity-50 py-16">
+                <div className="h-20 w-20 rounded-full border-4 border-dashed border-gray-700 flex items-center justify-center mb-4">
+                  <CheckCircle2 className="h-8 w-8 text-gray-600" />
                 </div>
-                <h3 className="text-2xl font-black text-gray-500 mb-2">Orden Vacía</h3>
-                <p className="text-sm font-medium text-gray-600">Toca cualquier platillo para agregarlo a la cuenta.</p>
+                <h3 className="text-xl font-black text-gray-400 mb-1">Orden Vacía</h3>
+                <p className="text-xs font-medium text-gray-500">Toca cualquier platillo del menú para agregarlo.</p>
               </div>
             )}
           </div>

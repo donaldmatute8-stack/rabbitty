@@ -32,6 +32,7 @@ export default function CampaignsPage() {
   const sentCampaigns = campaigns?.filter((c) => c.status === "SENT").length ?? 0;
 
   const [activeTab, setActiveTab] = useState<"growth" | "proximity" | "classic">("growth");
+  const { data: branches } = trpc.admin.getBranches.useQuery();
   const { data: growthData } = trpc.campaigns.growthSignals.useQuery();
   const { data: affiliateCampaignsList } = trpc.campaigns.affiliateList.useQuery();
   const manageAffiliate = trpc.campaigns.manageAffiliateCampaign.useMutation({
@@ -307,19 +308,37 @@ export default function CampaignsPage() {
             <h3 className="text-base font-bold text-white mb-4 flex items-center gap-2">
               <span>📍</span> Sucursales Sincronizadas al Radar
             </h3>
-            <div className="p-4 rounded-2xl border border-white/5 bg-white/3 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-bold text-white m-0">626 Café • Bucerías Centro</p>
-                <p className="text-xs text-gray-400 m-0 mt-0.5">Lat: 20.7533 | Lng: -105.3345 • Nayarit, México</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                  Bunz'in Activo
-                </span>
-                <span className="px-3 py-1 rounded-full text-xs font-bold bg-pink-500/15 text-pink-400 border border-pink-500/30">
-                  Cashback 25%
-                </span>
-              </div>
+            <div className="space-y-3">
+              {branches && branches.length > 0 ? (
+                branches.map((b) => (
+                  <div key={b.id} className="p-4 rounded-2xl border border-white/5 bg-white/3 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-bold text-white m-0">{b.name}</p>
+                      <p className="text-xs text-gray-400 m-0 mt-0.5">{b.address || "Dirección operativa registrada"}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                        Bunz'in Activo
+                      </span>
+                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-pink-500/15 text-pink-400 border border-pink-500/30">
+                        Radar En Vivo
+                      </span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="p-4 rounded-2xl border border-white/5 bg-white/3 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-bold text-white m-0">Sucursal Principal</p>
+                    <p className="text-xs text-gray-400 m-0 mt-0.5">Ubicación configurada</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                      Bunz'in Activo
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </Card>
         </div>

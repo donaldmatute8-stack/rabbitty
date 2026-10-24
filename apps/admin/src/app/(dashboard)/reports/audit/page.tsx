@@ -77,6 +77,12 @@ export default function AuditReportPage() {
   const toParam = searchParams.get("to") || "";
 
   const [loading, setLoading] = useState(true);
+  const [logoError, setLogoError] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
   const [report, setReport] = useState<{
     business: BusinessMeta | null;
     shift?: Record<string, unknown> | null;
@@ -127,7 +133,7 @@ export default function AuditReportPage() {
     URL.revokeObjectURL(url);
   };
 
-  if (loading) {
+  if (!isMounted || loading) {
     return (
       <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-8">
         <div className="w-12 h-12 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mb-4" />
@@ -262,21 +268,26 @@ export default function AuditReportPage() {
         {/* Document Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-8 border-b border-white/10 print:border-gray-200 gap-6">
           <div className="flex items-center gap-4">
-            {business?.logoUrl ? (
+            {business?.logoUrl && !logoError ? (
               <img
-                src={business.logoUrl}
+                src={business.logoUrl.startsWith("/logos/") ? business.logoUrl : (business.logoUrl.startsWith("/") ? business.logoUrl : `/${business.logoUrl}`)}
                 alt={business.restaurantName || business.businessName || "Tenant Logo"}
-                className="w-16 h-16 rounded-2xl object-cover border border-white/10 shadow-lg shrink-0 print:border-gray-300 print:shadow-none"
+                onError={() => setLogoError(true)}
+                className="w-16 h-16 rounded-2xl object-contain bg-black/60 p-1.5 border border-white/10 shadow-lg shrink-0 print:border-gray-300 print:shadow-none"
               />
             ) : (
-              <div className="w-16 h-16 rounded-2xl bg-linear-to-tr from-pink-500 via-purple-500 to-indigo-500 flex items-center justify-center text-white font-black text-2xl shadow-lg shrink-0 print:border print:border-gray-300">
-                🐰
+              <div className="w-16 h-16 rounded-2xl bg-black border border-white/15 flex items-center justify-center shadow-lg shrink-0 print:border-gray-300 p-2">
+                <img
+                  src="/Ra.png"
+                  alt="Rabbitty"
+                  className="h-10 w-10 object-contain drop-shadow-[0_0_10px_rgba(236,72,153,0.4)]"
+                />
               </div>
             )}
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-xl sm:text-2xl font-black text-white print:text-black m-0 tracking-tight">
-                  {business?.restaurantName || business?.businessName || "626 Café"}
+                  {business?.restaurantName || business?.businessName || "Mi Restaurante"}
                 </h2>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 print:border-emerald-600 print:text-emerald-800 print:bg-emerald-50">
                   Cuadre Verificado
@@ -285,7 +296,7 @@ export default function AuditReportPage() {
               <p className="text-xs text-gray-400 print:text-gray-600 mt-1 flex items-center gap-1.5">
                 <Store size={13} className="text-pink-400 print:text-gray-500" />
                 {business?.branchName ? `${business.branchName} • ` : ""}
-                {business?.businessAddress || business?.branchAddress || "Bucerías, Nayarit, México"}
+                {business?.businessAddress || business?.branchAddress || "Sucursal Principal"}
               </p>
             </div>
           </div>

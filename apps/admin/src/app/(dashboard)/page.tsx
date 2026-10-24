@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { trpc } from "../../lib/trpc-client";
 import { Card, cn } from "@rabbitty/ui";
@@ -21,6 +22,11 @@ const itemVariants: Variants = {
 
 export default function AdminPage() {
   const { branchId } = useBranch();
+  const [currentDateStr, setCurrentDateStr] = useState<string>("");
+
+  useEffect(() => {
+    setCurrentDateStr(new Date().toLocaleDateString("es-MX", { weekday: "long", year: "numeric", month: "long", day: "numeric" }));
+  }, []);
   const { data: orders } = trpc.pos.getOrders.useQuery({}, { retry: false });
   const { data: tables } = trpc.pos.getTables.useQuery(undefined, { retry: false });
   const { data: crossStore } = trpc.admin.getCrossStoreKpis.useQuery(undefined, { retry: false });
@@ -73,7 +79,7 @@ export default function AdminPage() {
     <div className="space-y-8 pb-10">
       {/* 0. Alerta de PIN de Administrador no configurado */}
       {pinStatus && !pinStatus.hasAdminPin && (
-        <div className="relative overflow-hidden rounded-3xl border border-amber-500/30 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-black/60 p-6 backdrop-blur-xl shadow-[0_0_40px_rgba(245,158,11,0.12)] animate-in fade-in slide-in-from-top-4 duration-500">
+        <div className="relative overflow-hidden rounded-3xl border border-amber-500/30 bg-linear-to-r from-amber-500/15 via-orange-500/10 to-black/60 p-6 backdrop-blur-xl shadow-[0_0_40px_rgba(245,158,11,0.12)] animate-in fade-in slide-in-from-top-4 duration-500">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-start gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/20 border border-amber-500/30 text-amber-400 shrink-0">
@@ -103,18 +109,18 @@ export default function AdminPage() {
       )}
 
       {/* 1. Top Banner Disruptivo */}
-      <div className="relative overflow-hidden rounded-3xl border border-white/5 bg-gradient-to-br from-gray-900/60 to-black/80 p-8 shadow-2xl backdrop-blur-xl">
+      <div className="relative overflow-hidden rounded-3xl border border-white/5 bg-linear-to-br from-gray-900/60 to-black/80 p-8 shadow-2xl backdrop-blur-xl">
         <div className="absolute top-0 right-0 h-48 w-48 rounded-full bg-pink-500/10 blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-pink-500">
               <Activity className="h-3.5 w-3.5" /> En Vivo
             </span>
-            <h1 className="text-4xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-200 to-gray-500 mt-2">
+            <h1 className="text-4xl font-black tracking-tight text-transparent bg-clip-text bg-linear-to-r from-white via-gray-200 to-gray-500 mt-2">
               Resumen Operativo
             </h1>
-            <p suppressHydrationWarning className="text-gray-400 mt-1 text-sm font-medium">
-              Dashboard ejecutivo para la sucursal de {new Date().toLocaleDateString("es-MX", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+            <p className="text-gray-400 mt-1 text-sm font-medium">
+              Dashboard ejecutivo para la sucursal {currentDateStr ? `de ${currentDateStr}` : ""}
             </p>
           </div>
           <div className="flex items-center gap-4">
@@ -227,7 +233,7 @@ export default function AdminPage() {
                 <p className="text-xs text-gray-600 mt-1">Los pedidos aparecerán aquí tan pronto se generen en el POS.</p>
               </div>
             ) : (
-              <div className="space-y-3 flex-1 overflow-y-auto max-h-[350px] pr-1">
+              <div className="space-y-3 flex-1 overflow-y-auto max-h-87.5 pr-1">
                 {openOrders.map((order) => (
                   <div
                     key={order.id}

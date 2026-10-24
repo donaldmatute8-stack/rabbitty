@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { cn, useWakeLock } from "@rabbitty/ui";
-import { ShoppingBag, ChevronRight, CheckCircle2, ChevronLeft, Minus, Plus, Scan, X, QrCode } from "lucide-react";
+import { ShoppingBag, ChevronRight, CheckCircle2, ChevronLeft, Minus, Plus, Scan, X, QrCode, Lock, KeyRound, ArrowRight } from "lucide-react";
 
 const PLACEHOLDER_IMG = "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?q=80&w=1000&auto=format&fit=crop";
 const BG_VIDEO_PLACEHOLDER = "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?q=80&w=2574&auto=format&fit=crop";
@@ -13,6 +13,9 @@ export default function KioskPage() {
   const [cart, setCart] = useState<any[]>([]);
   const [view, setView] = useState<"welcome" | "menu" | "checkout" | "qr_payment" | "success">("welcome");
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
+  const [adminPinModal, setAdminPinModal] = useState(false);
+  const [adminPin, setAdminPin] = useState("");
+  const [pinError, setPinError] = useState(false);
 
   // Keep screen awake (WakeLock API) for iPad / Kiosk stands
   useWakeLock();
@@ -86,17 +89,20 @@ export default function KioskPage() {
         <div className="absolute inset-0 bg-cover bg-center opacity-40 transition-transform duration-[10s] group-hover:scale-110" style={{ backgroundImage: `url(${BG_VIDEO_PLACEHOLDER})` }} />
         <div className="absolute inset-0 bg-linear-to-t from-black via-black/60 to-transparent" />
         
+        {/* Discreet Staff Exit Button (Protected) */}
         <div className="absolute top-6 left-6 z-30">
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              window.location.href = "/";
+              setAdminPin("");
+              setPinError(false);
+              setAdminPinModal(true);
             }}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-black/60 hover:bg-black/90 border border-white/20 text-gray-300 hover:text-white text-xs font-bold backdrop-blur-xl transition-all cursor-pointer shadow-lg active:scale-95"
+            className="flex items-center justify-center h-10 w-10 rounded-full bg-black/40 hover:bg-black/80 border border-white/10 text-white/30 hover:text-white/80 transition-all cursor-pointer backdrop-blur-md"
+            title="Acceso Personal / Salir"
           >
-            <ChevronLeft className="h-4 w-4" />
-            Volver al Panel
+            <Lock className="h-4 w-4" />
           </button>
         </div>
 
@@ -276,13 +282,19 @@ export default function KioskPage() {
                     </div>
                   </div>
 
-                  <div className="flex flex-col justify-between p-8 pt-6 min-h-52">
+                  <div className="flex flex-col justify-between p-7 pt-5 min-h-56">
                     <div>
-                      <h3 className="text-2xl xl:text-3xl font-black leading-tight text-white line-clamp-2 drop-shadow-sm group-hover:text-purple-300 transition-colors">{item.name}</h3>
-                      <p className="mt-2.5 text-base text-gray-300 font-medium leading-relaxed line-clamp-2">{item.description || "Ingredientes frescos y de la más alta calidad."}</p>
+                      {/* Fixed 2-line height for product title so cards always align */}
+                      <h3 className="h-16 text-2xl font-black leading-tight text-white line-clamp-2 drop-shadow-sm group-hover:text-purple-300 transition-colors flex items-start">
+                        {item.name}
+                      </h3>
+                      {/* Fixed 1-line height for description/spec */}
+                      <p className="mt-2 text-sm text-gray-400 font-medium leading-relaxed line-clamp-1 h-5">
+                        {item.description || "240 ML • Especialidad Rabbitty"}
+                      </p>
                     </div>
                     
-                    <div className="mt-6 flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-white/10 border border-white/10 text-base font-bold text-gray-100 group-hover:bg-purple-600 group-hover:border-purple-400 group-hover:text-white transition-all shadow-md">
+                    <div className="mt-4 flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-white/10 border border-white/10 text-base font-bold text-gray-100 group-hover:bg-purple-600 group-hover:border-purple-400 group-hover:text-white transition-all shadow-md">
                       <Plus className="h-5 w-5" /> Toca para Agregar
                     </div>
                   </div>
@@ -342,86 +354,183 @@ export default function KioskPage() {
         </div>
       )}
 
-      {/* Checkout Screen */}
+      {/* Checkout Screen - Immersive 2-Column Full Screen Layout */}
       {view === "checkout" && (
-        <main className="flex flex-1 flex-col items-center overflow-y-auto p-12 custom-scrollbar relative">
-          <div className="w-full max-w-5xl space-y-10 z-10">
-            <h2 className="text-5xl font-black text-center mb-16">Revisa tu Pedido</h2>
-            
-            <div className="space-y-6 bg-white/5 backdrop-blur-xl border border-white/10 p-10 rounded-[3rem] shadow-2xl">
+        <main className="flex flex-1 overflow-hidden p-8 lg:p-12 gap-8 relative z-10">
+          {/* Left Column: Cart Items List */}
+          <div className="flex-1 flex flex-col overflow-hidden rounded-[2.5rem] bg-gray-900/80 backdrop-blur-2xl border border-white/10 p-8 shadow-2xl">
+            <div className="flex items-center justify-between pb-6 border-b border-white/10">
+              <div>
+                <h2 className="text-3xl lg:text-4xl font-black text-white">Revisa tu Pedido</h2>
+                <p className="text-gray-400 text-sm mt-1">{cart.length} {cart.length === 1 ? "platillo seleccionado" : "platillos seleccionados"}</p>
+              </div>
+              {cart.length > 0 && (
+                <button
+                  onClick={() => setCart([])}
+                  className="text-sm font-bold text-rose-400 hover:text-rose-300 px-4 py-2 rounded-xl bg-rose-500/10 border border-rose-500/20 active:scale-95 transition-all"
+                >
+                  Vaciar Orden
+                </button>
+              )}
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar py-6 space-y-4 pr-2">
               {cart.map((item) => (
-                <div key={item.id} className="flex items-center justify-between border-b border-white/5 pb-6 last:border-0 last:pb-0">
-                  <div className="flex-1 pr-6">
-                    <h3 className="text-3xl font-bold mb-2">{item.name}</h3>
-                    <p className="text-purple-400 text-2xl font-black">${item.price.toFixed(2)}</p>
+                <div key={item.id} className="flex items-center justify-between p-5 rounded-3xl bg-white/5 border border-white/5 hover:border-white/10 transition-all">
+                  <div className="flex-1 pr-4">
+                    <h3 className="text-xl lg:text-2xl font-bold text-white leading-tight">{item.name}</h3>
+                    <p className="text-purple-400 text-lg font-black mt-1">${item.price.toFixed(2)} c/u</p>
                   </div>
-                  <div className="flex items-center gap-6 bg-black/60 rounded-4xl p-3 border border-white/5 shadow-inner">
+                  
+                  {/* Quantity Stepper */}
+                  <div className="flex items-center gap-4 bg-black/70 rounded-2xl p-2 border border-white/10 shadow-inner">
                     <button 
                       onClick={() => {
                         if (item.quantity === 1) setCart(prev => prev.filter(i => i.id !== item.id));
                         else setCart(prev => prev.map(i => i.id === item.id ? { ...i, quantity: i.quantity - 1 } : i));
                       }}
-                      className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 active:bg-white/20 text-white"
+                      className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 active:bg-white/20 text-white"
                     >
-                      <Minus className="h-8 w-8" />
+                      <Minus className="h-5 w-5" />
                     </button>
-                    <span className="w-12 text-center text-4xl font-black">{item.quantity}</span>
+                    <span className="w-8 text-center text-2xl font-black">{item.quantity}</span>
                     <button 
                       onClick={() => setCart(prev => prev.map(i => i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i))}
-                      className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 active:bg-white/20 text-white"
+                      className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 active:bg-white/20 text-white"
                     >
-                      <Plus className="h-8 w-8" />
+                      <Plus className="h-5 w-5" />
                     </button>
                   </div>
-                  <div className="w-40 text-right text-4xl font-black text-white">
+
+                  <div className="w-28 text-right text-2xl font-black text-white pl-4">
                     ${(item.price * item.quantity).toFixed(2)}
                   </div>
                 </div>
               ))}
+
               {cart.length === 0 && (
-                <div className="text-center py-20 text-gray-500 text-3xl font-bold flex flex-col items-center">
-                  <ShoppingBag className="h-24 w-24 mb-6 opacity-20" />
-                  No has agregado nada aún
+                <div className="h-full flex flex-col items-center justify-center text-center py-20 text-gray-500">
+                  <ShoppingBag className="h-20 w-20 mb-4 opacity-20" />
+                  <p className="text-2xl font-bold">No has agregado nada aún</p>
+                  <button 
+                    onClick={() => setView("menu")}
+                    className="mt-6 rounded-2xl bg-white/10 hover:bg-white/15 px-6 py-3 text-base font-bold text-white transition-all"
+                  >
+                    Explorar Menú
+                  </button>
                 </div>
               )}
             </div>
+          </div>
 
-            <div className="flex flex-col items-end gap-4 bg-gray-900 border border-white/10 p-10 rounded-[3rem] shadow-2xl">
-              <div className="flex justify-between w-full max-w-lg text-2xl text-gray-400 font-semibold">
-                <span>Subtotal (Base)</span>
-                <span>${(total / 1.16).toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between w-full max-w-lg text-2xl text-purple-400/80 font-semibold">
-                <span>IVA (16% Incluido)</span>
-                <span>${(total - total / 1.16).toFixed(2)}</span>
-              </div>
-              <div className="w-full max-w-lg h-px bg-white/10 my-4" />
-              <div className="flex justify-between w-full max-w-lg text-5xl font-black text-white items-end">
-                <div>
-                  <span className="block">Total</span>
-                  <span className="text-sm text-gray-500 font-normal">IVA incluido</span>
+          {/* Right Column: Summary & Checkout CTA */}
+          <div className="w-105 lg:w-120 shrink-0 flex flex-col justify-between rounded-[2.5rem] bg-gray-900/90 backdrop-blur-2xl border border-white/10 p-8 shadow-2xl">
+            <div className="space-y-6">
+              <h3 className="text-2xl font-black text-white border-b border-white/10 pb-4">Resumen de Cuenta</h3>
+              
+              <div className="space-y-4">
+                <div className="flex justify-between text-lg text-gray-400 font-medium">
+                  <span>Subtotal (Base)</span>
+                  <span className="text-white font-bold">${(Math.round((total / 1.16) * 100) / 100).toFixed(2)}</span>
                 </div>
-                <span className="text-emerald-400 text-6xl tracking-tighter">${total.toFixed(2)}</span>
+                <div className="flex justify-between text-lg text-purple-400 font-medium">
+                  <span>IVA (16% Incluido)</span>
+                  <span className="font-bold">${(Math.round((total - Math.round((total / 1.16) * 100) / 100) * 100) / 100).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 font-semibold">
+                  <span>Puntos Bunz a Acumular</span>
+                  <span>+{Math.round(total * 0.2)} Bunz</span>
+                </div>
+              </div>
+
+              <div className="h-px bg-white/10 my-4" />
+
+              <div className="flex justify-between items-baseline">
+                <div>
+                  <span className="text-3xl font-black text-white block">Total</span>
+                  <span className="text-xs text-gray-400 font-normal">Impuestos incluidos</span>
+                </div>
+                <span className="text-5xl font-black text-emerald-400 tracking-tight">${total.toFixed(2)}</span>
               </div>
             </div>
 
-            <div className="flex gap-8 justify-end pt-8">
-              <button 
-                onClick={() => setView("menu")}
-                className="rounded-full bg-white/5 px-12 py-6 text-2xl font-bold text-white hover:bg-white/10 border border-white/10 transition-all active:scale-95"
-              >
-                Volver al Menú
-              </button>
+            <div className="space-y-4 pt-6">
               <button 
                 disabled={cart.length === 0}
                 onClick={() => setView("qr_payment")}
-                className="flex items-center gap-4 rounded-full bg-linear-to-r from-purple-500 to-pink-500 px-16 py-6 text-3xl font-black text-white shadow-[0_20px_50px_rgba(168,85,247,0.5)] active:scale-95 disabled:opacity-50 transition-all hover:-translate-y-1"
+                className="w-full flex items-center justify-center gap-3 rounded-2xl bg-linear-to-r from-purple-500 to-pink-500 py-6 text-2xl font-black text-white shadow-[0_15px_40px_rgba(168,85,247,0.4)] active:scale-95 disabled:opacity-40 transition-all cursor-pointer"
               >
-                PAGAR ORDEN <ChevronRight className="h-8 w-8" />
+                PAGAR ORDEN <ChevronRight className="h-7 w-7" />
+              </button>
+              
+              <button 
+                onClick={() => setView("menu")}
+                className="w-full rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 py-4 text-base font-bold text-gray-300 hover:text-white transition-all active:scale-95"
+              >
+                ← Seguir Agregando Platillos
               </button>
             </div>
           </div>
         </main>
+      )}
+
+      {/* Admin PIN Unlock Modal */}
+      {adminPinModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xl p-6">
+          <div className="w-full max-w-md rounded-3xl bg-gray-900 border border-white/15 p-8 shadow-2xl text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-purple-500/20 text-purple-400 border border-purple-500/30 mb-4">
+              <KeyRound className="h-7 w-7" />
+            </div>
+            <h3 className="text-2xl font-black text-white mb-2">Acceso de Personal</h3>
+            <p className="text-sm text-gray-400 mb-6">Ingresa el PIN de seguridad para salir al Panel Administrativo.</p>
+            
+            <input
+              type="password"
+              maxLength={6}
+              autoFocus
+              value={adminPin}
+              onChange={(e) => {
+                setAdminPin(e.target.value);
+                setPinError(false);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  if (adminPin === "1234" || adminPin === "0000") {
+                    window.location.href = "/";
+                  } else {
+                    setPinError(true);
+                  }
+                }
+              }}
+              placeholder="PIN de 4 dígitos"
+              className="w-full text-center tracking-[0.5em] text-3xl font-black py-3 px-4 rounded-2xl bg-black border border-white/20 text-white focus:outline-none focus:border-purple-500 mb-2"
+            />
+            {pinError && <p className="text-rose-400 text-xs font-semibold mb-4">PIN incorrecto. Intenta de nuevo.</p>}
+
+            <div className="grid grid-cols-2 gap-3 mt-6">
+              <button
+                type="button"
+                onClick={() => setAdminPinModal(false)}
+                className="py-3 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-sm"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (adminPin === "1234" || adminPin === "0000") {
+                    window.location.href = "/";
+                  } else {
+                    setPinError(true);
+                  }
+                }}
+                className="py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm"
+              >
+                Desbloquear
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
