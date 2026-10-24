@@ -12,7 +12,23 @@ const LEVEL_ICONS: Record<string, { emoji: string, color: string, glow: string }
   "4": { emoji: "🦊", color: "from-orange-600 to-orange-400", glow: "shadow-[0_0_30px_rgba(249,115,22,0.4)]" },
   "5": { emoji: "🦅", color: "from-blue-600 to-cyan-400", glow: "shadow-[0_0_30px_rgba(6,182,212,0.4)]" },
   "6": { emoji: "🐉", color: "from-purple-600 to-indigo-400", glow: "shadow-[0_0_30px_rgba(139,92,246,0.5)]" },
+  "lvl_1": { emoji: "🥚", color: "from-gray-500 to-gray-400", glow: "shadow-[0_0_30px_rgba(156,163,175,0.4)]" },
+  "lvl_2": { emoji: "🐣", color: "from-yellow-500 to-amber-400", glow: "shadow-[0_0_30px_rgba(245,158,11,0.4)]" },
+  "lvl_3": { emoji: "🐰", color: "from-pink-500 to-rose-400", glow: "shadow-[0_0_30px_rgba(244,63,94,0.4)]" },
+  "lvl_4": { emoji: "🦊", color: "from-orange-600 to-orange-400", glow: "shadow-[0_0_30px_rgba(249,115,22,0.4)]" },
+  "l1": { emoji: "🥚", color: "from-gray-500 to-gray-400", glow: "shadow-[0_0_30px_rgba(156,163,175,0.4)]" },
+  "l2": { emoji: "🐣", color: "from-yellow-500 to-amber-400", glow: "shadow-[0_0_30px_rgba(245,158,11,0.4)]" },
+  "l3": { emoji: "🐰", color: "from-pink-500 to-rose-400", glow: "shadow-[0_0_30px_rgba(244,63,94,0.4)]" },
+  "l4": { emoji: "🦊", color: "from-orange-600 to-orange-400", glow: "shadow-[0_0_30px_rgba(249,115,22,0.4)]" },
 };
+
+const DEFAULT_LEVEL_ICON = { emoji: "🐰", color: "from-pink-500 to-rose-400", glow: "shadow-[0_0_30px_rgba(244,63,94,0.4)]" };
+
+function getLevelIcon(id?: string | null) {
+  if (!id) return DEFAULT_LEVEL_ICON;
+  const match = LEVEL_ICONS[id] || LEVEL_ICONS[id.replace(/\D/g, "")];
+  return match || DEFAULT_LEVEL_ICON;
+}
 
 export default function LoyaltyPage() {
   const utils = trpc.useUtils();
@@ -51,8 +67,8 @@ export default function LoyaltyPage() {
     { id: "6", name: "Dragón", requiredHops: 1000, bunzMultiplier: 3.0, userCount: 7 },
   ];
 
-  const activeLevel = levels.find(l => l.id === activeLevelId) || levels[2];
-  const calculatedBunz = Math.round(simulatedTicket * (rewardPercentage / 100) * activeLevel.bunzMultiplier);
+  const activeLevel = levels.find(l => l.id === activeLevelId) || levels[0] || { id: "1", name: "Rabbitter", requiredHops: 0, bunzMultiplier: 1.0, userCount: 0 };
+  const calculatedBunz = Math.round(simulatedTicket * (rewardPercentage / 100) * (activeLevel.bunzMultiplier ?? 1.0));
 
   const handleSaveRewardRate = () => {
     if (!restaurants || restaurants.length === 0) return;
@@ -63,16 +79,16 @@ export default function LoyaltyPage() {
   };
 
   return (
-    <div className="space-y-8 pb-10 max-w-[1600px] mx-auto">
+    <div className="space-y-8 pb-10 max-w-400 mx-auto">
       
       {/* ── Immersive Header ── */}
-      <div className="relative overflow-hidden rounded-[2.5rem] border border-white/5 bg-gradient-to-br from-indigo-900/40 via-gray-900 to-black p-10 shadow-2xl backdrop-blur-3xl">
-        <div className="absolute top-[-20%] right-[-10%] h-[500px] w-[500px] rounded-full bg-pink-500/10 blur-[120px] pointer-events-none" />
-        <div className="absolute bottom-[-20%] left-[10%] h-[400px] w-[400px] rounded-full bg-cyan-500/10 blur-[100px] pointer-events-none" />
+      <div className="relative overflow-hidden rounded-[2.5rem] border border-white/5 bg-linear-to-br from-indigo-900/40 via-gray-900 to-black p-10 shadow-2xl backdrop-blur-3xl">
+        <div className="absolute top-[-20%] right-[-10%] h-125 w-125 rounded-full bg-pink-500/10 blur-[120px] pointer-events-none" />
+        <div className="absolute bottom-[-20%] left-[10%] h-100 w-100 rounded-full bg-cyan-500/10 blur-[100px] pointer-events-none" />
         
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-end justify-between gap-8">
           <div className="flex gap-6 items-center">
-            <div className="flex h-20 w-20 items-center justify-center rounded-[2rem] bg-gradient-to-br from-pink-500 to-purple-600 shadow-[0_0_40px_rgba(236,72,153,0.3)]">
+            <div className="flex h-20 w-20 items-center justify-center rounded-4xl bg-linear-to-br from-pink-500 to-purple-600 shadow-[0_0_40px_rgba(236,72,153,0.3)]">
               <Sparkles className="h-10 w-10 text-white" />
             </div>
             <div>
@@ -107,7 +123,7 @@ export default function LoyaltyPage() {
           
           {/* Base Cashback Configurator */}
           <div className="rounded-[2.5rem] border border-white/5 bg-gray-900/60 p-8 shadow-2xl backdrop-blur-xl relative overflow-hidden group">
-            <div className="absolute inset-0 bg-gradient-to-tr from-pink-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="absolute inset-0 bg-linear-to-tr from-pink-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
             
             <div className="flex items-center gap-4 mb-8">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-pink-500/20 text-pink-400">
@@ -150,7 +166,7 @@ export default function LoyaltyPage() {
             
             <div className="space-y-4">
               <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-black/40 p-4 transition-all hover:border-indigo-500/50">
-                <div className="absolute inset-0 bg-indigo-500/10 translate-y-[100%] group-hover:translate-y-[0%] transition-transform duration-300" />
+                <div className="absolute inset-0 bg-indigo-500/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
                 <div className="relative z-10 flex items-center justify-between">
                   <div>
                     <div className="font-bold text-white">Martes Locos</div>
@@ -161,7 +177,7 @@ export default function LoyaltyPage() {
               </div>
 
               <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-black/40 p-4 transition-all hover:border-emerald-500/50">
-                <div className="absolute inset-0 bg-emerald-500/10 translate-y-[100%] group-hover:translate-y-[0%] transition-transform duration-300" />
+                <div className="absolute inset-0 bg-emerald-500/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
                 <div className="relative z-10 flex items-center justify-between">
                   <div>
                     <div className="font-bold text-white">Cumpleañeros</div>
@@ -201,7 +217,7 @@ export default function LoyaltyPage() {
                       activeLevelId === l.id ? "bg-white/10 text-white" : "text-gray-500 hover:text-gray-300"
                     )}
                   >
-                    <span>{LEVEL_ICONS[l.id].emoji}</span>
+                    <span>{getLevelIcon(l.id).emoji}</span>
                   </button>
                 ))}
               </div>
@@ -211,18 +227,18 @@ export default function LoyaltyPage() {
             <div className="flex-1 flex items-center justify-center relative z-10">
               
               {/* Dynamic Aura */}
-              <div className={cn("absolute w-[400px] h-[400px] rounded-full blur-[100px] opacity-20 transition-all duration-1000", `bg-gradient-to-br ${LEVEL_ICONS[activeLevel.id].color}`)} />
+              <div className={cn("absolute w-100 h-100 rounded-full blur-[100px] opacity-20 transition-all duration-1000", `bg-linear-to-br ${getLevelIcon(activeLevel.id).color}`)} />
 
               <div className="flex w-full items-center justify-between gap-12 px-12">
                 
                 {/* 3D Badge Simulation */}
                 <div className={cn(
-                  "relative flex h-64 w-64 shrink-0 flex-col items-center justify-center rounded-[3rem] bg-gradient-to-br border border-white/20 transition-all duration-500",
-                  LEVEL_ICONS[activeLevel.id].color,
-                  LEVEL_ICONS[activeLevel.id].glow
+                  "relative flex h-64 w-64 shrink-0 flex-col items-center justify-center rounded-[3rem] bg-linear-to-br border border-white/20 transition-all duration-500",
+                  getLevelIcon(activeLevel.id).color,
+                  getLevelIcon(activeLevel.id).glow
                 )}>
                   <div className="absolute inset-0 rounded-[3rem] bg-black/40 backdrop-blur-sm" />
-                  <span className="relative z-10 text-[6rem] drop-shadow-2xl mb-2">{LEVEL_ICONS[activeLevel.id].emoji}</span>
+                  <span className="relative z-10 text-[6rem] drop-shadow-2xl mb-2">{getLevelIcon(activeLevel.id).emoji}</span>
                   <span className="relative z-10 text-2xl font-black text-white uppercase tracking-widest">{activeLevel.name}</span>
                   <div className="relative z-10 mt-2 rounded-full bg-black/50 px-3 py-1 text-xs font-bold text-white border border-white/10">
                     Nivel {activeLevel.id}
@@ -247,7 +263,7 @@ export default function LoyaltyPage() {
 
                   <ArrowUpRight className="h-10 w-10 text-gray-700 mx-auto" />
 
-                  <div className="rounded-[2rem] bg-black/60 border border-white/5 p-8 relative overflow-hidden">
+                  <div className="rounded-4xl bg-black/60 border border-white/5 p-8 relative overflow-hidden">
                     <div className="absolute top-0 right-0 p-4 opacity-10">
                       <Hexagon className="h-32 w-32" />
                     </div>
@@ -272,25 +288,26 @@ export default function LoyaltyPage() {
           </div>
 
           {/* User Distribution Bar */}
-          <div className="rounded-[2rem] border border-white/5 bg-gray-900/60 p-8 shadow-2xl backdrop-blur-xl">
+          <div className="rounded-4xl border border-white/5 bg-gray-900/60 p-8 shadow-2xl backdrop-blur-xl">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-black text-white">Distribución de Usuarios por Nivel</h3>
               <div className="text-sm font-bold text-gray-400">Total: {totalUsers}</div>
             </div>
             
             <div className="flex h-12 w-full rounded-2xl overflow-hidden shadow-inner border border-white/5 bg-black">
-              {levels.map((l) => {
+              {levels.map((l, index) => {
                 const percent = totalUsers > 0 ? (l.userCount / totalUsers) * 100 : 0;
                 if (percent === 0) return null;
                 const colors = [
                   "bg-gray-500", "bg-yellow-500", "bg-pink-500", 
                   "bg-orange-500", "bg-blue-500", "bg-purple-500"
                 ];
+                const colorClass = colors[index % colors.length];
                 return (
                   <div 
                     key={l.id} 
                     style={{ width: `${percent}%` }}
-                    className={cn("h-full relative group transition-all hover:brightness-125 cursor-help", colors[parseInt(l.id) - 1])}
+                    className={cn("h-full relative group transition-all hover:brightness-125 cursor-help", colorClass)}
                   >
                     <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-white/20 transition-opacity" />
                   </div>
@@ -301,7 +318,7 @@ export default function LoyaltyPage() {
             <div className="mt-6 flex flex-wrap gap-4">
               {levels.map(l => (
                 <div key={l.id} className="flex items-center gap-2">
-                  <span className="text-lg">{LEVEL_ICONS[l.id].emoji}</span>
+                  <span className="text-lg">{getLevelIcon(l.id).emoji}</span>
                   <div className="text-sm font-bold text-gray-300">
                     {l.name} <span className="text-gray-500">({l.userCount})</span>
                   </div>
