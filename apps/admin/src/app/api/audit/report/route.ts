@@ -121,10 +121,10 @@ export async function GET(req: NextRequest) {
       FROM orders o
       LEFT JOIN order_items oi ON oi."orderId" = o.id
       LEFT JOIN menu_items mi ON mi.id = oi."menuItemId"
-      WHERE o.status = ANY(${validStatuses})
+      WHERE o.status IN ('COMPLETED', 'PAID')
         AND (${branchId}::text IS NULL OR o."branchId" = ${branchId})
-        AND (${fromDate ? fromDate.toISOString() : null}::timestamptz IS NULL OR o."createdAt" >= ${fromDate ? fromDate.toISOString() : null}::timestamptz)
-        AND (${toDate ? toDate.toISOString() : null}::timestamptz IS NULL OR o."createdAt" <= ${toDate ? toDate.toISOString() : null}::timestamptz)
+        AND (${fromDate ? fromDate.toISOString() : null}::text IS NULL OR o."createdAt" >= ${fromDate ? fromDate.toISOString() : null}::timestamptz)
+        AND (${toDate ? toDate.toISOString() : null}::text IS NULL OR o."createdAt" <= ${toDate ? toDate.toISOString() : null}::timestamptz)
       GROUP BY o.id
       ORDER BY o."createdAt" ASC
     `);
@@ -142,11 +142,11 @@ export async function GET(req: NextRequest) {
         p."createdAt" as payment_date
       FROM payments p
       JOIN orders o ON p."orderId" = o.id
-      WHERE o.status = ANY(${validStatuses})
+      WHERE o.status IN ('COMPLETED', 'PAID')
         AND p.status = 'COMPLETED'
         AND (${branchId}::text IS NULL OR o."branchId" = ${branchId})
-        AND (${fromDate ? fromDate.toISOString() : null}::timestamptz IS NULL OR o."createdAt" >= ${fromDate ? fromDate.toISOString() : null}::timestamptz)
-        AND (${toDate ? toDate.toISOString() : null}::timestamptz IS NULL OR o."createdAt" <= ${toDate ? toDate.toISOString() : null}::timestamptz)
+        AND (${fromDate ? fromDate.toISOString() : null}::text IS NULL OR o."createdAt" >= ${fromDate ? fromDate.toISOString() : null}::timestamptz)
+        AND (${toDate ? toDate.toISOString() : null}::text IS NULL OR o."createdAt" <= ${toDate ? toDate.toISOString() : null}::timestamptz)
       ORDER BY p."createdAt" ASC
     `);
 
