@@ -250,6 +250,44 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
     return result;
   }
 
+  if (data.isRefund) {
+    chunks.push(alignCenter);
+    chunks.push(boldOn);
+    addText(`\nCOMPROBANTE DE REEMBOLSO\n`);
+    chunks.push(boldOff);
+    addText(divider);
+    chunks.push(alignLeft);
+    if (data.orderNumber) addText(`Ticket Original: #${data.orderNumber}\n`);
+    addText(`Fecha: ${data.date || new Date().toLocaleString("es-MX")}\n`);
+    if (data.paymentMethod) addText(`Forma Original: ${data.paymentMethod}\n`);
+    if (data.reason) addText(`Motivo: ${data.reason}\n`);
+    addText(divider);
+    chunks.push(alignRight);
+    chunks.push(boldOn);
+    addText(`MONTO DEVUELTO: $${Number(data.refundAmount || data.amount || 0).toFixed(2)}\n`);
+    chunks.push(boldOff);
+    addText(divider);
+    chunks.push(alignCenter);
+    addText(`Devolución procesada en sistema.\n\n`);
+    addText(`Firma del Cliente:\n\n\n___________________\n\n`);
+    addText(`Firma de Autorización:\n\n\n___________________\n\n\n`);
+    
+    // Line feed & Cut paper
+    chunks.push(new Uint8Array([0x0a, 0x0a, 0x0a, 0x0a, 0x0a]));
+    const cut = new Uint8Array([0x1d, 0x56, 0x41, 0x00]);
+    chunks.push(cut);
+    
+    let totalLength = 0;
+    for (const c of chunks) totalLength += c.length;
+    const result = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const c of chunks) {
+      result.set(c, offset);
+      offset += c.length;
+    }
+    return result;
+  }
+
   // META
   chunks.push(alignLeft);
   addText(`Ticket: #${data.orderNumber || "0001"}\n`);
@@ -285,6 +323,33 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
   addText(`TOTAL:    ${tot.padStart(10)}\n`);
   chunks.push(boldOff);
   addText(divider);
+
+  // FORMAS DE PAGO
+  chunks.push(alignLeft);
+  if (Array.isArray(data.payments) && data.payments.length > 0) {
+    addText(`FORMA DE PAGO:\n`);
+    for (const p of data.payments) {
+      const pMethod = String(p.method || "EFECTIVO").toUpperCase();
+      const pAmt = `$${Number(p.amount || 0).toFixed(2)}`;
+      const pSpace = Math.max(1, width - pMethod.length - pAmt.length - 2);
+      addText(`  ${pMethod}${" ".repeat(pSpace)}${pAmt}\n`);
+    }
+    addText(divider);
+  } else if (data.paymentMethod) {
+    const methodStr = String(data.paymentMethod).toUpperCase();
+    const methodLabel = "FORMA DE PAGO: ";
+    if (methodLabel.length + methodStr.length <= width) {
+      addText(`${methodLabel}${methodStr}\n`);
+    } else {
+      addText(`${methodLabel}\n  ${methodStr}\n`);
+    }
+    if (data.cashGiven != null && data.cashGiven > 0) {
+      addText(`  Entregado: $${Number(data.cashGiven).toFixed(2)}\n`);
+      const cambio = Number(data.change ?? Math.max(0, data.cashGiven - (data.total || 0)));
+      addText(`  Cambio:    $${cambio.toFixed(2)}\n`);
+    }
+    addText(divider);
+  }
 
   // FOOTER & REWARDS
   chunks.push(alignCenter);

@@ -34,15 +34,19 @@ const RESTAURANT_COLUMNS: string[] = [
 ];
 
 async function ensureRestaurantColumns(client: ReturnType<typeof postgres>) {
-  // Postgres NO permite varios comandos en un solo prepared statement (42601),
-  // y postgres.js prepara por defecto. Se ejecuta cada ALTER por separado vía
-  // unsafe() para que la migración avance aunque un ALTER falle.
-  for (const statement of RESTAURANT_COLUMNS) {
-    try {
+  // Configurar client_min_messages = 'warning' para que postgres no envíe spam de
+  // NOTICE 42701 ("column already exists, skipping") en los logs de producción (Railway).
+  try {
+    await client.unsafe("SET client_min_messages = 'warning'");
+    for (const statement of RESTAURANT_COLUMNS) {
       await client.unsafe(statement);
-    } catch (e) {
-      console.warn("Auto-migration error (restaurants):", statement, e);
     }
+  } catch (e) {
+    console.warn("Auto-migration notice (restaurants):", e);
+  } finally {
+    try {
+      await client.unsafe("RESET client_min_messages");
+    } catch {}
   }
 }
 

@@ -36,11 +36,15 @@ export interface TicketData {
   tip?: number;
   total: number;
   paymentMethod?: string;
+  payments?: Array<{ method: string; amount: number }>;
   cashGiven?: number;
   change?: number;
   currency?: string;
   bunzCashbackRate?: number; // Kept for legacy compatibility
   estimatedBunz?: number;
+  isRefund?: boolean;
+  refundAmount?: number;
+  reason?: string;
 }
 
 export function TicketTemplate({
@@ -73,8 +77,8 @@ export function TicketTemplate({
       id={id}
       className={
         isThermalPaper
-          ? `${is58mm ? "w-full max-w-[240px]" : "w-full max-w-[300px]"} bg-white text-black p-3 font-mono text-xs leading-tight mx-auto select-text shadow-sm`
-          : `${is58mm ? "w-full max-w-[280px]" : "w-full max-w-[340px]"} rounded-3xl border border-white/10 bg-gradient-to-b from-gray-900/95 via-gray-950/90 to-black p-5 font-mono text-xs leading-relaxed text-gray-200 shadow-2xl backdrop-blur-2xl relative overflow-hidden select-none`
+          ? `${is58mm ? "w-full max-w-60" : "w-full max-w-75"} bg-white text-black p-3 font-mono text-xs leading-tight mx-auto select-text shadow-sm`
+          : `${is58mm ? "w-full max-w-70" : "w-full max-w-85"} rounded-3xl border border-white/10 bg-linear-to-b from-gray-900/95 via-gray-950/90 to-black p-5 font-mono text-xs leading-relaxed text-gray-200 shadow-2xl backdrop-blur-2xl relative overflow-hidden select-none`
       }
     >
       {/* Decorative Glow inside screen mode */}
@@ -219,11 +223,23 @@ export function TicketTemplate({
         </div>
 
         {/* Payment info */}
-        <div className={`pt-1.5 space-y-0.5 text-[10px] ${isThermalPaper ? "text-gray-700" : "text-gray-400"}`}>
-          <div className="flex justify-between">
-            <span>Método de Pago:</span>
-            <span className="font-bold uppercase">{data.paymentMethod || "Efectivo"}</span>
-          </div>
+        <div className={`pt-1.5 space-y-1 text-[10px] ${isThermalPaper ? "text-gray-700" : "text-gray-400"}`}>
+          {Array.isArray(data.payments) && data.payments.length > 0 ? (
+            <div className="space-y-0.5">
+              <span className="font-bold text-[9px] uppercase tracking-wider block">Formas de Pago:</span>
+              {data.payments.map((p, pIdx) => (
+                <div key={pIdx} className="flex justify-between pl-2">
+                  <span>• {p.method.toUpperCase()}</span>
+                  <span className="font-semibold">${Number(p.amount || 0).toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex justify-between">
+              <span>Método de Pago:</span>
+              <span className="font-bold uppercase">{data.paymentMethod || "Efectivo"}</span>
+            </div>
+          )}
           {data.cashGiven != null && data.cashGiven > 0 && (
             <>
               <div className="flex justify-between">
@@ -242,7 +258,7 @@ export function TicketTemplate({
       {/* ── BUNZ CASHBACK & RABBITTY LOYALTY ── */}
       <div className={`py-3 space-y-2 text-center border-b border-dashed border-gray-700 ${isThermalPaper ? "text-black" : "text-gray-300"}`}>
         {(data.paymentMethod === "QR BUNZ" || data.paymentMethod?.includes("BUNZ")) ? (
-          <div className="rounded-xl p-2 bg-gradient-to-r from-emerald-500/10 via-emerald-400/10 to-emerald-500/10 border border-white/5 space-y-1">
+          <div className="rounded-xl p-2 bg-linear-to-r from-emerald-500/10 via-emerald-400/10 to-emerald-500/10 border border-white/5 space-y-1">
             <div className="flex items-center justify-center gap-1.5 font-bold text-emerald-500 text-[11px]">
               <CheckCircle2 className="h-3 w-3" />
               <span>¡Cashback de +{estimatedBunz} Bunz!</span>
@@ -253,7 +269,7 @@ export function TicketTemplate({
           </div>
         ) : (
           <>
-            <div className="rounded-xl p-2 bg-gradient-to-r from-pink-500/10 via-purple-500/10 to-cyan-500/10 border border-white/5 space-y-1">
+            <div className="rounded-xl p-2 bg-linear-to-r from-pink-500/10 via-purple-500/10 to-cyan-500/10 border border-white/5 space-y-1">
               <div className="flex items-center justify-center gap-1.5 font-bold text-pink-400 text-[11px]">
                 <Sparkles className="h-3 w-3" />
                 <span>¡Ganas +{estimatedBunz} Bunz Recompensa!</span>

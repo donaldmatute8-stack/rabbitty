@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { trpc } from "../../../lib/trpc-client";
-import { AlertCircle, CreditCard, ArrowLeft, Check, Search, RotateCcw } from "lucide-react";
+import { AlertCircle, CreditCard, ArrowLeft, Check, Search, RotateCcw, Printer } from "lucide-react";
 import { toast, Card, Badge } from "@rabbitty/ui";
+import { printEngine } from "../../../lib/print-engine";
 
 const METHOD_LABELS: Record<string, string> = {
   CASH: "Efectivo",
@@ -24,12 +25,51 @@ export default function RefundsPage() {
   const [refundAmount, setRefundAmount] = useState<number | "">("");
   const [refundNote, setRefundNote] = useState("");
 
+  const { data: ticketContext } = trpc.printing.getTicketData.useQuery(undefined, { retry: false });
   const { data: payments, isLoading, refetch } = trpc.payments.list.useQuery({ limit: 100 });
   const todayStr = new Date().toISOString().split("T")[0]!;
   const { data: totals } = trpc.payments.getTotals.useQuery({ startDate: todayStr, endDate: todayStr });
+
+  const completedPayments = payments?.filter(p => p.payment.status !== "REFUNDED") ?? [];
+  const refundedPayments = payments?.filter(p => p.payment.status === "REFUNDED") ?? [];
+
+  const selectedPayment = completedPayments.find(p => p.payment.id === selectedPaymentId);
+
+  const printRefundReceipt = async (paymentItem: typeof selectedPayment, amount: number, reason: string) => {
+    const rest: any = ticketContext?.restaurant;
+    const branch: any = ticketContext?.branch;
+    const refundTicket = {
+      isRefund: true,
+      restaurantName: rest?.name || "Rabbitty Bistro",
+      legalName: rest?.legalName || undefined,
+      rfc: rest?.rfc || undefined,
+      taxRegime: rest?.taxRegime || undefined,
+      logoUrl: rest?.logoUrl || undefined,
+      address: branch?.address || undefined,
+      phone: rest?.phone || branch?.phone || undefined,
+      orderNumber: paymentItem?.order?.id ? paymentItem.order.id.slice(-4).toUpperCase() : undefined,
+      paymentMethod: paymentItem ? (METHOD_LABELS[paymentItem.payment.method] || paymentItem.payment.method) : "Efectivo",
+      refundAmount: amount,
+      amount: amount,
+      reason: reason || "Devolución / Cancelación",
+      date: new Date().toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" }),
+      ticketFooter: rest?.ticketFooter || "Comprobante oficial de devolución y ajuste de caja.",
+    };
+
+    const res = await printEngine.printTicket(refundTicket, true);
+    if (res.success) {
+      toast.success("¡Ticket de reembolso impreso!");
+    } else if (res.queued) {
+      toast.warning("Ticket de reembolso guardado en cola para impresión.");
+    }
+  };
+
   const { mutate: refundPayment, isPending } = trpc.payments.refund.useMutation({
-    onSuccess: () => { 
-      toast.success("Reembolso procesado"); 
+    onSuccess: async (_, variables) => { 
+      toast.success("Reembolso procesado correctamente"); 
+      if (selectedPayment) {
+        await printRefundReceipt(selectedPayment, variables.amount, variables.reason || "");
+      }
       setSelectedPaymentId(null); 
       setRefundAmount(""); 
       setRefundNote(""); 
@@ -37,11 +77,6 @@ export default function RefundsPage() {
     },
     onError: (err) => toast.error(err.message),
   });
-
-  const completedPayments = payments?.filter(p => p.payment.status !== "REFUNDED") ?? [];
-  const refundedPayments = payments?.filter(p => p.payment.status === "REFUNDED") ?? [];
-
-  const selectedPayment = completedPayments.find(p => p.payment.id === selectedPaymentId);
 
   const handleSelectPayment = (paymentId: string, amount: number) => {
     setSelectedPaymentId(paymentId);
@@ -147,7 +182,7 @@ export default function RefundsPage() {
                   <h3 className="font-bold text-red-400">Historial de Reembolsos</h3>
                 </div>
                 <div className="divide-y divide-white/5">
-                  {refundedPayments.map(({ payment }) => (
+                  {refundedPayments.map(({ payment, order }) => (
                     <div key={payment.id} className="flex items-center justify-between px-6 py-3">
                       <div className="flex items-center gap-3">
                         <RotateCcw className="h-4 w-4 text-red-400" />
@@ -156,7 +191,26 @@ export default function RefundsPage() {
                           <p className="text-xs text-gray-500">{payment.reference ?? "Reembolso procesado"}</p>
                         </div>
                       </div>
-                      <p className="text-xs text-gray-500">{new Date(payment.createdAt ?? "").toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })} · {new Date(payment.createdAt ?? "").toLocaleDateString("es-MX")}</p>
+                      <div className="flex items-center gap-3">
+                        <p className="text-xs text-gray-500 text-right">
+                          {new Date(payment.createdAt ?? "").toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })} · {new Date(payment.createdAt ?? "").toLocaleDateString("es-MX")}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            printRefundReceipt(
+                              { payment, order: order as any },
+                              Math.abs(payment.amount),
+                              payment.reference?.replace(/^Refund:\s*/, "") || "Reembolso"
+                            );
+                          }}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs border border-white/10 transition-all cursor-pointer"
+                          title="Reimprimir comprobante de devolución"
+                        >
+                          <Printer className="h-3 w-3" />
+                          <span>Ticket</span>
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
