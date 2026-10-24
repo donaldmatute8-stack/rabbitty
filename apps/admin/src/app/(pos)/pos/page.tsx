@@ -1026,71 +1026,71 @@ export default function PosPage() {
             )}
           </div>
 
-          {/* Cart Footer (Totals & Actions) - Adaptable y con presencia sólida */}
-          <div className="p-3.5 lg:p-4 bg-black/75 border-t border-white/10 shrink-0 flex flex-col justify-end shadow-2xl">
+          {/* Cart Footer (Totals & Actions) - Ultracompacto y Adaptado a la altura óptima */}
+          <div className="p-2.5 lg:p-3 bg-black/85 border-t border-white/10 shrink-0 flex flex-col justify-end shadow-2xl">
             {/* Quick action to zoom order */}
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-[11px] text-gray-400 uppercase tracking-widest font-black">Resumen de Orden</span>
+            <div className="flex justify-between items-center mb-1">
+              <span className="text-[10px] text-gray-400 uppercase tracking-widest font-black">Resumen de Orden</span>
               <button 
                 onClick={() => setOrderZoomModal(true)}
                 disabled={cart.length === 0}
-                className="text-xs text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1.5 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                className="text-[11px] text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
               >
-                <Maximize2 className="h-3.5 w-3.5" /> Ampliar Lista
+                <Maximize2 className="h-3 w-3" /> Ampliar
               </button>
             </div>
             
-            <div className="space-y-1.5 mb-3 bg-white/2 p-2.5 rounded-2xl border border-white/5">
-              <div className="flex justify-between text-xs text-gray-400 font-bold">
+            <div className="space-y-0.5 mb-2 bg-white/2 px-2.5 py-1.5 rounded-xl border border-white/5">
+              <div className="flex justify-between text-[11px] text-gray-400 font-bold">
                 <span>Subtotal (Base)</span>
                 <span>${subtotal.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-xs text-cyan-400 font-bold">
+              <div className="flex justify-between text-[11px] text-cyan-400 font-bold">
                 <span>IVA (16% Incluido)</span>
                 <span>${tax.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-xl lg:text-2xl font-black text-white pt-1.5 border-t border-white/10">
+              <div className="flex justify-between text-base lg:text-lg font-black text-white pt-1 border-t border-white/10 mt-0.5">
                 <div className="flex flex-col">
-                  <span>Total</span>
-                  <span className="text-[10px] text-gray-500 font-bold tracking-widest uppercase">Impuestos incluidos</span>
+                  <span className="leading-none">Total</span>
+                  <span className="text-[9px] text-gray-500 font-bold tracking-wider uppercase">Impuestos incl.</span>
                 </div>
                 <span className="text-emerald-400 font-black">${total.toFixed(2)}</span>
               </div>
             </div>
 
             {/* Quick Payment Methods */}
-            <div className="grid grid-cols-4 gap-2 mb-3">
+            <div className="grid grid-cols-4 gap-1.5 mb-2">
               <button 
                 onClick={() => requestCheckout("EFECTIVO")}
                 disabled={cart.length === 0}
-                className="group flex flex-col items-center justify-center gap-1.5 rounded-2xl bg-white/5 py-2.5 lg:py-3 border border-white/10 hover:bg-emerald-500/20 hover:border-emerald-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
+                className="group flex flex-col items-center justify-center gap-0.5 rounded-xl bg-white/5 py-1.5 border border-white/10 hover:bg-emerald-500/20 hover:border-emerald-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
               >
-                <Banknote className="h-5 w-5 text-gray-400 group-hover:text-emerald-400" />
-                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 group-hover:text-emerald-400">Efectivo</span>
+                <Banknote className="h-4 w-4 text-gray-400 group-hover:text-emerald-400" />
+                <span className="text-[9px] font-black uppercase tracking-wider text-gray-400 group-hover:text-emerald-400">Efectivo</span>
               </button>
               <button 
                 onClick={() => requestCheckout("TARJETA")}
                 disabled={cart.length === 0}
-                className="group flex flex-col items-center justify-center gap-1.5 rounded-2xl bg-white/5 py-2.5 lg:py-3 border border-white/10 hover:bg-blue-500/20 hover:border-blue-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
+                className="group flex flex-col items-center justify-center gap-0.5 rounded-xl bg-white/5 py-1.5 border border-white/10 hover:bg-blue-500/20 hover:border-blue-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
               >
-                <CreditCard className="h-5 w-5 text-gray-400 group-hover:text-blue-400" />
-                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 group-hover:text-blue-400">Tarjeta</span>
+                <CreditCard className="h-4 w-4 text-gray-400 group-hover:text-blue-400" />
+                <span className="text-[9px] font-black uppercase tracking-wider text-gray-400 group-hover:text-blue-400">Tarjeta</span>
               </button>
               <button 
                 onClick={() => requestCheckout("QR BUNZ")}
                 disabled={cart.length === 0}
-                className="group flex flex-col items-center justify-center gap-1.5 rounded-2xl bg-white/5 py-2.5 lg:py-3 border border-white/10 hover:bg-purple-500/20 hover:border-purple-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
+                className="group flex flex-col items-center justify-center gap-0.5 rounded-xl bg-white/5 py-1.5 border border-white/10 hover:bg-purple-500/20 hover:border-purple-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
               >
-                <QrCode className="h-5 w-5 text-gray-400 group-hover:text-purple-400" />
-                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 group-hover:text-purple-400">QR Bunz</span>
+                <QrCode className="h-4 w-4 text-gray-400 group-hover:text-purple-400" />
+                <span className="text-[9px] font-black uppercase tracking-wider text-gray-400 group-hover:text-purple-400">QR Bunz</span>
               </button>
               <button 
                 onClick={() => requestCheckout("DIVIDIDA")}
                 disabled={cart.length === 0}
-                className="group flex flex-col items-center justify-center gap-1.5 rounded-2xl bg-white/5 py-2.5 lg:py-3 border border-white/10 hover:bg-orange-500/20 hover:border-orange-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
+                className="group flex flex-col items-center justify-center gap-0.5 rounded-xl bg-white/5 py-1.5 border border-white/10 hover:bg-orange-500/20 hover:border-orange-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
               >
-                <SplitSquareHorizontal className="h-5 w-5 text-gray-400 group-hover:text-orange-400" />
-                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 group-hover:text-orange-400">Dividir</span>
+                <SplitSquareHorizontal className="h-4 w-4 text-gray-400 group-hover:text-orange-400" />
+                <span className="text-[9px] font-black uppercase tracking-wider text-gray-400 group-hover:text-orange-400">Dividir</span>
               </button>
             </div>
 
@@ -1098,11 +1098,11 @@ export default function PosPage() {
             <button 
               onClick={() => requestCheckout("VENTA DIRECTA")}
               disabled={cart.length === 0}
-              className="relative w-full overflow-hidden rounded-2xl lg:rounded-3xl bg-cyan-500 py-3.5 lg:py-4 text-lg lg:text-xl font-black text-gray-950 shadow-[0_15px_40px_rgba(6,182,212,0.4)] transition-all hover:bg-cyan-400 active:scale-95 disabled:opacity-50 disabled:shadow-none group cursor-pointer"
+              className="relative w-full overflow-hidden rounded-xl bg-cyan-500 py-2.5 text-base font-black text-gray-950 shadow-[0_8px_25px_rgba(6,182,212,0.35)] transition-all hover:bg-cyan-400 active:scale-95 disabled:opacity-50 disabled:shadow-none group cursor-pointer"
             >
               <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-[0%] transition-transform duration-300 ease-out" />
-              <span className="relative z-10 flex items-center justify-center gap-2">
-                <Check className="h-6 w-6" /> COBRAR ORDEN (${total.toFixed(2)})
+              <span className="relative z-10 flex items-center justify-center gap-1.5">
+                <Check className="h-5 w-5" /> COBRAR ORDEN (${total.toFixed(2)})
               </span>
             </button>
           </div>
