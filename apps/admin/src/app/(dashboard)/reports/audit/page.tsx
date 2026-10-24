@@ -154,15 +154,32 @@ export default function AuditReportPage() {
   const { business, summary, orders, generatedAt } = report;
 
   return (
-    <div className="min-h-screen bg-[#08080C] text-gray-200 p-4 sm:p-6 lg:p-10 font-sans print:bg-white print:text-black print:p-0">
+    <div id="audit-printable-report" className="min-h-screen bg-[#08080C] text-gray-200 p-4 sm:p-6 lg:p-10 font-sans print:bg-white print:text-black print:p-0">
       <style jsx global>{`
         @media print {
-          body {
+          html, body {
             background: white !important;
             color: black !important;
+            overflow: visible !important;
+            height: auto !important;
           }
-          .no-print {
+          aside, header, nav, .no-print {
             display: none !important;
+            visibility: hidden !important;
+          }
+          #audit-printable-report,
+          #audit-printable-report * {
+            visibility: visible !important;
+          }
+          #audit-printable-report {
+            position: relative !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white !important;
+            color: black !important;
           }
           .print-border {
             border: 1px solid #e5e7eb !important;

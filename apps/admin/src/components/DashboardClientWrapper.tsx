@@ -8,7 +8,7 @@ import { CommandMenu } from "./CommandMenu";
 import { SandboxBanner } from "./SandboxBanner";
 import { trpc } from "../lib/trpc-client";
 import Link from "next/link";
-import { TerminalSquare, TabletSmartphone, Smartphone, MessageSquare, X } from "lucide-react";
+import { TerminalSquare, TabletSmartphone, Smartphone, MessageSquare, X, Bot, Sparkles, Send } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
 import { ScannerPairModal } from "./ScannerPairModal";
 
@@ -43,8 +43,18 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
     setIsNativeApp(isCapNative || isStandalone);
   }, []);
   const [chatDrawerOpen, setChatDrawerOpen] = useState(false);
+  const [drawerTab, setDrawerTab] = useState<"bunzy" | "customers">("bunzy");
   const [activeCustomerChat, setActiveCustomerChat] = useState<string | null>(null);
   const [chatReply, setChatReply] = useState("");
+
+  // Bunzy Co-Pilot conversation state
+  const [bunzyInput, setBunzyInput] = useState("");
+  const [bunzyMessages, setBunzyMessages] = useState<Array<{ role: "assistant" | "user"; text: string; action?: string }>>([
+    {
+      role: "assistant",
+      text: "¡Hola! 🐰 Soy Bunzy. Mientras conecto el motor de inteligencia con tus datos en vivo, usa las herramientas operativas de abajo.",
+    },
+  ]);
 
   const [branchId, setBranchId] = useState("b1");
   const [twoFaChecked, setTwoFaChecked] = useState(false);
@@ -215,11 +225,11 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
               <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 shrink-0">
                 <button
                   onClick={() => setChatDrawerOpen(true)}
-                  className="relative flex items-center gap-1.5 sm:gap-2 rounded-xl bg-pink-500/10 px-2.5 sm:px-3 py-2 text-xs font-bold text-pink-400 hover:bg-pink-500/20 active:scale-95 transition-all border border-pink-500/20 cursor-pointer"
-                  title="Mensajes de clientes B2C"
+                  className="relative flex items-center gap-1.5 sm:gap-2 rounded-xl bg-pink-500/15 px-3 py-2 text-xs font-black text-pink-400 hover:bg-pink-500/25 active:scale-95 transition-all border border-pink-500/30 cursor-pointer shadow-[0_0_15px_rgba(236,72,153,0.15)]"
+                  title="Bunzy Co-Pilot & Chats de Clientes"
                 >
-                  <MessageSquare className="h-4 w-4 shrink-0 text-pink-400" />
-                  <span className="hidden md:inline whitespace-nowrap">Chats Clientes</span>
+                  <span className="text-sm">🐰</span>
+                  <span className="font-extrabold tracking-wide">Bunzy</span>
                   <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-pink-500"></span>
@@ -274,28 +284,127 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
 
                 {/* Panel lateral */}
                 <aside className="relative z-50 w-full max-w-md h-full bg-[#111113] border-l border-white/10 flex flex-col shadow-2xl animate-in slide-in-from-right duration-300">
-                  {/* Header */}
-                  <div className="flex items-center justify-between p-4 border-b border-white/10">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-full bg-pink-500/20 border border-pink-500/40 flex items-center justify-center text-pink-400">
-                        <MessageSquare className="w-4 h-4" />
+                  {/* Header con tabs */}
+                  <div className="p-4 border-b border-white/10 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-pink-500/20 border border-pink-500/40 flex items-center justify-center text-sm shadow-[0_0_12px_rgba(236,72,153,0.3)]">
+                          🐰
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-black text-white m-0">Bunzy Workspace</h3>
+                          <p className="text-[11px] text-gray-400 m-0">Co-Pilot Operativo & Mensajería B2C</p>
+                        </div>
                       </div>
-                      <div>
-                        <h3 className="text-sm font-bold text-white m-0">Atención a Clientes (B2C)</h3>
-                        <p className="text-[11px] text-gray-400 m-0">Mensajes de usuarios de la MiniApp</p>
-                      </div>
+                      <button
+                        onClick={() => setChatDrawerOpen(false)}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors border-0 bg-transparent cursor-pointer"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
                     </div>
-                    <button
-                      onClick={() => setChatDrawerOpen(false)}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors border-0 bg-transparent cursor-pointer"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
+
+                    {/* Sub-tabs Bunzy Co-Pilot vs Chats Clientes */}
+                    <div className="grid grid-cols-2 p-1 bg-black/60 rounded-xl border border-white/10">
+                      <button
+                        onClick={() => {
+                          setDrawerTab("bunzy");
+                          setActiveCustomerChat(null);
+                        }}
+                        className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                          drawerTab === "bunzy"
+                            ? "bg-pink-500 text-white shadow-md shadow-pink-500/25"
+                            : "text-gray-400 hover:text-white"
+                        }`}
+                      >
+                        <Sparkles size={13} /> Bunzy Co-Pilot
+                      </button>
+                      <button
+                        onClick={() => setDrawerTab("customers")}
+                        className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                          drawerTab === "customers"
+                            ? "bg-pink-500 text-white shadow-md shadow-pink-500/25"
+                            : "text-gray-400 hover:text-white"
+                        }`}
+                      >
+                        <MessageSquare size={13} /> Chats Clientes
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Body: Customer Conversations List or Thread */}
+                  {/* Body Content */}
                   <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                    {!activeCustomerChat && (
+                    {drawerTab === "bunzy" && (
+                      <div className="flex flex-col h-full justify-between space-y-4">
+                        <div className="space-y-3">
+                          {bunzyMessages.map((msg, i) => (
+                            <div
+                              key={i}
+                              className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                            >
+                              <div
+                                className={`max-w-[85%] rounded-2xl px-4 py-3 text-xs leading-relaxed ${
+                                  msg.role === "user"
+                                    ? "bg-pink-600 text-white"
+                                    : "bg-white/5 text-gray-200 border border-white/10"
+                                }`}
+                              >
+                                {msg.role === "assistant" && (
+                                  <span className="text-[10px] font-black uppercase text-pink-400 block mb-1">
+                                    🐰 Bunzy Co-Pilot
+                                  </span>
+                                )}
+                                <p className="m-0 whitespace-pre-wrap">{msg.text}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="space-y-3">
+                          <div className="rounded-2xl border border-pink-500/30 bg-pink-500/10 p-4 text-left">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-pink-400 block mb-1">
+                              🐰 Bunzy Co-Pilot • En Desarrollo
+                            </span>
+                            <p className="text-xs text-gray-200 leading-relaxed m-0">
+                              Estamos unificando el motor de inteligencia de Bunzy con los datos fiscales y de comensales en vivo. Muy pronto podrás pedirle acciones por chat como activar promociones automáticas y consultar análisis sin inventar datos.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Quick Navigation Chips to Real Tools */}
+                        <div className="pt-3 border-t border-white/10 space-y-2">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2">Herramientas Operativas Activas:</p>
+                          <div className="flex flex-col gap-2">
+                            <Link
+                              href="/reports/audit"
+                              onClick={() => setChatDrawerOpen(false)}
+                              className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white border border-white/10 text-xs font-bold transition-all flex items-center justify-between no-underline"
+                            >
+                              <span>🧾 Cuadre de Caja & Auditoría</span>
+                              <span className="text-[10px] text-pink-400 font-mono">Verificado →</span>
+                            </Link>
+                            <Link
+                              href="/campaigns"
+                              onClick={() => setChatDrawerOpen(false)}
+                              className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white border border-white/10 text-xs font-bold transition-all flex items-center justify-between no-underline"
+                            >
+                              <span>📍 Radar de Proximidad & Bunz'in</span>
+                              <span className="text-[10px] text-emerald-400 font-mono">Abrir →</span>
+                            </Link>
+                            <Link
+                              href="/marketing/mood"
+                              onClick={() => setChatDrawerOpen(false)}
+                              className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white border border-white/10 text-xs font-bold transition-all flex items-center justify-between no-underline"
+                            >
+                              <span>✨ Rabbitty Mood Telemetría</span>
+                              <span className="text-[10px] text-purple-400 font-mono">En Vivo →</span>
+                            </Link>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {drawerTab === "customers" && !activeCustomerChat && (
                       <>
                         {conversationsLoading && (
                           <p className="text-xs text-gray-400 text-center py-6">Cargando conversaciones…</p>
@@ -362,8 +471,8 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                     )}
                   </div>
 
-                  {/* Quick Reply Bar */}
-                  {activeCustomerChat && (
+                  {/* Quick Reply Bar for Customer Chat */}
+                  {drawerTab === "customers" && activeCustomerChat && (
                     <div className="p-3 border-t border-white/10 bg-black/40">
                       <div className="flex items-center gap-2">
                         <input

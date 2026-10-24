@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { trpc } from "../../../lib/trpc-client";
 import { Card, cn, Button } from "@rabbitty/ui";
 import { motion } from "framer-motion";
@@ -146,15 +147,13 @@ export default function ReportsPage() {
               {isExporting ? "Generando..." : "Exportar CSV"}
             </Button>
 
-            <a
+            <Link
               href={`/reports/audit${branchId !== "default" ? `?branchId=${branchId}` : ""}`}
-              target="_blank"
-              rel="noopener noreferrer"
               className="inline-flex items-center justify-center px-4 py-2 bg-linear-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-bold text-sm rounded-xl shadow-[0_0_20px_rgba(236,72,153,0.3)] transition-all cursor-pointer no-underline"
             >
               <Activity className="mr-2 h-4 w-4" />
               Reporte de Cuadre PDF
-            </a>
+            </Link>
           </div>
         </div>
       </div>

@@ -31,7 +31,7 @@ export default function CampaignsPage() {
   const totalFailed = campaigns?.reduce((s, c) => s + (c.failedCount ?? 0), 0) ?? 0;
   const sentCampaigns = campaigns?.filter((c) => c.status === "SENT").length ?? 0;
 
-  const [activeTab, setActiveTab] = useState<"growth" | "classic">("growth");
+  const [activeTab, setActiveTab] = useState<"growth" | "proximity" | "classic">("growth");
   const { data: growthData } = trpc.campaigns.growthSignals.useQuery();
   const { data: affiliateCampaignsList } = trpc.campaigns.affiliateList.useQuery();
   const manageAffiliate = trpc.campaigns.manageAffiliateCampaign.useMutation({
@@ -73,11 +73,11 @@ export default function CampaignsPage() {
         </div>
 
         {/* Tab switcher */}
-        <div className="flex gap-2 mt-6 pt-4 border-t border-white/10">
+        <div className="flex flex-wrap gap-2 mt-6 pt-4 border-t border-white/10">
           <button
             type="button"
             onClick={() => setActiveTab("growth")}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === "growth" ? "bg-pink-500 text-white shadow-lg shadow-pink-500/25" : "bg-white/5 text-gray-400 hover:text-white"
             }`}
           >
@@ -85,13 +85,28 @@ export default function CampaignsPage() {
           </button>
           <button
             type="button"
+            onClick={() => setActiveTab("proximity")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === "proximity" ? "bg-pink-500 text-white shadow-lg shadow-pink-500/25" : "bg-white/5 text-gray-400 hover:text-white"
+            }`}
+          >
+            📍 Radar de Proximidad & Bunz'in
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab("classic")}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === "classic" ? "bg-pink-500 text-white shadow-lg shadow-pink-500/25" : "bg-white/5 text-gray-400 hover:text-white"
             }`}
           >
             📢 Campañas Masivas Tradicionales
           </button>
+          <Link
+            href="/marketing/mood"
+            className="px-4 py-2 rounded-xl text-xs font-bold transition-all bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 border border-purple-500/20 flex items-center gap-1.5 no-underline ml-auto"
+          >
+            <span>✨</span> Rabbitty Mood Telemetría ↗
+          </Link>
         </div>
       </div>
 
@@ -241,6 +256,72 @@ export default function CampaignsPage() {
               )}
             </div>
           </div>
+        </div>
+      ) : activeTab === "proximity" ? (
+        <div className="space-y-6">
+          <div className="rounded-3xl border border-white/10 bg-linear-to-br from-indigo-950/40 via-gray-900/80 to-black p-8 shadow-2xl backdrop-blur-xl relative overflow-hidden">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+              <div>
+                <span className="text-xs font-bold uppercase tracking-widest text-emerald-400 flex items-center gap-1.5 mb-1">
+                  📡 Geofencing & Location-Based Marketing
+                </span>
+                <h2 className="text-2xl font-black text-white">Radar de Proximidad & Bunz'in</h2>
+                <p className="text-sm text-gray-400 mt-1 max-w-xl">
+                  Detecta en segundo plano a comensales y rabbitters que caminan a menos de 500m de tu sucursal para invitarlos a pasar con promociones flash.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2.5 text-right">
+                  <span className="text-[10px] uppercase font-bold text-emerald-400 block">Motor de Proximidad</span>
+                  <span className="text-xs font-black text-white flex items-center gap-1.5 justify-end">
+                    <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
+                    Activo (Bucerías Core)
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-3">
+            <Card className="p-6 border border-white/10 bg-gray-900/60 backdrop-blur-xl rounded-2xl">
+              <span className="text-xs font-bold uppercase tracking-wider text-gray-400 block mb-1">Radio de Geofence</span>
+              <p className="text-3xl font-black text-white">500 <span className="text-sm font-semibold text-gray-500">metros</span></p>
+              <p className="text-xs text-gray-400 mt-2">Perímetro optimizado para peatones en Zona Dorada de Bucerías.</p>
+            </Card>
+
+            <Card className="p-6 border border-white/10 bg-gray-900/60 backdrop-blur-xl rounded-2xl">
+              <span className="text-xs font-bold uppercase tracking-wider text-pink-400 block mb-1">Incentivo Bunz'in</span>
+              <p className="text-3xl font-black text-pink-400">+50 <span className="text-sm font-semibold text-pink-300">Bunz</span></p>
+              <p className="text-xs text-gray-400 mt-2">Recompensa automática que el usuario recibe al abrir la app cerca de tu negocio.</p>
+            </Card>
+
+            <Card className="p-6 border border-white/10 bg-gray-900/60 backdrop-blur-xl rounded-2xl">
+              <span className="text-xs font-bold uppercase tracking-wider text-cyan-400 block mb-1">Filtro Antispam</span>
+              <p className="text-3xl font-black text-cyan-300">1x <span className="text-sm font-semibold text-cyan-400/70">por día</span></p>
+              <p className="text-xs text-gray-400 mt-2">Máximo un ping de proximidad por usuario cada 24 horas para garantizar alta conversión.</p>
+            </Card>
+          </div>
+
+          <Card className="p-6 border border-white/10 bg-gray-950/80 rounded-3xl">
+            <h3 className="text-base font-bold text-white mb-4 flex items-center gap-2">
+              <span>📍</span> Sucursales Sincronizadas al Radar
+            </h3>
+            <div className="p-4 rounded-2xl border border-white/5 bg-white/3 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-bold text-white m-0">626 Café • Bucerías Centro</p>
+                <p className="text-xs text-gray-400 m-0 mt-0.5">Lat: 20.7533 | Lng: -105.3345 • Nayarit, México</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                  Bunz'in Activo
+                </span>
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-pink-500/15 text-pink-400 border border-pink-500/30">
+                  Cashback 25%
+                </span>
+              </div>
+            </div>
+          </Card>
         </div>
       ) : (
         <>
