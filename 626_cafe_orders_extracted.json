@@ -1,0 +1,390 @@
+[
+  {
+    "order_id": "2a1bff1f-d27d-4281-9d26-4bf37879b2cc",
+    "orderType": "TO_GO",
+    "order_status": "COMPLETED",
+    "subtotal": 110,
+    "tax": 17.6,
+    "discount": 0,
+    "tip": 0,
+    "total": 127.6,
+    "bunzReward": 0,
+    "bunzPaid": 0,
+    "order_date": "2026-10-21T08:20:27.742Z",
+    "payment_id": "048d6ba4-0065-41e2-84bb-d31c16e806a6",
+    "payment_method": "CASH",
+    "payment_amount": 127.6,
+    "payment_status": "COMPLETED",
+    "items": [
+      {
+        "item_id": "174ec2c0-9628-4f5f-ab8b-891ee37f9e31",
+        "name": "CAFÉ AMERICANO",
+        "quantity": 2,
+        "unit_price": 55,
+        "total_price": 110,
+        "notes": null
+      }
+    ]
+  },
+  {
+    "order_id": "7fa13f2f-f0a8-41e8-928e-824d22576fcb",
+    "orderType": "TO_GO",
+    "order_status": "COMPLETED",
+    "subtotal": 65,
+    "tax": 10.4,
+    "discount": 0,
+    "tip": 0,
+    "total": 75.4,
+    "bunzReward": 0,
+    "bunzPaid": 0,
+    "order_date": "2026-10-21T08:21:28.112Z",
+    "payment_id": "b3e57719-95fe-4ebf-8c01-7ff256a1320f",
+    "payment_method": "CASH",
+    "payment_amount": 75.4,
+    "payment_status": "COMPLETED",
+    "items": [
+      {
+        "item_id": "e2a9d9fb-f6eb-4901-86f3-9cbab9c13d65",
+        "name": "kombucha",
+        "quantity": 1,
+        "unit_price": 65,
+        "total_price": 65,
+        "notes": null
+      }
+    ]
+  },
+  {
+    "order_id": "a43ae2b4-be2b-4e4e-ba59-6c8e94535304",
+    "orderType": "TO_GO",
+    "order_status": "COMPLETED",
+    "subtotal": 89,
+    "tax": 14.24,
+    "discount": 0,
+    "tip": 0,
+    "total": 103.24,
+    "bunzReward": 0,
+    "bunzPaid": 0,
+    "order_date": "2026-10-21T08:21:56.148Z",
+    "payment_id": "411497a1-58f0-43b8-adf3-08258b641f62",
+    "payment_method": "CASH",
+    "payment_amount": 103.24,
+    "payment_status": "COMPLETED",
+    "items": [
+      {
+        "item_id": "e613996d-7d2f-473a-9484-3bfc0ce54089",
+        "name": "Refresh de limon",
+        "quantity": 1,
+        "unit_price": 89,
+        "total_price": 89,
+        "notes": null
+      }
+    ]
+  },
+  {
+    "order_id": "3eea624f-66e4-4b41-8fb2-efa27aa1a906",
+    "orderType": "TO_GO",
+    "order_status": "COMPLETED",
+    "subtotal": 55,
+    "tax": 8.8,
+    "discount": 0,
+    "tip": 0,
+    "total": 63.8,
+    "bunzReward": 0,
+    "bunzPaid": 0,
+    "order_date": "2026-10-21T08:22:58.092Z",
+    "payment_id": "0f72a0eb-b032-4230-adb7-4db3b54a8d94",
+    "payment_method": "CASH",
+    "payment_amount": 63.8,
+    "payment_status": "COMPLETED",
+    "items": [
+      {
+        "item_id": "c038b688-3b7f-40a2-ad4f-046a4f88849a",
+        "name": "CAFÉ AMERICANO",
+        "quantity": 1,
+        "unit_price": 55,
+        "total_price": 55,
+        "notes": null
+      }
+    ]
+  },
+  {
+    "order_id": "e453d0a4-3ce4-427f-bb84-fbf7477287dc",
+    "orderType": "TO_GO",
+    "order_status": "COMPLETED",
+    "subtotal": 55,
+    "tax": 8.8,
+    "discount": 0,
+    "tip": 0,
+    "total": 63.8,
+    "bunzReward": 0,
+    "bunzPaid": 0,
+    "order_date": "2026-10-21T08:23:55.277Z",
+    "payment_id": "7a7f0e52-0b27-4464-a136-5cb3a6064995",
+    "payment_method": "CASH",
+    "payment_amount": 63.8,
+    "payment_status": "COMPLETED",
+    "items": [
+      {
+        "item_id": "ea4158e5-21b8-49ef-b2e6-1db41da9b9e9",
+        "name": "CAFÉ AMERICANO",
+        "quantity": 1,
+        "unit_price": 55,
+        "total_price": 55,
+        "notes": null
+      }
+    ]
+  },
+  {
+    "order_id": "78d870e1-0995-48a7-8b23-fa3c0424ae4b",
+    "orderType": "TO_GO",
+    "order_status": "COMPLETED",
+    "subtotal": 95,
+    "tax": 15.2,
+    "discount": 0,
+    "tip": 0,
+    "total": 110.2,
+    "bunzReward": 0,
+    "bunzPaid": 0,
+    "order_date": "2026-10-21T23:39:07.540Z",
+    "payment_id": "bcce995c-0850-4674-8f27-1771f8a52287",
+    "payment_method": "CREDIT_CARD",
+    "payment_amount": 110.2,
+    "payment_status": "COMPLETED",
+    "items": [
+      {
+        "item_id": "df9d47b3-e2e2-4944-b150-1cca687fc4de",
+        "name": "CAFÉ AMERICANO",
+        "quantity": 1,
+        "unit_price": 55,
+        "total_price": 55,
+        "notes": null
+      },
+      {
+        "item_id": "bbe51364-85f2-4e8c-8b04-e30b141de289",
+        "name": "Galleta de nuez",
+        "quantity": 1,
+        "unit_price": 40,
+        "total_price": 40,
+        "notes": null
+      }
+    ]
+  },
+  {
+    "order_id": "b86a4f77-3f97-4f9f-8a7b-428255ee350f",
+    "orderType": "TO_GO",
+    "order_status": "COMPLETED",
+    "subtotal": 189,
+    "tax": 30.24,
+    "discount": 0,
+    "tip": 0,
+    "total": 219.24,
+    "bunzReward": 0,
+    "bunzPaid": 0,
+    "order_date": "2026-10-23T01:48:25.478Z",
+    "payment_id": "9b0a75ff-1a24-45e5-9691-b0fff0dcb12e",
+    "payment_method": "CASH",
+    "payment_amount": 219.24,
+    "payment_status": "COMPLETED",
+    "items": [
+      {
+        "item_id": "a834dedf-96bd-4e66-a837-a88acc909fce",
+        "name": "Refresh de limon",
+        "quantity": 1,
+        "unit_price": 89,
+        "total_price": 89,
+        "notes": null
+      },
+      {
+        "item_id": "05af74f1-c300-4832-ab37-c40b2dc197ef",
+        "name": "Pacifico",
+        "quantity": 1,
+        "unit_price": 55,
+        "total_price": 55,
+        "notes": null
+      },
+      {
+        "item_id": "38467320-9949-4bad-8129-2015e0dc5a67",
+        "name": "Rusa",
+        "quantity": 1,
+        "unit_price": 45,
+        "total_price": 45,
+        "notes": null
+      }
+    ]
+  },
+  {
+    "order_id": "fc480eca-5730-47f8-8af0-7f4b65c6a46e",
+    "orderType": "TO_GO",
+    "order_status": "COMPLETED",
+    "subtotal": 55,
+    "tax": 8.8,
+    "discount": 0,
+    "tip": 0,
+    "total": 63.8,
+    "bunzReward": 0,
+    "bunzPaid": 0,
+    "order_date": "2026-10-23T01:54:36.899Z",
+    "payment_id": "e9212a3b-eae6-4544-be09-e0c4cc90cf11",
+    "payment_method": "CASH",
+    "payment_amount": 63.8,
+    "payment_status": "COMPLETED",
+    "items": [
+      {
+        "item_id": "ef37d918-cdf7-40fb-a841-9fad5c57b83d",
+        "name": "CAFÉ AMERICANO",
+        "quantity": 1,
+        "unit_price": 55,
+        "total_price": 55,
+        "notes": null
+      }
+    ]
+  },
+  {
+    "order_id": "bc2107a0-17e3-4e5e-942b-7ab60d435af3",
+    "orderType": "TO_GO",
+    "order_status": "COMPLETED",
+    "subtotal": 189,
+    "tax": 30.24,
+    "discount": 0,
+    "tip": 0,
+    "total": 219.24,
+    "bunzReward": 0,
+    "bunzPaid": 0,
+    "order_date": "2026-10-23T02:51:40.100Z",
+    "payment_id": "ba2c908c-cc97-4ac5-98b3-74afc6b969b9",
+    "payment_method": "CASH",
+    "payment_amount": 219.24,
+    "payment_status": "COMPLETED",
+    "items": [
+      {
+        "item_id": "74bdfeea-0ce8-4947-adcb-86574e28b96b",
+        "name": "Refresh de limon",
+        "quantity": 1,
+        "unit_price": 89,
+        "total_price": 89,
+        "notes": null
+      },
+      {
+        "item_id": "562e1ad4-653f-4e74-b606-af907cc997a1",
+        "name": "Pacifico",
+        "quantity": 1,
+        "unit_price": 55,
+        "total_price": 55,
+        "notes": null
+      },
+      {
+        "item_id": "23fc01dd-92c6-4251-9b0e-4977b6e29860",
+        "name": "Rusa",
+        "quantity": 1,
+        "unit_price": 45,
+        "total_price": 45,
+        "notes": null
+      }
+    ]
+  },
+  {
+    "order_id": "e6d8a60b-0c86-4724-b137-1df74cfb9a40",
+    "orderType": "TO_GO",
+    "order_status": "COMPLETED",
+    "subtotal": 144,
+    "tax": 23.04,
+    "discount": 0,
+    "tip": 0,
+    "total": 167.04,
+    "bunzReward": 0,
+    "bunzPaid": 0,
+    "order_date": "2026-10-23T07:08:16.850Z",
+    "payment_id": "1da420f3-410d-4d6c-a79c-f62bd082824c",
+    "payment_method": "CASH",
+    "payment_amount": 167.04,
+    "payment_status": "COMPLETED",
+    "items": [
+      {
+        "item_id": "58c57eff-f88a-4881-af14-d5ec02c90591",
+        "name": "Refresh de menta",
+        "quantity": 1,
+        "unit_price": 89,
+        "total_price": 89,
+        "notes": null
+      },
+      {
+        "item_id": "626b8295-9087-4235-8c8c-1dd8d7c0e436",
+        "name": "Pacifico",
+        "quantity": 1,
+        "unit_price": 55,
+        "total_price": 55,
+        "notes": null
+      }
+    ]
+  },
+  {
+    "order_id": "2c2815a7-2b64-4051-82a6-67c22047e67c",
+    "orderType": "TO_GO",
+    "order_status": "COMPLETED",
+    "subtotal": 202.59,
+    "tax": 32.41,
+    "discount": 0,
+    "tip": 0,
+    "total": 235,
+    "bunzReward": 0,
+    "bunzPaid": 0,
+    "order_date": "2026-10-24T00:59:49.545Z",
+    "payment_id": "d0aac933-a072-470f-9def-ac16249b37c8",
+    "payment_method": "CASH",
+    "payment_amount": 235,
+    "payment_status": "COMPLETED",
+    "items": [
+      {
+        "item_id": "0db319b3-01bc-4670-a8b5-8f453e0cdc1f",
+        "name": "CAFÉ AMERICANO",
+        "quantity": 1,
+        "unit_price": 55,
+        "total_price": 55,
+        "notes": null
+      },
+      {
+        "item_id": "83158f72-da2f-4663-aac8-753f291fb457",
+        "name": "FRAPPÉS",
+        "quantity": 1,
+        "unit_price": 85,
+        "total_price": 85,
+        "notes": null
+      },
+      {
+        "item_id": "f0bb4f29-38da-4015-ade1-249401bd7332",
+        "name": "Chai latte frio",
+        "quantity": 1,
+        "unit_price": 95,
+        "total_price": 95,
+        "notes": null
+      }
+    ]
+  },
+  {
+    "order_id": "76c3ff3a-ddfe-4165-b1f6-0b90e4fa33b9",
+    "orderType": "TO_GO",
+    "order_status": "COMPLETED",
+    "subtotal": 73.28,
+    "tax": 11.72,
+    "discount": 0,
+    "tip": 0,
+    "total": 85,
+    "bunzReward": 0,
+    "bunzPaid": 0,
+    "order_date": "2026-10-24T04:55:03.535Z",
+    "payment_id": "03a571e2-9c5a-49ce-89f7-9292a171bf12",
+    "payment_method": "CREDIT_CARD",
+    "payment_amount": 85,
+    "payment_status": "COMPLETED",
+    "items": [
+      {
+        "item_id": "0f142ec1-bf22-4727-a470-74755f6830f5",
+        "name": "CAFÉ FRIO MINERAL",
+        "quantity": 1,
+        "unit_price": 85,
+        "total_price": 85,
+        "notes": null
+      }
+    ]
+  }
+]

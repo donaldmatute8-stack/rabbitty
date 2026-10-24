@@ -168,6 +168,22 @@ export default function FeedPage() {
         setUserLat(loc.lat);
         setUserLng(loc.lng);
         PlatformBridge.hapticFeedback('success');
+
+        // Ping proximity engine in background to evaluate loyalty rewards and local alerts
+        PlatformBridge.getAuthHeaders().then((headers) => {
+          fetch('/api/location/ping', {
+            method: 'POST',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lat: loc.lat, lng: loc.lng }),
+          })
+            .then((r) => r.json())
+            .then((res) => {
+              if (res.triggeredOffers && res.triggeredOffers.length > 0) {
+                showToast(`🎁 ¡Cashback especial disponible en ${res.triggeredOffers.join(', ')}!`, 'success');
+              }
+            })
+            .catch(() => {});
+        });
       } else if (loc.error === 'PERMISSION_DENIED') {
         showToast('Ubicación denegada. Puedes habilitarla en los ajustes de tu navegador.', 'info');
       } else {

@@ -708,15 +708,20 @@ async function runOllama(
 }
 
 export interface BunzyAssistInput {
-  mode: 'draft' | 'summarize' | 'admin_qa';
+  mode: 'draft' | 'summarize' | 'admin_qa' | 'marketing_proposal';
   intent?: string;
   otherName?: string;
   messages: { fromMe: boolean; content: string }[];
 }
 
 /**
- * Bunzy como asistente dentro de un chat interno (Rabbitter ↔ Rabbitter / Negocio).
- * Redacta un mensaje sugerido ('draft'), resume la conversación ('summarize') o responde dudas de Admin/POS ('admin_qa').
+ * Bunzy como asistente dentro de un chat interno (Rabbitter ↔ Rabbitter / Negocio)
+ * y Co-Pilot comercial para Afiliados.
+ * Modos:
+ * - 'draft': Redacta un mensaje sugerido al cliente.
+ * - 'summarize': Resume la conversación.
+ * - 'admin_qa': Responde dudas de Admin/POS.
+ * - 'marketing_proposal': Redacta una propuesta de campaña comercial con incentivo, tope y vigencia para aprobación del afiliado.
  */
 export async function generateBunzyAssist(input: BunzyAssistInput): Promise<string> {
   const transcript = input.messages
@@ -728,6 +733,16 @@ export async function generateBunzyAssist(input: BunzyAssistInput): Promise<stri
     input.mode === 'admin_qa'
       ? `Eres Bunzy 🐰, el concierge y asistente experto de Rabbitty en POS, Administración, KDS de cocina, Kiosko y Finanzas.
 Responde de forma concisa, clara y amigable a la consulta del usuario sobre el funcionamiento del sistema, cómo hacer corte de caja, gestionar comandas, emitir Bunz o exportar reportes. Tono mexicano profesional y fresco. Máximo 70 palabras.`
+      : input.mode === 'marketing_proposal'
+        ? `Eres Bunzy 🐰 Co-Pilot de Marketing para Afiliados de Rabbitty.
+El afiliado quiere una propuesta de campaña comercial.
+IMPORTANTE:
+1. Jamás inventes saldos ni emitas Bunz directamente. Toda bonificación propuesta debe tener un límite claro (tope de Bunz o % moderado de cashback) y vigencia temporal (ej. 2 horas o 48 horas).
+2. Redacta una propuesta lista para que el afiliado la revise y apruebe con 3 secciones breves:
+- [Mensaje para el cliente]: Texto cordial, tentador y fresco.
+- [Condición de recompensa]: % de cashback aplicable al pagar en caja (máximo tope razonable).
+- [Vigencia recomendada]: Duración de la promoción.
+Tono mexicano entusiasta, profesional y claro. Máximo 75 palabras.`
       : input.mode === 'summarize'
         ? `Eres Bunzy 🐰, asistente oficial de Rabbitty. Resume en 2 o 3 viñetas muy breves de qué se habló en esta conversación y, si aplica, cuál es el siguiente paso pendiente. Tono mexicano fresco y directo. Responde en español, máximo 60 palabras.`
         : `Eres Bunzy 🐰, asistente oficial de Rabbitty. Redacta UN mensaje breve, natural y cordial para que el usuario lo envíe en este chat${input.otherName ? ` con ${input.otherName}` : ''}. ${
@@ -744,7 +759,7 @@ Responde de forma concisa, clara y amigable a la consulta del usuario sobre el f
           { role: 'system', content: system },
           { role: 'user', content: input.intent || transcript || '(Aún no hay mensajes previos)' },
         ],
-        max_tokens: 160,
+        max_tokens: 180,
         temperature: 0.7,
       });
       const text = completion.choices[0]?.message?.content?.trim();
@@ -759,6 +774,13 @@ Responde de forma concisa, clara y amigable a la consulta del usuario sobre el f
     const matchedFaq = matchFaq(input.intent || '');
     if (matchedFaq) return `🐰 ${matchedFaq.a}`;
     return '🐰 En Rabbitty POS puedes cobrar, gestionar mesas, operar la caja por turnos con PIN (apertura, retiros, arqueo ciego y cierre Z), y enviar órdenes a cocina en KDS.';
+  }
+  if (input.mode === 'marketing_proposal') {
+    return `🐰 Propuesta lista para revisión:
+• Mensaje: "¡Hola! Te extrañamos por aquí. Ven hoy y recibe un bono especial en tu consumo al pagar en caja."
+• Incentivo sugerido: +10% de cashback en Bunz (tope máx 30 Bunz).
+• Vigencia sugerida: 48 horas.
+¿Deseas activarla?`;
   }
   if (input.mode === 'summarize') {
     const last = input.messages

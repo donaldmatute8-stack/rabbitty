@@ -74,12 +74,23 @@ function MapPageInner() {
   });
   const [isLocating, setIsLocating] = useState(false);
 
+  const pingLocation = (lat: number, lng: number) => {
+    PlatformBridge.getAuthHeaders().then((headers) => {
+      fetch('/api/location/ping', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lat, lng }),
+      }).catch(() => {});
+    });
+  };
+
   const requestLocation = async () => {
     setIsLocating(true);
     try {
       const loc = await PlatformBridge.getLocation();
       if (loc.success && loc.lat != null && loc.lng != null) {
         setUserCoords({ lat: loc.lat, lng: loc.lng });
+        pingLocation(loc.lat, loc.lng);
       }
     } finally {
       setIsLocating(false);
@@ -91,6 +102,7 @@ function MapPageInner() {
     PlatformBridge.getLocation().then((loc) => {
       if (loc.success && loc.lat != null && loc.lng != null) {
         setUserCoords({ lat: loc.lat, lng: loc.lng });
+        pingLocation(loc.lat, loc.lng);
       }
     });
   }, [targetLat, targetLng]);

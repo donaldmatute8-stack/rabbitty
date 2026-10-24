@@ -1,0 +1,247 @@
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/db";
+import { ownedBusinesses, transactions, notifications } from "@/db/schema";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { getAuthenticatedUser } from "@/lib/serverAuth";
+import { isApnsConfigured, sendPushToUser } from "@/lib/push/apns";
+import { restaurantDb } from "@/db/restaurant";
+import { restaurants, branches, events } from "@rabbitty/database-restaurant/schema";
+
+/**
+ * Calculates geodetic distance in meters using the Haversine formula.
+ */
+function getDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c);
+}
+
+// In-memory cooldown cache to prevent push spam: key -> timestamp
+const notificationCooldowns = new Map<string, number>();
+const COOLDOWN_MS = 12 * 60 * 60 * 1000;
+
+// Simple in-memory rate limit per user
+const pingRateLimit = new Map<string, { count: number; resetAt: number }>();
+const PING_RATE_LIMIT = 10;
+const PING_RATE_WINDOW_MS = 30 * 1000;
+
+interface ProximityMatch {
+  businessId: string;
+  businessName: string;
+  category: string;
+  distanceMeters: number;
+  rewardPercentage: number;
+  loyaltyOffer?: {
+    type: "DOUBLE_CASHBACK_VIP" | "PERSONAL_REWARD_100";
+    title: string;
+    description: string;
+    pastVisits: number;
+    multiplier: number;
+  };
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const caller = await getAuthenticatedUser(req);
+    const body = await req.json();
+    const { lat, lng, accuracy } = body;
+
+    if (typeof lat !== "number" || typeof lng !== "number") {
+      return NextResponse.json({ error: "lat and lng are required numbers" }, { status: 400 });
+    }
+
+    if (caller?.id) {
+      const now = Date.now();
+      const rlKey = `ping:${caller.id}`;
+      const rl = pingRateLimit.get(rlKey);
+      if (rl && now < rl.resetAt) {
+        if (rl.count >= PING_RATE_LIMIT) {
+          return NextResponse.json({ error: "Too many location pings" }, { status: 429 });
+        }
+        rl.count += 1;
+        pingRateLimit.set(rlKey, rl);
+      } else {
+        pingRateLimit.set(rlKey, { count: 1, resetAt: now + PING_RATE_WINDOW_MS });
+      }
+    }
+
+    const businesses = await db
+      .select()
+      .from(ownedBusinesses)
+      .where(eq(ownedBusinesses.status, "APPROVED"))
+      .limit(200);
+
+    const matches: ProximityMatch[] = [];
+    const triggeredOffers: string[] = [];
+
+    const nearBusinesses: Array<{ business: (typeof businesses)[0]; dist: number }> = [];
+    for (const b of businesses) {
+      if (typeof b.lat !== "number" || typeof b.lng !== "number") continue;
+      const dist = getDistanceMeters(lat, lng, b.lat, b.lng);
+      if (dist <= 2500) {
+        nearBusinesses.push({ business: b, dist });
+      }
+    }
+
+    const visitCountMap = new Map<string, number>();
+    if (caller) {
+      const proxBusinessIds = nearBusinesses
+        .filter((nb) => nb.dist <= 250)
+        .map((nb) => nb.business.id);
+      if (proxBusinessIds.length > 0) {
+        const counts = await db
+          .select({
+            businessId: transactions.businessId,
+            count: sql<number>`count(*)`,
+          })
+          .from(transactions)
+          .where(
+            and(
+              eq(transactions.userId, caller.id),
+              inArray(transactions.businessId, proxBusinessIds),
+              eq(transactions.status, "COMPLETED")
+            )
+          )
+          .groupBy(transactions.businessId);
+        for (const c of counts) {
+          visitCountMap.set(c.businessId, Number(c.count ?? 0));
+        }
+      }
+    }
+
+    for (const nb of nearBusinesses) {
+      const b = nb.business;
+      const dist = nb.dist;
+
+      const match: ProximityMatch = {
+        businessId: b.id,
+        businessName: b.name,
+        category: b.category,
+        distanceMeters: dist,
+        rewardPercentage: b.rewardPercentage,
+      };
+
+      if (caller && dist <= 250) {
+        const visitCount = visitCountMap.get(b.id) ?? 0;
+
+        if (visitCount >= 10) {
+          match.loyaltyOffer = {
+            type: "DOUBLE_CASHBACK_VIP",
+            title: `¡Bonificación Especial en ${b.name}!`,
+            description: `Por tu fidelidad (${visitCount} visitas), recibe doble cashback (hasta 50 Bunz) en tu consumo de hoy al pagar en caja.`,
+            pastVisits: visitCount,
+            multiplier: 2.0,
+          };
+
+          const cooldownKey = `push:loyalty:${caller.id}:${b.id}`;
+          const lastSent = notificationCooldowns.get(cooldownKey) || 0;
+          const now = Date.now();
+
+          if (now - lastSent > COOLDOWN_MS) {
+            notificationCooldowns.set(cooldownKey, now);
+
+            const pushTitle = `🐰 ¡Estás cerca de ${b.name}!`;
+            const pushBody = `Visita #${visitCount + 1}: Recibe doble cashback (hasta 50 Bunz) en tu consumo de hoy al pagar en caja.`;
+
+            await db
+              .insert(notifications)
+              .values({
+                userId: caller.id,
+                title: pushTitle,
+                message: pushBody,
+                type: "LOYALTY_OFFER",
+              })
+              .catch(() => {});
+
+            if (isApnsConfigured()) {
+              sendPushToUser(caller.id, {
+                title: pushTitle,
+                body: pushBody,
+                data: {
+                  type: "PROXIMITY_LOYALTY",
+                  businessId: b.id,
+                  businessName: b.name,
+                },
+              }).catch((err) => {
+                console.warn("[LOCATION_PING] Push send error:", err);
+              });
+            }
+
+            triggeredOffers.push(b.name);
+          }
+        }
+
+        if (dist <= 60) {
+          const poorAccuracy = typeof accuracy === "number" && accuracy > 80;
+          if (!poorAccuracy) {
+            const arrivalKey = `arrival:${caller.id}:${b.id}`;
+            const lastArrival = notificationCooldowns.get(arrivalKey) || 0;
+            const now = Date.now();
+            if (now - lastArrival > 4 * 60 * 60 * 1000) {
+              notificationCooldowns.set(arrivalKey, now);
+              try {
+                const [rest] = await restaurantDb
+                  .select()
+                  .from(restaurants)
+                  .where(eq(restaurants.businessId, b.id))
+                  .limit(1);
+                if (rest) {
+                  const [branch] = await restaurantDb
+                    .select()
+                    .from(branches)
+                    .where(eq(branches.restaurantId, rest.id))
+                    .limit(1);
+                  if (branch) {
+                    await restaurantDb
+                      .insert(events)
+                      .values({
+                        branchId: branch.id,
+                        type: "CUSTOMER_ARRIVAL",
+                        payload: {
+                          userId: caller.id,
+                          username: caller.username || "Rabbitter",
+                          visitCount,
+                          isVip: visitCount >= 10,
+                          arrivedAt: new Date().toISOString(),
+                          distanceMeters: dist,
+                          accuracy: typeof accuracy === "number" ? accuracy : undefined,
+                        },
+                      })
+                      .catch((err) => {
+                        console.warn("[LOCATION_PING] Failed to insert CUSTOMER_ARRIVAL event:", err);
+                      });
+                  }
+                }
+              } catch (err) {
+                console.warn("[LOCATION_PING] Error looking up restaurant/branch for arrival:", err);
+              }
+            }
+          }
+        }
+      }
+
+      matches.push(match);
+    }
+
+    matches.sort((a, b) => a.distanceMeters - b.distanceMeters);
+
+    return NextResponse.json({
+      success: true,
+      nearbyCount: matches.length,
+      immediateMatches: matches.filter((m) => m.distanceMeters <= 250),
+      matches: matches.slice(0, 10),
+      triggeredOffers,
+    });
+  } catch (error) {
+    console.error("[LOCATION_PING_ERROR]", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
