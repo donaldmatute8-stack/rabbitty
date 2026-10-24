@@ -32,7 +32,7 @@ export async function POST(req: Request) {
 
     const body = (await req.json()) as {
       conversationId?: string;
-      mode?: 'draft' | 'summarize' | 'admin_qa';
+      mode?: 'draft' | 'summarize' | 'admin_qa' | 'marketing_proposal';
       intent?: string;
     };
 
@@ -69,12 +69,15 @@ export async function POST(req: Request) {
       caller.role === 'AFFILIATE' ||
       access.isBusinessInbox;
 
-    // Si un usuario ordinario intenta invocar admin_qa, degradar limpiamente a draft
-    const effectiveMode = body.mode === 'admin_qa' && !isMerchantOrAdmin ? 'draft' : (body.mode || 'draft');
+    // Si un usuario ordinario intenta invocar modos de negocio (admin_qa o marketing_proposal), degradar limpiamente a draft
+    let effectiveMode: 'draft' | 'summarize' | 'admin_qa' | 'marketing_proposal' = body.mode || 'draft';
+    if ((body.mode === 'admin_qa' || body.mode === 'marketing_proposal') && !isMerchantOrAdmin) {
+      effectiveMode = 'draft';
+    }
 
     // Telemetría ligera de auditoría
-    if (body.mode === 'admin_qa') {
-      console.log(`[BunzyAssist Audit] admin_qa query by user=${caller.id} isMerchant=${isMerchantOrAdmin} intent="${body.intent || ''}"`);
+    if (body.mode === 'admin_qa' || body.mode === 'marketing_proposal') {
+      console.log(`[BunzyAssist Audit] ${body.mode} query by user=${caller.id} isMerchant=${isMerchantOrAdmin} intent="${body.intent || ''}"`);
     }
 
     const text = await generateBunzyAssist({

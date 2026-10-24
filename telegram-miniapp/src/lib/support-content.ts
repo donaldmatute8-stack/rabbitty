@@ -61,6 +61,18 @@ export const FAQS: FaqItem[] = [
     a: 'En la pantalla principal del Admin (/), cuentas con la "Barra de Preparación Inteligente (Business Readiness)". Evalúa 7 pilares operativos: 1. Menú y platillos (/menu), 2. Personal y roles (/staff), 3. Menú digital TV y QR de mesa (/menu-boards), 4. Cashback Bunz (/loyalty), 5. Corte de caja y fondo de gaveta (/pos), 6. Pantalla KDS e impresoras (/kitchen), y 7. Capacitación en Academy (/academy). Cada paso completado incrementa el % de preparación hacia el 100%.',
   },
   {
+    q: '¿Qué es el Growth Engine y cómo funcionan las Campañas Comerciales de Afiliados?',
+    a: 'El Growth Engine permite a los negocios afiliados crear campañas de marketing con presupuesto tope en Bunz, límite por usuario y vigencia (ej. 2h a 48h). Detecta oportunidades con k-anonimato (≥ 5 clientes) para recuperar inactivos (25+ días), incentivar horas valle frente a históricos de 3 semanas, o premiar a clientes VIP (5+ visitas). Toda redención es auditada y registrada en el Ledger contable al momento de pagar en caja.',
+  },
+  {
+    q: '¿Cómo asiste Bunzy en la creación de campañas y marketing para comercios?',
+    a: 'Dentro de cualquier chat de negocio o en el panel de marketing, el afiliado puede invocar a Bunzy Co-Pilot en modo "Crear propuesta comercial". Bunzy analiza la oportunidad y redacta una propuesta estructurada con mensaje cordial, % de cashback en caja, tope de Bunz y vigencia. El afiliado siempre debe revisar y aprobar explícitamente antes de que la campaña se active.',
+  },
+  {
+    q: '¿Cómo funciona la detección de proximidad y las alertas de fidelidad?',
+    a: 'Cuando un Rabbitter voluntariamente activa o consulta el mapa interactivo Freehands (/map), el sistema evalúa negocios cercanos (≤ 250m). Si el cliente tiene 10 o más consumos históricos con el afiliado, recibe una alerta con bonificación especial de doble cashback (con tope de 50 Bunz) para su consumo en caja. Si está en la puerta (≤ 60m), emite un aviso discreto al POS para que el staff salude al comensal.',
+  },
+  {
     q: '¿Dónde encuentro cada función en el Admin de Rabbitty?',
     a: 'El Admin se organiza en 4 pilares: 1. Operación En Vivo (Dashboard, POS /pos, Kiosko /kiosk, Cocina KDS /kitchen, Turnos /staff/shifts, Mesas /table-layout, Reportes /reports). 2. Carta & Productos (Menú /menu, Recetas /recipes, Inventario /inventory, Proveedores /suppliers, Gastos /expenses). 3. Crecimiento (Lealtad /loyalty, Clientes /customers, Campañas /campaigns, Referidos /referrals, Guías /academy). 4. Configuración (Sucursales, Hardware, Sincronización POS).',
   },
@@ -74,6 +86,14 @@ export const DOC_SECTIONS: { title: string; body: string }[] = [
   {
     title: 'El Ecosistema Rabbitty',
     body: 'Rabbitty es una red de recompensas que conecta negocios locales y consumidores con un modelo Give-to-Get. Al visitar los comercios de la red Stock y escanear tu billetera, recibes un porcentaje de tus compras en Bunz.',
+  },
+  {
+    title: 'Affiliate Growth Engine & Bunzy Co-Pilot',
+    body: 'Motor comercial para que los comercios afiliados activen campañas flash en horas valle, recuperen comensales inactivos y premien a clientes fieles. Incluye auditoría ROI (fiat generado por Bunz invertido), topes presupuestarios por comensal, deduplicación e integración con el Ledger contable.',
+  },
+  {
+    title: 'Ubicación Inteligente y Radar de Proximidad',
+    body: 'Geolocalización en primer plano que permite a los usuarios descubrir locales en el mapa y recibir ofertas de doble cashback por fidelidad (al pagar en caja). Cuenta con k-anonimato (≥ 5 personas) para proteger la privacidad del comensal y notificaciones de llegada sutiles al POS.',
   },
   {
     title: 'La Billetera Bunz',

@@ -139,11 +139,22 @@ export default function ReportsPage() {
             <Button
               onClick={handleExportCSV}
               disabled={isExporting}
-              className="bg-linear-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white rounded-xl shadow-[0_0_20px_rgba(236,72,153,0.3)] border-0 cursor-pointer"
+              variant="secondary"
+              className="rounded-xl border border-white/10 text-white cursor-pointer"
             >
               <Download className="mr-2 h-4 w-4" />
-              {isExporting ? "Generando..." : "Exportar Contabilidad"}
+              {isExporting ? "Generando..." : "Exportar CSV"}
             </Button>
+
+            <a
+              href={`/reports/audit${branchId !== "default" ? `?branchId=${branchId}` : ""}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center px-4 py-2 bg-linear-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-bold text-sm rounded-xl shadow-[0_0_20px_rgba(236,72,153,0.3)] transition-all cursor-pointer no-underline"
+            >
+              <Activity className="mr-2 h-4 w-4" />
+              Reporte de Cuadre PDF
+            </a>
           </div>
         </div>
       </div>

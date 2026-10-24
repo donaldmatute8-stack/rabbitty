@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { QrCode, Inbox, Check, X, ArrowLeft, BookOpen, AlertTriangle, BarChart3, Users, Settings2 } from 'lucide-react';
+import { QrCode, Inbox, Check, X, ArrowLeft, BookOpen, AlertTriangle, BarChart3, Users, Settings2, Zap } from 'lucide-react';
 import RabbittyCode from '@/components/ui/RabbittyCode';
 import { PlatformBridge } from '@/lib/platform';
 
@@ -77,7 +77,7 @@ interface MobileAffiliateDashboardProps {
 export default function MobileAffiliateDashboard({ business }: MobileAffiliateDashboardProps) {
   const router = useRouter();
   const [showCodeModal, setShowCodeModal] = useState(false);
-  const [activeSubTab, setActiveSubTab] = useState<'analytics' | 'clients' | 'settings' | 'ledger' | null>(null);
+  const [activeSubTab, setActiveSubTab] = useState<'analytics' | 'clients' | 'settings' | 'ledger' | 'campaigns' | null>(null);
   const [rewardRate, setRewardRate] = useState(business?.rewardPercentage || 21);
   const [savingRate, setSavingRate] = useState(false);
   const [reservations, setReservations] = useState<ReservationItem[]>([]);
@@ -86,6 +86,9 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
   const [totalBunz, setTotalBunz] = useState(0);
   const [clientCount, setClientCount] = useState(0);
   const [clientList] = useState<Array<{ user?: { firstName?: string; username?: string }; txs?: number; bunz?: number }>>([]);
+  const [growthSignals, setGrowthSignals] = useState<Array<{ id: string; type: string; headline: string; explanation: string; targetCount: number; suggestedAction: { rewardPercentage: number; maxBudgetBunz: number; validityHours: number } }>>([]);
+  const [affiliateCampaigns, setAffiliateCampaigns] = useState<Array<{ id: string; title: string; status: string; budgetSpent: number; budgetBunz: number; redemptionCount: number; message: string }>>([]);
+  const [loadingCampaigns, setLoadingCampaigns] = useState(false);
   
   // Paso C: Ledger audit state
   const [ledgerData, setLedgerData] = useState<LedgerAuditData | null>(null);
@@ -132,6 +135,22 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
           }
         })
         .catch(() => {});
+
+      // Fetch Growth Signals & Campaigns
+      PlatformBridge.getAuthHeaders().then(headers => {
+        setLoadingCampaigns(true);
+        Promise.all([
+          fetch(`/api/business/growth-signals?businessId=${business.id}`, { headers }).then(r => r.json()),
+          fetch(`/api/business/campaigns?businessId=${business.id}`, { headers }).then(r => r.json()),
+        ]).then(([signalsData, campaignsData]) => {
+          if (signalsData?.success && signalsData.opportunities) {
+            setGrowthSignals(signalsData.opportunities);
+          }
+          if (campaignsData?.success && campaignsData.campaigns) {
+            setAffiliateCampaigns(campaignsData.campaigns);
+          }
+        }).catch(() => {}).finally(() => setLoadingCampaigns(false));
+      });
     }
   }, [business?.id]);
 
@@ -379,6 +398,36 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
           </div>
         </motion.div>
 
+        {/* Action: Growth Engine & Campañas Flash */}
+        <motion.div
+          initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.10 }}
+          className="rounded-2xl p-4 mb-4 flex items-center justify-between cursor-pointer active:scale-[0.99] transition-transform"
+          style={{
+            background: 'linear-gradient(135deg, rgba(233,30,99,0.12) 0%, rgba(255,138,0,0.12) 100%)',
+            border: '1.5px solid rgba(233,30,99,0.3)',
+            boxShadow: 'var(--shadow-sm)',
+          }}
+          onClick={() => {
+            PlatformBridge.hapticFeedback('medium');
+            setActiveSubTab('campaigns');
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-linear-to-br from-[#E91E63] to-[#FF8A00] text-white flex items-center justify-center shrink-0 text-lg shadow-sm">
+              ⚡
+            </div>
+            <div>
+              <p className="text-sm font-extrabold text-(--text-primary) m-0 leading-snug">Motor de Crecimiento & Campañas</p>
+              <p className="text-xs text-(--text-muted) m-0">
+                {growthSignals.length > 0 ? `${growthSignals.length} oportunidades detectadas por Bunzy` : 'Campañas flash y recuperación de clientes'}
+              </p>
+            </div>
+          </div>
+          <div className="px-3 py-1.5 rounded-full bg-[#E91E63] text-white text-xs font-bold shrink-0 shadow-sm">
+            Ver
+          </div>
+        </motion.div>
+
         {/* Action: Kit de Impresión Físico Dinámico */}
         <motion.div
           initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
@@ -410,6 +459,34 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
           </div>
           <div className="px-3 py-1.5 rounded-full bg-pink-500/15 border border-pink-500/30 text-[#E91E63] text-xs font-bold shrink-0">
             Exportar
+          </div>
+        </motion.div>
+
+        {/* Action: Reporte Oficial de Cuadre de Caja & PDF */}
+        <motion.div
+          initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14 }}
+          className="rounded-2xl p-4 mb-4 flex items-center justify-between cursor-pointer active:scale-[0.99] transition-transform"
+          style={{
+            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(59, 130, 246, 0.12) 100%)',
+            border: '1.5px solid rgba(16, 185, 129, 0.3)',
+            boxShadow: 'var(--shadow-sm)',
+          }}
+          onClick={() => {
+            PlatformBridge.hapticFeedback('medium');
+            router.push(`/business/reports${business?.id ? `?businessId=${business.id}` : ''}`);
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-linear-to-br from-emerald-500 to-cyan-500 text-white flex items-center justify-center shrink-0 text-lg shadow-sm">
+              📊
+            </div>
+            <div>
+              <p className="text-sm font-extrabold text-(--text-primary) m-0 leading-snug">Cuadre de Caja & Auditoría</p>
+              <p className="text-xs text-(--text-muted) m-0">Reporte oficial con desglose de ventas, IVA y PDF</p>
+            </div>
+          </div>
+          <div className="px-3 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-xs font-bold shrink-0">
+            Ver PDF
           </div>
         </motion.div>
 
@@ -727,6 +804,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
               >
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-xl bg-[#E91E63]/15 text-[#E91E63] flex items-center justify-center">
+                    {activeSubTab === 'campaigns' && <Zap size={18} strokeWidth={2.4} />}
                     {activeSubTab === 'analytics' && <BarChart3 size={18} strokeWidth={2.4} />}
                     {activeSubTab === 'ledger' && <BookOpen size={18} strokeWidth={2.4} />}
                     {activeSubTab === 'clients' && <Users size={18} strokeWidth={2.4} />}
@@ -734,12 +812,14 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
                   </div>
                   <div>
                     <h3 className="text-base font-black text-(--text-primary) m-0 leading-tight">
+                      {activeSubTab === 'campaigns' && 'Motor Comercial y Campañas'}
                       {activeSubTab === 'analytics' && 'Métricas y Analíticas'}
                       {activeSubTab === 'ledger' && 'Libro Mayor Inmutable'}
                       {activeSubTab === 'clients' && `Clientes Frecuentes (${clientCount})`}
                       {activeSubTab === 'settings' && 'Ajustes del Comercio'}
                     </h3>
                     <p className="text-[11px] text-(--text-muted) m-0">
+                      {activeSubTab === 'campaigns' && 'Growth Signals, Bunzy Co-Pilot y ROI'}
                       {activeSubTab === 'analytics' && 'Rendimiento y retorno de clientes'}
                       {activeSubTab === 'ledger' && 'Auditoría criptográfica y transacciones'}
                       {activeSubTab === 'clients' && 'Usuarios más recurrentes y puntos acumulados'}
@@ -768,6 +848,162 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
 
               {/* Modal Scrollable Body */}
               <div className="flex-1 overflow-y-auto p-5 space-y-4 pb-20">
+                {/* SUBTAB: CAMPAIGNS & GROWTH SIGNALS */}
+                {activeSubTab === 'campaigns' && (
+                  <div className="space-y-4">
+                    {/* Header Banner */}
+                    <div className="p-4 rounded-2xl bg-linear-to-br from-pink-500/15 via-purple-500/10 to-amber-500/10 border border-pink-500/30">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <Zap size={18} className="text-[#E91E63]" />
+                        <h4 className="text-sm font-black text-(--text-primary) m-0">Oportunidades de Retorno & Copiloto</h4>
+                      </div>
+                      <p className="text-xs text-(--text-secondary) m-0 leading-relaxed">
+                        Detectamos patrones de consumo y horas valle para reactivar clientes con incentivos garantizados contra consumo real.
+                      </p>
+                    </div>
+
+                    {/* Opportunities Section */}
+                    <div className="space-y-3">
+                      <h5 className="text-[11px] font-black uppercase tracking-wider text-(--text-muted) m-0">
+                        Señales Detectadas en Tu Negocio
+                      </h5>
+                      {loadingCampaigns ? (
+                        <div className="p-6 text-center text-xs text-(--text-muted)">Analizando señales de consumo...</div>
+                      ) : growthSignals.length === 0 ? (
+                        <div className="p-4 rounded-2xl text-center text-xs text-(--text-muted)" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                          No hay señales críticas hoy. ¡Tus clientes están acudiendo con normalidad!
+                        </div>
+                      ) : (
+                        growthSignals.map((sig) => (
+                          <div 
+                            key={sig.id}
+                            className="p-4 rounded-2xl space-y-3"
+                            style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-500 mb-1">
+                                  {sig.type === 'OFF_PEAK_HAPPY_HOUR' ? 'Hora Valle' : 'Reactivación'}
+                                </span>
+                                <h4 className="text-sm font-black text-(--text-primary) m-0">{sig.headline}</h4>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <span className="text-xs font-black text-[#E91E63]">{sig.targetCount} clientes</span>
+                                <p className="text-[10px] text-(--text-muted) m-0">Audiencia k-anon</p>
+                              </div>
+                            </div>
+
+                            <p className="text-xs text-(--text-secondary) m-0 leading-relaxed">
+                              {sig.explanation}
+                            </p>
+
+                            <div className="p-3 rounded-xl flex items-center justify-between text-xs" style={{ background: 'var(--bg-subtle)' }}>
+                              <div>
+                                <p className="text-[10px] uppercase text-(--text-muted) font-bold m-0">Incentivo Sugerido</p>
+                                <p className="text-xs font-black text-[#E91E63] m-0">+{sig.suggestedAction.rewardPercentage}% Cashback en Bunz</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-[10px] uppercase text-(--text-muted) font-bold m-0">Tope de Presupuesto</p>
+                                <p className="text-xs font-black text-(--text-primary) m-0">{sig.suggestedAction.maxBudgetBunz} Bunz</p>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                PlatformBridge.hapticFeedback('medium');
+                                router.push(`/chat/bunzy?ref=opportunity_${sig.id}`);
+                              }}
+                              className="w-full py-2.5 rounded-xl bg-linear-to-r from-[#E91E63] to-pink-600 text-white font-black text-xs border-none cursor-pointer flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-sm"
+                            >
+                              <span>🤖</span>
+                              <span>Activar con Bunzy Co-Pilot</span>
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    {/* Active Affiliate Campaigns Section */}
+                    <div className="space-y-3 pt-2">
+                      <div className="flex items-center justify-between">
+                        <h5 className="text-[11px] font-black uppercase tracking-wider text-(--text-muted) m-0">
+                          Campañas Registradas ({affiliateCampaigns.length})
+                        </h5>
+                      </div>
+
+                      {affiliateCampaigns.length === 0 ? (
+                        <div className="p-4 rounded-2xl text-center text-xs text-(--text-muted)" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                          Aún no has creado campañas comerciales. Pídele a Bunzy en el chat: &ldquo;Quiero crear una campaña de reactivación&rdquo;.
+                        </div>
+                      ) : (
+                        affiliateCampaigns.map((camp) => (
+                          <div 
+                            key={camp.id}
+                            className="p-4 rounded-2xl space-y-2.5"
+                            style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
+                          >
+                            <div className="flex items-center justify-between">
+                              <h4 className="text-sm font-black text-(--text-primary) m-0 truncate pr-2">{camp.title}</h4>
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                                camp.status === 'ACTIVE' 
+                                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' 
+                                  : camp.status === 'PAUSED'
+                                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                                  : 'bg-white/10 text-(--text-muted)'
+                              }`}>
+                                {camp.status === 'ACTIVE' ? 'Activa' : camp.status === 'PAUSED' ? 'Pausada' : camp.status}
+                              </span>
+                            </div>
+
+                            <p className="text-xs text-(--text-secondary) m-0 line-clamp-2">
+                              {camp.message}
+                            </p>
+
+                            <div className="flex items-center justify-between text-xs pt-1 border-t border-(--border-subtle)">
+                              <span className="text-(--text-muted)">
+                                Consumido: <strong className="text-(--text-primary)">{camp.budgetSpent}</strong> / {camp.budgetBunz} B
+                              </span>
+                              <span className="text-(--text-muted)">
+                                Canjes: <strong className="text-emerald-400">{camp.redemptionCount}</strong>
+                              </span>
+                            </div>
+
+                            {/* Control button: Pause / Resume */}
+                            {(camp.status === 'ACTIVE' || camp.status === 'PAUSED') && (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  try {
+                                    PlatformBridge.hapticFeedback('light');
+                                    const nextAction = camp.status === 'ACTIVE' ? 'PAUSE' : 'RESUME';
+                                    const headers = await PlatformBridge.getAuthHeaders();
+                                    const res = await fetch('/api/business/campaigns/manage', {
+                                      method: 'POST',
+                                      headers: { ...headers, 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ campaignId: camp.id, action: nextAction }),
+                                    });
+                                    const d = await res.json();
+                                    if (d.success) {
+                                      setAffiliateCampaigns(prev => prev.map(c => c.id === camp.id ? { ...c, status: d.campaign.status } : c));
+                                    }
+                                  } catch (err) {
+                                    console.error('Error toggling campaign:', err);
+                                  }
+                                }}
+                                className="w-full mt-1 py-2 rounded-xl text-xs font-bold border border-(--border-subtle) cursor-pointer transition-colors"
+                                style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)' }}
+                              >
+                                {camp.status === 'ACTIVE' ? 'Pausar Campaña' : 'Reanudar Campaña'}
+                              </button>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* SUBTAB: ANALYTICS */}
                 {activeSubTab === 'analytics' && (
                   <div className="space-y-4">

@@ -429,5 +429,51 @@ export const memoryCandidates = pgTable("memoryCandidates", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
+/**
+ * 🎯 Affiliate Growth Campaigns
+ * Modelo persistente y financiero de campañas comerciales activadas por el afiliado.
+ */
+export const affiliateCampaigns = pgTable("affiliateCampaigns", {
+  id: id(),
+  businessId: text("businessId").notNull().references(() => ownedBusinesses.id, { onDelete: "cascade" }),
+  createdBy: text("createdBy").notNull().references(() => users.id),
+  approvedBy: text("approvedBy").references(() => users.id),
+  title: text("title").notNull(),
+  headline: text("headline").notNull(),
+  message: text("message").notNull(),
+  campaignType: text("campaignType").notNull(), // 'WINBACK_INACTIVE' | 'OFF_PEAK_BOOST' | 'VIP_LOYALTY' | 'FLASH_OFFER'
+  targetSegment: text("targetSegment").notNull(), // 'INACTIVE_25D' | 'VIP_5_VISITS' | 'ALL_CUSTOMERS'
+  rewardPercentage: integer("rewardPercentage").notNull(), // % de cashback en Bunz
+  maxRewardPerUser: integer("maxRewardPerUser").default(50).notNull(), // Tope máximo de Bunz por usuario
+  budgetBunz: integer("budgetBunz").notNull(), // Presupuesto total asignado a la campaña
+  budgetSpent: integer("budgetSpent").default(0).notNull(), // Bunz redimidos
+  redemptionCount: integer("redemptionCount").default(0).notNull(), // Clientes que redimieron
+  startsAt: timestamp("startsAt").defaultNow().notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  status: text("status").default("DRAFT").notNull(), // 'DRAFT' | 'PENDING_APPROVAL' | 'ACTIVE' | 'PAUSED' | 'EXHAUSTED' | 'EXPIRED' | 'CANCELLED'
+  approvedAt: timestamp("approvedAt"),
+  metadata: jsonb("metadata"), // Razón de Bunzy Co-Pilot, k-anonimato, condiciones
+  ...timestamps,
+});
+
+/**
+ * 🧾 Campaign Redemptions (Atribución y Auditoría ROI)
+ * Registra cada redención real ligada a una transacción completada y al ledger.
+ */
+export const campaignRedemptions = pgTable("campaignRedemptions", {
+  id: id(),
+  campaignId: fkId("campaignId").references(() => affiliateCampaigns.id, { onDelete: "cascade" }),
+  userId: text("userId").notNull().references(() => users.id),
+  businessId: text("businessId").notNull().references(() => ownedBusinesses.id),
+  transactionId: text("transactionId"), // Referencia a transactions o pos orderId
+  bunzAwarded: integer("bunzAwarded").notNull(),
+  fiatSpent: real("fiatSpent").default(0).notNull(), // Consumo en fiat que originó el cashback
+  idempotencyKey: text("idempotencyKey").notNull().unique(), // Evita doble emisión en reintentos
+  redeemedAt: timestamp("redeemedAt").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("campaign_tx_redemption_idx").on(table.campaignId, table.transactionId),
+]);
+
+
 
 

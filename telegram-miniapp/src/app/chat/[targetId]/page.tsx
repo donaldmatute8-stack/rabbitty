@@ -177,7 +177,7 @@ export default function ChatRoomPage() {
   const [bunzyOpen, setBunzyOpen] = useState(false);
   const [bunzyBusy, setBunzyBusy] = useState(false);
   const [bunzyIntent, setBunzyIntent] = useState('');
-  const [bunzyNote, setBunzyNote] = useState<{ mode: 'draft' | 'summarize' | 'admin_qa'; text: string } | null>(null);
+  const [bunzyNote, setBunzyNote] = useState<{ mode: 'draft' | 'summarize' | 'admin_qa' | 'marketing_proposal'; text: string } | null>(null);
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
 
@@ -576,7 +576,7 @@ export default function ChatRoomPage() {
     }
   };
 
-  const runBunzy = async (mode: 'draft' | 'summarize' | 'admin_qa') => {
+  const runBunzy = async (mode: 'draft' | 'summarize' | 'admin_qa' | 'marketing_proposal') => {
     const cid = conversationIdRef.current || conversationId;
     if (!cid) return;
     setBunzyBusy(true);
@@ -1879,7 +1879,7 @@ export default function ChatRoomPage() {
                 <span style={{ flex: 1, fontSize: '12px', lineHeight: 1.4, color: 'var(--text-secondary)' }}>
                   <strong style={{ color: '#E91E63' }}>Bunzy:</strong> {bunzyNote.text}
                 </span>
-                {bunzyNote.mode === 'draft' && (
+                {(bunzyNote.mode === 'draft' || bunzyNote.mode === 'marketing_proposal') && (
                   <button
                     type="button"
                     onClick={() => {
@@ -2342,6 +2342,25 @@ export default function ChatRoomPage() {
               }}
             />
           </div>
+
+          <button
+            type="button"
+            onClick={() => runBunzy('marketing_proposal')}
+            disabled={bunzyBusy}
+            style={{
+              width: '100%',
+              border: '1px solid rgba(255,138,0,0.3)',
+              borderRadius: '100px',
+              padding: '14px',
+              fontSize: '15px',
+              fontWeight: 800,
+              color: '#FF8A00',
+              background: 'rgba(255,138,0,0.08)',
+              cursor: bunzyBusy ? 'not-allowed' : 'pointer',
+            }}
+          >
+            🚀 Crear propuesta comercial / campaña
+          </button>
 
           <button
             type="button"
