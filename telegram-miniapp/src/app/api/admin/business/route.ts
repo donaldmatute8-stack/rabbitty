@@ -53,10 +53,22 @@ export async function POST(req: NextRequest) {
       .where(eq(ownedBusinesses.id, businessId))
       .returning();
 
-    // Notificar al dueño si tiene Telegram
     const owner = updated.ownerId ? await db.query.users.findFirst({
       where: eq(users.id, updated.ownerId),
     }) : null;
+
+    // Notificación In-App y Push universal al dueño del negocio (móvil, iPad, web)
+    if (owner?.id) {
+      sendEcosystemNotification({
+        userId: owner.id,
+        title: `🎉 ¡+${bunzToAdd.toLocaleString()} Bunz Aprovisionados!`,
+        message: `Tu negocio ${updated.name} tiene ahora ${updated.bunzBalance.toLocaleString()} BUNZ disponibles en su bóveda para premiar a clientes.`,
+        type: 'AFFILIATE',
+        route: '/business',
+        pushData: { businessId: updated.id, bunzBalance: updated.bunzBalance },
+        threadId: 'business_provisioning',
+      }).catch((e) => console.error('[PROVISION_BUNZ Notify Error]:', e));
+    }
 
     if (owner?.telegramId && TELEGRAM_BOT_TOKEN) {
       const msg =

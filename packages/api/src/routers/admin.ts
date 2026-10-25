@@ -699,4 +699,81 @@ export const adminRouter = router({
 
       return { success: true };
     }),
+
+  /**
+   * Consulta de inventario y estado de Bunz para el comercio/afiliado autenticado.
+   * Usado en apps/admin (Mac, iPad, Web) y POS para mostrar la bóveda de Bunz disponible.
+   */
+  getAffiliateBunzInventory: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      const [biz] = await ctx.coreDb
+        .select({
+          id: ownedBusinesses.id,
+          name: ownedBusinesses.name,
+          category: ownedBusinesses.category,
+          bunzBalance: ownedBusinesses.bunzBalance,
+          package: ownedBusinesses.package,
+          rewardPercentage: ownedBusinesses.rewardPercentage,
+          status: ownedBusinesses.status,
+          creditLimit: ownedBusinesses.creditLimit,
+        })
+        .from(ownedBusinesses)
+        .where(eq(ownedBusinesses.ownerId, ctx.userId))
+        .limit(1);
+
+      if (biz) {
+        return {
+          hasBusiness: true,
+          businessId: biz.id,
+          businessName: biz.name,
+          category: biz.category,
+          bunzBalance: biz.bunzBalance ?? 0,
+          package: biz.package || "Personalizado",
+          rewardPercentage: biz.rewardPercentage ?? 10,
+          status: biz.status,
+          creditLimit: biz.creditLimit ?? 0,
+        };
+      }
+
+      // Si no tiene negocio asociado por userId directo, fallback a primera empresa o defaults seguros
+      const [firstBiz] = await ctx.coreDb
+        .select({
+          id: ownedBusinesses.id,
+          name: ownedBusinesses.name,
+          category: ownedBusinesses.category,
+          bunzBalance: ownedBusinesses.bunzBalance,
+          package: ownedBusinesses.package,
+          rewardPercentage: ownedBusinesses.rewardPercentage,
+          status: ownedBusinesses.status,
+          creditLimit: ownedBusinesses.creditLimit,
+        })
+        .from(ownedBusinesses)
+        .limit(1);
+
+      return {
+        hasBusiness: Boolean(firstBiz),
+        businessId: firstBiz?.id || null,
+        businessName: firstBiz?.name || "Mi Negocio",
+        category: firstBiz?.category || "Comercio",
+        bunzBalance: firstBiz?.bunzBalance ?? 0,
+        package: firstBiz?.package || "Personalizado",
+        rewardPercentage: firstBiz?.rewardPercentage ?? 10,
+        status: firstBiz?.status || "APPROVED",
+        creditLimit: firstBiz?.creditLimit ?? 0,
+      };
+    } catch (e: any) {
+      console.error("[getAffiliateBunzInventory] Error:", e);
+      return {
+        hasBusiness: false,
+        businessId: null,
+        businessName: "Mi Negocio",
+        category: "Comercio",
+        bunzBalance: 0,
+        package: "Sin paquete",
+        rewardPercentage: 10,
+        status: "APPROVED",
+        creditLimit: 0,
+      };
+    }
+  }),
 });

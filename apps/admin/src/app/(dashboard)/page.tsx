@@ -36,6 +36,8 @@ export default function AdminPage() {
   const paidOrders = orders?.filter((o) => o.status === "PAID" || o.status === "COMPLETED") ?? [];
   const totalRevenue = paidOrders.reduce((sum, o) => sum + o.total, 0);
 
+  const { data: bunzInventory } = trpc.admin.getAffiliateBunzInventory.useQuery(undefined, { retry: false });
+
   const stats = [
     {
       label: "Ventas hoy",
@@ -123,11 +125,29 @@ export default function AdminPage() {
               Dashboard ejecutivo para la sucursal {currentDateStr ? `de ${currentDateStr}` : ""}
             </p>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Indicador de Bóveda y Aprovisionamiento Bunz */}
+            <div className="rounded-2xl border border-pink-500/20 bg-linear-to-r from-pink-500/10 via-purple-500/10 to-transparent px-4 py-2.5 backdrop-blur-md flex items-center gap-3 shadow-[0_0_20px_rgba(233,30,99,0.1)]">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-pink-500/20 border border-pink-500/30 text-pink-400 font-black text-sm">
+                🐰
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] uppercase tracking-wider text-pink-300 font-black">Bóveda Bunz</span>
+                  <span className="text-[9px] font-bold text-gray-400 bg-white/5 border border-white/10 px-1.5 py-0.2 rounded-full">
+                    {bunzInventory?.package || "Inventario"}
+                  </span>
+                </div>
+                <p className="text-base font-black text-white leading-none mt-0.5">
+                  {(bunzInventory?.bunzBalance ?? 0).toLocaleString()} <span className="text-xs font-bold text-pink-400">BZ</span>
+                </p>
+              </div>
+            </div>
+
             <BranchSelector />
-            <div className="rounded-2xl border border-white/5 bg-white/5 px-5 py-3 backdrop-blur-md">
+            <div className="rounded-2xl border border-white/5 bg-white/5 px-4 py-2.5 backdrop-blur-md">
               <span className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Estado del Servidor</span>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-center gap-2 mt-0.5">
                 <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
                 <span className="text-xs font-bold text-gray-200">Sincronizado</span>
               </div>
