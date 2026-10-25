@@ -50,6 +50,7 @@ export default function PosPage() {
   const [receiptModal, setReceiptModal] = useState(false);
   // Método elegido pendiente de confirmación (el cobro NO se ejecuta hasta confirmar)
   const [pendingMethod, setPendingMethod] = useState<string | null>(null);
+  const [cashReceived, setCashReceived] = useState<string>("");
   const [isCharging, setIsCharging] = useState(false);
   const [paidTicketData, setPaidTicketData] = useState<TicketData | null>(null);
   const [btConnected, setBtConnected] = useState(false);
@@ -338,11 +339,13 @@ export default function PosPage() {
   const subtotal = Math.round((total / (1 + taxRate)) * 100) / 100;
   const tax = Math.round((total - subtotal) * 100) / 100;
 
-  const finalizeCheckout = async (realOrderNumber: string, method: string) => {
+  const finalizeCheckout = async (realOrderNumber: string, method: string, cashGiven?: number) => {
     const rest = ticketContext?.restaurant;
     const branch = ticketContext?.branch;
     const selectedTable = tables?.find((t) => t.id === selectedTableId);
     const tableLabel = orderType === "DINE_IN" ? (selectedTable ? `Mesa ${selectedTable.number}` : "Salón") : orderType === "TAKEAWAY" ? "Para Llevar" : orderType === "DELIVERY" ? "Domicilio" : "Mostrador";
+
+    const changeAmount = cashGiven && cashGiven >= total ? Math.round((cashGiven - total) * 100) / 100 : undefined;
 
     const ticket: TicketData = {
       restaurantName: rest?.name || "Rabbitty Bistro",
@@ -372,6 +375,8 @@ export default function PosPage() {
       discount: 0,
       total,
       paymentMethod: method,
+      cashGiven: cashGiven && cashGiven > 0 ? cashGiven : undefined,
+      change: changeAmount,
       currency: rest?.currency || "MXN",
       bunzCashbackRate: rest?.defaultRewardRate ?? 20,
     };
@@ -394,15 +399,19 @@ export default function PosPage() {
   const requestCheckout = (method: string) => {
     if (cart.length === 0 || isCharging) return;
     setPendingMethod(method);
+    // Para pagos en efectivo, inicializar con el total exacto o vacío para facilitar la captura
+    if (method === "EFECTIVO" || method === "VENTA DIRECTA" || method === "DIVIDIDA") {
+      setCashReceived("");
+    }
   };
 
-  const confirmCheckout = async () => {
+  const confirmCheckout = async (customCashGiven?: number) => {
     if (!pendingMethod || isCharging) return;
     const method = pendingMethod;
     setPendingMethod(null);
     setIsCharging(true);
     try {
-      await handleCheckout(method);
+      await handleCheckout(method, customCashGiven);
     } finally {
       setIsCharging(false);
     }
@@ -415,7 +424,7 @@ export default function PosPage() {
     else toast.warning(r.error || "No se pudo imprimir. Revisa la impresora.");
   };
 
-  const handleCheckout = async (method: string = "EFECTIVO") => {
+  const handleCheckout = async (method: string = "EFECTIVO", cashGiven?: number) => {
     if (cart.length === 0) return;
 
     // Map payment method string to schema enum
@@ -479,7 +488,7 @@ export default function PosPage() {
       // Allow ticket generation even if backend offline (graceful degradation)
     }
 
-    await finalizeCheckout(realOrderNumber, method);
+    await finalizeCheckout(realOrderNumber, method, cashGiven);
   };
 
   return (
@@ -1382,24 +1391,173 @@ export default function PosPage() {
         </div>
       </Dialog>
 
-      {/* Confirmación de cobro: el cobro y la impresión ocurren solo al confirmar */}
-      <Dialog open={!!pendingMethod} onClose={() => setPendingMethod(null)} title="Confirmar cobro">
-        <div className="flex flex-col gap-4 p-2">
-          <div className="text-center">
-            <p className="text-gray-400 text-sm">Método de pago</p>
-            <p className="text-white text-lg font-black">
-              {pendingMethod === "VENTA DIRECTA" ? "EFECTIVO" : pendingMethod === "DIVIDIDA" ? "EFECTIVO (dividida)" : pendingMethod}
-            </p>
-            <p className="text-emerald-400 text-4xl font-black mt-2">${total.toFixed(2)}</p>
-            <p className="text-gray-500 text-xs mt-1">{cart.reduce((s, i) => s + i.quantity, 0)} artículo(s) · impuestos incluidos</p>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Button variant="secondary" id="pos-cancel-charge" onClick={() => setPendingMethod(null)}>Cancelar</Button>
-            <Button id="pos-confirm-charge" onClick={confirmCheckout} className="bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-black">
-              Confirmar y cobrar
-            </Button>
-          </div>
-        </div>
+      {/* Confirmación de cobro: efectivo con desglose de recibido y cambio o confirmación directa de tarjeta */}
+      <Dialog 
+        open={!!pendingMethod} 
+        onClose={() => setPendingMethod(null)} 
+        title={pendingMethod === "EFECTIVO" || pendingMethod === "VENTA DIRECTA" || pendingMethod === "DIVIDIDA" ? "Cobro en Efectivo" : "Confirmar cobro"}
+        className="max-w-md w-full"
+      >
+        {(() => {
+          const isCash = pendingMethod === "EFECTIVO" || pendingMethod === "VENTA DIRECTA" || pendingMethod === "DIVIDIDA";
+          const numericReceived = parseFloat(cashReceived) || 0;
+          const change = numericReceived >= total ? numericReceived - total : 0;
+          const isExact = cashReceived !== "" && numericReceived === total;
+          const isShort = cashReceived !== "" && numericReceived > 0 && numericReceived < total;
+          const shortage = total - numericReceived;
+
+          // Billetes comunes en México superiores o iguales al total (y denominaciones clave)
+          const billSuggestions = [50, 100, 200, 500, 1000].filter(b => b >= total || (total > 200 && b >= 200));
+          if (billSuggestions.length === 0) billSuggestions.push(Math.ceil(total / 100) * 100);
+
+          return (
+            <div className="flex flex-col gap-4 p-2">
+              {/* Resumen Superior */}
+              <div className="rounded-2xl bg-white/5 border border-white/10 p-3.5 flex items-center justify-between">
+                <div>
+                  <span className="text-xs uppercase font-bold tracking-wider text-gray-400">Total a Pagar</span>
+                  <p className="text-3xl font-black text-white tracking-tight">${total.toFixed(2)}</p>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-md border border-cyan-500/20">
+                    {pendingMethod === "VENTA DIRECTA" ? "EFECTIVO" : pendingMethod === "DIVIDIDA" ? "EFECTIVO (DIVIDIDA)" : pendingMethod}
+                  </span>
+                  <p className="text-[11px] text-gray-400 mt-1">{cart.reduce((s, i) => s + i.quantity, 0)} artículo(s)</p>
+                </div>
+              </div>
+
+              {isCash ? (
+                <>
+                  {/* Entrada Dinero Recibido */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-bold text-gray-300">¿Cuánto efectivo entrega el cliente?</label>
+                      <button
+                        type="button"
+                        onClick={() => setCashReceived(total.toFixed(2))}
+                        className="text-[11px] font-bold text-cyan-400 hover:text-cyan-300 underline cursor-pointer"
+                      >
+                        Monto exacto (${total.toFixed(2)})
+                      </button>
+                    </div>
+
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-lg font-bold text-gray-400">$</span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        step="any"
+                        autoFocus
+                        value={cashReceived}
+                        onChange={(e) => setCashReceived(e.target.value)}
+                        placeholder={total.toFixed(2)}
+                        className="w-full pl-8 pr-12 py-3 rounded-2xl bg-gray-900 border-2 border-white/15 focus:border-cyan-500 text-2xl font-black text-white placeholder-gray-600 outline-none transition-all tracking-tight"
+                      />
+                      {cashReceived && (
+                        <button
+                          type="button"
+                          onClick={() => setCashReceived("")}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full bg-white/10 hover:bg-white/20 text-gray-300 flex items-center justify-center text-xs font-black cursor-pointer"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Botones de billetes rápidos */}
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Billetes sugeridos</span>
+                    <div className="grid grid-cols-4 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setCashReceived(total.toFixed(2))}
+                        className={`py-2 px-1 rounded-xl text-xs font-black border transition-all cursor-pointer ${
+                          isExact
+                            ? "bg-cyan-500/20 border-cyan-500 text-cyan-300 shadow-md shadow-cyan-500/10"
+                            : "bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:border-white/20"
+                        }`}
+                      >
+                        Exacto
+                      </button>
+                      {billSuggestions.slice(0, 3).map((bill) => (
+                        <button
+                          key={bill}
+                          type="button"
+                          onClick={() => setCashReceived(bill.toString())}
+                          className={`py-2 px-1 rounded-xl text-xs font-black border transition-all cursor-pointer ${
+                            numericReceived === bill
+                              ? "bg-emerald-500/20 border-emerald-500 text-emerald-300 shadow-md shadow-emerald-500/10"
+                              : "bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:border-white/20"
+                          }`}
+                        >
+                          ${bill}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Panel de Cambio a Devolver */}
+                  <div
+                    className={`rounded-2xl p-4 border transition-all ${
+                      isShort
+                        ? "bg-red-500/10 border-red-500/30 text-red-300"
+                        : numericReceived >= total
+                        ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300 shadow-lg shadow-emerald-500/10"
+                        : "bg-white/5 border-white/10 text-gray-400"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Banknote className="h-5 w-5" />
+                        <span className="text-xs font-bold uppercase tracking-wider">
+                          {isShort ? "Falta por cobrar:" : "Cambio a devolver:"}
+                        </span>
+                      </div>
+                      <span className={`text-2xl font-black tracking-tight ${isShort ? "text-red-400" : "text-emerald-400"}`}>
+                        ${isShort ? shortage.toFixed(2) : change.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="py-2 text-center text-sm text-gray-300">
+                  ¿Confirmas el cobro de esta orden con <strong className="text-white">{pendingMethod}</strong>?
+                </div>
+              )}
+
+              {/* Botones de Acción */}
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <Button 
+                  variant="secondary" 
+                  id="pos-cancel-charge" 
+                  onClick={() => {
+                    setPendingMethod(null);
+                    setCashReceived("");
+                  }}
+                  className="rounded-xl py-3 font-bold"
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  id="pos-confirm-charge" 
+                  disabled={isCash && cashReceived !== "" && numericReceived < total}
+                  onClick={() => {
+                    const finalCash = isCash ? (numericReceived > 0 ? numericReceived : total) : undefined;
+                    confirmCheckout(finalCash);
+                  }} 
+                  className={`rounded-xl py-3 font-black text-sm shadow-lg cursor-pointer ${
+                    isCash && cashReceived !== "" && numericReceived < total
+                      ? "opacity-40 cursor-not-allowed bg-gray-700 text-gray-400"
+                      : "bg-emerald-500 hover:bg-emerald-400 text-gray-950 shadow-emerald-500/20"
+                  }`}
+                >
+                  {isCash ? (change > 0 ? `Cobrar (Cambio $${change.toFixed(2)})` : "Cobrar Orden") : "Confirmar y cobrar"}
+                </Button>
+              </div>
+            </div>
+          );
+        })()}
       </Dialog>
 
       {/* Modal de Ticket de Venta / Comprobante de Cobro */}

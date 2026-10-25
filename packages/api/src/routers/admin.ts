@@ -661,29 +661,40 @@ export const adminRouter = router({
       const userEmail = ctx.user?.email || "Usuario Admin";
       const branchId = ctx.branchId || "N/A";
 
-      const text =
+      const cleanTitle = (input.title || (input.type === "BUG" ? "Error reportado" : "Sugerencia")).trim();
+      const cleanMessage = input.message.trim();
+      const originUrl = input.url || "Panel Admin";
+
+      // Plain text / safe message to prevent Telegram Markdown parsing rejections
+      const safeText =
         `${tag}\n\n` +
-        `📌 *Título:* ${input.title || (input.type === "BUG" ? "Error reportado" : "Sugerencia")}\n` +
-        `📝 *Detalle:*\n${input.message.trim()}\n\n` +
-        `👤 *Remitente:* ${userEmail} (Sucursal: \`${branchId}\`)\n` +
-        `🌐 *Ruta:* \`${input.url || "Panel Admin"}\``;
+        `📌 Título: ${cleanTitle}\n` +
+        `📝 Detalle:\n${cleanMessage}\n\n` +
+        `👤 Remitente: ${userEmail} (Sucursal: ${branchId})\n` +
+        `🌐 Ruta: ${originUrl}`;
 
       if (botToken) {
         for (const adminId of adminTelegramIds) {
           try {
-            await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 chat_id: adminId,
-                text,
-                parse_mode: "Markdown",
+                text: safeText,
+                disable_web_page_preview: true,
               }),
             });
+            if (!res.ok) {
+              const errBody = await res.text();
+              console.error(`[AdminFeedback] Telegram dispatch failed (${res.status}):`, errBody);
+            }
           } catch (tErr) {
-            console.warn("[AdminFeedback] Telegram dispatch error:", tErr);
+            console.error("[AdminFeedback] Telegram dispatch error:", tErr);
           }
         }
+      } else {
+        console.warn("[AdminFeedback] No Telegram Bot Token configured in environment.");
       }
 
       return { success: true };

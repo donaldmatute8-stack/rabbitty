@@ -136,11 +136,13 @@ export async function computeShiftTotals(db: Db, shift: { id: string; branchId: 
   const cardSales = round2(sum("CREDIT_CARD") + sum("DEBIT_CARD"));
   const bunzSales = sum("BUNZ");
 
-  const [d] = await db
-    .select({ total: sql<number>`coalesce(sum(${cashDrops.amount}), 0)` })
+  const drops = await db
+    .select({ category: cashDrops.category, amount: cashDrops.amount })
     .from(cashDrops)
     .where(eq(cashDrops.shiftId, shift.id));
-  const withdrawals = round2(Number(d?.total ?? 0));
+  const expenses = round2(drops.filter((d: { category: string | null }) => d.category === "EXPENSE").reduce((s: number, d: { amount: unknown }) => s + Number(d.amount), 0));
+  // Legacy (sin categoría) cuenta como retiro/sangría a caja fuerte
+  const withdrawals = round2(drops.filter((d: { category: string | null }) => d.category !== "EXPENSE").reduce((s: number, d: { amount: unknown }) => s + Number(d.amount), 0));
 
   const [a] = await db
     .select({ total: sql<number>`coalesce(sum(${cashShiftEvents.difference}), 0)` })
@@ -155,6 +157,7 @@ export async function computeShiftTotals(db: Db, shift: { id: string; branchId: 
     cardSales,
     bunzSales,
     withdrawals,
+    expenses,
     adjustments,
     expectedCash,
   };

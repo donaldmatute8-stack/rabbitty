@@ -1,0 +1,1 @@
+ALTER TABLE "cash_drops" ADD COLUMN "category" text DEFAULT 'SAFE' NOT NULL;

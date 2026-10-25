@@ -245,7 +245,52 @@ LIMITANTES Y REGLAS FINANCIERAS INFRANQUEABLES:
 2. Si sugieres una campaña comercial, el porcentaje de cashback DEBE estar entre 2% y 50% y debe tener una vigencia clara (ej. 24 a 72 horas).
 3. No des asesoría fiscal ni contable vinculante.
 4. Si el usuario te pide ejecutar una acción (crear campaña o ajustar cashback), confírmale los parámetros y sugiérele aplicarla mediante las herramientas de acción de Bunzy.
+
+CONOCIMIENTO OPERATIVO OFICIAL DEL POS Y CORTE DE CAJA (ÚSALO PARA ASISTIR AL COMERCIO):
+- Apertura de caja: Se hace en el POS con 'Caja cerrada · Abrir'. Requiere PIN de 4 dígitos y capturar el fondo inicial (cambio para dar a clientes). Imprime ticket de apertura.
+- Retiros y gastos menores (agua, café, hielo, insumos): Se registran en 'Caja / Turno' -> 'Retiro'. El cajero escribe el monto y concepto. Este monto se DESCUENTA AUTOMÁTICAMENTE del efectivo que debe entregar al final. Si no hay suficiente dinero en gaveta, el sistema bloquea el retiro avisando fondos insuficientes.
+- Cierre Parcial (Ticket X): Arqueo informativo a mitad de turno sin cerrar la caja ni interrumpir ventas.
+- Cierre Definitivo (Ticket Z): 
+  a) Cuadre de Tarjeta Bancaria: El cajero primero coteja el total cobrado con tarjeta en la pantalla con el reporte de la terminal bancaria física (Clip, Mercado Pago o Banco). Las tarjetas no se cuentan en el efectivo.
+  b) Conteo de Efectivo: El cajero cuenta el dinero físico de la gaveta e ingresa el monto total.
+  c) PIN de Cajero y PIN de Manager: Cierra el turno e imprime el comprobante Z definitivo.
+- Descuadres (sobrantes/faltantes): No bloquean el cierre. El cajero captura lo contado real y el sistema solicita una nota justificativa y PIN de manager para la bitácora inmutable.
+- Manual imprimible y visual: Guía completa siempre disponible en '/operations-manual'.
+
+CAPACIDAD DE SOPORTE, REPORTE DE BUGS Y FEEDBACK:
+- Si el usuario reporta un problema, error técnico, fallo en pantalla o sugiere una mejora ("hay un error", "falló el ticket", "se trabó", "tengo una sugerencia", "quiero dejar feedback"), agradécele cálidamente, infórmale que has canalizado su reporte directamente con el equipo de ingeniería de Rabbitty y que está siendo atendido de inmediato.
 `;
+
+      // ─── 2.1 AUTO-DISPATCH TELEGRAM SI EL USUARIO REPORTA BUG O FEEDBACK ──
+      const lowerMsg = cleanMessage.toLowerCase();
+      const isBugReport = /\b(bug|error|fallo|falla|se trabó|no sirve|se congeló|no imprime|problema tecnico|problema técnico|crash)\b/i.test(lowerMsg);
+      const isFeedbackReport = /\b(feedback|sugerencia|mejora|recomiendo que|estaría bien|idea para)\b/i.test(lowerMsg);
+
+      if (isBugReport || isFeedbackReport) {
+        const botToken = process.env.TELEGRAM_BOT_TOKEN || process.env.AUTH_TELEGRAM_BOT_TOKEN;
+        const adminTelegramIds = (process.env.ADMIN_TELEGRAM_IDS || "798431743")
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+
+        if (botToken) {
+          const reportCategory = isBugReport ? "🐞 REPORTE DE ERROR VÍA BUNZY AI (ADMIN)" : "💡 FEEDBACK VÍA BUNZY AI (ADMIN)";
+          const tgText =
+            `${reportCategory}\n\n` +
+            `📝 Mensaje:\n${cleanMessage}\n\n` +
+            `👤 Remitente: ${ctx.user?.email || "Usuario Admin"} (Sucursal: ${branchId})\n` +
+            `🏢 Negocio: ${business?.name || "Rabbitty"}\n` +
+            `🤖 Asistente: Bunzy Co-Pilot`;
+
+          for (const adminId of adminTelegramIds) {
+            fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ chat_id: adminId, text: tgText, disable_web_page_preview: true }),
+            }).catch((err) => console.error("[BunzyFeedback] Telegram dispatch error:", err));
+          }
+        }
+      }
 
       const promptMessages: LLMMessage[] = [
         { role: "system", content: systemPrompt },

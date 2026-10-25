@@ -164,9 +164,37 @@ const guides: Guide[] = [
     id: "cash-cut",
     icon: ReceiptIcon,
     label: "Corte de Caja (Cierre de Turno)",
-    desc: "Cómo realizar arqueo ciego, comparar lo esperado vs contado y registrar retiros",
+    desc: "Apertura, retiros de gastos operativos (agua/insumos), cuadre de terminal bancaria y Ticket Z",
     role: "pos",
-    content: `## Guía Operativa de Turnos y Corte de Caja\n\nCada venta en efectivo queda ligada a un turno de caja con un cajero responsable. **Sin turno abierto no se puede cobrar en efectivo.**\n\n### Flujo del día\n1. **Abrir caja**: en el POS toca 'Caja cerrada · Abrir'. Ingresa tu PIN de cajero y el fondo inicial (cambio). Se imprime el comprobante de apertura.\n2. **Retiros**: dentro de 'Caja / Turno' → Retiro. Pide tu PIN. Si el monto supera el umbral configurado (Turnos de Caja en el admin) también pide PIN de manager/admin.\n3. **Cierre parcial (Ticket X)**: cuenta la gaveta sin cerrar turno. Es arqueo ciego: el sistema no muestra el esperado hasta que capturas el contado. Imprime 'CIERRE PARCIAL - TURNO ABIERTO'.\n4. **Cambio de cajero**: el que sale cuenta y confirma con su PIN; el que entra confirma con el suyo. Si hay descuadre se pide nota y PIN de manager/admin.\n5. **Cierre de turno (Ticket Z)**: arqueo ciego + PIN del cajero + PIN de manager/admin. Si hay sobrante o faltante la nota es obligatoria. Imprime 'CIERRE DE TURNO - DEFINITIVO'.\n\n### Auditoría\nEn el admin → Turnos de Caja ves cada turno, su diferencia y la bitácora inmutable (quién, cuándo y quién autorizó). Nada se edita ni se borra.\n\n### Importante\n- Esto es distinto de 'Control de Turnos' del personal (entradas y salidas de asistencia).\n- Los PINs se registran en Personal & Roles (4 dígitos). Para autorizar se requiere rol Manager o Admin.\n- Tras 5 PINs incorrectos se bloquea el intento por 5 minutos.`,
+    content: `## Guía Operativa de Turnos y Corte de Caja
+
+Cada venta en efectivo queda ligada a un turno de caja con un cajero responsable. **Sin turno abierto no se puede cobrar en efectivo.**
+
+### 1. Apertura de Caja (Fondo de Cambio)
+- En el POS toca **'Caja cerrada · Abrir'**.
+- Ingresa tu **PIN de cajero (4 dígitos)** y el monto con el que inicia la gaveta (monedas y billetes para dar cambio).
+- Se imprime automáticamente el comprobante de apertura.
+
+### 2. Retiros y Gastos Operativos Menores (Agua, Café, Insumos)
+- Si llega un proveedor y necesitas pagar en efectivo (ej. garrafones de agua o café), entra a **Caja / Turno → Retiro**.
+- Ingresa el monto exacto, la justificación clara (ej. *"Pago 2 garrafones de agua"*) y tu PIN.
+- **Validación automática:** El sistema te muestra el saldo disponible en gaveta y bloquea retiros si no hay suficiente efectivo.
+- Este gasto se descuenta automáticamente del efectivo que deberás entregar al final del turno.
+
+### 3. Cierre Parcial (Ticket X)
+- Realiza un arqueo ciego a mitad del turno sin cerrar la caja.
+- Cuenta lo que tienes en gaveta y captúralo. El sistema imprime el balance sin detener las ventas en mostrador.
+
+### 4. Cierre Definitivo de Turno (Ticket Z)
+- **Paso A (Cuadre de Tarjetas):** Coteja el total de cobros con tarjeta que muestra la pantalla con el reporte de tu terminal bancaria física (Clip, Mercado Pago o Banco). Las tarjetas no van en la gaveta.
+- **Paso B (Conteo de Efectivo):** Cuenta todo el efectivo de la gaveta e ingrésalo.
+- **Paso C (PINs):** Requiere el PIN del cajero y el PIN de manager/admin.
+- **Paso D (Impresión Z):** Se imprime el ticket definitivo con la fecha exacta del turno y el desglose contable.
+
+### 5. ¿Qué pasa si hay descuadre?
+- El sistema no bloquea el turno: permite capturar la cantidad real y exige una nota explicativa para auditoría. Nada se borra ni se altera en la bitácora inmutable.
+
+👉 *Puedes consultar o imprimir el manual gráfico completo en: Menú → Manual Operativo & Caja (\`/operations-manual\`)*`,
   },
   {
     id: "financial-reports",

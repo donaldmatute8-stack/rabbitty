@@ -25,6 +25,8 @@ interface AuditSummary {
   totalBunzPaid: number;
   totalBunzReward: number;
   paymentBreakdown: Record<string, { count: number; total: number }>;
+  totalExpenses?: number;
+  totalSafeWithdrawals?: number;
   productBreakdown: Array<{ name: string; quantity: number; revenue: number }>;
 }
 
@@ -391,6 +393,18 @@ export default function AuditReportPage() {
                 <span className="text-gray-400 print:text-gray-600">Base Imponible (Subtotal Neto)</span>
                 <span className="font-bold text-white print:text-gray-900">${summary.totalSubtotal.toFixed(2)} MXN</span>
               </div>
+              {(summary.totalExpenses != null || summary.totalSafeWithdrawals != null) && (
+                <>
+                  <div className="flex justify-between py-1.5 border-b border-white/5 print:border-gray-200">
+                    <span className="text-gray-400 print:text-gray-600">Gastos de operación (agua, insumos, proveedores)</span>
+                    <span className="font-bold text-orange-300 print:text-orange-700">-${(summary.totalExpenses ?? 0).toFixed(2)} MXN</span>
+                  </div>
+                  <div className="flex justify-between py-1.5 border-b border-white/5 print:border-gray-200">
+                    <span className="text-gray-400 print:text-gray-600">Retiros / sangría a caja fuerte</span>
+                    <span className="font-bold text-amber-300 print:text-amber-700">-${(summary.totalSafeWithdrawals ?? 0).toFixed(2)} MXN</span>
+                  </div>
+                </>
+              )}
               <div className="flex justify-between py-1.5 border-b border-white/5 print:border-gray-200">
                 <span className="text-gray-400 print:text-gray-600">IVA Trasladado (16%)</span>
                 <span className="font-bold text-blue-400 print:text-blue-700">${summary.totalTax.toFixed(2)} MXN</span>

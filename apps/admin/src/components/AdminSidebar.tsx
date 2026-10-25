@@ -156,6 +156,7 @@ const menuPillars: MenuPillar[] = [
       { href: "/birthdays", label: "Cumpleaños", icon: Cake },
       { href: "/catering", label: "Eventos & Catering", icon: CalendarCheck },
       { href: "/academy", label: "Guías & Academy", icon: BookOpen, badge: "Docs" },
+      { href: "/operations-manual", label: "Manual Operativo & Caja", icon: BookOpen, badge: "PDF" },
     ],
   },
   {

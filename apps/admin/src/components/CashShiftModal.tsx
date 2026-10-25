@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button, Dialog, toast, cn } from "@rabbitty/ui";
-import { Banknote, Lock, LockOpen, ArrowLeftRight, ClipboardCheck, HandCoins, Printer, ShieldCheck, Clock } from "lucide-react";
+import { Banknote, Lock, LockOpen, ArrowLeftRight, ClipboardCheck, HandCoins, Printer, ShieldCheck, Clock, BookOpen, HelpCircle, AlertCircle, CreditCard, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { trpc } from "../lib/trpc-client";
 import { printEngine } from "../lib/print-engine";
@@ -87,6 +87,8 @@ export function CashShiftModal({
   const [managerPin, setManagerPin] = useState("");
   const [amount, setAmount] = useState("");
   const [notes, setNotes] = useState("");
+  const [closeFund, setCloseFund] = useState("");
+  const [withdrawCategory, setWithdrawCategory] = useState<"EXPENSE" | "SAFE">("SAFE");
   const [needManager, setNeedManager] = useState(false);
   const [result, setResult] = useState<any>(null);
 
@@ -96,6 +98,7 @@ export function CashShiftModal({
     setManagerPin("");
     setAmount("");
     setNotes("");
+    setCloseFund("");
     setNeedManager(false);
   };
   const goHome = () => {
@@ -112,6 +115,7 @@ export function CashShiftModal({
   }, [open, initialMode]);
 
   const isOpen = !!data?.open;
+  const currentTotals = data?.open ? data.totals : null;
   const settings: any = data?.settings;
   const mgrThreshold = Number(settings?.cashDropManagerThreshold ?? 1000);
 
@@ -258,8 +262,12 @@ export function CashShiftModal({
                   <span className="text-[10px] uppercase font-bold text-gray-400 block">Fondo inicial</span>
                   <span className="font-black text-white">{fmt(data.totals.openingFloat)}</span>
                 </div>
+                <div className="p-2.5 rounded-xl bg-black/40 border border-orange-500/20">
+                  <span className="text-[10px] uppercase font-bold text-gray-400 block">Gastos (insumos)</span>
+                  <span className="font-black text-orange-400">-{fmt((data.totals as any).expenses ?? 0)}</span>
+                </div>
                 <div className="p-2.5 rounded-xl bg-black/40 border border-amber-500/20">
-                  <span className="text-[10px] uppercase font-bold text-gray-400 block">Retiros</span>
+                  <span className="text-[10px] uppercase font-bold text-gray-400 block">Retiros / sangría</span>
                   <span className="font-black text-amber-400">-{fmt(data.totals.withdrawals)}</span>
                 </div>
                 <div className="p-2.5 rounded-xl bg-black/40 border border-white/10">
@@ -270,9 +278,19 @@ export function CashShiftModal({
               <p className="text-[11px] text-gray-500 flex items-center gap-1">
                 <ShieldCheck className="h-3 w-3" /> Arqueo ciego: el efectivo esperado se revela hasta que cuentas la gaveta.
               </p>
-              <p className="text-[11px] text-gray-500">
-                Los totales se calculan por sucursal (una sola caja por local). Si operas con dos cajas, el esperado mezclará sus cobros en efectivo.
-              </p>
+              {/* Reminder banner */}
+              <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs text-purple-200 flex items-start justify-between gap-2">
+                <div className="flex items-start gap-2">
+                  <Sparkles className="h-4 w-4 text-purple-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold text-white block">Gastos y pagos de agua/insumos:</span>
+                    <span className="text-[11px] text-gray-300">Usa "Retiro" para pagar compras menores. El sistema lo descuenta automáticamente del corte final.</span>
+                  </div>
+                </div>
+                <Link href="/operations-manual" target="_blank" className="text-[10px] font-bold text-pink-400 hover:text-pink-300 whitespace-nowrap underline flex items-center gap-1 shrink-0">
+                  <BookOpen className="h-3 w-3" /> Ver Manual
+                </Link>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
@@ -322,21 +340,75 @@ export function CashShiftModal({
             className="space-y-3"
             onSubmit={(e) => {
               e.preventDefault();
-              withdrawMut.mutate({ pin, amount: num, notes: notes || undefined, managerPin: managerPin || undefined });
+              withdrawMut.mutate({ pin, amount: num, category: withdrawCategory, notes: notes || undefined, managerPin: managerPin || undefined });
             }}
           >
-            <p className="text-xs text-gray-400">
-              Retiros mayores a {fmt(mgrThreshold)} requieren además PIN de manager/admin.
-            </p>
-            <MoneyField id="cash-withdraw-amount" label="Monto a retirar ($)" value={amount} onChange={setAmount} autoFocus />
-            <NoteField id="cash-withdraw-notes" label="Entregado a / justificación" value={notes} onChange={setNotes} />
+            {/* Saldo disponible en tiempo real */}
+            <div className="p-3 rounded-xl bg-linear-to-r from-cyan-950/40 to-black border border-cyan-500/30 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">Efectivo Disponible en Gaveta</span>
+                <span className="text-lg font-black text-cyan-300">{fmt(currentTotals?.expectedCash ?? 0)}</span>
+              </div>
+              <HandCoins className="h-6 w-6 text-cyan-400 opacity-60" />
+            </div>
+
+            {/* Selector rápido de justificación */}
+            <div>
+              <span className="text-[10px] font-bold text-gray-400 block mb-1 uppercase tracking-wider">Concepto Rápido</span>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { concept: "Garrafones de agua", category: "EXPENSE" },
+                  { concept: "Compra de café / insumos", category: "EXPENSE" },
+                  { concept: "Hielo / Emergencia", category: "EXPENSE" },
+                  { concept: "Pago a proveedor", category: "EXPENSE" },
+                  { concept: "Retiro parcial a caja fuerte", category: "SAFE" },
+                ].map(({ concept, category }) => (
+                  <button
+                    key={concept}
+                    type="button"
+                    onClick={() => {
+                      setNotes(concept);
+                      setWithdrawCategory(category as "EXPENSE" | "SAFE");
+                    }}
+                    className={cn(
+                      "text-[11px] px-2.5 py-1 rounded-lg border transition-all cursor-pointer",
+                      notes === concept
+                        ? "bg-cyan-500 text-gray-950 font-bold border-cyan-400"
+                        : "bg-white/5 text-gray-300 border-white/10 hover:bg-white/10"
+                    )}
+                  >
+                    {concept}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <MoneyField id="cash-withdraw-amount" label="Monto a retirar / pagar ($)" value={amount} onChange={setAmount} autoFocus />
+
+            {/* Validación visual reactiva */}
+            {num > (currentTotals?.expectedCash ?? 0) && (
+              <div className="p-2.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>No puedes retirar más de lo que hay en gaveta ({fmt(currentTotals?.expectedCash ?? 0)} disponible).</span>
+              </div>
+            )}
+
+            <NoteField id="cash-withdraw-notes" label="Detalle o justificación" value={notes} onChange={setNotes} />
             <PinField id="cash-withdraw-pin" label="PIN del cajero" value={pin} onChange={setPin} />
             {(num > mgrThreshold || needManager) && (
-              <PinField id="cash-withdraw-mgr" label="PIN manager / admin" value={managerPin} onChange={setManagerPin} />
+              <div className="space-y-1">
+                <p className="text-[11px] text-amber-400 font-semibold">Monto mayor a {fmt(mgrThreshold)}: pide autorización de manager/admin.</p>
+                <PinField id="cash-withdraw-mgr" label="PIN manager / admin" value={managerPin} onChange={setManagerPin} />
+              </div>
             )}
             <div className="flex gap-2 justify-end pt-1">
               <BackBtn />
-              <Button type="submit" id="cash-withdraw-submit" disabled={busy || pin.length !== 4 || !validAmount || num <= 0} className="bg-cyan-500 hover:bg-cyan-400 text-gray-950 font-bold">
+              <Button 
+                type="submit" 
+                id="cash-withdraw-submit" 
+                disabled={busy || pin.length !== 4 || !validAmount || num <= 0 || num > (currentTotals?.expectedCash ?? 0)} 
+                className="bg-cyan-500 hover:bg-cyan-400 text-gray-950 font-bold"
+              >
                 {withdrawMut.isPending ? "Registrando..." : "Registrar retiro e imprimir"}
               </Button>
             </div>
@@ -412,15 +484,57 @@ export function CashShiftModal({
               closeMut.mutate({ pin, managerPin, countedCash: num, notes: notes || undefined });
             }}
           >
-            <p className="text-xs text-gray-400">
-              Cierre definitivo (Ticket Z). Cuenta la gaveta; si hay diferencia, la nota es obligatoria. Requiere PIN de manager/admin.
-            </p>
-            <MoneyField id="cash-close-counted" label="Efectivo contado ($)" value={amount} onChange={setAmount} autoFocus />
-            <NoteField id="cash-close-notes" value={notes} onChange={setNotes} label="Nota (obligatoria si hay diferencia)" />
+            {/* Paso 1: Cuadre de Tarjeta Bancaria */}
+            <div className="p-3.5 rounded-xl bg-linear-to-r from-blue-950/40 to-black border border-blue-500/30 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400 flex items-center gap-1.5">
+                  <CreditCard className="h-3.5 w-3.5" /> 1. Cotejo de Terminal Bancaria
+                </span>
+                <span className="text-xs font-black text-blue-300">{fmt(currentTotals?.cardSales ?? 0)}</span>
+              </div>
+              <p className="text-[11px] text-gray-300 leading-relaxed">
+                Coteja que los vouchers o el corte de tu terminal física (Clip, Mercado Pago o Banco) sumen exactamente <strong className="text-white">{fmt(currentTotals?.cardSales ?? 0)}</strong>. Las tarjetas no van en la gaveta física.
+              </p>
+            </div>
+
+            {/* Paso 2: Conteo de Efectivo */}
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">2. Conteo de Efectivo en Gaveta</span>
+              <p className="text-[11px] text-gray-400">
+                Cuenta todos los billetes y monedas que tienes en mano. Si hay diferencia, la nota explicativa es obligatoria.
+              </p>
+            </div>
+
+            <MoneyField id="cash-close-counted" label="Total Contado en Gaveta ($)" value={amount} onChange={setAmount} autoFocus />
+
+            {/* Paso 3: Gasto vs Fondo para mañana (guía, no muta nada) */}
+            <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 space-y-2">
+              <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider block">3. Retiro de Ganancia & Fondo para Mañana</span>
+              <MoneyField id="cash-close-fund" label="¿Cuánto dejas de fondo para el próximo turno? (opcional)" value={closeFund} onChange={setCloseFund} />
+              {validAmount && closeFund.length > 0 && Number(closeFund) >= 0 && (
+                <p className="text-[11px] text-gray-300 leading-relaxed">
+                  {Math.max(0, num - Number(closeFund || 0)) > 0 ? (
+                    <>
+                      <strong className="text-orange-300 block">Lleva a caja fuerte: {fmt(Math.max(0, num - Number(closeFund || 0)))}</strong>
+                      Después de cerrar, retira esa cantidad físicamente. El fondo queda en la gaveta listo para abrir el próximo turno.
+                    </>
+                  ) : (
+                    <span>El fondo deja la gaveta en $0 — verifica que sea lo correcto.</span>
+                  )}
+                </p>
+              )}
+              {!validAmount && (
+                <p className="text-[10px] text-gray-500">Captura primero el total contado para ver la sugerencia.</p>
+              )}
+            </div>
+
+            <NoteField id="cash-close-notes" value={notes} onChange={setNotes} label="Nota / Justificación (si hay diferencia)" />
+            
             <div className="grid grid-cols-2 gap-2">
               <PinField id="cash-close-pin" label="PIN del cajero" value={pin} onChange={setPin} />
               <PinField id="cash-close-mgr" label="PIN manager / admin" value={managerPin} onChange={setManagerPin} />
             </div>
+
             <div className="flex gap-2 justify-end pt-1">
               <BackBtn />
               <Button type="submit" id="cash-close-submit" disabled={busy || pin.length !== 4 || managerPin.length !== 4 || !validAmount} className="bg-red-500 hover:bg-red-400 text-white font-bold">

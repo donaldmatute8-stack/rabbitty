@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { trpc } from "../../../lib/trpc-client";
 import { Card, Badge, Button, toast } from "@rabbitty/ui";
-import { Banknote, ChevronDown, ChevronRight, RefreshCw, ShieldCheck, Settings2 } from "lucide-react";
+import { Banknote, ChevronDown, ChevronRight, RefreshCw, ShieldCheck, Settings2, Printer, FileText } from "lucide-react";
 
 const fmt = (n: number | null | undefined) => `$${Number(n ?? 0).toFixed(2)}`;
 const dt = (d: any) => (d ? new Date(d).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" }) : "—");
@@ -126,7 +127,7 @@ export default function CashShiftsPage() {
           <table className="w-full text-left text-sm">
             <thead className="border-b border-white/5">
               <tr>
-                {["", "Apertura", "Cajero", "Fondo", "Esperado", "Contado", "Diferencia", "Cierre", "Autorizó", "Estado"].map((h) => (
+                {["", "Apertura", "Cajero", "Fondo", "Esperado", "Contado", "Diferencia", "Cierre", "Autorizó", "Estado", "Acciones"].map((h) => (
                   <th key={h} className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-400">{h}</th>
                 ))}
               </tr>
@@ -149,17 +150,28 @@ export default function CashShiftsPage() {
                     <td className="px-4 py-3">
                       <Badge variant={s.status === "OPEN" ? "success" : "default"}>{s.status === "OPEN" ? "Abierto" : "Cerrado"}</Badge>
                     </td>
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      <Link
+                        href={`/reports/audit?shiftId=${s.id}`}
+                        target="_blank"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-pink-500/10 hover:bg-pink-500/20 text-pink-400 border border-pink-500/30 text-xs font-bold transition-all"
+                        title="Ver y descargar reporte PDF del turno"
+                      >
+                        <FileText className="h-3 w-3" />
+                        <span>PDF</span>
+                      </Link>
+                    </td>
                   </tr>
                   {expanded === s.id && (
                     <tr key={`${s.id}-ev`}>
-                      <td colSpan={10} className="p-0"><ShiftEvents shiftId={s.id} /></td>
+                      <td colSpan={11} className="p-0"><ShiftEvents shiftId={s.id} /></td>
                     </tr>
                   )}
                 </>
               ))}
               {!isLoading && !shifts?.length && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-10 text-center text-sm text-gray-500">
+                  <td colSpan={11} className="px-4 py-10 text-center text-sm text-gray-500">
                     Aún no hay turnos de caja. Se abren desde el POS con el botón “Caja cerrada · Abrir”.
                   </td>
                 </tr>

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { ownedBusinesses } from '@/db/schema';
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql, type SQL } from 'drizzle-orm';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 import crypto from 'crypto';
 
@@ -212,7 +212,29 @@ export async function GET(req: Request) {
     const generatedAt = new Date().toISOString();
 
     // 6. Compute Cryptographic SHA-256 Digest of immutable report content
-    const payloadForHashing = JSON.stringify({
+    // Gastos de operación vs retiros del rango (categoría EXPENSE vs SAFE, con binding)
+    let totalExpenses = 0;
+    let totalSafeWithdrawals = 0;
+    try {
+      const dropConds: SQL[] = [];
+      if (fromDate) dropConds.push(sql`d."createdAt" >= ${fromDate}::timestamptz`);
+      if (toDate) dropConds.push(sql`d."createdAt" <= ${toDate}::timestamptz`);
+      if (branchId) dropConds.push(sql`d."branchId" = ${branchId}`);
+      if (dropConds.length > 0) {
+        const dropsRes = await db.execute(
+          sql`SELECT COALESCE(d.category, 'SAFE') as category, SUM(d.amount) as total FROM cash_drops d WHERE ${sql.join(dropConds, sql` AND `)} GROUP BY 1`
+        );
+        const dropsRows = ((dropsRes as unknown as { rows?: Record<string, unknown>[] }).rows || (dropsRes as unknown as Record<string, unknown>[]) || []) as Record<string, unknown>[];
+        for (const dr of dropsRows) {
+          if (String(dr.category) === "EXPENSE") totalExpenses = Number(dr.total) || 0;
+          else totalSafeWithdrawals = Number(dr.total) || 0;
+        }
+      }
+    } catch (dropErr) {
+      console.warn("[AUDIT_REPORT] drops query failed:", dropErr);
+    }
+
+        const payloadForHashing = JSON.stringify({
       businessId: business.id,
       branchId: branch?.branchId,
       totalOrders: ordersList.length,
@@ -250,6 +272,8 @@ export async function GET(req: Request) {
         totalTax: Math.round(totalTax * 100) / 100,
         totalBunzPaid,
         totalBunzReward,
+        totalExpenses: Math.round(totalExpenses * 100) / 100,
+        totalSafeWithdrawals: Math.round(totalSafeWithdrawals * 100) / 100,
         paymentBreakdown,
         productBreakdown: Object.entries(productBreakdown)
           .map(([name, data]) => ({ name, ...data }))

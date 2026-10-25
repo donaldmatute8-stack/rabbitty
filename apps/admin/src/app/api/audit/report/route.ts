@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@rabbitty/auth";
 import { getRestaurantDb } from "@rabbitty/api/db";
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import crypto from "crypto";
 
 export async function GET(req: NextRequest) {
@@ -213,7 +213,29 @@ export async function GET(req: NextRequest) {
     const generatedAt = new Date().toISOString();
 
     // 6. Compute Cryptographic SHA-256 Digest of immutable report content
-    const payloadForHashing = JSON.stringify({
+    // 4b. Gastos de operación vs retiros (sangría) del/los turno(s) del rango (con binding, sin sql.raw)
+    let totalExpenses = 0;
+    let totalSafeWithdrawals = 0;
+    try {
+      const dropConds: SQL[] = [];
+      if (fromDate) dropConds.push(sql`d."createdAt" >= ${fromDate}::timestamptz`);
+      if (toDate) dropConds.push(sql`d."createdAt" <= ${toDate}::timestamptz`);
+      if (branchId) dropConds.push(sql`d."branchId" = ${branchId}`);
+      if (dropConds.length > 0) {
+        const dropsRes = await db.execute(
+          sql`SELECT COALESCE(d.category, 'SAFE') as category, SUM(d.amount) as total FROM cash_drops d WHERE ${sql.join(dropConds, sql` AND `)} GROUP BY 1`
+        );
+        const dropsRows = ((dropsRes as unknown as { rows?: Record<string, unknown>[] }).rows || (dropsRes as unknown as Record<string, unknown>[]) || []) as Record<string, unknown>[];
+        for (const r of dropsRows) {
+          if (String(r.category) === "EXPENSE") totalExpenses = Number(r.total) || 0;
+          else totalSafeWithdrawals = Number(r.total) || 0;
+        }
+      }
+    } catch (dropErr) {
+      console.warn("[AUDIT_REPORT] drops query failed:", dropErr);
+    }
+
+        const payloadForHashing = JSON.stringify({
       businessId: businessInfo?.businessId || businessInfo?.restaurantId,
       branchId: businessInfo?.branchId,
       totalOrders: ordersList.length,
@@ -245,6 +267,8 @@ export async function GET(req: NextRequest) {
         totalTax: Math.round(totalTax * 100) / 100,
         totalBunzPaid,
         totalBunzReward,
+        totalExpenses: Math.round(totalExpenses * 100) / 100,
+        totalSafeWithdrawals: Math.round(totalSafeWithdrawals * 100) / 100,
         paymentBreakdown,
         productBreakdown: Object.entries(productBreakdown)
           .map(([name, data]) => ({ name, ...data }))
