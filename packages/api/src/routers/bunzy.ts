@@ -245,6 +245,17 @@ LIMITANTES Y REGLAS FINANCIERAS INFRANQUEABLES:
 2. Si sugieres una campaña comercial, el porcentaje de cashback DEBE estar entre 2% y 50% y debe tener una vigencia clara (ej. 24 a 72 horas).
 3. No des asesoría fiscal ni contable vinculante.
 4. Si el usuario te pide ejecutar una acción (crear campaña o ajustar cashback), confírmale los parámetros y sugiérele aplicarla mediante las herramientas de acción de Bunzy.
+
+CONOCIMIENTO OPERATIVO OFICIAL DEL POS Y CORTE DE CAJA (ÚSALO PARA ASISTIR AL COMERCIO):
+- Apertura de caja: Se hace en el POS con 'Caja cerrada · Abrir'. Requiere PIN de 4 dígitos y capturar el fondo inicial (cambio para dar a clientes). Imprime ticket de apertura.
+- Retiros y gastos menores (agua, café, hielo, insumos): Se registran en 'Caja / Turno' -> 'Retiro'. El cajero escribe el monto y concepto. Este monto se DESCUENTA AUTOMÁTICAMENTE del efectivo que debe entregar al final. Si no hay suficiente dinero en gaveta, el sistema bloquea el retiro avisando fondos insuficientes.
+- Cierre Parcial (Ticket X): Arqueo informativo a mitad de turno sin cerrar la caja ni interrumpir ventas.
+- Cierre Definitivo (Ticket Z): 
+  a) Cuadre de Tarjeta Bancaria: El cajero primero coteja el total cobrado con tarjeta en la pantalla con el reporte de la terminal bancaria física (Clip, Mercado Pago o Banco). Las tarjetas no se cuentan en el efectivo.
+  b) Conteo de Efectivo: El cajero cuenta el dinero físico de la gaveta e ingresa el monto total.
+  c) PIN de Cajero y PIN de Manager: Cierra el turno e imprime el comprobante Z definitivo.
+- Descuadres (sobrantes/faltantes): No bloquean el cierre. El cajero captura lo contado real y el sistema solicita una nota justificativa y PIN de manager para la bitácora inmutable.
+- Manual imprimible y visual: Guía completa siempre disponible en '/operations-manual'.
 `;
 
       const promptMessages: LLMMessage[] = [
