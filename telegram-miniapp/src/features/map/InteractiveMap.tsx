@@ -334,6 +334,8 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
     const map = L.map(mapRef.current, {
       center: [centerLat, centerLng],
       zoom: 15,
+      minZoom: 4,
+      maxZoom: 21,
       zoomControl: false,
       attributionControl: false,
     });
@@ -363,7 +365,7 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Basemap switcher: True Cyber Dark vs Architectural Crisp Light
+  // Basemap switcher: True Cyber Dark vs Architectural Crisp Light with Overzooming support
   useEffect(() => {
     const map = mapInst.current;
     if (!map || !mapReady) return;
@@ -372,8 +374,18 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
       tileLayerRef.current = null;
     }
     const layer = isDark
-      ? L.tileLayer(DARK_TILE_URL, { maxZoom: 19, subdomains: ['a', 'b', 'c', 'd'], attribution: DARK_TILE_ATTR })
-      : L.tileLayer(LIGHT_TILE_URL, { maxZoom: 19, subdomains: ['a', 'b', 'c', 'd'], attribution: LIGHT_TILE_ATTR });
+      ? L.tileLayer(DARK_TILE_URL, {
+          maxNativeZoom: 19,
+          maxZoom: 21,
+          subdomains: ['a', 'b', 'c', 'd'],
+          attribution: DARK_TILE_ATTR,
+        })
+      : L.tileLayer(LIGHT_TILE_URL, {
+          maxNativeZoom: 19,
+          maxZoom: 21,
+          subdomains: ['a', 'b', 'c', 'd'],
+          attribution: LIGHT_TILE_ATTR,
+        });
     layer.addTo(map);
     layer.bringToBack();
     tileLayerRef.current = layer;
