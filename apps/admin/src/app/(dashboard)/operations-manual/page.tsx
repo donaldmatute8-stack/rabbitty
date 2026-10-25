@@ -37,9 +37,78 @@ export default function OperationsManualPage() {
   };
 
   return (
-    <div className="space-y-8 pb-16 print:p-0 print:space-y-4 print:text-black">
+    <div id="operations-manual-container" className="space-y-8 pb-16 print:p-0 print:space-y-6 print:text-black">
+      <style jsx global>{`
+        @media print {
+          /* 1. Resetear el viewport global de Next.js y desarmar el scroll lock de DashboardClientWrapper */
+          html, body {
+            background: #ffffff !important;
+            color: #000000 !important;
+            overflow: visible !important;
+            height: auto !important;
+            min-height: auto !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+
+          /* 2. Ocultar todos los elementos globales del layout (sidebar, header, sandbox banner, bunzy drawer) */
+          aside, header, nav, footer, [role="banner"], .no-print, [class*="SandboxBanner"], [class*="AdminSidebar"] {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          /* 3. Desbloquear los contenedores padres flex y overflow para permitir múltiples páginas */
+          div[class*="DashboardClientWrapper"],
+          div[class*="flex-col"][class*="h-screen"],
+          main[class*="overflow-y-auto"],
+          div[class*="max-w-7xl"] {
+            overflow: visible !important;
+            height: auto !important;
+            max-height: none !important;
+            position: static !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            display: block !important;
+          }
+
+          /* 4. Contenedor imprimible */
+          #operations-manual-container {
+            display: block !important;
+            position: relative !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0.5cm 0.5cm 1cm 0.5cm !important;
+            background: #ffffff !important;
+            color: #000000 !important;
+            font-size: 10pt !important;
+            line-height: 1.4 !important;
+          }
+
+          /* 5. Asegurar contraste y que no corte cajas a la mitad */
+          .print-card,
+          div[class*="rounded-"],
+          div[class*="Card"] {
+            box-shadow: none !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+
+          @page {
+            margin: 1.2cm 1cm 1.2cm 1cm;
+            size: letter portrait;
+          }
+        }
+      `}</style>
+
       {/* Header Banner - Printable Header */}
-      <div className="relative overflow-hidden rounded-3xl border border-white/5 bg-linear-to-br from-gray-900/90 via-black to-purple-950/40 p-8 shadow-2xl backdrop-blur-xl print:border-none print:p-4 print:bg-white print:text-black">
+      <div className="relative overflow-hidden rounded-3xl border border-white/5 bg-linear-to-br from-gray-900/90 via-black to-purple-950/40 p-8 shadow-2xl backdrop-blur-xl print:border print:border-gray-300 print:p-6 print:bg-white print:text-black">
         <div className="absolute top-0 right-0 h-64 w-64 rounded-full bg-pink-500/10 blur-3xl pointer-events-none print:hidden" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
