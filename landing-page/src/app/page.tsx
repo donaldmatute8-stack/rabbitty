@@ -377,7 +377,7 @@ export default function LandingPage() {
       </section>
 
       {/* CONSUMERS (Rabbitters) */}
-      <section id="rabbitters" className="relative z-10 py-32 px-6">
+      <section id="rabbitters" className="relative z-10 py-32 px-6 overflow-x-clip">
         <div className="max-w-7xl mx-auto grid md:grid-cols-2 gap-16 items-center">
           <motion.div 
             initial={{ opacity: 0, x: -50 }}
@@ -407,12 +407,12 @@ export default function LandingPage() {
                 </div>
               </div>
             </div>
-            {/* Floating elements */}
-            <div className="absolute top-20 -right-10 glass-panel p-4 rounded-2xl flex items-center gap-3 animate-[bounce_4s_infinite]">
-              <span className="text-2xl">🏆</span>
+            {/* Floating elements - responsive positioning to avoid pushing mobile horizontal viewport */}
+            <div className="absolute top-20 right-2 sm:-right-4 md:-right-8 glass-panel p-3.5 sm:p-4 rounded-2xl flex items-center gap-2.5 sm:gap-3 shadow-xl backdrop-blur-xl z-20 animate-[bounce_4s_infinite]">
+              <span className="text-xl sm:text-2xl">🏆</span>
               <div>
-                <div className="font-bold text-sm">Nivel Épico</div>
-                <div className="text-xs text-white/50">Multiplicador x1.5</div>
+                <div className="font-bold text-xs sm:text-sm">Nivel Épico</div>
+                <div className="text-[11px] sm:text-xs text-white/50">Multiplicador x1.5</div>
               </div>
             </div>
           </motion.div>
