@@ -10,6 +10,7 @@ import OpenAppButton from '@/components/OpenAppButton';
 import PricingPackagesSection, { PackagePlan, NicheData } from '@/components/PricingPackagesSection';
 
 const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || '5213312345678';
+const TELEGRAM_BOT_USERNAME = process.env.NEXT_PUBLIC_BOT_USERNAME || 'Rabbittyme_bot';
 const BUSINESS_TYPES = ['restaurante', 'cafetería', 'barbería', 'gimnasio', 'tienda'];
 
 type TrackingWindow = Window & {
@@ -919,17 +920,33 @@ export default function LandingPage() {
                 </p>
                 <div className="pt-2 flex flex-col gap-3">
                   <a
-                    href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
-                      `¡Hola Rabbitty! Acabo de registrar a "${formData.negocio}" desde la web para el paquete "${formData.packageName || formData.paquete || 'Personalizado'}". Me gustaría agendar mi deploy demo.`
+                    href={`https://t.me/${TELEGRAM_BOT_USERNAME}?start=${encodeURIComponent(
+                      `solicitud_${(formData.negocio || 'negocio').toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 30)}`
                     )}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    onClick={() => fireConversion('Contact', { niche: formData.nicheId, package: formData.packageCode })}
-                    className="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm transition-all shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 no-underline cursor-pointer"
+                    onClick={() => fireConversion('Contact', { niche: formData.nicheId, package: formData.packageCode, channel: 'telegram' })}
+                    className="w-full py-4 rounded-2xl bg-sky-500 hover:bg-sky-400 text-white font-black text-sm transition-all shadow-lg shadow-sky-500/30 flex items-center justify-center gap-2 no-underline cursor-pointer"
                   >
-                    <span>💬</span>
-                    <span>Agilizar por WhatsApp Directo</span>
+                    <span>✈️</span>
+                    <span>Agilizar por Telegram Bot</span>
                   </a>
+
+                  {/* Configuración de WhatsApp preservada para activación futura cuando se adquiera número comercial */}
+                  {WHATSAPP_NUMBER && WHATSAPP_NUMBER !== '5213312345678' && (
+                    <a
+                      href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
+                        `¡Hola Rabbitty! Acabo de registrar a "${formData.negocio}" desde la web para el paquete "${formData.packageName || formData.paquete || 'Personalizado'}". Me gustaría agendar mi deploy demo.`
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => fireConversion('Contact', { niche: formData.nicheId, package: formData.packageCode, channel: 'whatsapp' })}
+                      className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm transition-all shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 no-underline cursor-pointer"
+                    >
+                      <span>💬</span>
+                      <span>Agilizar por WhatsApp Directo</span>
+                    </a>
+                  )}
 
                   <button onClick={resetForm} className="w-full py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white/70 hover:text-white font-bold text-xs transition-all cursor-pointer border-none">
                     Cerrar

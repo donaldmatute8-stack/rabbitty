@@ -28,7 +28,52 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
-  const { businessId, status } = await req.json();
+  const body = await req.json();
+  const { businessId, status, action, amount } = body;
+
+  // Acción rápida de aprovisionamiento de Bunz (inventario) para comercios
+  if (action === 'PROVISION_BUNZ' || status === 'PROVISION_BUNZ') {
+    const bunzToAdd = Number(amount) || 3500;
+    if (!businessId || bunzToAdd <= 0) {
+      return NextResponse.json({ error: 'businessId y amount válidos requeridos' }, { status: 400 });
+    }
+
+    const currentBiz = await db.query.ownedBusinesses.findFirst({
+      where: eq(ownedBusinesses.id, businessId),
+    });
+    if (!currentBiz) {
+      return NextResponse.json({ error: 'Business not found' }, { status: 404 });
+    }
+
+    const { sql } = await import('drizzle-orm');
+    const [updated] = await db.update(ownedBusinesses)
+      .set({
+        bunzBalance: sql`"bunzBalance" + ${bunzToAdd}`,
+      })
+      .where(eq(ownedBusinesses.id, businessId))
+      .returning();
+
+    // Notificar al dueño si tiene Telegram
+    const owner = updated.ownerId ? await db.query.users.findFirst({
+      where: eq(users.id, updated.ownerId),
+    }) : null;
+
+    if (owner?.telegramId && TELEGRAM_BOT_TOKEN) {
+      const msg =
+        `🎉 *¡Bunz Aprovisionados con Éxito!*\n\n` +
+        `Tu negocio *${updated.name}* ha recibido una carga de *+${bunzToAdd.toLocaleString()} BUNZ* para recompensar a tus clientes.\n\n` +
+        `💰 *Nuevo Balance del Negocio:* ${updated.bunzBalance.toLocaleString()} BUNZ\n\n` +
+        `🐰 — Rabbitty Team`;
+      fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: owner.telegramId, text: msg, parse_mode: 'Markdown' }),
+      }).catch(() => {});
+    }
+
+    return NextResponse.json({ success: true, business: updated, bunzBalance: updated.bunzBalance });
+  }
+
   if (!businessId || !['APPROVED', 'REJECTED', 'UNDER_REVIEW'].includes(status)) {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   }

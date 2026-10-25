@@ -500,6 +500,7 @@ interface AdminBusinessItem {
   address?: string | null;
   status: string;
   rewardPercentage?: number;
+  bunzBalance?: number;
   package?: string | null;
   creditLimit?: number;
   creditUsed?: number;
@@ -583,6 +584,25 @@ function BusinessApprovals() {
       }
     } catch {
       showToast('Error de conexión', 'error');
+    }
+  };
+
+  const handleProvisionBunz = async (businessId: string, businessName: string, amount: number = 3500) => {
+    try {
+      const res = await fetch('/api/admin/business', {
+        method: 'POST',
+        headers: await adminHeaders(user, true),
+        body: JSON.stringify({ businessId, action: 'PROVISION_BUNZ', amount })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBusinesses(prev => prev.map(b => b.id === businessId ? { ...b, bunzBalance: data.bunzBalance } : b));
+        showToast(`🎉 +${amount.toLocaleString()} Bunz aprovisionados a ${businessName}`, 'success');
+      } else {
+        showToast('Error: ' + (data.error || 'No se pudo aprovisionar'), 'error');
+      }
+    } catch {
+      showToast('Error de conexión al aprovisionar', 'error');
     }
   };
 
@@ -767,6 +787,38 @@ function BusinessApprovals() {
                   ) : (
                     <p style={{ margin: 0, fontSize: 11, color: '#9CA3AF', fontStyle: 'italic' }}>Sin usuario asignado</p>
                   )}
+                </div>
+
+                {/* Row de Balance & Aprovisionamiento Rápido */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: '#F8FAFC', borderRadius: 12, border: '1px solid #E2E8F0', marginLeft: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 14 }}>🐰</span>
+                    <div>
+                      <p style={{ margin: 0, fontSize: 10, fontWeight: 800, color: '#64748B', textTransform: 'uppercase' }}>Inventario Bunz</p>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 900, color: '#0F172A' }}>
+                        {(b.bunzBalance || 0).toLocaleString()} <span style={{ fontSize: 10, color: '#E91E63' }}>BUNZ</span>
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleProvisionBunz(b.id, b.name || 'Comercio', 3500)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      padding: '6px 12px',
+                      borderRadius: 10,
+                      background: 'linear-gradient(135deg, #E91E63 0%, #D81B60 100%)',
+                      color: '#FFF',
+                      border: 'none',
+                      fontSize: 11,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 8px rgba(233,30,99,0.25)',
+                    }}
+                  >
+                    <span>+3,500 Bunz</span>
+                  </button>
                 </div>
 
                 {/* Action Buttons */}

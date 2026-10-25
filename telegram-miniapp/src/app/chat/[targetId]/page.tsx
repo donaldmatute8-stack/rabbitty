@@ -130,6 +130,72 @@ function cleanOrEmpty(text: string): string {
   return text.replace(/\[COMERCIO_ACTION id="[^"]+" name="[^"]+"\]/g, '').trim();
 }
 
+/**
+ * Renderizador de formato Markdown nativo y seguro para respuestas de Bunzy y usuarios.
+ * Soporta **negritas**, *cursivas*, `código`, listas numeradas y saltos de línea estéticos.
+ */
+function renderFormattedMarkdown(text: string) {
+  if (!text) return null;
+  const lines = text.split('\n');
+
+  return (
+    <span style={{ display: 'block', fontSize: '15px', lineHeight: '1.5', margin: 0, wordBreak: 'break-word' }}>
+      {lines.map((line, lineIdx) => {
+        // Detectar si es elemento de lista numerada como "1. **Nombre**"
+        const isListItem = /^\d+\.\s/.test(line);
+
+        // Procesar tokens inline: **bold**, *italic*, `code`
+        const parts = line.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g);
+
+        return (
+          <span
+            key={lineIdx}
+            style={{
+              display: 'block',
+              marginBottom: lineIdx === lines.length - 1 ? 0 : line.trim() === '' ? '8px' : '4px',
+              paddingLeft: isListItem ? '4px' : undefined,
+            }}
+          >
+            {parts.map((part, partIdx) => {
+              if (part.startsWith('**') && part.endsWith('**')) {
+                return (
+                  <strong key={partIdx} style={{ fontWeight: 800, color: 'inherit' }}>
+                    {part.slice(2, -2)}
+                  </strong>
+                );
+              }
+              if (part.startsWith('*') && part.endsWith('*')) {
+                return (
+                  <em key={partIdx} style={{ fontStyle: 'italic', opacity: 0.9 }}>
+                    {part.slice(1, -1)}
+                  </em>
+                );
+              }
+              if (part.startsWith('`') && part.endsWith('`')) {
+                return (
+                  <code
+                    key={partIdx}
+                    style={{
+                      background: 'rgba(255,255,255,0.1)',
+                      padding: '2px 6px',
+                      borderRadius: 6,
+                      fontSize: '13px',
+                      fontFamily: 'monospace',
+                    }}
+                  >
+                    {part.slice(1, -1)}
+                  </code>
+                );
+              }
+              return part;
+            })}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
 function CheckTicks({ read }: { read: boolean }) {
   return (
     <svg width="16" height="11" viewBox="0 0 16 11" fill="none" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -1123,9 +1189,7 @@ export default function ChatRoomPage() {
       if (typedMeta.kind === 'TRANSFER_REQUEST' && typedMeta.transferRequest && typeof typedMeta.transferRequest === 'object') {
         return (
           <>
-            {cleanOrEmpty(msg.content) && (
-              <p style={{ fontSize: '15px', lineHeight: '1.5', margin: 0, whiteSpace: 'pre-wrap' }}>{cleanOrEmpty(msg.content)}</p>
-            )}
+            {cleanOrEmpty(msg.content) && renderFormattedMarkdown(cleanOrEmpty(msg.content))}
             {renderTransferRequest(typedMeta.transferRequest as TransferRequest)}
           </>
         );
@@ -1137,9 +1201,7 @@ export default function ChatRoomPage() {
           const payload = `rabbitty://pay?to=${encodeURIComponent(handle)}`;
           return (
             <>
-              {cleanOrEmpty(msg.content) && (
-                <p style={{ fontSize: '15px', lineHeight: '1.5', margin: 0, whiteSpace: 'pre-wrap' }}>{cleanOrEmpty(msg.content)}</p>
-              )}
+              {cleanOrEmpty(msg.content) && renderFormattedMarkdown(cleanOrEmpty(msg.content))}
               <div style={{ marginTop: '10px', borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--border-subtle)', background: 'var(--bg-pressed)', padding: '16px', textAlign: 'center' }}>
                 <div style={{ display: 'inline-block', padding: '12px', borderRadius: '20px', background: '#FFFFFF', marginBottom: '10px' }}>
                   <QRCodeSVG
@@ -1165,9 +1227,7 @@ export default function ChatRoomPage() {
       if (typedMeta.kind === 'OPTIONS' && Array.isArray(typedMeta.options)) {
         return (
           <>
-            {cleanOrEmpty(msg.content) && (
-              <p style={{ fontSize: '15px', lineHeight: '1.5', margin: 0, whiteSpace: 'pre-wrap' }}>{cleanOrEmpty(msg.content)}</p>
-            )}
+            {cleanOrEmpty(msg.content) && renderFormattedMarkdown(cleanOrEmpty(msg.content))}
             {renderOptions(typedMeta.options as BusinessOption[])}
           </>
         );
@@ -1192,9 +1252,7 @@ export default function ChatRoomPage() {
 
     return (
       <>
-        {cleanText && (
-          <p style={{ fontSize: '15px', lineHeight: '1.5', margin: 0, whiteSpace: 'pre-wrap' }}>{cleanText}</p>
-        )}
+        {cleanText && renderFormattedMarkdown(cleanText)}
         {target && renderBusinessCard(target)}
       </>
     );

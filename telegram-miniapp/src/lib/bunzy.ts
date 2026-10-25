@@ -377,6 +377,22 @@ async function loadHistory(conversationId: string): Promise<ChatMessage[]> {
 function heuristicReply(content: string, ctx: BunzyContext, lat?: number | null, lng?: number | null): BunzyReply {
   const nc = normalizeText(content);
 
+  // 0.8 Pregunta sobre bunz pendientes / saldo / por qué no han llegado mis bunz
+  if (/no me han llegado|no llegan mis bunz|mis bunz no|donde estan mis bunz|no veo mis bunz|saldo no actualizado|no me llego el cashback|tardan mis bunz/.test(nc)) {
+    const balance = ctx.user?.balance ?? 0;
+    return {
+      content:
+        `🐰 ¡Oído cocina! A veces la acreditación de bunz en caja toma entre **1 y 5 minutos** mientras el comercio valida el ticket y se sincroniza en la red.\n\n` +
+        `Actualmente tu saldo registrado es de **${balance} bunz**.\n\n` +
+        `💡 **Tip rápido**: Si acabas de consumir en un comercio, asegúrate de que el cajero haya escaneado tu QR de Rabbitty o ingresado tu identificador. Si pasaron más de 10 minutos, avísanos con la palabra **"soporte"** o toca el botón abajo para revisarlo de inmediato.`,
+      type: 'TEXT',
+      metadata: null,
+      suggestions: ['Ver mi saldo', 'Soporte', 'Explorar comercios'],
+      options: [],
+      orderDraft: null,
+    };
+  }
+
   // 1. Pregunta sobre ganar bunz / qué son los bunz
   if (/como gano bunz|que son los bunz|como ganar bunz|que es un bunz|para que sirven los bunz|explicame los bunz/.test(nc)) {
     const balanceInfo = ctx.user ? ` Actualmente tienes **${ctx.user.balance} bunz** disponibles.` : '';
