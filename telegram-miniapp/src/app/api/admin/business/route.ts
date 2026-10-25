@@ -261,10 +261,19 @@ export async function POST(req: NextRequest) {
     if (targetEmail) {
       try {
         const { sendEmail, getApplicationApprovedEmailTemplate } = await import('@/lib/email');
+        const vData = existingVerificationData as Record<string, any>;
+        const packageName = String(vData.packageName || vData.paquete || updated.package || 'Café Express / Quick Bite (3,500 BUNZ)');
+        const bunzProvisioned = Number(updated.bunzBalance) > 0 ? Number(updated.bunzBalance) : 3500;
+        const ownerName = String(owner?.firstName || vData.nombre || 'Emprendedor');
+
         const emailRes = await sendEmail({
           to: targetEmail,
-          subject: `🎉 ¡Felicidades! Tu negocio ${updated.name} fue aprobado en Rabbitty`,
-          html: getApplicationApprovedEmailTemplate(updated.name, magicUrl),
+          subject: `🎉 ¡Bienvenido a Rabbitty! ${updated.name} está aprobado y tu paquete fue aprovisionado`,
+          html: getApplicationApprovedEmailTemplate(updated.name, magicUrl, {
+            packageName,
+            bunzProvisioned,
+            ownerName,
+          }),
         });
         console.log('[Admin Approval Email Result]:', emailRes);
       } catch (e) {

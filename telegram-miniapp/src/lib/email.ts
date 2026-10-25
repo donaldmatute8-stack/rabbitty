@@ -108,33 +108,94 @@ export function getApplicationReceivedEmailTemplate(businessName: string, applic
   return wrapInRabbittyEmailLayout(`¡Solicitud Recibida!`, businessName, content);
 }
 
-export function getApplicationApprovedEmailTemplate(businessName: string, magicUrl: string) {
+export function getApplicationApprovedEmailTemplate(
+  businessName: string, 
+  magicUrl: string,
+  options?: {
+    packageName?: string;
+    bunzProvisioned?: number;
+    billingPeriod?: string;
+    ownerName?: string;
+  }
+) {
+  const pkgName = options?.packageName || 'Café Express / Quick Bite';
+  const bunz = options?.bunzProvisioned ?? 3500;
+  const ownerGreeting = options?.ownerName ? `Hola <strong>${options.ownerName}</strong>,` : '¡Hola!';
+
   const content = `
-    <div style="background: rgba(34,197,94,0.06); border-radius: 18px; padding: 22px; margin-bottom: 24px; border: 1px solid rgba(34,197,94,0.3);">
-      <p style="font-size: 15px; line-height: 1.6; color: #E2E8F0; margin: 0 0 12px 0;">
-        ¡Tu comercio ha sido verificado con éxito! Ya estás listo para emitir Bunz, activar reservaciones y fidelizar clientes.
+    <!-- BIENVENIDA Y ESTADO APROBADO -->
+    <div style="background: rgba(34,197,94,0.06); border-radius: 20px; padding: 22px 24px; margin-bottom: 22px; border: 1px solid rgba(34,197,94,0.3);">
+      <p style="font-size: 15px; line-height: 1.6; color: #E2E8F0; margin: 0 0 10px 0;">
+        ${ownerGreeting}
       </p>
-      <p style="font-size: 14px; line-height: 1.6; color: #CBD5E1; margin: 0;">
-        Accede a tu panel web mediante tu <strong>Enlace Mágico Único</strong> sin necesidad de recordar contraseñas:
+      <p style="font-size: 14px; line-height: 1.6; color: #CBD5E1; margin: 0 0 14px 0;">
+        ¡Tu negocio <strong>${businessName}</strong> ha sido oficialmente aprobado y activado en la red Rabbitty!
+      </p>
+      <div style="display: inline-block; background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.4); border-radius: 999px; padding: 4px 14px; font-size: 11px; font-weight: 800; color: #4ADE80; letter-spacing: 0.05em; text-transform: uppercase;">
+        ✓ Cuenta y Comercio Verificados
+      </div>
+    </div>
+
+    <!-- TARJETA DEL PAQUETE Y APROVISIONAMIENTO BUNZ -->
+    <div style="background: linear-gradient(135deg, rgba(233,30,99,0.12), rgba(168,85,247,0.12)); border-radius: 20px; padding: 24px; margin-bottom: 24px; border: 1px solid rgba(233,30,99,0.3); text-align: center;">
+      <p style="margin: 0 0 6px 0; font-size: 11px; font-weight: 800; color: #F472B6; text-transform: uppercase; letter-spacing: 0.1em;">
+        Paquete Aprovisionado
+      </p>
+      <h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 900; color: #FFFFFF;">
+        📦 ${pkgName}
+      </h3>
+
+      <div style="background: rgba(0,0,0,0.4); border-radius: 16px; padding: 18px; border: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-around; align-items: center; max-width: 380px; margin: 0 auto 16px;">
+        <div style="text-align: center; flex: 1;">
+          <p style="margin: 0 0 4px 0; font-size: 10px; font-weight: 800; color: #94A3B8; text-transform: uppercase;">Bóveda Inicial</p>
+          <p style="margin: 0; font-size: 20px; font-weight: 900; color: #F43F5E;">
+            +${bunz.toLocaleString()} <span style="font-size: 11px; color: #FDA4AF;">BUNZ</span>
+          </p>
+        </div>
+        <div style="width: 1px; height: 32px; background: rgba(255,255,255,0.1);"></div>
+        <div style="text-align: center; flex: 1;">
+          <p style="margin: 0 0 4px 0; font-size: 10px; font-weight: 800; color: #94A3B8; text-transform: uppercase;">Estatus Caja</p>
+          <p style="margin: 0; font-size: 14px; font-weight: 800; color: #4ADE80;">
+            100% Listo
+          </p>
+        </div>
+      </div>
+
+      <p style="margin: 0; font-size: 12px; color: #CBD5E1; line-height: 1.5;">
+        Estos Bunz ya están listos en tu bóveda digital para comenzar a premiar a tus clientes desde hoy.
       </p>
     </div>
 
+    <!-- BOTÓN DE ENLACE MÁGICO AL PORTAL -->
     <div style="text-align: center; margin-bottom: 28px;">
-      <a href="${magicUrl}" style="display: inline-block; background: linear-gradient(135deg, #22C55E, #16A34A); color: #FFF; font-weight: 900; font-size: 15px; padding: 16px 32px; border-radius: 14px; text-decoration: none; box-shadow: 0 0 25px rgba(34,197,94,0.4);">
-        🔑 Entrar a Mi Portal de Negocios
+      <p style="margin: 0 0 12px 0; font-size: 13px; color: #CBD5E1;">
+        Accede directamente a tu panel de control sin recordar contraseñas:
+      </p>
+      <a href="${magicUrl}" style="display: inline-block; background: linear-gradient(135deg, #E91E63 0%, #D81B60 100%); color: #FFF; font-weight: 900; font-size: 15px; padding: 16px 36px; border-radius: 14px; text-decoration: none; box-shadow: 0 0 25px rgba(233,30,99,0.4);">
+        🚀 Entrar a Mi Portal de Negocios
       </a>
+      <p style="margin: 10px 0 0 0; font-size: 11px; color: #64748B;">
+        Enlace seguro y personal de un solo clic. Válido por 7 días.
+      </p>
     </div>
 
-    <div style="background: rgba(255,255,255,0.03); border-radius: 18px; padding: 20px; border: 1px solid rgba(255,255,255,0.08);">
-      <h4 style="margin: 0 0 10px 0; color: #FFF; font-size: 14px; font-weight: 800;">💡 Siguientes pasos clave:</h4>
-      <ul style="margin: 0; padding-left: 20px; color: #CBD5E1; font-size: 13px; line-height: 1.8;">
-        <li>Ajusta tu tasa de recompensa en Bunz por consumo.</li>
-        <li>Descarga e imprime tu <strong>Rabbitty Code Neón</strong> para exhibir en tu caja.</li>
-        <li>Utiliza nuestro sistema bidireccional desde la PC o tu móvil.</li>
-      </ul>
+    <!-- PASOS RÁPIDOS DE ARRANQUE -->
+    <div style="background: rgba(255,255,255,0.03); border-radius: 18px; padding: 22px; border: 1px solid rgba(255,255,255,0.08);">
+      <h4 style="margin: 0 0 12px 0; color: #FFF; font-size: 14px; font-weight: 800;">💡 Tus primeros 3 pasos como afiliado:</h4>
+      <div style="color: #CBD5E1; font-size: 13px; line-height: 1.8;">
+        <p style="margin: 0 0 8px 0;">
+          <strong>1. Configura tu POS o Punto de Cobro:</strong> Entra al portal y abre la pestaña de POS para cobrar en efectivo o con Bunz.
+        </p>
+        <p style="margin: 0 0 8px 0;">
+          <strong>2. Descarga tu Rabbitty Code Neón:</strong> Colócalo cerca de tu caja para que los clientes escaneen desde la app.
+        </p>
+        <p style="margin: 0;">
+          <strong>3. Aparece en el Mapa Freehands:</strong> Tu negocio ya es visible para los exploradores de la comunidad en Nayarit y todo México.
+        </p>
+      </div>
     </div>
   `;
-  return wrapInRabbittyEmailLayout(`¡Comercio Aprobado! 🎉`, businessName, content);
+  return wrapInRabbittyEmailLayout(`¡Bienvenido a Rabbitty! 🎉`, businessName, content);
 }
 
 export function getApplicationRejectedEmailTemplate(businessName: string, reason?: string) {
