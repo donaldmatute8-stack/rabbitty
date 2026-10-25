@@ -840,6 +840,46 @@ export async function generateBunzyReply(input: BunzyInput): Promise<BunzyReply>
     };
   }
 
+  // Fallback -0.5: Reporte de Bug o Feedback directo a Bunzy en la app móvil
+  const isMobileBug = /\b(bug|error|fallo|falla|se trabó|no sirve|se congeló|no carga|problema técnico|problema tecnico|crash)\b/i.test(nc0);
+  const isMobileFeedback = /\b(feedback|sugerencia|mejora|recomiendo|estaría genial|estaría bien|idea para la app)\b/i.test(nc0);
+
+  if (isMobileBug || isMobileFeedback) {
+    const adminTelegramIds = (process.env.ADMIN_TELEGRAM_IDS || '798431743').split(',').map((s) => s.trim()).filter(Boolean);
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    const tag = isMobileBug ? '🐞 REPORTE DE ERROR VÍA BUNZY (MOBILE APP)' : '💡 FEEDBACK VÍA BUNZY (MOBILE APP)';
+    const sender = ctx.user ? `Usuario ID: ${ctx.user.id} (@${ctx.user.username || 'Sin alias'})` : 'Usuario Móvil / App';
+
+    const dispatchText =
+      `${tag}\n\n` +
+      `📝 Mensaje:\n${input.content.trim()}\n\n` +
+      `👤 Remitente: ${sender}\n` +
+      `📱 Plataforma: App Móvil / Telegram MiniApp\n` +
+      `🤖 Asistente: Bunzy Concierge`;
+
+    if (token) {
+      for (const adminId of adminTelegramIds) {
+        fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: adminId, text: dispatchText, disable_web_page_preview: true }),
+        }).catch(() => {});
+      }
+    }
+
+    return {
+      content: isMobileBug
+        ? '🐰 ¡Gracias por avisarme! Acabo de registrar tu reporte de error y enviarlo al equipo de desarrollo de Rabbitty para resolverlo a la brevedad. 🛠️'
+        : '🐰 ¡Me encanta tu idea! Ya compartí tu sugerencia con el equipo de Rabbitty para tenerla en cuenta en las próximas actualizaciones. ¡Gracias por ayudarnos a mejorar! ✨',
+      type: 'TEXT',
+      metadata: null,
+      suggestions: ['Ver mi saldo', 'Explorar comercios', 'Soporte'],
+      options: [],
+      orderDraft: null,
+      transferRequest: null,
+    };
+  }
+
   // Fallback 0: pregunta de soporte → responde con FAQ conciso + enlace
   const faqMatch = matchFaq(input.content);
   if (faqMatch) {

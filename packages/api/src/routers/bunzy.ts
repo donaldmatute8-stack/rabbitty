@@ -256,7 +256,41 @@ CONOCIMIENTO OPERATIVO OFICIAL DEL POS Y CORTE DE CAJA (ÚSALO PARA ASISTIR AL C
   c) PIN de Cajero y PIN de Manager: Cierra el turno e imprime el comprobante Z definitivo.
 - Descuadres (sobrantes/faltantes): No bloquean el cierre. El cajero captura lo contado real y el sistema solicita una nota justificativa y PIN de manager para la bitácora inmutable.
 - Manual imprimible y visual: Guía completa siempre disponible en '/operations-manual'.
+
+CAPACIDAD DE SOPORTE, REPORTE DE BUGS Y FEEDBACK:
+- Si el usuario reporta un problema, error técnico, fallo en pantalla o sugiere una mejora ("hay un error", "falló el ticket", "se trabó", "tengo una sugerencia", "quiero dejar feedback"), agradécele cálidamente, infórmale que has canalizado su reporte directamente con el equipo de ingeniería de Rabbitty y que está siendo atendido de inmediato.
 `;
+
+      // ─── 2.1 AUTO-DISPATCH TELEGRAM SI EL USUARIO REPORTA BUG O FEEDBACK ──
+      const lowerMsg = cleanMessage.toLowerCase();
+      const isBugReport = /\b(bug|error|fallo|falla|se trabó|no sirve|se congeló|no imprime|problema tecnico|problema técnico|crash)\b/i.test(lowerMsg);
+      const isFeedbackReport = /\b(feedback|sugerencia|mejora|recomiendo que|estaría bien|idea para)\b/i.test(lowerMsg);
+
+      if (isBugReport || isFeedbackReport) {
+        const botToken = process.env.TELEGRAM_BOT_TOKEN || process.env.AUTH_TELEGRAM_BOT_TOKEN;
+        const adminTelegramIds = (process.env.ADMIN_TELEGRAM_IDS || "798431743")
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+
+        if (botToken) {
+          const reportCategory = isBugReport ? "🐞 REPORTE DE ERROR VÍA BUNZY AI (ADMIN)" : "💡 FEEDBACK VÍA BUNZY AI (ADMIN)";
+          const tgText =
+            `${reportCategory}\n\n` +
+            `📝 Mensaje:\n${cleanMessage}\n\n` +
+            `👤 Remitente: ${ctx.user?.email || "Usuario Admin"} (Sucursal: ${branchId})\n` +
+            `🏢 Negocio: ${business?.name || "Rabbitty"}\n` +
+            `🤖 Asistente: Bunzy Co-Pilot`;
+
+          for (const adminId of adminTelegramIds) {
+            fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ chat_id: adminId, text: tgText, disable_web_page_preview: true }),
+            }).catch((err) => console.error("[BunzyFeedback] Telegram dispatch error:", err));
+          }
+        }
+      }
 
       const promptMessages: LLMMessage[] = [
         { role: "system", content: systemPrompt },
