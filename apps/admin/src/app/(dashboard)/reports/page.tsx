@@ -121,17 +121,22 @@ export default function ReportsPage() {
           </div>
           
           <div className="flex items-center gap-4">
-            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-1 flex">
-              {[1, 7, 30, 90].map((days) => (
+            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-1 flex flex-wrap gap-1">
+              {[
+                { label: "Hoy", days: 1 },
+                { label: "7 Días", days: 7 },
+                { label: "30 Días", days: 30 },
+                { label: "90 Días", days: 90 },
+              ].map((item) => (
                 <button
-                  key={days}
-                  onClick={() => setDaysRange(days)}
+                  key={item.days}
+                  onClick={() => setDaysRange(item.days)}
                   className={cn(
-                    "px-4 py-2 rounded-xl text-sm font-bold transition-all duration-300",
-                    daysRange === days ? "bg-white text-black shadow-lg" : "text-white/70 hover:text-white"
+                    "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer",
+                    daysRange === item.days ? "bg-white text-black shadow-lg" : "text-white/70 hover:text-white"
                   )}
                 >
-                  {days === 1 ? "Hoy" : `${days}D`}
+                  {item.label}
                 </button>
               ))}
             </div>
@@ -140,18 +145,18 @@ export default function ReportsPage() {
               onClick={handleExportCSV}
               disabled={isExporting}
               variant="secondary"
-              className="rounded-xl border border-white/10 text-white cursor-pointer"
+              className="rounded-xl border border-white/10 text-white cursor-pointer text-xs"
             >
-              <Download className="mr-2 h-4 w-4" />
+              <Download className="mr-1.5 h-3.5 w-3.5" />
               {isExporting ? "Generando..." : "Exportar CSV"}
             </Button>
 
             <Link
               href={`/reports/audit${branchId !== "default" ? `?branchId=${branchId}` : ""}`}
-              className="inline-flex items-center justify-center px-4 py-2 bg-linear-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-bold text-sm rounded-xl shadow-[0_0_20px_rgba(236,72,153,0.3)] transition-all cursor-pointer no-underline"
+              className="inline-flex items-center justify-center px-3.5 py-1.5 bg-linear-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-bold text-xs rounded-xl shadow-[0_0_20px_rgba(236,72,153,0.3)] transition-all cursor-pointer no-underline"
             >
-              <Activity className="mr-2 h-4 w-4" />
-              Reporte de Cuadre PDF
+              <Activity className="mr-1.5 h-3.5 w-3.5" />
+              Reporte Auditoría PDF
             </Link>
           </div>
         </div>
