@@ -252,6 +252,37 @@ export default function ChatRoomPage() {
 
   const isBot = targetId === 'bot';
 
+  // Keyboard offset state for native webview / iOS
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const updateKeyboard = () => {
+      if (window.visualViewport) {
+        const currentHeight = window.visualViewport.height;
+        const windowHeight = window.innerHeight;
+        const offset = windowHeight - currentHeight;
+        setKeyboardHeight(offset > 60 ? offset : 0);
+      }
+      setTimeout(() => {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }, 50);
+    };
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', updateKeyboard);
+      window.visualViewport.addEventListener('scroll', updateKeyboard);
+    }
+
+    return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', updateKeyboard);
+        window.visualViewport.removeEventListener('scroll', updateKeyboard);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     queueMicrotask(() => {
       try {
@@ -1801,10 +1832,13 @@ export default function ChatRoomPage() {
 
       <footer
         style={{
-          padding: '14px 18px',
-          paddingBottom: 'calc(env(safe-area-inset-bottom, 20px) + 14px)',
+          padding: '12px 16px',
+          paddingBottom: keyboardHeight > 0 
+            ? `${keyboardHeight + 10}px` 
+            : 'calc(max(var(--safe-bottom, 0px), env(safe-area-inset-bottom, 20px)) + 12px)',
           backgroundColor: 'var(--bg-elevated)',
           borderTop: '1px solid var(--border-subtle)',
+          transition: 'padding-bottom 0.15s ease-out',
         }}
       >
         {(suggestions.length > 0 || isBusinessInbox) && (
@@ -1995,7 +2029,17 @@ export default function ChatRoomPage() {
               outline: 'none',
               transition: 'border-color 0.2s',
             }}
-            onFocus={(e) => (e.target.style.borderColor = 'var(--rabbitty-pink)')}
+            onFocus={(e) => {
+              e.target.style.borderColor = 'var(--rabbitty-pink)';
+              setTimeout(() => {
+                bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+              }, 120);
+            }}
+            onClick={() => {
+              setTimeout(() => {
+                bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+              }, 120);
+            }}
             onBlur={(e) => (e.target.style.borderColor = 'var(--border-subtle)')}
           />
           {input.trim() ? (

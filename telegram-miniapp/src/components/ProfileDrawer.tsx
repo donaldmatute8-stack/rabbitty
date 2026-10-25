@@ -16,11 +16,15 @@ import {
   Store, 
   Bell, 
   ShieldCheck, 
-  HelpCircle
+  HelpCircle,
+  Bug,
+  MessageSquarePlus
 } from 'lucide-react';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useTheme } from '@/contexts/ThemeContext';
 import { PlatformBridge } from '@/lib/platform';
+import { useState } from 'react';
+import { FeedbackModal } from '@/components/feedback/FeedbackModal';
 
 interface ProfileDrawerProps {
   open: boolean;
@@ -45,6 +49,8 @@ const SETTINGS_ITEMS = [
 export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
   const { user, logout } = useAuth();
   const { resolvedTheme, setTheme } = useTheme();
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackType, setFeedbackType] = useState<'BUG' | 'FEEDBACK'>('BUG');
 
   useEffect(() => {
     if (!open) return;
@@ -92,12 +98,11 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}
             transition={{ type: 'spring', damping: 32, stiffness: 320 }}
-            className="fixed top-0 left-0 bottom-0 z-201 w-[78%] max-w-72 sm:max-w-80 flex flex-col justify-between rounded-r-4xl overflow-hidden"
+            className="fixed top-0 left-0 bottom-0 z-201 w-[75%] max-w-72 sm:max-w-80 flex flex-col justify-between rounded-r-2xl border-r border-(--border-subtle) overflow-hidden"
             style={{
               background: 'var(--bg-primary)',
-              paddingTop: 'calc(max(var(--safe-top, 0px), 12px) + 12px)',
-              paddingBottom: 'calc(max(var(--safe-bottom, 0px), 12px) + 16px)',
-              borderRight: '1px solid var(--border-subtle)',
+              paddingTop: 'calc(max(var(--safe-top, 0px), 12px) + 8px)',
+              paddingBottom: 'calc(max(var(--safe-bottom, 0px), 8px) + 8px)',
               boxShadow: '10px 0 30px rgba(0, 0, 0, 0.12), 4px 0 10px rgba(0, 0, 0, 0.05)',
             }}
           >
@@ -252,17 +257,67 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                     </Link>
                   );
                 })}
+
+                <div className="h-px bg-[var(--border-subtle)] my-1" />
+
+                {/* Report a bug */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    PlatformBridge.hapticFeedback('light');
+                    setFeedbackType('BUG');
+                    setFeedbackOpen(true);
+                  }}
+                  className="flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all active:scale-[0.98] group hover:bg-(--bg-pressed) cursor-pointer"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
+                  <Bug 
+                    size={18} 
+                    strokeWidth={2}
+                    className="text-(--text-muted) group-hover:text-red-400 shrink-0 transition-colors" 
+                  />
+                  <span className="text-[13px] font-semibold tracking-tight flex-1 group-hover:text-(--text-primary) transition-colors">
+                    Report a bug
+                  </span>
+                </button>
+
+                {/* Leave Feedback */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    PlatformBridge.hapticFeedback('light');
+                    setFeedbackType('FEEDBACK');
+                    setFeedbackOpen(true);
+                  }}
+                  className="flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all active:scale-[0.98] group hover:bg-(--bg-pressed) cursor-pointer"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
+                  <MessageSquarePlus 
+                    size={18} 
+                    strokeWidth={2}
+                    className="text-(--text-muted) group-hover:text-[#E91E63] shrink-0 transition-colors" 
+                  />
+                  <span className="text-[13px] font-semibold tracking-tight flex-1 group-hover:text-(--text-primary) transition-colors">
+                    Leave Feedback
+                  </span>
+                </button>
               </div>
             </div>
 
-            {/* Bottom section: theme toggle + logout, perfectly vertically centered */}
+            <FeedbackModal
+              isOpen={feedbackOpen}
+              onClose={() => setFeedbackOpen(false)}
+              initialType={feedbackType}
+            />
+
+            {/* Bottom section: theme toggle + logout, perfectly vertically centered and compact */}
             <div 
-              className="px-4 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom,0px))] shrink-0 flex items-center justify-between gap-3"
+              className="px-3.5 py-2.5 pb-[max(0.6rem,env(safe-area-inset-bottom,0px))] shrink-0 flex items-center justify-between gap-2.5"
               style={{ borderTop: '1px solid var(--border-subtle)' }}
             >
               {/* Dark / Light Toggle */}
               <div
-                className="flex items-center gap-1 p-1 rounded-xl"
+                className="flex items-center gap-0.5 p-0.5 rounded-lg"
                 style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
               >
                 <button
@@ -272,14 +327,14 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                     PlatformBridge.hapticFeedback('light');
                     setTheme('light');
                   }}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center transition-all border-none cursor-pointer"
+                  className="w-6 h-6 rounded-md flex items-center justify-center transition-all border-none cursor-pointer"
                   style={{
                     background: resolvedTheme === 'light' ? 'var(--bg-primary)' : 'transparent',
                     color: resolvedTheme === 'light' ? '#E91E63' : 'var(--text-muted)',
                     boxShadow: resolvedTheme === 'light' ? 'var(--shadow-sm)' : 'none',
                   }}
                 >
-                  <Sun size={14} strokeWidth={2.4} />
+                  <Sun size={13} strokeWidth={2.4} />
                 </button>
                 <button
                   type="button"
@@ -288,14 +343,14 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                     PlatformBridge.hapticFeedback('light');
                     setTheme('dark');
                   }}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center transition-all border-none cursor-pointer"
+                  className="w-6 h-6 rounded-md flex items-center justify-center transition-all border-none cursor-pointer"
                   style={{
                     background: resolvedTheme === 'dark' ? 'var(--bg-primary)' : 'transparent',
                     color: resolvedTheme === 'dark' ? '#E91E63' : 'var(--text-muted)',
                     boxShadow: resolvedTheme === 'dark' ? 'var(--shadow-sm)' : 'none',
                   }}
                 >
-                  <Moon size={14} strokeWidth={2.4} />
+                  <Moon size={13} strokeWidth={2.4} />
                 </button>
               </div>
 
@@ -309,9 +364,9 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                 }}
                 title="Cerrar Sesión"
                 aria-label="Cerrar Sesión"
-                className="h-8.5 px-3.5 rounded-xl flex items-center gap-1.5 bg-rose-500/10 text-rose-500 border border-rose-500/20 font-bold text-[12px] cursor-pointer active:scale-95 transition-transform"
+                className="h-7.5 px-3 rounded-lg flex items-center gap-1.5 bg-rose-500/10 text-rose-500 border border-rose-500/20 font-bold text-[11.5px] cursor-pointer active:scale-95 transition-transform"
               >
-                <LogOut size={13} strokeWidth={2.2} />
+                <LogOut size={12} strokeWidth={2.2} />
                 <span>Cerrar sesión</span>
               </button>
             </div>

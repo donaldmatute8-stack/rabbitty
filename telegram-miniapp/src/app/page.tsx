@@ -22,6 +22,8 @@ import { openBunzy } from '@/lib/bunzyLaunch';
 import { MoodCheckInSheet } from '@/components/mood/MoodCheckInSheet';
 import { WelcomeRitual } from '@/components/ui/WelcomeRitual';
 import { SmartBiometricPrompt } from '@/components/security/SmartBiometricPrompt';
+import { SmartNotificationPrompt } from '@/components/notifications/SmartNotificationPrompt';
+import { SmartPromptOrchestrator } from '@/lib/smartPromptOrchestrator';
 
 const InteractiveMap = dynamic(() => import('@/features/map/InteractiveMap'), {
   ssr: false,
@@ -227,24 +229,20 @@ export default function FeedPage() {
     }
   }, []);
 
-  // Auto-prompt Rabbitty Mood diario (abre cada nuevo día al entrar al feed o tras terminar el ritual)
+  // Auto-prompt Rabbitty Mood diario (coordinado para no atosigar al Rabbitter)
   useEffect(() => {
     let timer: NodeJS.Timeout | null = null;
     try {
-      const today = new Date().toISOString().slice(0, 10);
-      const lastDate = localStorage.getItem('rabbitty_mood_last_shown_date');
-      const dismissedDate = localStorage.getItem('rabbitty_mood_dismissed_date');
+      SmartPromptOrchestrator.recordVisit();
 
-      // Si ya se mostró hoy o se eligió "no preguntar hoy", esperar a mañana
-      if (lastDate === today || dismissedDate === today) return;
+      if (!SmartPromptOrchestrator.canShow('mood')) return;
 
       const triggerMood = (delay = 7000) => {
         if (timer) clearTimeout(timer);
         timer = setTimeout(() => {
-          setMoodOpen(true);
-          try {
-            localStorage.setItem('rabbitty_mood_last_shown_date', today);
-          } catch {}
+          if (SmartPromptOrchestrator.acquireLock('mood')) {
+            setMoodOpen(true);
+          }
         }, delay);
       };
 
@@ -261,7 +259,7 @@ export default function FeedPage() {
           triggerMood(1000);
         }, 19000);
       } else {
-        triggerMood(5000);
+        triggerMood(6000);
       }
     } catch {}
 
@@ -919,11 +917,15 @@ export default function FeedPage() {
       <ProfileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
       <MoodCheckInSheet
         isOpen={moodOpen}
-        onClose={() => setMoodOpen(false)}
+        onClose={() => {
+          setMoodOpen(false);
+          SmartPromptOrchestrator.releaseLock();
+        }}
         onExploreMap={() => setActiveTab('Freehands')}
       />
       <WelcomeRitual />
       <SmartBiometricPrompt />
+      <SmartNotificationPrompt />
     </div>
   );
 }

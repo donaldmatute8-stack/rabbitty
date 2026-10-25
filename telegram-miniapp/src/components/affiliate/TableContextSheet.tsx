@@ -4,10 +4,18 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QrCode, CheckCircle2, Utensils, X } from 'lucide-react';
 
+interface TableSpot {
+  id: string;
+  number: number;
+  capacity?: number;
+  location?: string | null;
+  qrCode?: string | null;
+}
+
 interface TableContextSheetProps {
   isOpen: boolean;
   onClose: () => void;
-  tables: Array<{ id: string; number: number; qrCode?: string | null }>;
+  tables: TableSpot[];
   currentTableNumber?: number | null;
   onSelectTable: (tableNumber: number, tableId: string) => void;
   businessName: string;
@@ -42,7 +50,7 @@ export function TableContextSheet({
                 <QrCode size={20} />
               </div>
               <div>
-                <h3 className="text-base font-black tracking-tight">Experiencia en Mesa</h3>
+                <h3 className="text-base font-black tracking-tight">Experiencia en Mesa & Barra</h3>
                 <p className="text-xs text-white/50">{businessName}</p>
               </div>
             </div>
@@ -54,22 +62,43 @@ export function TableContextSheet({
             </button>
           </div>
 
-          {/* Description */}
-          <div className="py-4 space-y-2">
-            <p className="text-xs text-white/70 leading-relaxed">
-              Al sentarte en una mesa, puedes consultar el menú estructurado, personalizar tus platillos y ordenar directamente desde tu celular.
-            </p>
+          {/* Step by step: Cómo funciona */}
+          <div className="py-3 space-y-3">
+            <div className="grid grid-cols-3 gap-2 bg-white/5 p-3 rounded-2xl border border-white/5 text-center">
+              <div className="space-y-1">
+                <span className="w-5 h-5 rounded-full bg-[#E91E63]/20 text-[#E91E63] text-[10px] font-black inline-flex items-center justify-center">1</span>
+                <p className="text-[10px] font-black text-white">Elige Ubicación</p>
+                <p className="text-[9px] text-white/50">Mesa, barra o QR</p>
+              </div>
+              <div className="space-y-1">
+                <span className="w-5 h-5 rounded-full bg-[#E91E63]/20 text-[#E91E63] text-[10px] font-black inline-flex items-center justify-center">2</span>
+                <p className="text-[10px] font-black text-white">Arma Pedido</p>
+                <p className="text-[9px] text-white/50">Personaliza tus platillos</p>
+              </div>
+              <div className="space-y-1">
+                <span className="w-5 h-5 rounded-full bg-[#E91E63]/20 text-[#E91E63] text-[10px] font-black inline-flex items-center justify-center">3</span>
+                <p className="text-[10px] font-black text-white">Directo al Staff</p>
+                <p className="text-[9px] text-white/50">Se envía a cocina/barra</p>
+              </div>
+            </div>
+
             {currentTableNumber ? (
-              <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-center gap-2.5 text-emerald-400">
-                <CheckCircle2 size={16} className="shrink-0" />
-                <span className="text-xs font-bold">
-                  Actualmente estás ubicado en la Mesa #{currentTableNumber}
-                </span>
+              <div className="p-3 bg-emerald-500/15 border border-emerald-500/25 rounded-2xl flex items-center justify-between text-emerald-400">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={16} className="shrink-0" />
+                  <span className="text-xs font-black">
+                    Actualmente ubicado en: {tables.find(t => t.number === currentTableNumber)?.location || `Mesa #${currentTableNumber}`}
+                  </span>
+                </div>
               </div>
             ) : (
-              <p className="text-[11px] text-pink-400/90 font-semibold">
-                Selecciona tu mesa o escanea el código QR que se encuentra en ella:
-              </p>
+              <div className="flex items-center justify-between text-xs text-white/60 px-1">
+                <span className="font-semibold text-[11px] text-white/80">
+                  {tables && tables.length > 0 
+                    ? 'Selecciona tu lugar o escanea el código QR:' 
+                    : 'Servicio directo en mostrador'}
+                </span>
+              </div>
             )}
           </div>
 
@@ -79,6 +108,10 @@ export function TableContextSheet({
               <div className="grid grid-cols-3 gap-3">
                 {tables.map(tbl => {
                   const isSelected = currentTableNumber === tbl.number;
+                  const locName = (tbl.location || '').toLowerCase();
+                  const isBar = locName.includes('bar') || locName.includes('barra');
+                  const isTerrace = locName.includes('terraza') || locName.includes('jardin');
+
                   return (
                     <motion.button
                       key={tbl.id}
@@ -87,32 +120,40 @@ export function TableContextSheet({
                         onSelectTable(tbl.number, tbl.id);
                         onClose();
                       }}
-                      className={`p-4 rounded-2xl border flex flex-col items-center justify-center gap-1.5 transition-all ${
+                      className={`p-3.5 rounded-2xl border flex flex-col items-center justify-center gap-1 transition-all ${
                         isSelected
                           ? 'bg-[#E91E63] border-[#E91E63] text-white shadow-lg shadow-[#E91E63]/40'
                           : 'bg-white/5 border-white/10 text-white/80 hover:bg-white/10'
                       }`}
                     >
-                      <Utensils size={18} className={isSelected ? 'text-white' : 'text-pink-400'} />
-                      <span className="text-sm font-black">Mesa {tbl.number}</span>
-                      <span className="text-[10px] opacity-70">
-                        {isSelected ? 'Activa' : 'Elegir'}
+                      <div className="flex items-center gap-1">
+                        <Utensils size={16} className={isSelected ? 'text-white' : 'text-pink-400'} />
+                        <span className="text-xs">{isBar ? '🍸' : isTerrace ? '🌿' : '🍽️'}</span>
+                      </div>
+                      <span className="text-xs font-black text-center truncate max-w-full">
+                        {tbl.location || `Mesa ${tbl.number}`}
+                      </span>
+                      <span className="text-[9px] opacity-70">
+                        {isSelected ? 'Activo' : tbl.capacity ? `${tbl.capacity} pers.` : 'Elegir'}
                       </span>
                     </motion.button>
                   );
                 })}
               </div>
             ) : (
-              <div className="text-center py-8 text-white/40 text-xs">
-                No hay mesas registradas en el sistema para esta sucursal.
+              <div className="text-center py-10 px-4 bg-white/5 rounded-2xl border border-white/5 space-y-2">
+                <p className="text-sm font-black text-white">Orden directa en caja</p>
+                <p className="text-xs text-white/50 leading-relaxed">
+                  Este establecimiento opera con pedidos y cobros directamente en la barra/caja con tu código QR de Rabbitty.
+                </p>
               </div>
             )}
           </div>
 
           {/* Footer note */}
-          <div className="pt-4 border-t border-white/10 text-center">
-            <span className="text-[11px] text-white/40">
-              El restaurante verifica cada orden antes de prepararla.
+          <div className="pt-3 border-t border-white/10 text-center">
+            <span className="text-[10px] text-white/40">
+              Cada orden es confirmada por el personal antes de su preparación.
             </span>
           </div>
         </motion.div>

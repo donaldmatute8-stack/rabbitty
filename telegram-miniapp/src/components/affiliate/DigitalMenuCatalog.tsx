@@ -98,43 +98,48 @@ export function DigitalMenuCatalog({
         )}
       </div>
 
-      {/* Category Pills (Horizontal Scroll) */}
-      <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
-        <button
-          onClick={() => setSelectedCategoryId('all')}
-          className={`shrink-0 px-4 py-2 rounded-full text-xs font-black tracking-wide transition-all border ${
-            selectedCategoryId === 'all'
-              ? 'bg-[#E91E63] text-white border-[#E91E63] shadow-md shadow-[#E91E63]/30'
-              : 'bg-[#161622] text-white/70 border-white/10 hover:bg-white/10'
-          }`}
-        >
-          Todos ({totalItemsCount})
-        </button>
-        {categories.map(cat => (
+      {/* Category Pills (Sticky Subheader under segmented tabs) */}
+      <div className="sticky top-[calc(max(var(--safe-top,0px),env(safe-area-inset-top,0px))+112px)] z-20 -mx-6 px-6 py-2 bg-[#0D0D15]/95 backdrop-blur-xl border-b border-white/5">
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
           <button
-            key={cat.id}
-            onClick={() => setSelectedCategoryId(cat.id)}
-            className={`shrink-0 px-4 py-2 rounded-full text-xs font-black tracking-wide transition-all border ${
-              selectedCategoryId === cat.id
-                ? 'bg-[#E91E63] text-white border-[#E91E63] shadow-md shadow-[#E91E63]/30'
+            onClick={() => setSelectedCategoryId('all')}
+            className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-black tracking-wide transition-all border ${
+              selectedCategoryId === 'all'
+                ? 'bg-linear-to-r from-[#E91E63] to-[#FF4081] text-white border-transparent shadow-md shadow-[#E91E63]/30'
                 : 'bg-[#161622] text-white/70 border-white/10 hover:bg-white/10'
             }`}
           >
-            {cat.name} ({cat.items.length})
+            Todos ({totalItemsCount})
           </button>
-        ))}
+          {categories.map(cat => (
+            <button
+              key={cat.id}
+              onClick={() => setSelectedCategoryId(cat.id)}
+              className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-black tracking-wide transition-all border ${
+                selectedCategoryId === cat.id
+                  ? 'bg-linear-to-r from-[#E91E63] to-[#FF4081] text-white border-transparent shadow-md shadow-[#E91E63]/30'
+                  : 'bg-[#161622] text-white/70 border-white/10 hover:bg-white/10'
+              }`}
+            >
+              {cat.name} ({cat.items.length})
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Structured Category Listings */}
-      <div className="space-y-8">
+      <div className="space-y-7">
         {filteredCategories.map(cat => (
-          <div key={cat.id} className="space-y-3.5">
-            <div className="flex items-baseline justify-between border-b border-white/5 pb-2">
-              <h3 className="text-lg font-black text-white tracking-tight uppercase">
-                {cat.name}
-              </h3>
+          <div key={cat.id} className="space-y-3">
+            <div className="flex items-baseline justify-between border-b border-white/10 pb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-[#E91E63]" />
+                <h3 className="text-base font-black text-white tracking-wide uppercase">
+                  {cat.name}
+                </h3>
+              </div>
               {cat.description && (
-                <span className="text-xs text-white/40 line-clamp-1 max-w-50">
+                <span className="text-[11px] text-white/40 line-clamp-1 max-w-[200px]">
                   {cat.description}
                 </span>
               )}
@@ -145,17 +150,18 @@ export function DigitalMenuCatalog({
               {cat.items.map(item => {
                 const estimatedBunz = Math.round(item.price * (rewardPercentage / 100));
                 const itemImg = item.imageUrl || null;
+                const isDrink = cat.name.toLowerCase().includes('bebida') || cat.name.toLowerCase().includes('café') || item.name.toLowerCase().includes('café') || item.name.toLowerCase().includes('capuccino');
 
                 return (
                   <motion.div
                     key={item.id}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => setActiveItem(item)}
-                    className="group bg-[#161622] hover:bg-[#1a1a29] border border-white/10 rounded-2xl p-3.5 flex gap-3.5 items-center cursor-pointer transition-colors shadow-sm"
+                    className="group bg-[#161622]/90 hover:bg-[#1a1a29] border border-white/10 rounded-2xl p-3.5 flex gap-3.5 items-center cursor-pointer transition-all shadow-sm hover:border-[#E91E63]/30"
                   >
                     {/* Item Thumbnail */}
                     {itemImg ? (
-                      <div className="relative w-22 h-22 rounded-xl overflow-hidden bg-black/40 shrink-0 border border-white/10">
+                      <div className="relative w-20 h-20 rounded-xl overflow-hidden bg-black/40 shrink-0 border border-white/10">
                         <Image
                           src={itemImg}
                           alt={item.name}
@@ -165,9 +171,11 @@ export function DigitalMenuCatalog({
                         />
                       </div>
                     ) : (
-                      <div className="w-20 h-20 rounded-xl bg-linear-to-br from-pink-500/10 to-purple-500/10 border border-white/5 flex flex-col items-center justify-center text-pink-400 shrink-0">
-                        <Sparkles size={20} className="mb-1 opacity-70" />
-                        <span className="text-[10px] font-black uppercase text-white/40">Platillo</span>
+                      <div className="w-20 h-20 rounded-xl bg-linear-to-br from-white/5 to-white/10 border border-white/10 flex flex-col items-center justify-center text-pink-400 shrink-0">
+                        <span className="text-2xl mb-1">{isDrink ? '☕' : '🍽️'}</span>
+                        <span className="text-[9px] font-black uppercase tracking-wider text-white/50">
+                          {isDrink ? 'Bebida' : 'Especial'}
+                        </span>
                       </div>
                     )}
 
@@ -182,19 +190,19 @@ export function DigitalMenuCatalog({
                             ${item.price}
                           </span>
                         </div>
-                        <p className="text-xs text-white/50 line-clamp-2 mt-1 leading-relaxed">
-                          {item.description || 'Consulta ingredientes y variantes disponibles.'}
+                        <p className="text-xs text-white/50 line-clamp-1 mt-0.5 leading-relaxed">
+                          {item.description || 'Consulta ingredientes y opciones disponibles.'}
                         </p>
                       </div>
 
                       {/* Badges / Add action */}
                       <div className="flex items-center justify-between mt-2.5">
-                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-pink-400 bg-pink-500/10 px-2 py-0.5 rounded-md">
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-pink-400 bg-pink-500/10 px-2 py-0.5 rounded-md border border-pink-500/20">
                           +{estimatedBunz} Bunz
                         </span>
 
-                        <div className="flex items-center gap-1.5 text-xs font-bold text-white/80 bg-white/5 hover:bg-white/10 border border-white/10 px-2.5 py-1 rounded-xl transition-colors">
-                          <Plus size={14} className="text-pink-400" />
+                        <div className="flex items-center gap-1 text-xs font-black text-white bg-white/10 group-hover:bg-[#E91E63] group-hover:text-white px-2.5 py-1 rounded-xl transition-all shadow-sm">
+                          <Plus size={13} className="shrink-0" />
                           <span>{digitalOrderingEnabled ? 'Pedir' : 'Ver'}</span>
                         </div>
                       </div>

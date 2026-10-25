@@ -121,6 +121,118 @@ export async function POST(req: NextRequest) {
 
         const resData = await res.json();
         console.log("sendMessage response:", resData);
+      } else {
+        // ── RESPUESTA DIRECTA DESDE TELEGRAM (AFILIADO -> RABBITTER) ──
+        try {
+          const fromTelegramId = String(message.from?.id || chatId);
+          const replyTo = message.reply_to_message;
+          const { db } = await import("@/db");
+          const { users, ownedBusinesses, conversations, messages: chatMessages } = await import("@/db/schema");
+          const { eq, or, desc, and, like } = await import("drizzle-orm");
+          const { sendEcosystemNotification } = await import("@/lib/push/notify");
+
+          // 1. Identificar si el remitente en Telegram es dueño de un comercio afiliado
+          const senderUser = await db.query.users.findFirst({
+            where: eq(users.telegramId, fromTelegramId),
+          });
+
+          if (senderUser) {
+            const biz = await db.query.ownedBusinesses.findFirst({
+              where: eq(ownedBusinesses.ownerId, senderUser.id),
+            });
+
+            if (biz) {
+              // 2. Resolución de la conversación objetivo:
+              //    a) Si el dueño responde con Reply a la alerta del bot, la alerta trae "(ref: conv-xxxxxxxxxx)"
+              //    b) Fallback: la conversación más reciente del comercio
+              let targetConv = null;
+              const refPrefix = /^\(ref: conv-([A-Za-z0-9]+)\)/m.exec(replyTo?.text || '')?.[1];
+
+              let convWhere;
+              if (refPrefix) {
+                convWhere = and(
+                  or(
+                    eq(conversations.participant1, biz.id),
+                    eq(conversations.participant2, biz.id)
+                  ),
+                  like(conversations.id, `${refPrefix}%`)
+                );
+              } else {
+                convWhere = or(
+                  eq(conversations.participant1, biz.id),
+                  eq(conversations.participant2, biz.id)
+                );
+              }
+
+              // Si es un reply directo a un mensaje del bot que notificaba un chat, priorizar
+              // la referencia exacta embebida; si no hay ref o no matchea, caer a la más reciente.
+              targetConv = await db.query.conversations.findFirst({
+                where: convWhere,
+                orderBy: [desc(conversations.lastMessageAt)],
+              });
+
+              if (refPrefix && !targetConv) {
+                // La ref no encontró match exacto: fallback seguro a la más reciente
+                targetConv = await db.query.conversations.findFirst({
+                  where: or(
+                    eq(conversations.participant1, biz.id),
+                    eq(conversations.participant2, biz.id)
+                  ),
+                  orderBy: [desc(conversations.lastMessageAt)],
+                });
+              }
+
+              if (targetConv) {
+                const customerId =
+                  targetConv.participant1 === biz.id
+                    ? targetConv.participant2
+                    : targetConv.participant1;
+
+                // 3. Insertar el mensaje en Rabbitty como proveniente del comercio
+                const [newMsg] = await db
+                  .insert(chatMessages)
+                  .values({
+                    conversationId: targetConv.id,
+                    senderId: biz.id,
+                    content: text.trim(),
+                    type: "TEXT",
+                  })
+                  .returning();
+
+                await db
+                  .update(conversations)
+                  .set({ lastMessageAt: new Date(), updatedAt: new Date() })
+                  .where(eq(conversations.id, targetConv.id));
+
+                // 4. Notificar al cliente (Rabbitter) en su app
+                await sendEcosystemNotification({
+                  userId: customerId,
+                  title: `💬 ${biz.name}`,
+                  message: text.trim(),
+                  type: "CHAT",
+                  route: `/chat/${biz.id}`,
+                  threadId: "chat",
+                });
+
+                // 5. Confirmar al afiliado en Telegram que su respuesta fue entregada
+                const botToken = process.env.TELEGRAM_BOT_TOKEN;
+                if (botToken) {
+                  await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      chat_id: chatId,
+                      text: `✅ Mensaje enviado a tu cliente en Rabbitty.`,
+                      reply_to_message_id: message.message_id,
+                    }),
+                  });
+                }
+              }
+            }
+          }
+        } catch (chatReplyErr) {
+          console.error("Error processing affiliate telegram reply:", chatReplyErr);
+        }
       }
     }
 

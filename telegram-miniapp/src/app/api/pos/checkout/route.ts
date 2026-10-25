@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { restaurantDb } from '@/db/restaurant';
-import { orders, orderItems, tables, payments } from '@rabbitty/database-restaurant/schema';
+import { orders, orderItems, tables, payments, branches, restaurants } from '@rabbitty/database-restaurant/schema';
 import { eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { users } from '@/db/schema';
+import { users, ownedBusinesses } from '@/db/schema';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 import { recordLedgerTransaction, findLedgerEntry } from '@/lib/ledgerHelper';
 
@@ -57,6 +57,40 @@ export async function POST(req: Request) {
         notes: i.notes || null,
       }));
       await restaurantDb.insert(orderItems).values(orderItemsData);
+
+      // 3. Notificar al sistema del restaurante (POS / KDS)
+      try {
+        const { sendEcosystemNotification } = await import('@/lib/push/notify');
+        const caller = await getAuthenticatedUser(req).catch(() => null);
+        let customerName = 'Cliente en Mesa';
+        if (caller?.id) {
+          const u = await db.query.users.findFirst({ where: eq(users.id, caller.id) });
+          if (u) {
+            customerName = `${u.firstName || 'Cliente'} ${u.lastName || ''}`.trim();
+          }
+        }
+        
+        // Buscar el dueño o branch para emitir la alerta
+        const [branch] = await restaurantDb.select().from(branches).where(eq(branches.id, table.branchId));
+        if (branch) {
+          const [rest] = await restaurantDb.select().from(restaurants).where(eq(restaurants.id, branch.restaurantId));
+          if (rest && rest.businessId) {
+            const biz = await db.query.ownedBusinesses.findFirst({ where: eq(ownedBusinesses.id, rest.businessId) });
+            if (biz?.ownerId) {
+              await sendEcosystemNotification({
+                userId: biz.ownerId,
+                title: `🍽️ Nueva Comanda - Mesa #${table.number}`,
+                message: `${customerName} ordenó ${typedItems.length} platillo(s) ($${grandTotal} MXN).`,
+                type: 'SYSTEM',
+                route: '/pos',
+                threadId: 'table_orders',
+              });
+            }
+          }
+        }
+      } catch (notifErr) {
+        console.warn('Could not send table order notification:', notifErr);
+      }
 
       targetOrderId = newOrder.id;
       totalToPay = grandTotal;

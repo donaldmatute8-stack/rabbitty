@@ -9,7 +9,8 @@ import {
   Mail, Shield, Key, Smartphone, Fingerprint, Trash2, Plus, QrCode, 
   Coffee, UtensilsCrossed, Wine, Truck, ChefHat, Zap, Settings, 
   ToggleLeft, ToggleRight, Table2, Package, Users, CalendarCheck, 
-  Sparkles, BookUser, Receipt, Lock, Hash, AlertTriangle, ShieldCheck
+  Sparkles, BookUser, Receipt, Lock, Hash, AlertTriangle, ShieldCheck,
+  MessageSquare
 } from "lucide-react";
 import { cn } from "@rabbitty/ui";
 import { ScannerPairModal } from "../../../components/ScannerPairModal";
@@ -249,6 +250,24 @@ export default function SettingsPage() {
   const [whatsapp, setWhatsapp] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [chatChannel, setChatChannel] = useState<"hybrid" | "telegram" | "admin" | "mobile">(() => {
+    if (typeof window === "undefined") return "hybrid";
+    try {
+      return (localStorage.getItem("rabbitty_affiliate_chat_channel") as any) || "hybrid";
+    } catch {
+      return "hybrid";
+    }
+  });
+  const chatChannelServer = trpc.settings.getChatReplyChannel.useQuery();
+  const setChatChannelServer = trpc.settings.setChatReplyChannel.useMutation({
+    onSuccess: () => { utils.settings.getChatReplyChannel.invalidate(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  useEffect(() => {
+    if (chatChannelServer.data?.chatReplyChannel) {
+      setChatChannel(chatChannelServer.data.chatReplyChannel as any);
+    }
+  }, [chatChannelServer.data?.chatReplyChannel]);
   const [totpSecretData, setTotpSecretData] = useState<{ secret: string; qrCodeDataUrl: string; otpauth: string } | null>(null);
   const [totpCode, setTotpCode] = useState("");
   const [totpDisableCode, setTotpDisableCode] = useState("");
@@ -648,6 +667,92 @@ export default function SettingsPage() {
                 </div>
               </div>
             )}
+          </Card>
+
+          {/* Canales de Respuesta a Rabbitters */}
+          <Card className="p-6 border border-white/5 bg-white/5 backdrop-blur-md hover:border-white/10 transition-all duration-300 lg:col-span-2 mt-6">
+            <div className="mb-5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 shrink-0">
+                  <MessageSquare className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base">Canales de Contestación a Rabbitters</h3>
+                  <p className="text-xs text-gray-400">Elige dónde y cómo prefieres responder los mensajes de tus clientes</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+              {[
+                {
+                  id: "hybrid",
+                  title: "Omnicanal (Híbrido)",
+                  badge: "Recomendado",
+                  desc: "Recibe aviso en Telegram con respuesta directa por Reply + alertas en tu Admin iPad/Mac.",
+                  icon: "⚡",
+                },
+                {
+                  id: "telegram",
+                  title: "Telegram Bot Directo",
+                  badge: "Rápido",
+                  desc: "Responde citando el mensaje (Reply) desde Telegram sin necesidad de abrir la app.",
+                  icon: "✈️",
+                },
+                {
+                  id: "admin",
+                  title: "Admin POS & iPad",
+                  badge: "Mostrador",
+                  desc: "Contesta desde el cajón en vivo de clientes en tu terminal de caja o computadora.",
+                  icon: "💻",
+                },
+                {
+                  id: "mobile",
+                  title: "App Móvil Rabbitty",
+                  badge: "Móvil",
+                  desc: "Notificaciones push directas a la aplicación nativa o MiniApp en tu teléfono.",
+                  icon: "📱",
+                },
+              ].map((item) => {
+                const isSelected = chatChannel === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setChatChannel(item.id as any);
+                      setChatChannelServer.mutate({ channel: item.id as any });
+                      try {
+                        localStorage.setItem("rabbitty_affiliate_chat_channel", item.id);
+                      } catch {}
+                      toast.success(`Canal de contestación actualizado: ${item.title}`);
+                    }}
+                    className={cn(
+                      "flex flex-col items-start p-4 rounded-2xl border text-left transition-all duration-200 cursor-pointer active:scale-98",
+                      isSelected
+                        ? "bg-cyan-500/15 border-cyan-500/50 shadow-[0_0_20px_rgba(6,182,212,0.15)]"
+                        : "bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/15"
+                    )}
+                  >
+                    <div className="flex items-center justify-between w-full mb-2">
+                      <span className="text-2xl">{item.icon}</span>
+                      <span
+                        className={cn(
+                          "text-[10px] font-black px-2 py-0.5 rounded-full",
+                          isSelected
+                            ? "bg-cyan-500 text-gray-950 font-bold"
+                            : "bg-white/10 text-gray-400"
+                        )}
+                      >
+                        {item.badge}
+                      </span>
+                    </div>
+                    <span className="font-bold text-sm text-white mb-1">{item.title}</span>
+                    <span className="text-[11px] text-gray-400 leading-snug">{item.desc}</span>
+                  </button>
+                );
+              })}
+            </div>
           </Card>
         </div>
       )}

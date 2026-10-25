@@ -1,6 +1,6 @@
 import { db } from '@/db';
 import { users, ownedBusinesses } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, or } from 'drizzle-orm';
 import { sendEcosystemNotification } from '@/lib/push/notify';
 
 export type TypingColumn = 'participant1TypingAt' | 'participant2TypingAt';
@@ -109,10 +109,18 @@ export async function resolveTelegramRecipient(otherId: string): Promise<Telegra
   if (!otherId || otherId === 'bot') {
     return { userId: null, telegramId: null, displayName: 'Bunzy' };
   }
-  const business = await db.query.ownedBusinesses.findFirst({ where: eq(ownedBusinesses.id, otherId) });
+  const business = await db.query.ownedBusinesses.findFirst({
+    where: or(eq(ownedBusinesses.id, otherId), eq(ownedBusinesses.slug, otherId)),
+  });
   if (business) {
-    const owner = await db.query.users.findFirst({ where: eq(users.id, business.ownerId) });
-    return { userId: business.ownerId, telegramId: owner?.telegramId ?? null, displayName: business.name };
+    const owner = business.ownerId
+      ? await db.query.users.findFirst({ where: eq(users.id, business.ownerId) })
+      : null;
+    return {
+      userId: business.ownerId ?? null,
+      telegramId: owner?.telegramId ?? null,
+      displayName: business.name,
+    };
   }
   const user = await db.query.users.findFirst({ where: eq(users.id, otherId) });
   return {
@@ -135,22 +143,54 @@ export async function notifyChatRecipient(params: {
   recipientTelegramId: string | null;
   senderName: string;
   preview: string;
+  targetId?: string;
+  conversationId?: string;
+  businessId?: string;
 }): Promise<void> {
-  const { recipientUserId, recipientTelegramId, senderName, preview } = params;
+  const { recipientUserId, recipientTelegramId, senderName, preview, targetId, conversationId, businessId } = params;
   const clean = cleanMessagePreview(preview) || 'Nuevo mensaje';
-  if (recipientUserId) {
+
+  // Canal de contestación preferido del afiliado (persistido en ownedBusinesses.chatReplyChannel)
+  let channel = 'hybrid';
+  if (businessId) {
+    try {
+      const { db } = await import('@/db');
+      const { ownedBusinesses } = await import('@/db/schema');
+      const { eq } = await import('drizzle-orm');
+      const [biz] = await db
+        .select({ chatReplyChannel: ownedBusinesses.chatReplyChannel })
+        .from(ownedBusinesses)
+        .where(eq(ownedBusinesses.id, businessId))
+        .limit(1);
+      if (biz?.chatReplyChannel) channel = biz.chatReplyChannel;
+    } catch {
+      // Canal por defecto si la consulta falla: omnicanal
+    }
+  }
+  const telegramAllowed = channel === 'hybrid' || channel === 'telegram';
+  const pushAllowed = channel === 'hybrid' || channel === 'admin' || channel === 'mobile';
+
+  if (recipientUserId && pushAllowed) {
     await sendEcosystemNotification({
       userId: recipientUserId,
       title: `💬 ${senderName}`,
       message: clean,
       type: 'CHAT',
-      route: '/chat',
+      route: targetId ? `/chat/${targetId}` : '/chat',
       threadId: 'chat',
     });
   }
-  if (recipientTelegramId) {
-    const appUrl = process.env.RABBITTY_APP_URL || 'https://t.me/Rabbittyme_bot/app';
-    await sendTelegramMessage(recipientTelegramId, `💬 ${senderName} te escribió:\n\n${clean}`, {
+  if (recipientTelegramId && telegramAllowed) {
+    const baseUrl = process.env.RABBITTY_APP_URL || 'https://t.me/Rabbittyme_bot/app';
+    const appUrl = targetId ? `${baseUrl}?startapp=chat_${targetId}` : baseUrl;
+    const refTag = conversationId ? `\n(ref: conv-${conversationId.slice(0, 10)})` : '';
+    const telegramText =
+      `💬 *${senderName}* te escribió:\n\n` +
+      `"${clean}"\n\n` +
+      `💡 _Puedes responder a este mensaje directamente en Telegram para contestarle, o presionar el botón de abajo._` +
+      refTag;
+
+    await sendTelegramMessage(recipientTelegramId, telegramText, {
       buttonUrl: appUrl,
       buttonText: 'Responder en Rabbitty',
     });

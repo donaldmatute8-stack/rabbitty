@@ -83,7 +83,9 @@ export async function GET(req: Request) {
           otherName = 'Bunzy 🐰';
           isBot = true;
         } else {
-          const business = await db.query.ownedBusinesses.findFirst({ where: eq(ownedBusinesses.id, otherId) });
+          const business = await db.query.ownedBusinesses.findFirst({
+            where: or(eq(ownedBusinesses.id, otherId), eq(ownedBusinesses.slug, otherId)),
+          });
           if (business) {
             otherName = business.name;
             otherAvatar =

@@ -56,7 +56,7 @@ interface BusinessResponse {
   restaurant?: { id: string; name: string; currency?: string } | null;
   primaryBranch?: { id: string; name: string } | null;
   categories: CatalogCategory[];
-  tables: Array<{ id: string; number: number; qrCode?: string | null }>;
+  tables: Array<{ id: string; number: number; capacity?: number; location?: string | null; qrCode?: string | null }>;
   capabilities: {
     menuEnabled: boolean;
     digitalOrderingEnabled: boolean;
@@ -77,7 +77,7 @@ function AffiliateProfileContent() {
 
   const [affiliate, setAffiliate] = useState<AffiliateData | null>(null);
   const [categories, setCategories] = useState<CatalogCategory[]>([]);
-  const [tables, setTables] = useState<Array<{ id: string; number: number; qrCode?: string | null }>>([]);
+  const [tables, setTables] = useState<Array<{ id: string; number: number; capacity?: number; location?: string | null; qrCode?: string | null }>>([]);
   const [capabilities, setCapabilities] = useState<BusinessResponse['capabilities']>({
     menuEnabled: true,
     digitalOrderingEnabled: true,
@@ -268,43 +268,49 @@ function AffiliateProfileContent() {
   return (
     <div className="bg-[#0D0D15] min-h-screen pb-36 relative text-white">
       {/* Floating Dynamic Header */}
-      <div className="fixed top-0 left-0 right-0 z-50 pt-[calc(max(var(--safe-top,0),env(safe-area-inset-top,0))+12px)] pb-3 px-4 flex items-center justify-between pointer-events-none">
+      <div 
+        className={`fixed top-0 left-0 right-0 z-50 pt-[calc(max(var(--safe-top,0px),env(safe-area-inset-top,0px))+8px)] pb-3 px-4 flex items-center justify-between transition-all duration-200 ${
+          isScrolled 
+            ? 'bg-[#0D0D15]/95 backdrop-blur-xl border-b border-white/10 shadow-lg pointer-events-auto' 
+            : 'pointer-events-none'
+        }`}
+      >
         {/* Back Button */}
         <button
           onClick={() => router.back()}
-          className="w-11 h-11 rounded-full bg-[#14141A]/75 text-white flex items-center justify-center border border-white/15 backdrop-blur-xl shadow-xl pointer-events-auto active:scale-90 transition-transform"
+          className="w-10 h-10 rounded-full bg-[#14141A]/80 text-white flex items-center justify-center border border-white/15 backdrop-blur-xl shadow-xl pointer-events-auto active:scale-90 transition-transform shrink-0"
           aria-label="Volver atrás"
         >
-          <ChevronLeft size={22} />
+          <ChevronLeft size={20} />
         </button>
 
         {/* Central Floating Pill */}
         <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: isScrolled ? 1 : 0, y: isScrolled ? 0 : -10 }}
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: isScrolled ? 1 : 0, y: isScrolled ? 0 : -6 }}
           transition={{ duration: 0.2 }}
-          className="bg-[#181820]/90 backdrop-blur-xl border border-white/15 px-4 py-1.5 rounded-full flex flex-col items-center justify-center shadow-xl max-w-[62%] pointer-events-auto"
+          className="bg-white/5 border border-white/10 px-4 py-1 rounded-full flex flex-col items-center justify-center max-w-[65%] pointer-events-auto"
         >
-          <span className="font-black text-sm text-white leading-tight truncate w-full text-center">
+          <span className="font-black text-xs text-white leading-tight truncate w-full text-center">
             {affiliate.name}
           </span>
-          <span className="text-[10px] font-bold text-[#E91E63] uppercase tracking-wider">
+          <span className="text-[9px] font-bold text-[#E91E63] uppercase tracking-wider">
             {affiliate.category || 'Negocio'}
           </span>
         </motion.div>
 
         {/* Top Right Quick Actions (Share + Favorite) */}
-        <div className="flex items-center gap-2 pointer-events-auto">
+        <div className="flex items-center gap-2 pointer-events-auto shrink-0">
           <button
             onClick={() => {
               PlatformBridge.hapticFeedback('light');
               setIsFavorite(!isFavorite);
               showToast(isFavorite ? 'Eliminado de favoritos' : '¡Guardado en tus favoritos!', 'success');
             }}
-            className="w-11 h-11 rounded-full bg-[#14141A]/75 text-white flex items-center justify-center border border-white/15 backdrop-blur-xl shadow-xl active:scale-90 transition-transform"
+            className="w-10 h-10 rounded-full bg-[#14141A]/80 text-white flex items-center justify-center border border-white/15 backdrop-blur-xl shadow-xl active:scale-90 transition-transform"
             aria-label="Favorito"
           >
-            <Heart size={18} className={isFavorite ? 'fill-[#E91E63] text-[#E91E63]' : 'text-white/80'} />
+            <Heart size={16} className={isFavorite ? 'fill-[#E91E63] text-[#E91E63]' : 'text-white/80'} />
           </button>
           <button
             onClick={async () => {
@@ -324,10 +330,10 @@ function AffiliateProfileContent() {
                 showToast('Enlace de la sucursal copiado', 'info');
               }
             }}
-            className="w-11 h-11 rounded-full bg-[#14141A]/75 text-white flex items-center justify-center border border-white/15 backdrop-blur-xl shadow-xl active:scale-90 transition-transform"
+            className="w-10 h-10 rounded-full bg-[#14141A]/80 text-white flex items-center justify-center border border-white/15 backdrop-blur-xl shadow-xl active:scale-90 transition-transform"
             aria-label="Compartir"
           >
-            <Share2 size={18} />
+            <Share2 size={16} />
           </button>
         </div>
       </div>
@@ -390,8 +396,8 @@ function AffiliateProfileContent() {
           </p>
         </div>
 
-        {/* Action Quick Links */}
-        <div className="grid grid-cols-4 gap-2.5">
+        {/* Action Quick Links (Dynamically adapted based on affiliate capabilities & tables) */}
+        <div className={`grid ${capabilities.tableServiceEnabled && tables.length > 0 ? 'grid-cols-4' : 'grid-cols-3'} gap-2.5`}>
           <motion.div
             whileTap={{ scale: 0.95 }}
             onClick={() => setShowMapSelector(true)}
@@ -417,24 +423,20 @@ function AffiliateProfileContent() {
             <span className="text-[11px] font-black text-amber-400">Mood</span>
           </motion.div>
 
-          <motion.div
-            whileTap={{ scale: 0.95 }}
-            onClick={() => {
-              if (capabilities.tableServiceEnabled) {
-                setShowTableSheet(true);
-              } else {
-                router.push('/scan');
-              }
-            }}
-            className="bg-[#161622] rounded-2xl p-3 flex flex-col items-center gap-1.5 border border-white/10 cursor-pointer shadow-sm"
-          >
-            <div className="bg-purple-500/15 text-purple-400 p-2.5 rounded-xl">
-              <QrCode size={18} />
-            </div>
-            <span className="text-[11px] font-black text-white">
-              {tableNumber ? `Mesa #${tableNumber}` : 'Mesa QR'}
-            </span>
-          </motion.div>
+          {capabilities.tableServiceEnabled && tables.length > 0 && (
+            <motion.div
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setShowTableSheet(true)}
+              className="bg-[#161622] rounded-2xl p-3 flex flex-col items-center gap-1.5 border border-white/10 cursor-pointer shadow-sm"
+            >
+              <div className="bg-purple-500/15 text-purple-400 p-2.5 rounded-xl">
+                <QrCode size={18} />
+              </div>
+              <span className="text-[11px] font-black text-white">
+                {tableNumber ? `Mesa #${tableNumber}` : 'Mesa / Barra'}
+              </span>
+            </motion.div>
+          )}
 
           <motion.div
             whileTap={{ scale: 0.95 }}
@@ -448,41 +450,43 @@ function AffiliateProfileContent() {
           </motion.div>
         </div>
 
-        {/* Interactive Segmented Experience Tabs */}
-        <div className="flex p-1 bg-[#161622] rounded-2xl border border-white/10">
-          <button
-            onClick={() => setActiveTab('menu')}
-            className={`flex-1 py-2.5 rounded-xl text-xs font-black tracking-wide transition-all flex items-center justify-center gap-1.5 ${
-              activeTab === 'menu'
-                ? 'bg-[#E91E63] text-white shadow-md'
-                : 'text-white/60 hover:text-white'
-            }`}
-          >
-            <Utensils size={14} />
-            <span>Menú y Servicios</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('experiences')}
-            className={`flex-1 py-2.5 rounded-xl text-xs font-black tracking-wide transition-all flex items-center justify-center gap-1.5 ${
-              activeTab === 'experiences'
-                ? 'bg-[#E91E63] text-white shadow-md'
-                : 'text-white/60 hover:text-white'
-            }`}
-          >
-            <Sparkles size={14} />
-            <span>Rabbitty Mood</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('info')}
-            className={`flex-1 py-2.5 rounded-xl text-xs font-black tracking-wide transition-all flex items-center justify-center gap-1.5 ${
-              activeTab === 'info'
-                ? 'bg-[#E91E63] text-white shadow-md'
-                : 'text-white/60 hover:text-white'
-            }`}
-          >
-            <Layers size={14} />
-            <span>Sucursal</span>
-          </button>
+        {/* Interactive Segmented Experience Tabs (Sticky Header) */}
+        <div className="sticky top-[calc(max(var(--safe-top,0px),env(safe-area-inset-top,0px))+56px)] z-30 -mx-2 px-2 py-2 bg-[#0D0D15]/95 backdrop-blur-xl">
+          <div className="flex p-1 bg-[#161622] rounded-2xl border border-white/10 shadow-lg">
+            <button
+              onClick={() => setActiveTab('menu')}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-black tracking-wide transition-all flex items-center justify-center gap-1.5 ${
+                activeTab === 'menu'
+                  ? 'bg-[#E91E63] text-white shadow-md shadow-[#E91E63]/30'
+                  : 'text-white/60 hover:text-white'
+              }`}
+            >
+              <Utensils size={14} />
+              <span>Menú y Servicios</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('experiences')}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-black tracking-wide transition-all flex items-center justify-center gap-1.5 ${
+                activeTab === 'experiences'
+                  ? 'bg-[#E91E63] text-white shadow-md shadow-[#E91E63]/30'
+                  : 'text-white/60 hover:text-white'
+              }`}
+            >
+              <Sparkles size={14} />
+              <span>Rabbitty Mood</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('info')}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-black tracking-wide transition-all flex items-center justify-center gap-1.5 ${
+                activeTab === 'info'
+                  ? 'bg-[#E91E63] text-white shadow-md shadow-[#E91E63]/30'
+                  : 'text-white/60 hover:text-white'
+              }`}
+            >
+              <Layers size={14} />
+              <span>Sucursal</span>
+            </button>
+          </div>
         </div>
 
         {/* Tab 1: Menú y Catálogo Estructurado */}
@@ -637,37 +641,45 @@ function AffiliateProfileContent() {
       </div>
 
       {/* Persistent Bottom Bar (Cart / Scan) */}
-      <div className="fixed bottom-[calc(max(env(safe-area-inset-bottom,0),12px)+72px)] left-0 right-0 px-5 z-40 pointer-events-none">
-        <div className="max-w-lg mx-auto pointer-events-auto flex gap-3">
+      <div className="fixed bottom-[calc(max(var(--safe-bottom,0px),env(safe-area-inset-bottom,0px))+76px)] left-0 right-0 px-4 z-40 pointer-events-none">
+        <div className="max-w-md mx-auto pointer-events-auto">
           {totalCartCount > 0 ? (
-            <button
+            <motion.button
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              whileTap={{ scale: 0.98 }}
               onClick={() => {
                 PlatformBridge.hapticFeedback('medium');
                 setShowCartSheet(true);
               }}
-              className="flex-1 bg-linear-to-r from-[#E91E63] to-[#FF4081] text-white py-4 px-5 rounded-2xl font-black text-sm shadow-xl shadow-[#E91E63]/40 flex items-center justify-between active:scale-98 transition-transform"
+              className="w-full bg-linear-to-r from-[#E91E63] via-[#D81B60] to-[#C2185B] text-white py-3.5 px-5 rounded-2xl font-black text-sm shadow-[0_8px_25px_rgba(233,30,99,0.5)] border border-white/20 flex items-center justify-between transition-all"
             >
-              <div className="flex items-center gap-2.5">
-                <div className="w-6 h-6 rounded-full bg-white text-[#E91E63] flex items-center justify-center text-xs font-black">
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-full bg-white text-[#E91E63] flex items-center justify-center text-xs font-black shadow">
                   {totalCartCount}
                 </div>
-                <span>Ver tu pedido</span>
+                <div className="text-left">
+                  <span className="block font-black text-sm leading-tight">Ver orden en mesa</span>
+                  <span className="text-[10px] text-white/80 font-medium">Revisa tus productos agregados</span>
+                </div>
               </div>
-              <div className="flex items-center gap-1">
-                <ChevronRight size={18} />
+              <div className="flex items-center gap-1.5 bg-black/20 py-1.5 px-3 rounded-xl border border-white/10">
+                <span className="text-xs font-black">Continuar</span>
+                <ChevronRight size={16} />
               </div>
-            </button>
+            </motion.button>
           ) : (
-            <button
+            <motion.button
+              whileTap={{ scale: 0.98 }}
               onClick={() => {
                 PlatformBridge.hapticFeedback('medium');
                 router.push('/scan');
               }}
-              className="flex-1 bg-linear-to-r from-[#E91E63] to-[#FF4081] text-white py-4 px-5 rounded-2xl font-black text-sm shadow-xl shadow-[#E91E63]/30 flex items-center justify-center gap-2 active:scale-98 transition-transform"
+              className="w-full bg-linear-to-r from-[#E91E63] to-[#FF4081] text-white py-3 px-4 rounded-full font-black text-xs sm:text-sm shadow-[0_6px_20px_rgba(233,30,99,0.4)] border border-white/20 flex items-center justify-center gap-2 transition-all active:brightness-95"
             >
-              <Tag size={18} />
-              <span>Escanear en caja y ganar +{affiliate.rewardPercentage}% Bunz</span>
-            </button>
+              <Tag size={16} className="shrink-0" />
+              <span className="truncate">Escanear en caja y ganar +{affiliate.rewardPercentage}% Bunz</span>
+            </motion.button>
           )}
         </div>
       </div>

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { verify as verifyTotp } from "otplib";
 import { router, protectedProcedure } from "../trpc";
-import { users, trustedSessions, passkeys } from "@rabbitty/database-core";
+import { users, trustedSessions, passkeys, ownedBusinesses } from "@rabbitty/database-core";
 import { TRPCError } from "@trpc/server";
 import { decryptText } from "../services/crypto";
 
@@ -78,5 +78,36 @@ export const settingsRouter = router({
     .mutation(async ({ ctx, input }) => {
       await ctx.coreDb.update(users).set(input).where(eq(users.id, ctx.userId));
       return { success: true };
+    }),
+
+  /**
+   * Canal de contestación preferido del afiliado hacia Rabbitters.
+   * Persistido en ownedBusinesses.chatReplyChannel y respetado por el motor de notificaciones.
+   */
+  getChatReplyChannel: protectedProcedure.query(async ({ ctx }) => {
+    const [biz] = await ctx.coreDb
+      .select({ chatReplyChannel: ownedBusinesses.chatReplyChannel })
+      .from(ownedBusinesses)
+      .where(eq(ownedBusinesses.ownerId, ctx.userId))
+      .limit(1);
+    return { chatReplyChannel: biz?.chatReplyChannel ?? "hybrid" };
+  }),
+
+  setChatReplyChannel: protectedProcedure
+    .input(z.object({
+      channel: z.enum(["hybrid", "telegram", "admin", "mobile"]),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const [biz] = await ctx.coreDb
+        .select({ id: ownedBusinesses.id })
+        .from(ownedBusinesses)
+        .where(eq(ownedBusinesses.ownerId, ctx.userId))
+        .limit(1);
+      if (!biz) throw new TRPCError({ code: "NOT_FOUND", message: "Comercio no encontrado para tu cuenta" });
+      await ctx.coreDb
+        .update(ownedBusinesses)
+        .set({ chatReplyChannel: input.channel, updatedAt: new Date() })
+        .where(eq(ownedBusinesses.id, biz.id));
+      return { success: true, chatReplyChannel: input.channel };
     }),
 });

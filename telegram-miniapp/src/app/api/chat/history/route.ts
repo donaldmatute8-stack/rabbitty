@@ -78,7 +78,9 @@ export async function GET(req: Request) {
       targetUsername = 'bunzy_concierge_bot';
       targetBio = 'Concierge oficial de Rabbitty. Asistente con IA para descubrir ofertas, reservar mesas y maximizar recompensas Bunz.';
     } else {
-      const business = await db.query.ownedBusinesses.findFirst({ where: eq(ownedBusinesses.id, otherId) });
+      const business = await db.query.ownedBusinesses.findFirst({
+        where: or(eq(ownedBusinesses.id, otherId), eq(ownedBusinesses.slug, otherId)),
+      });
       if (business) {
         targetName = business.name;
         targetRole = 'AFFILIATE';

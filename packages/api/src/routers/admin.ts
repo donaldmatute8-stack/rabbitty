@@ -640,4 +640,52 @@ export const adminRouter = router({
       totalCustomers,
     };
   }),
+
+  sendFeedback: protectedProcedure
+    .input(
+      z.object({
+        type: z.enum(["BUG", "FEEDBACK"]),
+        title: z.string().optional(),
+        message: z.string().min(1),
+        url: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const adminTelegramIds = (process.env.ADMIN_TELEGRAM_IDS || "798431743")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const botToken = process.env.TELEGRAM_BOT_TOKEN || process.env.AUTH_TELEGRAM_BOT_TOKEN;
+
+      const tag = input.type === "BUG" ? "🐞 REPORTE DE ERROR (ADMIN/POS)" : "💡 FEEDBACK DE AFILIADO";
+      const userEmail = ctx.user?.email || "Usuario Admin";
+      const branchId = ctx.branchId || "N/A";
+
+      const text =
+        `${tag}\n\n` +
+        `📌 *Título:* ${input.title || (input.type === "BUG" ? "Error reportado" : "Sugerencia")}\n` +
+        `📝 *Detalle:*\n${input.message.trim()}\n\n` +
+        `👤 *Remitente:* ${userEmail} (Sucursal: \`${branchId}\`)\n` +
+        `🌐 *Ruta:* \`${input.url || "Panel Admin"}\``;
+
+      if (botToken) {
+        for (const adminId of adminTelegramIds) {
+          try {
+            await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: adminId,
+                text,
+                parse_mode: "Markdown",
+              }),
+            });
+          } catch (tErr) {
+            console.warn("[AdminFeedback] Telegram dispatch error:", tErr);
+          }
+        }
+      }
+
+      return { success: true };
+    }),
 });

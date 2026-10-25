@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { detectBiometric, isBiometricEnabled, enableBiometric } from '@/lib/securityVault';
 import { PlatformBridge } from '@/lib/platform';
 import { useToast } from '@/contexts/ToastContext';
+import { SmartPromptOrchestrator } from '@/lib/smartPromptOrchestrator';
 
 const BIOMETRIC_PROMPT_KEY = 'rabbitty_biometric_prompt_handled_v2';
 const DISMISSED_COOLDOWN_MS = 24 * 60 * 60 * 1000; // Si el usuario descartó, volver a recordar tras 24h si sigue sin Face ID
@@ -54,12 +55,16 @@ export function SmartBiometricPrompt() {
       setIsApple(appleDevice);
       setLabel(appleDevice ? 'Face ID / Apple ID' : support.label || 'Biometría');
 
+      if (!SmartPromptOrchestrator.canShow('faceid')) return;
+
       const triggerPrompt = () => {
         if (timer) clearTimeout(timer);
-        // Dar 4.5s de respiro natural para que el usuario explore el feed
+        // Dar 5.5s de respiro natural para que el usuario explore el feed
         timer = setTimeout(() => {
-          if (alive) setShow(true);
-        }, 4500);
+          if (alive && SmartPromptOrchestrator.acquireLock('faceid')) {
+            setShow(true);
+          }
+        }, 5500);
       };
 
       // Si el ritual de bienvenida aún no se ha visto, esperar a que termine
@@ -73,10 +78,12 @@ export function SmartBiometricPrompt() {
         // Respaldo de seguridad por si no hubo evento (WelcomeRitual dura ~15.5s + fade)
         timer = setTimeout(() => {
           window.removeEventListener('rabbitty:welcome-ritual-completed', onRitualFinished);
-          if (alive) setShow(true);
+          if (alive && SmartPromptOrchestrator.acquireLock('faceid')) {
+            setShow(true);
+          }
         }, 18000);
       } else {
-        // Si el ritual ya fue visto en visitas anteriores, esperar 4.5s después de entrar al feed
+        // Si el ritual ya fue visto en visitas anteriores, esperar 5.5s después de entrar al feed
         triggerPrompt();
       }
     };
@@ -91,6 +98,7 @@ export function SmartBiometricPrompt() {
 
   const handleDismiss = () => {
     PlatformBridge.hapticFeedback('light');
+    SmartPromptOrchestrator.releaseLock();
     localStorage.setItem(BIOMETRIC_PROMPT_KEY, String(Date.now()));
     setShow(false);
   };

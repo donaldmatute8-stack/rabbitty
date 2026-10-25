@@ -1,0 +1,1 @@
+ALTER TABLE "ownedBusinesses" ADD COLUMN "chatReplyChannel" text DEFAULT 'hybrid' NOT NULL;

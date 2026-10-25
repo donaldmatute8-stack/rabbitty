@@ -179,6 +179,9 @@ export async function POST(req: Request) {
       recipientTelegramId: recipient.telegramId,
       senderName,
       preview: content,
+      targetId: senderId,
+      conversationId: conversation.id,
+      businessId: otherId,
     });
 
     return NextResponse.json({ success: true, message: userMessage, autoReply, suggestions: [] });

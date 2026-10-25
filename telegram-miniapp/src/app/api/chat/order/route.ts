@@ -83,6 +83,8 @@ export async function POST(req: Request) {
       recipientTelegramId: recipient.telegramId,
       senderName: sender.displayName,
       preview: `Nuevo pedido: ${itemLines[0] || 'pedido'}`,
+      conversationId: conversation.id,
+      businessId,
     });
 
     return NextResponse.json({

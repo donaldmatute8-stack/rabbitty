@@ -1,21 +1,24 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Crosshair } from 'lucide-react';
+import { 
+  Crosshair, Mic, MicOff, Sparkles, Navigation, MessageCircle, 
+  ChevronUp, ChevronDown, Flame, Gift, Compass, Volume2, X 
+} from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
 import { useTheme } from '@/contexts/ThemeContext';
 
-// Keyless, no-watermark basemaps. Dark = Esri World Dark Gray Base (calles
-// mínimas, sin POIs ni etiquetas). Light = OSM estándar (blanco).
-const DARK_TILE_URL =
-  'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
-const DARK_TILE_ATTR = 'Tiles &copy; <a href="https://www.esri.com/">Esri</a>';
-const LIGHT_TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-const LIGHT_TILE_ATTR =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+// High-contrast, clean modern map tiles:
+// Dark: CartoDB Dark Matter (ultra dark, subtle street lines, no heavy watermarks)
+const DARK_TILE_URL = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+const DARK_TILE_ATTR = '&copy; <a href="https://carto.com/">CARTO</a>';
+
+// Light: CartoDB Positron (clean architectural white, subtle pastel accents)
+const LIGHT_TILE_URL = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+const LIGHT_TILE_ATTR = '&copy; <a href="https://carto.com/">CARTO</a>';
 
 export interface MapBusiness {
   id: string;
@@ -56,7 +59,7 @@ const RARITY = {
 type RarityKey = keyof typeof RARITY;
 
 function getRarity(bunz: number): RarityKey {
-  if (bunz >= 15) return "legendary"; // Adjusted for realistic percentages (15%+)
+  if (bunz >= 15) return "legendary";
   if (bunz >= 10) return "epic";
   if (bunz >= 5)  return "rare";
   return "common";
@@ -68,29 +71,30 @@ function getIcon(category?: string) {
   if (cat.includes('restaurante') || cat.includes('comida') || cat.includes('pizz')) return '🍕';
   if (cat.includes('fit') || cat.includes('gym')) return '💪';
   if (cat.includes('tech') || cat.includes('tecno')) return '💻';
-  if (cat.includes('belleza') || cat.includes('spa')) return '✨';
+  if (cat.includes('belleza') || cat.includes('spa') || cat.includes('barber')) return '✨';
+  if (cat.includes('bar') || cat.includes('copas')) return '🍸';
   return '🛍️';
 }
 
-function markerHTML(a: MapBusiness, selected: boolean) {
+function markerHTML(a: MapBusiness, selected: boolean, isDark: boolean) {
   const rw = a.rewardPercentage || a.reward_percentage || 0;
   const isStockOnly = (a.acceptsBunz || a.accepts_bunz) && !(a.givesBunz || a.gives_bunz);
   const r = isStockOnly ? { color: "#E91E63", label: "Stock" } : RARITY[getRarity(rw)];
-  const sz = selected ? 54 : 46;
+  const sz = selected ? 52 : 44;
   const glowSize = selected
-    ? `0 0 0 3px #0D0D1A, 0 0 18px ${r.color}, 0 0 36px ${r.color}77`
-    : `0 0 0 2px #0D0D1A, 0 0 10px ${r.color}99, 0 0 22px ${r.color}44`;
-  const scale = selected ? "scale(1.18)" : "scale(1)";
+    ? `0 0 0 3px ${isDark ? '#0D0914' : '#FFFFFF'}, 0 0 18px ${r.color}, 0 0 32px ${r.color}77`
+    : `0 0 0 2px ${isDark ? '#0D0914' : '#FFFFFF'}, 0 0 10px ${r.color}88, 0 0 18px ${r.color}33`;
+  const scale = selected ? "scale(1.15)" : "scale(1)";
   const icon = isStockOnly ? '🎁' : getIcon(a.category || a.device);
   
   const badgeHtml = isStockOnly 
     ? `<div style="position:absolute;top:-20px;left:50%;transform:translateX(-50%);background:#E91E63;color:#fff;font-size:9px;font-weight:900;padding:2px 8px;border-radius:100px;white-space:nowrap;letter-spacing:.3px;box-shadow:0 2px 10px rgba(233,30,99,0.5)">STOCK</div>`
-    : `<div style="position:absolute;top:-20px;left:50%;transform:translateX(-50%);background:${r.color};color:${getRarity(rw)==='legendary'?'#111':'#0D0D1A'};font-size:9px;font-weight:900;padding:2px 8px;border-radius:100px;white-space:nowrap;font-family:var(--font-family-base, sans-serif);letter-spacing:.3px;box-shadow:0 2px 10px ${r.color}88">+${rw}%</div>`;
+    : `<div style="position:absolute;top:-20px;left:50%;transform:translateX(-50%);background:${r.color};color:${getRarity(rw)==='legendary'?'#111':'#0D0D1A'};font-size:9px;font-weight:900;padding:2px 8px;border-radius:100px;white-space:nowrap;letter-spacing:.3px;box-shadow:0 2px 10px ${r.color}88">+${rw}%</div>`;
 
   return `
     <div style="position:relative;display:flex;flex-direction:column;align-items:center;transform:${scale};transition:transform 0.25s cubic-bezier(.34,1.56,.64,1)">
       ${badgeHtml}
-      <div style="width:${sz}px;height:${sz}px;border-radius:50%;background:linear-gradient(145deg,#1A1A2E,#0D0D1A);display:flex;align-items:center;justify-content:center;font-size:${selected?22:18}px;box-shadow:${glowSize};border:2px solid ${r.color};transition:all .25s">
+      <div style="width:${sz}px;height:${sz}px;border-radius:50%;background:${isDark ? 'linear-gradient(145deg,#1E142B,#0F0A18)' : '#FFFFFF'};display:flex;align-items:center;justify-content:center;font-size:${selected?22:18}px;box-shadow:${glowSize};border:2px solid ${r.color};transition:all .25s">
         ${icon}
       </div>
       <div style="width:2px;height:9px;background:linear-gradient(${r.color},transparent);margin-top:-1px"></div>
@@ -100,11 +104,9 @@ function markerHTML(a: MapBusiness, selected: boolean) {
 
 function userMarkerHTML() {
   return `
-    <div style="position:relative;width:26px;height:26px">
-      <!-- Radar Sweep tied to the marker -->
+    <div style="position:relative;width:28px;height:28px">
       <div class="radar-sweep"></div>
-      
-      <div style="position:absolute;inset:0;border-radius:50%;background:#E91E63;border:3px solid #fff;box-shadow:0 0 0 2px #E91E63,0 0 20px #E91E6388;z-index:2"></div>
+      <div style="position:absolute;inset:0;border-radius:50%;background:#E91E63;border:3px solid #fff;box-shadow:0 0 0 2px #E91E63,0 0 24px #E91E63aa;z-index:2"></div>
       <div class="rb-pulse rb-pulse-1"></div>
       <div class="rb-pulse rb-pulse-2"></div>
       <div class="rb-pulse rb-pulse-3"></div>
@@ -122,12 +124,19 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
   const isDark = resolvedTheme === 'dark';
   const [selected, setSelected] = useState<MapBusiness | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>('Todos');
-  const [activeRarity, setActiveRarity] = useState<string>('ALL');
   const [activeMode, setActiveMode] = useState<string>('Todos');
-  const [showFilters, setShowFilters] = useState<boolean>(false);
   const [showAllFilters, setShowAllFilters] = useState<boolean>(true);
+  
+  // Bunzy Copilot Voice & Search State (Gemini-in-car style)
+  const [isListening, setIsListening] = useState(false);
+  const [copilotQuery, setCopilotQuery] = useState('');
+  const [copilotReply, setCopilotReply] = useState<string | null>(null);
+  const [isProcessingVoice, setIsProcessingVoice] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(false);
+
   const router = useRouter();
 
+  // Filter businesses
   const filteredBusinesses = businesses.filter(b => {
     // Mode Filter
     let modeMatch = true;
@@ -144,24 +153,178 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
       categoryMatch = cat.includes(activeCategory.toLowerCase());
     }
 
-    // Rarity Filter
-    let rarityMatch = true;
-    if (activeRarity !== 'ALL') {
-      const rw = b.rewardPercentage || b.reward_percentage || 0;
-      const r = getRarity(rw);
-      rarityMatch = (r === activeRarity);
-    }
-
-    return modeMatch && categoryMatch && rarityMatch;
+    return modeMatch && categoryMatch;
   });
 
-  // Radar sweep RAF removed since we use CSS animation now
+  // Check speech recognition capability
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const hasSpeech = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
+      setSpeechSupported(hasSpeech);
+    }
+  }, []);
+
+  // Speech Synthesis TTS Engine
+  const speakReply = useCallback((text: string) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    try {
+      window.speechSynthesis.cancel(); // Stop any pending utterance
+      // Clean emojis and icons for clean vocalization
+      const cleanText = text.replace(/[\u{1F300}-\u{1FAFF}]|[\u{2600}-\u{27BF}]/gu, '').trim();
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.lang = 'es-MX';
+      utterance.rate = 1.05;
+      utterance.pitch = 1.08;
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      // Speech synthesis is best effort
+    }
+  }, []);
+
+  // Bunzy voice command processor
+  const handleVoiceCommand = useCallback((transcript: string) => {
+    setCopilotQuery(transcript);
+    setIsProcessingVoice(true);
+    PlatformBridge.hapticFeedback('medium');
+
+    const lower = transcript.toLowerCase();
+    
+    // Command 1: Cafés / concentración / trabajar
+    if (lower.includes('café') || lower.includes('cafe') || lower.includes('trabaj') || lower.includes('concentr')) {
+      setActiveCategory('Cafetería');
+      const cafe = businesses.find(b => (b.category || '').toLowerCase().includes('caf'));
+      if (cafe && cafe.lat && cafe.lng && mapInst.current) {
+        const reply = `Encontré ${cafe.name || 'Cafetería'} en tu zona con cashback en Bunz ☕`;
+        setCopilotReply(reply);
+        speakReply(reply);
+        mapInst.current.flyTo([Number(cafe.lat), Number(cafe.lng)], 16, { duration: 1.2 });
+        setSelected(cafe);
+      } else {
+        const reply = 'No encontré cafeterías afiliadas activas en esta área ☕';
+        setCopilotReply(reply);
+        speakReply(reply);
+      }
+    } 
+    // Command 2: Mayor recompensa / más bunz / cashback alto
+    else if (lower.includes('más bunz') || lower.includes('mas bunz') || lower.includes('recompensa') || lower.includes('cashback')) {
+      const topBiz = [...businesses].sort((a, b) => (b.rewardPercentage || 0) - (a.rewardPercentage || 0))[0];
+      if (topBiz && topBiz.lat && topBiz.lng && mapInst.current) {
+        const reply = `El spot con más cashback es ${topBiz.name || 'afiliado'} con +${topBiz.rewardPercentage ?? 0}% Bunz 🔥`;
+        setCopilotReply(reply);
+        speakReply(reply);
+        mapInst.current.flyTo([Number(topBiz.lat), Number(topBiz.lng)], 16.5, { duration: 1.2 });
+        setSelected(topBiz);
+      } else {
+        const reply = 'No hay comercios con recompensas registradas en esta zona.';
+        setCopilotReply(reply);
+        speakReply(reply);
+      }
+    }
+    // Command 3: Comida / restaurante / hambre
+    else if (lower.includes('comer') || lower.includes('hambre') || lower.includes('restaurante') || lower.includes('pizza')) {
+      setActiveCategory('Restaurante');
+      const food = businesses.find(b => (b.category || '').toLowerCase().includes('restaurante') || (b.category || '').toLowerCase().includes('comida'));
+      if (food && food.lat && food.lng && mapInst.current) {
+        const reply = `Filtrando opciones de comida. Te muestro ${food.name || 'restaurante'} 🍕`;
+        setCopilotReply(reply);
+        speakReply(reply);
+        mapInst.current.flyTo([Number(food.lat), Number(food.lng)], 16, { duration: 1.2 });
+        setSelected(food);
+      } else {
+        const reply = 'No encontré restaurantes afiliados activos en esta área 🍕';
+        setCopilotReply(reply);
+        speakReply(reply);
+      }
+    }
+    // Command 4: Mi ubicación / llévame a donde estoy
+    else if (lower.includes('dónde estoy') || lower.includes('mi ubicación') || lower.includes('aqui') || lower.includes('aquí')) {
+      if (userLat && userLng && mapInst.current) {
+        const reply = 'Centrando el radar en tu ubicación actual 📍';
+        setCopilotReply(reply);
+        speakReply(reply);
+        mapInst.current.flyTo([userLat, userLng], 16.5, { duration: 1 });
+      } else if (onRequestLocation) {
+        onRequestLocation();
+        const reply = 'Activando señal GPS de tu dispositivo 📍';
+        setCopilotReply(reply);
+        speakReply(reply);
+      }
+    }
+    // Default fallback: search query
+    else {
+      const match = businesses.find(b => (b.name || '').toLowerCase().includes(lower) || (b.category || '').toLowerCase().includes(lower));
+      if (match && match.lat && match.lng && mapInst.current) {
+        const distText = match.distance ? `a ${match.distance} km` : 'en el mapa';
+        const reply = `Encontré ${match.name} ${distText} 🐰`;
+        setCopilotReply(reply);
+        speakReply(reply);
+        mapInst.current.flyTo([Number(match.lat), Number(match.lng)], 16.5, { duration: 1.2 });
+        setSelected(match);
+      } else {
+        const reply = `Buscando "${transcript}" en comercios afiliados cercanos 🐰`;
+        setCopilotReply(reply);
+        speakReply(reply);
+      }
+    }
+
+    setTimeout(() => {
+      setIsProcessingVoice(false);
+    }, 1500);
+  }, [businesses, userLat, userLng, onRequestLocation, speakReply]);
+
+  const toggleSpeechRecognition = () => {
+    if (typeof window === 'undefined') return;
+    
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SpeechRec = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+    if (!SpeechRec) {
+      // Fallback: trigger quick prompt for text
+      const manual = prompt('¿Qué spot o recompensa buscas? (ej: "Cafeterías cerca", "Mayor cashback")');
+      if (manual) handleVoiceCommand(manual);
+      return;
+    }
+
+    if (isListening) {
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRec();
+      recognition.lang = 'es-MX';
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        PlatformBridge.hapticFeedback('medium');
+      };
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      recognition.onresult = (event: any) => {
+        const text = event.results[0][0].transcript;
+        setIsListening(false);
+        handleVoiceCommand(text);
+      };
+
+      recognition.onerror = () => {
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognition.start();
+    } catch {
+      setIsListening(false);
+    }
+  };
 
   // Map Initialization — runs ONCE on mount
   useEffect(() => {
     if (!mapRef.current || mapInst.current) return;
     
-    // Default to first business location if no user location, else fallback to Monterrey
     const fallbackLat = businesses.length > 0 && businesses[0].lat ? Number(businesses[0].lat) : 25.7275;
     const fallbackLng = businesses.length > 0 && businesses[0].lng ? Number(businesses[0].lng) : -100.312;
 
@@ -172,10 +335,8 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
       center: [centerLat, centerLng],
       zoom: 15,
       zoomControl: false,
-      attributionControl: true,
+      attributionControl: false,
     });
-
-    // Basemap se agrega/actualiza en el efecto dependiente del tema (dark/light).
 
     layerGroup.current = L.layerGroup().addTo(map);
     userMarkerGroup.current = L.layerGroup().addTo(map);
@@ -184,8 +345,8 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
     
     map.on('click', () => setSelected(null));
 
-    // Fix Captura 5: Ensure Leaflet recalculates dimensions after parent CSS/animation mounts
-    const t1 = setTimeout(() => map.invalidateSize(), 50);
+    // Leaflet dimension recalculations
+    const t1 = setTimeout(() => map.invalidateSize(), 60);
     const t2 = setTimeout(() => map.invalidateSize(), 250);
     const t3 = setTimeout(() => map.invalidateSize(), 600);
 
@@ -200,9 +361,9 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
       setMapReady(false);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Initialize only once — don't re-init on coord change
+  }, []);
 
-  // Basemap — se recrea cuando cambia el tema (dark = Esri gris oscuro, light = OSM)
+  // Basemap switcher: True Cyber Dark vs Architectural Crisp Light
   useEffect(() => {
     const map = mapInst.current;
     if (!map || !mapReady) return;
@@ -211,14 +372,14 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
       tileLayerRef.current = null;
     }
     const layer = isDark
-      ? L.tileLayer(DARK_TILE_URL, { maxZoom: 19, attribution: DARK_TILE_ATTR })
-      : L.tileLayer(LIGHT_TILE_URL, { maxZoom: 19, subdomains: ['a', 'b', 'c'], attribution: LIGHT_TILE_ATTR });
+      ? L.tileLayer(DARK_TILE_URL, { maxZoom: 19, subdomains: ['a', 'b', 'c', 'd'], attribution: DARK_TILE_ATTR })
+      : L.tileLayer(LIGHT_TILE_URL, { maxZoom: 19, subdomains: ['a', 'b', 'c', 'd'], attribution: LIGHT_TILE_ATTR });
     layer.addTo(map);
     layer.bringToBack();
     tileLayerRef.current = layer;
   }, [isDark, mapReady]);
 
-  // Actualiza reactivamente el pin del usuario y centra el mapa
+  // Reactive user marker and centering
   useEffect(() => {
     const map = mapInst.current;
     const group = userMarkerGroup.current;
@@ -227,23 +388,23 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
     group.clearLayers();
 
     if (userLat != null && userLng != null) {
-      const uIcon = L.divIcon({ html: userMarkerHTML(), className: '', iconSize: [26, 26], iconAnchor: [13, 13] });
+      const uIcon = L.divIcon({ html: userMarkerHTML(), className: '', iconSize: [28, 28], iconAnchor: [14, 14] });
       L.marker([userLat, userLng], { icon: uIcon, zIndexOffset: 2000 }).addTo(group);
 
       L.circle([userLat, userLng], {
         radius: 90,
         color: '#E91E63',
         fillColor: '#E91E63',
-        fillOpacity: 0.05,
-        weight: 1,
+        fillOpacity: isDark ? 0.06 : 0.1,
+        weight: 1.5,
         dashArray: '3 5',
       }).addTo(group);
 
       map.flyTo([userLat, userLng], 15.5, { duration: 1.2 });
     }
-  }, [userLat, userLng]);
+  }, [userLat, userLng, isDark]);
 
-  // Render Business Markers
+  // Render Business Markers with theme awareness
   useEffect(() => {
     const map = mapInst.current;
     const group = layerGroup.current;
@@ -260,317 +421,415 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
       const r = isStockOnly ? { color: "#E91E63", label: "Stock" } : RARITY[getRarity(rw)];
       const isSel = selected?.id === b.id;
 
-      // Radius of influence
       L.circle([lat, lng], {
         radius: isSel ? 100 : 70,
-        color: r.color, fillColor: r.color,
-        fillOpacity: isSel ? 0.12 : 0.06,
+        color: r.color, 
+        fillColor: r.color,
+        fillOpacity: isSel ? (isDark ? 0.14 : 0.18) : (isDark ? 0.05 : 0.08),
         weight: isSel ? 1.5 : 1,
         dashArray: isSel ? undefined : '4 6',
       }).addTo(group);
 
-      const icon = L.divIcon({ html: markerHTML(b, isSel), className:'', iconSize:[64,80], iconAnchor:[32,80] });
+      const icon = L.divIcon({ html: markerHTML(b, isSel, isDark), className:'', iconSize:[64,80], iconAnchor:[32,80] });
       L.marker([lat, lng], { icon, zIndexOffset: isSel ? 1500 : 800 })
         .addTo(group)
         .on('click', (e: L.LeafletMouseEvent) => {
           L.DomEvent.stopPropagation(e.originalEvent);
+          PlatformBridge.hapticFeedback('light');
           setSelected((prev) => prev?.id === b.id ? null : b);
           map.panTo([lat - 0.0018, lng], { animate:true, duration:0.5 });
         });
     });
-  }, [filteredBusinesses, selected]);
+  }, [filteredBusinesses, selected, isDark]);
+
+  const totalBunzInZone = filteredBusinesses.reduce((sum, b) => sum + (b.rewardPercentage || b.reward_percentage || 0), 0);
 
   return (
-    <div className="w-full h-full relative" style={{ background: 'var(--bg-subtle)' }}>
+    <div 
+      className="w-full h-full relative overflow-hidden select-none" 
+      style={{ background: isDark ? '#0D0914' : '#F8FAFC' }}
+    >
       <style dangerouslySetInnerHTML={{__html: `
-        .rb-pulse {
-          position: absolute;
-          border-radius: 50%;
-          background: rgba(233, 30, 99, 0.35);
-          animation: rb-beacon 2.4s ease-out infinite;
-        }
-        .rb-pulse-1 { width:52px; height:52px; top:-13px; left:-13px; }
-        .rb-pulse-2 { width:52px; height:52px; top:-13px; left:-13px; animation-delay: 0.8s; }
-        .rb-pulse-3 { width:52px; height:52px; top:-13px; left:-13px; animation-delay: 1.6s; }
-        @keyframes rb-beacon {
-          0%   { transform: scale(0.4); opacity: 0.8; }
-          100% { transform: scale(2.2); opacity: 0;   }
-        }
         @keyframes radar-spin {
           from { transform: translate(-50%, -50%) rotate(0deg); }
           to { transform: translate(-50%, -50%) rotate(360deg); }
         }
         .radar-sweep {
           position: absolute;
-          top: 13px; left: 13px;
+          top: 14px; left: 14px;
           width: 800px; height: 800px;
-          background: conic-gradient(from 0deg, transparent 70%, rgba(233,30,99,0.05) 95%, rgba(233,30,99,0.4) 100%);
+          background: conic-gradient(from 0deg, transparent 70%, rgba(233,30,99,0.04) 95%, rgba(233,30,99,0.35) 100%);
           border-radius: 50%;
-          animation: radar-spin 3s linear infinite;
+          animation: radar-spin 3.2s linear infinite;
           pointer-events: none;
           z-index: 0;
-          mix-blend-mode: screen;
+          mix-blend-mode: ${isDark ? 'screen' : 'multiply'};
+        }
+        .rb-pulse {
+          position: absolute;
+          inset: -4px;
+          border-radius: 50%;
+          border: 1.5px solid #E91E63;
+          animation: rb-pulse-anim 2.5s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+          pointer-events: none;
+        }
+        .rb-pulse-2 { animation-delay: 0.8s; }
+        .rb-pulse-3 { animation-delay: 1.6s; }
+        @keyframes rb-pulse-anim {
+          0% { transform: scale(0.9); opacity: 0.8; }
+          100% { transform: scale(3.2); opacity: 0; }
         }
       `}} />
 
-      {/* Hex grid overlay */}
-      <div className="absolute inset-0 z-10 pointer-events-none" style={{
-        backgroundImage: `repeating-linear-gradient(60deg,rgba(233,30,99,0.04) 0px,rgba(233,30,99,0.04) 1px,transparent 1px,transparent 30px),
-                          repeating-linear-gradient(120deg,rgba(233,30,99,0.04) 0px,rgba(233,30,99,0.04) 1px,transparent 1px,transparent 30px),
-                          repeating-linear-gradient(0deg,rgba(233,30,99,0.04) 0px,rgba(233,30,99,0.04) 1px,transparent 1px,transparent 30px)`
-      }} />
+      {/* Hex Grid Overlay (Cyber Aesthetic) */}
+      <div 
+        className="absolute inset-0 z-1 pointer-events-none opacity-40" 
+        style={{
+          backgroundImage: isDark
+            ? `repeating-linear-gradient(60deg,rgba(233,30,99,0.03) 0px,rgba(233,30,99,0.03) 1px,transparent 1px,transparent 30px),
+               repeating-linear-gradient(120deg,rgba(233,30,99,0.03) 0px,rgba(233,30,99,0.03) 1px,transparent 1px,transparent 30px)`
+            : `repeating-linear-gradient(60deg,rgba(0,136,204,0.02) 0px,rgba(0,136,204,0.02) 1px,transparent 1px,transparent 30px)`
+        }} 
+      />
 
-      {/* Radar Sweep is now inside the marker HTML */}
-
+      {/* Leaflet Map Canvas */}
       <div ref={mapRef} className="absolute inset-0 z-0" />
 
-      {/* Mode Filters (Todos / bunz'in / Stock) - Collapsible Div */}
-      {showAllFilters ? (
-        <div style={{ position: 'absolute', bottom: selected ? 230 : (PlatformBridge.isTelegram() ? 40 : 24), left: 16, right: 16, zIndex: 2000, display: 'flex', flexDirection: 'column', gap: 10, transition: 'bottom 0.3s' }}>
+      {/* Top HUD: Status Pills & GPS Centering */}
+      <div 
+        className="absolute inset-x-4 z-20 flex items-center justify-between pointer-events-none"
+        style={{ top: PlatformBridge.isTelegram() ? 12 : 14 }}
+      >
+        {/* Left Stats Pill (Glassmorphic) */}
+        <div 
+          className="pointer-events-auto flex items-center gap-2 px-3 py-1.5 rounded-full border shadow-md backdrop-blur-xl"
+          style={{
+            background: isDark ? 'rgba(13, 9, 20, 0.88)' : 'rgba(255, 255, 255, 0.92)',
+            borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)',
+          }}
+        >
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-[#E91E63] animate-pulse" />
+            <span className="text-[11px] font-black uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>
+              {filteredBusinesses.length} {filteredBusinesses.length === 1 ? 'Spot' : 'Spots'}
+            </span>
+          </div>
           
-          {/* Toggle Filters Row */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <button 
-              onClick={() => setShowAllFilters(false)}
-              style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 900, cursor: 'pointer', transition: 'all 0.2s' }}
-              title="Ocultar Filtros"
+          {totalBunzInZone > 0 && (
+            <>
+              <span className="w-1 h-1 rounded-full bg-(--text-muted) opacity-40" />
+              <span className="text-[11px] font-extrabold text-[#E91E63] flex items-center gap-1">
+                <Flame className="w-3 h-3 fill-[#E91E63]" />
+                {totalBunzInZone}% Bunz
+              </span>
+            </>
+          )}
+        </div>
+
+        {/* Right Action: Locate Me GPS */}
+        <div className="pointer-events-auto flex items-center gap-2">
+          {!userLat && onRequestLocation && (
+            <button
+              type="button"
+              onClick={onRequestLocation}
+              disabled={isLocating}
+              className="px-3 py-1.5 rounded-full text-[11px] font-black text-white flex items-center gap-1.5 border-none cursor-pointer shadow-lg active:scale-95 transition-all"
+              style={{
+                background: 'linear-gradient(135deg, #E91E63 0%, #D81B60 100%)',
+                boxShadow: '0 4px 16px rgba(233,30,99,0.4)',
+              }}
             >
-              ▼
+              <span>{isLocating ? 'Buscando GPS…' : 'Activar GPS'}</span>
             </button>
-            
-            <button 
-              onClick={() => setShowFilters(!showFilters)}
-              style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 999, padding: '4px 10px', fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 4 }}
+          )}
+
+          <button 
+            type="button"
+            onClick={() => {
+              PlatformBridge.hapticFeedback('light');
+              if (userLat && userLng && mapInst.current) {
+                mapInst.current.flyTo([userLat, userLng], 16.5, { duration: 1 });
+              } else if (onRequestLocation) {
+                onRequestLocation();
+              }
+            }}
+            className="w-10 h-10 rounded-full flex items-center justify-center border cursor-pointer shadow-md backdrop-blur-xl active:scale-90 transition-transform"
+            style={{
+              background: userLat 
+                ? (isDark ? 'rgba(13, 9, 20, 0.9)' : 'rgba(255, 255, 255, 0.95)') 
+                : 'rgba(233,30,99,0.18)',
+              borderColor: userLat 
+                ? (isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)') 
+                : '#E91E63',
+              color: userLat ? (isDark ? '#FFFFFF' : '#111111') : '#E91E63',
+            }}
+            title={userLat ? "Centrar en mi ubicación" : "Activar GPS"}
+          >
+            <Crosshair size={18} className={isLocating ? 'animate-spin' : ''} />
+          </button>
+        </div>
+      </div>
+
+      {/* Bunzy Copilot Bar (Gemini in Car Style Assistant) */}
+      <div 
+        className="absolute z-20 inset-x-4 pointer-events-none"
+        style={{ top: PlatformBridge.isTelegram() ? 64 : 66 }}
+      >
+        <div 
+          className="pointer-events-auto rounded-2xl border shadow-xl backdrop-blur-2xl p-2.5 transition-all"
+          style={{
+            background: isDark ? 'rgba(18, 12, 28, 0.92)' : 'rgba(255, 255, 255, 0.95)',
+            borderColor: isListening ? '#E91E63' : (isDark ? 'rgba(233, 30, 99, 0.3)' : 'rgba(233, 30, 99, 0.2)'),
+            boxShadow: isListening 
+              ? '0 0 24px rgba(233, 30, 99, 0.35)' 
+              : '0 8px 32px rgba(0, 0, 0, 0.12)',
+          }}
+        >
+          <div className="flex items-center gap-2.5">
+            {/* Bunzy Avatar with Pulsing Halo */}
+            <div 
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0 shadow-sm relative overflow-hidden"
+              style={{
+                background: 'linear-gradient(135deg, #E91E63 0%, #8E24AA 100%)',
+              }}
             >
-              {showFilters ? 'Ocultar Filtros 🔽' : 'Filtros Avanzados ⚙️'}
+              <span>🐰</span>
+              {isListening && (
+                <div className="absolute inset-0 bg-[#E91E63]/30 animate-ping rounded-xl" />
+              )}
+            </div>
+
+            {/* Input or Voice Feedback text */}
+            <div className="flex-1 min-w-0">
+              {copilotReply ? (
+                <p className="m-0 text-xs font-bold truncate text-[#E91E63] flex items-center gap-1.5 animate-fadeIn">
+                  <Sparkles size={13} className="shrink-0" />
+                  <span>{copilotReply}</span>
+                </p>
+              ) : isListening ? (
+                <p className="m-0 text-xs font-bold truncate text-[#E91E63] flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-[#E91E63] animate-ping" />
+                  <span>Escuchando... &ldquo;Café cerca&rdquo;, &ldquo;Más Bunz&rdquo;</span>
+                </p>
+              ) : (
+                <div className="flex items-center">
+                  <input
+                    type="text"
+                    value={copilotQuery}
+                    onChange={(e) => setCopilotQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && copilotQuery.trim()) {
+                        handleVoiceCommand(copilotQuery.trim());
+                      }
+                    }}
+                    placeholder='Bunzy Copilot: "¿A dónde vamos?"'
+                    className="w-full bg-transparent border-none outline-none text-xs font-semibold placeholder:text-(--text-muted)"
+                    style={{ color: 'var(--text-primary)' }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Mic Button (Voice Assistant Command) */}
+            <button
+              type="button"
+              onClick={toggleSpeechRecognition}
+              className={`w-9 h-9 rounded-xl flex items-center justify-center border-none cursor-pointer transition-all active:scale-95 ${
+                isListening ? 'bg-[#E91E63] text-white animate-pulse' : 'bg-(--bg-subtle) text-(--text-primary)'
+              }`}
+              title={speechSupported ? 'Hablar con Bunzy Copilot' : 'Escribir comando para Bunzy'}
+            >
+              {isListening ? <MicOff size={16} /> : <Mic size={16} className="text-[#E91E63]" />}
             </button>
           </div>
 
-          {/* Collapsible Filters: Rarity & Category */}
-          {showFilters && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, background: 'rgba(0,0,0,0.4)', borderRadius: 16, padding: 12, backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)' }}>
-              <div style={{ display: 'flex', gap: 8, overflowX: 'auto' }} className="no-scrollbar">
-                {[
-                  { id: 'ALL', label: 'TODOS', icon: '' },
-                  { id: 'common', label: 'COMÚN', icon: '🔵' },
-                  { id: 'rare', label: 'RARO', icon: '🟣' },
-                  { id: 'epic', label: 'ÉPICO', icon: '🔴' },
-                  { id: 'legendary', label: 'LEGENDARIO', icon: '🟡' },
-                ].map(r => (
-                  <button
-                    key={r.id}
-                    onClick={() => setActiveRarity(r.id)}
-                    style={{ flexShrink: 0, padding: '2px 8px', borderRadius: 999, fontSize: 9, fontWeight: 800, border: '1px solid rgba(255,255,255,0.1)', background: activeRarity === r.id ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.6)', color: activeRarity === r.id ? '#fff' : 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', gap: 4 }}
-                  >
-                    {r.icon && <span>{r.icon}</span>} {r.label}
-                  </button>
-                ))}
-              </div>
-              <div style={{ display: 'flex', gap: 8, overflowX: 'auto' }} className="no-scrollbar">
-                {['Todos', 'Cafetería', 'Restaurante', 'Bar', 'Fitness', 'Tecnología'].map(c => (
-                  <button
-                    key={c}
-                    onClick={() => setActiveCategory(c)}
-                    style={{ flexShrink: 0, padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700, background: activeCategory === c ? '#fff' : 'rgba(0,0,0,0.6)', color: activeCategory === c ? '#111' : '#fff', border: '1px solid rgba(255,255,255,0.1)' }}
-                  >
-                    {c}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div style={{ display: 'flex', gap: 8, overflowX: 'auto' }} className="no-scrollbar">
-            {['Todos', "bunz'in", 'Stock'].map(mode => (
+          {/* Quick Voice Prompt Shortcuts */}
+          <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-(--border-subtle) overflow-x-auto hide-scrollbar">
+            {[
+              { label: '☕ Café cerca', query: 'Cafeterías cerca' },
+              { label: '🔥 Más Bunz', query: 'Comercios con mayor cashback' },
+              { label: '🍕 Dónde comer', query: 'Restaurantes y comida' },
+              { label: '📍 Mi ubicación', query: 'Dónde estoy' },
+            ].map((chip) => (
               <button
-                key={mode}
-                onClick={() => setActiveMode(mode)}
-                style={{ 
-                  flex: 1, padding: '8px 10px', borderRadius: 14, fontSize: 11, fontWeight: 800, textAlign: 'center',
-                  background: activeMode === mode ? 'linear-gradient(135deg, #E91E63 0%, #FF4D8D 100%)' : 'rgba(13, 13, 26, 0.85)',
-                  color: activeMode === mode ? '#fff' : '#aaa',
-                  border: `1px solid ${activeMode === mode ? 'transparent' : 'rgba(255,255,255,0.08)'}`,
-                  boxShadow: activeMode === mode ? '0 4px 16px rgba(233,30,99,0.4), inset 0 1px 1px rgba(255,255,255,0.3)' : 'none',
-                  backdropFilter: 'blur(12px)',
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                  textTransform: 'uppercase',
-                  letterSpacing: 0.5
-                }}
+                key={chip.label}
+                onClick={() => handleVoiceCommand(chip.query)}
+                className="px-2.5 py-1 rounded-lg text-[10px] font-bold whitespace-nowrap bg-(--bg-subtle) hover:bg-[#E91E63]/15 text-(--text-secondary) hover:text-[#E91E63] border border-(--border-subtle) cursor-pointer transition-colors shrink-0"
               >
-                {mode === 'Stock' ? '🎁 ' : (mode === "bunz'in" ? '💸 ' : '')}{mode}
+                {chip.label}
               </button>
             ))}
           </div>
         </div>
-      ) : (
-        /* Sleek floating arrow button to show filters when collapsed */
-        <button 
-          onClick={() => setShowAllFilters(true)}
-          style={{ 
-            position: 'absolute', 
-            bottom: selected ? 260 : 86, 
-            right: 16, 
-            zIndex: 2000, 
-            background: 'rgba(0,0,0,0.85)', 
-            backdropFilter: 'blur(10px)', 
-            color: '#fff', 
-            border: '1px solid rgba(255,255,255,0.2)', 
-            borderRadius: '50%', 
-            width: 40, 
-            height: 40, 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            fontSize: 14, 
-            fontWeight: 900, 
-            boxShadow: '0 4px 16px rgba(0,0,0,0.5)', 
-            cursor: 'pointer',
-            transition: 'all 0.2s'
-          }}
-          title="Mostrar Filtros"
-        >
-          ▲
-        </button>
-      )}
+      </div>
 
-      {/* Top Left Stack: Afiliados and Bunz */}
-      <div style={{ position: 'absolute', top: PlatformBridge.isTelegram() ? 70 : 14, left: 16, zIndex: 2000, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
-        <div style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', color: '#fff', padding: '4px 10px', borderRadius: 999, fontSize: 10, fontWeight: 800, border: '1px solid rgba(255,255,255,0.1)' }}>
-          🔴 {filteredBusinesses.length} afiliados
+      {/* Bottom Floating Filter Dock (Glassmorphism & Collapsible) */}
+      <div 
+        className="absolute z-20 inset-x-4 flex flex-col gap-2 transition-all duration-300 pointer-events-none"
+        style={{ 
+          bottom: selected ? 230 : (PlatformBridge.isTelegram() ? 28 : 20),
+        }}
+      >
+        <div className="pointer-events-auto flex items-center justify-between">
+          <button 
+            type="button"
+            onClick={() => {
+              PlatformBridge.hapticFeedback('light');
+              setShowAllFilters(!showAllFilters);
+            }}
+            className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider backdrop-blur-xl border flex items-center gap-1.5 cursor-pointer shadow-md active:scale-95 transition-all"
+            style={{
+              background: isDark ? 'rgba(13, 9, 20, 0.88)' : 'rgba(255, 255, 255, 0.92)',
+              borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)',
+              color: 'var(--text-secondary)'
+            }}
+          >
+            <span>{showAllFilters ? 'Ocultar Filtros' : 'Mostrar Filtros'}</span>
+            {showAllFilters ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
+          </button>
         </div>
 
-        {activeMode !== 'Stock' && filteredBusinesses.length > 0 && (
-          <div style={{ background: 'rgba(233,30,99,0.85)', backdropFilter: 'blur(10px)', color: '#fff', padding: '4px 10px', borderRadius: 999, fontWeight: 900, fontSize: 10, border: '1px solid rgba(255,255,255,0.2)', boxShadow: '0 4px 20px rgba(233,30,99,0.4)', letterSpacing: 0.5 }}>
-            🎯 {filteredBusinesses.reduce((sum, b) => sum + (b.rewardPercentage || b.reward_percentage || 0), 0)} bunz en esta zona
+        {showAllFilters && (
+          <div 
+            className="pointer-events-auto p-2.5 rounded-3xl border shadow-2xl backdrop-blur-2xl flex flex-col gap-2 transition-all"
+            style={{
+              background: isDark ? 'rgba(13, 9, 20, 0.92)' : 'rgba(255, 255, 255, 0.95)',
+              borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)',
+            }}
+          >
+            {/* Mode Selector Tabs: Todos / Bunz'in / Stock */}
+            <div className="flex gap-1.5 p-1 rounded-2xl bg-(--bg-subtle) border border-(--border-subtle)">
+              {[
+                { id: 'Todos', label: 'Todos' },
+                { id: "bunz'in", label: '💸 Gana Bunz' },
+                { id: 'Stock', label: '🎁 Canjea Stock' },
+              ].map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => {
+                    PlatformBridge.hapticFeedback('light');
+                    setActiveMode(m.id);
+                  }}
+                  className={`flex-1 py-2 rounded-xl text-xs font-black uppercase tracking-wider border-none cursor-pointer transition-all ${
+                    activeMode === m.id
+                      ? 'bg-[#E91E63] text-white shadow-md scale-101'
+                      : 'bg-transparent text-(--text-muted) hover:text-(--text-primary)'
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Horizontal Category Chips */}
+            <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar pt-0.5">
+              {[
+                { id: 'Todos', label: 'Todos', icon: '🌐' },
+                { id: 'Cafetería', label: 'Cafés', icon: '☕' },
+                { id: 'Restaurante', label: 'Gastro', icon: '🍕' },
+                { id: 'Bar', label: 'Copas', icon: '🍸' },
+                { id: 'Fitness', label: 'Fitness', icon: '💪' },
+                { id: 'Belleza', label: 'Belleza', icon: '✨' },
+              ].map((cat) => {
+                const active = activeCategory === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => {
+                      PlatformBridge.hapticFeedback('light');
+                      setActiveCategory(cat.id);
+                    }}
+                    className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap cursor-pointer transition-all border ${
+                      active
+                        ? 'bg-(--text-primary) text-(--bg-primary) border-transparent shadow-xs'
+                        : 'bg-(--bg-subtle) text-(--text-muted) border-(--border-subtle) hover:text-(--text-primary)'
+                    }`}
+                  >
+                    <span>{cat.icon}</span>
+                    <span>{cat.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
 
-      {/* Locate Me Button & Activate Location Prompt */}
-      <div style={{ position: 'absolute', top: PlatformBridge.isTelegram() ? 70 : 14, right: 16, zIndex: 2000, display: 'flex', alignItems: 'center', gap: 8 }}>
-        {!userLat && onRequestLocation && (
-          <button
-            type="button"
-            onClick={onRequestLocation}
-            disabled={isLocating}
-            style={{
-              background: 'linear-gradient(135deg, #E91E63 0%, #D81B60 100%)',
-              color: '#fff',
-              border: '1px solid rgba(255,255,255,0.3)',
-              borderRadius: 999,
-              padding: '6px 12px',
-              fontSize: 11,
-              fontWeight: 800,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 5,
-              boxShadow: '0 4px 16px rgba(233,30,99,0.5)',
-              cursor: 'pointer',
-            }}
-          >
-            <span>📍 {isLocating ? 'Buscando GPS…' : 'Activar Ubicación'}</span>
-          </button>
-        )}
-
-        <button 
-          onClick={() => {
-            if (userLat && userLng && mapInst.current) {
-              mapInst.current.flyTo([userLat, userLng], 16, { duration: 1 });
-            } else if (onRequestLocation) {
-              onRequestLocation();
-            }
-          }}
-          style={{ width: 36, height: 36, borderRadius: '50%', background: userLat ? 'rgba(0,0,0,0.6)' : 'rgba(233,30,99,0.2)', backdropFilter: 'blur(10px)', border: `1px solid ${userLat ? 'rgba(255,255,255,0.2)' : '#E91E63'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: userLat ? '#fff' : '#E91E63', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', cursor: 'pointer' }}
-          title={userLat ? "Centrar en mi ubicación" : "Activar GPS"}
-        >
-          <Crosshair size={18} className={isLocating ? 'animate-spin' : ''} />
-        </button>
-      </div>
-
-      {/* Selected Business Floating Card */}
+      {/* Selected Business Action Card (Floating HUD Card) */}
       {selected && (
-        <div style={{ position: 'absolute', bottom: 170, left: 14, right: 14, zIndex: 2000, maxWidth: 440, margin: '0 auto' }}>
+        <div 
+          className="absolute inset-x-4 z-30 max-w-md mx-auto"
+          style={{ bottom: PlatformBridge.isTelegram() ? 28 : 20 }}
+        >
           <div 
             onClick={() => router.push(`/affiliate/${selected.id}`)}
-            style={{ 
-              background: 'rgba(20, 20, 30, 0.94)', 
-              backdropFilter: 'blur(24px)', 
-              WebkitBackdropFilter: 'blur(24px)',
-              border: '1px solid rgba(255, 255, 255, 0.14)', 
-              borderRadius: 24, 
-              padding: '16px 18px', 
-              boxShadow: '0 24px 48px -12px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(233, 30, 99, 0.15)', 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: 16, 
-              color: '#fff',
-              animation: "slideUp 0.3s cubic-bezier(0.16,1,0.3,1)",
-              cursor: 'pointer',
-              position: 'relative'
+            className="p-4 rounded-3xl border shadow-2xl backdrop-blur-2xl flex items-center gap-3.5 cursor-pointer relative overflow-hidden transition-all active:scale-98"
+            style={{
+              background: isDark ? 'rgba(18, 12, 28, 0.95)' : 'rgba(255, 255, 255, 0.98)',
+              borderColor: isDark ? 'rgba(233, 30, 99, 0.4)' : 'rgba(233, 30, 99, 0.25)',
+              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.25)',
             }}
           >
-            <div style={{ width: 68, height: 68, borderRadius: 18, background: '#12121E', overflow: 'hidden', flexShrink: 0, border: '1px solid rgba(255,255,255,0.1)' }}>
-              {selected.imageUrl ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={selected.imageUrl} alt={selected.user} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            {/* Business Logo / Emoji Avatar */}
+            <div className="w-16 h-16 rounded-2xl overflow-hidden shrink-0 border border-(--border-subtle) bg-(--bg-subtle) flex items-center justify-center">
+              {selected.logoUrl || selected.imageUrl ? (
+                <img 
+                  src={selected.logoUrl || selected.imageUrl} 
+                  alt={selected.name || 'Comercio'} 
+                  className="w-full h-full object-cover" 
+                />
               ) : (
-                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30 }}>{getIcon(selected.device)}</div>
+                <span className="text-3xl">{getIcon(selected.category || selected.device)}</span>
               )}
             </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                <h3 style={{ fontSize: 17, fontWeight: 900, color: '#fff', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+
+            {/* Info Column */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="m-0 text-base font-black truncate" style={{ color: 'var(--text-primary)' }}>
                   {selected.name || selected.user}
                 </h3>
+                
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     setSelected(null);
                   }}
-                  style={{
-                    background: 'rgba(255,255,255,0.1)',
-                    border: 'none',
-                    color: 'rgba(255,255,255,0.7)',
-                    width: 24,
-                    height: 24,
-                    borderRadius: '50%',
-                    cursor: 'pointer',
-                    fontSize: 12,
-                    fontWeight: 800,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0
-                  }}
+                  className="w-6 h-6 rounded-full bg-(--bg-subtle) hover:bg-[#E91E63]/20 flex items-center justify-center text-(--text-muted) hover:text-[#E91E63] border-none cursor-pointer"
                 >
-                  ✕
+                  <X size={13} />
                 </button>
               </div>
 
-              <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', margin: '3px 0 8px 0', fontWeight: 600 }}>
-                {selected.category || selected.device} • A {selected.distance || '1.2'}km de ti
+              <p className="m-0 text-xs font-semibold text-(--text-muted) mt-0.5 truncate">
+                {selected.category || selected.device || 'Comercio Afiliado'} • A {selected.distance ? `${selected.distance} km` : 'Cerca de ti'}
               </p>
-              
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+
+              {/* Rewards / Bunz Pills */}
+              <div className="flex items-center gap-1.5 mt-2">
                 {(selected.givesBunz !== false) && (
-                  <span style={{ background: 'rgba(233,30,99,0.18)', color: '#FF4081', fontWeight: 900, fontSize: 11, padding: '4px 10px', borderRadius: 999, border: '1px solid rgba(233,30,99,0.35)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    <span>🎁</span> +{selected.reward_percentage || selected.rewardPercentage}% Bunz
+                  <span className="px-2 py-0.5 rounded-md text-[11px] font-black bg-[#E91E63]/15 text-[#E91E63] border border-[#E91E63]/30 flex items-center gap-1">
+                    <Flame size={12} className="fill-[#E91E63]" />
+                    +{selected.reward_percentage || selected.rewardPercentage || 10}% Bunz
                   </span>
                 )}
                 {selected.acceptsBunz === true && (
-                  <span style={{ background: 'rgba(16, 185, 129, 0.18)', color: '#34D399', fontWeight: 900, fontSize: 11, padding: '4px 10px', borderRadius: 999, border: '1px solid rgba(16, 185, 129, 0.35)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    <span>⚡</span> Stock Canjeable
+                  <span className="px-2 py-0.5 rounded-md text-[11px] font-black bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 flex items-center gap-1">
+                    <Gift size={12} />
+                    Stock
                   </span>
                 )}
               </div>
             </div>
+
+            {/* Navigation CTA icon */}
+            <div className="w-10 h-10 rounded-2xl bg-[#E91E63] text-white flex items-center justify-center shrink-0 shadow-lg shadow-pink-500/30">
+              <Navigation size={18} className="rotate-45" />
+            </div>
           </div>
         </div>
       )}
-      <style dangerouslySetInnerHTML={{__html: `
-        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-      `}} />
     </div>
   );
 }
