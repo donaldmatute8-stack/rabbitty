@@ -38,6 +38,7 @@ import {
   Smartphone,
 } from 'lucide-react';
 import { GROUPS, openTelegramLink } from '@/components/groups/GroupsStrip';
+import { setStoredAvatar } from '@/lib/avatar';
 import { useToast } from '@/contexts/ToastContext';
 
 type Conversation = {
@@ -511,9 +512,7 @@ export default function ChatInboxPage() {
     PlatformBridge.hapticFeedback('medium');
     try {
       if (user?.id && userAvatar) {
-        try {
-          localStorage.setItem(`rabbitty_avatar_${user.id}`, userAvatar);
-        } catch {}
+        setStoredAvatar(user.id, userAvatar);
       }
       const headers = await PlatformBridge.getAuthHeaders();
       const res = await fetch(`/api/auth/profile`, {
@@ -1480,11 +1479,9 @@ export default function ChatInboxPage() {
                         const b64 = reader.result as string;
                         setUserAvatar(b64);
                         if (user?.id) {
-                          try {
-                            localStorage.setItem(`rabbitty_avatar_${user.id}`, b64);
-                          } catch {}
+                          setStoredAvatar(user.id, b64);
                         }
-                        showToast('Foto actualizada (recuerda presionar Guardar Perfil)', 'success');
+                        showToast('Foto de perfil actualizada en toda la app', 'success');
                       };
                       reader.readAsDataURL(file);
                     }}

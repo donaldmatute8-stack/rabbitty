@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { users, pendingVaults, transactions, ownedBusinesses } from "@/db/schema";
-import { eq, and, gte, sql, or } from "drizzle-orm";
+import { users, pendingVaults, transactions, ownedBusinesses, affiliateCampaigns, campaignRedemptions } from "@/db/schema";
+import { eq, and, gte, sql, or, desc, gt } from "drizzle-orm";
 import { recordLedgerTransaction, findLedgerEntry } from "@/lib/ledgerHelper";
 import { sendEcosystemNotification } from "@/lib/push/notify";
 import crypto from "crypto";
@@ -26,6 +26,8 @@ export async function POST(request: Request) {
     const idempotencyKey = `pos_rwd_${body.idempotency_key || body.idempotencyKey || order_id || crypto.randomUUID()}`;
 
     let rewardRate = 0.20;
+    let baseBunzPos = 0;
+    let boostCampaignId: string | null = null;
     if (business_id) {
       const [business] = await db.select({ rewardPercentage: ownedBusinesses.rewardPercentage })
         .from(ownedBusinesses)
@@ -33,9 +35,100 @@ export async function POST(request: Request) {
         .limit(1);
       if (business) {
         rewardRate = (business.rewardPercentage ?? 20) / 100;
+        baseBunzPos = Math.floor(amount_usd * ((business.rewardPercentage ?? 20) / 100));
+
+        // Check if an active FLASH_OFFER boost campaign exists for this business with higher %
+        const now = new Date();
+        const [activeBoost] = await db.select()
+          .from(affiliateCampaigns)
+          .where(
+            and(
+              eq(affiliateCampaigns.businessId, business_id),
+              eq(affiliateCampaigns.campaignType, "FLASH_OFFER"),
+              eq(affiliateCampaigns.status, "ACTIVE"),
+              gt(affiliateCampaigns.expiresAt, now)
+            )
+          )
+          .orderBy(desc(affiliateCampaigns.rewardPercentage))
+          .limit(1);
+
+        if (activeBoost && activeBoost.rewardPercentage > (business.rewardPercentage ?? 20)) {
+          rewardRate = activeBoost.rewardPercentage / 100;
+          boostCampaignId = activeBoost.id;
+        }
       }
     }
-    const bunzToMint = Math.floor(amount_usd * rewardRate);
+    let bunzToMint = Math.floor(amount_usd * rewardRate);
+
+    // Usuario existente (para tope por usuario del boost)
+    const conditionsPos = [
+      eq(users.phoneNumber, phone),
+      eq(users.telegramId, phone)
+    ];
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(phone)) {
+      conditionsPos.push(eq(users.id, phone));
+    }
+    const [existingUserEarly] = await db.select({ id: users.id }).from(users).where(or(...conditionsPos)).limit(1);
+    const existingUserId = existingUserEarly?.id || null;
+
+    // ── CONSUMO ATOMICO DE PRESUPUESTO DEL FLASH BOOST ──
+    // La bonificación extra se paga del presupuesto de la campaña (budgetBunz),
+    // respeta el tope por usuario (maxRewardPerUser) y registra la redención.
+    if (business_id && boostCampaignId && bunzToMint > baseBunzPos) {
+      let cappedBonus = 0;
+      await db.transaction(async (btx) => {
+        const [lockedCampaign] = await btx
+          .select()
+          .from(affiliateCampaigns)
+          .where(eq(affiliateCampaigns.id, boostCampaignId))
+          .for('update');
+
+        const campaignValid = lockedCampaign
+          && lockedCampaign.status === "ACTIVE"
+          && lockedCampaign.expiresAt > new Date();
+
+        if (campaignValid && lockedCampaign) {
+          const remainingBudget = lockedCampaign.budgetBunz - lockedCampaign.budgetSpent;
+          const [userRedeemed] = await btx
+            .select({ total: sql<number>`coalesce(sum(${campaignRedemptions.bunzAwarded}), 0)` })
+            .from(campaignRedemptions)
+            .where(and(
+              eq(campaignRedemptions.campaignId, lockedCampaign.id),
+              eq(campaignRedemptions.userId, existingUserId as string)
+            ));
+          const perUserRemaining = existingUserId
+            ? Math.max(0, lockedCampaign.maxRewardPerUser - Number(userRedeemed?.total ?? 0))
+            : lockedCampaign.maxRewardPerUser;
+          const rawBonus = bunzToMint - baseBunzPos;
+          cappedBonus = Math.max(0, Math.min(rawBonus, remainingBudget, perUserRemaining));
+
+          if (cappedBonus > 0) {
+            const willExhaust = lockedCampaign.budgetSpent + cappedBonus >= lockedCampaign.budgetBunz;
+            await btx.update(affiliateCampaigns)
+              .set({
+                budgetSpent: sql`${affiliateCampaigns.budgetSpent} + ${cappedBonus}`,
+                redemptionCount: sql`${affiliateCampaigns.redemptionCount} + 1`,
+                status: willExhaust ? "EXHAUSTED" : lockedCampaign.status,
+                updatedAt: new Date(),
+              })
+              .where(eq(affiliateCampaigns.id, lockedCampaign.id));
+
+            if (existingUserId) {
+              await btx.insert(campaignRedemptions).values({
+                campaignId: lockedCampaign.id,
+                userId: existingUserId,
+                businessId: business_id,
+                transactionId: order_id || null,
+                bunzAwarded: cappedBonus,
+                fiatSpent: amount_usd,
+                idempotencyKey: `${idempotencyKey}:boost`,
+              }).onConflictDoNothing();
+            }
+          }
+        }
+        bunzToMint = baseBunzPos + cappedBonus;
+      });
+    }
 
     if (bunzToMint <= 0) {
       return NextResponse.json({ message: "Amount too low to generate Bunz" }, { status: 200 });

@@ -16,6 +16,7 @@ import { WelcomeRitual } from '@/components/ui/WelcomeRitual';
 import { authorizeSensitiveAction } from '@/lib/securityVault';
 import { promptForPin } from '@/components/security/PinPromptModal';
 import { DeleteAccountModal } from '@/components/profile/DeleteAccountModal';
+import { useUserAvatar } from '@/lib/avatar';
 
 interface UserProfile {
   id?: string;
@@ -58,6 +59,7 @@ export default function ProfilePage() {
   const router = useRouter();
   const { user: rawUser, logout } = useAuth();
   const user = rawUser as UserProfile | null;
+  const userAvatar = useUserAvatar(rawUser, 'ffffff');
   const { showToast } = useToast();
   const [showAdmin, setShowAdmin] = useState(false);
   const [showBunzGuide, setShowBunzGuide] = useState(false);
@@ -97,12 +99,14 @@ export default function ProfilePage() {
     PlatformBridge.hapticFeedback('light');
 
     const isOwner = 
-      user?.email === 'marco@rabbitty.me' ||
       user?.role === 'ADMIN' ||
+      user?.email === 'marco@rabbitty.me' ||
+      user?.email === 'marco.munoz9@gmail.com' ||
       user?.username?.toLowerCase() === 'mardelbull' ||
+      user?.username?.toLowerCase() === 'deltoro' ||
       user?.username?.toLowerCase() === 'marco';
 
-    // Acceso administrativo: requiere ser admin o activar el gesto de 5 toques
+    // Acceso administrativo: con un solo toque si es owner/admin, o gesto secreto de 5 toques
     if (isOwner || tapCountRef.current >= 5) {
       tapCountRef.current = 0;
       PlatformBridge.hapticFeedback('medium');
@@ -165,12 +169,12 @@ export default function ProfilePage() {
         className="w-12.5 h-12.5 rounded-[14px] p-0.5 flex items-center justify-center shrink-0 relative cursor-pointer"
       >
         <Image 
-          src={`https://api.dicebear.com/7.x/notionists/svg?seed=${user?.firstName || 'Rabbitty'}&backgroundColor=ffffff`} 
+          src={userAvatar} 
           alt={user?.firstName || 'User'} 
           width={46}
           height={46}
           unoptimized
-          className="w-full h-full rounded-xl" 
+          className="w-full h-full rounded-xl object-cover" 
         />
         {(user?.hops ?? 0) >= 2000 && (
           <div className="absolute -top-1.5 -right-1.5 text-base">👑</div>

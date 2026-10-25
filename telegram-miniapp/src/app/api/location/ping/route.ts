@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { ownedBusinesses, transactions, notifications } from "@/db/schema";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { ownedBusinesses, transactions, notifications, affiliateCampaigns } from "@/db/schema";
+import { and, eq, inArray, sql, gt } from "drizzle-orm";
 import { getAuthenticatedUser } from "@/lib/serverAuth";
 import { isApnsConfigured, sendPushToUser } from "@/lib/push/apns";
 import { restaurantDb } from "@/db/restaurant";
@@ -39,8 +39,10 @@ interface ProximityMatch {
   category: string;
   distanceMeters: number;
   rewardPercentage: number;
+  hasActiveBoost?: boolean;
+  boostTitle?: string;
   loyaltyOffer?: {
-    type: "DOUBLE_CASHBACK_VIP" | "PERSONAL_REWARD_100";
+    type: "DOUBLE_CASHBACK_VIP" | "PERSONAL_REWARD_100" | "FLASH_BOOST";
     title: string;
     description: string;
     pastVisits: number;
@@ -91,6 +93,36 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Fetch any active campaigns / flash boosts for nearby businesses
+    const nearBusinessIds = nearBusinesses.map((nb) => nb.business.id);
+    const activeCampaignsMap = new Map<string, { rewardPercentage: number; title: string; headline: string; maxRewardPerUser: number }>();
+    if (nearBusinessIds.length > 0) {
+      const now = new Date();
+      const campaigns = await db
+        .select()
+        .from(affiliateCampaigns)
+        .where(
+          and(
+            inArray(affiliateCampaigns.businessId, nearBusinessIds),
+            eq(affiliateCampaigns.campaignType, "FLASH_OFFER"),
+            eq(affiliateCampaigns.status, "ACTIVE"),
+            gt(affiliateCampaigns.expiresAt, now)
+          )
+        );
+      for (const cmp of campaigns) {
+        // Keep the highest reward percentage if multiple campaigns exist
+        const existing = activeCampaignsMap.get(cmp.businessId);
+        if (!existing || cmp.rewardPercentage > existing.rewardPercentage) {
+          activeCampaignsMap.set(cmp.businessId, {
+            rewardPercentage: cmp.rewardPercentage,
+            title: cmp.title,
+            headline: cmp.headline,
+            maxRewardPerUser: cmp.maxRewardPerUser || 50,
+          });
+        }
+      }
+    }
+
     const visitCountMap = new Map<string, number>();
     if (caller) {
       const proxBusinessIds = nearBusinesses
@@ -120,19 +152,70 @@ export async function POST(req: NextRequest) {
     for (const nb of nearBusinesses) {
       const b = nb.business;
       const dist = nb.dist;
+      const activeBoost = activeCampaignsMap.get(b.id);
+      const effectiveReward = activeBoost ? Math.max(b.rewardPercentage, activeBoost.rewardPercentage) : b.rewardPercentage;
 
       const match: ProximityMatch = {
         businessId: b.id,
         businessName: b.name,
         category: b.category,
         distanceMeters: dist,
-        rewardPercentage: b.rewardPercentage,
+        rewardPercentage: effectiveReward,
+        hasActiveBoost: !!activeBoost,
+        boostTitle: activeBoost?.headline || activeBoost?.title,
       };
 
       if (caller && dist <= 250) {
         const visitCount = visitCountMap.get(b.id) ?? 0;
 
-        if (visitCount >= 10) {
+        // Si el comercio tiene un Flash Boost activo, priorizar la oferta de proximidad especial
+        if (activeBoost && activeBoost.rewardPercentage > b.rewardPercentage) {
+          match.loyaltyOffer = {
+            type: "FLASH_BOOST",
+            title: `⚡ ¡Flash Boost en ${b.name}!`,
+            description: `${activeBoost.headline || activeBoost.title}: Obtén +${activeBoost.rewardPercentage}% Bunz en tu consumo hoy al pagar en caja.`,
+            pastVisits: visitCount,
+            multiplier: 1.0,
+          };
+
+          const cooldownKey = `push:boost:${caller.id}:${b.id}`;
+          const lastSent = notificationCooldowns.get(cooldownKey) || 0;
+          const now = Date.now();
+
+          if (now - lastSent > COOLDOWN_MS) {
+            notificationCooldowns.set(cooldownKey, now);
+
+            const pushTitle = `⚡ ¡${activeBoost.rewardPercentage}% Bunz en ${b.name}!`;
+            const pushBody = `Pasa en tu caminata de hoy: ${activeBoost.headline || `obtenemos recompensa especial de +${activeBoost.rewardPercentage}% Bunz`}.`;
+
+            await db
+              .insert(notifications)
+              .values({
+                userId: caller.id,
+                title: pushTitle,
+                message: pushBody,
+                type: "LOYALTY_OFFER",
+              })
+              .catch(() => {});
+
+            if (isApnsConfigured()) {
+              sendPushToUser(caller.id, {
+                title: pushTitle,
+                body: pushBody,
+                data: {
+                  type: "PROXIMITY_BOOST",
+                  businessId: b.id,
+                  businessName: b.name,
+                  rewardPercentage: activeBoost.rewardPercentage,
+                },
+              }).catch((err) => {
+                console.warn("[LOCATION_PING] Push send error:", err);
+              });
+            }
+
+            triggeredOffers.push(b.name);
+          }
+        } else if (visitCount >= 10) {
           match.loyaltyOffer = {
             type: "DOUBLE_CASHBACK_VIP",
             title: `¡Bonificación Especial en ${b.name}!`,

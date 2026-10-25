@@ -202,13 +202,28 @@ export async function POST(req: Request) {
         const postgres = (await import('postgres')).default;
         const sql = postgres(dbUrl, { ssl: 'require', max: 1 });
 
-        const sysUser = await sql`
-          INSERT INTO "users" (id, "telegramId", "firstName", "lastName", "role")
-          VALUES (gen_random_uuid(), 'WEB_FORM_SYS', 'Aspirante', '(Web)', 'USER')
-          ON CONFLICT ("telegramId") DO UPDATE SET "firstName" = 'Aspirante'
-          RETURNING id
-        `;
-        const placeholderOwnerId = sysUser[0].id;
+        // Buscar si ya existe un usuario registrado con el email o teléfono del solicitante
+        let ownerId: string | null = null;
+        if (email) {
+          const userByEmail = await sql`SELECT id FROM "users" WHERE email = ${email} LIMIT 1`;
+          if (userByEmail.length > 0) ownerId = userByEmail[0].id;
+        }
+        if (!ownerId && telefono) {
+          const userByPhone = await sql`SELECT id FROM "users" WHERE "phoneNumber" = ${telefono} LIMIT 1`;
+          if (userByPhone.length > 0) ownerId = userByPhone[0].id;
+        }
+
+        if (!ownerId) {
+          // Si no existe, crear un usuario independiente para este solicitante
+          const newApplicant = await sql`
+            INSERT INTO "users" (id, "telegramId", "firstName", "lastName", email, "phoneNumber", "role")
+            VALUES (gen_random_uuid(), ${'WEB_' + Date.now()}, ${nombre || 'Emprendedor'}, '(Afiliado)', ${email || null}, ${telefono || null}, 'USER')
+            RETURNING id
+          `;
+          ownerId = newApplicant[0].id;
+        }
+
+        const placeholderOwnerId = ownerId;
 
         const existing = await sql`
           SELECT id FROM "ownedBusinesses" WHERE name = ${negocio || 'Nuevo Negocio'} LIMIT 1

@@ -1,9 +1,10 @@
 import Foundation
 import Capacitor
 import UIKit
+import WebKit
 
 @objc(RabbittyMapPlugin)
-public class RabbittyMapPlugin: CAPPlugin, CAPBridgedPlugin {
+public class RabbittyMapPlugin: CAPPlugin, CAPBridgedPlugin, UIGestureRecognizerDelegate {
     public let identifier = "RabbittyMapPlugin"
     public let jsName = "RabbittyMap"
     public let pluginMethods: [CAPPluginMethod] = [
@@ -14,6 +15,9 @@ public class RabbittyMapPlugin: CAPPlugin, CAPBridgedPlugin {
     ]
 
     private var nativeMapView: RabbittyNativeMapView?
+    private var panRecognizer: UIPanGestureRecognizer?
+    private var pinchRecognizer: UIPinchGestureRecognizer?
+    private var tapRecognizer: UITapGestureRecognizer?
 
     @objc public func showMap(_ call: CAPPluginCall) {
         DispatchQueue.main.async { [weak self] in
@@ -34,12 +38,82 @@ public class RabbittyMapPlugin: CAPPlugin, CAPBridgedPlugin {
                 webView.scrollView.backgroundColor = .clear
                 webView.superview?.insertSubview(map, belowSubview: webView)
                 self.nativeMapView = map
+
+                // Attach touch forwarding gestures to webView so native map receives pan, pinch and pin taps
+                self.setupTouchForwarding(on: webView, targetMap: map)
             } else {
                 self.nativeMapView?.isHidden = false
             }
 
             call.resolve(["success": true])
         }
+    }
+
+    private func setupTouchForwarding(on webView: WKWebView, targetMap: RabbittyNativeMapView) {
+        // Forward gestures when user interacts with transparent webview areas
+        let pan = UIPanGestureRecognizer(target: self, action: #selector(handleMapPan(_:)))
+        pan.cancelsTouchesInView = false
+        pan.delegate = self
+        webView.addGestureRecognizer(pan)
+        self.panRecognizer = pan
+
+        let pinch = UIPinchGestureRecognizer(target: self, action: #selector(handleMapPinch(_:)))
+        pinch.cancelsTouchesInView = false
+        pinch.delegate = self
+        webView.addGestureRecognizer(pinch)
+        self.pinchRecognizer = pinch
+
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleMapTap(_:)))
+        tap.cancelsTouchesInView = false
+        tap.delegate = self
+        webView.addGestureRecognizer(tap)
+        self.tapRecognizer = tap
+    }
+
+    @objc private func handleMapPan(_ gesture: UIPanGestureRecognizer) {
+        guard let map = nativeMapView?.mapView else { return }
+        let translation = gesture.translation(in: map)
+        if gesture.state == .changed {
+            var center = map.centerCoordinate
+            let span = map.region.span
+            center.latitude += (translation.y / map.bounds.height) * span.latitudeDelta * 0.5
+            center.longitude -= (translation.x / map.bounds.width) * span.longitudeDelta * 0.5
+            map.setCenter(center, animated: false)
+            gesture.setTranslation(.zero, in: map)
+        }
+    }
+
+    @objc private func handleMapPinch(_ gesture: UIPinchGestureRecognizer) {
+        guard let map = nativeMapView?.mapView else { return }
+        if gesture.state == .changed {
+            let scale = gesture.scale
+            var region = map.region
+            region.span.latitudeDelta /= Double(scale)
+            region.span.longitudeDelta /= Double(scale)
+            map.setRegion(region, animated: false)
+            gesture.scale = 1.0
+        }
+    }
+
+    @objc private func handleMapTap(_ gesture: UITapGestureRecognizer) {
+        guard let map = nativeMapView?.mapView else { return }
+        let point = gesture.location(in: map)
+        for annot in map.annotations {
+            if let annotView = map.view(for: annot) {
+                let annotPoint = gesture.location(in: annotView)
+                if annotView.bounds.contains(annotPoint) {
+                    map.selectAnnotation(annot, animated: true)
+                    if let rabbitAnnot = annot as? RabbittyAnnotation {
+                        self.notifyListeners("onBusinessSelected", data: ["businessId": rabbitAnnot.business.id])
+                    }
+                    return
+                }
+            }
+        }
+    }
+
+    public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        return true
     }
 
     @objc public func hideMap(_ call: CAPPluginCall) {

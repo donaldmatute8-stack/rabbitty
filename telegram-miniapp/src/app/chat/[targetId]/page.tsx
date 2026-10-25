@@ -9,7 +9,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { QRCodeSVG } from 'qrcode.react';
 import { useToast } from '@/contexts/ToastContext';
-import { Bell, BellOff, Search, Ban, MoreHorizontal, Store, Bot, ExternalLink } from 'lucide-react';
+import { Bell, BellOff, Search, Ban, MoreHorizontal, Store, Bot, ExternalLink, Zap } from 'lucide-react';
 
 interface BusinessCard {
   kind?: 'BUSINESS';
@@ -244,6 +244,12 @@ export default function ChatRoomPage() {
   const [bunzyBusy, setBunzyBusy] = useState(false);
   const [bunzyIntent, setBunzyIntent] = useState('');
   const [bunzyNote, setBunzyNote] = useState<{ mode: 'draft' | 'summarize' | 'admin_qa' | 'marketing_proposal'; text: string } | null>(null);
+  const [boostSheetOpen, setBoostSheetOpen] = useState(false);
+  const [boostPercentage, setBoostPercentage] = useState(25);
+  const [boostHours, setBoostHours] = useState(4);
+  const [activeBoostCampaign, setActiveBoostCampaign] = useState<{ id: string; rewardPercentage: number; budgetBunz: number; budgetSpent: number; expiresAt: string } | null>(null);
+  const [loadingActiveBoost, setLoadingActiveBoost] = useState(false);
+  const [activatingBoost, setActivatingBoost] = useState(false);
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
 
@@ -1627,35 +1633,93 @@ export default function ChatRoomPage() {
               </div>
               <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>›</span>
             </button>
-          ) : targetRole === 'AFFILIATE' && targetBusinessId ? (
-            <button
-              type="button"
-              onClick={() => {
-                PlatformBridge.hapticFeedback('medium');
-                setTargetInfoOpen(false);
-                router.push(`/p/${targetBusinessId}`);
-              }}
-              style={{
-                width: '100%',
-                padding: '14px 16px',
-                borderRadius: 16,
-                background: 'var(--bg-elevated)',
-                border: '1px solid var(--border-subtle)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                color: 'var(--text-primary)',
-                cursor: 'pointer',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(255,138,0,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Store size={18} color="#FF8A00" />
+          ) : (targetRole === 'AFFILIATE' || isBusinessInbox) ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
+              {targetBusinessId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    PlatformBridge.hapticFeedback('medium');
+                    setTargetInfoOpen(false);
+                    router.push(`/p/${targetBusinessId}`);
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '14px 16px',
+                    borderRadius: 16,
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border-subtle)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(255,138,0,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Store size={18} color="#FF8A00" />
+                    </div>
+                    <span style={{ fontSize: 14, fontWeight: 800 }}>Ver Perfil y Menú del Negocio</span>
+                  </div>
+                  <ExternalLink size={16} color="var(--text-muted)" />
+                </button>
+              )}
+
+              {/* Affiliate Action: Darle un Boost Directo */}
+              <button
+                type="button"
+                onClick={async () => {
+                  PlatformBridge.hapticFeedback('medium');
+                  setTargetInfoOpen(false);
+                  setBoostSheetOpen(true);
+                  // Consultar si ya existe un boost activo para no apilar campañas
+                  const bizIdForBoost = targetBusinessId || user?.id;
+                  if (bizIdForBoost) {
+                    setLoadingActiveBoost(true);
+                    setActiveBoostCampaign(null);
+                    try {
+                      const hdrs = await PlatformBridge.getAuthHeaders();
+                      const res = await fetch(`/api/business/campaigns?businessId=${bizIdForBoost}`, { headers: hdrs });
+                      const data = await res.json();
+                      const now = Date.now();
+                      const active = (data.campaigns || []).find(
+                        (c: { campaignType: string; status: string; expiresAt: string }) =>
+                          c.campaignType === 'FLASH_OFFER' && c.status === 'ACTIVE' && new Date(c.expiresAt).getTime() > now
+                      );
+                      if (active) {
+                        setActiveBoostCampaign({ id: active.id, rewardPercentage: active.rewardPercentage, budgetBunz: active.budgetBunz, budgetSpent: active.budgetSpent, expiresAt: active.expiresAt });
+                        setBoostPercentage(active.rewardPercentage);
+                      }
+                    } catch { /* falla silenciosa: el sheet funciona igual */ }
+                    setLoadingActiveBoost(false);
+                  }
+                }}
+                style={{
+                  width: '100%',
+                  padding: '14px 16px',
+                  borderRadius: 16,
+                  background: 'linear-gradient(135deg, rgba(233,30,99,0.15) 0%, rgba(255,138,0,0.15) 100%)',
+                  border: '1px solid rgba(233,30,99,0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  color: '#E91E63',
+                  cursor: 'pointer',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 10, background: '#E91E63', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Zap size={18} color="#FFFFFF" />
+                  </div>
+                  <div style={{ textAlign: 'left' }}>
+                    <span style={{ fontSize: 14, fontWeight: 900, display: 'block', color: 'var(--text-primary)' }}>⚡ Dar un Flash Boost</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>Asignar % especial en radar y mapa</span>
+                  </div>
                 </div>
-                <span style={{ fontSize: 14, fontWeight: 800 }}>Ver Perfil y Menú del Negocio</span>
-              </div>
-              <ExternalLink size={16} color="var(--text-muted)" />
-            </button>
+                <span style={{ fontSize: 13, fontWeight: 800, color: '#E91E63' }}>Activar ›</span>
+              </button>
+            </div>
           ) : null}
         </div>
       </BottomSheet>
@@ -2519,6 +2583,150 @@ export default function ChatRoomPage() {
             }}
           >
             📝 Resumir chat
+          </button>
+        </div>
+      </BottomSheet>
+
+      {/* Affiliate Special Boost Modal */}
+      <BottomSheet isOpen={boostSheetOpen} onClose={() => setBoostSheetOpen(false)} title="⚡ Flash Boost de Recompensa">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '4px 0 16px' }}>
+          <p style={{ margin: 0, fontSize: '13px', lineHeight: 1.5, color: 'var(--text-secondary)' }}>
+            Asigna un porcentaje especial independiente para atraer a los rabbitters cercanos a través del radar de proximidad y el mapa.
+          </p>
+
+          {loadingActiveBoost && (
+            <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)' }}>Verificando boosts activos…</p>
+          )}
+
+          {!loadingActiveBoost && activeBoostCampaign && (
+            <div style={{ background: 'rgba(255,209,102,0.08)', border: '1px solid rgba(255,209,102,0.35)', borderRadius: 14, padding: 12 }}>
+              <span style={{ fontSize: 12, fontWeight: 900, color: '#FFD166', display: 'block', marginBottom: 4 }}>
+                ⚡ Ya tienes un boost activo: +{activeBoostCampaign.rewardPercentage}%
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', lineHeight: 1.45 }}>
+                Bolsa: {activeBoostCampaign.budgetSpent}/{activeBoostCampaign.budgetBunz} Bunz consumidos · vence {new Date(activeBoostCampaign.expiresAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginTop: 4 }}>
+                Activar un nuevo boost cancelará el actual y creará uno con los valores que elijas.
+              </span>
+            </div>
+          )}
+
+          <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 18, padding: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Porcentaje Especial Bunz</span>
+              <span style={{ fontSize: 24, fontWeight: 900, color: '#E91E63' }}>+{boostPercentage}%</span>
+            </div>
+
+            <input
+              type="range"
+              min="15"
+              max="50"
+              step="5"
+              value={boostPercentage}
+              onChange={(e) => setBoostPercentage(Number(e.target.value))}
+              style={{ width: '100%', accentColor: '#E91E63', cursor: 'pointer' }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 11, color: 'var(--text-muted)' }}>
+              <span>15%</span>
+              <span>25% (Recomendado)</span>
+              <span>50%</span>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            {[2, 4, 8, 24].map((h) => (
+              <button
+                key={h}
+                type="button"
+                onClick={() => setBoostHours(h)}
+                style={{
+                  flex: 1,
+                  padding: '10px 4px',
+                  borderRadius: 12,
+                  border: boostHours === h ? '1.5px solid #E91E63' : '1px solid var(--border-subtle)',
+                  background: boostHours === h ? 'rgba(233,30,99,0.12)' : 'var(--bg-elevated)',
+                  color: boostHours === h ? '#E91E63' : 'var(--text-secondary)',
+                  fontSize: 12,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                }}
+              >
+                {h}h
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            disabled={activatingBoost}
+            onClick={async () => {
+              setActivatingBoost(true);
+              try {
+                PlatformBridge.hapticFeedback('medium');
+                const headers = await PlatformBridge.getAuthHeaders();
+                // Si el chat es de un negocio o tiene targetBusinessId
+                const bizId = targetBusinessId || user?.id;
+                // No apilar: cancelar el boost activo previo si existe
+                if (activeBoostCampaign) {
+                  await fetch('/api/business/campaigns/manage', {
+                    method: 'POST',
+                    headers: { ...headers, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ campaignId: activeBoostCampaign.id, action: 'CANCEL' }),
+                  }).catch(() => {});
+                }
+                const res = await fetch('/api/business/campaigns', {
+                  method: 'POST',
+                  headers: { ...headers, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    businessId: bizId,
+                    title: `Flash Boost ${boostPercentage}%`,
+                    headline: `¡Flash Boost Especial de +${boostPercentage}% Bunz!`,
+                    message: `Aprovecha hoy en ${targetName}: +${boostPercentage}% de cashback directo en Bunz al pagar en caja.`,
+                    campaignType: 'FLASH_OFFER',
+                    targetSegment: 'ALL_CUSTOMERS',
+                    rewardPercentage: boostPercentage,
+                    maxRewardPerUser: 50,
+                    budgetBunz: 1000,
+                    validityHours: boostHours,
+                  }),
+                });
+                const data = await res.json();
+                if (data.campaign?.id) {
+                  // Activarla inmediatamente
+                  await fetch('/api/business/campaigns/manage', {
+                    method: 'POST',
+                    headers: { ...headers, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      campaignId: data.campaign.id,
+                      action: 'APPROVE_AND_ACTIVATE',
+                    }),
+                  });
+                }
+                showToast(`¡Boost del ${boostPercentage}% activado en Radar & Mapa!`, 'success');
+                PlatformBridge.hapticFeedback('success');
+                setBoostSheetOpen(false);
+              } catch (err) {
+                console.warn('Boost activation error:', err);
+                showToast(`Error al activar boost`, 'error');
+              } finally {
+                setActivatingBoost(false);
+              }
+            }}
+            style={{
+              width: '100%',
+              padding: 16,
+              borderRadius: 100,
+              border: 'none',
+              background: activatingBoost ? 'var(--bg-pressed)' : 'linear-gradient(135deg, #E91E63 0%, #FF8A00 100%)',
+              color: '#FFFFFF',
+              fontSize: 15,
+              fontWeight: 900,
+              cursor: activatingBoost ? 'not-allowed' : 'pointer',
+              boxShadow: '0 4px 16px rgba(233,30,99,0.3)',
+            }}
+          >
+            {activatingBoost ? 'Activando Boost…' : `⚡ Activar Boost (+${boostPercentage}% Bunz por ${boostHours}h)`}
           </button>
         </div>
       </BottomSheet>

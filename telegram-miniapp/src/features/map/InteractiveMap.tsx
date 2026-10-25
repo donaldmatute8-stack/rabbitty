@@ -130,23 +130,26 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
   const [isProcessingVoice, setIsProcessingVoice] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
   const isNativeIos = typeof window !== 'undefined' && PlatformBridge.isIos();
+  const [nativeMapActive, setNativeMapActive] = useState(false);
 
   const router = useRouter();
 
-  // Lifecycle para MapKit nativo en iOS
+  // 1. Lifecycle para montaje/desmontaje de MapKit nativo en iOS
   useEffect(() => {
     if (!isNativeIos) return;
 
     let listenerHandle: { remove: () => void } | null = null;
+    let isMounted = true;
 
     RabbittyMap.showMap()
       .then(() => {
-        RabbittyMap.setBusinesses({ businesses });
-        if (userLat != null && userLng != null) {
-          RabbittyMap.centerOn({ lat: userLat, lng: userLng, radiusKm: 2.0 });
-        }
+        if (!isMounted) return;
+        setNativeMapActive(true);
       })
-      .catch((err) => console.warn('[MapKit] Native map init failed, using Leaflet fallback:', err));
+      .catch((err) => {
+        console.warn('[MapKit] Native map init failed, using Leaflet fallback:', err);
+        if (isMounted) setNativeMapActive(false);
+      });
 
     RabbittyMap.addListener('onBusinessSelected', (data) => {
       const match = businesses.find((b) => b.id === data.businessId);
@@ -156,10 +159,24 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
     }).catch(() => {});
 
     return () => {
+      isMounted = false;
       if (listenerHandle) listenerHandle.remove();
       RabbittyMap.hideMap().catch(() => {});
+      setNativeMapActive(false);
     };
-  }, [isNativeIos, businesses, userLat, userLng]);
+  }, [isNativeIos]);
+
+  // 2. Sincronización de spots en mapa nativo sin recrear la vista (anti-thrash)
+  useEffect(() => {
+    if (!nativeMapActive) return;
+    RabbittyMap.setBusinesses({ businesses }).catch(() => {});
+  }, [nativeMapActive, businesses]);
+
+  // 3. Centrado GPS dinámico cuando la ubicación llega o cambia
+  useEffect(() => {
+    if (!nativeMapActive || userLat == null || userLng == null) return;
+    RabbittyMap.centerOn({ lat: userLat, lng: userLng, radiusKm: 2.0 }).catch(() => {});
+  }, [nativeMapActive, userLat, userLng]);
 
   // Filter businesses
   const filteredBusinesses = businesses.filter(b => {
@@ -527,10 +544,10 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
         }} 
       />
 
-      {/* Leaflet Map Canvas (oculto / transparente si MapKit nativo está activo) */}
+      {/* Leaflet Map Canvas (oculto / transparente solo si MapKit nativo está verdaderamente activo) */}
       <div 
         ref={mapRef} 
-        className={`absolute inset-0 z-0 transition-opacity duration-300 ${isNativeIos ? 'opacity-0 pointer-events-none' : 'opacity-100'}`} 
+        className={`absolute inset-0 z-0 transition-opacity duration-300 ${nativeMapActive ? 'opacity-0 pointer-events-none' : 'opacity-100'}`} 
       />
 
       {/* Top HUD: Status Pills & GPS Centering */}

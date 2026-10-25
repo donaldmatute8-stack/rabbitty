@@ -122,7 +122,26 @@ export async function POST(req: NextRequest) {
     where: eq(users.id, updated.ownerId),
   });
 
-  const targetEmail: string = String(owner?.email || existingVerificationData?.email || 'iaherrerav10@gmail.com');
+  const rawData = (existingVerificationData as Record<string, any>)?.raw || existingVerificationData || {};
+  const applicantEmail = String(owner?.email || rawData.email || existingVerificationData?.email || '').trim();
+  const applicantName = String(owner?.firstName || rawData.nombre || existingVerificationData?.nombre || 'Emprendedor').trim();
+
+  // Si el usuario no tiene rol de admin, asignarle rol AFFILIATE al aprobar
+  if (status === 'APPROVED' && owner?.id && owner.role !== 'ADMIN') {
+    try {
+      await db.update(users)
+        .set({
+          role: 'AFFILIATE',
+          email: owner.email || applicantEmail || undefined,
+          firstName: owner.firstName && owner.firstName !== 'Emprendedor' ? owner.firstName : applicantName,
+        })
+        .where(eq(users.id, owner.id));
+    } catch (e) {
+      console.warn('Failed to promote user to AFFILIATE:', e);
+    }
+  }
+
+  const targetEmail: string = applicantEmail;
 
   let magicUrl = 'https://admin.rabbitty.me/login';
   if (owner?.id) {
@@ -276,7 +295,7 @@ export async function POST(req: NextRequest) {
         const vData = existingVerificationData as Record<string, any>;
         const packageName = String(vData.packageName || vData.paquete || updated.package || 'Café Express / Quick Bite (3,500 BUNZ)');
         const bunzProvisioned = Number(updated.bunzBalance) > 0 ? Number(updated.bunzBalance) : 3500;
-        const ownerName = String(owner?.firstName || vData.nombre || 'Emprendedor');
+        const ownerName = applicantName;
 
         const emailRes = await sendEmail({
           to: targetEmail,

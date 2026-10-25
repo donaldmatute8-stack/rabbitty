@@ -24,6 +24,7 @@ import { WelcomeRitual } from '@/components/ui/WelcomeRitual';
 import { SmartBiometricPrompt } from '@/components/security/SmartBiometricPrompt';
 import { SmartNotificationPrompt } from '@/components/notifications/SmartNotificationPrompt';
 import { SmartPromptOrchestrator } from '@/lib/smartPromptOrchestrator';
+import { useUserAvatar } from '@/lib/avatar';
 
 const InteractiveMap = dynamic(() => import('@/features/map/InteractiveMap'), {
   ssr: false,
@@ -113,6 +114,7 @@ export default function FeedPage() {
   const { showToast } = useToast();
 
   const { user } = useAuth();
+  const userAvatar = useUserAvatar(user, 'E91E63');
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
 
@@ -567,7 +569,7 @@ export default function FeedPage() {
               >
                 <div className="w-11 h-11 rounded-full overflow-hidden" style={{ background: 'var(--bg-pressed)', border: '1px solid var(--border-subtle)' }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${user?.firstName || 'Rabbitty'}&backgroundColor=E91E63`} alt={user?.firstName || 'User'} className="w-full h-full" />
+                  <img src={userAvatar} alt={user?.firstName || 'User'} className="w-full h-full object-cover" />
                 </div>
                 <h1 className="sr-only">{user?.firstName || 'Rabbitty'}</h1>
               </button>

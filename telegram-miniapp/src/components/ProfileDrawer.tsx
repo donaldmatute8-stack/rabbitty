@@ -25,6 +25,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { PlatformBridge } from '@/lib/platform';
 import { useState } from 'react';
 import { FeedbackModal } from '@/components/feedback/FeedbackModal';
+import { useUserAvatar } from '@/lib/avatar';
 
 interface ProfileDrawerProps {
   open: boolean;
@@ -51,6 +52,7 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
   const { resolvedTheme, setTheme } = useTheme();
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [feedbackType, setFeedbackType] = useState<'BUG' | 'FEEDBACK'>('BUG');
+  const avatarUrl = useUserAvatar(user, 'E91E63');
 
   useEffect(() => {
     if (!open) return;
@@ -118,7 +120,7 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={`https://api.dicebear.com/7.x/notionists/svg?seed=${user?.firstName || 'Rabbitty'}&backgroundColor=E91E63`}
+                      src={avatarUrl}
                       alt={user?.firstName || 'User'}
                       className="w-full h-full rounded-full object-cover"
                     />
