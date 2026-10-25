@@ -735,12 +735,12 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
               borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)',
             }}
           >
-            {/* Mode Selector Tabs: Todos / Bunz'in / Stock */}
+            {/* Mode Selector Tabs: Todos / Bunz'in / Gasta */}
             <div className="flex gap-1.5 p-1 rounded-2xl bg-(--bg-subtle) border border-(--border-subtle)">
               {[
                 { id: 'Todos', label: 'Todos' },
-                { id: "bunz'in", label: '💸 Gana Bunz' },
-                { id: 'Stock', label: '🎁 Canjea Stock' },
+                { id: "bunz'in", label: 'Gana Bunz' },
+                { id: 'Stock', label: 'Gasta Bunz' },
               ].map((m) => (
                 <button
                   key={m.id}
@@ -748,7 +748,7 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
                     PlatformBridge.hapticFeedback('light');
                     setActiveMode(m.id);
                   }}
-                  className={`flex-1 py-2 rounded-xl text-xs font-black uppercase tracking-wider border-none cursor-pointer transition-all ${
+                  className={`flex-1 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-wide border-none cursor-pointer transition-all ${
                     activeMode === m.id
                       ? 'bg-[#E91E63] text-white shadow-md scale-101'
                       : 'bg-transparent text-(--text-muted) hover:text-(--text-primary)'
