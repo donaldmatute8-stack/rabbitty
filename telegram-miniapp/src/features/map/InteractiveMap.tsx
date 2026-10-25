@@ -12,14 +12,9 @@ import { PlatformBridge } from '@/lib/platform';
 import { useTheme } from '@/contexts/ThemeContext';
 import { RabbittyMap } from './nativeMapBridge';
 
-// High-contrast, clean modern map tiles:
-// Dark: CartoDB Dark Matter (ultra dark, subtle street lines, no heavy watermarks)
-const DARK_TILE_URL = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
-const DARK_TILE_ATTR = '&copy; <a href="https://carto.com/">CARTO</a>';
-
-// Light: CartoDB Positron (clean architectural white, subtle pastel accents)
-const LIGHT_TILE_URL = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-const LIGHT_TILE_ATTR = '&copy; <a href="https://carto.com/">CARTO</a>';
+// Free, open, high-performance OSM tiles without API Key restrictions or watermarks:
+const OSM_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const OSM_TILE_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
 export interface MapBusiness {
   id: string;
@@ -404,17 +399,15 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
       tileLayerRef.current = null;
     }
     const layer = isDark
-      ? L.tileLayer(DARK_TILE_URL, {
-          maxNativeZoom: 19,
-          maxZoom: 21,
-          subdomains: ['a', 'b', 'c', 'd'],
-          attribution: DARK_TILE_ATTR,
+      ? L.tileLayer(OSM_TILE_URL, {
+          maxZoom: 20,
+          className: 'rabbitty-dark-tiles',
+          attribution: OSM_TILE_ATTR,
         })
-      : L.tileLayer(LIGHT_TILE_URL, {
-          maxNativeZoom: 19,
-          maxZoom: 21,
-          subdomains: ['a', 'b', 'c', 'd'],
-          attribution: LIGHT_TILE_ATTR,
+      : L.tileLayer(OSM_TILE_URL, {
+          maxZoom: 20,
+          className: 'rabbitty-light-tiles',
+          attribution: OSM_TILE_ATTR,
         });
     layer.addTo(map);
     layer.bringToBack();

@@ -40,11 +40,19 @@ input, textarea, [contenteditable="true"], .selectable, code, pre, .font-mono {
 
 /* Leaflet container background adapts to the active theme */
 .leaflet-container {
-  background: var(--bg-subtle) !important;
+  background: #0D0914 !important;
   font-family: var(--font-family-base);
 }
 .leaflet-control-attribution {
   display: none !important;
+}
+
+/* Cyber Dark Mode Tile Filter (High-contrast, sleek streets, no watermarks) */
+.rabbitty-dark-tiles {
+  filter: brightness(0.65) invert(1) contrast(2.8) hue-rotate(205deg) saturate(0.25) !important;
+}
+.rabbitty-light-tiles {
+  filter: contrast(1.05) brightness(0.98) saturate(0.85) !important;
 }
 
 /* Scrollbar hide */
