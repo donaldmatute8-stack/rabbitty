@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { trpc } from "../lib/trpc-client";
 import { toast, Button } from "@rabbitty/ui";
 import { Bug, MessageSquarePlus, X, Send, CheckCircle2 } from "lucide-react";
@@ -16,10 +17,15 @@ export function AdminFeedbackModal({
   onClose,
   initialType = "BUG",
 }: AdminFeedbackModalProps) {
+  const [mounted, setMounted] = useState(false);
   const [type, setType] = useState<"BUG" | "FEEDBACK">(initialType);
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [sent, setSent] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const sendMutation = trpc.admin.sendFeedback.useMutation({
     onSuccess: () => {
@@ -39,7 +45,7 @@ export function AdminFeedbackModal({
     },
   });
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,8 +62,8 @@ export function AdminFeedbackModal({
     });
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+  const modalContent = (
+    <div className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
       <div className="relative w-full max-w-lg rounded-3xl border border-white/10 bg-gray-950 p-6 shadow-2xl overflow-hidden">
         {/* Background glow */}
         <div
@@ -181,4 +187,6 @@ export function AdminFeedbackModal({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }
