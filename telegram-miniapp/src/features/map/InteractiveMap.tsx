@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
 import { useTheme } from '@/contexts/ThemeContext';
+import { RabbittyMap } from './nativeMapBridge';
 
 // High-contrast, clean modern map tiles:
 // Dark: CartoDB Dark Matter (ultra dark, subtle street lines, no heavy watermarks)
@@ -133,8 +134,37 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
   const [copilotReply, setCopilotReply] = useState<string | null>(null);
   const [isProcessingVoice, setIsProcessingVoice] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
+  const isNativeIos = typeof window !== 'undefined' && PlatformBridge.isIos();
 
   const router = useRouter();
+
+  // Lifecycle para MapKit nativo en iOS
+  useEffect(() => {
+    if (!isNativeIos) return;
+
+    let listenerHandle: { remove: () => void } | null = null;
+
+    RabbittyMap.showMap()
+      .then(() => {
+        RabbittyMap.setBusinesses({ businesses });
+        if (userLat != null && userLng != null) {
+          RabbittyMap.centerOn({ lat: userLat, lng: userLng, radiusKm: 2.0 });
+        }
+      })
+      .catch((err) => console.warn('[MapKit] Native map init failed, using Leaflet fallback:', err));
+
+    RabbittyMap.addListener('onBusinessSelected', (data) => {
+      const match = businesses.find((b) => b.id === data.businessId);
+      if (match) setSelected(match);
+    }).then((handle) => {
+      listenerHandle = handle;
+    }).catch(() => {});
+
+    return () => {
+      if (listenerHandle) listenerHandle.remove();
+      RabbittyMap.hideMap().catch(() => {});
+    };
+  }, [isNativeIos, businesses, userLat, userLng]);
 
   // Filter businesses
   const filteredBusinesses = businesses.filter(b => {
@@ -504,8 +534,11 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
         }} 
       />
 
-      {/* Leaflet Map Canvas */}
-      <div ref={mapRef} className="absolute inset-0 z-0" />
+      {/* Leaflet Map Canvas (oculto / transparente si MapKit nativo está activo) */}
+      <div 
+        ref={mapRef} 
+        className={`absolute inset-0 z-0 transition-opacity duration-300 ${isNativeIos ? 'opacity-0 pointer-events-none' : 'opacity-100'}`} 
+      />
 
       {/* Top HUD: Status Pills & GPS Centering */}
       <div 
