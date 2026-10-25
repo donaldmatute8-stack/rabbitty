@@ -436,6 +436,7 @@ export const cashDrops = pgTable("cash_drops", {
   staffId: fkIdOpt("staffId").references(() => staff.id),
   shiftId: fkIdOpt("shiftId").references(() => cashShifts.id),
   amount: money("amount").notNull(),
+  category: text("category").default("SAFE").notNull(), // 'EXPENSE' | 'SAFE' — gasto operativo vs sangría a caja fuerte
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow(),
 }, (t) => [index("cash_drops_shift_idx").on(t.shiftId)]);

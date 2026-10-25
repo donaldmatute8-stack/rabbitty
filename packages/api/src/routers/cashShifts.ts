@@ -102,6 +102,7 @@ export const cashShiftsRouter = router({
         pin,
         managerPin: pin.optional(),
         amount: z.number().positive().max(10_000_000),
+        category: z.enum(["EXPENSE", "SAFE"]).default("SAFE"),
         notes: z.string().max(300).optional(),
       })
     )
@@ -151,6 +152,7 @@ export const cashShiftsRouter = router({
             shiftId: shift.id,
             staffId: actor.id,
             amount: round2(input.amount),
+            category: input.category,
             notes: input.notes,
           })
           .returning();

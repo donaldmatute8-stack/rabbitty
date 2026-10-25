@@ -87,6 +87,8 @@ export function CashShiftModal({
   const [managerPin, setManagerPin] = useState("");
   const [amount, setAmount] = useState("");
   const [notes, setNotes] = useState("");
+  const [closeFund, setCloseFund] = useState("");
+  const [withdrawCategory, setWithdrawCategory] = useState<"EXPENSE" | "SAFE">("SAFE");
   const [needManager, setNeedManager] = useState(false);
   const [result, setResult] = useState<any>(null);
 
@@ -96,6 +98,7 @@ export function CashShiftModal({
     setManagerPin("");
     setAmount("");
     setNotes("");
+    setCloseFund("");
     setNeedManager(false);
   };
   const goHome = () => {
@@ -259,8 +262,12 @@ export function CashShiftModal({
                   <span className="text-[10px] uppercase font-bold text-gray-400 block">Fondo inicial</span>
                   <span className="font-black text-white">{fmt(data.totals.openingFloat)}</span>
                 </div>
+                <div className="p-2.5 rounded-xl bg-black/40 border border-orange-500/20">
+                  <span className="text-[10px] uppercase font-bold text-gray-400 block">Gastos (insumos)</span>
+                  <span className="font-black text-orange-400">-{fmt((data.totals as any).expenses ?? 0)}</span>
+                </div>
                 <div className="p-2.5 rounded-xl bg-black/40 border border-amber-500/20">
-                  <span className="text-[10px] uppercase font-bold text-gray-400 block">Retiros</span>
+                  <span className="text-[10px] uppercase font-bold text-gray-400 block">Retiros / sangría</span>
                   <span className="font-black text-amber-400">-{fmt(data.totals.withdrawals)}</span>
                 </div>
                 <div className="p-2.5 rounded-xl bg-black/40 border border-white/10">
@@ -333,7 +340,7 @@ export function CashShiftModal({
             className="space-y-3"
             onSubmit={(e) => {
               e.preventDefault();
-              withdrawMut.mutate({ pin, amount: num, notes: notes || undefined, managerPin: managerPin || undefined });
+              withdrawMut.mutate({ pin, amount: num, category: withdrawCategory, notes: notes || undefined, managerPin: managerPin || undefined });
             }}
           >
             {/* Saldo disponible en tiempo real */}
@@ -350,16 +357,19 @@ export function CashShiftModal({
               <span className="text-[10px] font-bold text-gray-400 block mb-1 uppercase tracking-wider">Concepto Rápido</span>
               <div className="flex flex-wrap gap-1.5">
                 {[
-                  "Garrafones de agua",
-                  "Compra de café / insumos",
-                  "Hielo / Emergencia",
-                  "Pago a proveedor",
-                  "Retiro parcial a caja fuerte"
-                ].map((concept) => (
+                  { concept: "Garrafones de agua", category: "EXPENSE" },
+                  { concept: "Compra de café / insumos", category: "EXPENSE" },
+                  { concept: "Hielo / Emergencia", category: "EXPENSE" },
+                  { concept: "Pago a proveedor", category: "EXPENSE" },
+                  { concept: "Retiro parcial a caja fuerte", category: "SAFE" },
+                ].map(({ concept, category }) => (
                   <button
                     key={concept}
                     type="button"
-                    onClick={() => setNotes(concept)}
+                    onClick={() => {
+                      setNotes(concept);
+                      setWithdrawCategory(category as "EXPENSE" | "SAFE");
+                    }}
                     className={cn(
                       "text-[11px] px-2.5 py-1 rounded-lg border transition-all cursor-pointer",
                       notes === concept
@@ -496,6 +506,28 @@ export function CashShiftModal({
             </div>
 
             <MoneyField id="cash-close-counted" label="Total Contado en Gaveta ($)" value={amount} onChange={setAmount} autoFocus />
+
+            {/* Paso 3: Gasto vs Fondo para mañana (guía, no muta nada) */}
+            <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 space-y-2">
+              <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider block">3. Retiro de Ganancia & Fondo para Mañana</span>
+              <MoneyField id="cash-close-fund" label="¿Cuánto dejas de fondo para el próximo turno? (opcional)" value={closeFund} onChange={setCloseFund} />
+              {validAmount && closeFund.length > 0 && Number(closeFund) >= 0 && (
+                <p className="text-[11px] text-gray-300 leading-relaxed">
+                  {Math.max(0, num - Number(closeFund || 0)) > 0 ? (
+                    <>
+                      <strong className="text-orange-300 block">Lleva a caja fuerte: {fmt(Math.max(0, num - Number(closeFund || 0)))}</strong>
+                      Después de cerrar, retira esa cantidad físicamente. El fondo queda en la gaveta listo para abrir el próximo turno.
+                    </>
+                  ) : (
+                    <span>El fondo deja la gaveta en $0 — verifica que sea lo correcto.</span>
+                  )}
+                </p>
+              )}
+              {!validAmount && (
+                <p className="text-[10px] text-gray-500">Captura primero el total contado para ver la sugerencia.</p>
+              )}
+            </div>
+
             <NoteField id="cash-close-notes" value={notes} onChange={setNotes} label="Nota / Justificación (si hay diferencia)" />
             
             <div className="grid grid-cols-2 gap-2">

@@ -1,27 +1,77 @@
 import { z } from "zod";
 import { router, protectedProcedure, resolveBranchId } from "../trpc";
-import { and, eq, gte, inArray } from "drizzle-orm";
+import { and, eq, gte, lte, inArray } from "drizzle-orm";
 import { orders, orderItems, menuItems, payments, branches, customers } from "@rabbitty/database-restaurant/schema";
+
+// ─── ZONA HORARIA DEL NEGOCIO ──────────────────────────────────────────────
+// Los reportes financieros y por hora se agrupan por el día/hora LOCAL del
+// comercio (default America/Mexico_City), NO por UTC del servidor. Esto evita
+// que ventas/gastos registrados en la tarde-noche caigan al día equivocado.
+const BUSINESS_TZ = process.env.BUSINESS_TZ || "America/Mexico_City";
+
+const tzPartsFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: BUSINESS_TZ,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  hour12: false,
+});
+
+/** Retorna fecha local del negocio "YYYY-MM-DD" y hora 0-23 para un instante. */
+function tzDayAndHour(d: Date): { date: string; hour: number } {
+  try {
+    const parts = tzPartsFormatter.formatToParts(d);
+    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+    const hour = parseInt(get("hour"), 10) % 24;
+    return { date: `${get("year")}-${get("month")}-${get("day")}`, hour };
+  } catch {
+    const dt = new Date(d.getTime() - 6 * 60 * 60 * 1000); // fallback manual CST
+    const year = dt.getFullYear();
+    const month = String(dt.getMonth() + 1).padStart(2, "0");
+    const day = String(dt.getDate()).padStart(2, "0");
+    return { date: `${year}-${month}-${day}`, hour: dt.getHours() };
+  }
+}
+
+/** Convierte una fecha local del negocio "YYYY-MM-DD" al intervalo real [inicio, fin). */
+function localDayRange(dateStr: string): { start: Date; end: Date } {
+  const start = new Date(`${dateStr}T00:00:00.000Z`);
+  start.setUTCHours(start.getUTCHours() - 6); // CST (UTC-6, México sin DST desde 2022)
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 1);
+  return { start, end };
+}
+
+function effectiveDateRange(
+  input: { days?: number | null; from?: string | null; to?: string | null }
+): { startDate: Date; endDate: Date | null; perDayInit: boolean } {
+  if (input.from && input.to) {
+    const { start } = localDayRange(input.from);
+    const { end } = localDayRange(input.to);
+    return { startDate: start, endDate: end, perDayInit: false };
+  }
+  const days = input.days ?? 30;
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return { startDate: d, endDate: null, perDayInit: true };
+}
 
 export const analyticsRouter = router({
   getSalesTrends: protectedProcedure
     .input(
       z.object({
         branchId: z.string(),
-        days: z.number(),
+        days: z.number().optional(),
+        from: z.string().optional(),
+        to: z.string().optional(),
       })
     )
     .query(async ({ ctx, input }) => {
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - input.days);
+      const { startDate, endDate, perDayInit } = effectiveDateRange(input);
 
-      // Local date string helper (YYYY-MM-DD in local time)
-      const toLocalDateStr = (d: Date) => {
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, "0");
-        const day = String(d.getDate()).padStart(2, "0");
-        return `${year}-${month}-${day}`;
-      };
+      // Local date string helper — en la timezone del NEGOCIO (no del servidor)
+      const toLocalDateStr = (d: Date) => tzDayAndHour(d).date;
 
       const ordersList = await ctx.restaurantDb
         .select()
@@ -38,11 +88,13 @@ export const analyticsRouter = router({
       type DayBucket = { totalSales: number; taxTotal: number; baseTotal: number };
       const dailySalesMap = new Map<string, DayBucket>();
       
-      // Initialize daily sales map with all days in range to avoid gaps
-      for (let i = input.days - 1; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        dailySalesMap.set(toLocalDateStr(d), { totalSales: 0, taxTotal: 0, baseTotal: 0 });
+      // Initialize daily sales map with all days in range to avoid gaps (solo en modo presets)
+      if (perDayInit) {
+        for (let i = (input.days ?? 30) - 1; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          dailySalesMap.set(toLocalDateStr(d), { totalSales: 0, taxTotal: 0, baseTotal: 0 });
+        }
       }
 
       for (const order of ordersList) {
@@ -69,12 +121,12 @@ export const analyticsRouter = router({
     .input(
       z.object({
         branchId: z.string().optional(),
-        days: z.number(),
+        days: z.number().optional(),
       })
     )
     .query(async ({ ctx, input }) => {
       const startDate = new Date();
-      startDate.setDate(startDate.getDate() - input.days);
+      startDate.setDate(startDate.getDate() - (input.days ?? 7));
 
       const ordersList = await ctx.restaurantDb
         .select()
@@ -91,7 +143,8 @@ export const analyticsRouter = router({
 
       for (const order of ordersList) {
         if (!order.createdAt) continue;
-        const hour = order.createdAt.getHours();
+        // Hora local del negocio (no getHours del servidor, que es UTC en Vercel)
+        const hour = tzDayAndHour(order.createdAt).hour;
         hourlySales[hour]!.sales += (Number(order.total) || 0);
         hourlySales[hour]!.orderCount += 1;
       }
@@ -155,12 +208,13 @@ export const analyticsRouter = router({
     .input(
       z.object({
         branchId: z.string(),
-        days: z.number(),
+        days: z.number().optional(),
+        from: z.string().optional(),
+        to: z.string().optional(),
       })
     )
     .query(async ({ ctx, input }) => {
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - input.days);
+      const { startDate, endDate } = effectiveDateRange(input);
 
       // Same rule as the cash register (computeShiftTotals): COMPLETED payments
       // of the branch, bucketed by payment date, regardless of order status
@@ -173,7 +227,8 @@ export const analyticsRouter = router({
           and(
             eq(orders.branchId, resolveBranchId(ctx, input.branchId)),
             eq(payments.status, "COMPLETED"),
-            gte(payments.createdAt, startDate)
+            gte(payments.createdAt, startDate),
+            ...(endDate ? [lte(payments.createdAt, endDate)] : [])
           )
         );
 
@@ -204,12 +259,13 @@ export const analyticsRouter = router({
     .input(
       z.object({
         branchId: z.string(),
-        days: z.number(),
+        days: z.number().optional(),
+        from: z.string().optional(),
+        to: z.string().optional(),
       })
     )
     .query(async ({ ctx, input }) => {
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - input.days);
+      const { startDate, endDate } = effectiveDateRange(input);
 
       const [branch] = await ctx.restaurantDb
         .select()
@@ -224,7 +280,8 @@ export const analyticsRouter = router({
           and(
             eq(orders.branchId, resolveBranchId(ctx, input.branchId)),
             inArray(orders.status, ["COMPLETED", "PAID"]),
-            gte(orders.createdAt, startDate)
+            gte(orders.createdAt, startDate),
+            ...(endDate ? [lte(orders.createdAt, endDate)] : [])
           )
         );
 

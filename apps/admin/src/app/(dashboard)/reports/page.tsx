@@ -36,15 +36,17 @@ const COLORS = ["#ec4899", "#8b5cf6", "#3b82f6", "#10b981", "#f59e0b"];
 
 export default function ReportsPage() {
   const [daysRange, setDaysRange] = useState(30);
+  const [customRange, setCustomRange] = useState<{ from: string | null; to: string | null }>({ from: null, to: null });
+  const dateFilter = customRange.from && customRange.to ? { from: customRange.from, to: customRange.to } : { days: daysRange };
   const { branchId: activeBranchId } = useBranch();
   const branchId = activeBranchId || "default";
 
-  const { data: salesTrends, isLoading: loadingSales } = trpc.analytics.getSalesTrends.useQuery({ branchId, days: daysRange });
+  const { data: salesTrends, isLoading: loadingSales } = trpc.analytics.getSalesTrends.useQuery({ branchId, ...dateFilter });
   const { data: topProducts, isLoading: loadingTop } = trpc.analytics.getTopProducts.useQuery({ branchId, limit: 5 });
-  const { data: paymentMethods, isLoading: loadingPayments } = trpc.analytics.getPaymentMethods.useQuery({ branchId, days: daysRange });
+  const { data: paymentMethods, isLoading: loadingPayments } = trpc.analytics.getPaymentMethods.useQuery({ branchId, ...dateFilter });
   
   const { data: exportData, refetch: refetchExport, isFetching: isExporting } = trpc.analytics.getExportData.useQuery(
-    { branchId, days: daysRange },
+    { branchId, ...dateFilter },
     { enabled: false }
   );
 
@@ -130,7 +132,7 @@ export default function ReportsPage() {
               ].map((item) => (
                 <button
                   key={item.days}
-                  onClick={() => setDaysRange(item.days)}
+                  onClick={() => { setDaysRange(item.days); setCustomRange({ from: null, to: null }); }}
                   className={cn(
                     "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer",
                     daysRange === item.days ? "bg-white text-black shadow-lg" : "text-white/70 hover:text-white"
@@ -139,6 +141,38 @@ export default function ReportsPage() {
                   {item.label}
                 </button>
               ))}
+              <div className="flex items-center gap-1.5 pl-2">
+                <input
+                  type="date"
+                  value={customRange.from || ""}
+                  onChange={(e) => {
+                    const from = e.target.value;
+                    setCustomRange((r) => ({ from, to: r.to || new Date().toISOString().slice(0, 10) }));
+                  }}
+                  className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white outline-none focus:border-pink-400 [color-scheme:dark]"
+                  aria-label="Fecha inicio"
+                />
+                <span className="text-white/40 text-[11px]">→</span>
+                <input
+                  type="date"
+                  value={customRange.to || ""}
+                  onChange={(e) => {
+                    const to = e.target.value;
+                    setCustomRange((r) => ({ from: r.from || new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10), to }));
+                  }}
+                  className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white outline-none focus:border-pink-400 [color-scheme:dark]"
+                  aria-label="Fecha fin"
+                />
+                {(customRange.from || customRange.to) && (
+                  <button
+                    onClick={() => setCustomRange({ from: null, to: null })}
+                    className="text-white/40 hover:text-white text-[11px] font-bold cursor-pointer px-1"
+                    title="Volver a rango por días"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
             </div>
             
             <Button

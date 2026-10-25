@@ -26,6 +26,8 @@ interface AuditSummary {
   totalBunzPaid: number;
   totalBunzReward: number;
   paymentBreakdown: Record<string, { count: number; total: number }>;
+  totalExpenses?: number;
+  totalSafeWithdrawals?: number;
   productBreakdown: Array<{ name: string; quantity: number; revenue: number }>;
 }
 
@@ -325,6 +327,18 @@ export default function MobileAuditReportPage() {
             <ShieldCheck size={14} className="text-[#E91E63]" /> Resumen Impositivo
           </p>
           <div className="space-y-2 text-xs">
+            {(summary.totalExpenses != null || summary.totalSafeWithdrawals != null) && (
+              <>
+                <div className="flex justify-between py-1 border-b border-white/5 print:border-gray-200">
+                  <span className="text-(--text-muted)">Gastos de operación (insumos)</span>
+                  <span className="font-bold text-orange-300 print:text-orange-700">-${(summary.totalExpenses ?? 0).toFixed(2)} MXN</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-white/5 print:border-gray-200">
+                  <span className="text-(--text-muted)">Retiros / sangría a caja fuerte</span>
+                  <span className="font-bold text-amber-300 print:text-amber-700">-${(summary.totalSafeWithdrawals ?? 0).toFixed(2)} MXN</span>
+                </div>
+              </>
+            )}
             <div className="flex justify-between py-1 border-b border-white/5 print:border-gray-200">
               <span className="text-(--text-muted)">Subtotal Neto (Base 0% / 16%)</span>
               <span className="font-bold text-(--text-primary)">${summary.totalSubtotal.toFixed(2)} MXN</span>
