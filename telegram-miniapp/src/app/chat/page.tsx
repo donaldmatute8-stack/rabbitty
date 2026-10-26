@@ -283,7 +283,7 @@ export default function ChatInboxPage() {
         setDockPosition(savedPos);
       }
     } catch {}
-    setSettingsIdentity(activeTab === 'business' ? 'business' : 'rabbitter');
+    setSettingsIdentity(activeTab === 'business' && isAffiliate ? 'business' : 'rabbitter');
     setSettingsOpen(true);
   };
 

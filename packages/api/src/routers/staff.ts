@@ -6,6 +6,7 @@ import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
 import { staff as staffTable, staffShifts } from "@rabbitty/database-restaurant/schema";
 import { hashPin, verifyPin } from "../services/crypto";
+import { assertPinNotLocked, registerPinFail, clearPinFails } from "../services/cashShift";
 
 
 
@@ -110,15 +111,20 @@ export const staffRouter = router({
       branchId: z.string(),
     }))
     .mutation(async ({ ctx, input }) => {
+      const scope = `pin:staff:${input.branchId}`;
+      await assertPinNotLocked(ctx.restaurantDb, scope);
+
       const staffList = await ctx.restaurantDb.select()
         .from(staffTable)
         .where(eq(staffTable.branchId, input.branchId));
 
       for (const s of staffList) {
         if (s.pinCode && verifyPin(input.pin, s.pinCode)) {
+          await clearPinFails(ctx.restaurantDb, scope);
           return { verified: true, staffId: s.id, name: s.name, role: s.role };
         }
       }
+      await registerPinFail(ctx.restaurantDb, scope);
       return { verified: false };
     }),
 
@@ -224,6 +230,9 @@ export const staffRouter = router({
   verifyAdminPin: protectedProcedure
     .input(z.object({ pin: z.string().length(4, "El PIN debe ser de 4 dígitos") }))
     .mutation(async ({ ctx, input }) => {
+      const scope = `pin:staff:${ctx.branchId}`;
+      await assertPinNotLocked(ctx.restaurantDb, scope);
+
       const staffList = await ctx.restaurantDb
         .select()
         .from(staffTable)
@@ -242,12 +251,14 @@ export const staffRouter = router({
       }
 
       if (!authorized) {
+        await registerPinFail(ctx.restaurantDb, scope);
         throw new TRPCError({
           code: "UNAUTHORIZED",
           message: "PIN de Administrador / Gerente incorrecto",
         });
       }
 
+      await clearPinFails(ctx.restaurantDb, scope);
       return { success: true };
     }),
 });

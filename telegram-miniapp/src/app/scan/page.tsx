@@ -64,7 +64,56 @@ export default function ScanPage() {
         app.setHeaderColor(bg); 
       } catch {}
     });
-  }, [isDark]);
+
+    // Auto-reclamo si el usuario abrió el link directo del ticket /scan?claimToken=...
+    const urlClaimToken = searchParams.get('claimToken') || searchParams.get('claim');
+    if (urlClaimToken) {
+      (async () => {
+        try {
+          const headers = await PlatformBridge.getAuthHeaders();
+          const claimRes = await fetch('/api/pos/claim-ticket', {
+            method: 'POST',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ claimToken: urlClaimToken }),
+          });
+          const claimData = await claimRes.json();
+          if (claimData.success) {
+            alert(`🐰 ¡Felicidades! Se han acreditado +${claimData.bunzAwarded} Bunz a tu cuenta por el ticket #${claimData.orderNumber}.`);
+            router.push('/profile/wallet');
+          } else {
+            alert(claimData.error || 'No se pudo reclamar este ticket.');
+          }
+        } catch {
+          alert('Error al conectar con el servidor para reclamar el ticket.');
+        }
+      })();
+    }
+
+    // Auto-vinculación a mesa si el usuario abrió el link directo /scan?tableId=... o /scan?table=...
+    const urlTableId = searchParams.get('tableId') || searchParams.get('table');
+    const urlBranchId = searchParams.get('branchId') || searchParams.get('branch');
+    if (urlTableId) {
+      (async () => {
+        try {
+          const headers = await PlatformBridge.getAuthHeaders();
+          const tableRes = await fetch('/api/pos/claim-table', {
+            method: 'POST',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tableId: urlTableId, branchId: urlBranchId || undefined }),
+          });
+          const tableData = await tableRes.json();
+          if (tableData.success) {
+            alert(`🐰 ¡Conectado a la Mesa #${tableData.table.number}! Tu comanda está abierta en caja y acumularás Bunz.`);
+            router.push(`/pos-menu/${urlTableId}`);
+          } else {
+            alert(tableData.error || 'No se pudo vincular a la mesa.');
+          }
+        } catch {
+          alert('Error al conectar con el servidor para vincular a la mesa.');
+        }
+      })();
+    }
+  }, [isDark, searchParams, router]);
 
   const requestCameraAccess = async () => {
     if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
@@ -142,6 +191,98 @@ export default function ScanPage() {
                 return;
               }
             } catch {}
+          }
+
+          // 0.1 Reclamación de recompensa mediante Ticket QR (claimToken)
+          if (decodedText.includes('claimToken=') || decodedText.includes('claim=')) {
+            let tokenToClaim = '';
+            try {
+              if (decodedText.startsWith('http')) {
+                const urlObj = new URL(decodedText);
+                tokenToClaim = urlObj.searchParams.get('claimToken') || urlObj.searchParams.get('claim') || '';
+              } else {
+                const params = new URLSearchParams(decodedText.split('?')[1] || decodedText);
+                tokenToClaim = params.get('claimToken') || params.get('claim') || '';
+              }
+            } catch {
+              tokenToClaim = decodedText.split('claimToken=')[1]?.split('&')[0] || decodedText.split('claim=')[1]?.split('&')[0] || '';
+            }
+
+            if (tokenToClaim) {
+              await stopScanning();
+              try {
+                const headers = await PlatformBridge.getAuthHeaders();
+                const claimRes = await fetch('/api/pos/claim-ticket', {
+                  method: 'POST',
+                  headers: { ...headers, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ claimToken: tokenToClaim }),
+                });
+                const claimData = await claimRes.json();
+                if (claimData.success) {
+                  alert(`🐰 ¡Felicidades! Se han acreditado +${claimData.bunzAwarded} Bunz a tu cuenta por el ticket #${claimData.orderNumber}.`);
+                  router.push('/profile/wallet');
+                  return;
+                } else {
+                  alert(claimData.error || 'No se pudo reclamar este ticket.');
+                  startScanningRef.current();
+                  return;
+                }
+              } catch (err: any) {
+                alert('Error al conectar con el servidor para reclamar el ticket.');
+                startScanningRef.current();
+                return;
+              }
+            }
+          }
+
+          // 0. Check if it is a Table QR (/qr/table/[tableId], /pos-menu/[tableId], or tableId parameter)
+          if (decodedText.includes('/qr/table/') || decodedText.includes('/pos-menu/') || decodedText.includes('tableId=')) {
+            let scannedTableId = '';
+            let scannedBranchId: string | undefined = undefined;
+
+            try {
+              if (decodedText.includes('/qr/table/')) {
+                const afterPrefix = decodedText.split('/qr/table/')[1];
+                scannedTableId = afterPrefix.split(/[?&#\s]/)[0];
+              } else if (decodedText.includes('/pos-menu/')) {
+                const afterPrefix = decodedText.split('/pos-menu/')[1];
+                scannedTableId = afterPrefix.split(/[?&#\s]/)[0];
+              } else if (decodedText.includes('tableId=')) {
+                scannedTableId = decodedText.split('tableId=')[1].split(/[&#\s]/)[0];
+              }
+
+              if (decodedText.includes('branch=')) {
+                scannedBranchId = decodedText.split('branch=')[1].split(/[&#\s]/)[0];
+              } else if (decodedText.includes('branchId=')) {
+                scannedBranchId = decodedText.split('branchId=')[1].split(/[&#\s]/)[0];
+              }
+            } catch {}
+
+            if (scannedTableId) {
+              await stopScanning();
+              try {
+                const headers = await PlatformBridge.getAuthHeaders();
+                const tableRes = await fetch('/api/pos/claim-table', {
+                  method: 'POST',
+                  headers: { ...headers, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ tableId: scannedTableId, branchId: scannedBranchId }),
+                });
+                const tableData = await tableRes.json();
+                if (tableData.success) {
+                  alert(`🐰 ¡Conectado a la Mesa #${tableData.table.number}! Tu comanda está abierta en caja y acumularás Bunz.`);
+                  router.push(`/pos-menu/${scannedTableId}`);
+                  return;
+                } else {
+                  alert(tableData.error || 'No se pudo vincular a la mesa.');
+                  startScanningRef.current();
+                  return;
+                }
+              } catch {
+                alert('Error al conectar con el servidor para vincular a la mesa.');
+                startScanningRef.current();
+                return;
+              }
+            }
           }
 
           // 1. Check if it is a QR Login for PC/Admin

@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { Button, Dialog, Input, toast, cn, useWakeLock } from "@rabbitty/ui";
-import { Clock, Wifi, Search, User, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, Table2, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, FileText, X, ArrowRight } from "lucide-react";
+import { Clock, Wifi, Search, User, Users, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, Table2, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, FileText, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, Unlock } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { TicketTemplate, TicketData } from "../../../components/TicketTemplate";
@@ -44,6 +44,8 @@ export default function PosPage() {
   const [voidReason, setVoidReason] = useState("");
   const [managerPin, setManagerPin] = useState("");
   const [confirmClearCart, setConfirmClearCart] = useState(false);
+  const [clearCartPin, setClearCartPin] = useState("");
+  const [pendingDiscardFolio, setPendingDiscardFolio] = useState<string | null>(null);
   const [tableModal, setTableModal] = useState(false);
   const [orderType, setOrderType] = useState<"COUNTER" | "DINE_IN" | "TAKEAWAY" | "DELIVERY">("COUNTER");
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
@@ -58,6 +60,38 @@ export default function PosPage() {
   const [queueCount, setQueueCount] = useState(0);
   const [waPhone, setWaPhone] = useState("");
   const [qrPaymentModal, setQrPaymentModal] = useState<{ intentId: string; amount: number; bunz: number; expiresAt: Date; orderId?: string } | null>(null);
+  const [sendBillModal, setSendBillModal] = useState(false);
+  const [activeTabsModal, setActiveTabsModal] = useState(false);
+  const [pausedCartsModal, setPausedCartsModal] = useState(false);
+  const [pausedCarts, setPausedCarts] = useState<{
+    id: string;
+    folio: string;
+    createdAt: string;
+    cart: any[];
+    orderType: "COUNTER" | "DINE_IN" | "TAKEAWAY" | "DELIVERY";
+    selectedTableId: string | null;
+    selectedRabbitter: any | null;
+    total: number;
+    itemsCount: number;
+  }[]>([]);
+  const [adminPinModal, setAdminPinModal] = useState(false);
+  const [exitPin, setExitPin] = useState("");
+
+  // Rabbitter Vinculado antes de cobrar
+  const [selectedRabbitter, setSelectedRabbitter] = useState<{
+    id: string;
+    name: string;
+    phoneNumber?: string | null;
+    telegramId?: string | null;
+    bunzBalance: number;
+    hops: number;
+    level: string;
+    currentRewardRate: number;
+  } | null>(null);
+  const [rabbitterModalOpen, setRabbitterModalOpen] = useState(false);
+  const [rabbitterQuery, setRabbitterQuery] = useState("");
+  const [isSearchingRabbitter, setIsSearchingRabbitter] = useState(false);
+  const utils = trpc.useUtils();
 
   // Subscribe to PrintEngine state (connections, auto-reconnects, queue changes)
   useEffect(() => {
@@ -120,10 +154,108 @@ export default function PosPage() {
   const { data: categories } = trpc.pos.getCategories.useQuery(undefined, { retry: false });
   const { data: menuItems } = trpc.pos.getMenuItems.useQuery({}, { retry: false });
   const { data: tables } = trpc.pos.getTables.useQuery(undefined, { retry: false });
+  const { data: activeTabsData, refetch: refetchActiveTabs } = trpc.pos.getActiveTabs.useQuery(undefined, { refetchInterval: 10000, retry: false });
+  const sendBillMutation = trpc.pos.sendBillToCustomer.useMutation({
+    onSuccess: (data) => {
+      toast.success(`🧾 Cuenta enviada a ${data.customerName}!`);
+      if (data.whatsappUrl) {
+        window.open(data.whatsappUrl, "_blank");
+      }
+      setSendBillModal(false);
+    },
+    onError: (err) => {
+      toast.error(err.message || "Error al enviar la cuenta");
+    },
+  });
   const { data: ticketContext } = trpc.printing.getTicketData.useQuery(undefined, { retry: false });
   const { data: cashStatus, refetch: refetchCashStatus } = trpc.cashDrops.getStatus.useQuery({}, { refetchInterval: 30000 });
   const { data: sandboxStatus } = trpc.sandbox.getSandboxStatus.useQuery(undefined, { retry: false });
   const { data: branches } = trpc.admin.getBranches.useQuery(undefined, { retry: false });
+  const { data: userProfile } = trpc.admin.getProfile.useQuery(undefined, { retry: false });
+  const isEmployeeRole = userProfile?.role === "CASHIER" || userProfile?.role === "WAITER";
+
+  // Cargar carrito activo y carritos pausados desde almacenamiento local (persistencia tipo Óptima POS)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const savedCart = localStorage.getItem("rabbitty_active_cart");
+      if (savedCart) {
+        const parsed = JSON.parse(savedCart);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setCart(parsed);
+        }
+      }
+      const savedPaused = localStorage.getItem("rabbitty_paused_carts");
+      if (savedPaused) {
+        const parsed = JSON.parse(savedPaused);
+        if (Array.isArray(parsed)) {
+          setPausedCarts(parsed);
+        }
+      }
+      const savedOrderType = localStorage.getItem("rabbitty_active_order_type");
+      if (savedOrderType && ["COUNTER", "DINE_IN", "TAKEAWAY", "DELIVERY"].includes(savedOrderType)) {
+        setOrderType(savedOrderType as any);
+      }
+      const savedTable = localStorage.getItem("rabbitty_active_table_id");
+      if (savedTable) {
+        setSelectedTableId(savedTable);
+      }
+      const savedRabbitter = localStorage.getItem("rabbitty_active_rabbitter");
+      if (savedRabbitter) {
+        setSelectedRabbitter(JSON.parse(savedRabbitter));
+      }
+    } catch (e) {
+      console.warn("[POS_RESTORE_ERROR]", e);
+    }
+  }, []);
+
+  // Guardar en tiempo real ante cualquier cambio (si se apaga la tablet o sale, no se pierde)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      if (cart.length > 0) {
+        localStorage.setItem("rabbitty_active_cart", JSON.stringify(cart));
+      } else {
+        localStorage.removeItem("rabbitty_active_cart");
+      }
+    } catch {}
+  }, [cart]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem("rabbitty_paused_carts", JSON.stringify(pausedCarts));
+    } catch {}
+  }, [pausedCarts]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem("rabbitty_active_order_type", orderType);
+    } catch {}
+  }, [orderType]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      if (selectedTableId) {
+        localStorage.setItem("rabbitty_active_table_id", selectedTableId);
+      } else {
+        localStorage.removeItem("rabbitty_active_table_id");
+      }
+    } catch {}
+  }, [selectedTableId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      if (selectedRabbitter) {
+        localStorage.setItem("rabbitty_active_rabbitter", JSON.stringify(selectedRabbitter));
+      } else {
+        localStorage.removeItem("rabbitty_active_rabbitter");
+      }
+    } catch {}
+  }, [selectedRabbitter]);
 
   const [cashDropAmount, setCashDropAmount] = useState("");
   const [cashDropNotes, setCashDropNotes] = useState("");
@@ -339,7 +471,15 @@ export default function PosPage() {
   const subtotal = Math.round((total / (1 + taxRate)) * 100) / 100;
   const tax = Math.round((total - subtotal) * 100) / 100;
 
-  const finalizeCheckout = async (realOrderNumber: string, method: string, cashGiven?: number) => {
+  const finalizeCheckout = async (
+    realOrderNumber: string,
+    method: string,
+    cashGiven?: number,
+    customerName?: string,
+    awardedBunz?: number,
+    claimToken?: string,
+    orderId?: string
+  ) => {
     const rest = ticketContext?.restaurant;
     const branch = ticketContext?.branch;
     const selectedTable = tables?.find((t) => t.id === selectedTableId);
@@ -358,6 +498,8 @@ export default function PosPage() {
       email: (rest as any)?.email || undefined,
       ticketFooter: (rest as any)?.ticketFooter || "¡Gracias por su compra en Rabbitty! Vuelva pronto.",
       orderNumber: realOrderNumber,
+      orderId: orderId,
+      claimToken: claimToken,
       tableNumber: tableLabel,
       orderType: orderType === "DINE_IN" ? "Consumo en Sitio" : orderType === "TAKEAWAY" ? "Para Llevar" : orderType === "DELIVERY" ? "A Domicilio" : "Caja Rápida",
       cashierName: "Caja Principal",
@@ -378,7 +520,9 @@ export default function PosPage() {
       cashGiven: cashGiven && cashGiven > 0 ? cashGiven : undefined,
       change: changeAmount,
       currency: rest?.currency || "MXN",
-      bunzCashbackRate: rest?.defaultRewardRate ?? 20,
+      bunzCashbackRate: selectedRabbitter?.currentRewardRate ?? rest?.defaultRewardRate ?? 20,
+      customerName: customerName || selectedRabbitter?.name || undefined,
+      awardedBunz: awardedBunz !== undefined && awardedBunz > 0 ? awardedBunz : undefined,
     };
 
     setPaidTicketData(ticket);
@@ -394,6 +538,7 @@ export default function PosPage() {
 
     setCart([]);
     setSelectedTableId(null);
+    setSelectedRabbitter(null);
   };
 
   const requestCheckout = (method: string) => {
@@ -465,6 +610,9 @@ export default function PosPage() {
           tableId: selectedTableId || undefined,
           orderType: mappedOrderType,
           paymentMethod: mappedMethod,
+          customerId: selectedRabbitter?.id || undefined,
+          customerName: selectedRabbitter?.name || undefined,
+          customerPhone: selectedRabbitter?.phoneNumber || undefined,
           items: cart.map((i) => ({
             menuItemId: i.menuItemId,
             quantity: i.quantity,
@@ -475,7 +623,23 @@ export default function PosPage() {
         if (checkoutResult.orderNumber) {
           realOrderNumber = checkoutResult.orderNumber;
         }
-        toast.success(`Orden #${realOrderNumber} registrada y pagada en el sistema`);
+
+        if (checkoutResult.awardedBunz && checkoutResult.awardedBunz > 0) {
+          toast.success(`🐰 ¡Orden #${realOrderNumber} pagada! +${checkoutResult.awardedBunz} Bunz acreditados a ${selectedRabbitter?.name || "cliente"}.`);
+        } else {
+          toast.success(`Orden #${realOrderNumber} registrada y pagada en el sistema`);
+        }
+
+        await finalizeCheckout(
+          realOrderNumber,
+          method,
+          cashGiven,
+          checkoutResult.customerName || selectedRabbitter?.name || undefined,
+          checkoutResult.awardedBunz || undefined,
+          checkoutResult.claimToken || undefined,
+          checkoutResult.orderId || undefined
+        );
+        return;
       }
     } catch (err: any) {
       const msg = String(err?.message || "");
@@ -488,7 +652,7 @@ export default function PosPage() {
       // Allow ticket generation even if backend offline (graceful degradation)
     }
 
-    await finalizeCheckout(realOrderNumber, method, cashGiven);
+    await finalizeCheckout(realOrderNumber, method, cashGiven, selectedRabbitter?.name || undefined);
   };
 
   return (
@@ -545,15 +709,37 @@ export default function PosPage() {
       {/* ── Top Header ── */}
       <header className="flex h-22 shrink-0 items-center justify-between bg-black/60 backdrop-blur-2xl px-6 border-b border-white/5 relative z-20">
         <div className="flex items-center gap-4 lg:gap-6">
-          <Link href="/" className="flex items-center gap-3 rounded-2xl bg-white/5 p-2 pr-4 lg:pr-6 border border-white/5 hover:bg-white/10 hover:border-white/20 transition-all cursor-pointer shadow-lg active:scale-95">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-linear-to-br from-cyan-500 to-blue-600 shadow-[0_0_20px_rgba(6,182,212,0.5)]">
-              <ChevronLeft className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <div className="text-[10px] uppercase tracking-widest text-cyan-400 font-bold mb-0.5">Cerrar Terminal</div>
-              <div className="font-black text-base lg:text-lg leading-none tracking-wide">Salir a Dashboard</div>
-            </div>
-          </Link>
+          {isEmployeeRole ? (
+            <button
+              type="button"
+              onClick={() => {
+                setExitPin("");
+                setAdminPinModal(true);
+              }}
+              className="flex items-center gap-3 rounded-2xl bg-amber-500/10 p-2 pr-4 lg:pr-5 border border-amber-500/25 hover:bg-amber-500/20 transition-all cursor-pointer shadow-lg active:scale-95"
+              title="Modo Kiosco / Empleado: Requiere PIN de Administrador para salir"
+            >
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400">
+                <Lock className="h-5 w-5" />
+              </div>
+              <div className="text-left">
+                <div className="text-[10px] uppercase tracking-widest text-amber-400 font-bold mb-0.5">Modo Kiosco POS</div>
+                <div className="font-black text-sm lg:text-base leading-none text-white flex items-center gap-1.5">
+                  Desbloquear Admin
+                </div>
+              </div>
+            </button>
+          ) : (
+            <Link href="/" className="flex items-center gap-3 rounded-2xl bg-white/5 p-2 pr-4 lg:pr-6 border border-white/5 hover:bg-white/10 hover:border-white/20 transition-all cursor-pointer shadow-lg active:scale-95">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-linear-to-br from-cyan-500 to-blue-600 shadow-[0_0_20px_rgba(6,182,212,0.5)]">
+                <ChevronLeft className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-cyan-400 font-bold mb-0.5">Cerrar Terminal</div>
+                <div className="font-black text-base lg:text-lg leading-none tracking-wide">Salir a Dashboard</div>
+              </div>
+            </Link>
+          )}
 
           <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 px-3.5 py-2 border border-emerald-500/20 shadow-[inset_0_0_12px_rgba(16,185,129,0.1)]">
             <div className="relative flex h-3 w-3">
@@ -598,6 +784,31 @@ export default function PosPage() {
               <span>Cola ({queueCount})</span>
             </button>
           )}
+
+          {/* Comandas en Pausa / En Espera (Ticket Parcheado Óptima POS) */}
+          <button
+            onClick={() => setPausedCartsModal(true)}
+            className={cn(
+              "flex items-center gap-2 rounded-xl px-3.5 py-2 border text-xs font-black transition-all cursor-pointer active:scale-95",
+              pausedCarts.length > 0
+                ? "bg-amber-500/20 border-amber-500/40 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.2)] animate-pulse"
+                : "bg-white/5 border-white/10 text-gray-400 hover:text-white hover:bg-white/10"
+            )}
+            title="Ver transacciones pausadas / comensales en espera"
+          >
+            <Pause className="h-4 w-4 text-amber-400" />
+            <span>En Espera ({pausedCarts.length})</span>
+          </button>
+
+          {/* Rabbitty Tabs / Comandas Activas */}
+          <button
+            onClick={() => setActiveTabsModal(true)}
+            className="flex items-center gap-2 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 px-3.5 py-2 border border-purple-500/30 text-purple-300 text-xs font-black transition-all cursor-pointer shadow-[0_0_15px_rgba(168,85,247,0.15)] active:scale-95"
+            title="Ver comandas y clientes activos en tienda"
+          >
+            <Users className="h-4 w-4 text-purple-400" />
+            <span>Tabs ({activeTabsData?.totalActiveCount ?? 0})</span>
+          </button>
         </div>
 
         <div className="flex items-center gap-4 lg:gap-6">
@@ -782,21 +993,52 @@ export default function PosPage() {
                 </div>
               </button>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 {cart.length > 0 && (
-                  <span className="hidden sm:inline-flex px-2.5 py-1 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-[11px] font-black text-cyan-300">
+                  <span className="hidden sm:inline-flex px-2 py-1 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-[11px] font-black text-cyan-300">
                     {cart.reduce((s, i) => s + i.quantity, 0)} uds
                   </span>
                 )}
+                {/* Botón Pausar Transacción (Poner en Espera con Folio X tipo Óptima) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (cart.length === 0) return;
+                    const nextNum = pausedCarts.length + 1;
+                    const folio = `ESP-${nextNum}`;
+                    const parkedEntry = {
+                      id: crypto.randomUUID(),
+                      folio,
+                      createdAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                      cart: [...cart],
+                      orderType,
+                      selectedTableId,
+                      selectedRabbitter,
+                      total: total,
+                      itemsCount: cart.reduce((s, i) => s + i.quantity, 0),
+                    };
+                    setPausedCarts((prev) => [parkedEntry, ...prev]);
+                    setCart([]);
+                    setSelectedRabbitter(null);
+                    toast.success(`⏸️ Transacción pausada como ${folio}. Pantalla libre para el siguiente cliente.`);
+                  }}
+                  disabled={cart.length === 0}
+                  title="Pausar venta actual y asignar folio de espera (para atender a otro cliente)"
+                  className="flex items-center gap-1 h-9 px-2.5 rounded-xl bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 border border-amber-500/30 transition-all active:scale-95 disabled:opacity-30 disabled:pointer-events-none cursor-pointer text-xs font-bold"
+                >
+                  <Pause className="h-3.5 w-3.5" />
+                  <span className="hidden xl:inline">Pausar</span>
+                </button>
+
                 <button 
                   onClick={() => {
                     if (cart.length > 0) setConfirmClearCart(true);
                   }} 
                   disabled={cart.length === 0}
                   title="Vaciar orden actual"
-                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white border border-red-500/20 transition-all active:scale-95 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                  className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white border border-red-500/20 transition-all active:scale-95 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
             </div>
@@ -868,6 +1110,54 @@ export default function PosPage() {
               >
                 <Bike className="h-3 w-3" /> Domicilio
               </button>
+            </div>
+
+            {/* ── Rabbitter Vinculado (Identificación Previa al Cobro) ── */}
+            <div className="mt-2 pt-2 border-t border-white/5">
+              {selectedRabbitter ? (
+                <div className="flex items-center justify-between rounded-xl bg-pink-500/10 border border-pink-500/25 p-2 gap-2 shadow-[0_0_15px_rgba(236,72,153,0.1)]">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-pink-500/20 text-pink-300 font-bold text-xs border border-pink-500/30">
+                      🐰
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-black text-white truncate">{selectedRabbitter.name}</span>
+                        <span className="text-[9px] font-black text-pink-400 bg-pink-500/20 px-1 py-0.2 rounded uppercase">
+                          {selectedRabbitter.level}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                        <span>{selectedRabbitter.phoneNumber || selectedRabbitter.telegramId || "Cuenta Verificada"}</span>
+                        <span>•</span>
+                        <span className="text-emerald-400 font-bold">{selectedRabbitter.currentRewardRate}% Cashback</span>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRabbitter(null)}
+                    title="Desvincular cliente"
+                    className="flex h-6 w-6 items-center justify-center rounded-md bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-300 transition-all cursor-pointer shrink-0"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setRabbitterModalOpen(true)}
+                  className="w-full flex items-center justify-between rounded-xl bg-white/5 hover:bg-pink-500/15 border border-white/10 hover:border-pink-500/30 px-2.5 py-1.5 text-xs font-bold text-gray-300 hover:text-pink-300 transition-all cursor-pointer group"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">🐰</span>
+                    <span className="text-[11px] font-black tracking-wide">Identificar Rabbitter (Recompensa Directa)</span>
+                  </div>
+                  <span className="text-[10px] font-extrabold text-pink-400 bg-pink-500/15 group-hover:bg-pink-500/25 px-1.5 py-0.5 rounded-md border border-pink-500/20">
+                    + Vincular
+                  </span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -1065,6 +1355,16 @@ export default function PosPage() {
                 </div>
                 <span className="text-emerald-400 font-black">${total.toFixed(2)}</span>
               </div>
+              {selectedRabbitter && total > 0 && (
+                <div className="flex items-center justify-between text-[11px] font-bold text-pink-400 pt-1 mt-0.5 border-t border-pink-500/20 bg-pink-500/10 -mx-2.5 px-2.5 py-1 rounded-b-lg">
+                  <span className="flex items-center gap-1">
+                    <Sparkles className="h-3 w-3" /> Recompensa ({selectedRabbitter.currentRewardRate}%)
+                  </span>
+                  <span className="font-black text-white">
+                    +{Math.floor(total * (selectedRabbitter.currentRewardRate / 100))} Bunz
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Quick Payment Methods */}
@@ -1103,41 +1403,85 @@ export default function PosPage() {
               </button>
             </div>
 
-            {/* Massive Checkout Button */}
-            <button 
-              onClick={() => requestCheckout("VENTA DIRECTA")}
-              disabled={cart.length === 0}
-              className="relative w-full overflow-hidden rounded-xl bg-cyan-500 py-2.5 text-base font-black text-gray-950 shadow-[0_8px_25px_rgba(6,182,212,0.35)] transition-all hover:bg-cyan-400 active:scale-95 disabled:opacity-50 disabled:shadow-none group cursor-pointer"
-            >
-              <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-[0%] transition-transform duration-300 ease-out" />
-              <span className="relative z-10 flex items-center justify-center gap-1.5">
-                <Check className="h-5 w-5" /> COBRAR ORDEN (${total.toFixed(2)})
-              </span>
-            </button>
+            {/* Massive Checkout & Digital Dispatch Buttons */}
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setSendBillModal(true)}
+                disabled={cart.length === 0}
+                className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-pink-500/20 hover:bg-pink-500/30 text-pink-300 border border-pink-500/40 text-xs font-black transition-all active:scale-95 disabled:opacity-40 cursor-pointer shadow-md"
+                title="Enviar cuenta digital al móvil del Rabbitter"
+              >
+                <Send className="h-4 w-4 text-pink-400" />
+                <span className="hidden sm:inline">Enviar al Móvil</span>
+              </button>
+              <button 
+                onClick={() => requestCheckout("VENTA DIRECTA")}
+                disabled={cart.length === 0}
+                className="relative flex-1 overflow-hidden rounded-xl bg-cyan-500 py-2.5 text-base font-black text-gray-950 shadow-[0_8px_25px_rgba(6,182,212,0.35)] transition-all hover:bg-cyan-400 active:scale-95 disabled:opacity-50 disabled:shadow-none group cursor-pointer"
+              >
+                <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-[0%] transition-transform duration-300 ease-out" />
+                <span className="relative z-10 flex items-center justify-center gap-1.5">
+                  <Check className="h-5 w-5" /> COBRAR (${total.toFixed(2)})
+                </span>
+              </button>
+            </div>
           </div>
         </aside>
       </div>
 
       {/* Modal de Confirmación para Vaciar Orden */}
-      <Dialog open={confirmClearCart} onClose={() => setConfirmClearCart(false)} title="¿Vaciar la orden actual?">
+      {/* ── Modal: Vaciar orden / Descartar pausada — requiere PIN de Gerente (anti-robo Óptima) ── */}
+      <Dialog
+        open={confirmClearCart || pendingDiscardFolio !== null}
+        onClose={() => { setConfirmClearCart(false); setPendingDiscardFolio(null); setClearCartPin(""); }}
+        title={pendingDiscardFolio ? `¿Descartar la comanda ${pendingDiscardFolio}?` : "¿Vaciar la orden actual?"}
+        className="max-w-sm w-full"
+      >
         <div className="space-y-4">
           <div className="flex items-center gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
             <AlertTriangle className="h-5 w-5 shrink-0" />
-            <span>Esta acción eliminará todos los ({cart.reduce((s, i) => s + i.quantity, 0)}) platillos seleccionados de la cuenta actual.</span>
+            <span>
+              {pendingDiscardFolio
+                ? "Eliminarás la comanda en espera. Ninguna venta quedará registrada en el sistema."
+                : `Esta acción eliminará todos los platillos (${cart.reduce((s, i) => s + i.quantity, 0)}) de la cuenta actual sin registrar la venta.`}
+            </span>
           </div>
-          <p className="text-sm text-gray-300">
-            ¿Confirmas que deseas cancelar y vaciar los elementos de esta comanda?
-          </p>
+          <label className="text-xs font-bold text-gray-300 block">PIN de Gerente / Administrador para autorizar el descarte</label>
+          <Input
+            type="password"
+            maxLength={4}
+            value={clearCartPin}
+            onChange={(e) => setClearCartPin(e.target.value.replace(/\D/g, ""))}
+            placeholder="••••"
+            className="text-center text-lg tracking-widest font-black py-2.5"
+            autoFocus
+          />
           <div className="flex justify-end gap-3 pt-3 border-t border-white/5">
-            <Button variant="secondary" onClick={() => setConfirmClearCart(false)}>Cancelar</Button>
+            <Button variant="secondary" onClick={() => { setConfirmClearCart(false); setPendingDiscardFolio(null); setClearCartPin(""); }}>Cancelar</Button>
             <Button
               variant="danger"
-              onClick={() => {
-                setCart([]);
-                setConfirmClearCart(false);
+              disabled={clearCartPin.length !== 4}
+              onClick={async () => {
+                if (clearCartPin.length !== 4) return;
+                try {
+                  await verifyPinMutation.mutateAsync({ pin: clearCartPin });
+                  if (pendingDiscardFolio !== null) {
+                    setPausedCarts((prev) => prev.filter((p) => p.folio !== pendingDiscardFolio));
+                    setPendingDiscardFolio(null);
+                    toast.success("Comanda pausada descartada con autorización registrada.");
+                  } else {
+                    setCart([]);
+                    setConfirmClearCart(false);
+                    toast.success("Orden vaciada con autorización registrada.");
+                  }
+                  setClearCartPin("");
+                } catch {
+                  toast.error("PIN de Gerente incorrecto. Intenta de nuevo.");
+                  setClearCartPin("");
+                }
               }}
             >
-              Sí, Vaciar Orden
+              {verifyPinMutation.isPending ? "Validando..." : "Autorizar y Descartar"}
             </Button>
           </div>
         </div>
@@ -1318,6 +1662,9 @@ export default function PosPage() {
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 max-h-64 overflow-y-auto custom-scrollbar p-1">
                 {tables.map((t) => {
                   const isSelected = selectedTableId === t.id && orderType === "DINE_IN";
+                  const activeTab = activeTabsData?.activeTabs.find((tab) => tab.tableId === t.id);
+                  const hasCustomer = !!activeTab?.customer;
+
                   return (
                     <button
                       key={t.id}
@@ -1325,18 +1672,37 @@ export default function PosPage() {
                       onClick={() => {
                         setSelectedTableId(t.id);
                         setOrderType("DINE_IN");
+                        if (activeTab?.customer && !selectedRabbitter) {
+                          setSelectedRabbitter({
+                            id: activeTab.customer.id || "",
+                            name: activeTab.customer.name,
+                            phoneNumber: activeTab.customer.phone || "",
+                            telegramId: activeTab.customer.username || "",
+                            level: "Rabbitter",
+                            currentRewardRate: 20,
+                            bunzBalance: 0,
+                            hops: 0,
+                          });
+                        }
                         setTableModal(false);
                         toast.success(`Mesa ${t.number} asignada`);
                       }}
                       className={cn(
-                        "flex flex-col items-center justify-center p-3 rounded-2xl border transition-all cursor-pointer active:scale-95",
+                        "flex flex-col items-center justify-center p-3 rounded-2xl border transition-all cursor-pointer active:scale-95 relative",
                         isSelected
                           ? "bg-cyan-500 text-gray-950 border-cyan-400 shadow-[0_4px_20px_rgba(6,182,212,0.4)]"
+                          : hasCustomer
+                          ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-200 shadow-[0_0_15px_rgba(16,185,129,0.15)]"
                           : "bg-white/5 border-white/10 text-white hover:bg-white/10 hover:border-white/20"
                       )}
                     >
+                      {hasCustomer && (
+                        <span className="absolute -top-1.5 -right-1.5 bg-emerald-500 text-gray-950 text-[9px] font-black px-1.5 py-0.5 rounded-full shadow">
+                          🐰 {activeTab.customer?.name.split(" ")[0]}
+                        </span>
+                      )}
                       <span className="text-lg font-black leading-none mb-1">Mesa {t.number}</span>
-                      <span className={cn("text-[10px] font-bold", isSelected ? "text-gray-900" : "text-gray-400")}>
+                      <span className={cn("text-[10px] font-bold", isSelected ? "text-gray-900" : hasCustomer ? "text-emerald-300" : "text-gray-400")}>
                         {t.location || "Salón"} • 👤 {t.capacity}
                       </span>
                     </button>
@@ -1425,6 +1791,32 @@ export default function PosPage() {
                   <p className="text-[11px] text-gray-400 mt-1">{cart.reduce((s, i) => s + i.quantity, 0)} artículo(s)</p>
                 </div>
               </div>
+
+              {/* Rabbitter Vinculado en Cobro */}
+              {selectedRabbitter && (
+                <div className="rounded-2xl bg-pink-500/10 border border-pink-500/25 p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🐰</span>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-black text-white">{selectedRabbitter.name}</span>
+                        <span className="text-[9px] font-black text-pink-400 bg-pink-500/20 px-1 py-0.2 rounded uppercase">
+                          {selectedRabbitter.level}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-gray-400">
+                        {selectedRabbitter.phoneNumber || selectedRabbitter.telegramId || "Cuenta Verificada"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Recompensa</span>
+                    <span className="text-xs font-black text-emerald-400">
+                      +{Math.floor(total * (selectedRabbitter.currentRewardRate / 100))} Bunz ({selectedRabbitter.currentRewardRate}%)
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {isCash ? (
                 <>
@@ -1715,6 +2107,415 @@ export default function PosPage() {
             </div>
           </div>
         )}
+      </Dialog>
+
+      {/* ── Modal de Identificación y Vinculación de Rabbitter ── */}
+      <Dialog
+        open={rabbitterModalOpen}
+        onClose={() => {
+          setRabbitterModalOpen(false);
+          setRabbitterQuery("");
+        }}
+        title="Identificar Rabbitter (Recompensa Directa)"
+        className="max-w-md w-full"
+      >
+        <div className="space-y-4 p-1">
+          <p className="text-xs text-gray-400">
+            Escanea el <strong className="text-pink-400">Rabbitty Code</strong> del cliente o ingresa su teléfono / usuario para vincularlo a la cuenta y acreditar su recompensa automáticamente al cobrar.
+          </p>
+
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!rabbitterQuery.trim()) return;
+              setIsSearchingRabbitter(true);
+              try {
+                const res = await utils.pos.lookupRabbitter.fetch({ query: rabbitterQuery.trim() });
+                if (res) {
+                  setSelectedRabbitter(res);
+                  setRabbitterModalOpen(false);
+                  setRabbitterQuery("");
+                  toast.success(`🐰 ¡Rabbitter vinculado: ${res.name}!`);
+                } else {
+                  toast.error("No se encontró ningún Rabbitter con ese código o teléfono.");
+                }
+              } catch (err: any) {
+                toast.error(err?.message || "Error al buscar Rabbitter");
+              } finally {
+                setIsSearchingRabbitter(false);
+              }
+            }}
+            className="space-y-3"
+          >
+            <div className="relative">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">
+                <Search className="h-4 w-4" />
+              </span>
+              <input
+                type="text"
+                autoFocus
+                value={rabbitterQuery}
+                onChange={(e) => setRabbitterQuery(e.target.value)}
+                placeholder="Teléfono, ID o código QR..."
+                className="w-full pl-10 pr-4 py-3 rounded-2xl bg-gray-900 border border-white/15 focus:border-pink-500 text-sm font-bold text-white placeholder-gray-500 outline-none transition-all"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setRabbitterModalOpen(false);
+                  setRabbitterQuery("");
+                }}
+                className="flex-1 py-2.5 font-bold text-xs"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={!rabbitterQuery.trim() || isSearchingRabbitter}
+                className="flex-1 py-2.5 font-black text-xs bg-pink-500 hover:bg-pink-400 text-white shadow-lg shadow-pink-500/20 disabled:opacity-40 cursor-pointer"
+              >
+                {isSearchingRabbitter ? "Buscando..." : "Vincular a la Orden"}
+              </Button>
+            </div>
+          </form>
+
+          <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[11px] text-gray-500">
+            <span>✨ Tasa actual: <strong>{ticketContext?.restaurant?.defaultRewardRate ?? 20}% Bunz</strong></span>
+            <span>Un solo uso por compra</span>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* ── Modal de Rabbitty Tabs / Comandas Activas en Tienda ── */}
+      <Dialog
+        open={activeTabsModal}
+        onClose={() => setActiveTabsModal(false)}
+        title="Rabbitty Tabs & Comandas Activas"
+        className="max-w-xl w-full"
+      >
+        <div className="space-y-4 p-1">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-gray-400">
+              Mesas y comandas abiertas en tiempo real con identificación de clientes.
+            </p>
+            <Button
+              variant="secondary"
+              onClick={() => refetchActiveTabs()}
+              className="py-1 px-2.5 text-xs font-bold"
+            >
+              Refrescar
+            </Button>
+          </div>
+
+          <div className="max-h-80 overflow-y-auto custom-scrollbar space-y-2">
+            {activeTabsData && activeTabsData.activeTabs.length > 0 ? (
+              activeTabsData.activeTabs.map((tab) => (
+                <div
+                  key={tab.orderId}
+                  className="flex items-center justify-between rounded-xl bg-white/5 border border-white/10 p-3 hover:bg-white/10 transition-all"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-black text-white text-sm">
+                        {tab.tableNumber ? `Mesa ${tab.tableNumber}` : tab.orderType}
+                      </span>
+                      {tab.tableLocation && (
+                        <span className="text-[10px] text-gray-400 bg-white/5 px-1.5 py-0.5 rounded">
+                          {tab.tableLocation}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-400 flex items-center gap-2">
+                      {tab.customer ? (
+                        <span className="text-pink-300 font-bold flex items-center gap-1">
+                          🐰 {tab.customer.name} {tab.customer.phone ? `(${tab.customer.phone})` : ""}
+                        </span>
+                      ) : (
+                        <span className="text-gray-500 italic">Sin vincular</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <span className="font-black text-cyan-400 text-sm">
+                      ${tab.total.toFixed(2)}
+                    </span>
+                    <Button
+                      onClick={async () => {
+                        await sendBillMutation.mutateAsync({
+                          orderId: tab.orderId,
+                          customerId: tab.customer?.id || undefined,
+                          phone: tab.customer?.phone || undefined,
+                          customerName: tab.customer?.name || undefined,
+                        });
+                      }}
+                      disabled={sendBillMutation.isPending}
+                      className="py-1.5 px-3 text-xs font-bold bg-pink-500/20 hover:bg-pink-500/30 text-pink-300 border border-pink-500/40"
+                    >
+                      <Send className="h-3 w-3 mr-1 text-pink-400" />
+                      Enviar Cuenta
+                    </Button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-8 text-gray-500 text-xs">
+                No hay comandas activas pendientes en esta sucursal.
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end pt-2 border-t border-white/5">
+            <Button variant="secondary" onClick={() => setActiveTabsModal(false)}>
+              Cerrar
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* ── Modal para Enviar Cuenta Digital al Móvil ── */}
+      <Dialog
+        open={sendBillModal}
+        onClose={() => setSendBillModal(false)}
+        title="Enviar Cuenta Digital al Móvil"
+        className="max-w-md w-full"
+      >
+        <div className="space-y-4 p-1">
+          <p className="text-xs text-gray-400">
+            Despacha la comanda actual directamente al móvil del Rabbitter vía Push nativo o WhatsApp para que revise su cuenta digital y previsualice sus Bunz antes de pagar en caja o mesa.
+          </p>
+
+          <div className="rounded-xl bg-white/5 border border-white/10 p-3 space-y-2">
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-400">Total de la orden:</span>
+              <span className="font-black text-cyan-400 text-sm">${total.toFixed(2)}</span>
+            </div>
+            {selectedRabbitter && (
+              <div className="flex justify-between text-xs pt-1 border-t border-white/5">
+                <span className="text-gray-400">Rabbitter:</span>
+                <span className="font-bold text-pink-300">🐰 {selectedRabbitter.name}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-gray-300">
+              Teléfono del cliente (WhatsApp / Push)
+            </label>
+            <Input
+              placeholder="10 dígitos (ej. 5512345678)"
+              type="tel"
+              value={waPhone}
+              onChange={(e) => setWaPhone(e.target.value.replace(/\D/g, ''))}
+              className="text-center py-2.5 text-sm"
+            />
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <Button
+              variant="secondary"
+              onClick={() => setSendBillModal(false)}
+              className="flex-1 py-2 font-bold text-xs"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={async () => {
+                if (cart.length === 0) {
+                  toast.error("La orden está vacía");
+                  return;
+                }
+                try {
+                  // Registrar orden preliminar PENDING en backend para generar la URL digital
+                  const mappedOrderType: "DINE_IN" | "TO_GO" | "DELIVERY" = 
+                    orderType === "TAKEAWAY" || orderType === "COUNTER" ? "TO_GO" :
+                    orderType === "DELIVERY" ? "DELIVERY" : "DINE_IN";
+
+                  const newOrder = await utils.client.pos.createOrder.mutate({
+                    tableId: selectedTableId || undefined,
+                    orderType: mappedOrderType,
+                    customerName: selectedRabbitter?.name || undefined,
+                    customerPhone: waPhone || selectedRabbitter?.phoneNumber || undefined,
+                  });
+
+                  for (const it of cart) {
+                    await utils.client.pos.addToCart.mutate({
+                      orderId: newOrder.id,
+                      menuItemId: it.menuItemId,
+                      quantity: it.quantity,
+                    });
+                  }
+
+                  await sendBillMutation.mutateAsync({
+                    orderId: newOrder.id,
+                    customerId: selectedRabbitter?.id || undefined,
+                    phone: waPhone || selectedRabbitter?.phoneNumber || undefined,
+                    customerName: selectedRabbitter?.name || undefined,
+                  });
+                  refetchActiveTabs();
+                } catch (err: any) {
+                  toast.error(err?.message || "Error al despachar la cuenta");
+                }
+              }}
+              disabled={sendBillMutation.isPending || (!selectedRabbitter && waPhone.length < 10)}
+              className="flex-1 py-2 font-black text-xs bg-pink-500 hover:bg-pink-400 text-white shadow-lg shadow-pink-500/20 disabled:opacity-40"
+            >
+              {sendBillMutation.isPending ? "Despachando..." : "Despachar Cuenta"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* ── Modal de Comandas Pausadas / En Espera (Tipo Óptima POS) ── */}
+      <Dialog
+        open={pausedCartsModal}
+        onClose={() => setPausedCartsModal(false)}
+        title="Transacciones Pausadas / En Espera"
+        className="max-w-xl w-full"
+      >
+        <div className="space-y-4 p-1">
+          <p className="text-xs text-gray-400">
+            Rescata una comanda previa para continuar cobrándola o modificarla sin haber perdido los platillos.
+          </p>
+
+          <div className="max-h-80 overflow-y-auto custom-scrollbar space-y-2">
+            {pausedCarts.length > 0 ? (
+              pausedCarts.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="flex items-center justify-between rounded-xl bg-white/5 border border-white/10 p-3 hover:bg-white/10 transition-all"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-black text-amber-400 text-sm">
+                        {entry.folio}
+                      </span>
+                      <span className="text-[10px] text-gray-400 bg-white/5 px-1.5 py-0.5 rounded">
+                        {entry.orderType}
+                      </span>
+                      <span className="text-[10px] text-gray-500">
+                        {entry.createdAt}
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-300">
+                      {entry.itemsCount} productos · <strong className="text-emerald-400">${entry.total.toFixed(2)}</strong>
+                    </div>
+                    {entry.selectedRabbitter && (
+                      <div className="text-[11px] text-pink-300 font-bold">
+                        🐰 {entry.selectedRabbitter.name}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      onClick={() => {
+                        if (cart.length > 0) {
+                          toast.error("Hay una orden en curso. Termínala o paúsala antes de rescatar otra.");
+                          return;
+                        }
+                        setCart(entry.cart);
+                        setOrderType(entry.orderType);
+                        setSelectedTableId(entry.selectedTableId);
+                        setSelectedRabbitter(entry.selectedRabbitter);
+                        setPausedCarts((prev) => prev.filter((p) => p.id !== entry.id));
+                        setPausedCartsModal(false);
+                        toast.success(`▶️ Comanda ${entry.folio} cargada al carrito`);
+                      }}
+                      className="py-1.5 px-3 text-xs font-bold bg-amber-500 hover:bg-amber-400 text-gray-950 shadow-md active:scale-95 cursor-pointer"
+                    >
+                      <Play className="h-3 w-3 mr-1 fill-current" />
+                      Rescatar
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPendingDiscardFolio(entry.folio);
+                        setClearCartPin("");
+                      }}
+                      title="Eliminar de espera (requiere PIN de Gerente)"
+                      className="h-8 w-8 flex items-center justify-center rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-8 text-gray-500 text-xs">
+                No hay transacciones pausadas en este momento.
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end pt-2 border-t border-white/5">
+            <Button variant="secondary" onClick={() => setPausedCartsModal(false)}>
+              Cerrar
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* ── Modal de Desbloqueo Admin para Salir de Kiosco ── */}
+      <Dialog
+        open={adminPinModal}
+        onClose={() => setAdminPinModal(false)}
+        title="Modo Kiosco: Desbloquear Salida al Dashboard"
+        className="max-w-sm w-full"
+      >
+        <div className="space-y-4 p-1">
+          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2">
+            <Lock className="h-5 w-5 shrink-0 text-amber-400" />
+            <span>Esta terminal está operando con perfil de empleado. Ingresa el PIN de Administrador o Gerente para salir.</span>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-gray-300">PIN de Supervisor / Admin (4 dígitos)</label>
+            <Input
+              type="password"
+              maxLength={4}
+              value={exitPin}
+              onChange={(e) => setExitPin(e.target.value.replace(/\D/g, ""))}
+              placeholder="••••"
+              className="text-center text-lg tracking-widest font-black py-2.5"
+              autoFocus
+            />
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <Button
+              variant="secondary"
+              onClick={() => setAdminPinModal(false)}
+              className="flex-1 py-2 font-bold text-xs"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={async () => {
+                if (exitPin.length !== 4) {
+                  toast.error("Ingresa los 4 dígitos del PIN");
+                  return;
+                }
+                try {
+                  await verifyPinMutation.mutateAsync({ pin: exitPin });
+                  setAdminPinModal(false);
+                  toast.success("PIN autorizado. Saliendo al dashboard...");
+                  window.location.href = "/";
+                } catch (err: any) {
+                  toast.error(err?.message || "PIN no autorizado");
+                }
+              }}
+              disabled={exitPin.length !== 4 || verifyPinMutation.isPending}
+              className="flex-1 py-2 font-black text-xs bg-cyan-500 hover:bg-cyan-400 text-gray-950 disabled:opacity-40"
+            >
+              {verifyPinMutation.isPending ? "Validando..." : "Desbloquear y Salir"}
+            </Button>
+          </div>
+        </div>
       </Dialog>
     </div>
   );

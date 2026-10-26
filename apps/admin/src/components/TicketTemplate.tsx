@@ -42,6 +42,10 @@ export interface TicketData {
   currency?: string;
   bunzCashbackRate?: number; // Kept for legacy compatibility
   estimatedBunz?: number;
+  customerName?: string;
+  awardedBunz?: number;
+  orderId?: string;
+  claimToken?: string;
   isRefund?: boolean;
   refundAmount?: number;
   reason?: string;
@@ -257,14 +261,14 @@ export function TicketTemplate({
 
       {/* ── BUNZ CASHBACK & RABBITTY LOYALTY ── */}
       <div className={`py-3 space-y-2 text-center border-b border-dashed border-gray-700 ${isThermalPaper ? "text-black" : "text-gray-300"}`}>
-        {(data.paymentMethod === "QR BUNZ" || data.paymentMethod?.includes("BUNZ")) ? (
+        {(data.paymentMethod === "QR BUNZ" || data.paymentMethod?.includes("BUNZ") || (data.awardedBunz && data.awardedBunz > 0)) ? (
           <div className="rounded-xl p-2 bg-linear-to-r from-emerald-500/10 via-emerald-400/10 to-emerald-500/10 border border-white/5 space-y-1">
             <div className="flex items-center justify-center gap-1.5 font-bold text-emerald-500 text-[11px]">
               <CheckCircle2 className="h-3 w-3" />
-              <span>¡Cashback de +{estimatedBunz} Bunz!</span>
+              <span>¡+{data.awardedBunz ?? estimatedBunz} Bunz Acreditados!</span>
             </div>
             <p className="text-[9px] text-gray-400">
-              Depositado automáticamente a tu cuenta.
+              {data.customerName ? `Depositados a ${data.customerName}` : "Depositados automáticamente a tu cuenta."}
             </p>
           </div>
         ) : (
@@ -279,10 +283,14 @@ export function TicketTemplate({
               </p>
             </div>
 
-            {/* Simulated QR Code for Validation / Bunz Claim */}
+            {/* Real QR Code for Validation / Bunz Claim */}
             <div className="flex flex-col items-center justify-center pt-1">
               <div className="bg-white p-2 rounded-xl shadow-md inline-block">
-                <QrCode className="h-16 w-16 text-black stroke-[2.5]" />
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(`https://rabbitty.me/scan?claimToken=${data.claimToken || data.orderNumber || "0000"}`)}`}
+                  alt="QR Reclamar Recompensa"
+                  className="h-16 w-16"
+                />
               </div>
               <p className="text-[8px] tracking-widest text-gray-400 uppercase mt-1 font-mono">
                 RBBTY-VERIF-{data.orderNumber || "0001"}

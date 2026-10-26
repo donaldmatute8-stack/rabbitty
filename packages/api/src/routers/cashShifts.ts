@@ -169,22 +169,23 @@ export const cashShiftsRouter = router({
       });
     }),
 
-  /** Cierre parcial (Ticket X): arqueo ciego, el turno sigue abierto. */
+  /** Cierre parcial (Ticket X): reporte previo o arqueo, el turno sigue abierto. */
   partialClose: protectedProcedure
-    .input(z.object({ ...branchInput, pin, countedCash: money, notes: z.string().max(300).optional() }))
+    .input(z.object({ ...branchInput, pin, countedCash: money.optional(), notes: z.string().max(300).optional() }))
     .mutation(async ({ ctx, input }) => {
       const branchId = resolveBranchId(ctx, input.branchId);
       const shift = await getOpenShift(ctx.restaurantDb, branchId);
       if (!shift) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "No hay turno abierto." });
       const actor = await findStaffByPin(ctx.restaurantDb, branchId, input.pin, CASHIER_ROLES);
       if (actor.id !== shift.currentStaffId && !MANAGER_ROLES.includes(String(actor.role).toUpperCase())) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Solo el cajero del turno o un manager puede hacer el arqueo." });
+        throw new TRPCError({ code: "FORBIDDEN", message: "Solo el cajero del turno o un manager puede hacer el corte X." });
       }
       return await ctx.restaurantDb.transaction(async (tx: any) => {
         await lockShift(tx, shift.id);
         const totals = await computeShiftTotals(tx, shift);
-        const counted = round2(input.countedCash);
-        const difference = round2(counted - totals.expectedCash);
+        const hasCounted = typeof input.countedCash === "number" && !isNaN(input.countedCash);
+        const counted = hasCounted ? round2(input.countedCash!) : totals.expectedCash;
+        const difference = hasCounted ? round2(counted - totals.expectedCash) : 0;
         await tx.insert(cashShiftEvents).values({
           shiftId: shift.id,
           branchId,
@@ -193,7 +194,7 @@ export const cashShiftsRouter = router({
           expectedAmount: totals.expectedCash,
           countedAmount: counted,
           difference,
-          notes: input.notes,
+          notes: input.notes || (hasCounted ? undefined : "Reporte Previo Informativo X"),
         });
         return {
           kind: "X" as const,
@@ -202,6 +203,7 @@ export const cashShiftsRouter = router({
           ...totals,
           countedCash: counted,
           difference,
+          isInformativeOnly: !hasCounted,
         };
       });
     }),

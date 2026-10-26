@@ -181,17 +181,24 @@ Cada venta en efectivo queda ligada a un turno de caja con un cajero responsable
 - **Validación automática:** El sistema te muestra el saldo disponible en gaveta y bloquea retiros si no hay suficiente efectivo.
 - Este gasto se descuenta automáticamente del efectivo que deberás entregar al final del turno.
 
-### 3. Cierre Parcial (Ticket X)
-- Realiza un arqueo ciego a mitad del turno sin cerrar la caja.
-- Cuenta lo que tienes en gaveta y captúralo. El sistema imprime el balance sin detener las ventas en mostrador.
+### 3. Corte X (Reporte Previo Informativo y Cuadre de Tarjetas)
+- **¿Para qué sirve?** Para saber con exactitud cuánto dinero registrado debe haber en gaveta y cotejar que las ventas de tarjeta coincidan al centavo con los vouchers de tu terminal física (Clip, Mercado Pago o Banco) antes de cerrar.
+- **Sin bloqueos:** Se imprime y visualiza con el PIN del cajero; **no cierra la caja, no exige retiros y no detiene las ventas**.
 
-### 4. Cierre Definitivo de Turno (Ticket Z)
-- **Paso A (Cuadre de Tarjetas):** Coteja el total de cobros con tarjeta que muestra la pantalla con el reporte de tu terminal bancaria física (Clip, Mercado Pago o Banco). Las tarjetas no van en la gaveta.
-- **Paso B (Conteo de Efectivo):** Cuenta todo el efectivo de la gaveta e ingrésalo.
-- **Paso C (PINs):** Requiere el PIN del cajero y el PIN de manager/admin.
-- **Paso D (Impresión Z):** Se imprime el ticket definitivo con la fecha exacta del turno y el desglose contable.
+### 4. Retiro de Efectivo de Ganancias y Cierre Definitivo (Corte Z)
+- **Paso A (Retiro de Ganancias):** Con el Corte X en mano, el cajero realiza el retiro de efectivo en **Caja / Turno → Retiro** para dejar la gaveta lista (en ceros o con el fondo base para el siguiente turno).
+- **Paso B (Cierre Z):** Con la caja cuadrada y el retiro efectuado, se ejecuta el **Corte Z** ingresando el efectivo final y los PINs del cajero y gerente. Se imprime el comprobante fiscal Z definitivo para contabilidad.
 
-### 5. ¿Qué pasa si hay descuadre?
+### 5. Pausar Comandas en Mostrador (En Espera tipo Óptima POS)
+- Si un cliente en mostrador no decide qué pedir o va por más cosas, presiona el botón **"Pausar"** en el carrito.
+- El sistema le asigna un número de folio (ej. \`ESP-1\`), guarda los platillos intactos sin afectar inventario y libera la pantalla para atender al siguiente comensal.
+- Para rescatarla en cualquier momento, pulsa el botón **"En Espera (N)"** en el header superior y presiona *Rescatar*.
+
+### 6. Candado de Persistencia y Modo Kiosco de Seguridad
+- **Candado Anti-Pérdida:** Si el iPad se apaga o se refresca la app, los productos del carrito no desaparecen; se restauran en automático.
+- **Modo Kiosco POS:** Los empleados con rol de cajero o mesero tienen protegida la salida al Dashboard con PIN de 4 dígitos de Gerente/Admin para evitar accesos indebidos a configuración o reportes.
+
+### 7. ¿Qué pasa si hay descuadre?
 - El sistema no bloquea el turno: permite capturar la cantidad real y exige una nota explicativa para auditoría. Nada se borra ni se altera en la bitácora inmutable.
 
 👉 *Puedes consultar o imprimir el manual gráfico completo en: Menú → Manual Operativo & Caja (\`/operations-manual\`)*`,

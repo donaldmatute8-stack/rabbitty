@@ -26,11 +26,11 @@ const MAX_FAILS = 5;
 const LOCK_MINUTES = 5;
 const WINDOW_MINUTES = 10;
 
-async function assertNotLocked(db: Db, branchId: string) {
+export async function assertPinNotLocked(db: Db, scope: string) {
   // La comparación se hace en SQL (now() del servidor) para evitar desfases de zona horaria
   // entre timestamps sin zona y el reloj de la instancia.
   const res: any = await db.execute(
-    sql`select ("lockedUntil" is not null and "lockedUntil" > now()) as locked from pin_attempts where "scopeKey" = ${`cash:${branchId}`}`
+    sql`select ("lockedUntil" is not null and "lockedUntil" > now()) as locked from pin_attempts where "scopeKey" = ${scope}`
   );
   const rows: any[] = Array.isArray(res) ? res : res?.rows ?? [];
   if (rows[0]?.locked) {
@@ -42,8 +42,8 @@ async function assertNotLocked(db: Db, branchId: string) {
 }
 
 /** UPSERT atómico: incrementa el contador y fija lockedUntil al llegar al máximo. */
-async function registerFail(db: Db, branchId: string) {
-  const key = `cash:${branchId}`;
+export async function registerPinFail(db: Db, scope: string) {
+  const key = scope;
   await db.execute(sql`
     INSERT INTO pin_attempts ("scopeKey", "failCount", "lastFailAt", "lockedUntil")
     VALUES (${key}, 1, now(), NULL)
@@ -60,8 +60,8 @@ async function registerFail(db: Db, branchId: string) {
   `);
 }
 
-async function clearFails(db: Db, branchId: string) {
-  await db.delete(pinAttempts).where(eq(pinAttempts.scopeKey, `cash:${branchId}`));
+export async function clearPinFails(db: Db, scope: string) {
+  await db.delete(pinAttempts).where(eq(pinAttempts.scopeKey, scope));
 }
 
 /** Identifica a un empleado activo de la sucursal por su PIN. Nunca expone el hash. */
@@ -72,7 +72,7 @@ export async function findStaffByPin(
   roles: string[],
   label = "PIN incorrecto"
 ) {
-  await assertNotLocked(db, branchId);
+  await assertPinNotLocked(db, `cash:${branchId}`);
   const list = await db
     .select()
     .from(staff)
@@ -81,11 +81,11 @@ export async function findStaffByPin(
   for (const s of list) {
     if (!s.pinCode || !normalized.includes(String(s.role).toUpperCase())) continue;
     if (verifyPin(pin, s.pinCode)) {
-      await clearFails(db, branchId);
+      await clearPinFails(db, `cash:${branchId}`);
       return s as { id: string; name: string; role: string };
     }
   }
-  await registerFail(db, branchId);
+  await registerPinFail(db, `cash:${branchId}`);
   throw new TRPCError({ code: "UNAUTHORIZED", message: label });
 }
 
@@ -150,7 +150,8 @@ export async function computeShiftTotals(db: Db, shift: { id: string; branchId: 
     .where(and(eq(cashShiftEvents.shiftId, shift.id), eq(cashShiftEvents.type, "HANDOVER")));
   const adjustments = round2(Number(a?.total ?? 0));
 
-  const expectedCash = round2(shift.openingFloat + cashSales - withdrawals + adjustments);
+  const totalDrops = round2(withdrawals + expenses);
+  const expectedCash = round2(shift.openingFloat + cashSales - totalDrops + adjustments);
   return {
     openingFloat: round2(shift.openingFloat),
     cashSales,
@@ -158,6 +159,7 @@ export async function computeShiftTotals(db: Db, shift: { id: string; branchId: 
     bunzSales,
     withdrawals,
     expenses,
+    totalDrops,
     adjustments,
     expectedCash,
   };

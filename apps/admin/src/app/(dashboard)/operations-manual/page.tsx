@@ -217,37 +217,37 @@ export default function OperationsManualPage() {
               </div>
             </Card>
 
-            {/* Paso 3: Cierre Parcial */}
+            {/* Paso 3: Corte X (Reporte Previo Informativo) */}
             <Card className="p-5 border border-white/5 bg-white/5 backdrop-blur-md space-y-3 relative overflow-hidden print:border print:border-gray-300 print:bg-white">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-black uppercase tracking-wider text-cyan-400 bg-cyan-500/10 px-2.5 py-0.5 rounded-full border border-cyan-500/20">
-                  Paso 3 · Control
+                  Paso 3 · Previo y Cotejo
                 </span>
                 <ClipboardCheck className="h-4 w-4 text-cyan-400" />
               </div>
-              <h3 className="text-base font-bold text-white print:text-black">Cierre Parcial (Ticket X)</h3>
+              <h3 className="text-base font-bold text-white print:text-black">Corte X (Reporte Previo)</h3>
               <p className="text-xs text-gray-400 print:text-gray-600 leading-relaxed">
-                Para revisar cómo vas a mitad del turno sin cerrar la caja. Cuenta el efectivo en gaveta y captúralo. El sistema imprime el balance sin interrumpir las ventas.
+                Saca tu Corte X para ver cuánto efectivo registrado hay en gaveta y confirmar que los vouchers de tus terminales bancarias físicas cuadren con el sistema. <strong>No cierra la caja ni exige retiros</strong>.
               </p>
-              <div className="pt-2 border-t border-white/5 print:border-gray-200 text-[11px] text-gray-500">
-                🔍 Arqueo seguro para auditorías rápidas.
+              <div className="pt-2 border-t border-white/5 print:border-gray-200 text-[11px] text-cyan-300 font-medium">
+                📊 Permite saber con exactitud cuánto dinero retirar antes del cierre.
               </div>
             </Card>
 
-            {/* Paso 4: Cierre Z */}
+            {/* Paso 4: Retiro de Efectivo y Corte Z */}
             <Card className="p-5 border border-white/5 bg-white/5 backdrop-blur-md space-y-3 relative overflow-hidden print:border print:border-gray-300 print:bg-white">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-black uppercase tracking-wider text-rose-400 bg-rose-500/10 px-2.5 py-0.5 rounded-full border border-rose-500/20">
-                  Paso 4 · Fin de Día
+                  Paso 4 · Fin de Turno
                 </span>
                 <Lock className="h-4 w-4 text-rose-400" />
               </div>
-              <h3 className="text-base font-bold text-white print:text-black">Cierre Definitivo (Ticket Z)</h3>
+              <h3 className="text-base font-bold text-white print:text-black">Retiro y Cierre Definitivo (Corte Z)</h3>
               <p className="text-xs text-gray-400 print:text-gray-600 leading-relaxed">
-                El corte final del día. Primero coteja tus vouchers de tarjeta física con la pantalla, cuenta tu efectivo final e ingresa tu PIN + PIN de manager.
+                Una vez cotejado el Corte X, haz el retiro de efectivo de las ganancias para dejar la caja en ceros (o con el fondo inicial para el siguiente turno), y saca el <strong>Corte Z</strong> con PIN para sellar el día.
               </p>
               <div className="pt-2 border-t border-white/5 print:border-gray-200 text-[11px] text-rose-400/90 font-medium">
-                🖨️ Genera el Ticket Z final para contabilidad.
+                🖨️ Imprime el Ticket Z definitivo con balance conciliado.
               </div>
             </Card>
           </div>

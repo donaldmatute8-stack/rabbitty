@@ -185,7 +185,12 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
     line("Fondo inicial:", money(data.openingFloat));
     if (data.kind !== "OPEN") {
       line("(+) Ventas efectivo:", money(data.cashSales));
-      line("(-) Retiros:", money(data.withdrawals));
+      if (Number(data.expenses || 0) > 0) {
+        line("(-) Gastos en efectivo:", money(data.expenses));
+      }
+      if (Number(data.withdrawals || 0) > 0 || Number(data.expenses || 0) === 0) {
+        line("(-) Retiros gaveta:", money(data.withdrawals));
+      }
       if (Number(data.adjustments || 0) !== 0) line("(+/-) Ajustes traspaso:", money(data.adjustments));
       addText(divider);
       chunks.push(boldOn);
@@ -370,7 +375,8 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
       addText(`Escanea tu ticket en la mini app de\nTelegram o Rabbitty para recibir tu cashback.\n\n`);
       try {
         // Create QR Code (Universal rabbitty.me URL compatible with native app and web)
-        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`https://rabbitty.me/scan?claim=${data.orderNumber || "0000"}`)}`;
+        const claimParam = (data as any).claimToken ? `claimToken=${(data as any).claimToken}` : `claim=${data.orderNumber || "0000"}`;
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`https://rabbitty.me/scan?${claimParam}`)}`;
         const qrBytes = await rasterizeImage(qrUrl, 200);
         if (qrBytes) {
           chunks.push(qrBytes);

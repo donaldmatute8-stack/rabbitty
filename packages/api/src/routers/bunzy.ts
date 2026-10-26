@@ -152,18 +152,18 @@ function generateHeuristicResponse(messages: LLMMessage[]): string {
     );
   }
 
-  // 2. Caja, corte de caja, turno, ticket x, ticket z
-  if (/\b(caja|corte|turno|ticket|gaveta|arqueo|abrir caja|cerrar caja|ticket x|ticket z)\b/i.test(q)) {
+  // 2. Caja, corte de caja, turno, ticket x, ticket z, pausar, kiosco
+  if (/\b(caja|corte|turno|ticket|gaveta|arqueo|abrir caja|cerrar caja|ticket x|ticket z|corte x|corte z|pausar|espera|kiosco|kiosk)\b/i.test(q)) {
     return (
-      `🐰 Para operaciones de caja en el **POS** (\`/pos\`):\n\n` +
-      `• **Apertura de Turno**: Haz clic en *"Caja cerrada · Abrir"* en la barra superior del POS. Ingresa tu PIN de 4 dígitos y el fondo inicial en efectivo (cambio).\n` +
-      `• **Retiros/Gastos Menores**: Ve a *"Caja / Turno" ➔ "Retiro"*. Captura monto y concepto (hielo, insumos). Se descuenta automáticamente del efectivo a entregar.\n` +
-      `• **Corte Informativo (Ticket X)**: Arqueo parcial en cualquier momento sin cerrar turno.\n` +
-      `• **Cierre de Turno (Ticket Z)**:\n` +
-      `  1. Primero coteja el total de tarjetas bancarias con el reporte de tu terminal física (Clip/Mercado Pago/Banco).\n` +
-      `  2. Cuenta el dinero en efectivo de la gaveta e ingrésalo.\n` +
-      `  3. Ingresa PIN de cajero y PIN de manager para emitir el Ticket Z definitivo.\n\n` +
-      `📖 Puedes consultar la guía paso a paso en **Manual Operativo** (\`/operations-manual\`).`
+      `🐰 **Operaciones y Control de Caja en el POS** (\`/pos\`):\n\n` +
+      `• **Apertura de Turno**: Haz clic en *"Caja cerrada · Abrir"* en la barra superior del POS con tu PIN de 4 dígitos y fondo inicial en efectivo.\n` +
+      `• **Pausar Venta (En Espera tipo Óptima POS)**: Si un cliente no se decide, pulsa *"Pausar"* en el carrito. Se genera un folio (ej. \`ESP-1\`), se libera la pantalla para el siguiente y la rescatas en el botón *"En Espera (N)"* del header.\n` +
+      `• **Flujo Canónico de Corte y Retiro**:\n` +
+      `  1️⃣ **Corte X (Reporte Previo)**: Lo sacas en *"Caja / Turno" ➔ "Cierre parcial (X)"*. Muestra el efectivo que debe haber en gaveta y las ventas de tarjeta para cuadrar contra el voucher de tu terminal física (Clip/Mercado Pago/Banco). No cierra la caja ni exige retiros.\n` +
+      `  2️⃣ **Retiro de Ganancias**: En *"Caja / Turno" ➔ "Retiro"*, retiras el dinero para dejar la gaveta en ceros (o con el fondo base).\n` +
+      `  3️⃣ **Corte Z (Cierre Definitivo)**: Con la caja cuadrada y el retiro hecho, ejecutas el Corte Z con PIN de cajero y supervisor para sellar el turno e imprimir el comprobante fiscal definitivo.\n` +
+      `• **Modo Kiosco de Seguridad**: Los empleados no pueden salir al Dashboard sin el PIN de 4 dígitos de un Administrador o Gerente.\n\n` +
+      `📖 Puedes consultar la guía completa en **Manual Operativo** (\`/operations-manual\`) o en **Academy** (\`/academy\`).`
     );
   }
 
@@ -339,16 +339,16 @@ LIMITANTES Y REGLAS FINANCIERAS INFRANQUEABLES:
 3. No des asesoría fiscal ni contable vinculante.
 4. Si el usuario te pide ejecutar una acción (crear campaña o ajustar cashback), confírmale los parámetros y sugiérele aplicarla mediante las herramientas de acción de Bunzy.
 
-CONOCIMIENTO OPERATIVO OFICIAL DEL POS Y CORTE DE CAJA (ÚSALO PARA ASISTIR AL COMERCIO):
-- Apertura de caja: Se hace en el POS con 'Caja cerrada · Abrir'. Requiere PIN de 4 dígitos y capturar el fondo inicial (cambio para dar a clientes). Imprime ticket de apertura.
-- Retiros y gastos menores (agua, café, hielo, insumos): Se registran en 'Caja / Turno' -> 'Retiro'. El cajero escribe el monto y concepto. Este monto se DESCUENTA AUTOMÁTICAMENTE del efectivo que debe entregar al final. Si no hay suficiente dinero en gaveta, el sistema bloquea el retiro avisando fondos insuficientes.
-- Cierre Parcial (Ticket X): Arqueo informativo a mitad de turno sin cerrar la caja ni interrumpir ventas.
-- Cierre Definitivo (Ticket Z): 
-  a) Cuadre de Tarjeta Bancaria: El cajero primero coteja el total cobrado con tarjeta en la pantalla con el reporte de la terminal bancaria física (Clip, Mercado Pago o Banco). Las tarjetas no se cuentan en el efectivo.
-  b) Conteo de Efectivo: El cajero cuenta el dinero físico de la gaveta e ingresa el monto total.
-  c) PIN de Cajero y PIN de Manager: Cierra el turno e imprime el comprobante Z definitivo.
-- Descuadres (sobrantes/faltantes): No bloquean el cierre. El cajero captura lo contado real y el sistema solicita una nota justificativa y PIN de manager para la bitácora inmutable.
-- Manual imprimible y visual: Guía completa siempre disponible en '/operations-manual'.
+CONOCIMIENTO OPERATIVO OFICIAL DEL POS Y FLUJO DE CAJA (ÚSALO PARA ASISTIR AL COMERCIO):
+- Flujo Maestro de Dinero y Cuadre:
+  1) Corte X (Reporte Previo): Se saca antes de cerrar para ver cuánto dinero registrado hay en gaveta y cotejar que las ventas de tarjeta coincidan con la terminal bancaria física. No exige retiros ni cierra la caja.
+  2) Retiro de Efectivo: Con el previo en mano, el cajero realiza el retiro de las ganancias en 'Caja / Turno -> Retiro' para dejar la caja lista (en ceros o con el fondo para el siguiente turno).
+  3) Corte Z (Cierre Definitivo): Se ejecuta al final con PIN de cajero y supervisor para sellar el turno e imprimir el comprobante fiscal Z definitivo.
+- Pausar Comanda / Transacción en Espera (Tipo Óptima POS): Si un comensal aún no decide qué pedir o va por más cosas, el cajero presiona el botón 'Pausar' en el carrito. La venta se guarda como folio de espera (ej. ESP-1) y la pantalla queda libre para atender al siguiente comensal sin borrar artículos ni alterar inventario. Para rescatarla, se abre el botón 'En Espera (N)' en el header superior.
+- Candado Anti-Pérdida (Persistencia): El carrito del POS se sincroniza en tiempo real en la memoria local del dispositivo. Si el iPad se apaga, se bloquea o se refresca la app, los platillos no desaparecen y el POS se reabre exactamente donde se quedó.
+- Modo Kiosco de Seguridad: Los empleados con rol de cajero o mesero tienen bloqueada la salida al Dashboard administrativo. Para salir a configurar el negocio o ver reportes globales, se exige el PIN de 4 dígitos de un Administrador o Gerente.
+- Gastos y Pagos Menores (agua, café, hielo): Se registran en 'Caja / Turno -> Retiro' y se descuentan de forma automática del efectivo final.
+- Manual operativo completo disponible siempre en '/operations-manual'.
 
 CAPACIDAD DE SOPORTE, REPORTE DE BUGS Y FEEDBACK:
 - Si el usuario reporta un problema, error técnico, fallo en pantalla o sugiere una mejora ("hay un error", "falló el ticket", "se trabó", "tengo una sugerencia", "quiero dejar feedback"), agradécele cálidamente, infórmale que has canalizado su reporte directamente con el equipo de ingeniería de Rabbitty y que está siendo atendido de inmediato.

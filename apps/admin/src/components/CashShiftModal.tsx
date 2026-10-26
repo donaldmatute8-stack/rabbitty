@@ -417,22 +417,61 @@ export function CashShiftModal({
 
         {mode === "partial" && (
           <form
-            className="space-y-3"
+            className="space-y-4"
             onSubmit={(e) => {
               e.preventDefault();
-              partialMut.mutate({ pin, countedCash: num, notes: notes || undefined });
+              partialMut.mutate({
+                pin,
+                countedCash: amount !== "" ? num : undefined,
+                notes: notes || undefined,
+              });
             }}
           >
-            <p className="text-xs text-gray-400">
-              Cuenta billetes y monedas en la gaveta e ingresa el total. El turno sigue abierto; se imprime Ticket X.
-            </p>
-            <MoneyField id="cash-partial-counted" label="Efectivo contado ($)" value={amount} onChange={setAmount} autoFocus />
-            <NoteField id="cash-partial-notes" value={notes} onChange={setNotes} />
+            <div className="p-3.5 rounded-xl bg-cyan-500/10 border border-cyan-500/25 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-cyan-400">📊 Corte X (Reporte Previo de Caja)</span>
+                <span className="text-[10px] text-cyan-200/80 font-medium">Turno sigue abierto</span>
+              </div>
+              <p className="text-xs text-gray-300 leading-relaxed">
+                Úsalo para ver cuánto dinero debe haber en gaveta y revisar que tus ventas de tarjeta cuadren con tu terminal física. <strong>No cierra la caja ni exige retiros</strong>.
+              </p>
+              {currentTotals && (
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-cyan-500/20 text-xs">
+                  <div>
+                    <span className="text-[10px] text-gray-400 block">Efectivo en gaveta (sistema):</span>
+                    <strong className="text-white text-sm">{fmt(currentTotals.expectedCash)}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-gray-400 block">Ventas Tarjeta + Bunz:</span>
+                    <strong className="text-cyan-300 text-sm">{fmt(currentTotals.cardSales + currentTotals.bunzSales)}</strong>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1">
+              <MoneyField 
+                id="cash-partial-counted" 
+                label="Efectivo contado físico ($) — Opcional si solo quieres ver/imprimir el previo" 
+                value={amount} 
+                onChange={setAmount} 
+                autoFocus 
+              />
+              <span className="text-[10px] text-gray-400">Si lo dejas en blanco, se imprime el balance registrado en sistema sin declarar diferencias.</span>
+            </div>
+
+            <NoteField id="cash-partial-notes" label="Notas / Justificación (Opcional)" value={notes} onChange={setNotes} />
             <PinField id="cash-partial-pin" label="PIN del cajero" value={pin} onChange={setPin} />
+
             <div className="flex gap-2 justify-end pt-1">
               <BackBtn />
-              <Button type="submit" id="cash-partial-submit" disabled={busy || pin.length !== 4 || !validAmount} className="bg-cyan-500 hover:bg-cyan-400 text-gray-950 font-bold">
-                {partialMut.isPending ? "Calculando..." : "Registrar arqueo e imprimir X"}
+              <Button 
+                type="submit" 
+                id="cash-partial-submit" 
+                disabled={busy || pin.length !== 4 || (amount !== "" && !validAmount)} 
+                className="bg-cyan-500 hover:bg-cyan-400 text-gray-950 font-bold"
+              >
+                {partialMut.isPending ? "Generando..." : "Imprimir Corte X (Previo)"}
               </Button>
             </div>
           </form>
