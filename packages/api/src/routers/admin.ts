@@ -715,20 +715,50 @@ export const adminRouter = router({
    */
   getAffiliateBunzInventory: protectedProcedure.query(async ({ ctx }) => {
     try {
-      const [biz] = await ctx.coreDb
-        .select({
-          id: ownedBusinesses.id,
-          name: ownedBusinesses.name,
-          category: ownedBusinesses.category,
-          bunzBalance: ownedBusinesses.bunzBalance,
-          package: ownedBusinesses.package,
-          rewardPercentage: ownedBusinesses.rewardPercentage,
-          status: ownedBusinesses.status,
-          creditLimit: ownedBusinesses.creditLimit,
-        })
-        .from(ownedBusinesses)
-        .where(eq(ownedBusinesses.ownerId, ctx.userId))
-        .limit(1);
+      // 1. Intentar resolver por ctx.userId (Core user ID)
+      let [biz] = ctx.userId
+        ? await ctx.coreDb
+            .select({
+              id: ownedBusinesses.id,
+              name: ownedBusinesses.name,
+              category: ownedBusinesses.category,
+              bunzBalance: ownedBusinesses.bunzBalance,
+              package: ownedBusinesses.package,
+              rewardPercentage: ownedBusinesses.rewardPercentage,
+              status: ownedBusinesses.status,
+              creditLimit: ownedBusinesses.creditLimit,
+            })
+            .from(ownedBusinesses)
+            .where(eq(ownedBusinesses.ownerId, ctx.userId))
+            .limit(1)
+        : [undefined];
+
+      // 2. Si no se encontró por userId directo, buscar por el email del usuario de la sesión
+      if (!biz && ctx.user?.email) {
+        const [coreUser] = await ctx.coreDb
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.email, ctx.user.email))
+          .limit(1);
+
+        if (coreUser?.id) {
+          const [found] = await ctx.coreDb
+            .select({
+              id: ownedBusinesses.id,
+              name: ownedBusinesses.name,
+              category: ownedBusinesses.category,
+              bunzBalance: ownedBusinesses.bunzBalance,
+              package: ownedBusinesses.package,
+              rewardPercentage: ownedBusinesses.rewardPercentage,
+              status: ownedBusinesses.status,
+              creditLimit: ownedBusinesses.creditLimit,
+            })
+            .from(ownedBusinesses)
+            .where(eq(ownedBusinesses.ownerId, coreUser.id))
+            .limit(1);
+          if (found) biz = found;
+        }
+      }
 
       if (biz) {
         return {

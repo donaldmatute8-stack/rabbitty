@@ -279,7 +279,16 @@ export default function ExpensesPage() {
   });
 
   const [dialog, setDialog] = useState(false);
-  const [form, setForm] = useState({ category: "SUPPLIES", description: "", amount: 0, reference: "", paidTo: "", notes: "", expenseDate: new Date().toISOString().split("T")[0] });
+  const [form, setForm] = useState({ 
+    category: "SUPPLIES", 
+    description: "", 
+    amount: 0, 
+    reference: "", 
+    paidTo: "", 
+    notes: "", 
+    expenseDate: new Date().toISOString().split("T")[0],
+    deductFromCashDrawer: false,
+  });
   
   const [editExpense, setEditExpense] = useState<{
     id: string;
@@ -504,6 +513,27 @@ export default function ExpensesPage() {
               onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
               placeholder="Notas u observaciones del gasto..."
             />
+          </div>
+
+          {/* Toggle: ¿Pagado con efectivo de la caja / gaveta? */}
+          <div className="p-3.5 rounded-2xl border border-cyan-500/20 bg-linear-to-r from-cyan-500/10 via-blue-500/5 to-transparent flex items-center justify-between">
+            <div className="space-y-0.5">
+              <span className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
+                💵 ¿Pagado con efectivo de la caja del turno?
+              </span>
+              <p className="text-[11px] text-gray-400">
+                Si marcas esta casilla, el monto se registrará automáticamente como salida de efectivo del turno de caja abierto hoy (se descuenta del corte en tiempo real). Si el efectivo en gaveta no alcanza, el sistema te lo dirá.
+              </p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
+              <input
+                type="checkbox"
+                checked={form.deductFromCashDrawer}
+                onChange={(e) => setForm((f) => ({ ...f, deductFromCashDrawer: e.target.checked }))}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500" />
+            </label>
           </div>
 
           <div className="flex justify-end gap-3 pt-3 border-t border-white/5">

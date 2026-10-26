@@ -4,6 +4,7 @@ import { auth } from "@rabbitty/auth";
 import { getRestaurantDb, getCoreDb } from "@rabbitty/api/db";
 import { getEnv } from "@/env";
 import { staff, branches } from "@rabbitty/database-restaurant/schema";
+import { users } from "@rabbitty/database-core/schema";
 import { eq } from "drizzle-orm";
 
 const handler = async (req: Request) => {
@@ -35,13 +36,28 @@ const handler = async (req: Request) => {
         activeBranchId = firstBranch?.id || env.BRANCH_ID;
       }
 
+      const coreDb = getCoreDb();
+      let effectiveUserId = session?.user?.id ?? null;
+
+      if (session?.user?.email) {
+        // Mapear adminAuthUsers.email a core users.id para enlazar la propiedad de negocios y saldo de Bunz
+        const [coreUser] = await coreDb
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.email, session.user.email))
+          .limit(1);
+        if (coreUser) {
+          effectiveUserId = coreUser.id;
+        }
+      }
+
       return {
-        userId: session?.user?.id ?? null,
-        user: session?.user ?? null,
+        userId: effectiveUserId,
+        user: session?.user ? { ...session.user, id: effectiveUserId || session.user.id } : null,
         staffRole,
         staffBranchId,
         restaurantDb,
-        coreDb: getCoreDb(),
+        coreDb,
         branchId: activeBranchId,
       };
     },
