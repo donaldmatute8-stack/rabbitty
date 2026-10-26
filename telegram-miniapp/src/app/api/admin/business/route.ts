@@ -105,9 +105,18 @@ export async function POST(req: NextRequest) {
     }
   } catch {}
 
+  const rawData = (existingVerificationData as Record<string, any>)?.raw || existingVerificationData || {};
+  const initialPackageBunz = Number(existingVerificationData?.setupBunz || existingVerificationData?.initialVaultBunz || rawData.setupBunz || rawData.initialVaultBunz || 3500);
+
   const [updated] = await db.update(ownedBusinesses)
     .set({
       status,
+      bunzBalance: status === 'APPROVED' && (currentBiz.bunzBalance === 0 || !currentBiz.bunzBalance)
+        ? initialPackageBunz
+        : currentBiz.bunzBalance,
+      creditLimit: status === 'APPROVED' && (currentBiz.creditLimit === 0 || !currentBiz.creditLimit)
+        ? initialPackageBunz
+        : currentBiz.creditLimit,
       verificationMethod: 'admin',
       verificationData: JSON.stringify({
         ...existingVerificationData,
@@ -118,11 +127,11 @@ export async function POST(req: NextRequest) {
     .where(eq(ownedBusinesses.id, businessId))
     .returning();
 
+
   const owner = await db.query.users.findFirst({
     where: eq(users.id, updated.ownerId),
   });
 
-  const rawData = (existingVerificationData as Record<string, any>)?.raw || existingVerificationData || {};
   const applicantEmail = String(owner?.email || rawData.email || existingVerificationData?.email || '').trim();
   const applicantName = String(owner?.firstName || rawData.nombre || existingVerificationData?.nombre || 'Emprendedor').trim();
 

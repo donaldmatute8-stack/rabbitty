@@ -85,6 +85,13 @@ export async function POST(req: NextRequest) {
         })
         .returning();
 
+      // Credit business vault when receiving Bunz from a customer redemption
+      await tx
+        .update(ownedBusinesses)
+        .set({ bunzBalance: sql`COALESCE(${ownedBusinesses.bunzBalance}, 0) + ${bunzCost}` })
+        .where(eq(ownedBusinesses.id, businessId));
+
+
       // Record authoritative Ledger entry
       await recordLedgerTransaction(
         {

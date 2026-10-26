@@ -236,12 +236,13 @@ export async function POST(req: NextRequest) {
         .set({ totalBunzEarned: sql`COALESCE(${users.totalBunzEarned}, 0) + ${bunzReward}` })
         .where(eq(users.id, lockedCustomer.id));
 
-      // Deduct from business credit limit
-      if (business.creditLimit > 0) {
-        await tx.update(ownedBusinesses)
-          .set({ creditUsed: sql`${ownedBusinesses.creditUsed} + ${bunzReward}` })
-          .where(eq(ownedBusinesses.id, business.id));
-      }
+      // Deduct from business vault balance (base rewards funded by merchant vault)
+      await tx.update(ownedBusinesses)
+        .set({
+          bunzBalance: sql`GREATEST(0, COALESCE(${ownedBusinesses.bunzBalance}, 0) - ${baseBunz})`,
+          creditUsed: business.creditLimit > 0 ? sql`${ownedBusinesses.creditUsed} + ${bunzReward}` : ownedBusinesses.creditUsed,
+        })
+        .where(eq(ownedBusinesses.id, business.id));
 
       // Record authoritative Ledger entry
       await recordLedgerTransaction(
