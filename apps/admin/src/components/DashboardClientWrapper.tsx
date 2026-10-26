@@ -8,7 +8,7 @@ import { CommandMenu } from "./CommandMenu";
 import { SandboxBanner } from "./SandboxBanner";
 import { trpc } from "../lib/trpc-client";
 import Link from "next/link";
-import { TerminalSquare, TabletSmartphone, Smartphone, MessageSquare, X, Bot, Sparkles, Send } from "lucide-react";
+import { TerminalSquare, TabletSmartphone, Smartphone, MessageSquare, X, Bot, Sparkles, Send, RotateCw } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
 import { ScannerPairModal } from "./ScannerPairModal";
 
@@ -59,6 +59,8 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
   const [branchId, setBranchId] = useState("b1");
   const [twoFaChecked, setTwoFaChecked] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const utils = trpc.useUtils();
 
   // Detect breakpoint on mount and resize
   useEffect(() => {
@@ -287,6 +289,24 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                   <span className="hidden sm:inline whitespace-nowrap">Kiosko</span>
                 </Link>
                 <div className="w-px h-6 bg-white/10 mx-0.5 hidden sm:block" />
+                <button
+                  onClick={async () => {
+                    if (isRefreshing) return;
+                    setIsRefreshing(true);
+                    try {
+                      await utils.invalidate();
+                      router.refresh();
+                    } finally {
+                      setTimeout(() => setIsRefreshing(false), 600);
+                    }
+                  }}
+                  disabled={isRefreshing}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10 active:scale-90 transition-all cursor-pointer shrink-0 disabled:opacity-50"
+                  title="Refrescar datos (Mac / iPad / Web)"
+                  aria-label="Refrescar datos"
+                >
+                  <RotateCw className={`h-4 w-4 transition-transform ${isRefreshing ? "animate-spin text-pink-400" : ""}`} />
+                </button>
                 <BranchSelector />
               </div>
             </header>

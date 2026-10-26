@@ -66,6 +66,8 @@ export async function GET() {
         boostHeadline: boost?.headline,
         givesBunz: b.givesBunz,
         acceptsBunz: b.acceptsBunz,
+        bunzBalance: b.bunzBalance || 0,
+        hasStockOffer: Boolean(b.acceptsBunz && (b.bunzBalance || 0) >= 5),
         distance: 0,
         imageUrl,
         logo_base64: b.logoUrl,

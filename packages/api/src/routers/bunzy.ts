@@ -118,14 +118,107 @@ async function callInferenceEngine(messages: LLMMessage[]): Promise<InferenceRes
     }
   }
 
-  // 3. Fallback Heurístico Local Seguro si no hay LLM accesible
+  // 3. Fallback Heurístico Local Asistente Operativo si no hay LLM accesible
   return {
-    content:
-      "🐰 Hola. Mi red neuronal remota está en mantenimiento en este momento, " +
-      "pero tus herramientas operativas (Caja, Lealtad, Menú y Campañas) están operando con total normalidad. " +
-      "¿Deseas que te redirija a alguna sección en específico?",
-    modelUsed: "fallback:heuristic-core",
+    content: generateHeuristicResponse(messages),
+    modelUsed: "heuristic:rabbitty-pilot",
   };
+}
+
+/**
+ * Motor heurístico experto para resolver dudas del comercio en tiempo real
+ * aún cuando las GPUs externas no estén respondiendo.
+ */
+function generateHeuristicResponse(messages: LLMMessage[]): string {
+  const userMsg = messages.filter((m) => m.role === "user").pop()?.content || "";
+  const systemMsg = messages.find((m) => m.role === "system")?.content || "";
+  const q = userMsg.toLowerCase();
+
+  // Extraer valores contextuales inyectados en el system prompt
+  const cashbackMatch = systemMsg.match(/Cashback Bunz Activo:\s*([0-9.]+)%/);
+  const currentCashback = cashbackMatch ? cashbackMatch[1] : "20";
+  const negocioMatch = systemMsg.match(/Negocio:\s*([^\n]+)/);
+  const negocioName = negocioMatch?.[1]?.trim() || "tu negocio";
+
+  // 1. Porcentaje de recompensa / cashback / lealtad / bunz
+  if (/\b(porcentaje|recompensa|cashback|lealtad|premio|tasa|dar bunz|ajustar %|cambiar %|donde est[aá]|d[oó]nde est[aá])\b/i.test(q) && !q.includes("corte")) {
+    return (
+      `🐰 ¡Con gusto! Para ajustar el porcentaje de recompensa que otorga **${negocioName}**:\n\n` +
+      `1️⃣ Dirígete al menú lateral y haz clic en **Lealtad** (\`/loyalty\`).\n` +
+      `2️⃣ En la sección **"Tasa de Cashback Base"**, encontrarás el slider que te permite definir el porcentaje entre **2% y 50%**.\n` +
+      `3️⃣ Tu porcentaje actual está configurado en **${currentCashback}%**.\n` +
+      `4️⃣ Al mover el slider y guardar, se sincroniza de inmediato como la **fuente de la verdad única** hacia la app móvil de clientes, el mapa Freehands y la sección Bunz'in.\n\n` +
+      `💡 *Recuerda*: Cada 1 Bunz equivale a $1 MXN. Si un cliente consume $100 y tienes ${currentCashback}%, recibirá ${currentCashback} Bunz.`
+    );
+  }
+
+  // 2. Caja, corte de caja, turno, ticket x, ticket z
+  if (/\b(caja|corte|turno|ticket|gaveta|arqueo|abrir caja|cerrar caja|ticket x|ticket z)\b/i.test(q)) {
+    return (
+      `🐰 Para operaciones de caja en el **POS** (\`/pos\`):\n\n` +
+      `• **Apertura de Turno**: Haz clic en *"Caja cerrada · Abrir"* en la barra superior del POS. Ingresa tu PIN de 4 dígitos y el fondo inicial en efectivo (cambio).\n` +
+      `• **Retiros/Gastos Menores**: Ve a *"Caja / Turno" ➔ "Retiro"*. Captura monto y concepto (hielo, insumos). Se descuenta automáticamente del efectivo a entregar.\n` +
+      `• **Corte Informativo (Ticket X)**: Arqueo parcial en cualquier momento sin cerrar turno.\n` +
+      `• **Cierre de Turno (Ticket Z)**:\n` +
+      `  1. Primero coteja el total de tarjetas bancarias con el reporte de tu terminal física (Clip/Mercado Pago/Banco).\n` +
+      `  2. Cuenta el dinero en efectivo de la gaveta e ingrésalo.\n` +
+      `  3. Ingresa PIN de cajero y PIN de manager para emitir el Ticket Z definitivo.\n\n` +
+      `📖 Puedes consultar la guía paso a paso en **Manual Operativo** (\`/operations-manual\`).`
+    );
+  }
+
+  // 3. Ventas, reportes, auditoría, estadísticas
+  if (/\b(ventas|ordenes|[oó]rdenes|ingresos|ganancias|reporte|auditor[ií]a|cu[aá]nto vend[ií])\b/i.test(q)) {
+    return (
+      `🐰 Puedes consultar tus métricas en tiempo real:\n\n` +
+      `• **Dashboard Principal** (\`/\`): Gráficas de volumen diario, órdenes y Bunz emitidos.\n` +
+      `• **Ventas y Reportes** (\`/reports\`): Historial detallado por ticket, método de pago (Efectivo, Tarjeta, Bunz) y desglose de propinas.\n` +
+      `• **Auditoría de Turnos** (\`/reports/audit\`): Bitácora inmutable de turnos de caja, diferencias de conteo y tickets Z emitidos.`
+    );
+  }
+
+  // 4. Bóveda, recarga, inventario de Bunz
+  if (/\b(b[oó]veda|fondear|aprovisionar|comprar bunz|inventario|paquete|saldo)\b/i.test(q)) {
+    return (
+      `🐰 **Bóveda de Bunz** de **${negocioName}**:\n\n` +
+      `• Tu bóveda almacena el inventario de Bunz respaldados para otorgar como recompensa a los clientes.\n` +
+      `• Puedes ver el saldo disponible en la tarjeta **Bóveda de Bunz** del Dashboard (\`/\`).\n` +
+      `• Conforme los clientes acumulan compras en tu sucursal, los Bunz se transfieren de tu bóveda al wallet de los usuarios.\n` +
+      `• Para aprovisionar o recargar saldo en tu bóveda, puedes hacerlo desde el botón *"Recargar Bóveda"* o contactar directamente a tu asesor Rabbitty.`
+    );
+  }
+
+  // 5. Vincular celular, escáner, terminal móvil
+  if (/\b(vincular|celular|tel[eé]fono|escanear|esc[aá]ner|c[aá]mara|terminal)\b/i.test(q)) {
+    return (
+      `🐰 Para convertir cualquier smartphone en una terminal de escaneo:\n\n` +
+      `1️⃣ Haz clic en el botón **"Vincular Celular"** en la barra superior del Admin.\n` +
+      `2️⃣ Se mostrará un código QR con clave de sincronización segura (Zero-Install).\n` +
+      `3️⃣ Abre la cámara del teléfono del mesero o cajero y escanea el código.\n` +
+      `4️⃣ El teléfono quedará vinculado al instante para escanear tickets y otorgar o canjear Bunz sin necesidad de instalar apps adicionales.`
+    );
+  }
+
+  // 6. Menú, productos, precios
+  if (/\b(men[uú]|producto|art[ií]culo|precio|categor[ií]a|platillo)\b/i.test(q)) {
+    return (
+      `🐰 Para gestionar tu catálogo y precios:\n\n` +
+      `• Ve a **Menú / Catálogo** (\`/menu\`).\n` +
+      `• Aquí puedes crear categorías, productos con modificadores, combos y cambiar precios en vivo para POS y Kiosko.`
+    );
+  }
+
+  // Respuesta por defecto con mapa de acción claro
+  return (
+    `🐰 ¡Hola! Estoy activo como tu copiloto de **${negocioName}**.\n\n` +
+    `Aquí tienes accesos rápidos a lo que puedes gestionar hoy:\n\n` +
+    `• 🎁 **% de Recompensa (Cashback)**: Ve a **Lealtad** (\`/loyalty\`) — actualmente en **${currentCashback}%**.\n` +
+    `• 💳 **Caja y Turnos (Tickets X y Z)**: Ve a **Caja POS** (\`/pos\`).\n` +
+    `• 📊 **Ventas y Auditoría**: Ve a **Reportes** (\`/reports\`).\n` +
+    `• 📱 **Vincular Teléfono**: Usa el botón *"Vincular Celular"* en la barra superior.\n` +
+    `• 🍔 **Menú y Productos**: Ve a **Menú** (\`/menu\`).\n\n` +
+    `¿En cuál de estas áreas te gustaría que te oriente en detalle?`
+  );
 }
 
 // ─── ROUTER PRINCIPAL DE BUNZY ──────────────────────────────────────────────
@@ -406,6 +499,17 @@ CAPACIDAD DE SOPORTE, REPORTE DE BUGS Y FEEDBACK:
           updatedAt: new Date(),
         })
         .where(eq(ownedBusinesses.id, targetBusiness.id));
+
+      // ── FUENTE ÚNICA DE LA VERDAD ──
+      // Espejar a restaurants.defaultRewardRate (admin /loyalty y POS leen de ahí).
+      try {
+        await ctx.restaurantDb
+          .update(restaurants)
+          .set({ defaultRewardRate: input.newRewardPercentage, updatedAt: new Date() })
+          .where(eq(restaurants.businessId, targetBusiness.id));
+      } catch (syncErr) {
+        console.warn("[Bunzy Sync] Error espejando defaultRewardRate en restaurants:", syncErr);
+      }
 
       return {
         success: true,

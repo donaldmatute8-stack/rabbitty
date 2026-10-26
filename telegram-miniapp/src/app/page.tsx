@@ -57,6 +57,10 @@ interface FeedItem {
   endTime?: string;
   lat?: number;
   lng?: number;
+  givesBunz?: boolean;
+  acceptsBunz?: boolean;
+  bunzBalance?: number;
+  hasStockOffer?: boolean;
 }
 
 interface Offer {

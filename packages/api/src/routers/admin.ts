@@ -147,27 +147,36 @@ export const adminRouter = router({
         }
       }
 
-      // Auto-sync to miniapp
+      // Auto-sync directo a la tabla unificada ownedBusinesses (Fuente única de la verdad)
       try {
         const [updated] = await ctx.restaurantDb.select().from(restaurants).where(eq(restaurants.id, input.id));
-        if (updated?.businessId) {
-          // rewardPercentage en la miniapp es percent entero. Normaliza valores legacy < 1.
+        if (updated) {
           const rate = typeof updated.defaultRewardRate === "number" && updated.defaultRewardRate > 0 && updated.defaultRewardRate < 1
             ? Math.round(updated.defaultRewardRate * 100)
             : updated.defaultRewardRate;
-          await miniappClient.createBusiness({
-            name: updated.name,
-            category: "Restaurante",
-            address: "",
-            rewardPercentage: rate ?? 10,
-            telegramId: updated.businessId,
-          });
+
+          if (typeof rate === "number" && rate > 0) {
+            // Sincronizar en coreDb: por businessId si existe o por ownerId/nombre del restaurante
+            await ctx.coreDb
+              .update(ownedBusinesses)
+              .set({
+                rewardPercentage: rate,
+                name: updated.name || undefined,
+                updatedAt: new Date(),
+              })
+              .where(
+                updated.businessId && updated.businessId !== "rabbitty-main"
+                  ? eq(ownedBusinesses.id, updated.businessId)
+                  : eq(ownedBusinesses.ownerId, ctx.userId)
+              );
+          }
         }
-      } catch {
-        // Non-critical — restaurant updated locally
+      } catch (syncErr) {
+        console.warn("[Admin Sync] Error actualizando ownedBusinesses desde updateRestaurant:", syncErr);
       }
 
       return { success: true };
+
     }),
 
   verifyBusiness: platformOnlyProcedure

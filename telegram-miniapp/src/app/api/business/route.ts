@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { users, ownedBusinesses } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+import { restaurantDb } from '@/db/restaurant';
+import { restaurants } from '@rabbitty/database-restaurant/schema';
 import { parseTelegramUser, validateTelegramInitData } from '@/lib/telegramAuth';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 import { sendEcosystemNotification } from '@/lib/push/notify';
@@ -103,6 +105,23 @@ export async function PATCH(req: Request) {
 
     if (!updated) {
       return NextResponse.json({ error: 'Business not found' }, { status: 404 });
+    }
+
+    // ── FUENTE ÚNICA DE LA VERDAD ──
+    // Espejar la tasa de recompensa hacia restaurants.defaultRewardRate para que
+    // el admin /loyalty, el legado del POS y la app móvil siempre muestren el mismo %.
+    if (rewardPercentage !== undefined) {
+      try {
+        const rate = parseInt(rewardPercentage);
+        if (Number.isFinite(rate) && rate > 0) {
+          await restaurantDb
+            .update(restaurants)
+            .set({ defaultRewardRate: rate, updatedAt: new Date() })
+            .where(eq(restaurants.businessId, updated.id));
+        }
+      } catch (syncErr) {
+        console.warn("[BUSINESS_SYNC] Error espejando defaultRewardRate en restaurants:", syncErr);
+      }
     }
 
     return NextResponse.json({ success: true, business: updated, rewardPercentage: updated.rewardPercentage });

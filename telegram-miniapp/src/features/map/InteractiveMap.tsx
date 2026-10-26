@@ -31,6 +31,8 @@ export interface MapBusiness {
   accepts_bunz?: boolean;
   givesBunz?: boolean;
   gives_bunz?: boolean;
+  hasStockOffer?: boolean;
+  bunzBalance?: number;
   distance?: number;
   image?: string;
   imageUrl?: string;
@@ -180,12 +182,15 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
 
   // Filter businesses
   const filteredBusinesses = businesses.filter(b => {
-    // Mode Filter
+    // Mode Filter:
+    // En bunz'in: se muestran todos los negocios que dan recompensas (visita y acumulación)
+    // En Stock: SOLO se muestran los negocios que realmente tienen stock fondeado y disponible para canjear
     let modeMatch = true;
     if (activeMode === "bunz'in") {
       modeMatch = (b.givesBunz === true || b.gives_bunz === true);
     } else if (activeMode === "Stock") {
-      modeMatch = (b.acceptsBunz === true || b.accepts_bunz === true);
+      const hasBalance = typeof b.bunzBalance === 'number' ? b.bunzBalance >= 5 : false;
+      modeMatch = (b.hasStockOffer === true || ((b.acceptsBunz === true || b.accepts_bunz === true) && hasBalance));
     }
 
     // Category Filter
