@@ -301,8 +301,9 @@ export default function ChatInboxPage() {
     [data, prefs]
   );
 
-  const hasBusinessConvs = allConversations.some((c) => c.isBusinessInbox) || !!profileRes?.profile?.ownedBusiness;
-  const isAffiliate = user?.role === 'AFFILIATE' || hasBusinessConvs;
+  // Un Rabbitter común NUNCA debe ver los settings de negocio a menos que sea dueño en DB de un negocio o rol AFFILIATE
+  const hasOwnedBusiness = !!profileRes?.profile?.ownedBusiness;
+  const isAffiliate = user?.role === 'AFFILIATE' || hasOwnedBusiness;
   const archivedCount = allConversations.filter((c) => prefs[c.id]?.archived).length;
   const totalUnreadCount = useMemo(
     () => allConversations.reduce((acc, c) => acc + (c.unreadCount || 0), 0),

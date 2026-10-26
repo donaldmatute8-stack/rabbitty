@@ -24,14 +24,16 @@ function getDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: numbe
   return Math.round(R * c);
 }
 
-// In-memory cooldown cache to prevent push spam: key -> timestamp
-const notificationCooldowns = new Map<string, number>();
-const COOLDOWN_MS = 12 * 60 * 60 * 1000;
+import { checkRateLimit } from "@/lib/rateLimit";
 
-// Simple in-memory rate limit per user
-const pingRateLimit = new Map<string, { count: number; resetAt: number }>();
-const PING_RATE_LIMIT = 10;
-const PING_RATE_WINDOW_MS = 30 * 1000;
+// In-memory fallback cooldown cache
+const memoryCooldowns = new Map<string, number>();
+const COOLDOWN_SECONDS = 12 * 60 * 60; // 12 horas
+
+async function isCooldownActive(key: string, cooldownSec: number): Promise<boolean> {
+  const res = await checkRateLimit(`cd:${key}`, 1, cooldownSec);
+  return !res.allowed;
+}
 
 interface ProximityMatch {
   businessId: string;
@@ -61,17 +63,9 @@ export async function POST(req: NextRequest) {
     }
 
     if (caller?.id) {
-      const now = Date.now();
-      const rlKey = `ping:${caller.id}`;
-      const rl = pingRateLimit.get(rlKey);
-      if (rl && now < rl.resetAt) {
-        if (rl.count >= PING_RATE_LIMIT) {
-          return NextResponse.json({ error: "Too many location pings" }, { status: 429 });
-        }
-        rl.count += 1;
-        pingRateLimit.set(rlKey, rl);
-      } else {
-        pingRateLimit.set(rlKey, { count: 1, resetAt: now + PING_RATE_WINDOW_MS });
+      const rl = await checkRateLimit(`ping:${caller.id}`, 10, 30);
+      if (!rl.allowed) {
+        return NextResponse.json({ error: "Too many location pings" }, { status: 429 });
       }
     }
 
@@ -179,12 +173,9 @@ export async function POST(req: NextRequest) {
           };
 
           const cooldownKey = `push:boost:${caller.id}:${b.id}`;
-          const lastSent = notificationCooldowns.get(cooldownKey) || 0;
-          const now = Date.now();
+          const isBoostCoolingDown = await isCooldownActive(cooldownKey, COOLDOWN_SECONDS);
 
-          if (now - lastSent > COOLDOWN_MS) {
-            notificationCooldowns.set(cooldownKey, now);
-
+          if (!isBoostCoolingDown) {
             const pushTitle = `⚡ ¡${activeBoost.rewardPercentage}% Bunz en ${b.name}!`;
             const pushBody = `Pasa en tu caminata de hoy: ${activeBoost.headline || `obtenemos recompensa especial de +${activeBoost.rewardPercentage}% Bunz`}.`;
 
@@ -225,12 +216,9 @@ export async function POST(req: NextRequest) {
           };
 
           const cooldownKey = `push:loyalty:${caller.id}:${b.id}`;
-          const lastSent = notificationCooldowns.get(cooldownKey) || 0;
-          const now = Date.now();
+          const isCoolingDown = await isCooldownActive(cooldownKey, COOLDOWN_SECONDS);
 
-          if (now - lastSent > COOLDOWN_MS) {
-            notificationCooldowns.set(cooldownKey, now);
-
+          if (!isCoolingDown) {
             const pushTitle = `🐰 ¡Estás cerca de ${b.name}!`;
             const pushBody = `Visita #${visitCount + 1}: Recibe doble cashback (hasta 50 Bunz) en tu consumo de hoy al pagar en caja.`;
 
@@ -266,10 +254,8 @@ export async function POST(req: NextRequest) {
           const poorAccuracy = typeof accuracy === "number" && accuracy > 80;
           if (!poorAccuracy) {
             const arrivalKey = `arrival:${caller.id}:${b.id}`;
-            const lastArrival = notificationCooldowns.get(arrivalKey) || 0;
-            const now = Date.now();
-            if (now - lastArrival > 4 * 60 * 60 * 1000) {
-              notificationCooldowns.set(arrivalKey, now);
+            const isArrivalCoolingDown = await isCooldownActive(arrivalKey, 4 * 60 * 60);
+            if (!isArrivalCoolingDown) {
               try {
                 const [rest] = await restaurantDb
                   .select()

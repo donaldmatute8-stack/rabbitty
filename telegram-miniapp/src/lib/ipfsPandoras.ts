@@ -38,9 +38,7 @@ export async function archiveAccountToPandorasIpfs(
     process.env.PANDORAS_IPFS_GATEWAY ||
     "https://rpc.ipfs.pandoras.finance/api/v0/add";
 
-  const pandorasAuthToken =
-    process.env.PANDORAS_IPFS_AUTH_TOKEN ||
-    "c9dcb0fa224698754b52cbfa69899c41d360e476fb623092973d89de52ea3118";
+  const pandorasAuthToken = process.env.PANDORAS_IPFS_AUTH_TOKEN || undefined;
 
   try {
     // Intentar anclar directamente en el Nodo IPFS de Pandoras si el endpoint está disponible

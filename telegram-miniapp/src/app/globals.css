@@ -47,12 +47,12 @@ input, textarea, [contenteditable="true"], .selectable, code, pre, .font-mono {
   display: none !important;
 }
 
-/* Cyber Dark Mode Tile Filter (High-contrast, sleek streets, no watermarks) */
+/* Rabbitty Tile Rendering (Dark Matter & Positron Crisp Aesthetics) */
 .rabbitty-dark-tiles {
-  filter: brightness(0.65) invert(1) contrast(2.8) hue-rotate(205deg) saturate(0.25) !important;
+  filter: contrast(1.15) brightness(0.95) saturate(1.1) !important;
 }
 .rabbitty-light-tiles {
-  filter: contrast(1.05) brightness(0.98) saturate(0.85) !important;
+  filter: contrast(1.05) brightness(0.98) saturate(1.05) !important;
 }
 
 /* Scrollbar hide */

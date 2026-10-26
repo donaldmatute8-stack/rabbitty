@@ -12,9 +12,11 @@ import { PlatformBridge } from '@/lib/platform';
 import { useTheme } from '@/contexts/ThemeContext';
 import { RabbittyMap } from './nativeMapBridge';
 
-// Free, open, high-performance OSM tiles without API Key restrictions or watermarks:
-const OSM_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-const OSM_TILE_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+// Ultra-sleek, high-performance Dark Matter and Positron map tiles (No watermark, dark cyber / crisp aesthetic)
+const DARK_TILE_URL = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+const DARK_MATTER_URL = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+const LIGHT_POSITRON_URL = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+const MAP_TILE_ATTR = '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
 export interface MapBusiness {
   id: string;
@@ -321,18 +323,22 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
 
   const toggleSpeechRecognition = () => {
     if (typeof window === 'undefined') return;
+    PlatformBridge.hapticFeedback('medium');
     
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const SpeechRec = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
-    if (!SpeechRec) {
-      // Fallback: trigger quick prompt for text
-      const manual = prompt('¿Qué spot o recompensa buscas? (ej: "Cafeterías cerca", "Mayor cashback")');
-      if (manual) handleVoiceCommand(manual);
+    
+    if (isListening) {
+      setIsListening(false);
       return;
     }
 
-    if (isListening) {
-      setIsListening(false);
+    if (!SpeechRec) {
+      // Direct ergonomic prompt in mobile WebViews / iOS Safari where webkitSpeech is blocked
+      const query = window.prompt('Habla o escribe a Bunzy:\n(Ej: "Café cerca", "Más Bunz", "Dónde comer")', copilotQuery || '');
+      if (query && query.trim()) {
+        handleVoiceCommand(query.trim());
+      }
       return;
     }
 
@@ -344,18 +350,22 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
 
       recognition.onstart = () => {
         setIsListening(true);
-        PlatformBridge.hapticFeedback('medium');
       };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       recognition.onresult = (event: any) => {
-        const text = event.results[0][0].transcript;
+        const text = event.results?.[0]?.[0]?.transcript;
         setIsListening(false);
-        handleVoiceCommand(text);
+        if (text) handleVoiceCommand(text);
       };
 
-      recognition.onerror = () => {
+      recognition.onerror = (err: any) => {
         setIsListening(false);
+        // If microphone was blocked or not allowed by browser/iOS webview, provide fallback input
+        if (err?.error === 'not-allowed' || err?.error === 'service-not-allowed') {
+          const manual = window.prompt('El micrófono está restringido en este navegador. Escribe lo que buscas:', copilotQuery || '');
+          if (manual && manual.trim()) handleVoiceCommand(manual.trim());
+        }
       };
 
       recognition.onend = () => {
@@ -365,6 +375,8 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
       recognition.start();
     } catch {
       setIsListening(false);
+      const manual = window.prompt('Habla o escribe a Bunzy (ej. "Cafetería", "Más Bunz"):', copilotQuery || '');
+      if (manual && manual.trim()) handleVoiceCommand(manual.trim());
     }
   };
 
@@ -412,7 +424,7 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Basemap switcher: True Cyber Dark vs Architectural Crisp Light with Overzooming support
+  // Basemap switcher: True Cyber Dark Matter vs Crisp Positron Light with Overzooming support
   useEffect(() => {
     const map = mapInst.current;
     if (!map || !mapReady) return;
@@ -421,15 +433,17 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
       tileLayerRef.current = null;
     }
     const layer = isDark
-      ? L.tileLayer(OSM_TILE_URL, {
+      ? L.tileLayer(DARK_MATTER_URL, {
+          subdomains: 'abcd',
           maxZoom: 20,
           className: 'rabbitty-dark-tiles',
-          attribution: OSM_TILE_ATTR,
+          attribution: MAP_TILE_ATTR,
         })
-      : L.tileLayer(OSM_TILE_URL, {
+      : L.tileLayer(LIGHT_POSITRON_URL, {
+          subdomains: 'abcd',
           maxZoom: 20,
           className: 'rabbitty-light-tiles',
-          attribution: OSM_TILE_ATTR,
+          attribution: MAP_TILE_ATTR,
         });
     layer.addTo(map);
     layer.bringToBack();
@@ -555,7 +569,7 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
         className={`absolute inset-0 z-0 transition-opacity duration-300 ${nativeMapActive ? 'opacity-0 pointer-events-none' : 'opacity-100'}`} 
       />
 
-      {/* Top HUD: Status Pills & GPS Centering */}
+      {/* Top HUD: Spots Counter & Quick Stats */}
       <div 
         className="absolute inset-x-4 z-20 flex items-center justify-between pointer-events-none"
         style={{ top: PlatformBridge.isTelegram() ? 12 : 14 }}
@@ -586,54 +600,24 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
           )}
         </div>
 
-        {/* Right Action: Locate Me GPS */}
-        <div className="pointer-events-auto flex items-center gap-2">
-          {!userLat && onRequestLocation && (
-            <button
-              type="button"
-              onClick={onRequestLocation}
-              disabled={isLocating}
-              className="px-3 py-1.5 rounded-full text-[11px] font-black text-white flex items-center gap-1.5 border-none cursor-pointer shadow-lg active:scale-95 transition-all"
-              style={{
-                background: 'linear-gradient(135deg, #E91E63 0%, #D81B60 100%)',
-                boxShadow: '0 4px 16px rgba(233,30,99,0.4)',
-              }}
+        {/* Compact GPS status indicator (No space disruption) */}
+        <div className="pointer-events-auto flex items-center gap-1.5">
+          {isLocating && (
+            <span 
+              className="px-2.5 py-1 rounded-full text-[10px] font-black text-white flex items-center gap-1 shadow-md animate-pulse"
+              style={{ background: 'linear-gradient(135deg, #E91E63 0%, #D81B60 100%)' }}
             >
-              <span>{isLocating ? 'Buscando GPS…' : 'Activar GPS'}</span>
-            </button>
+              <Crosshair size={11} className="animate-spin" />
+              <span>GPS...</span>
+            </span>
           )}
-
-          <button 
-            type="button"
-            onClick={() => {
-              PlatformBridge.hapticFeedback('light');
-              if (userLat && userLng && mapInst.current) {
-                mapInst.current.flyTo([userLat, userLng], 16.5, { duration: 1 });
-              } else if (onRequestLocation) {
-                onRequestLocation();
-              }
-            }}
-            className="w-10 h-10 rounded-full flex items-center justify-center border cursor-pointer shadow-md backdrop-blur-xl active:scale-90 transition-transform"
-            style={{
-              background: userLat 
-                ? (isDark ? 'rgba(13, 9, 20, 0.9)' : 'rgba(255, 255, 255, 0.95)') 
-                : 'rgba(233,30,99,0.18)',
-              borderColor: userLat 
-                ? (isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)') 
-                : '#E91E63',
-              color: userLat ? (isDark ? '#FFFFFF' : '#111111') : '#E91E63',
-            }}
-            title={userLat ? "Centrar en mi ubicación" : "Activar GPS"}
-          >
-            <Crosshair size={18} className={isLocating ? 'animate-spin' : ''} />
-          </button>
         </div>
       </div>
 
-      {/* Bunzy Copilot Bar (Gemini in Car Style Assistant) */}
+      {/* Bunzy Copilot Floating Search Bar (Apple/Google Maps style search input) */}
       <div 
         className="absolute z-20 inset-x-4 pointer-events-none"
-        style={{ top: PlatformBridge.isTelegram() ? 64 : 66 }}
+        style={{ top: PlatformBridge.isTelegram() ? 56 : 58 }}
       >
         <div 
           className="pointer-events-auto rounded-2xl border shadow-xl backdrop-blur-2xl p-2.5 transition-all"
@@ -648,7 +632,7 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
           <div className="flex items-center gap-2.5">
             {/* Bunzy Avatar with Pulsing Halo */}
             <div 
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0 shadow-sm relative overflow-hidden"
+              className="w-8 h-8 rounded-xl flex items-center justify-center text-base shrink-0 shadow-sm relative overflow-hidden"
               style={{
                 background: 'linear-gradient(135deg, #E91E63 0%, #8E24AA 100%)',
               }}
@@ -682,7 +666,7 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
                         handleVoiceCommand(copilotQuery.trim());
                       }
                     }}
-                    placeholder='Bunzy Copilot: "¿A dónde vamos?"'
+                    placeholder='Pregunta a Bunzy: "¿A dónde vamos?"'
                     className="w-full bg-transparent border-none outline-none text-xs font-semibold placeholder:text-(--text-muted)"
                     style={{ color: 'var(--text-primary)' }}
                   />
@@ -694,12 +678,12 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
             <button
               type="button"
               onClick={toggleSpeechRecognition}
-              className={`w-9 h-9 rounded-xl flex items-center justify-center border-none cursor-pointer transition-all active:scale-95 ${
+              className={`w-8 h-8 rounded-xl flex items-center justify-center border-none cursor-pointer transition-all active:scale-95 ${
                 isListening ? 'bg-[#E91E63] text-white animate-pulse' : 'bg-(--bg-subtle) text-(--text-primary)'
               }`}
               title={speechSupported ? 'Hablar con Bunzy Copilot' : 'Escribir comando para Bunzy'}
             >
-              {isListening ? <MicOff size={16} /> : <Mic size={16} className="text-[#E91E63]" />}
+              {isListening ? <MicOff size={15} /> : <Mic size={15} className="text-[#E91E63]" />}
             </button>
           </div>
 
@@ -714,7 +698,7 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
               <button
                 key={chip.label}
                 onClick={() => handleVoiceCommand(chip.query)}
-                className="px-2.5 py-1 rounded-lg text-[10px] font-bold whitespace-nowrap bg-(--bg-subtle) hover:bg-[#E91E63]/15 text-(--text-secondary) hover:text-[#E91E63] border border-(--border-subtle) cursor-pointer transition-colors shrink-0"
+                className="px-2 py-0.5 rounded-lg text-[9.5px] font-bold whitespace-nowrap bg-(--bg-subtle) hover:bg-[#E91E63]/15 text-(--text-secondary) hover:text-[#E91E63] border border-(--border-subtle) cursor-pointer transition-colors shrink-0"
               >
                 {chip.label}
               </button>
@@ -723,115 +707,158 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
         </div>
       </div>
 
-      {/* Bottom Floating Filter Dock (Glassmorphism & Collapsible) */}
+      {/* Right Floating Map Controls (Google Maps / Apple Maps Style) */}
       <div 
-        className="absolute z-20 inset-x-4 flex flex-col gap-2 transition-all duration-300 pointer-events-none"
-        style={{ 
-          bottom: selected ? 230 : (PlatformBridge.isTelegram() ? 28 : 20),
-        }}
+        className="absolute right-4 z-20 flex flex-col gap-2.5 pointer-events-auto"
+        style={{ top: PlatformBridge.isTelegram() ? 175 : 180 }}
       >
-        <div className="pointer-events-auto flex items-center justify-between">
-          <button 
-            type="button"
-            onClick={() => {
-              PlatformBridge.hapticFeedback('light');
-              setShowAllFilters(!showAllFilters);
-            }}
-            className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider backdrop-blur-xl border flex items-center gap-1.5 cursor-pointer shadow-md active:scale-95 transition-all"
-            style={{
-              background: isDark ? 'rgba(13, 9, 20, 0.88)' : 'rgba(255, 255, 255, 0.92)',
-              borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)',
-              color: 'var(--text-secondary)'
-            }}
-          >
-            <span>{showAllFilters ? 'Ocultar Filtros' : 'Mostrar Filtros'}</span>
-            {showAllFilters ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
-          </button>
-        </div>
+        {/* Locate Me GPS Button */}
+        <button 
+          type="button"
+          onClick={() => {
+            PlatformBridge.hapticFeedback('light');
+            if (userLat && userLng && mapInst.current) {
+              mapInst.current.flyTo([userLat, userLng], 16.5, { duration: 1 });
+            } else if (onRequestLocation) {
+              onRequestLocation();
+            }
+          }}
+          className="w-10 h-10 rounded-2xl flex items-center justify-center border cursor-pointer shadow-lg backdrop-blur-xl active:scale-90 transition-transform"
+          style={{
+            background: userLat 
+              ? (isDark ? 'rgba(18, 12, 28, 0.92)' : 'rgba(255, 255, 255, 0.95)') 
+              : 'rgba(233,30,99,0.18)',
+            borderColor: userLat 
+              ? (isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)') 
+              : '#E91E63',
+            color: userLat ? (isDark ? '#FFFFFF' : '#111111') : '#E91E63',
+          }}
+          title={userLat ? "Centrar en mi ubicación" : "Activar GPS"}
+        >
+          <Crosshair size={18} className={isLocating ? 'animate-spin' : ''} />
+        </button>
 
-        {showAllFilters && (
-          <div 
-            className="pointer-events-auto p-2.5 rounded-3xl border shadow-2xl backdrop-blur-2xl flex flex-col gap-2 transition-all"
-            style={{
-              background: isDark ? 'rgba(13, 9, 20, 0.92)' : 'rgba(255, 255, 255, 0.95)',
-              borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)',
-            }}
-          >
-            {/* Mode Selector Tabs: Todos / Bunz'in / Gasta */}
-            <div className="flex gap-1.5 p-1 rounded-2xl bg-(--bg-subtle) border border-(--border-subtle)">
-              {[
-                { id: 'Todos', label: 'Todos' },
-                { id: "bunz'in", label: 'Gana Bunz' },
-                { id: 'Stock', label: 'Gasta Bunz' },
-              ].map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => {
-                    PlatformBridge.hapticFeedback('light');
-                    setActiveMode(m.id);
-                  }}
-                  className={`flex-1 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-wide border-none cursor-pointer transition-all ${
-                    activeMode === m.id
-                      ? 'bg-[#E91E63] text-white shadow-md scale-101'
-                      : 'bg-transparent text-(--text-muted) hover:text-(--text-primary)'
-                  }`}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Horizontal Category Chips */}
-            <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar pt-0.5">
-              {[
-                { id: 'Todos', label: 'Todos', icon: '🌐' },
-                { id: 'Cafetería', label: 'Cafés', icon: '☕' },
-                { id: 'Restaurante', label: 'Gastro', icon: '🍕' },
-                { id: 'Bar', label: 'Copas', icon: '🍸' },
-                { id: 'Fitness', label: 'Fitness', icon: '💪' },
-                { id: 'Belleza', label: 'Belleza', icon: '✨' },
-              ].map((cat) => {
-                const active = activeCategory === cat.id;
-                return (
-                  <button
-                    key={cat.id}
-                    onClick={() => {
-                      PlatformBridge.hapticFeedback('light');
-                      setActiveCategory(cat.id);
-                    }}
-                    className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap cursor-pointer transition-all border ${
-                      active
-                        ? 'bg-(--text-primary) text-(--bg-primary) border-transparent shadow-xs'
-                        : 'bg-(--bg-subtle) text-(--text-muted) border-(--border-subtle) hover:text-(--text-primary)'
-                    }`}
-                  >
-                    <span>{cat.icon}</span>
-                    <span>{cat.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        {/* Compass / Recenter Spots Button */}
+        <button 
+          type="button"
+          onClick={() => {
+            PlatformBridge.hapticFeedback('light');
+            if (filteredBusinesses.length > 0 && mapInst.current) {
+              const bounds = L.latLngBounds(
+                filteredBusinesses
+                  .filter(b => b.lat != null && b.lng != null)
+                  .map(b => [Number(b.lat), Number(b.lng)] as [number, number])
+              );
+              if (bounds.isValid()) {
+                mapInst.current.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
+              }
+            }
+          }}
+          className="w-10 h-10 rounded-2xl flex items-center justify-center border cursor-pointer shadow-lg backdrop-blur-xl active:scale-90 transition-transform"
+          style={{
+            background: isDark ? 'rgba(18, 12, 28, 0.92)' : 'rgba(255, 255, 255, 0.95)',
+            borderColor: isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)',
+            color: 'var(--text-primary)',
+          }}
+          title="Ver todos los spots"
+        >
+          <Compass size={18} />
+        </button>
       </div>
 
-      {/* Selected Business Action Card (Floating HUD Card) */}
+      {/* Bottom Floating Filter Dock (Persistent Google Maps Chips - Never Pushed Out) */}
+      <div 
+        className="absolute z-20 inset-x-4 flex flex-col gap-2 pointer-events-none transition-all duration-300"
+        style={{ 
+          bottom: selected ? (PlatformBridge.isTelegram() ? 135 : 125) : (PlatformBridge.isTelegram() ? 24 : 18),
+        }}
+      >
+        <div 
+          className="pointer-events-auto p-2 rounded-2xl border shadow-xl backdrop-blur-2xl flex flex-col gap-1.5"
+          style={{
+            background: isDark ? 'rgba(13, 9, 20, 0.92)' : 'rgba(255, 255, 255, 0.95)',
+            borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)',
+          }}
+        >
+          {/* Mode Selector Tabs: Todos / Gana Bunz / Gasta Bunz */}
+          <div className="flex gap-1 p-0.5 rounded-xl bg-(--bg-subtle) border border-(--border-subtle)">
+            {[
+              { id: 'Todos', label: 'Todos' },
+              { id: "bunz'in", label: 'Gana Bunz' },
+              { id: 'Stock', label: 'Gasta Bunz' },
+            ].map((m) => (
+              <button
+                key={m.id}
+                onClick={() => {
+                  PlatformBridge.hapticFeedback('light');
+                  setActiveMode(m.id);
+                }}
+                className={`flex-1 py-1 rounded-lg text-[10px] font-black uppercase tracking-wide border-none cursor-pointer transition-all ${
+                  activeMode === m.id
+                    ? 'bg-[#E91E63] text-white shadow-xs'
+                    : 'bg-transparent text-(--text-muted) hover:text-(--text-primary)'
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Horizontal Category Chips */}
+          <div className="flex items-center gap-1 overflow-x-auto hide-scrollbar">
+            {[
+              { id: 'Todos', label: 'Todos', icon: '🌐' },
+              { id: 'Cafetería', label: 'Cafés', icon: '☕' },
+              { id: 'Restaurante', label: 'Gastro', icon: '🍕' },
+              { id: 'Bar', label: 'Copas', icon: '🍸' },
+              { id: 'Fitness', label: 'Fitness', icon: '💪' },
+              { id: 'Belleza', label: 'Belleza', icon: '✨' },
+            ].map((cat) => {
+              const active = activeCategory === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => {
+                    PlatformBridge.hapticFeedback('light');
+                    setActiveCategory(cat.id);
+                  }}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-extrabold whitespace-nowrap cursor-pointer transition-all border ${
+                    active
+                      ? 'bg-(--text-primary) text-(--bg-primary) border-transparent shadow-xs'
+                      : 'bg-(--bg-subtle) text-(--text-muted) border-(--border-subtle) hover:text-(--text-primary)'
+                  }`}
+                >
+                  <span>{cat.icon}</span>
+                  <span>{cat.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Selected Business Action Card (Bottom Sheet inspired by Apple/Google Maps) */}
       {selected && (
         <div 
-          className="absolute inset-x-4 z-30 max-w-md mx-auto"
-          style={{ bottom: PlatformBridge.isTelegram() ? 28 : 20 }}
+          className="absolute inset-x-3 z-30 max-w-md mx-auto pointer-events-auto animate-fadeIn"
+          style={{ bottom: PlatformBridge.isTelegram() ? 12 : 10 }}
         >
           <div 
             onClick={() => router.push(`/affiliate/${selected.id}`)}
-            className="p-4 rounded-3xl border shadow-2xl backdrop-blur-2xl flex items-center gap-3.5 cursor-pointer relative overflow-hidden transition-all active:scale-98"
+            className="p-3.5 rounded-3xl border shadow-2xl backdrop-blur-2xl flex items-center gap-3 cursor-pointer relative overflow-hidden transition-all active:scale-98"
             style={{
-              background: isDark ? 'rgba(18, 12, 28, 0.95)' : 'rgba(255, 255, 255, 0.98)',
+              background: isDark ? 'rgba(18, 12, 28, 0.96)' : 'rgba(255, 255, 255, 0.98)',
               borderColor: isDark ? 'rgba(233, 30, 99, 0.4)' : 'rgba(233, 30, 99, 0.25)',
-              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.25)',
+              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.35)',
             }}
           >
+            {/* Grab Handle bar (Apple / Google Maps style) */}
+            <div className="absolute top-1.5 inset-x-0 flex justify-center pointer-events-none">
+              <span className="w-8 h-1 rounded-full bg-white/20" />
+            </div>
+
             {/* Business Logo / Emoji Avatar */}
-            <div className="w-16 h-16 rounded-2xl overflow-hidden shrink-0 border border-(--border-subtle) bg-(--bg-subtle) flex items-center justify-center">
+            <div className="w-14 h-14 rounded-2xl overflow-hidden shrink-0 border border-(--border-subtle) bg-(--bg-subtle) flex items-center justify-center mt-1">
               {selected.logoUrl || selected.imageUrl ? (
                 <img 
                   src={selected.logoUrl || selected.imageUrl} 
@@ -839,14 +866,14 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
                   className="w-full h-full object-cover" 
                 />
               ) : (
-                <span className="text-3xl">{getIcon(selected.category || selected.device)}</span>
+                <span className="text-2xl">{getIcon(selected.category || selected.device)}</span>
               )}
             </div>
 
             {/* Info Column */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="m-0 text-base font-black truncate" style={{ color: 'var(--text-primary)' }}>
+            <div className="flex-1 min-w-0 mt-1">
+              <div className="flex items-center justify-between gap-1">
+                <h3 className="m-0 text-sm font-black truncate" style={{ color: 'var(--text-primary)' }}>
                   {selected.name || selected.user}
                 </h3>
                 
@@ -856,27 +883,27 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
                     e.stopPropagation();
                     setSelected(null);
                   }}
-                  className="w-6 h-6 rounded-full bg-(--bg-subtle) hover:bg-[#E91E63]/20 flex items-center justify-center text-(--text-muted) hover:text-[#E91E63] border-none cursor-pointer"
+                  className="w-5 h-5 rounded-full bg-(--bg-subtle) hover:bg-[#E91E63]/20 flex items-center justify-center text-(--text-muted) hover:text-[#E91E63] border-none cursor-pointer"
                 >
-                  <X size={13} />
+                  <X size={12} />
                 </button>
               </div>
 
-              <p className="m-0 text-xs font-semibold text-(--text-muted) mt-0.5 truncate">
-                {selected.category || selected.device || 'Comercio Afiliado'} • A {selected.distance ? `${selected.distance} km` : 'Cerca de ti'}
+              <p className="m-0 text-[11px] font-semibold text-(--text-muted) mt-0.5 truncate">
+                {selected.category || selected.device || 'Comercio Afiliado'} • {selected.distance ? `${selected.distance} km` : 'Cerca de ti'}
               </p>
 
               {/* Rewards / Bunz Pills */}
-              <div className="flex items-center gap-1.5 mt-2">
+              <div className="flex items-center gap-1.5 mt-1.5">
                 {(selected.givesBunz !== false) && (
-                  <span className="px-2 py-0.5 rounded-md text-[11px] font-black bg-[#E91E63]/15 text-[#E91E63] border border-[#E91E63]/30 flex items-center gap-1">
-                    <Flame size={12} className="fill-[#E91E63]" />
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-[#E91E63]/15 text-[#E91E63] border border-[#E91E63]/30 flex items-center gap-1">
+                    <Flame size={11} className="fill-[#E91E63]" />
                     +{selected.reward_percentage || selected.rewardPercentage || 10}% Bunz
                   </span>
                 )}
                 {selected.acceptsBunz === true && (
-                  <span className="px-2 py-0.5 rounded-md text-[11px] font-black bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 flex items-center gap-1">
-                    <Gift size={12} />
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 flex items-center gap-1">
+                    <Gift size={11} />
                     Stock
                   </span>
                 )}
@@ -884,8 +911,8 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
             </div>
 
             {/* Navigation CTA icon */}
-            <div className="w-10 h-10 rounded-2xl bg-[#E91E63] text-white flex items-center justify-center shrink-0 shadow-lg shadow-pink-500/30">
-              <Navigation size={18} className="rotate-45" />
+            <div className="w-9 h-9 rounded-xl bg-[#E91E63] text-white flex items-center justify-center shrink-0 shadow-lg shadow-pink-500/30">
+              <Navigation size={16} className="rotate-45" />
             </div>
           </div>
         </div>

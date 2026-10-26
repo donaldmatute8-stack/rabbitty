@@ -905,15 +905,6 @@ export const posRouter = router({
 
 
       await ctx.restaurantDb.update(orders).set({ status: "COMPLETED" }).where(eq(orders.id, order.id));
-      if (order.tableId) {
-        await ctx.restaurantDb.update(tableSessions).set({
-          status: "CLOSED",
-          closedAt: new Date(),
-        }).where(and(
-          eq(tableSessions.tableId, order.tableId),
-          eq(tableSessions.status, "OPEN")
-        ));
-      }
 
       // Liberar la mesa: cerrar la sesión activa de la tabla para que el
       // próximo comensal pueda reclamarla (409 anti-robo no se convierte en DoS).

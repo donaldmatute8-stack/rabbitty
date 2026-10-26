@@ -7,6 +7,7 @@ import { eq, and, desc, gt, sql } from "drizzle-orm";
 import { getAuthenticatedUser } from "@/lib/serverAuth";
 import { recordLedgerTransaction, findLedgerEntry } from "@/lib/ledgerHelper";
 import { sendEcosystemNotification } from "@/lib/push/notify";
+import { checkRateLimit } from "@/lib/rateLimit";
 import crypto from "crypto";
 
 export async function POST(req: NextRequest) {
@@ -14,6 +15,14 @@ export async function POST(req: NextRequest) {
     const caller = await getAuthenticatedUser(req);
     if (!caller) {
       return NextResponse.json({ error: "Autenticación requerida para reclamar recompensas." }, { status: 401 });
+    }
+
+    // Rate Limiting anti-bruteforce: Máx 12 reclamos de ticket por minuto por usuario
+    const rate = await checkRateLimit(`claim_ticket:${caller.id}`, 12, 60);
+    if (!rate.allowed) {
+      return NextResponse.json({
+        error: `Demasiados intentos de reclamo de ticket. Espera ${rate.retryAfterSeconds}s antes de reintentar.`
+      }, { status: 429 });
     }
 
     const body = await req.json();

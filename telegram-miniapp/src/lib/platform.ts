@@ -441,7 +441,7 @@ export const PlatformBridge = {
       return { success: false, error: 'UNSUPPORTED' };
     }
 
-    // Try primary high-accuracy position first with 6s timeout
+    // Try primary high-accuracy position first with 3.5s timeout
     const getPos = (enableHigh: boolean, timeoutMs: number) =>
       new Promise<{
         success: boolean;
@@ -450,8 +450,19 @@ export const PlatformBridge = {
         accuracy?: number;
         error?: 'PERMISSION_DENIED' | 'POSITION_UNAVAILABLE' | 'TIMEOUT';
       }>((resolve) => {
+        let finished = false;
+        const timer = setTimeout(() => {
+          if (!finished) {
+            finished = true;
+            resolve({ success: false, error: 'TIMEOUT' });
+          }
+        }, timeoutMs);
+
         navigator.geolocation.getCurrentPosition(
           (pos) => {
+            if (finished) return;
+            finished = true;
+            clearTimeout(timer);
             resolve({
               success: true,
               lat: pos.coords.latitude,
@@ -460,21 +471,24 @@ export const PlatformBridge = {
             });
           },
           (err) => {
+            if (finished) return;
+            finished = true;
+            clearTimeout(timer);
             let code: 'PERMISSION_DENIED' | 'POSITION_UNAVAILABLE' | 'TIMEOUT' = 'POSITION_UNAVAILABLE';
             if (err.code === err.PERMISSION_DENIED) code = 'PERMISSION_DENIED';
             else if (err.code === err.TIMEOUT) code = 'TIMEOUT';
             resolve({ success: false, error: code });
           },
-          { enableHighAccuracy: enableHigh, timeout: timeoutMs, maximumAge: 300000 }
+          { enableHighAccuracy: enableHigh, timeout: timeoutMs, maximumAge: 60000 }
         );
       });
 
-    const primary = await getPos(true, 5000);
+    const primary = await getPos(true, 3500);
     if (primary.success) return primary;
     if (primary.error === 'PERMISSION_DENIED') return primary;
 
-    // Retry with low accuracy (wifi/cell triangulation) if timeout or position unavailable
-    const fallback = await getPos(false, 6000);
+    // Fast retry with low accuracy (cell/wifi triangulation) if GPS timed out
+    const fallback = await getPos(false, 3000);
     return fallback;
   },
 
