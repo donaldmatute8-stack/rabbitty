@@ -263,7 +263,7 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
     addText(divider);
     chunks.push(alignLeft);
     if (data.orderNumber) addText(`Ticket Original: #${data.orderNumber}\n`);
-    addText(`Fecha: ${data.date || new Date().toLocaleString("es-MX")}\n`);
+    addText(`Fecha: ${data.date || new Date().toLocaleString("es-MX", { timeZone: "America/Mexico_City", dateStyle: "short", timeStyle: "short" })}\n`);
     if (data.paymentMethod) addText(`Forma Original: ${data.paymentMethod}\n`);
     if (data.reason) addText(`Motivo: ${data.reason}\n`);
     addText(divider);
@@ -299,7 +299,7 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
   addText(`Ticket: #${data.orderNumber || "0001"}\n`);
   addText(`Folio Rabbitty: ${data.claimToken ? data.claimToken.slice(0, 10).toUpperCase() : `RBBTY-${data.orderNumber || "0001"}`}\n`);
   chunks.push(boldOff);
-  addText(`Fecha: ${data.date || new Date().toLocaleString("es-MX")}\n`);
+  addText(`Fecha: ${data.date || new Date().toLocaleString("es-MX", { timeZone: "America/Mexico_City", dateStyle: "short", timeStyle: "short" })}\n`);
   addText(`Tipo:  ${data.orderType || "Consumo en Sitio"}\n`);
   if (data.tableNumber) addText(`Mesa:  ${data.tableNumber}\n`);
   addText(divider);

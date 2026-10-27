@@ -468,6 +468,7 @@ export default function AuditReportPage() {
                     </td>
                     <td className="py-3 px-3 text-gray-400 print:text-gray-600 whitespace-nowrap">
                       {new Date(ord.order_date).toLocaleString("es-MX", {
+                        timeZone: "America/Mexico_City",
                         month: "short",
                         day: "numeric",
                         hour: "2-digit",

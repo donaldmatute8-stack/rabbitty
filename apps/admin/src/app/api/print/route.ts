@@ -69,8 +69,8 @@ export async function POST(req: Request) {
       ticket += "* Perfil:  Termica 58mm (ESC/POS)\n";
       ticket += "* Puerto:  USB High-Speed & BLE\n";
       ticket += "* Papel:   Rollo Detectado [OK]\n";
-      ticket += `* Fecha:   ${new Date().toLocaleDateString("es-MX")}\n`;
-      ticket += `* Hora:    ${new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}\n`;
+      ticket += `* Fecha:   ${new Date().toLocaleDateString("es-MX", { timeZone: "America/Mexico_City" })}\n`;
+      ticket += `* Hora:    ${new Date().toLocaleTimeString("es-MX", { timeZone: "America/Mexico_City", hour: "2-digit", minute: "2-digit" })}\n`;
       ticket += "--------------------------------\n";
       ticket += CENTER;
       ticket += `${BOLD_ON}¿QUE SIGUE AHORA?${BOLD_OFF}\n`;
@@ -98,7 +98,7 @@ export async function POST(req: Request) {
     ticket += "--------------------------------\n";
     ticket += LEFT;
     ticket += `Ticket: #${orderNumber}\n`;
-    ticket += `Fecha: ${new Date().toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" })}\n`;
+    ticket += `Fecha: ${new Date().toLocaleString("es-MX", { timeZone: "America/Mexico_City", dateStyle: "short", timeStyle: "short" })}\n`;
     ticket += `Tipo: ${orderType}${tableNumber ? ` | ${tableNumber}` : ""}\n`;
     ticket += "--------------------------------\n";
     ticket += `${BOLD_ON}Cant  Descripcion        Total${BOLD_OFF}\n`;

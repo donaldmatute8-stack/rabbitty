@@ -21,7 +21,7 @@ function PosClock() {
 
   useEffect(() => {
     const tick = () =>
-      setTime(new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" }));
+      setTime(new Date().toLocaleTimeString("es-MX", { timeZone: "America/Mexico_City", hour: "2-digit", minute: "2-digit" }));
     tick();
     const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
@@ -603,7 +603,14 @@ export default function PosPage() {
       tableNumber: tableLabel,
       orderType: orderType === "DINE_IN" ? "Consumo en Sitio" : orderType === "TAKEAWAY" ? "Para Llevar" : orderType === "DELIVERY" ? "A Domicilio" : "Caja Rápida",
       cashierName: "Caja Principal",
-      date: new Date().toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" }),
+      date: new Date().toLocaleString("es-MX", {
+        timeZone: rest?.timezone || "America/Mexico_City",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
       items: cart.map((i) => ({
         id: i.id,
         name: i.name,
@@ -3020,6 +3027,7 @@ export default function PosPage() {
                   orderId: ord.id,
                   claimToken: ord.id,
                   date: orderDate.toLocaleString("es-MX", {
+                    timeZone: rest?.timezone || "America/Mexico_City",
                     day: "2-digit",
                     month: "2-digit",
                     year: "numeric",
@@ -3061,7 +3069,7 @@ export default function PosPage() {
                           {ord.orderType || "VENTA"}
                         </span>
                         <span className="text-[11px] text-gray-400">
-                          {orderDate.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}
+                          {orderDate.toLocaleTimeString("es-MX", { timeZone: rest?.timezone || "America/Mexico_City", hour: "2-digit", minute: "2-digit" })}
                         </span>
                       </div>
                       <div className="text-xs text-gray-300">
