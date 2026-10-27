@@ -76,7 +76,7 @@ export function CashShiftModal({
   open: boolean;
   onClose: () => void;
   buildTicketHeader: () => Record<string, any>;
-  initialMode?: "open";
+  initialMode?: "open" | "partial";
 }) {
   const utils = trpc.useUtils();
   const { data, refetch } = trpc.cashShifts.current.useQuery({}, { enabled: open, refetchInterval: open ? 15000 : false });
@@ -90,6 +90,7 @@ export function CashShiftModal({
   const [closeFund, setCloseFund] = useState("");
   const [withdrawCategory, setWithdrawCategory] = useState<"EXPENSE" | "SAFE">("SAFE");
   const [needManager, setNeedManager] = useState(false);
+  const [showManualCount, setShowManualCount] = useState(false);
   const [result, setResult] = useState<any>(null);
 
   const reset = () => {
@@ -100,6 +101,7 @@ export function CashShiftModal({
     setNotes("");
     setCloseFund("");
     setNeedManager(false);
+    setShowManualCount(false);
   };
   const goHome = () => {
     reset();
@@ -110,7 +112,7 @@ export function CashShiftModal({
     if (open) {
       reset();
       setResult(null);
-      setMode(initialMode === "open" ? "open" : "home");
+      setMode(initialMode === "open" ? "open" : initialMode === "partial" ? "partial" : "home");
     }
   }, [open, initialMode]);
 
@@ -422,56 +424,89 @@ export function CashShiftModal({
               e.preventDefault();
               partialMut.mutate({
                 pin,
-                countedCash: amount !== "" ? num : undefined,
+                countedCash: showManualCount && amount !== "" ? num : undefined,
                 notes: notes || undefined,
               });
             }}
           >
             <div className="p-3.5 rounded-xl bg-cyan-500/10 border border-cyan-500/25 space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-cyan-400">📊 Corte X (Reporte Previo de Caja)</span>
+                <span className="text-xs font-bold text-cyan-400">📊 Corte X (Reporte Previo de Supervisión)</span>
                 <span className="text-[10px] text-cyan-200/80 font-medium">Turno sigue abierto</span>
               </div>
               <p className="text-xs text-gray-300 leading-relaxed">
-                Úsalo para ver cuánto dinero debe haber en gaveta y revisar que tus ventas de tarjeta cuadren con tu terminal física. <strong>No cierra la caja ni exige retiros</strong>.
+                Reporte de lectura para cuadrar vouchers de terminal y ver el efectivo acumulado. <strong>No cierra el turno, no pide retiros y no altera la caja</strong>.
               </p>
-              {currentTotals && (
+              {currentTotals && pin.length === 4 ? (
                 <div className="grid grid-cols-2 gap-2 pt-2 border-t border-cyan-500/20 text-xs">
-                  <div>
-                    <span className="text-[10px] text-gray-400 block">Efectivo en gaveta (sistema):</span>
-                    <strong className="text-white text-sm">{fmt(currentTotals.expectedCash)}</strong>
+                  <div className="p-2 rounded-lg bg-black/40 border border-cyan-500/20">
+                    <span className="text-[10px] text-gray-400 block font-medium">Efectivo en gaveta (sistema):</span>
+                    <strong className="text-white text-base">{fmt(currentTotals.expectedCash)}</strong>
                   </div>
-                  <div>
-                    <span className="text-[10px] text-gray-400 block">Ventas Tarjeta + Bunz:</span>
-                    <strong className="text-cyan-300 text-sm">{fmt(currentTotals.cardSales + currentTotals.bunzSales)}</strong>
+                  <div className="p-2 rounded-lg bg-black/40 border border-cyan-500/20">
+                    <span className="text-[10px] text-gray-400 block font-medium">Vouchers Tarjeta / Clip:</span>
+                    <strong className="text-cyan-300 text-base">{fmt(currentTotals.cardSales)}</strong>
                   </div>
+                </div>
+              ) : (
+                <p className="text-[10px] text-gray-500 italic">Ingresa tu PIN para autorizar la lectura de cifras.</p>
+              )}
+            </div>
+
+            <PinField 
+              id="cash-partial-pin" 
+              label="Ingresa tu PIN de cajero para imprimir el ticket" 
+              value={pin} 
+              onChange={setPin} 
+              autoFocus 
+            />
+
+            {/* Opciones avanzadas colapsables (solo si el supervisor desea registrar arqueo ciego previo) */}
+            <div className="pt-1">
+              {!showManualCount ? (
+                <button
+                  type="button"
+                  onClick={() => setShowManualCount(true)}
+                  className="text-[11px] text-cyan-400/80 hover:text-cyan-300 hover:underline flex items-center gap-1 font-medium"
+                >
+                  <span>+ Declarar conteo físico manual o nota (opcional)</span>
+                </button>
+              ) : (
+                <div className="space-y-3 p-3 rounded-xl bg-black/40 border border-white/10 mt-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-gray-300 uppercase tracking-wider">Arqueo Manual Opcional</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowManualCount(false);
+                        setAmount("");
+                        setNotes("");
+                      }}
+                      className="text-[10px] text-gray-500 hover:text-gray-300"
+                    >
+                      Ocultar
+                    </button>
+                  </div>
+                  <MoneyField 
+                    id="cash-partial-counted" 
+                    label="Efectivo contado físico ($)" 
+                    value={amount} 
+                    onChange={setAmount} 
+                  />
+                  <NoteField id="cash-partial-notes" label="Nota / Justificación" value={notes} onChange={setNotes} />
                 </div>
               )}
             </div>
 
-            <div className="space-y-1">
-              <MoneyField 
-                id="cash-partial-counted" 
-                label="Efectivo contado físico ($) — Opcional si solo quieres ver/imprimir el previo" 
-                value={amount} 
-                onChange={setAmount} 
-                autoFocus 
-              />
-              <span className="text-[10px] text-gray-400">Si lo dejas en blanco, se imprime el balance registrado en sistema sin declarar diferencias.</span>
-            </div>
-
-            <NoteField id="cash-partial-notes" label="Notas / Justificación (Opcional)" value={notes} onChange={setNotes} />
-            <PinField id="cash-partial-pin" label="PIN del cajero" value={pin} onChange={setPin} />
-
-            <div className="flex gap-2 justify-end pt-1">
+            <div className="flex gap-2 justify-end pt-2">
               <BackBtn />
               <Button 
                 type="submit" 
                 id="cash-partial-submit" 
-                disabled={busy || pin.length !== 4 || (amount !== "" && !validAmount)} 
-                className="bg-cyan-500 hover:bg-cyan-400 text-gray-950 font-bold"
+                disabled={busy || pin.length !== 4 || (showManualCount && amount !== "" && !validAmount)} 
+                className="bg-cyan-500 hover:bg-cyan-400 text-gray-950 font-black px-6 py-2.5 shadow-lg shadow-cyan-500/20"
               >
-                {partialMut.isPending ? "Generando..." : "Imprimir Corte X (Previo)"}
+                {partialMut.isPending ? "Imprimiendo..." : "Imprimir Ticket X"}
               </Button>
             </div>
           </form>

@@ -30,7 +30,12 @@ import {
   Webhook, 
   UserRound, 
   Command,
-  X
+  X,
+  Banknote,
+  TrendingUp,
+  BookOpen,
+  FlaskConical,
+  Brain
 } from "lucide-react";
 import { cn } from "@rabbitty/ui";
 
@@ -46,6 +51,12 @@ type CommandItem = {
 const commands: CommandItem[] = [
   // ⚡ Operación En Vivo
   { id: "dashboard", label: "Dashboard Principal", category: "⚡ Operación En Vivo", href: "/", icon: LayoutDashboard, keywords: ["inicio", "resumen", "ventas", "métricas"] },
+  { id: "cash-shifts", label: "Turnos de Caja & Arqueos", category: "⚡ Operación En Vivo", href: "/cash-shifts", icon: Banknote, keywords: ["caja", "corte", "arqueo", "corte x", "corte z", "gaveta", "efectivo", "retiro", "sangría"] },
+  { id: "audit-reports", label: "Cuadre & Auditoría de Turnos", category: "⚡ Operación En Vivo", href: "/reports/audit", icon: TrendingUp, keywords: ["auditoría", "pdf", "corte", "diferencias", "cajero"] },
+  { id: "operations-manual", label: "Manual Operativo & Caja", category: "⚡ Operación En Vivo", href: "/operations-manual", icon: BookOpen, keywords: ["manual", "guía", "corte x", "corte z", "procedimientos", "instrucciones"] },
+  { id: "academy", label: "Rabbitty Academy & Guías", category: "⚡ Operación En Vivo", href: "/academy", icon: BookOpen, keywords: ["capacitación", "academia", "entrenamiento", "tutoriales"] },
+  { id: "sandbox", label: "Modo Sandbox (Entrenamiento)", category: "⚡ Operación En Vivo", href: "/sandbox", icon: FlaskConical, keywords: ["pruebas", "simulación", "entrenamiento", "test"] },
+  { id: "strategy", label: "Estrategia de Precios Bunzy", category: "⚡ Operación En Vivo", href: "/strategy", icon: Brain, keywords: ["inteligencia", "ia", "estrategia", "metas"] },
   { id: "kitchen", label: "Cocina / KDS", category: "⚡ Operación En Vivo", href: "/kitchen", icon: ChefHat, keywords: ["comandas", "pedidos", "preparación"] },
   { id: "shifts", label: "Turnos y Asistencia", category: "⚡ Operación En Vivo", href: "/staff/shifts", icon: Clock, keywords: ["horarios", "reloj", "asistencia", "checkin"] },
   { id: "tables", label: "Mapa de Mesas", category: "⚡ Operación En Vivo", href: "/table-layout", icon: Table2, keywords: ["salón", "distribución", "mesas"] },

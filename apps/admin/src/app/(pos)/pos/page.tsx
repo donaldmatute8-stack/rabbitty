@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { Button, Dialog, Input, toast, cn, useWakeLock } from "@rabbitty/ui";
-import { Clock, Wifi, Search, User, Users, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, Table2, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, FileText, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, Unlock } from "lucide-react";
+import { Clock, Wifi, Search, User, Users, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, Table2, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, FileText, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, Unlock, ClipboardCheck } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { TicketTemplate, TicketData } from "../../../components/TicketTemplate";
@@ -260,6 +260,7 @@ export default function PosPage() {
   const [cashDropAmount, setCashDropAmount] = useState("");
   const [cashDropNotes, setCashDropNotes] = useState("");
   const [corteModalOpen, setCorteModalOpen] = useState(false);
+  const [corteInitialMode, setCorteInitialMode] = useState<"open" | "partial" | undefined>(undefined);
 
   const activeBranchId = ticketContext?.branch?.id;
   const isSandboxActive =
@@ -327,6 +328,20 @@ export default function PosPage() {
     },
     onError: (err) => toast.error(err.message),
   });
+
+    // Anti-abandono: advertir si el cajero cierra/sale con una operación sin concluir.
+  // (El carrito persiste en localStorage, pero esta guardia evita cierres accidentales)
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (cart.length > 0) {
+        e.preventDefault();
+        e.returnValue = "Tienes una operación sin concluir. Pausa la venta o cóbrala antes de salir.";
+        return e.returnValue;
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [cart]);
 
   const directCheckoutMutation = trpc.pos.directCheckout.useMutation({
     onError: (err) => {
@@ -752,6 +767,23 @@ export default function PosPage() {
           {/* Estado de caja (abrir / ver turno) */}
           <CashShiftBadge onClick={() => setCorteModalOpen(true)} />
 
+          {/* Acceso Rápido 1-Clic: Corte X (Reporte de Supervisión estilo SoftRestaurant) */}
+          {cashStatus?.shiftOpen && (
+            <button
+              id="pos-quick-corte-x"
+              type="button"
+              onClick={() => {
+                setCorteInitialMode("partial");
+                setCorteModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 rounded-2xl px-3 py-2 border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 text-xs font-bold transition-all active:scale-95 shadow-[0_0_12px_rgba(6,182,212,0.15)]"
+              title="Sacar Corte X de supervisión e imprimir ticket rápido para cuadrar vouchers y efectivo sin cerrar el turno"
+            >
+              <ClipboardCheck className="h-4 w-4 text-cyan-400" />
+              <span>Corte X</span>
+            </button>
+          )}
+
           {/* Bluetooth Thermal Printer Indicator / Connect */}
           {btConnected ? (
             <button
@@ -833,6 +865,14 @@ export default function PosPage() {
           </div>
         </div>
       </header>
+
+      {/* ── Banner: Operación en curso (anti-abandono visual) ── */}
+      {cart.length > 0 && (
+        <div className="flex items-center gap-2 px-6 py-1.5 bg-amber-500/10 border-b border-amber-500/25 text-[11px] font-bold text-amber-300">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+          <span>Operación en curso: {cart.reduce((s, i) => s + i.quantity, 0)} artículos · ${cart.reduce((s, i) => s + i.price * i.quantity, 0).toFixed(2)}. Pausa la venta si el comensal no se decide, o cóbrala antes de salir de esta pantalla.</span>
+        </div>
+      )}
 
       {/* ── Main Workspace ── */}
       <div className="flex flex-1 overflow-hidden relative">
@@ -2052,8 +2092,12 @@ export default function PosPage() {
       {/* Caja / Turnos: apertura, retiro, arqueo X, traspaso y cierre Z (todo con PIN) */}
       <CashShiftModal
         open={corteModalOpen}
-        onClose={() => setCorteModalOpen(false)}
+        onClose={() => {
+          setCorteModalOpen(false);
+          setCorteInitialMode(undefined);
+        }}
         buildTicketHeader={buildTicketHeader}
+        initialMode={corteInitialMode}
       />
       <Dialog
         open={!!qrPaymentModal}

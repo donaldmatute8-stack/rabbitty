@@ -183,7 +183,8 @@ Cada venta en efectivo queda ligada a un turno de caja con un cajero responsable
 
 ### 3. Corte X (Reporte Previo Informativo y Cuadre de Tarjetas)
 - **¿Para qué sirve?** Para saber con exactitud cuánto dinero registrado debe haber en gaveta y cotejar que las ventas de tarjeta coincidan al centavo con los vouchers de tu terminal física (Clip, Mercado Pago o Banco) antes de cerrar.
-- **Sin bloqueos:** Se imprime y visualiza con el PIN del cajero; **no cierra la caja, no exige retiros y no detiene las ventas**.
+- **Acceso Directo 1-Clic:** Toca el botón **"Corte X"** en el header del POS.
+- **Blindaje de Arqueo Ciego:** Las cifras del sistema permanecen ocultas hasta que ingresas tu PIN de 4 dígitos. Una vez capturado, se revelan las ventas y se expide el ticket térmico al instante. **No cierra la caja, no exige retiros y no detiene las ventas**.
 
 ### 4. Retiro de Efectivo de Ganancias y Cierre Definitivo (Corte Z)
 - **Paso A (Retiro de Ganancias):** Con el Corte X en mano, el cajero realiza el retiro de efectivo en **Caja / Turno → Retiro** para dejar la gaveta lista (en ceros o con el fondo base para el siguiente turno).
@@ -194,8 +195,9 @@ Cada venta en efectivo queda ligada a un turno de caja con un cajero responsable
 - El sistema le asigna un número de folio (ej. \`ESP-1\`), guarda los platillos intactos sin afectar inventario y libera la pantalla para atender al siguiente comensal.
 - Para rescatarla en cualquier momento, pulsa el botón **"En Espera (N)"** en el header superior y presiona *Rescatar*.
 
-### 6. Candado de Persistencia y Modo Kiosco de Seguridad
-- **Candado Anti-Pérdida:** Si el iPad se apaga o se refresca la app, los productos del carrito no desaparecen; se restauran en automático.
+### 6. Candado de Persistencia, Modo Kiosco y Anti-Abandono
+- **Candado Anti-Pérdida:** Si el iPad se apaga o se refresca la app, los productos del carrito no desaparecen; se restauran en automático vía memoria local.
+- **Guardia Anti-Abandono:** Si hay artículos en el carrito, una alerta visual fija en el POS te advierte que hay una operación en curso para pausarla o cobrarla, y el navegador bloquea cierres accidentales.
 - **Modo Kiosco POS:** Los empleados con rol de cajero o mesero tienen protegida la salida al Dashboard con PIN de 4 dígitos de Gerente/Admin para evitar accesos indebidos a configuración o reportes.
 
 ### 7. ¿Qué pasa si hay descuadre?

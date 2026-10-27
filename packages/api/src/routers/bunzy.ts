@@ -9,7 +9,7 @@ import {
   restaurants,
   staff,
 } from "@rabbitty/database-restaurant/schema";
-import { ownedBusinesses } from "@rabbitty/database-core/schema";
+import { ownedBusinesses, users } from "@rabbitty/database-core/schema";
 import { eq, and, desc, sql, gte, inArray } from "drizzle-orm";
 
 // ─── GUARDRAILS & LIMITANTES ────────────────────────────────────────────────
@@ -137,6 +137,8 @@ function generateHeuristicResponse(messages: LLMMessage[]): string {
   // Extraer valores contextuales inyectados en el system prompt
   const cashbackMatch = systemMsg.match(/Cashback Bunz Activo:\s*([0-9.]+)%/);
   const currentCashback = cashbackMatch ? cashbackMatch[1] : "20";
+  const bovedaMatch = systemMsg.match(/Bóveda de Bunz:\s*([0-9,]+)\s*BZ/);
+  const currentBoveda = bovedaMatch ? bovedaMatch[1] : null;
   const negocioMatch = systemMsg.match(/Negocio:\s*([^\n]+)/);
   const negocioName = negocioMatch?.[1]?.trim() || "tu negocio";
 
@@ -182,9 +184,9 @@ function generateHeuristicResponse(messages: LLMMessage[]): string {
     return (
       `🐰 **Bóveda de Bunz** de **${negocioName}**:\n\n` +
       `• Tu bóveda almacena el inventario de Bunz respaldados para otorgar como recompensa a los clientes.\n` +
-      `• Puedes ver el saldo disponible en la tarjeta **Bóveda de Bunz** del Dashboard (\`/\`).\n` +
-      `• Conforme los clientes acumulan compras en tu sucursal, los Bunz se transfieren de tu bóveda al wallet de los usuarios.\n` +
-      `• Para aprovisionar o recargar saldo en tu bóveda, puedes hacerlo desde el botón *"Recargar Bóveda"* o contactar directamente a tu asesor Rabbitty.`
+      `• **Saldo Disponible**: **${currentBoveda ? `${currentBoveda} BZ` : "Activo en sistema"}** (visible en la tarjeta superior del Dashboard \`/\`).\n` +
+      `• Conforme los clientes consumen en tu sucursal, los Bunz se transfieren automáticamente de tu bóveda al wallet del cliente.\n` +
+      `• Para aprovisionar o adquirir paquetes adicionales de Bunz, puedes hacerlo desde el botón *"Recargar Bóveda"* en el Dashboard o contactar a tu asesor Rabbitty.`
     );
   }
 
@@ -289,16 +291,43 @@ export const bunzyRouter = router({
         .orderBy(desc(cashShifts.openedAt))
         .limit(1);
 
-      // b) Cashback y negocio pertenecientes EXCLUSIVAMENTE al usuario autenticado (Anti-Tenant Leak)
-      const [business] = await ctx.coreDb
-        .select({
-          id: ownedBusinesses.id,
-          name: ownedBusinesses.name,
-          rewardPercentage: ownedBusinesses.rewardPercentage,
-        })
-        .from(ownedBusinesses)
-        .where(eq(ownedBusinesses.ownerId, ctx.userId))
-        .limit(1);
+      // b) Cashback y negocio pertenecientes al usuario autenticado (con fallback por email para sucursal como 626 Café)
+      let [business] = ctx.userId
+        ? await ctx.coreDb
+            .select({
+              id: ownedBusinesses.id,
+              name: ownedBusinesses.name,
+              rewardPercentage: ownedBusinesses.rewardPercentage,
+              bunzBalance: ownedBusinesses.bunzBalance,
+              package: ownedBusinesses.package,
+            })
+            .from(ownedBusinesses)
+            .where(eq(ownedBusinesses.ownerId, ctx.userId))
+            .limit(1)
+        : [undefined];
+
+      if (!business && ctx.user?.email) {
+        const [coreUser] = await ctx.coreDb
+          .select({ id: users.id })
+          .from(users)
+          .where(sql`lower(${users.email}) = ${String(ctx.user.email).toLowerCase()}`)
+          .limit(1);
+
+        if (coreUser?.id) {
+          const [found] = await ctx.coreDb
+            .select({
+              id: ownedBusinesses.id,
+              name: ownedBusinesses.name,
+              rewardPercentage: ownedBusinesses.rewardPercentage,
+              bunzBalance: ownedBusinesses.bunzBalance,
+              package: ownedBusinesses.package,
+            })
+            .from(ownedBusinesses)
+            .where(eq(ownedBusinesses.ownerId, coreUser.id))
+            .limit(1);
+          if (found) business = found;
+        }
+      }
 
       // c) Resumen de ventas recientes (últimas 24h) de su sucursal
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -331,6 +360,7 @@ CONTEXTO REAL DE TU NEGOCIO (KNOWLEDGE VIVO AUTÉNTICO):
 - Negocio: ${business?.name || "Comercio Rabbitty"}
 - Estado de Caja: ${shiftState}.
 - Cashback Bunz Activo: ${currentCashback}% (Límite permitido por sistema: 2% a 50%).
+- Bóveda de Bunz: ${(business?.bunzBalance ?? 0).toLocaleString()} BZ (Paquete: ${business?.package || "Inventario Activo"}).
 - Ventas últimas 24h: ${salesStats.count} órdenes registradas, volumen aproximado: $${Number(salesStats.total).toFixed(2)}.
 
 LIMITANTES Y REGLAS FINANCIERAS INFRANQUEABLES:

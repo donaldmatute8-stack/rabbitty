@@ -227,10 +227,10 @@ export default function OperationsManualPage() {
               </div>
               <h3 className="text-base font-bold text-white print:text-black">Corte X (Reporte Previo)</h3>
               <p className="text-xs text-gray-400 print:text-gray-600 leading-relaxed">
-                Saca tu Corte X para ver cuánto efectivo registrado hay en gaveta y confirmar que los vouchers de tus terminales bancarias físicas cuadren con el sistema. <strong>No cierra la caja ni exige retiros</strong>.
+                Saca tu Corte X directo con el botón <strong>Corte X</strong> en la barra superior del POS. Para mantener el principio de arqueo ciego, las cifras se revelan e imprimen tras ingresar tu PIN de 4 dígitos. <strong>No cierra la caja ni exige retiros</strong>.
               </p>
               <div className="pt-2 border-t border-white/5 print:border-gray-200 text-[11px] text-cyan-300 font-medium">
-                📊 Permite saber con exactitud cuánto dinero retirar antes del cierre.
+                📊 Permite saber con exactitud cuánto dinero retirar a caja fuerte antes del cierre.
               </div>
             </Card>
 
