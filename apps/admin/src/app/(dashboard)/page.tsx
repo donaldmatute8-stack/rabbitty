@@ -131,16 +131,24 @@ export default function AdminPage() {
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-pink-500/20 border border-pink-500/30 text-pink-400 font-black text-sm">
                 🐰
               </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] uppercase tracking-wider text-pink-300 font-black">Bóveda Bunz</span>
-                  <span className="text-[9px] font-bold text-gray-400 bg-white/5 border border-white/10 px-1.5 py-0.2 rounded-full">
-                    {bunzInventory?.package || "Inventario"}
-                  </span>
+              <div className="flex items-center gap-4 divide-x divide-white/10">
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] uppercase tracking-wider text-pink-300 font-black">Bóveda Bunz</span>
+                    <span className="text-[9px] font-bold text-gray-400 bg-white/5 border border-white/10 px-1.5 py-0.2 rounded-full">
+                      {bunzInventory?.package || "Inventario"}
+                    </span>
+                  </div>
+                  <p className="text-base font-black text-white leading-none mt-0.5">
+                    {(bunzInventory?.bunzBalance ?? 0).toLocaleString()} <span className="text-xs font-bold text-pink-400">BZ</span>
+                  </p>
                 </div>
-                <p className="text-base font-black text-white leading-none mt-0.5">
-                  {(bunzInventory?.bunzBalance ?? 0).toLocaleString()} <span className="text-xs font-bold text-pink-400">BZ</span>
-                </p>
+                <div className="pl-4">
+                  <span className="text-[10px] uppercase tracking-wider text-amber-300 font-black block">Minteados / Otorgados</span>
+                  <p className="text-base font-black text-white leading-none mt-0.5">
+                    {((bunzInventory as any)?.totalBunzMinted ?? 0).toLocaleString()} <span className="text-xs font-bold text-amber-400">BZ</span>
+                  </p>
+                </div>
               </div>
             </div>
 

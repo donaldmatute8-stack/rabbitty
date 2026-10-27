@@ -5,7 +5,7 @@ import { TRPCError } from "@trpc/server";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
 import { restaurants, branches, orders, tables, staff } from "@rabbitty/database-restaurant/schema";
-import { referrals, users, levels, ownedBusinesses } from "@rabbitty/database-core";
+import { referrals, users, levels, ownedBusinesses, transactions } from "@rabbitty/database-core";
 import { customers } from "@rabbitty/database-restaurant/schema";
 import { miniappClient } from "../services/miniapp-client";
 import * as cheerio from "cheerio";
@@ -760,6 +760,43 @@ export const adminRouter = router({
         }
       }
 
+      // Si no tiene negocio asociado por userId directo, fallback a primera empresa o defaults seguros
+      let firstBiz: typeof biz | undefined = undefined;
+      if (!biz) {
+        const [foundFirst] = await ctx.coreDb
+          .select({
+            id: ownedBusinesses.id,
+            name: ownedBusinesses.name,
+            category: ownedBusinesses.category,
+            bunzBalance: ownedBusinesses.bunzBalance,
+            package: ownedBusinesses.package,
+            rewardPercentage: ownedBusinesses.rewardPercentage,
+            status: ownedBusinesses.status,
+            creditLimit: ownedBusinesses.creditLimit,
+          })
+          .from(ownedBusinesses)
+          .limit(1);
+        firstBiz = foundFirst;
+      }
+
+      const targetBiz = biz || firstBiz;
+
+      let totalBunzMinted = 0;
+      if (targetBiz?.id) {
+        // Calcular total de Bunz minteados/otorgados desde las transacciones del negocio
+        try {
+          const [txAgg] = await ctx.coreDb
+            .select({
+              total: sql<number>`COALESCE(SUM(${transactions.bunzMinted}), 0)::int`,
+            })
+            .from(transactions)
+            .where(eq(transactions.businessId, targetBiz.id));
+          totalBunzMinted = Number(txAgg?.total ?? 0);
+        } catch (aggErr) {
+          console.warn("[getAffiliateBunzInventory] Could not aggregate transactions:", aggErr);
+        }
+      }
+
       if (biz) {
         return {
           hasBusiness: true,
@@ -767,6 +804,7 @@ export const adminRouter = router({
           businessName: biz.name,
           category: biz.category,
           bunzBalance: biz.bunzBalance ?? 0,
+          totalBunzMinted,
           package: biz.package || "Personalizado",
           rewardPercentage: biz.rewardPercentage ?? 10,
           status: biz.status,
@@ -774,27 +812,13 @@ export const adminRouter = router({
         };
       }
 
-      // Si no tiene negocio asociado por userId directo, fallback a primera empresa o defaults seguros
-      const [firstBiz] = await ctx.coreDb
-        .select({
-          id: ownedBusinesses.id,
-          name: ownedBusinesses.name,
-          category: ownedBusinesses.category,
-          bunzBalance: ownedBusinesses.bunzBalance,
-          package: ownedBusinesses.package,
-          rewardPercentage: ownedBusinesses.rewardPercentage,
-          status: ownedBusinesses.status,
-          creditLimit: ownedBusinesses.creditLimit,
-        })
-        .from(ownedBusinesses)
-        .limit(1);
-
       return {
         hasBusiness: Boolean(firstBiz),
         businessId: firstBiz?.id || null,
         businessName: firstBiz?.name || "Mi Negocio",
         category: firstBiz?.category || "Comercio",
         bunzBalance: firstBiz?.bunzBalance ?? 0,
+        totalBunzMinted,
         package: firstBiz?.package || "Personalizado",
         rewardPercentage: firstBiz?.rewardPercentage ?? 10,
         status: firstBiz?.status || "APPROVED",
@@ -808,6 +832,7 @@ export const adminRouter = router({
         businessName: "Mi Negocio",
         category: "Comercio",
         bunzBalance: 0,
+        totalBunzMinted: 0,
         package: "Sin paquete",
         rewardPercentage: 10,
         status: "APPROVED",
