@@ -45,10 +45,44 @@ export default function ReportsPage() {
   const { data: topProducts, isLoading: loadingTop } = trpc.analytics.getTopProducts.useQuery({ branchId, limit: 5 });
   const { data: paymentMethods, isLoading: loadingPayments } = trpc.analytics.getPaymentMethods.useQuery({ branchId, ...dateFilter });
   
+  const { data: reconciliationData, refetch: refetchReconciliation, isFetching: isReconciling } = trpc.payments.getFinancialReconciliation.useQuery(
+    { branchId: branchId !== "default" ? branchId : undefined },
+    { enabled: true }
+  );
+
   const { data: exportData, refetch: refetchExport, isFetching: isExporting } = trpc.analytics.getExportData.useQuery(
     { branchId, ...dateFilter },
     { enabled: false }
   );
+
+  const handleExportReconciliationCSV = () => {
+    if (!reconciliationData || reconciliationData.records.length === 0) {
+      return alert("No hay transacciones registradas para conciliar.");
+    }
+
+    const headers = ["ID Intento", "ID Orden", "Fecha", "Status", "Proveedor", "Total Bruto (MXN)", "Neto Tarjeta (MXN)", "Comisión Rabbitty (MXN)", "Bunz Canjeados"];
+    const rows = reconciliationData.records.map((r: any) => [
+      r.id,
+      r.orderId || "N/A",
+      new Date(r.createdAt).toISOString(),
+      r.status,
+      r.provider,
+      r.grossMxn.toFixed(2),
+      r.netFiatMxn.toFixed(2),
+      r.platformFeeMxn.toFixed(2),
+      r.bunzApplied,
+    ]);
+
+    const csvContent = [headers.join(","), ...rows.map((e: any[]) => e.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `Conciliacion_RabbittyPay_${new Date().toISOString().split("T")[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const handleExportCSV = async () => {
     const { data } = await refetchExport();
@@ -182,7 +216,16 @@ export default function ReportsPage() {
               className="rounded-xl border border-white/10 text-white cursor-pointer text-xs"
             >
               <Download className="mr-1.5 h-3.5 w-3.5" />
-              {isExporting ? "Generando..." : "Exportar CSV"}
+              {isExporting ? "Generando..." : "Exportar Ventas CSV"}
+            </Button>
+
+            <Button
+              onClick={handleExportReconciliationCSV}
+              disabled={isReconciling}
+              className="rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-white cursor-pointer text-xs"
+            >
+              <Download className="mr-1.5 h-3.5 w-3.5 text-pink-400" />
+              Conciliación Stripe CSV
             </Button>
 
             <Link
@@ -195,6 +238,57 @@ export default function ReportsPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Conciliación Financiera Rabbitty Pay & Stripe Connect ── */}
+      {reconciliationData && (
+        <div className="rounded-3xl border border-white/5 bg-linear-to-br from-gray-900/60 to-black/80 p-6 backdrop-blur-xl space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-pink-500 flex items-center gap-1.5">
+                <CreditCard className="h-3.5 w-3.5" /> Rabbitty Pay · Conciliación de Pasarela
+              </p>
+              <h3 className="text-lg font-black text-white mt-0.5">Liquidación Neta y Comisiones Stripe Connect</h3>
+            </div>
+            <span className="text-[11px] font-bold text-gray-400 bg-white/5 px-2.5 py-1 rounded-full border border-white/10">
+              {reconciliationData.summary.succeededCount} cobros exitosos · {reconciliationData.summary.cancelledCount} cancelados
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+            <div className="rounded-2xl border border-white/5 bg-white/5 p-4">
+              <p className="text-[11px] font-bold uppercase text-gray-400">Total Bruto Órdenes</p>
+              <p className="text-xl font-black text-white mt-1">
+                ${reconciliationData.summary.grossOrderTotalMxn.toFixed(2)}
+              </p>
+              <p className="text-[10px] text-gray-500 mt-0.5">Comandas liquidadas en mesa</p>
+            </div>
+
+            <div className="rounded-2xl border border-pink-500/20 bg-pink-500/10 p-4">
+              <p className="text-[11px] font-bold uppercase text-pink-400">Neto Tarjeta / Apple Pay</p>
+              <p className="text-xl font-black text-pink-300 mt-1">
+                ${reconciliationData.summary.netFiatMxn.toFixed(2)}
+              </p>
+              <p className="text-[10px] text-pink-400/60 mt-0.5">Cobrado vía Stripe Connect</p>
+            </div>
+
+            <div className="rounded-2xl border border-purple-500/20 bg-purple-500/10 p-4">
+              <p className="text-[11px] font-bold uppercase text-purple-400">Comisión Rabbitty (1%)</p>
+              <p className="text-xl font-black text-purple-300 mt-1">
+                ${reconciliationData.summary.platformFeeMxn.toFixed(2)}
+              </p>
+              <p className="text-[10px] text-purple-400/60 mt-0.5">Application fee devengada</p>
+            </div>
+
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+              <p className="text-[11px] font-bold uppercase text-emerald-400">Depósito Estimado Banco</p>
+              <p className="text-xl font-black text-emerald-300 mt-1">
+                ${reconciliationData.summary.netSettledToMerchantMxn.toFixed(2)}
+              </p>
+              <p className="text-[10px] text-emerald-400/60 mt-0.5">Neto a transferir por CLABE</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Tarjetas Fiscales de Resumen ── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

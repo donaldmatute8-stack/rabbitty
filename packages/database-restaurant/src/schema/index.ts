@@ -414,21 +414,76 @@ export const aiStrategies = pgTable("ai_strategies", {
   ...timestamps,
 });
 
+export const merchantPaymentAccounts = pgTable("merchant_payment_accounts", {
+  id: id(),
+  branchId: fkId("branchId").references(() => branches.id),
+  merchantId: text("merchantId"), // Agrupador matriz (opcional)
+  provider: text("provider").default("STRIPE_CONNECT").notNull(),
+  stripeAccountId: text("stripeAccountId").notNull().unique(),
+  chargesEnabled: boolean("chargesEnabled").default(false).notNull(),
+  payoutsEnabled: boolean("payoutsEnabled").default(false).notNull(),
+  defaultCurrency: text("defaultCurrency").default("MXN").notNull(),
+  platformFeePercent: real("platformFeePercent").default(0.01).notNull(), // 1.0% por defecto
+  metadata: jsonb("metadata"),
+  ...timestamps,
+});
+
 export const paymentIntents = pgTable("payment_intents", {
   id: id(),
   orderId: fkIdOpt("orderId").references(() => orders.id),
   merchantId: fkId("merchantId").references(() => branches.id),
   creatorSubjectId: text("creatorSubjectId"),
   payerSubjectId: text("payerSubjectId"),
+  // Campos en centavos enteros para precisión monetaria absoluta (sin punto flotante)
+  amountCents: integer("amountCents").default(0).notNull(),
+  netFiatCents: integer("netFiatCents").default(0).notNull(),
+  platformFeeCents: integer("platformFeeCents").default(0).notNull(),
+  // Compatibilidad legacy (reflejo de centavos a unidades)
   amountMxn: real("amountMxn").notNull(),
   bunzAmount: real("bunzAmount").notNull(),
   currency: text("currency").default("MXN").notNull(),
+  provider: text("provider").default("STRIPE").notNull(), // 'STRIPE' | 'CASH' | 'BUNZ_ONLY'
+  externalIntentId: text("externalIntentId"), // ej: pi_xxx de Stripe
   status: text("status").default("PENDING_PAYMENT").notNull(),
+  // Estados: PENDING_PAYMENT, REQUIRES_ACTION, PROCESSING, SUCCEEDED, CANCELLED, EXPIRED, FAILED
   idempotencyKey: text("idempotencyKey").unique(),
   expiresAt: timestamp("expiresAt").notNull(),
   paidAt: timestamp("paidAt"),
   ...timestamps,
 });
+
+export const bunzReserves = pgTable("bunz_reserves", {
+  id: id(),
+  paymentIntentId: fkId("paymentIntentId").references(() => paymentIntents.id),
+  orderId: fkIdOpt("orderId").references(() => orders.id),
+  branchId: fkId("branchId").references(() => branches.id),
+  userId: text("userId").notNull(), // Customer Subject / Wallet
+  amount: real("amount").notNull(), // Cantidad de Bunz reservados
+  status: text("status").default("RESERVED").notNull(),
+  // Estados: RESERVED, CAPTURED, RELEASED, EXPIRED, RECOVERY_HOLD
+  expiresAt: timestamp("expiresAt").notNull(),
+  capturedAt: timestamp("capturedAt"),
+  releasedAt: timestamp("releasedAt"),
+  failureReason: text("failureReason"),
+  ...timestamps,
+}, (t) => [
+  index("bunz_reserves_intent_idx").on(t.paymentIntentId),
+  index("bunz_reserves_user_idx").on(t.userId),
+]);
+
+export const paymentProviderEvents = pgTable("payment_provider_events", {
+  id: id(),
+  provider: text("provider").notNull(), // 'STRIPE'
+  eventId: text("eventId").notNull(), // evt_xxx de Stripe
+  eventType: text("eventType").notNull(), // ej: payment_intent.succeeded
+  paymentIntentId: fkIdOpt("paymentIntentId").references(() => paymentIntents.id),
+  payload: jsonb("payload").notNull(),
+  status: text("status").default("PROCESSING").notNull(), // 'PROCESSING' | 'COMPLETED' | 'FAILED'
+  errorMessage: text("errorMessage"),
+  processedAt: timestamp("processedAt").defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("payment_provider_events_idx").on(t.provider, t.eventId),
+]);
 
 export const cashDrops = pgTable("cash_drops", {
   id: id(),

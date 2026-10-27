@@ -1704,6 +1704,7 @@ export default function PosPage() {
                   const isSelected = selectedTableId === t.id && orderType === "DINE_IN";
                   const activeTab = activeTabsData?.activeTabs.find((tab) => tab.tableId === t.id);
                   const hasCustomer = !!activeTab?.customer;
+                  const isCashRequested = activeTab?.cashRequested;
 
                   return (
                     <button
@@ -1725,25 +1726,35 @@ export default function PosPage() {
                           });
                         }
                         setTableModal(false);
-                        toast.success(`Mesa ${t.number} asignada`);
+                        if (isCashRequested) {
+                          toast.warning(`⚠️ Mesa ${t.number} solicitó pagar $${activeTab.total.toFixed(2)} en efectivo`);
+                        } else {
+                          toast.success(`Mesa ${t.number} asignada`);
+                        }
                       }}
                       className={cn(
                         "flex flex-col items-center justify-center p-3 rounded-2xl border transition-all cursor-pointer active:scale-95 relative",
                         isSelected
                           ? "bg-cyan-500 text-gray-950 border-cyan-400 shadow-[0_4px_20px_rgba(6,182,212,0.4)]"
+                          : isCashRequested
+                          ? "bg-amber-500/20 border-amber-500/80 text-amber-200 animate-pulse shadow-[0_0_20px_rgba(245,158,11,0.3)]"
                           : hasCustomer
                           ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-200 shadow-[0_0_15px_rgba(16,185,129,0.15)]"
                           : "bg-white/5 border-white/10 text-white hover:bg-white/10 hover:border-white/20"
                       )}
                     >
-                      {hasCustomer && (
+                      {isCashRequested ? (
+                        <span className="absolute -top-1.5 -right-1.5 bg-amber-400 text-gray-950 text-[9px] font-black px-1.5 py-0.5 rounded-full shadow">
+                          💵 Cobra Efectivo
+                        </span>
+                      ) : hasCustomer ? (
                         <span className="absolute -top-1.5 -right-1.5 bg-emerald-500 text-gray-950 text-[9px] font-black px-1.5 py-0.5 rounded-full shadow">
                           🐰 {activeTab.customer?.name.split(" ")[0]}
                         </span>
-                      )}
+                      ) : null}
                       <span className="text-lg font-black leading-none mb-1">Mesa {t.number}</span>
-                      <span className={cn("text-[10px] font-bold", isSelected ? "text-gray-900" : hasCustomer ? "text-emerald-300" : "text-gray-400")}>
-                        {t.location || "Salón"} • 👤 {t.capacity}
+                      <span className={cn("text-[10px] font-bold", isSelected ? "text-gray-900" : isCashRequested ? "text-amber-300" : hasCustomer ? "text-emerald-300" : "text-gray-400")}>
+                        {isCashRequested ? `Paga $${activeTab?.total.toFixed(2)}` : `${t.location || "Salón"} • 👤 ${t.capacity}`}
                       </span>
                     </button>
                   );
