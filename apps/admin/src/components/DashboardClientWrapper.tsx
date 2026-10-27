@@ -8,7 +8,7 @@ import { CommandMenu } from "./CommandMenu";
 import { SandboxBanner } from "./SandboxBanner";
 import { trpc } from "../lib/trpc-client";
 import Link from "next/link";
-import { TerminalSquare, TabletSmartphone, Smartphone, MessageSquare, X, Bot, Sparkles, Send, RotateCw } from "lucide-react";
+import { TerminalSquare, TabletSmartphone, Smartphone, MessageSquare, X, Bot, Sparkles, Send, RotateCw, CreditCard } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
 import { ScannerPairModal } from "./ScannerPairModal";
 
@@ -32,6 +32,17 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isNativeApp, setIsNativeApp] = useState(false);
   const [pairModalOpen, setPairModalOpen] = useState(false);
+
+  const createStripeLink = trpc.payments.createStripeConnectLink.useMutation({
+    onSuccess: (data) => {
+      if (data?.url) {
+        window.location.href = data.url;
+      }
+    },
+    onError: (err) => {
+      alert(`Error al generar enlace de Stripe: ${err.message}`);
+    },
+  });
 
   useEffect(() => {
     // Si corre en Capacitor nativo (iOS / Android / Desktop nativo) o standalone PWA
@@ -424,6 +435,24 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                         <div className="pt-3 border-t border-white/10 space-y-2">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2">Herramientas Operativas Activas:</p>
                           <div className="grid grid-cols-1 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const currentUrl = typeof window !== "undefined" ? window.location.href : "https://rabbitty.me/settings";
+                                createStripeLink.mutate({
+                                  refreshUrl: currentUrl,
+                                  returnUrl: currentUrl,
+                                });
+                              }}
+                              disabled={createStripeLink.isPending}
+                              className="px-3 py-2 rounded-xl bg-linear-to-r from-pink-500/20 to-purple-500/20 hover:from-pink-500/30 hover:to-purple-500/30 text-white border border-pink-500/30 text-xs font-bold transition-all flex items-center justify-between cursor-pointer"
+                            >
+                              <span className="flex items-center gap-1.5">
+                                <CreditCard size={13} className="text-pink-400" />
+                                <span>{createStripeLink.isPending ? "Generando link..." : "💳 Conectar Stripe & Pagos en Mesa"}</span>
+                              </span>
+                              <span className="text-[10px] text-pink-400 font-mono">Conectar →</span>
+                            </button>
                             <Link
                               href="/reports/audit"
                               onClick={() => setChatDrawerOpen(false)}

@@ -742,7 +742,7 @@ export default function LandingPage() {
             {[
               { value: '10%', label: 'Recompensa en Bunz por compra' },
               { value: 'x3', label: 'Multiplicador máximo por nivel' },
-              { value: '$0.01', label: 'Valor fijo por Bunz (MXN)' },
+              { value: '$1.00', label: 'Valor fijo por Bunz (MXN)' },
             ].map((s, i) => (
               <div key={i} className="p-6 rounded-2xl bg-white/5 border border-white/5">
                 <p className="text-3xl font-black text-yellow-400 mb-1">{s.value}</p>

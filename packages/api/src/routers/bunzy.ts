@@ -8,6 +8,7 @@ import {
   branches,
   restaurants,
   staff,
+  merchantPaymentAccounts,
 } from "@rabbitty/database-restaurant/schema";
 import { ownedBusinesses, users } from "@rabbitty/database-core/schema";
 import { eq, and, desc, sql, gte, inArray } from "drizzle-orm";
@@ -201,7 +202,18 @@ function generateHeuristicResponse(messages: LLMMessage[]): string {
     );
   }
 
-  // 6. Menú, productos, precios
+  // 6. Stripe Connect, pagos con tarjeta, cobro en mesa
+  if (/\b(stripe|conectar stripe|cuenta bancaria|pagar con tarjeta|cobro digital|apple pay|google pay|terminal digital|pasarela|clabe)\b/i.test(q)) {
+    return (
+      `🐰 **Stripe Connect & Pagos Digitales en Mesa** de **${negocioName}**:\n\n` +
+      `• **Habilitar Cobros en Mesa**: Ve a **Configuración ➔ Pasarela de Pagos** (\`/settings\`) para vincular tu cuenta bancaria vía Stripe Connect Express.\n` +
+      `• **Beneficios Activos**: Tus clientes podrán escanear el QR de su mesa y pagar directamente con **Apple Pay, Google Pay y Tarjetas de Crédito/Débito**.\n` +
+      `• **Depósitos Directos**: Los fondos de las ventas con tarjeta se transfieren automáticamente a tu cuenta vía CLABE interbancaria, y Rabbitty concilia la comisin contable de inmediato.\n` +
+      `• **Acceso Inmediato**: También puedes pulsar la herramienta *"Conectar Stripe & Pagos"* en los accesos rápidos de este chat.`
+    );
+  }
+
+  // 7. Menú, productos, precios
   if (/\b(men[uú]|producto|art[ií]culo|precio|categor[ií]a|platillo)\b/i.test(q)) {
     return (
       `🐰 Para gestionar tu catálogo y precios:\n\n` +
@@ -344,11 +356,25 @@ export const bunzyRouter = router({
           )
         );
 
+      // d) Estado de la cuenta de cobro Stripe Connect
+      const [stripeAcc] = await ctx.restaurantDb
+        .select({
+          chargesEnabled: merchantPaymentAccounts.chargesEnabled,
+          payoutsEnabled: merchantPaymentAccounts.payoutsEnabled,
+          stripeAccountId: merchantPaymentAccounts.stripeAccountId,
+        })
+        .from(merchantPaymentAccounts)
+        .where(eq(merchantPaymentAccounts.branchId, branchId))
+        .limit(1);
+
       const salesStats = recentOrders[0] || { count: 0, total: 0 };
       const currentCashback = business?.rewardPercentage ?? 10;
       const shiftState = activeShift
         ? `Turno ABIERTO (Fondo inicial: $${activeShift.openingFloat})`
         : "Turno de caja CERRADO";
+      const stripeState = stripeAcc?.chargesEnabled
+        ? `Cuenta Stripe CONECTADA (${stripeAcc.stripeAccountId}) - Cobros y Payouts activos`
+        : "Sin cuenta Stripe Connect vinculada (o pendiente de verificación)";
 
       // ─── 2. SYSTEM PROMPT CON IDENTITY Y REGLAS DE NEGOCIO ───────────────
       const systemPrompt = `
@@ -359,6 +385,7 @@ Tono: Profesional, fresco, mexicano, directo y altamente resolutivo.
 CONTEXTO REAL DE TU NEGOCIO (KNOWLEDGE VIVO AUTÉNTICO):
 - Negocio: ${business?.name || "Comercio Rabbitty"}
 - Estado de Caja: ${shiftState}.
+- Estado de Pasarela Stripe: ${stripeState}.
 - Cashback Bunz Activo: ${currentCashback}% (Límite permitido por sistema: 2% a 50%).
 - Bóveda de Bunz: ${(business?.bunzBalance ?? 0).toLocaleString()} BZ (Paquete: ${business?.package || "Inventario Activo"}).
 - Ventas últimas 24h: ${salesStats.count} órdenes registradas, volumen aproximado: $${Number(salesStats.total).toFixed(2)}.
@@ -378,6 +405,7 @@ CONOCIMIENTO OPERATIVO OFICIAL DEL POS Y FLUJO DE CAJA (ÚSALO PARA ASISTIR AL C
 - Candado Anti-Pérdida (Persistencia): El carrito del POS se sincroniza en tiempo real en la memoria local del dispositivo. Si el iPad se apaga, se bloquea o se refresca la app, los platillos no desaparecen y el POS se reabre exactamente donde se quedó.
 - Modo Kiosco de Seguridad: Los empleados con rol de cajero o mesero tienen bloqueada la salida al Dashboard administrativo. Para salir a configurar el negocio o ver reportes globales, se exige el PIN de 4 dígitos de un Administrador o Gerente.
 - Gastos y Pagos Menores (agua, café, hielo): Se registran en 'Caja / Turno -> Retiro' y se descuentan de forma automática del efectivo final.
+- Stripe Connect y Checkout en Mesa: Si el comercio pregunta cómo cobrar con tarjeta en mesa o habilitar Apple Pay / Google Pay, explícale que puede vincular su cuenta bancaria en '/settings' (pestaña Pasarela de Pagos) o usando el botón directo de Stripe en este chat de Bunzy. Una vez conectado, los clientes pagan escaneando el QR de la mesa y el dinero se deposita directamente a su cuenta bancaria vía CLABE.
 - Manual operativo completo disponible siempre en '/operations-manual'.
 
 CAPACIDAD DE SOPORTE, REPORTE DE BUGS Y FEEDBACK:

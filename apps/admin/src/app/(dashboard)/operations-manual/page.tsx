@@ -295,7 +295,7 @@ export default function OperationsManualPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card className="p-5 border border-white/5 bg-white/5 backdrop-blur-md space-y-2.5 print:border print:border-gray-300 print:bg-white">
               <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
                 <Banknote className="h-4 w-4" /> Cobro en Efectivo
@@ -309,8 +309,20 @@ export default function OperationsManualPage() {
             </Card>
 
             <Card className="p-5 border border-white/5 bg-white/5 backdrop-blur-md space-y-2.5 print:border print:border-gray-300 print:bg-white">
+              <div className="flex items-center gap-2 text-pink-400 font-bold text-sm">
+                <Sparkles className="h-4 w-4" /> Rabbitty Pay en Mesa
+              </div>
+              <p className="text-xs text-gray-400 print:text-gray-600 leading-relaxed">
+                1. Vincula tu cuenta bancaria en <strong className="text-white print:text-black">Configuración → Pasarela</strong> (o con Bunzy).<br />
+                2. El comensal escanea el QR en mesa.<br />
+                3. Paga al instante con <strong className="text-white print:text-black">Apple Pay, Tarjeta o Bunz</strong>.<br />
+                4. La mesa se libera en el POS y el dinero entra a tu CLABE.
+              </p>
+            </Card>
+
+            <Card className="p-5 border border-white/5 bg-white/5 backdrop-blur-md space-y-2.5 print:border print:border-gray-300 print:bg-white">
               <div className="flex items-center gap-2 text-cyan-400 font-bold text-sm">
-                <CreditCard className="h-4 w-4" /> Terminal Bancaria
+                <CreditCard className="h-4 w-4" /> Terminal Bancaria Física
               </div>
               <p className="text-xs text-gray-400 print:text-gray-600 leading-relaxed">
                 1. Toca <strong className="text-white print:text-black">Cobrar → Tarjeta</strong>.<br />
