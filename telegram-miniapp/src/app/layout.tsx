@@ -6,6 +6,7 @@ import { WalletProvider } from "@/contexts/WalletContext";
 import AuthProvider from "@/features/auth/AuthProvider";
 import { ToastProvider } from "@/contexts/ToastContext";
 import AppOpener from "@/components/AppOpener";
+import DeepLinkHandler from "@/components/DeepLinkHandler";
 import BunzyLaunchOverlay from "@/components/bunzy/BunzyLaunchOverlay";
 
 const inter = Inter({
@@ -52,6 +53,7 @@ export default function RootLayout({
         <AppOpener />
           <ToastProvider>
             <AuthProvider>
+              <DeepLinkHandler />
               <WalletProvider>
                 {children}
               </WalletProvider>

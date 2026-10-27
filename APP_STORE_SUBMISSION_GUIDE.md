@@ -169,6 +169,11 @@ En tu Mac:
 5. Selecciona **App Store Connect** -> **Upload** -> Deja las casillas predeterminadas de símbolos y firma automática -> Haz clic en **Upload**.
 6. En 10 a 15 minutos el build aparecerá en App Store Connect listo para adjuntarse a la versión 2.2.
 
+### ✅ Checklist previo a TestFlight / App Store (no bloquea el piloto dev)
+
+- [ ] **APNs production:** en `telegram-miniapp/ios/App/App/App.entitlements`, `aps-environment` debe ser `production` (hoy es `development`; el mismo archivo sirve a Debug y Release). Además, `APNS_ENV=production` en Vercel.
+- [ ] **Universal Links `/pay/*`:** el AASA (`/.well-known/apple-app-site-association`) abre la app nativa para `/scan`, `/qr` y `/pay`. Probar `/pay/[orderId]` (visor + Stripe Element) dentro del WebView de Capacitor en el piloto, no solo en Safari.
+
 ---
 
 # 🏢 PARTE II: Kit Oficial para Rabbitty POS (iPad & Mac)

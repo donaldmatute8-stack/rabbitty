@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { Button, Dialog, Input, toast, cn, useWakeLock } from "@rabbitty/ui";
-import { Clock, Wifi, Search, User, Users, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, Table2, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, FileText, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, Unlock, ClipboardCheck, Camera } from "lucide-react";
+import { Clock, Wifi, Search, User, Users, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, Table2, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, FileText, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, Unlock, ClipboardCheck, Camera, History, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { TicketTemplate, TicketData } from "../../../components/TicketTemplate";
@@ -63,6 +63,21 @@ export default function PosPage() {
   const [sendBillModal, setSendBillModal] = useState(false);
   const [activeTabsModal, setActiveTabsModal] = useState(false);
   const [pausedCartsModal, setPausedCartsModal] = useState(false);
+  const [recentOrdersModal, setRecentOrdersModal] = useState(false);
+  // Anti doble-impresión: el ref bloquea de forma síncrona; el estado pinta el loader
+  const printLockRef = useRef(false);
+  const [printingKey, setPrintingKey] = useState<string | null>(null);
+  const runPrint = async (key: string, job: () => Promise<void>) => {
+    if (printLockRef.current) return;
+    printLockRef.current = true;
+    setPrintingKey(key);
+    try {
+      await job();
+    } finally {
+      printLockRef.current = false;
+      setPrintingKey(null);
+    }
+  };
   const [pausedCarts, setPausedCarts] = useState<{
     id: string;
     folio: string;
@@ -157,6 +172,10 @@ export default function PosPage() {
   const { data: menuItems } = trpc.pos.getMenuItems.useQuery({}, { retry: false });
   const { data: tables } = trpc.pos.getTables.useQuery(undefined, { retry: false });
   const { data: activeTabsData, refetch: refetchActiveTabs } = trpc.pos.getActiveTabs.useQuery(undefined, { refetchInterval: 10000, retry: false });
+  const { data: recentCompletedOrders, refetch: refetchRecentOrders } = trpc.pos.getOrders.useQuery(
+    { status: "COMPLETED" },
+    { enabled: recentOrdersModal, retry: false }
+  );
   const sendBillMutation = trpc.pos.sendBillToCustomer.useMutation({
     onSuccess: (data) => {
       toast.success(`🧾 Cuenta enviada a ${data.customerName}!`);
@@ -547,12 +566,14 @@ export default function PosPage() {
     setReceiptModal(true);
 
     // Resilient ticket printing (prints live if connected, or enqueues if disconnected / failed)
-    const printResult = await printEngine.printTicket(ticket, true);
-    if (printResult.success) {
-      toast.success("¡Ticket impreso correctamente!");
-    } else if (printResult.queued) {
-      toast.warning((printResult.error || "Ticket guardado en cola.") + " Puedes reintentar con el botón Imprimir.");
-    }
+    await runPrint("receipt", async () => {
+      const printResult = await printEngine.printTicket(ticket, true);
+      if (printResult.success) {
+        toast.success("¡Ticket impreso correctamente!");
+      } else if (printResult.queued) {
+        toast.warning((printResult.error || "Ticket guardado en cola.") + " Puedes reintentar con el botón Imprimir.");
+      }
+    });
 
     setCart([]);
     setSelectedTableId(null);
@@ -582,9 +603,11 @@ export default function PosPage() {
 
   const handlePrintReceipt = async () => {
     if (!paidTicketData) return;
-    const r = await printEngine.printTicket(paidTicketData, true);
-    if (r.success) toast.success("¡Ticket impreso correctamente!");
-    else toast.warning(r.error || "No se pudo imprimir. Revisa la impresora.");
+    await runPrint("receipt", async () => {
+      const r = await printEngine.printTicket(paidTicketData, true);
+      if (r.success) toast.success("¡Ticket impreso correctamente!");
+      else toast.warning(r.error || "No se pudo imprimir. Revisa la impresora.");
+    });
   };
 
   const handleCheckout = async (method: string = "EFECTIVO", cashGiven?: number) => {
@@ -843,6 +866,19 @@ export default function PosPage() {
           >
             <Users className="h-4 w-4 text-purple-400" />
             <span>Tabs ({activeTabsData?.totalActiveCount ?? 0})</span>
+          </button>
+
+          {/* Reimprimir Tickets / Historial Rápido */}
+          <button
+            onClick={() => {
+              setRecentOrdersModal(true);
+              refetchRecentOrders();
+            }}
+            className="flex items-center gap-2 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 px-3.5 py-2 border border-cyan-500/30 text-cyan-300 text-xs font-black transition-all cursor-pointer shadow-[0_0_15px_rgba(6,182,212,0.15)] active:scale-95"
+            title="Reimprimir tickets cobrados recientemente"
+          >
+            <History className="h-4 w-4 text-cyan-400" />
+            <span>Reimprimir</span>
           </button>
 
           {/* QR Neón del Negocio (Mostrar al cliente en pantalla para escanear en mostrador) */}
@@ -2065,9 +2101,18 @@ export default function PosPage() {
               id="pos-print-receipt"
               variant="secondary"
               onClick={handlePrintReceipt}
-              className="w-full font-bold py-2 text-sm bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/30"
+              disabled={printingKey !== null}
+              aria-busy={printingKey === "receipt"}
+              className="w-full font-bold py-2 text-sm bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/30 disabled:opacity-70 disabled:cursor-wait"
             >
-              Imprimir ticket
+              {printingKey === "receipt" ? (
+                <span className="inline-flex items-center justify-center gap-2">
+                  <span className="h-4 w-4 rounded-full border-2 border-cyan-300/30 border-t-cyan-300 animate-spin" />
+                  Imprimiendo...
+                </span>
+              ) : (
+                "Imprimir ticket"
+              )}
             </Button>
             <div className="flex items-center gap-2">
               <Input
@@ -2428,21 +2473,30 @@ export default function PosPage() {
                     <span className="font-black text-cyan-400 text-sm">
                       ${tab.total.toFixed(2)}
                     </span>
-                    <Button
-                      onClick={async () => {
-                        await sendBillMutation.mutateAsync({
-                          orderId: tab.orderId,
-                          customerId: tab.customer?.id || undefined,
-                          phone: tab.customer?.phone || undefined,
-                          customerName: tab.customer?.name || undefined,
-                        });
-                      }}
-                      disabled={sendBillMutation.isPending}
-                      className="py-1.5 px-3 text-xs font-bold bg-pink-500/20 hover:bg-pink-500/30 text-pink-300 border border-pink-500/40"
-                    >
-                      <Send className="h-3 w-3 mr-1 text-pink-400" />
-                      Enviar Cuenta
-                    </Button>
+                    {tab.status === "CASH_PAYMENT_REQUESTED" ? (
+                      <span
+                        className="flex items-center gap-1.5 py-1.5 px-3 rounded-xl bg-amber-500/15 text-amber-300 border border-amber-500/40 text-xs font-bold"
+                        title="El comensal solicitó pagar en efectivo: cobra en gaveta con tu PIN, no envíes link de pago digital."
+                      >
+                        💵 Solicitó efectivo
+                      </span>
+                    ) : (
+                      <Button
+                        onClick={async () => {
+                          await sendBillMutation.mutateAsync({
+                            orderId: tab.orderId,
+                            customerId: tab.customer?.id || undefined,
+                            phone: tab.customer?.phone || undefined,
+                            customerName: tab.customer?.name || undefined,
+                          });
+                        }}
+                        disabled={sendBillMutation.isPending}
+                        className="py-1.5 px-3 text-xs font-bold bg-pink-500/20 hover:bg-pink-500/30 text-pink-300 border border-pink-500/40"
+                      >
+                        <Send className="h-3 w-3 mr-1 text-pink-400" />
+                        Enviar Cuenta
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))
@@ -2638,6 +2692,158 @@ export default function PosPage() {
 
           <div className="flex justify-end pt-2 border-t border-white/5">
             <Button variant="secondary" onClick={() => setPausedCartsModal(false)}>
+              Cerrar
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* ── Modal de Reimpresión de Tickets Recientes ── */}
+      <Dialog
+        open={recentOrdersModal}
+        onClose={() => setRecentOrdersModal(false)}
+        title="Historial de Tickets / Reimpresión"
+        className="max-w-2xl w-full"
+      >
+        <div className="space-y-4 p-1">
+          <p className="text-xs text-gray-400">
+            Selecciona cualquier ticket cobrado recientemente para visualizarlo o imprimir una copia en la ticketera térmica.
+          </p>
+
+          <div className="max-h-96 overflow-y-auto custom-scrollbar space-y-2">
+            {recentCompletedOrders && recentCompletedOrders.length > 0 ? (
+              [...recentCompletedOrders].reverse().map((ord) => {
+                const rest = ticketContext?.restaurant;
+                const br = ticketContext?.branch;
+                const orderDate = ord.createdAt ? new Date(ord.createdAt) : new Date();
+                const orderFolio = `#${ord.id.slice(-4).toUpperCase()}`;
+                const itemsCount = ord.items?.reduce((s, it) => s + it.quantity, 0) || 0;
+
+                const reconstructTicket = (): TicketData => ({
+                  restaurantName: rest?.name || "RABBITTY RESTAURANT",
+                  legalName: rest?.legalName || undefined,
+                  rfc: rest?.rfc || undefined,
+                  taxRegime: rest?.taxRegime || undefined,
+                  logoUrl: rest?.logoUrl || undefined,
+                  address: br?.address || undefined,
+                  phone: br?.phone || undefined,
+                  email: rest?.email || undefined,
+                  ticketFooter: rest?.ticketFooter || "¡Gracias por tu visita!",
+                  orderNumber: orderFolio,
+                  orderId: ord.id,
+                  claimToken: ord.id,
+                  date: orderDate.toLocaleString("es-MX", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }),
+                  tableNumber: ord.tableId ? `Mesa` : undefined,
+                  orderType: ord.orderType || "DIRECTA",
+                  items: (ord.items || []).map((it) => ({
+                    id: it.id,
+                    name: it.name,
+                    quantity: it.quantity,
+                    unitPrice: it.unitPrice,
+                    totalPrice: it.totalPrice,
+                    notes: it.notes || undefined,
+                  })),
+                  subtotal: ord.subtotal || ord.total,
+                  tax: ord.tax || 0,
+                  total: ord.total,
+                  paymentMethod: ord.bunzPaid && ord.bunzPaid > 0 ? "BUNZ" : "EFECTIVO",
+                  currency: rest?.currency || "MXN",
+                  bunzCashbackRate: rest?.defaultRewardRate ?? 20,
+                  estimatedBunz: ord.bunzReward || Math.max(1, Math.round(ord.total * 0.2)),
+                  customerName: ord.customerName || undefined,
+                  awardedBunz: ord.bunzReward && ord.bunzReward > 0 ? ord.bunzReward : undefined,
+                });
+
+                return (
+                  <div
+                    key={ord.id}
+                    className="flex items-center justify-between rounded-xl bg-white/5 border border-white/10 p-3.5 hover:bg-white/10 transition-all"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-black text-pink-400 font-mono text-sm">
+                          {orderFolio}
+                        </span>
+                        <span className="text-[10px] text-gray-400 bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
+                          {ord.orderType || "VENTA"}
+                        </span>
+                        <span className="text-[11px] text-gray-400">
+                          {orderDate.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-300">
+                        {itemsCount} artículo(s) · <strong className="text-emerald-400 font-black">${Number(ord.total).toFixed(2)} MXN</strong>
+                        {ord.customerName && (
+                          <span className="text-pink-300 ml-2 font-bold">· 🐰 {ord.customerName}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        onClick={() => {
+                          const ticket = reconstructTicket();
+                          setPaidTicketData(ticket);
+                          setReceiptModal(true);
+                          setRecentOrdersModal(false);
+                        }}
+                        className="py-1.5 px-3 text-xs font-bold bg-white/10 hover:bg-white/20 text-white border border-white/15"
+                      >
+                        Ver Detalle
+                      </Button>
+                      <Button
+                        onClick={() =>
+                          runPrint(`reprint-${ord.id}`, async () => {
+                            const ticket = reconstructTicket();
+                            const r = await printEngine.printTicket(ticket, true);
+                            if (r.success) {
+                              toast.success(`🖨️ Ticket ${orderFolio} reimpreso correctamente`);
+                            } else {
+                              toast.warning(r.error || "No se pudo imprimir. Revisa la impresora.");
+                            }
+                          })
+                        }
+                        disabled={printingKey !== null}
+                        className="py-1.5 px-3 text-xs font-black bg-cyan-500 hover:bg-cyan-400 text-gray-950 shadow-md active:scale-95 cursor-pointer flex items-center gap-1.5 disabled:opacity-70 disabled:cursor-wait"
+                      >
+                        {printingKey === `reprint-${ord.id}` ? (
+                          <>
+                            <span className="h-3.5 w-3.5 rounded-full border-2 border-gray-950/30 border-t-gray-950 animate-spin" />
+                            Imprimiendo...
+                          </>
+                        ) : (
+                          <>
+                            <Printer className="h-3.5 w-3.5" />
+                            Reimprimir
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="text-center py-10 text-gray-400 text-xs">
+                No hay órdenes cobradas recientemente para esta sucursal.
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-between items-center pt-2 border-t border-white/5">
+            <Link
+              href="/reports/audit"
+              className="text-xs text-pink-400 hover:text-pink-300 underline font-medium"
+              onClick={() => setRecentOrdersModal(false)}
+            >
+              Ir a Auditoría y Registro Completo →
+            </Link>
+            <Button variant="secondary" onClick={() => setRecentOrdersModal(false)}>
               Cerrar
             </Button>
           </div>

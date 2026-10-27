@@ -1,0 +1,14 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["FW97275K5X.com.rabbitty.app"],
+        "components": [
+          { "/": "/scan*", "comment": "Tickets QR y vinculación de mesa" },
+          { "/": "/qr/*" },
+          { "/": "/pay/*" }
+        ]
+      }
+    ]
+  }
+}

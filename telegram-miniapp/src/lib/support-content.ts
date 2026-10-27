@@ -80,6 +80,18 @@ export const FAQS: FaqItem[] = [
     q: '¿Dónde veo qué negocios aceptan Bunz?',
     a: "En la pantalla principal (Stock o Feed) y en la pestaña Freehands (nuestro mapa inteligente), verás en tiempo real todos los negocios afiliados cercanos a tu ubicación.",
   },
+  {
+    q: '¿Cómo reclamo mis Bunz con el QR de mi ticket?',
+    a: 'Cada ticket impreso trae un QR de reclamo y un Folio Rabbitty. Opción 1: abre la cámara de tu iPhone y escanea el QR; se abre directo la app Rabbitty y se acreditan tus Bunz. Opción 2: dentro de la app toca Escanear y apunta al QR. Cada ticket se puede reclamar una sola vez. Si la cámara te abre el navegador en lugar de la app, actualiza Rabbitty a la última versión y vuelve a intentarlo.',
+  },
+  {
+    q: '¿Qué hago si el cajero no me identificó antes de pagar?',
+    a: 'No pierdes tus Bunz. Tienes tres vías: 1. Escanea el QR de tu ticket impreso (arriba). 2. Pídele al cajero que, justo después de cobrar, escanee tu QR Rabbitty con la cámara del POS o teclee tu teléfono de 10 dígitos. 3. Si estás en un negocio con kiosko o mostrador, escanea el QR Neón del negocio para identificarte.',
+  },
+  {
+    q: '¿Me avisan cuando gano o gasto Bunz?',
+    a: 'Sí. Recibes una notificación push al instante: "Ticket canjeado con éxito" cuando ganas Bunz, y "Pago realizado con éxito / Has gastado X Bunz en [negocio]" cuando pagas o canjeas. Si no te llegan, revisa que las notificaciones de Rabbitty estén activas en Ajustes de tu iPhone. Todas quedan también en tu centro de notificaciones dentro de la app.',
+  },
 ];
 
 export const DOC_SECTIONS: { title: string; body: string }[] = [

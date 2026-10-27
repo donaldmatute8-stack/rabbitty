@@ -447,15 +447,27 @@ export default function OperationsManualPage() {
                 </p>
                 <ol className="list-decimal list-inside space-y-1 pl-1 text-[11px]">
                   <li>
-                    <strong className="text-white print:text-black">Escaneo del Ticket Impreso:</strong> Cada ticket térmico emitido imprime automáticamente al final el <strong>QR de Reclamo Rabbitty</strong> y el <strong>Folio Rabbitty</strong> (ej. <code className="bg-white/10 px-1 py-0.5 rounded text-pink-300 font-mono">Folio: 72A5...</code>). El comensal solo abre la cámara de su teléfono o la Mini App de Telegram / Rabbitty y escanea el QR de su ticket para que sus Bunz se depositen al instante en su billetera.
+                    <strong className="text-white print:text-black">Escaneo del Ticket Impreso:</strong> Cada ticket térmico imprime al final el <strong>QR de Reclamo Rabbitty</strong> y el <strong>Folio Rabbitty</strong>. El comensal abre la cámara de su iPhone y escanea el QR: se abre directo la app Rabbitty y sus Bunz se acreditan al instante (cada ticket se reclama una sola vez). También puede usar el botón <em>"Escanear"</em> dentro de la app. Si se le abre el navegador, debe actualizar la app a la última versión.
                   </li>
                   <li>
-                    <strong className="text-white print:text-black">Envío por WhatsApp al Cobrar:</strong> En la pantalla de cobro exitoso del POS, el cajero puede escribir el WhatsApp del cliente y presionar <em>"Enviar Comprobante"</em>. El sistema le envía el ticket digital con su botón de reclamo directo.
+                    <strong className="text-white print:text-black">Escanear al cliente con la cámara del POS:</strong> En el botón de Rabbitter (antes o después de cobrar) toca <em>"Escanear QR de la App del Cliente"</em>. La cámara en vivo lee el QR de su app y lo vincula sola; también puedes buscar por teléfono o nombre.
                   </li>
                   <li>
-                    <strong className="text-white print:text-black">Flujo Ideal (Pre-escaneo en Mostrador):</strong> Para darle la mejor experiencia al cliente, pídele su código Rabbitter <em>antes</em> de presionar Cobrar o busca su teléfono/nombre en la barra superior. Al cobrar, el sistema deposita los Bunz en automático sin necesidad de que escanee el papel.
+                    <strong className="text-white print:text-black">QR Mostrador:</strong> El botón rosa <em>"QR Mostrador"</em> del POS muestra en pantalla el QR Neón del negocio para que el cliente lo escanee y se identifique antes o después de pagar (útil en Kiosko y autoservicio).
+                  </li>
+                  <li>
+                    <strong className="text-white print:text-black">Cuenta por WhatsApp ≠ asignación:</strong> <em>"Despachar Cuenta"</em> envía un link de pago al cliente, pero <strong>no</strong> lo asigna como Rabbitter. Para darle Bunz, vincula al Rabbitter o pídele que escanee el QR de su ticket.
+                  </li>
+                  <li>
+                    <strong className="text-white print:text-black">Flujo Ideal (Pre-escaneo en Mostrador):</strong> Para darle la mejor experiencia al cliente, pídele su código Rabbitter <em>antes</em> de presionar Cobrar o busca su teléfono/nombre. Al cobrar, el sistema deposita los Bunz en automático sin necesidad de que escanee el papel.
                   </li>
                 </ol>
+                <p className="text-[11px] pt-1">
+                  <strong className="text-white print:text-black">🖨️ Reimprimir un ticket:</strong> botón <em>"Reimprimir"</em> en la barra superior del POS → elige la orden cobrada → <em>"Ver Detalle"</em> o <em>"Reimprimir"</em>. El registro completo está en <Link href="/reports/audit" className="text-pink-400 underline font-semibold">Cuadre &amp; Auditoría</Link>.
+                </p>
+                <p className="text-[11px]">
+                  <strong className="text-white print:text-black">🔔 Notificaciones:</strong> el Rabbitter recibe un push al ganar Bunz y otro al gastarlos ("Has gastado X Bunz en tu negocio"). En el Dashboard, la tarjeta de Bunz muestra tu <em>Bóveda</em> disponible y los <em>Minteados / Otorgados</em> a clientes.
+                </p>
               </div>
             </Card>
 

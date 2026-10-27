@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { restaurantDb } from "@/db/restaurant";
 import { users, ownedBusinesses, transactions, affiliateCampaigns, campaignRedemptions } from "@/db/schema";
 import { orders, restaurants, branches } from "@rabbitty/database-restaurant/schema";
-import { eq, and, desc, gt, sql, ilike } from "drizzle-orm";
+import { eq, and, desc, gt, sql } from "drizzle-orm";
 import { getAuthenticatedUser } from "@/lib/serverAuth";
 import { recordLedgerTransaction, findLedgerEntry } from "@/lib/ledgerHelper";
 import { sendEcosystemNotification } from "@/lib/push/notify";
@@ -137,14 +137,15 @@ export async function POST(req: NextRequest) {
           if (!exists) resolvedBizId = null;
         }
 
-        // Si no existe o no tiene businessId directo, buscar por nombre o asignar el de 626 café
+        // Sin fuzzy-match: si el restaurante no tiene un businessId válido en
+        // ownedBusinesses, el reclamo se rechaza con un error accionable
+        // (evita ligar Bunz al negocio equivocado por similitud de nombre).
         if (!resolvedBizId) {
-          const [matchByName] = await db
-            .select({ id: ownedBusinesses.id })
-            .from(ownedBusinesses)
-            .where(ilike(ownedBusinesses.name, `%${restaurant.name || "626"}%`))
-            .limit(1);
-          resolvedBizId = matchByName?.id || null;
+          return NextResponse.json({
+            success: false,
+            error: `El restaurante "${restaurant.name}" no tiene un negocio afiliado vinculado en Rabbitty. Pide al dueño que complete su perfil de afiliado o contacta a soporte.`,
+            code: "BUSINESS_LINK_MISSING",
+          }, { status: 422 });
         }
 
         businessId = resolvedBizId;
