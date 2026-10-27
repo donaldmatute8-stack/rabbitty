@@ -293,7 +293,7 @@ export function TicketTemplate({
             <div className="flex flex-col items-center justify-center pt-1">
               <div className="bg-white p-2 rounded-xl shadow-md inline-block">
                 <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(`https://rabbitty.me/scan?claimToken=${data.claimToken || data.orderNumber || "0000"}`)}`}
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(`https://app.rabbitty.me/scan?claimToken=${data.claimToken || data.orderNumber || "0000"}`)}`}
                   alt="QR Reclamar Recompensa"
                   className="h-16 w-16"
                 />

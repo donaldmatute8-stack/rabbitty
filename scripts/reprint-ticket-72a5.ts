@@ -167,30 +167,40 @@ async function main() {
 
   const fullPayload = Buffer.concat(chunks);
 
-  // 4. Enviar a la impresora POS-58 conectada por USB
+  // 4. Enviar a la impresora POS-58
   console.log("\n🖨️  Enviando datos binarios a la impresora POS-58...");
-  const cupsBinary = "/usr/libexec/cups/backend/usb";
-  const deviceUri = process.env.RABBITTY_PRINTER_URI || "usb://YICHIP3121/POS-58%20Printer?serial=B120300001";
+  
+  // Guardamos el binario para envío directo por lp (CUPS Spooler)
+  import("fs").then(async (fs) => {
+    const tmpBinPath = "/tmp/ticket_72a5.bin";
+    fs.writeFileSync(tmpBinPath, fullPayload);
 
-  const proc = spawn(cupsBinary, ["1", "admin", "Ticket 72A5 Rabbitty", "1", ""], {
-    env: { ...process.env, DEVICE_URI: deviceUri }
-  });
-
-  proc.stdin.write(fullPayload);
-  proc.stdin.end();
-
-  proc.stderr.on("data", (d) => {
-    const s = d.toString();
-    if (!s.includes("DEBUG")) console.log(`[CUPS]: ${s.trim()}`);
-  });
-
-  proc.on("close", (code) => {
-    if (code === 0) {
-      console.log("\n🎉 ¡TICKET #72A5 IMPRESO CON ÉXITO EN TU POS-58 CON QR Y FOLIO RABBITTY!");
-    } else {
-      console.log(`\n⚠️ Proceso finalizado con código: ${code}`);
-    }
-    pool.end();
+    // Intentamos por lp directo al spooler de macOS
+    const lpProc = spawn("lp", ["-d", "Rabbitty_POS_Printer", "-o", "raw", tmpBinPath]);
+    
+    let lpErr = "";
+    lpProc.stderr.on("data", (d) => { lpErr += d.toString(); });
+    
+    lpProc.on("close", (code) => {
+      if (code === 0) {
+        console.log("\n🎉 ¡TICKET #72A5 ENVIADO CON ÉXITO A Rabbitty_POS_Printer (CUPS RAW)!");
+      } else {
+        console.log(`[lp fallback stderr]: ${lpErr.trim()}`);
+        // Si lp falla, probamos con el backend directo
+        const cupsBinary = "/usr/libexec/cups/backend/usb";
+        const deviceUri = process.env.RABBITTY_PRINTER_URI || "usb://YICHIP3121/POS-58%20Printer?serial=B120300001";
+        const proc = spawn(cupsBinary, ["1", "admin", "Ticket 72A5 Rabbitty", "1", ""], {
+          env: { ...process.env, DEVICE_URI: deviceUri }
+        });
+        proc.stdin.write(fullPayload);
+        proc.stdin.end();
+        proc.stderr.on("data", (d) => { console.log(`[CUPS Backend]: ${d.toString().trim()}`); });
+        proc.on("close", (c) => {
+          console.log(`Backend terminó con código ${c}`);
+        });
+      }
+      pool.end();
+    });
   });
 }
 

@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { restaurantDb } from "@/db/restaurant";
 import { users, ownedBusinesses, transactions, affiliateCampaigns, campaignRedemptions } from "@/db/schema";
 import { orders, restaurants, branches } from "@rabbitty/database-restaurant/schema";
-import { eq, and, desc, gt, sql } from "drizzle-orm";
+import { eq, and, desc, gt, sql, ilike } from "drizzle-orm";
 import { getAuthenticatedUser } from "@/lib/serverAuth";
 import { recordLedgerTransaction, findLedgerEntry } from "@/lib/ledgerHelper";
 import { sendEcosystemNotification } from "@/lib/push/notify";
@@ -112,6 +112,7 @@ export async function POST(req: NextRequest) {
     if (branch) {
       const [restaurant] = await restaurantDb
         .select({
+          name: restaurants.name,
           defaultRewardRate: restaurants.defaultRewardRate,
           happyHourRewardRate: restaurants.happyHourRewardRate,
           happyHourStart: restaurants.happyHourStart,
@@ -124,7 +125,29 @@ export async function POST(req: NextRequest) {
 
       if (restaurant) {
         rewardPercentage = normalizeToPercent(restaurant.defaultRewardRate) ?? 20;
-        businessId = restaurant.businessId;
+        let resolvedBizId: string | null = restaurant.businessId;
+
+        // Validar si existe en ownedBusinesses (clave foránea estricta de transactions)
+        if (resolvedBizId) {
+          const [exists] = await db
+            .select({ id: ownedBusinesses.id })
+            .from(ownedBusinesses)
+            .where(eq(ownedBusinesses.id, resolvedBizId))
+            .limit(1);
+          if (!exists) resolvedBizId = null;
+        }
+
+        // Si no existe o no tiene businessId directo, buscar por nombre o asignar el de 626 café
+        if (!resolvedBizId) {
+          const [matchByName] = await db
+            .select({ id: ownedBusinesses.id })
+            .from(ownedBusinesses)
+            .where(ilike(ownedBusinesses.name, `%${restaurant.name || "626"}%`))
+            .limit(1);
+          resolvedBizId = matchByName?.id || null;
+        }
+
+        businessId = resolvedBizId;
 
         // Comprobar Happy Hour si aplica
         if (restaurant.happyHourStart && restaurant.happyHourEnd) {

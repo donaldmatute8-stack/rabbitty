@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { Button, Dialog, Input, toast, cn, useWakeLock } from "@rabbitty/ui";
-import { Clock, Wifi, Search, User, Users, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, Table2, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, FileText, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, Unlock, ClipboardCheck } from "lucide-react";
+import { Clock, Wifi, Search, User, Users, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, Table2, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, FileText, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, Unlock, ClipboardCheck, Camera } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { TicketTemplate, TicketData } from "../../../components/TicketTemplate";
@@ -91,6 +91,7 @@ export default function PosPage() {
   const [rabbitterModalOpen, setRabbitterModalOpen] = useState(false);
   const [rabbitterQuery, setRabbitterQuery] = useState("");
   const [isSearchingRabbitter, setIsSearchingRabbitter] = useState(false);
+  const [isScanningRabbitter, setIsScanningRabbitter] = useState(false);
   const [showBusinessQrModal, setShowBusinessQrModal] = useState(false);
   const utils = trpc.useUtils();
 
@@ -2181,6 +2182,7 @@ export default function PosPage() {
         open={rabbitterModalOpen}
         onClose={() => {
           setRabbitterModalOpen(false);
+          setIsScanningRabbitter(false);
           setRabbitterQuery("");
         }}
         title="Identificar Rabbitter (Recompensa Directa)"
@@ -2190,6 +2192,78 @@ export default function PosPage() {
           <p className="text-xs text-gray-400">
             Escanea el <strong className="text-pink-400">Rabbitty Code</strong> del cliente o ingresa su teléfono / usuario para vincularlo a la cuenta y acreditar su recompensa automáticamente al cobrar.
           </p>
+
+          {/* Opción de Escaneo con Cámara en Vivo */}
+          {isScanningRabbitter ? (
+            <div className="space-y-3 flex flex-col items-center">
+              <div id="rabbitter-cam-reader" className="w-full max-w-[280px] h-[280px] rounded-2xl overflow-hidden border-2 border-pink-500/60 shadow-[0_0_30px_rgba(236,72,153,0.3)] bg-black" />
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setIsScanningRabbitter(false)}
+                className="text-xs font-bold"
+              >
+                Cerrar Cámara
+              </Button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={async () => {
+                setIsScanningRabbitter(true);
+                setTimeout(async () => {
+                  try {
+                    const { Html5Qrcode } = await import("html5-qrcode");
+                    const scanner = new Html5Qrcode("rabbitter-cam-reader");
+                    await scanner.start(
+                      { facingMode: "environment" },
+                      { fps: 10, qrbox: { width: 220, height: 220 } },
+                      async (decodedText: string) => {
+                        await scanner.stop().catch(() => {});
+                        setIsScanningRabbitter(false);
+                        // Clean clean query if scanned a URL (e.g. rabbitty.me/profile?user=... or phone)
+                        const cleaned = decodedText.includes("?") 
+                          ? new URL(decodedText).searchParams.get("user") || new URL(decodedText).searchParams.get("phone") || decodedText
+                          : decodedText;
+                        
+                        setIsSearchingRabbitter(true);
+                        try {
+                          const res = await utils.pos.lookupRabbitter.fetch({ query: cleaned.trim() });
+                          if (res) {
+                            setSelectedRabbitter(res);
+                            setRabbitterModalOpen(false);
+                            setRabbitterQuery("");
+                            toast.success(`🐰 ¡Rabbitter vinculado: ${res.name}!`);
+                          } else {
+                            toast.error("Código no encontrado. Verifica con el cliente.");
+                          }
+                        } catch (err: any) {
+                          toast.error(err?.message || "Error al buscar Rabbitter");
+                        } finally {
+                          setIsSearchingRabbitter(false);
+                        }
+                      },
+                      () => {}
+                    );
+                  } catch (e: any) {
+                    toast.error("No se pudo acceder a la cámara.");
+                    setIsScanningRabbitter(false);
+                  }
+                }, 150);
+              }}
+              className="w-full flex items-center justify-center gap-2.5 py-3 rounded-2xl bg-pink-500/15 hover:bg-pink-500/25 border border-pink-500/30 text-pink-300 text-xs font-black transition-all cursor-pointer shadow-[0_0_20px_rgba(236,72,153,0.15)] active:scale-95"
+            >
+              <Camera className="h-4 w-4 text-pink-400 animate-pulse" />
+              <span>Escanear QR de la App del Cliente</span>
+            </button>
+          )}
+
+          <div className="flex items-center gap-2">
+            <div className="h-px bg-white/10 flex-1" />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">O busca por teléfono/ID</span>
+            <div className="h-px bg-white/10 flex-1" />
+          </div>
 
           <form
             onSubmit={async (e) => {
@@ -2223,7 +2297,7 @@ export default function PosPage() {
                 autoFocus
                 value={rabbitterQuery}
                 onChange={(e) => setRabbitterQuery(e.target.value)}
-                placeholder="Teléfono, ID o código QR..."
+                placeholder="Teléfono (10 dígitos), ID o código..."
                 className="w-full pl-10 pr-4 py-3 rounded-2xl bg-gray-900 border border-white/15 focus:border-pink-500 text-sm font-bold text-white placeholder-gray-500 outline-none transition-all"
               />
             </div>
@@ -2234,6 +2308,7 @@ export default function PosPage() {
                 variant="secondary"
                 onClick={() => {
                   setRabbitterModalOpen(false);
+                  setIsScanningRabbitter(false);
                   setRabbitterQuery("");
                 }}
                 className="flex-1 py-2.5 font-bold text-xs"
