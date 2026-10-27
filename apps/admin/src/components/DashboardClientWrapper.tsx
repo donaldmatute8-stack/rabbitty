@@ -440,6 +440,7 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                               onClick={() => {
                                 const currentUrl = typeof window !== "undefined" ? window.location.href : "https://rabbitty.me/settings";
                                 createStripeLink.mutate({
+                                  branchId: branchId || undefined,
                                   refreshUrl: currentUrl,
                                   returnUrl: currentUrl,
                                 });

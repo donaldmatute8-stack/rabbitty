@@ -16,6 +16,7 @@ import {
   Salad, 
   Truck, 
   Receipt, 
+  CreditCard,
   CalendarCheck, 
   DollarSign, 
   Monitor, 
@@ -81,6 +82,7 @@ const commands: CommandItem[] = [
   { id: "catering", label: "Eventos & Catering", category: "🚀 Crecimiento & Lealtad", href: "/catering", icon: CalendarCheck, keywords: ["banquetes", "privados"] },
 
   // ⚙️ Configuración del Negocio
+  { id: "stripe", label: "Pasarela de Pagos & Stripe Connect", category: "⚙️ Configuración del Negocio", href: "/settings?tab=payments", icon: CreditCard, keywords: ["stripe", "tarjeta", "pagos", "banco", "clabe", "apple pay"] },
   { id: "restaurants", label: "Mis Sucursales", category: "⚙️ Configuración del Negocio", href: "/restaurants", icon: Store, keywords: ["locales", "dirección"] },
   { id: "staff", label: "Personal y Roles", category: "⚙️ Configuración del Negocio", href: "/staff", icon: Users, keywords: ["equipo", "empleados", "permisos", "pin"] },
   { id: "hardware", label: "Impresoras & POS", category: "⚙️ Configuración del Negocio", href: "/hardware", icon: Printer, keywords: ["tickets", "impresora", "kds"] },

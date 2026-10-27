@@ -23,6 +23,7 @@ import {
   Salad, 
   Truck, 
   Receipt,
+  CreditCard,
   ReceiptText, 
   CalendarCheck, 
   DollarSign, 
@@ -165,6 +166,7 @@ const menuPillars: MenuPillar[] = [
     icon: Settings,
     items: [
       { href: "/restaurants", label: "Mis Sucursales & Afiliados", icon: Store },
+      { href: "/settings?tab=payments", label: "Pasarela & Stripe Connect", icon: CreditCard, badge: "Pay" },
       { href: "/staff", label: "Personal & Roles", icon: Users },
       { href: "/hardware", label: "Impresoras & Hardware", icon: Printer },
       { href: "/qr-generator", label: "Códigos QR", icon: QrCode },
