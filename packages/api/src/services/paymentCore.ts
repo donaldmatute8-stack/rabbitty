@@ -570,7 +570,10 @@ export async function registerProviderWebhookEvent(
       eventRecordId: record.id,
     };
   } catch (err: any) {
-    if (err?.code === "23505" || String(err?.message || "").includes("duplicate key") || String(err?.message || "").includes("unique")) {
+    const pgErr = err && typeof err === "object" ? (err as { code?: string; message?: string; cause?: { code?: string; message?: string } | undefined; cause_message?: string }) : null;
+    const dupCode = pgErr?.code === "23505" || pgErr?.cause?.code === "23505";
+    const dupMsg = String(pgErr?.message || "") + String(pgErr?.cause?.message || pgErr?.cause_message || "");
+    if (dupCode || dupMsg.includes("duplicate key") || dupMsg.includes("unique") || dupMsg.includes("payment_provider_events_idx")) {
       const [existing] = await db
         .select()
         .from(paymentProviderEvents)
