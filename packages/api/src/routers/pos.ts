@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { and, asc, desc, eq, sql, inArray, or, ilike } from "drizzle-orm";
+import { and, asc, desc, eq, sql, inArray, or, ilike, gte } from "drizzle-orm";
 import crypto from "crypto";
 import { router, protectedProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
-import { tables as tablesTable, tableSessions, branches, menuCategories, menuItems, orders, orderItems, payments, menuItemModifiers, restaurants } from "@rabbitty/database-restaurant/schema";
+import { tables as tablesTable, tableSessions, branches, menuCategories, menuItems, orders, orderItems, payments, menuItemModifiers, restaurants, events as posEvents } from "@rabbitty/database-restaurant/schema";
 import { users as coreUsers } from "@rabbitty/database-core/schema";
 import { miniappClient } from "../services/miniapp-client";
 import { assertOpenShiftForCash } from "../services/cashShift";
@@ -156,6 +156,57 @@ export const posRouter = router({
       const items = await ctx.restaurantDb.select().from(menuItems).where(where).orderBy(asc(menuItems.sortOrder));
       return items;
     }),
+
+  /**
+   * Aviso de Llegada a POS: recupera los eventos CUSTOMER_ARRIVAL sin leer
+   * (los inserta /api/location/ping cuando un Rabbitter entra a ≤60m del local)
+   * y los marca como leídos. Incluye a VIPs y a quienes ya no llegan dentro de
+   * la ventana de 4 horas (anti-spam del motor de proximidad).
+   */
+  getRecentArrivals: protectedProcedure.query(async ({ ctx }) => {
+    const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
+    const rows = await ctx.restaurantDb.select()
+      .from(posEvents)
+      .where(and(
+        eq(posEvents.branchId, ctx.branchId),
+        eq(posEvents.type, "CUSTOMER_ARRIVAL"),
+        gte(posEvents.createdAt, fourHoursAgo)
+      ))
+      .orderBy(desc(posEvents.createdAt))
+      .limit(20);
+
+    const unseen = rows.filter((r: any) => !r.read);
+    if (unseen.length > 0) {
+      await ctx.restaurantDb.update(posEvents)
+        .set({ read: true })
+        .where(inArray(posEvents.id, unseen.map((r: any) => r.id)));
+    }
+
+    return {
+      newArrivals: unseen.map((r: any) => {
+        const payload = (typeof r.payload === "string" ? JSON.parse(r.payload) : r.payload) || {};
+        return {
+          eventId: r.id,
+          createdAt: r.createdAt,
+          userId: payload.userId ?? null,
+          username: payload.username ?? "Rabbitter",
+          visitCount: Number(payload.visitCount ?? 0),
+          isVip: Boolean(payload.isVip),
+          distanceMeters: Number(payload.distanceMeters ?? 0),
+          accuracy: Number(payload.accuracy ?? 0),
+        };
+      }),
+      recent: rows.map((r: any) => {
+        const payload = (typeof r.payload === "string" ? JSON.parse(r.payload) : r.payload) || {};
+        return {
+          createdAt: r.createdAt,
+          username: payload.username ?? "Rabbitter",
+          visitCount: Number(payload.visitCount ?? 0),
+          isVip: Boolean(payload.isVip),
+        };
+      }),
+    };
+  }),
 
   getOrders: protectedProcedure
     .input(z.object({ tableId: z.string().optional(), status: z.string().optional() }))
@@ -577,6 +628,7 @@ export const posRouter = router({
         customerPhone: z.string(),
         customerName: z.string().optional(),
         customerId: z.string().optional(),
+        awardBunz: z.boolean().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -594,7 +646,115 @@ export const posRouter = router({
         )
         .returning();
       if (!order) throw new Error("Orden no encontrada");
-      return order;
+
+      // ── Asignación POST-cobro con emisión atómica e idempotente ──
+      let awardedBunz = 0;
+      if (input.awardBunz && input.customerId) {
+        const isSettled = order.status === "COMPLETED" || order.status === "PAID";
+        const alreadyRewarded = Number((order as any).bunzReward || 0) > 0;
+        if (isSettled && !alreadyRewarded) {
+          const { miniappClient } = await import("../services/miniapp-client");
+          try {
+            const res = await miniappClient.rewardBunz(
+              input.customerId,
+              Number(order.total || 0),
+              order.id,
+              ctx.branchId
+            );
+            if (res?.success) {
+              awardedBunz = res.bunz || 0;
+              await ctx.restaurantDb.update(orders)
+                .set({ bunzReward: awardedBunz })
+                .where(eq(orders.id, order.id));
+            }
+          } catch (err) {
+            console.error("[POS_REWARD_FAIL] post-assign orderId=" + order.id, err);
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "El cliente quedó vinculado, pero la recompensa Bunz no pudo acreditarse. Inténtalo de nuevo (idempotente).",
+            });
+          }
+        }
+      }
+      return { ...order, awardedBunz };
+    }),
+
+
+/**
+   * POS-caja con Stripe Connect: crea la orden PENDING con items (IVA canónico),
+   * calcula el PaymentIntent en centavos (hold de Bunz si hay Rabbitter vinculado)
+   * y devuelve la URL /pay/[orderId] para que el comensal pague desde su teléfono
+   * (Apple Pay / tarjeta). La liquidación llega por webhook confirmPaymentIntentSettled.
+   * Cancelación → cancelPaymentIntent libera el hold.
+   */
+  createStripeChargeIntent: protectedProcedure
+    .input(z.object({
+      items: z.array(z.object({
+        menuItemId: z.string(),
+        quantity: z.number().int().min(1),
+        notes: z.string().optional(),
+      })).min(1),
+      orderType: z.enum(["DINE_IN", "TO_GO", "DELIVERY"]).default("DINE_IN"),
+      tableId: z.string().optional(),
+      customerId: z.string().optional(),
+      customerName: z.string().optional(),
+      customerPhone: z.string().optional(),
+      bunzToApply: z.number().int().min(0).default(0),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Orden + items + PaymentIntent en una transacción; precios SIEMPRE del menú server-side
+      return await ctx.restaurantDb.transaction(async (tx: any) => {
+        const prices = await tx.select({ id: menuItems.id, price: menuItems.price })
+          .from(menuItems)
+          .where(eq(menuItems.branchId, ctx.branchId));
+        const priceMap = new Map(prices.map((p: any) => [p.id, Number(p.price)]));
+
+        let itemsTotal = 0;
+        const itemRows = input.items.map((it) => {
+          const unit = Number(priceMap.get(it.menuItemId) ?? 0);
+          if (!unit) throw new TRPCError({ code: "BAD_REQUEST", message: "Item de menú no válido para esta sucursal" });
+          const lineTotal = r2(unit * it.quantity);
+          itemsTotal += lineTotal;
+          return { menuItemId: it.menuItemId, quantity: it.quantity, unitPrice: unit, totalPrice: lineTotal, notes: it.notes ?? null, sortOrder: 0 };
+        });
+        itemsTotal = r2(itemsTotal);
+        const { total: calcTotal, subtotal: calcSubtotal, tax: calcTaxAmt } = calcTax(itemsTotal);
+
+        const [order] = await tx.insert(orders).values({
+          branchId: ctx.branchId,
+          tableId: input.tableId ?? null,
+          orderType: input.orderType,
+          customerName: input.customerName ?? null,
+          customerPhone: input.customerPhone ?? null,
+          customerId: input.customerId ?? null,
+          subtotal: calcSubtotal,
+          tax: calcTaxAmt,
+          total: calcTotal,
+          status: "PENDING",
+        }).returning();
+
+        for (const [i, row] of itemRows.entries()) {
+          await tx.insert(orderItems).values({ ...row, sortOrder: i, orderId: order.id });
+        }
+
+        // 3. PaymentIntent atómico (hold de Bunz si hay payer)
+        const { createOrGetPaymentIntent } = await import("../services/paymentCore");
+        const intent = await createOrGetPaymentIntent(tx, {
+          branchId: ctx.branchId,
+          orderId: order.id,
+          payerUserId: input.customerId ?? undefined,
+          bunzToApply: input.bunzToApply,
+          tipMxn: 0,
+          attemptNumber: 1,
+          provider: "STRIPE",
+        } as never);
+
+        // 4. URL de pago (app admin /pay)
+        const base = process.env.RABBITTY_ADMIN_URL || process.env.ADMIN_APP_URL || "https://admin.rabbitty.me";
+        const payUrl = `${base}/pay/${order.id}`;
+
+        return { orderId: order.id, intentId: (intent as any).intentId, payUrl, total: calcTotal, bunzApplied: (intent as any).bunzApplied ?? 0, netFiatCents: (intent as any).netFiatCents, expiresAt: (intent as any).expiresAt };
+      });
     }),
 
   voidOrder: protectedProcedure

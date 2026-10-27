@@ -36,7 +36,10 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
   const createStripeLink = trpc.payments.createStripeConnectLink.useMutation({
     onSuccess: (data) => {
       if (data?.url) {
-        window.location.href = data.url;
+        const popup = window.open(data.url, "StripeConnectOnboarding", "width=650,height=850,scrollbars=yes");
+        if (!popup || popup.closed || typeof popup.closed === "undefined") {
+          window.location.href = data.url;
+        }
       }
     },
     onError: (err) => {
@@ -438,11 +441,11 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                             <button
                               type="button"
                               onClick={() => {
-                                const currentUrl = typeof window !== "undefined" ? window.location.href : "https://rabbitty.me/settings";
+                                const origin = typeof window !== "undefined" ? window.location.origin : "https://admin.rabbitty.me";
                                 createStripeLink.mutate({
                                   branchId: branchId || undefined,
-                                  refreshUrl: currentUrl,
-                                  returnUrl: currentUrl,
+                                  refreshUrl: `${origin}/settings/stripe-callback?status=refresh`,
+                                  returnUrl: `${origin}/settings/stripe-callback?status=success`,
                                 });
                               }}
                               disabled={createStripeLink.isPending}

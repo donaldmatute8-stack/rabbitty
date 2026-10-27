@@ -60,6 +60,15 @@ export default function PosPage() {
   const [queueCount, setQueueCount] = useState(0);
   const [waPhone, setWaPhone] = useState("");
   const [qrPaymentModal, setQrPaymentModal] = useState<{ intentId: string; amount: number; bunz: number; expiresAt: Date; orderId?: string } | null>(null);
+  const stripeStatus = trpc.payments.getStripeAccountStatus.useQuery({});
+  const arrivalsQuery = trpc.pos.getRecentArrivals.useQuery(undefined, { refetchInterval: 15000 });
+  const [arrivalBanner, setArrivalBanner] = useState<{ name: string; visits: number; vip: boolean } | null>(null);
+  const linkPostCheckout = trpc.pos.linkCustomerToOrder.useMutation();
+  const stripeChargeMutation = trpc.pos.createStripeChargeIntent.useMutation();
+  const cancelStripeIntent = trpc.payments.cancelPaymentIntent.useMutation();
+  const stripeIntentId = useRef<string | null>(null);
+  const [stripePayModal, setStripePayModal] = useState<{ payUrl: string; amount: number; orderId: string; expiresAt: Date; bunzApplied: number } | null>(null);
+  const [stripePaid, setStripePaid] = useState(false);
   const [sendBillModal, setSendBillModal] = useState(false);
   const [activeTabsModal, setActiveTabsModal] = useState(false);
   const [pausedCartsModal, setPausedCartsModal] = useState(false);
@@ -104,6 +113,8 @@ export default function PosPage() {
     currentRewardRate: number;
   } | null>(null);
   const [rabbitterModalOpen, setRabbitterModalOpen] = useState(false);
+  const [lastPaidOrderId, setLastPaidOrderId] = useState<string | null>(null);
+  const [cardFlowChoice, setCardFlowChoice] = useState<"stripe" | "external" | null>(null);
   const [rabbitterQuery, setRabbitterQuery] = useState("");
   const [isSearchingRabbitter, setIsSearchingRabbitter] = useState(false);
   const [isScanningRabbitter, setIsScanningRabbitter] = useState(false);
@@ -350,7 +361,19 @@ export default function PosPage() {
     onError: (err) => toast.error(err.message),
   });
 
-    // Anti-abandono: advertir si el cajero cierra/sale con una operación sin concluir.
+    // Aviso de llegada: el motor de proximidad marca eventos CUSTOMER_ARRIVAL
+  useEffect(() => {
+    const arr = arrivalsQuery.data?.newArrivals;
+    if (arr && arr.length > 0) {
+      const latest = arr[0];
+      setArrivalBanner({ name: latest.username || "Rabbitter", visits: latest.visitCount, vip: latest.isVip });
+      toast.success(latest.isVip
+        ? `👑 ¡Cliente VIP en puerta: ${latest.username}! (${latest.visitCount} visitas previas)`
+        : `👋 ¡Llegó ${latest.username}! Cliente #${latest.visitCount + 1} — dale la bienvenida.`);
+    }
+  }, [arrivalsQuery.data?.newArrivals]);
+
+  // Anti-abandono: advertir si el cajero cierra/sale con una operación sin concluir.
   // (El carrito persiste en localStorage, pero esta guardia evita cierres accidentales)
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
@@ -437,6 +460,47 @@ export default function PosPage() {
     }, 2000);
     return () => clearInterval(interval);
   }, [qrPaymentModal, API_SERVER_URL]);
+
+  // Polling del intento de Stripe: cuando el webhook liquida (SUCCEEDED), finaliza
+  useEffect(() => {
+    if (!stripePayModal || stripePaid) return;
+    let cancelled = false;
+    const timer = setInterval(async () => {
+      try {
+        const token = getPosAuthToken();
+        const url = `${API_SERVER_URL}/payments.getPaymentIntent?input=${encodeURIComponent(JSON.stringify({ intentId: stripeIntentId.current }))}`;
+        const res = await fetch(url, { headers: { "Authorization": token ? `Bearer ${token}` : "" } });
+        if (!res.ok) return;
+        const data = await res.json();
+        const intent = data?.result?.data;
+        if (intent?.status === "SUCCEEDED" && !cancelled) {
+          cancelled = true;
+          clearInterval(timer);
+          setStripePaid(true);
+          const ord = await fetch(`${API_SERVER_URL}/pos.getOrders?input=${encodeURIComponent(JSON.stringify({}))}`, { headers: { "Authorization": `Bearer ${token}` } }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+          void ord;
+          const realOrderNumber = (stripePayModal.orderId || stripeIntentId.current || "").slice(-4).toUpperCase();
+          if (stripePayModal.bunzApplied > 0) {
+            toast.success(`🐰 ¡Pago Stripe verificado! +${stripePayModal.bunzApplied} Bunz al Rabbitter.`);
+          } else {
+            toast.success("💳 ¡Pago Stripe recibido! Comanda liquidada.");
+          }
+          setLastPaidOrderId(stripePayModal.orderId);
+          finalizeCheckout(
+            realOrderNumber,
+            "STRIPE",
+            undefined,
+            selectedRabbitter?.name,
+            stripePayModal.bunzApplied || undefined,
+            stripePayModal.orderId,
+            stripePayModal.orderId
+          );
+          setStripePayModal(null);
+        }
+      } catch { /* siguiente ciclo intenta de nuevo */ }
+    }, 2000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [stripePayModal, stripePaid]);
 
   useEffect(() => {
     if (pollData?.status === "SETTLED" && qrPaymentModal) {
@@ -591,7 +655,13 @@ export default function PosPage() {
 
   const confirmCheckout = async (customCashGiven?: number) => {
     if (!pendingMethod || isCharging) return;
-    const method = pendingMethod;
+    const chosen = (window as any).__rabbittyCardFlow;
+    (window as any).__rabbittyCardFlow = null;
+    const method = pendingMethod === "TARJETA" && chosen && String(chosen).includes("STRIPE")
+      ? "TARJETA_STRIPE"
+      : pendingMethod === "TARJETA" && chosen && String(chosen).includes("EXTERNA")
+        ? "TARJETA_EXTERNA"
+        : pendingMethod;
     setPendingMethod(null);
     setIsCharging(true);
     try {
@@ -646,6 +716,31 @@ export default function PosPage() {
           expiresAt: new Date(result.expiresAt)
         });
         return; // Don't finalize yet, wait for polling!
+      } else if (
+        method.includes("STRIPE") &&
+        stripeStatus.data?.chargesEnabled
+      ) {
+        // ── Rabbitty Pay (Stripe Connect): el comensal paga desde su teléfono
+        //    con Apple Pay / tarjeta vía /pay/[orderId]; liquidación por webhook ──
+        const charge = await stripeChargeMutation.mutateAsync({
+          items: cart.map((i) => ({ menuItemId: i.menuItemId, quantity: i.quantity, notes: i.notes || undefined })),
+          orderType: mappedOrderType,
+          tableId: selectedTableId || undefined,
+          customerId: selectedRabbitter?.id,
+          customerName: selectedRabbitter?.name,
+          customerPhone: selectedRabbitter?.phoneNumber || selectedRabbitter?.telegramId || undefined,
+          bunzToApply: 0,
+        });
+        stripeIntentId.current = charge.intentId;
+        setStripePaid(false);
+        setStripePayModal({
+          payUrl: charge.payUrl,
+          amount: charge.total,
+          orderId: charge.orderId,
+          expiresAt: new Date(charge.expiresAt),
+          bunzApplied: charge.bunzApplied || 0,
+        });
+        return; // Waiting for webhook; POS polling below flips to finalize.
       } else {
         const checkoutResult = await directCheckoutMutation.mutateAsync({
           tableId: selectedTableId || undefined,
@@ -680,6 +775,7 @@ export default function PosPage() {
           checkoutResult.claimToken || undefined,
           checkoutResult.orderId || undefined
         );
+        setLastPaidOrderId(checkoutResult.orderId ?? null);
         return;
       }
     } catch (err: any) {
@@ -915,6 +1011,18 @@ export default function PosPage() {
         </div>
       </header>
 
+      {/* ── Banner: Llegada de Rabbitter (CUSTOMER_ARRIVAL del motor de proximidad) ── */}
+      {arrivalBanner && (
+        <div className="flex items-center gap-2 px-6 py-1.5 bg-emerald-500/10 border-b border-emerald-500/25 text-[11px] font-bold text-emerald-300">
+          <Users className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+          <span>
+            {arrivalBanner.vip ? '👑 Cliente VIP' : 'Cliente Rabbitter'} en el local: <span className="text-white">{arrivalBanner.name}</span>
+            {arrivalBanner.visits > 0 && ` · ${arrivalBanner.visits} visita${arrivalBanner.visits===1?'':'s'} previas`}
+            {" · "}
+            <button onClick={() => setArrivalBanner(null)} className="text-emerald-400/70 hover:text-white cursor-pointer underline">descartar</button>
+          </span>
+        </div>
+      )}
       {/* ── Banner: Operación en curso (anti-abandono visual) ── */}
       {cart.length > 0 && (
         <div className="flex items-center gap-2 px-6 py-1.5 bg-amber-500/10 border-b border-amber-500/25 text-[11px] font-bold text-amber-300">
@@ -2012,6 +2120,86 @@ export default function PosPage() {
                     </div>
                   </div>
                 </>
+              ) : pendingMethod === "TARJETA" ? (
+                <div className="py-2 space-y-3">
+                  {stripeStatus.data?.chargesEnabled && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setCardFlowChoice("stripe")}
+                        className={cn(
+                          "flex flex-col items-center gap-1 p-3 rounded-xl border text-center transition-all cursor-pointer",
+                          cardFlowChoice === "stripe"
+                            ? "bg-cyan-500/15 border-cyan-500/50"
+                            : "bg-white/5 border-white/10 hover:bg-white/10"
+                        )}
+                      >
+                        <span className="text-xl">📱</span>
+                        <span className="text-[11px] font-black text-cyan-300">Rabbitty Pay</span>
+                        <span className="text-[9px] text-gray-400 leading-snug">Paga desde su teléfono con Apple Pay / tarjeta (QR en pantalla)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCardFlowChoice("external")}
+                        className={cn(
+                          "flex flex-col items-center gap-1 p-3 rounded-xl border text-center transition-all cursor-pointer",
+                          cardFlowChoice === "external"
+                            ? "bg-blue-500/15 border-blue-500/50"
+                            : "bg-white/5 border-white/10 hover:bg-white/10"
+                        )}
+                      >
+                        <span className="text-xl">🏦</span>
+                        <span className="text-[11px] font-black text-blue-300">Mi Terminal</span>
+                        <span className="text-[9px] text-gray-400 leading-snug">Cobra con tu terminal física (Clip / BBVA / MP) y confirma aquí</span>
+                      </button>
+                    </div>
+                  )}
+                  {cardFlowChoice === "external" ? (
+                    <>
+                      <div className="inline-flex p-3 rounded-2xl bg-blue-500/10 border border-blue-500/30 text-blue-400 mb-1">
+                        <CreditCard className="h-7 w-7 animate-pulse" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-black text-white">💳 Cobro con Terminal Externa</h3>
+                        <p className="text-xs text-gray-300 mt-1 max-w-xs mx-auto leading-relaxed">
+                          Pasa la tarjeta física del cliente en tu terminal bancaria (Clip, BBVA o Mercado Pago).
+                        </p>
+                      </div>
+                      <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-500/30 text-left text-xs space-y-1.5">
+                        <div className="flex justify-between items-center text-gray-300">
+                          <span>Total a cobrar en terminal:</span>
+                          <strong className="text-base font-black text-cyan-400">${total.toFixed(2)}</strong>
+                        </div>
+                        <p className="text-[11px] text-gray-400 leading-snug">
+                          Presiona <strong className="text-emerald-400">✅ Terminal Aprobada</strong> únicamente tras verificar el voucher o mensaje de éxito en la máquina física.
+                        </p>
+                      </div>
+                      {selectedTableId && orderType === "DINE_IN" && (
+                        <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-300 text-[11px] font-semibold flex items-center gap-1.5 text-left">
+                          <span>⏳</span>
+                          <span>La mesa y comanda se mantendrán protegidas hasta confirmar la aprobación.</span>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="p-4 rounded-2xl bg-cyan-950/30 border border-cyan-500/30 text-center space-y-3">
+                      <div className="inline-flex p-3 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 mb-1">
+                        <QrCode className="h-7 w-7 animate-pulse" />
+                      </div>
+                      <h3 className="text-base font-black text-white">📱 Cobro Digital con Rabbitty Pay</h3>
+                      <p className="text-xs text-gray-300 max-w-xs mx-auto leading-relaxed">
+                        Se generará un código QR en pantalla para que el cliente pague con <strong className="text-white">Apple Pay</strong> o tarjeta desde su teléfono.
+                      </p>
+                      <div className="p-2.5 rounded-xl bg-cyan-900/30 border border-cyan-500/20 text-xs flex justify-between items-center">
+                        <span className="text-gray-300">Total a liquidar:</span>
+                        <strong className="text-base font-black text-cyan-400">${total.toFixed(2)} MXN</strong>
+                      </div>
+                      <p className="text-[10px] text-gray-400">
+                        La comanda se liquida y el ticket se emite automáticamente cuando Stripe confirma el pago.
+                      </p>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="py-2 text-center text-sm text-gray-300">
                   ¿Confirmas el cobro de esta orden con <strong className="text-white">{pendingMethod}</strong>?
@@ -2036,6 +2224,10 @@ export default function PosPage() {
                   disabled={isCash && cashReceived !== "" && numericReceived < total}
                   onClick={() => {
                     const finalCash = isCash ? (numericReceived > 0 ? numericReceived : total) : undefined;
+                    const m = pendingMethod === "TARJETA"
+                      ? (cardFlowChoice === "external" ? "TARJETA_EXTERNA" : "TARJETA_STRIPE")
+                      : pendingMethod;
+                    (window as any).__rabbittyCardFlow = m;
                     confirmCheckout(finalCash);
                   }} 
                   className={`rounded-xl py-3 font-black text-sm shadow-lg cursor-pointer ${
@@ -2044,7 +2236,13 @@ export default function PosPage() {
                       : "bg-emerald-500 hover:bg-emerald-400 text-gray-950 shadow-emerald-500/20"
                   }`}
                 >
-                  {isCash ? (change > 0 ? `Cobrar (Cambio $${change.toFixed(2)})` : "Cobrar Orden") : "Confirmar y cobrar"}
+                  {isCash
+                    ? (change > 0 ? `Cobrar (Cambio $${change.toFixed(2)})` : "Cobrar Orden")
+                    : pendingMethod === "TARJETA"
+                    ? (cardFlowChoice === "external"
+                        ? "✅ Terminal Aprobada (Cerrar Cuenta)"
+                        : "💳 Generar cobro Rabbitty Pay")
+                    : "Confirmar y cobrar"}
                 </Button>
               </div>
             </div>
@@ -2095,8 +2293,26 @@ export default function PosPage() {
             </div>
           </div>
 
-          {/* Acciones de WhatsApp y Nueva Orden */}
+          {/* Acciones Post-Cobro: Asignar Rabbitter / QR de reclamo / Imprimir / WhatsApp */}
           <div className="flex flex-col gap-2 pt-2 border-t border-white/5 shrink-0">
+            {paidTicketData && !paidTicketData.awardedBunz && (
+              <Button
+                onClick={() => setRabbitterModalOpen(true)}
+                className="w-full py-2 text-xs font-black bg-pink-500/20 hover:bg-pink-500/30 text-pink-300 border border-pink-500/40 cursor-pointer"
+                title="Asigna al Rabbitter que consumió para acreditarle su cashback Bunz (idempotente)"
+              >
+                🐰 Asignar Rabbitter & Recompensar esta venta
+              </Button>
+            )}
+            {paidTicketData?.claimToken && (
+              <div className="flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/10">
+                <span className="text-[10px] text-gray-400 leading-snug pr-2">El comensal también puede reclamar escaneando el QR impreso de su ticket (48 h, un solo uso).</span>
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=88x88&data=${encodeURIComponent(`https://app.rabbitty.me/scan?claimToken=${paidTicketData.claimToken}`)}`}
+                  alt="QR de reclamo en pantalla" className="h-16 w-16 bg-white p-1 rounded-lg shrink-0"
+                />
+              </div>
+            )}
             <Button
               id="pos-print-receipt"
               variant="secondary"
@@ -2208,6 +2424,43 @@ export default function PosPage() {
               </div>
             </div>
 
+            {/* ── Modal Rabbitty Pay (Stripe Connect) — QR para el teléfono del comensal ── */}
+            {stripePayModal && (
+              <div className="flex flex-col items-center justify-center p-6 space-y-6">
+                {stripePaid ? (
+                  <CheckCircle2 className="w-16 h-16 text-emerald-500" />
+                ) : (
+                  <>
+                    <div className="text-center">
+                      <h2 className="text-2xl font-black text-white">💳 Cobro Rabbitty Pay</h2>
+                      <p className="text-gray-400 mt-1 text-sm">
+                        Muestra este código al comensal: paga <span className="font-bold text-white">${stripePayModal.amount.toFixed(2)} MXN</span> con Apple Pay o tarjeta desde su teléfono.
+                      </p>
+                    </div>
+                    <div className="bg-white p-4 rounded-2xl shadow-[0_0_40px_rgba(6,182,212,0.35)] border-4 border-cyan-500 relative">
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(stripePayModal.payUrl)}`}
+                        alt="QR Rabbitty Pay" className="w-50 h-50" />
+                    </div>
+                    <div className="flex flex-col items-center gap-1 text-center">
+                      <p className="text-xs text-gray-400">La comanda se liquida automáticamente en el POS al confirmar el pago.</p>
+                      {stripePayModal.bunzApplied > 0 && <p className="text-[11px] font-bold text-pink-300">🎁 +{stripePayModal.bunzApplied} Bunz al Rabbitter identificado</p>}
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (stripeIntentId.current) {
+                            await cancelStripeIntent.mutateAsync({ intentId: stripeIntentId.current }).catch(() => {});
+                          }
+                          setStripePayModal(null);
+                          toast.info("Cobro Stripe cancelado; cualquier hold de Bunz fue liberado.");
+                        }}
+                        className="text-[11px] font-bold text-gray-500 hover:text-red-400 mt-1 cursor-pointer"
+                      >Cancelar cobro</button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             <div className="flex gap-4 w-full">
               <Button 
                 variant="secondary" 
@@ -2276,9 +2529,26 @@ export default function PosPage() {
                         try {
                           const res = await utils.pos.lookupRabbitter.fetch({ query: cleaned.trim() });
                           if (res) {
+                            setRabbitterQuery("");
+                            if (receiptModal && lastPaidOrderId) {
+                              // ── Asignación POST-cobro con emisión atómica e idempotente ──
+                              const linked = await linkPostCheckout.mutateAsync({
+                                orderId: lastPaidOrderId,
+                                customerId: res.id,
+                                customerPhone: res.phoneNumber || res.telegramId || "sin-telefono",
+                                customerName: res.name,
+                                awardBunz: true,
+                              });
+                              setRabbitterModalOpen(false);
+                              setLastPaidOrderId(null);
+                              setPaidTicketData((prev: any) => prev ? { ...prev, awardedBunz: linked.awardedBunz || prev.awardedBunz } : prev);
+                              toast.success(linked.awardedBunz > 0
+                                ? `🐰 ¡Asignado y recompensado: ${linked.awardedBunz} Bunz a ${res.name}!`
+                                : `🐰 Cliente asignado a la venta.`);
+                              return;
+                            }
                             setSelectedRabbitter(res);
                             setRabbitterModalOpen(false);
-                            setRabbitterQuery("");
                             toast.success(`🐰 ¡Rabbitter vinculado: ${res.name}!`);
                           } else {
                             toast.error("Código no encontrado. Verifica con el cliente.");
@@ -2318,9 +2588,26 @@ export default function PosPage() {
               try {
                 const res = await utils.pos.lookupRabbitter.fetch({ query: rabbitterQuery.trim() });
                 if (res) {
+                  setRabbitterQuery("");
+                  if (receiptModal && lastPaidOrderId) {
+                    // ── Asignación POST-cobro manual (por teléfono / ID) ──
+                    const linked = await linkPostCheckout.mutateAsync({
+                      orderId: lastPaidOrderId,
+                      customerId: res.id,
+                      customerPhone: res.phoneNumber || res.telegramId || "sin-telefono",
+                      customerName: res.name,
+                      awardBunz: true,
+                    });
+                    setRabbitterModalOpen(false);
+                    setLastPaidOrderId(null);
+                    setPaidTicketData((prev: any) => prev ? { ...prev, awardedBunz: linked.awardedBunz || prev.awardedBunz } : prev);
+                    toast.success(linked.awardedBunz > 0
+                      ? `🐰 ¡Asignado y recompensado: ${linked.awardedBunz} Bunz a ${res.name}!`
+                      : `🐰 Cliente asignado a la venta.`);
+                    return;
+                  }
                   setSelectedRabbitter(res);
                   setRabbitterModalOpen(false);
-                  setRabbitterQuery("");
                   toast.success(`🐰 ¡Rabbitter vinculado: ${res.name}!`);
                 } else {
                   toast.error("No se encontró ningún Rabbitter con ese código o teléfono.");

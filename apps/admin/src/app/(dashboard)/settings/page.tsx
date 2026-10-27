@@ -204,11 +204,41 @@ export default function SettingsPage() {
   const createStripeLinkMutation = trpc.payments.createStripeConnectLink.useMutation({
     onSuccess: (data) => {
       if (data.url) {
-        window.location.href = data.url;
+        // En vez de reemplazar window.location.href (lo que cerraba la app/sesión),
+        // abrimos la incorporación en ventana popup sin perder el estado de la app
+        const popup = window.open(data.url, "StripeConnectOnboarding", "width=650,height=850,scrollbars=yes");
+        if (!popup || popup.closed || typeof popup.closed === "undefined") {
+          // Bloqueador agresivo de popups: fallback a navegación
+          window.location.href = data.url;
+        } else {
+          toast.info("Completa los datos en la ventana de Stripe. Tu panel se actualizará automáticamente.");
+        }
       }
     },
     onError: (e: any) => toast.error(e.message),
   });
+
+  // Listener para capturar el retorno in-app desde la ventana de Stripe
+  useEffect(() => {
+    const handleMsg = (e: MessageEvent) => {
+      if (e.data?.type === "STRIPE_CONNECT_COMPLETED") {
+        stripeAccountQuery.refetch();
+        toast.success("🐰 ¡Cuenta de Stripe conectada y verificada!");
+      } else if (e.data?.type === "STRIPE_CONNECT_REFRESH") {
+        stripeAccountQuery.refetch();
+        toast.warning("El enlace de Stripe expiró. Genera uno nuevo.");
+      }
+    };
+    const handleFocus = () => {
+      stripeAccountQuery.refetch();
+    };
+    window.addEventListener("message", handleMsg);
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      window.removeEventListener("message", handleMsg);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, []);
 
   const searchParams = useSearchParams();
   const tabParam = searchParams?.get("tab");
@@ -1075,9 +1105,10 @@ export default function SettingsPage() {
               <div className="flex items-center gap-3">
                 <Button
                   onClick={() => {
+                    const origin = window.location.origin;
                     createStripeLinkMutation.mutate({
-                      refreshUrl: window.location.href,
-                      returnUrl: window.location.href,
+                      refreshUrl: `${origin}/settings/stripe-callback?status=refresh`,
+                      returnUrl: `${origin}/settings/stripe-callback?status=success`,
                     });
                   }}
                   disabled={createStripeLinkMutation.isPending}
