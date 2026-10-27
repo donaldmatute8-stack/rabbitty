@@ -16,9 +16,13 @@ export default function KioskPage() {
   const [adminPinModal, setAdminPinModal] = useState(false);
   const [adminPin, setAdminPin] = useState("");
   const [pinError, setPinError] = useState(false);
+  const [showKioskQrModal, setShowKioskQrModal] = useState(false);
 
   // Keep screen awake (WakeLock API) for iPad / Kiosk stands
   useWakeLock();
+
+  // Query restaurant/branch info for the QR
+  const { data: ticketContext } = trpc.printing.getTicketData.useQuery(undefined, { retry: false });
 
   // Idle Timer (90 seconds auto-reset to welcome screen if abandoned)
   const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -103,6 +107,21 @@ export default function KioskPage() {
             title="Acceso Personal / Salir"
           >
             <Lock className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Floating QR Neón Check-in Button */}
+        <div className="absolute top-6 right-6 z-30">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowKioskQrModal(true);
+            }}
+            className="flex items-center gap-3 rounded-full bg-black/70 hover:bg-pink-500/20 px-6 py-3 border border-pink-500/40 text-pink-300 text-base font-black transition-all cursor-pointer backdrop-blur-xl shadow-[0_0_30px_rgba(236,72,153,0.3)] active:scale-95 group/qr"
+          >
+            <QrCode className="h-6 w-6 text-pink-400 group-hover/qr:scale-110 transition-transform animate-pulse" />
+            <span>🐰 Escanea para ganar Bunz</span>
           </button>
         </div>
 
@@ -213,22 +232,33 @@ export default function KioskPage() {
           </div>
         </div>
         
-        {view === "menu" && (
-          <button 
-            onClick={() => setView("checkout")}
-            className="group relative flex items-center gap-4 rounded-full bg-linear-to-r from-purple-600 to-pink-600 px-8 py-5 text-2xl font-black text-white shadow-[0_15px_40px_rgba(168,85,247,0.4)] active:scale-95 transition-all overflow-hidden"
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => setShowKioskQrModal(true)}
+            className="flex items-center gap-3 rounded-full bg-white/5 hover:bg-pink-500/20 px-6 py-4 border border-pink-500/30 text-pink-300 text-lg font-black transition-all cursor-pointer backdrop-blur-xl shadow-[0_0_25px_rgba(236,72,153,0.2)] active:scale-95"
           >
-            <div className="absolute inset-0 bg-white/20 -translate-x-full group-hover:translate-x-[0%] transition-transform duration-300" />
-            <ShoppingBag className="h-8 w-8 relative z-10" />
-            <span className="relative z-10">Ver Orden (${total.toFixed(2)})</span>
-            
-            {cart.length > 0 && (
-              <div className="absolute -top-2 -right-2 flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500 border-2 border-gray-900 text-sm">
-                {cart.length}
-              </div>
-            )}
+            <QrCode className="h-6 w-6 text-pink-400 animate-pulse" />
+            <span className="hidden sm:inline">🐰 QR Bunz</span>
           </button>
-        )}
+
+          {view === "menu" && (
+            <button 
+              onClick={() => setView("checkout")}
+              className="group relative flex items-center gap-4 rounded-full bg-linear-to-r from-purple-600 to-pink-600 px-8 py-5 text-2xl font-black text-white shadow-[0_15px_40px_rgba(168,85,247,0.4)] active:scale-95 transition-all overflow-hidden cursor-pointer"
+            >
+              <div className="absolute inset-0 bg-white/20 -translate-x-full group-hover:translate-x-[0%] transition-transform duration-300" />
+              <ShoppingBag className="h-8 w-8 relative z-10" />
+              <span className="relative z-10">Ver Orden (${total.toFixed(2)})</span>
+              
+              {cart.length > 0 && (
+                <div className="absolute -top-2 -right-2 flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500 border-2 border-gray-900 text-sm">
+                  {cart.length}
+                </div>
+              )}
+            </button>
+          )}
+        </div>
       </header>
 
       {view === "menu" && (
@@ -529,6 +559,52 @@ export default function KioskPage() {
                 Desbloquear
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Kiosk Business QR Neon Modal */}
+      {showKioskQrModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-2xl p-6 animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-full max-w-lg rounded-[3rem] bg-gray-900 border-2 border-pink-500/50 p-10 shadow-[0_0_80px_rgba(236,72,153,0.35)] text-center relative flex flex-col items-center">
+            <button
+              onClick={() => setShowKioskQrModal(false)}
+              className="absolute top-6 right-6 h-12 w-12 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-all cursor-pointer"
+            >
+              <X className="h-6 w-6" />
+            </button>
+
+            <div className="h-20 w-20 rounded-3xl bg-pink-500/20 border border-pink-500/40 text-pink-400 flex items-center justify-center mb-6 shadow-lg shadow-pink-500/20">
+              <QrCode className="h-10 w-10 animate-pulse" />
+            </div>
+
+            <h3 className="text-3xl font-black text-white mb-2">Escanea y Gana Bunz</h3>
+            <p className="text-base text-gray-300 max-w-sm mb-6">
+              Apunta con la cámara de tu celular o abre tu App Rabbitty / Telegram para registrar tu visita y acumular hasta <strong>+{ticketContext?.restaurant?.defaultRewardRate ?? 20}% de Cashback</strong>.
+            </p>
+
+            <div className="bg-white p-4 rounded-3xl shadow-2xl mb-6">
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(`https://rabbitty.me/scan?branchId=${ticketContext?.branch?.id || "default"}&business=${encodeURIComponent(ticketContext?.restaurant?.name || "Rabbitty")}`)}`}
+                alt="QR Kiosko Rabbitty"
+                className="h-64 w-64 object-contain"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 mb-6">
+              <span className="text-lg font-black text-white">🐰 {ticketContext?.restaurant?.name || "Rabbitty"}</span>
+              <span className="text-xs font-bold text-pink-400 bg-pink-500/20 px-3 py-1 rounded-full border border-pink-500/30">
+                +{ticketContext?.restaurant?.defaultRewardRate ?? 20}% Bunz
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowKioskQrModal(false)}
+              className="w-full py-5 rounded-2xl bg-linear-to-r from-pink-500 to-purple-600 hover:from-pink-400 hover:to-purple-500 text-white font-black text-xl shadow-lg shadow-pink-500/30 active:scale-95 transition-all cursor-pointer"
+            >
+              ¡Ya lo Escaneé! (Continuar)
+            </button>
           </div>
         </div>
       )}

@@ -91,6 +91,7 @@ export default function PosPage() {
   const [rabbitterModalOpen, setRabbitterModalOpen] = useState(false);
   const [rabbitterQuery, setRabbitterQuery] = useState("");
   const [isSearchingRabbitter, setIsSearchingRabbitter] = useState(false);
+  const [showBusinessQrModal, setShowBusinessQrModal] = useState(false);
   const utils = trpc.useUtils();
 
   // Subscribe to PrintEngine state (connections, auto-reconnects, queue changes)
@@ -841,6 +842,16 @@ export default function PosPage() {
           >
             <Users className="h-4 w-4 text-purple-400" />
             <span>Tabs ({activeTabsData?.totalActiveCount ?? 0})</span>
+          </button>
+
+          {/* QR Neón del Negocio (Mostrar al cliente en pantalla para escanear en mostrador) */}
+          <button
+            onClick={() => setShowBusinessQrModal(true)}
+            className="flex items-center gap-2 rounded-xl bg-pink-500/15 hover:bg-pink-500/25 px-3.5 py-2 border border-pink-500/30 text-pink-300 text-xs font-black transition-all cursor-pointer shadow-[0_0_20px_rgba(236,72,153,0.2)] active:scale-95"
+            title="Mostrar QR Neón al cliente para identificarse o ganar Bunz"
+          >
+            <QrCode className="h-4 w-4 text-pink-400 animate-pulse" />
+            <span>QR Mostrador</span>
           </button>
         </div>
 
@@ -2243,6 +2254,48 @@ export default function PosPage() {
             <span>✨ Tasa actual: <strong>{ticketContext?.restaurant?.defaultRewardRate ?? 20}% Bunz</strong></span>
             <span>Un solo uso por compra</span>
           </div>
+        </div>
+      </Dialog>
+
+      {/* ── Modal de QR Neón del Negocio (Para mostrar al cliente en mostrador) ── */}
+      <Dialog
+        open={showBusinessQrModal}
+        onClose={() => setShowBusinessQrModal(false)}
+        title="QR Neón de Mostrador (Rabbitter Check-in)"
+        className="max-w-md w-full"
+      >
+        <div className="space-y-4 p-2 text-center flex flex-col items-center">
+          <p className="text-xs text-gray-400 max-w-sm">
+            Muestra esta pantalla al cliente para que apunte con la cámara de su celular o abra su app de Rabbitty / Telegram y reciba sus Bunz.
+          </p>
+
+          <div className="relative p-6 rounded-[2.5rem] bg-gray-900 border-2 border-pink-500/50 shadow-[0_0_50px_rgba(236,72,153,0.35)] flex flex-col items-center">
+            <div className="h-64 w-64 bg-white p-3 rounded-3xl shadow-xl flex items-center justify-center">
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(`https://rabbitty.me/scan?branchId=${ticketContext?.branch?.id || "default"}&business=${encodeURIComponent(ticketContext?.restaurant?.name || "Rabbitty")}`)}`}
+                alt="QR Mostrador Rabbitty"
+                className="h-full w-full object-contain"
+              />
+            </div>
+            <div className="mt-4 flex items-center gap-2">
+              <span className="text-sm font-black text-white">🐰 {ticketContext?.restaurant?.name || "Rabbitty"}</span>
+              <span className="text-xs font-bold text-pink-400 bg-pink-500/20 px-2 py-0.5 rounded-full border border-pink-500/30">
+                +{ticketContext?.restaurant?.defaultRewardRate ?? 20}% Bunz
+              </span>
+            </div>
+            <p className="text-[11px] text-gray-400 mt-1 font-mono">
+              rabbitty.me/scan
+            </p>
+          </div>
+
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => setShowBusinessQrModal(false)}
+            className="w-full py-2.5 font-bold text-xs bg-white/10 hover:bg-white/15 text-white"
+          >
+            Cerrar Pantalla
+          </Button>
         </div>
       </Dialog>
 
