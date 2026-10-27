@@ -26,6 +26,9 @@ import {
   purchaseOrderItems,
   expenses,
   paymentIntents,
+  merchantPaymentAccounts,
+  bunzReserves,
+  paymentProviderEvents,
   cashDrops,
   ledgerEntries,
   distributionDestinations,
@@ -187,10 +190,26 @@ export const cashDropsRelations = relations(cashDrops, ({ one }) => ({
   staff: one(staff, { fields: [cashDrops.staffId], references: [staff.id] }),
 }));
 
+export const merchantPaymentAccountsRelations = relations(merchantPaymentAccounts, ({ one }) => ({
+  branch: one(branches, { fields: [merchantPaymentAccounts.branchId], references: [branches.id] }),
+}));
+
 export const paymentIntentsRelations = relations(paymentIntents, ({ one, many }) => ({
   order: one(orders, { fields: [paymentIntents.orderId], references: [orders.id] }),
   branch: one(branches, { fields: [paymentIntents.merchantId], references: [branches.id] }),
+  bunzReserves: many(bunzReserves),
+  providerEvents: many(paymentProviderEvents),
   allocations: many(distributionAllocations),
+}));
+
+export const bunzReservesRelations = relations(bunzReserves, ({ one }) => ({
+  paymentIntent: one(paymentIntents, { fields: [bunzReserves.paymentIntentId], references: [paymentIntents.id] }),
+  order: one(orders, { fields: [bunzReserves.orderId], references: [orders.id] }),
+  branch: one(branches, { fields: [bunzReserves.branchId], references: [branches.id] }),
+}));
+
+export const paymentProviderEventsRelations = relations(paymentProviderEvents, ({ one }) => ({
+  paymentIntent: one(paymentIntents, { fields: [paymentProviderEvents.paymentIntentId], references: [paymentIntents.id] }),
 }));
 
 export const ledgerEntriesRelations = relations(ledgerEntries, ({ one, many }) => ({

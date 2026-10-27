@@ -10,7 +10,7 @@ import {
   Coffee, UtensilsCrossed, Wine, Truck, ChefHat, Zap, Settings, 
   ToggleLeft, ToggleRight, Table2, Package, Users, CalendarCheck, 
   Sparkles, BookUser, Receipt, Lock, Hash, AlertTriangle, ShieldCheck,
-  MessageSquare
+  MessageSquare, CreditCard
 } from "lucide-react";
 import { cn } from "@rabbitty/ui";
 import { ScannerPairModal } from "../../../components/ScannerPairModal";
@@ -200,6 +200,16 @@ export default function SettingsPage() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const stripeAccountQuery = trpc.payments.getStripeAccountStatus.useQuery({});
+  const createStripeLinkMutation = trpc.payments.createStripeConnectLink.useMutation({
+    onSuccess: (data) => {
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const searchParams = useSearchParams();
   const tabParam = searchParams?.get("tab");
 
@@ -231,13 +241,17 @@ export default function SettingsPage() {
     }
     return new Set(BUSINESS_PRESETS[0].defaultModules);
   });
-  const [activeTab, setActiveTab] = useState<"business" | "general" | "security">(() => {
-    return tabParam === "security" ? "security" : "business";
+  const [activeTab, setActiveTab] = useState<"business" | "general" | "security" | "payments">(() => {
+    if (tabParam === "security") return "security";
+    if (tabParam === "payments") return "payments";
+    return "business";
   });
 
   useEffect(() => {
     if (tabParam === "security") {
       setActiveTab("security");
+    } else if (tabParam === "payments") {
+      setActiveTab("payments");
     }
   }, [tabParam]);
 
@@ -397,16 +411,21 @@ export default function SettingsPage() {
             </p>
           </div>
           <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 p-1">
-            {["business", "general", "security"].map((tab) => (
+            {[
+              { id: "business", label: "🏬 Negocio" },
+              { id: "general", label: "⚙️ General" },
+              { id: "payments", label: "💳 Pagos & Stripe" },
+              { id: "security", label: "🔐 Seguridad" },
+            ].map((tab) => (
               <button
-                key={tab}
-                onClick={() => setActiveTab(tab as any)}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
                 className={cn(
                   "rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer",
-                  activeTab === tab ? "bg-pink-500/20 text-pink-400 border border-pink-500/30" : "text-gray-400 hover:text-white"
+                  activeTab === tab.id ? "bg-pink-500/20 text-pink-400 border border-pink-500/30" : "text-gray-400 hover:text-white"
                 )}
               >
-                {tab === "business" ? "🏬 Negocio" : tab === "general" ? "⚙️ General" : "🔐 Seguridad"}
+                {tab.label}
               </button>
             ))}
           </div>
@@ -1032,6 +1051,85 @@ export default function SettingsPage() {
                 )}
               </div>
             </Card>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════
+          TAB: PAYMENTS & STRIPE CONNECT
+      ══════════════════════════════════════════════════════════════ */}
+      {activeTab === "payments" && (
+        <div className="space-y-6">
+          <div className="rounded-3xl border border-white/5 bg-gradient-to-br from-gray-900/60 to-black/80 p-6 backdrop-blur-xl">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-pink-500">
+                  <CreditCard className="h-3.5 w-3.5" /> Pasarela de Pagos
+                </span>
+                <h2 className="text-2xl font-black text-white mt-1">Stripe Connect & Checkout Digital</h2>
+                <p className="text-sm text-gray-400 mt-1 max-w-2xl">
+                  Vincula tu cuenta bancaria para recibir cobros en mesa (tarjetas de crédito/débito, Apple Pay y Google Pay). Los fondos se depositan directamente en tu cuenta y Rabbitty retiene automáticamente solo la cuota de software pactada.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Button
+                  onClick={() => {
+                    createStripeLinkMutation.mutate({
+                      refreshUrl: window.location.href,
+                      returnUrl: window.location.href,
+                    });
+                  }}
+                  disabled={createStripeLinkMutation.isPending}
+                  className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-black text-xs px-5 py-3 rounded-2xl shadow-lg shadow-pink-500/25"
+                >
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  {stripeAccountQuery.data?.chargesEnabled ? "Gestionar Cuenta Stripe" : "Conectar Cuenta Bancaria (Stripe)"}
+                </Button>
+              </div>
+            </div>
+
+            <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Estado de Cobros</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <span className={cn(
+                    "h-2.5 w-2.5 rounded-full",
+                    stripeAccountQuery.data?.chargesEnabled ? "bg-emerald-400" : "bg-amber-400"
+                  )} />
+                  <p className="text-sm font-black text-white">
+                    {stripeAccountQuery.data?.chargesEnabled ? "Habilitado (Cobros Activos)" : "Pendiente de Verificación"}
+                  </p>
+                </div>
+                <p className="text-[11px] text-gray-500 mt-1">
+                  {stripeAccountQuery.data?.chargesEnabled
+                    ? "Tus clientes ya pueden pagar desde su celular con Apple Pay y tarjetas."
+                    : "Completa el onboarding de Stripe para aceptar pagos digitales."}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Depósitos a Banco</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <span className={cn(
+                    "h-2.5 w-2.5 rounded-full",
+                    stripeAccountQuery.data?.payoutsEnabled ? "bg-emerald-400" : "bg-gray-500"
+                  )} />
+                  <p className="text-sm font-black text-white">
+                    {stripeAccountQuery.data?.payoutsEnabled ? "Payouts Directos Habilitados" : "Sin Configurar"}
+                  </p>
+                </div>
+                <p className="text-[11px] text-gray-500 mt-1">Transferencias automáticas vía CLABE interbancaria.</p>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Cuenta Conectada</p>
+                <p className="mt-2 text-sm font-mono font-bold text-pink-400">
+                  {stripeAccountQuery.data?.stripeAccountId || "Sin cuenta vinculada"}
+                </p>
+                <p className="text-[11px] text-gray-500 mt-1">Identificador seguro de Stripe Connect Express.</p>
+              </div>
+            </div>
           </div>
         </div>
       )}

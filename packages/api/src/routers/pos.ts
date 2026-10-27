@@ -1185,11 +1185,14 @@ export const posRouter = router({
       .from(tableSessions)
       .where(and(eq(tableSessions.branchId, ctx.branchId), eq(tableSessions.status, "OPEN")));
 
-    // 3. Obtener órdenes PENDING de la sucursal
+    // 3. Obtener órdenes PENDING o CASH_PAYMENT_REQUESTED de la sucursal
     const pendingOrders = await ctx.restaurantDb
       .select()
       .from(orders)
-      .where(and(eq(orders.branchId, ctx.branchId), eq(orders.status, "PENDING")))
+      .where(and(
+        eq(orders.branchId, ctx.branchId),
+        inArray(orders.status, ["PENDING", "CASH_PAYMENT_REQUESTED"])
+      ))
       .orderBy(desc(orders.createdAt));
 
     // 4. Si hay órdenes con customerId, buscar datos de usuario en coreDb
@@ -1236,6 +1239,8 @@ export const posRouter = router({
         tableNumber: table?.number ?? null,
         tableLocation: table?.location ?? null,
         orderType: ord.orderType,
+        status: ord.status,
+        cashRequested: ord.status === "CASH_PAYMENT_REQUESTED",
         total: Number(ord.total || 0),
         createdAt: ord.createdAt,
         customer: user

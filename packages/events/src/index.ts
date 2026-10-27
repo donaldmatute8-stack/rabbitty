@@ -6,6 +6,7 @@ export const EventTypes = {
   ORDER_PAID: "order.paid",
   ORDER_VOIDED: "order.voided",
   PAYMENT_PROCESSED: "payment.processed",
+  CASH_PAYMENT_REQUESTED: "cash.payment.requested",
   TABLE_OPENED: "table.opened",
   TABLE_CLOSED: "table.closed",
   STAFF_SHIFT_START: "staff.shift.start",
