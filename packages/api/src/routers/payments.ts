@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { and, eq, inArray, gte, lt, sql } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure, publicLimitedProcedure, resolveBranchId } from "../trpc";
 import { orders, payments, tables, tableSessions, orderItems } from "@rabbitty/database-restaurant/schema";
 import { bus, EventTypes } from "@rabbitty/events";
@@ -314,6 +315,24 @@ export const paymentsRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const branchId = resolveBranchId(ctx, input.branchId);
+
+      // ── Multi-tenant guard: la sucursal debe pertenecer al negocio del caller ──
+      const { restaurants, branches } = await import("@rabbitty/database-restaurant/schema");
+      const coreOwned = await import("@rabbitty/database-core/schema").then(m => m.ownedBusinesses);
+      const [branchRow] = await ctx.restaurantDb.select({ restaurantId: branches.restaurantId }).from(branches).where(eq(branches.id, branchId)).limit(1);
+      const [restaurantRow] = branchRow
+        ? await ctx.restaurantDb.select({ businessId: restaurants.businessId, name: restaurants.name }).from(restaurants).where(eq(restaurants.id, branchRow.restaurantId)).limit(1)
+        : [];
+      if (!restaurantRow) throw new TRPCError({ code: "NOT_FOUND", message: "Sucursal sin restaurante asociado." });
+
+      const isPlatformStaff = Boolean(ctx.staffRole);
+      if (!isPlatformStaff) {
+        const [owned] = await ctx.coreDb.select({ id: coreOwned.id }).from(coreOwned).where(eq(coreOwned.ownerId, ctx.userId)).limit(1);
+        if (!owned || owned.id !== restaurantRow.businessId) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Esta sucursal no pertenece a tu negocio." });
+        }
+      }
+
       const { createStripeConnectOnboardingLink } = await import("../services/stripeConnect");
       return await createStripeConnectOnboardingLink({
         db: ctx.restaurantDb,
@@ -321,7 +340,7 @@ export const paymentsRouter = router({
         refreshUrl: input.refreshUrl,
         returnUrl: input.returnUrl,
         email: ctx.user?.email ?? undefined,
-        businessName: ctx.user?.name ?? undefined,
+        businessName: restaurantRow.name ?? undefined,
       });
     }),
 

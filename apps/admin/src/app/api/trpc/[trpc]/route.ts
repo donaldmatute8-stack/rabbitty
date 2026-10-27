@@ -3,7 +3,7 @@ import { appRouter } from "@rabbitty/api";
 import { auth } from "@rabbitty/auth";
 import { getRestaurantDb, getCoreDb } from "@rabbitty/api/db";
 import { getEnv } from "@/env";
-import { staff, branches } from "@rabbitty/database-restaurant/schema";
+import { staff, branches, restaurants } from "@rabbitty/database-restaurant/schema";
 import { users } from "@rabbitty/database-core/schema";
 import { eq } from "drizzle-orm";
 
@@ -48,6 +48,22 @@ const handler = async (req: Request) => {
           .limit(1);
         if (coreUser) {
           effectiveUserId = coreUser.id;
+        }
+      }
+      if (!activeBranchId && effectiveUserId && !staffRole) {
+        // Owner de negocio: NUNCA caer al primer branch global (sería la sucursal
+        // de otro tenant). Resolverse a la branch del PROPIO negocio.
+        const coreSchema = await import("@rabbitty/database-core/schema");
+        const ownerBiz = await coreDb.select().from(coreSchema.ownedBusinesses)
+          .where(eq(coreSchema.ownedBusinesses.ownerId, effectiveUserId)).limit(1)
+          .catch(() => []);
+        const bizId = ownerBiz[0]?.id;
+        if (bizId) {
+          const [ownRestaurant] = await restaurantDb.select({ id: restaurants.id }).from(restaurants).where(eq(restaurants.businessId, bizId)).limit(1);
+          if (ownRestaurant?.id) {
+            const [ownBranch] = await restaurantDb.select({ id: branches.id }).from(branches).where(eq(branches.restaurantId, ownRestaurant.id)).limit(1);
+            if (ownBranch?.id) activeBranchId = ownBranch.id;
+          }
         }
       }
 
