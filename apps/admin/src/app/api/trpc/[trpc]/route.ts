@@ -5,7 +5,7 @@ import { getRestaurantDb, getCoreDb } from "@rabbitty/api/db";
 import { getEnv } from "@/env";
 import { staff, branches, restaurants } from "@rabbitty/database-restaurant/schema";
 import { users } from "@rabbitty/database-core/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 const handler = async (req: Request) => {
   const env = getEnv();
@@ -50,19 +50,28 @@ const handler = async (req: Request) => {
           effectiveUserId = coreUser.id;
         }
       }
-      if (!activeBranchId && effectiveUserId && !staffRole) {
-        // Owner de negocio: NUNCA caer al primer branch global (sería la sucursal
-        // de otro tenant). Resolverse a la branch del PROPIO negocio.
+      if (effectiveUserId && !staffRole) {
+        // ── Owner de negocio (no staff): SIEMPRE su branch, inmunidad al header
+        // x-branch-id (localStorage heredado de otra sucursal/tenant) y al fallback global ──
         const coreSchema = await import("@rabbitty/database-core/schema");
         const ownerBiz = await coreDb.select().from(coreSchema.ownedBusinesses)
           .where(eq(coreSchema.ownedBusinesses.ownerId, effectiveUserId)).limit(1)
           .catch(() => []);
         const bizId = ownerBiz[0]?.id;
         if (bizId) {
-          const [ownRestaurant] = await restaurantDb.select({ id: restaurants.id }).from(restaurants).where(eq(restaurants.businessId, bizId)).limit(1);
-          if (ownRestaurant?.id) {
-            const [ownBranch] = await restaurantDb.select({ id: branches.id }).from(branches).where(eq(branches.restaurantId, ownRestaurant.id)).limit(1);
-            if (ownBranch?.id) activeBranchId = ownBranch.id;
+          const ownRest = await restaurantDb.select({ id: restaurants.id }).from(restaurants).where(eq(restaurants.businessId, bizId));
+          if (ownRest[0]?.id) {
+            if (headerBranchId) {
+              const ownHeader = await restaurantDb.select({ id: branches.id }).from(branches).where(and(
+                eq(branches.restaurantId, ownRest[0].id),
+                eq(branches.id, headerBranchId)
+              )).limit(1);
+              if (ownHeader[0]?.id) { activeBranchId = ownHeader[0].id; }
+            }
+            if (!headerBranchId || !activeBranchId) {
+              const [anyOwn] = await restaurantDb.select({ id: branches.id }).from(branches).where(eq(branches.restaurantId, ownRest[0].id)).limit(1);
+              if (anyOwn?.id) activeBranchId = anyOwn.id;
+            }
           }
         }
       }

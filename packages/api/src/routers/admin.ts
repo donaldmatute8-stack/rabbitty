@@ -508,6 +508,20 @@ export const adminRouter = router({
     if (ctx.staffRole && ctx.staffBranchId) {
       return await ctx.restaurantDb.select().from(branches).where(eq(branches.id, ctx.staffBranchId));
     }
+    // ── Multi-tenant guard: un OWNER (no staff) solo ve las branches de SU negocio ──
+    if (ctx.userId) {
+      const coreOwned = await import("@rabbitty/database-core/schema").then(m => m.ownedBusinesses);
+      const ownerBiz = await ctx.coreDb.select().from(coreOwned)
+        .where(eq(coreOwned.ownerId, ctx.userId)).limit(1).catch(() => []);
+      if (ownerBiz[0]?.id) {
+        const ownRest = await ctx.restaurantDb.select({ id: restaurants.id }).from(restaurants)
+          .where(eq(restaurants.businessId, ownerBiz[0].id));
+        if (ownRest[0]?.id) {
+          return await ctx.restaurantDb.select().from(branches).where(eq(branches.restaurantId, ownRest[0].id));
+        }
+        return [];
+      }
+    }
     return await ctx.restaurantDb.select().from(branches);
   }),
 
