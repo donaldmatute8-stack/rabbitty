@@ -295,10 +295,13 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
 
   // META
   chunks.push(alignLeft);
+  chunks.push(boldOn);
   addText(`Ticket: #${data.orderNumber || "0001"}\n`);
+  addText(`Folio Rabbitty: ${data.claimToken ? data.claimToken.slice(0, 10).toUpperCase() : `RBBTY-${data.orderNumber || "0001"}`}\n`);
+  chunks.push(boldOff);
   addText(`Fecha: ${data.date || new Date().toLocaleString("es-MX")}\n`);
-  addText(`Tipo: ${data.orderType || "Consumo en Sitio"}\n`);
-  if (data.tableNumber) addText(`Mesa: ${data.tableNumber}\n`);
+  addText(`Tipo:  ${data.orderType || "Consumo en Sitio"}\n`);
+  if (data.tableNumber) addText(`Mesa:  ${data.tableNumber}\n`);
   addText(divider);
 
   // ITEMS

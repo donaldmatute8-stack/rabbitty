@@ -438,6 +438,29 @@ export default function OperationsManualPage() {
 
             <Card className="p-4 border border-white/5 bg-white/5 backdrop-blur-md print:border print:border-gray-300 print:bg-white">
               <h4 className="text-xs font-bold text-white print:text-black flex items-center gap-2">
+                <QrCode className="h-3.5 w-3.5 text-pink-400 shrink-0" />
+                ¿Qué hacer si el cliente no se identificó antes de pagar o no hay QRs visibles en el negocio?
+              </h4>
+              <div className="text-xs text-gray-400 print:text-gray-600 mt-2 space-y-2 leading-relaxed">
+                <p>
+                  No te preocupes, el cliente <strong>nunca pierde sus Bunz de recompensa</strong> gracias a la triple vía de asignación:
+                </p>
+                <ol className="list-decimal list-inside space-y-1 pl-1 text-[11px]">
+                  <li>
+                    <strong className="text-white print:text-black">Escaneo del Ticket Impreso:</strong> Cada ticket térmico emitido imprime automáticamente al final el <strong>QR de Reclamo Rabbitty</strong> y el <strong>Folio Rabbitty</strong> (ej. <code className="bg-white/10 px-1 py-0.5 rounded text-pink-300 font-mono">Folio: 72A5...</code>). El comensal solo abre la cámara de su teléfono o la Mini App de Telegram / Rabbitty y escanea el QR de su ticket para que sus Bunz se depositen al instante en su billetera.
+                  </li>
+                  <li>
+                    <strong className="text-white print:text-black">Envío por WhatsApp al Cobrar:</strong> En la pantalla de cobro exitoso del POS, el cajero puede escribir el WhatsApp del cliente y presionar <em>"Enviar Comprobante"</em>. El sistema le envía el ticket digital con su botón de reclamo directo.
+                  </li>
+                  <li>
+                    <strong className="text-white print:text-black">Flujo Ideal (Pre-escaneo en Mostrador):</strong> Para darle la mejor experiencia al cliente, pídele su código Rabbitter <em>antes</em> de presionar Cobrar o busca su teléfono/nombre en la barra superior. Al cobrar, el sistema deposita los Bunz en automático sin necesidad de que escanee el papel.
+                  </li>
+                </ol>
+              </div>
+            </Card>
+
+            <Card className="p-4 border border-white/5 bg-white/5 backdrop-blur-md print:border print:border-gray-300 print:bg-white">
+              <h4 className="text-xs font-bold text-white print:text-black flex items-center gap-2">
                 <KeyRound className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
                 ¿Dónde se crean o cambian los PINs de los cajeros?
               </h4>

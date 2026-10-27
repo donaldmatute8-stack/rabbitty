@@ -146,9 +146,15 @@ export function TicketTemplate({
 
       {/* ── TICKET METADATA ── */}
       <div className={`py-3 space-y-1 text-[11px] border-b border-dashed border-gray-700 ${isThermalPaper ? "text-gray-700" : "text-gray-400"}`}>
-        <div className="flex justify-between">
-          <span className="font-bold">Ticket: #{data.orderNumber || "0001"}</span>
+        <div className="flex justify-between items-baseline">
+          <span className="font-black text-sm text-white">Ticket: #{data.orderNumber || "0001"}</span>
           <span>{data.date || new Date().toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" })}</span>
+        </div>
+        <div className="flex justify-between items-center text-[10px] font-mono">
+          <span className="text-pink-400 font-bold">Folio Rabbitty:</span>
+          <span className="font-black tracking-wider text-gray-200">
+            {data.claimToken ? data.claimToken.slice(0, 10).toUpperCase() : `RBBTY-${data.orderNumber || "0001"}`}
+          </span>
         </div>
         <div className="flex justify-between text-[10px]">
           <span>Tipo: <strong className={isThermalPaper ? "text-black" : "text-white"}>{data.orderType || "Consumo en Sitio"}</strong></span>
