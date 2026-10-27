@@ -212,6 +212,33 @@ export async function POST(req: Request) {
       if (sumPayments >= orderAfter.total) {
         await restaurantDb.update(orders).set({ status: 'PAID' }).where(eq(orders.id, targetOrderId));
       }
+
+      // Notificar al Rabbitter de su consumo con Bunz
+      try {
+        let restaurantName = 'el restaurante';
+        const [ord] = await restaurantDb.select({ branchId: orders.branchId }).from(orders).where(eq(orders.id, targetOrderId)).limit(1);
+        const resolvedBranchId = ord?.branchId;
+        if (resolvedBranchId) {
+          const [branch] = await restaurantDb.select().from(branches).where(eq(branches.id, resolvedBranchId)).limit(1);
+          if (branch) {
+            const [rest] = await restaurantDb.select().from(restaurants).where(eq(restaurants.id, branch.restaurantId)).limit(1);
+            if (rest?.name) restaurantName = rest.name;
+          }
+        }
+
+        const { sendEcosystemNotification } = await import('@/lib/push/notify');
+        await sendEcosystemNotification({
+          userId: caller.id,
+          title: '💸 Pago con Bunz realizado',
+          message: `Has gastado ${bunzRequired.toLocaleString()} Bunz en ${restaurantName}. ¡Disfruta tu visita!`,
+          type: 'SYSTEM',
+          route: '/profile/wallet',
+          pushData: { orderId: targetOrderId, bunzSpent: bunzRequired },
+          threadId: 'spending',
+        });
+      } catch (pushErr) {
+        console.warn('Could not send user spending notification:', pushErr);
+      }
     }
 
     return NextResponse.json({ success: true, orderId: targetOrderId });

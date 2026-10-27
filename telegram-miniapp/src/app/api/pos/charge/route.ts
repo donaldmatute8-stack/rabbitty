@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { users, transactions } from '@/db/schema';
+import { users, transactions, ownedBusinesses } from '@/db/schema';
 import { eq, or, and, gte, sql } from 'drizzle-orm';
 import { recordLedgerTransaction, findLedgerEntry } from '@/lib/ledgerHelper';
+import { sendEcosystemNotification } from '@/lib/push/notify';
 import crypto from 'crypto';
 
 const DAILY_SPEND_CAP = parseInt(process.env.DAILY_SPEND_CAP || '500', 10);
@@ -130,6 +131,29 @@ export async function POST(request: Request) {
 
       return { balanceRemaining: availableBalance - bunzToSpendNormally, idempotent: false };
     });
+
+    if (!result.idempotent) {
+      // Resolver nombre del negocio afiliado para el mensaje
+      let businessName = 'tu compra';
+      if (business_id) {
+        const [biz] = await db
+          .select({ name: ownedBusinesses.name })
+          .from(ownedBusinesses)
+          .where(eq(ownedBusinesses.id, business_id))
+          .limit(1);
+        if (biz?.name) businessName = biz.name;
+      }
+
+      await sendEcosystemNotification({
+        userId: user.id,
+        title: '💸 Pago realizado con éxito',
+        message: `Has gastado ${bunzRequired.toLocaleString()} Bunz en ${businessName}. Tu saldo actual es de ${result.balanceRemaining.toLocaleString()} Bunz.`,
+        type: 'SYSTEM',
+        route: '/profile/wallet',
+        pushData: { businessId: business_id, bunzSpent: bunzRequired, newBalance: result.balanceRemaining, orderId: order_id },
+        threadId: 'spending',
+      });
+    }
 
     return NextResponse.json({ 
       success: true, 
