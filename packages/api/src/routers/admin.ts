@@ -82,7 +82,16 @@ export const adminRouter = router({
       return { success: true };
     }),
 
-  getRestaurants: platformOnlyProcedure.query(async ({ ctx }) => {
+  // Owners ven todos; ADMIN/MANAGER (staff con PIN) solo el restaurante de su sucursal.
+  getRestaurants: adminOnlyProcedure.query(async ({ ctx }) => {
+    if (ctx.staffRole && ctx.staffBranchId) {
+      const [branch] = await ctx.restaurantDb
+        .select({ restaurantId: branches.restaurantId })
+        .from(branches)
+        .where(eq(branches.id, ctx.staffBranchId));
+      if (!branch?.restaurantId) return [];
+      return ctx.restaurantDb.select().from(restaurants).where(eq(restaurants.id, branch.restaurantId));
+    }
     const result = await ctx.restaurantDb.select().from(restaurants);
     return result;
   }),
