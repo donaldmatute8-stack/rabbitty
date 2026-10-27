@@ -361,14 +361,17 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
   if (data.ticketFooter) addText(`${data.ticketFooter}\n\n`);
 
   // BUNZ CASHBACK
-  if (data.estimatedBunz && data.estimatedBunz > 0) {
-    const earnedBunz = data.estimatedBunz;
+  const effectiveCashbackRate = data.bunzCashbackRate ?? 20;
+  const earnedBunz = data.estimatedBunz ?? (data.total > 0 ? Math.max(1, Math.round(data.total * (effectiveCashbackRate / 100))) : 0);
+
+  if (earnedBunz > 0) {
     chunks.push(boldOn);
     
-    if (data.paymentMethod === "QR BUNZ" || data.paymentMethod?.includes("BUNZ")) {
-      addText(`¡Cashback de +${earnedBunz.toFixed(2)} Bunz!\n`);
+    if (data.paymentMethod === "QR BUNZ" || data.paymentMethod?.includes("BUNZ") || (data.awardedBunz && data.awardedBunz > 0)) {
+      const credited = data.awardedBunz ?? earnedBunz;
+      addText(`¡Cashback de +${Number(credited).toFixed(2)} Bunz!\n`);
       chunks.push(boldOff);
-      addText(`Depositado automaticamente a tu cuenta.\n\n`);
+      addText(data.customerName ? `Depositado a ${data.customerName}\n\n` : `Depositado automaticamente a tu cuenta.\n\n`);
     } else {
       addText(`¡Ganas +${earnedBunz.toFixed(2)} Bunz Recompensa!\n`);
       chunks.push(boldOff);

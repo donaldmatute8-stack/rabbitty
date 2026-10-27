@@ -536,6 +536,7 @@ export default function PosPage() {
       change: changeAmount,
       currency: rest?.currency || "MXN",
       bunzCashbackRate: selectedRabbitter?.currentRewardRate ?? rest?.defaultRewardRate ?? 20,
+      estimatedBunz: Math.max(1, Math.round(total * ((selectedRabbitter?.currentRewardRate ?? rest?.defaultRewardRate ?? 20) / 100))),
       customerName: customerName || selectedRabbitter?.name || undefined,
       awardedBunz: awardedBunz !== undefined && awardedBunz > 0 ? awardedBunz : undefined,
     };
