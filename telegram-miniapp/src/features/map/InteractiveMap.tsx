@@ -12,11 +12,18 @@ import { PlatformBridge } from '@/lib/platform';
 import { useTheme } from '@/contexts/ThemeContext';
 import { RabbittyMap } from './nativeMapBridge';
 
-// Ultra-sleek, high-performance Dark Matter and Positron map tiles (No watermark, dark cyber / crisp aesthetic)
-const DARK_TILE_URL = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-const DARK_MATTER_URL = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
-const LIGHT_POSITRON_URL = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-const MAP_TILE_ATTR = '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+// High-performance OpenStreetMap raster tiles (Zero API key watermark, styled via dark filter)
+const cartoKey = process.env.NEXT_PUBLIC_CARTO_KEY;
+const OSM_TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+const DARK_MATTER_URL = cartoKey 
+  ? `https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key=${cartoKey}`
+  : OSM_TILE_URL;
+const LIGHT_POSITRON_URL = cartoKey
+  ? `https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=${cartoKey}`
+  : OSM_TILE_URL;
+const MAP_TILE_ATTR = cartoKey
+  ? '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
 export interface MapBusiness {
   id: string;
@@ -321,7 +328,9 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
     }, 1500);
   }, [businesses, userLat, userLng, onRequestLocation, speakReply]);
 
-  const toggleSpeechRecognition = () => {
+  const copilotInputRef = useRef<HTMLInputElement>(null);
+
+  const toggleSpeechRecognition = async () => {
     if (typeof window === 'undefined') return;
     PlatformBridge.hapticFeedback('medium');
     
@@ -334,15 +343,26 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
     }
 
     if (!SpeechRec) {
-      // Direct ergonomic prompt in mobile WebViews / iOS Safari where webkitSpeech is blocked
-      const query = window.prompt('Habla o escribe a Bunzy:\n(Ej: "Café cerca", "Más Bunz", "Dónde comer")', copilotQuery || '');
-      if (query && query.trim()) {
-        handleVoiceCommand(query.trim());
-      }
+      copilotInputRef.current?.focus();
+      setCopilotReply('Escribe tu búsqueda o pregunta a Bunzy aquí ✍️');
+      setTimeout(() => setCopilotReply(null), 3500);
       return;
     }
 
     try {
+      // Solicitar permiso nativo de micrófono con getUserMedia en navegadores móviles/iOS
+      if (typeof navigator !== 'undefined' && navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach((track) => track.stop());
+        } catch {
+          copilotInputRef.current?.focus();
+          setCopilotReply('Micrófono no disponible. Escribe a Bunzy aquí ✍️');
+          setTimeout(() => setCopilotReply(null), 3500);
+          return;
+        }
+      }
+
       const recognition = new SpeechRec();
       recognition.lang = 'es-MX';
       recognition.continuous = false;
@@ -361,11 +381,13 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
 
       recognition.onerror = (err: any) => {
         setIsListening(false);
-        // If microphone was blocked or not allowed by browser/iOS webview, provide fallback input
+        copilotInputRef.current?.focus();
         if (err?.error === 'not-allowed' || err?.error === 'service-not-allowed') {
-          const manual = window.prompt('El micrófono está restringido en este navegador. Escribe lo que buscas:', copilotQuery || '');
-          if (manual && manual.trim()) handleVoiceCommand(manual.trim());
+          setCopilotReply('Activa Dictado en Ajustes de iOS o escribe aquí ✍️');
+        } else {
+          setCopilotReply('Escribe a Bunzy aquí ✍️');
         }
+        setTimeout(() => setCopilotReply(null), 4000);
       };
 
       recognition.onend = () => {
@@ -375,8 +397,9 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
       recognition.start();
     } catch {
       setIsListening(false);
-      const manual = window.prompt('Habla o escribe a Bunzy (ej. "Cafetería", "Más Bunz"):', copilotQuery || '');
-      if (manual && manual.trim()) handleVoiceCommand(manual.trim());
+      copilotInputRef.current?.focus();
+      setCopilotReply('Escribe a Bunzy aquí ✍️');
+      setTimeout(() => setCopilotReply(null), 3500);
     }
   };
 
@@ -434,14 +457,14 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
     }
     const layer = isDark
       ? L.tileLayer(DARK_MATTER_URL, {
-          subdomains: 'abcd',
-          maxZoom: 20,
+          subdomains: cartoKey ? 'abcd' : 'abc',
+          maxZoom: 19,
           className: 'rabbitty-dark-tiles',
           attribution: MAP_TILE_ATTR,
         })
       : L.tileLayer(LIGHT_POSITRON_URL, {
-          subdomains: 'abcd',
-          maxZoom: 20,
+          subdomains: cartoKey ? 'abcd' : 'abc',
+          maxZoom: 19,
           className: 'rabbitty-light-tiles',
           attribution: MAP_TILE_ATTR,
         });
@@ -602,7 +625,7 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
 
         {/* Compact GPS status indicator (No space disruption) */}
         <div className="pointer-events-auto flex items-center gap-1.5">
-          {isLocating && (
+          {isLocating ? (
             <span 
               className="px-2.5 py-1 rounded-full text-[10px] font-black text-white flex items-center gap-1 shadow-md animate-pulse"
               style={{ background: 'linear-gradient(135deg, #E91E63 0%, #D81B60 100%)' }}
@@ -610,7 +633,22 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
               <Crosshair size={11} className="animate-spin" />
               <span>GPS...</span>
             </span>
-          )}
+          ) : userLat && userLng ? (
+            <button
+              type="button"
+              onClick={() => {
+                PlatformBridge.hapticFeedback('light');
+                if (mapInst.current) {
+                  mapInst.current.flyTo([userLat, userLng], 16.5, { duration: 1 });
+                }
+              }}
+              className="px-2.5 py-1 rounded-full text-[10px] font-black text-emerald-300 border border-emerald-500/30 bg-emerald-950/70 backdrop-blur-md flex items-center gap-1.5 shadow-md active:scale-95 cursor-pointer"
+              title="Centrar en mi ubicación GPS"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>GPS Activo</span>
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -658,6 +696,7 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
               ) : (
                 <div className="flex items-center">
                   <input
+                    ref={copilotInputRef}
                     type="text"
                     value={copilotQuery}
                     onChange={(e) => setCopilotQuery(e.target.value)}

@@ -47,9 +47,9 @@ input, textarea, [contenteditable="true"], .selectable, code, pre, .font-mono {
   display: none !important;
 }
 
-/* Rabbitty Tile Rendering (Dark Matter & Positron Crisp Aesthetics) */
+/* Rabbitty Tile Rendering (OpenStreetMap crisp aesthetics with zero API key requirement) */
 .rabbitty-dark-tiles {
-  filter: contrast(1.15) brightness(0.95) saturate(1.1) !important;
+  filter: brightness(0.6) invert(1) contrast(2.6) hue-rotate(200deg) saturate(0.35) !important;
 }
 .rabbitty-light-tiles {
   filter: contrast(1.05) brightness(0.98) saturate(1.05) !important;

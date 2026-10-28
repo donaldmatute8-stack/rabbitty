@@ -176,6 +176,7 @@ export default function FeedPage() {
         setUserLat(loc.lat);
         setUserLng(loc.lng);
         PlatformBridge.hapticFeedback('success');
+        showToast('📍 GPS activado: Ubicación actualizada.', 'success');
 
         // Ping proximity engine in background to evaluate loyalty rewards and local alerts
         PlatformBridge.getAuthHeaders().then((headers) => {
