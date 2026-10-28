@@ -61,6 +61,13 @@ export async function GET() {
       }
     };
 
+    // Bono de bienvenida configurado por tenant (fallback 25)
+    let welcomeConfig: Record<string, number> = {};
+    try {
+      const cfgRows = await sql`SELECT value FROM "systemSettings" WHERE key = 'welcome_bonus_tenant_config' LIMIT 1`;
+      if (cfgRows[0]?.value) welcomeConfig = JSON.parse(cfgRows[0].value);
+    } catch { welcomeConfig = {}; }
+
     const businesses = (rows as unknown as DbBusinessRow[]).map((r) => ({
       id: r.id,
       name: r.name,
@@ -69,6 +76,7 @@ export async function GET() {
       address: r.address || '',
       logoUrl: r.logoUrl || parseFirstGalleryImage(r.gallery) || null,
       refCode: r.refCode || r.name.toLowerCase().replace(/[^a-z0-9]/g, ''),
+      welcomeBunz: welcomeConfig[r.id] ?? 25,
     }));
 
     // Asegurar que 626 Café siempre esté disponible en el dropdown
@@ -81,6 +89,7 @@ export async function GET() {
         address: 'Av. Lázaro Cárdenas #74, Bucerías, Nayarit',
         logoUrl: '/logos/626cafe-logo.png',
         refCode: '626cafe',
+        welcomeBunz: welcomeConfig['626cafe'] ?? 25,
       });
     }
 

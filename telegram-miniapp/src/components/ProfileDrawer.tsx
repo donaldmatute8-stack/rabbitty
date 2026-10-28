@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  X, 
+  ArrowLeft, 
   Sun, 
   Moon, 
   LogOut, 
@@ -17,7 +17,6 @@ import {
   Bell, 
   ShieldCheck, 
   HelpCircle,
-  Bug,
   MessageSquarePlus
 } from 'lucide-react';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -104,7 +103,7 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
             style={{
               background: 'var(--bg-primary)',
               paddingTop: 'calc(max(var(--safe-top, 0px), 12px) + 8px)',
-              paddingBottom: 'calc(max(var(--safe-bottom, 0px), 8px) + 8px)',
+              paddingBottom: 'max(var(--safe-bottom, 0px), 6px)',
               boxShadow: '10px 0 30px rgba(0, 0, 0, 0.12), 4px 0 10px rgba(0, 0, 0, 0.05)',
             }}
           >
@@ -151,7 +150,7 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                     className="w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition-transform cursor-pointer border-none shrink-0"
                     style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
                   >
-                    <X size={15} />
+                    <ArrowLeft size={16} strokeWidth={2.4} />
                   </button>
                 </div>
               </div>
@@ -262,28 +261,7 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
 
                 <div className="h-px bg-[var(--border-subtle)] my-1" />
 
-                {/* Report a bug */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    PlatformBridge.hapticFeedback('light');
-                    setFeedbackType('BUG');
-                    setFeedbackOpen(true);
-                  }}
-                  className="flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all active:scale-[0.98] group hover:bg-(--bg-pressed) cursor-pointer"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  <Bug 
-                    size={18} 
-                    strokeWidth={2}
-                    className="text-(--text-muted) group-hover:text-red-400 shrink-0 transition-colors" 
-                  />
-                  <span className="text-[13px] font-semibold tracking-tight flex-1 group-hover:text-(--text-primary) transition-colors">
-                    Report a bug
-                  </span>
-                </button>
-
-                {/* Leave Feedback */}
+                {/* Reportar error o Feedback (unificado en un solo renglón) */}
                 <button
                   type="button"
                   onClick={() => {
@@ -300,7 +278,7 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                     className="text-(--text-muted) group-hover:text-[#E91E63] shrink-0 transition-colors" 
                   />
                   <span className="text-[13px] font-semibold tracking-tight flex-1 group-hover:text-(--text-primary) transition-colors">
-                    Leave Feedback
+                    Reportar error o Feedback
                   </span>
                 </button>
               </div>
@@ -314,7 +292,7 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
 
             {/* Bottom section: theme toggle + logout, perfectly vertically centered and compact */}
             <div 
-              className="px-3.5 py-2.5 pb-[max(0.6rem,env(safe-area-inset-bottom,0px))] shrink-0 flex items-center justify-between gap-2.5"
+              className="px-3.5 py-2.5 pb-[max(0.4rem,env(safe-area-inset-bottom,0px))] shrink-0 flex items-center justify-between gap-2.5"
               style={{ borderTop: '1px solid var(--border-subtle)' }}
             >
               {/* Dark / Light Toggle */}

@@ -78,7 +78,7 @@ export const analyticsRouter = router({
         .from(orders)
         .where(
           and(
-            eq(orders.branchId, resolveBranchId(ctx, input.branchId)),
+            eq(orders.branchId, await resolveBranchId(ctx, input.branchId)),
             inArray(orders.status, ["COMPLETED", "PAID"]),
             gte(orders.createdAt, startDate)
           )
@@ -133,7 +133,7 @@ export const analyticsRouter = router({
         .from(orders)
         .where(
           and(
-            eq(orders.branchId, resolveBranchId(ctx, input.branchId)),
+            eq(orders.branchId, await resolveBranchId(ctx, input.branchId)),
             inArray(orders.status, ["COMPLETED", "PAID"]),
             gte(orders.createdAt, startDate)
           )
@@ -165,7 +165,7 @@ export const analyticsRouter = router({
         .from(orders)
         .where(
           and(
-            eq(orders.branchId, resolveBranchId(ctx, input.branchId)),
+            eq(orders.branchId, await resolveBranchId(ctx, input.branchId)),
             inArray(orders.status, ["COMPLETED", "PAID"])
           )
         );
@@ -181,7 +181,7 @@ export const analyticsRouter = router({
       const menuItemsList = await ctx.restaurantDb
         .select()
         .from(menuItems)
-        .where(eq(menuItems.branchId, resolveBranchId(ctx, input.branchId)));
+        .where(eq(menuItems.branchId, await resolveBranchId(ctx, input.branchId)));
 
       const productRevenueMap = new Map<string, number>();
       for (const item of itemsList) {
@@ -225,7 +225,7 @@ export const analyticsRouter = router({
         .innerJoin(orders, eq(payments.orderId, orders.id))
         .where(
           and(
-            eq(orders.branchId, resolveBranchId(ctx, input.branchId)),
+            eq(orders.branchId, await resolveBranchId(ctx, input.branchId)),
             eq(payments.status, "COMPLETED"),
             gte(payments.createdAt, startDate),
             ...(endDate ? [lte(payments.createdAt, endDate)] : [])
@@ -270,7 +270,7 @@ export const analyticsRouter = router({
       const [branch] = await ctx.restaurantDb
         .select()
         .from(branches)
-        .where(eq(branches.id, resolveBranchId(ctx, input.branchId)));
+        .where(eq(branches.id, await resolveBranchId(ctx, input.branchId)));
       if (!branch) return [];
 
       const ordersList = await ctx.restaurantDb
@@ -278,7 +278,7 @@ export const analyticsRouter = router({
         .from(orders)
         .where(
           and(
-            eq(orders.branchId, resolveBranchId(ctx, input.branchId)),
+            eq(orders.branchId, await resolveBranchId(ctx, input.branchId)),
             inArray(orders.status, ["COMPLETED", "PAID"]),
             gte(orders.createdAt, startDate),
             ...(endDate ? [lte(orders.createdAt, endDate)] : [])

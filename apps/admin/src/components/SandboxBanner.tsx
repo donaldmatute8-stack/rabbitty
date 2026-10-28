@@ -23,12 +23,11 @@ export function SandboxBanner() {
 
   const initSandbox = trpc.sandbox.initSandbox.useMutation({
     onSuccess: (res) => {
-      utils.sandbox.getSandboxStatus.invalidate();
-      utils.admin.getBranches.invalidate();
-      setBranchId(res.branchId);
       if (typeof window !== "undefined") {
         localStorage.setItem("activeBranchId", res.branchId);
       }
+      setBranchId(res.branchId);
+      utils.invalidate();
       toast.success("¡Entorno Sandbox inicializado y activado!");
     },
     onError: (e) => toast.error(e.message),
@@ -87,10 +86,11 @@ export function SandboxBanner() {
 
   const enterSandbox = () => {
     if (status?.hasSandbox && status.sandboxBranch) {
-      setBranchId(status.sandboxBranch.id);
       if (typeof window !== "undefined") {
         localStorage.setItem("activeBranchId", status.sandboxBranch.id);
       }
+      setBranchId(status.sandboxBranch.id);
+      utils.invalidate();
       toast.success("Modo Entrenamiento activado.");
     } else {
       initSandbox.mutate();

@@ -2,10 +2,8 @@
 
 import { motion } from 'framer-motion';
 import { Users } from 'lucide-react';
-import { useState } from 'react';
-import { BottomSheet } from '@/components/ui/BottomSheet';
+import { useRouter } from 'next/navigation';
 import { PlatformBridge } from '@/lib/platform';
-import { openBunzy } from '@/lib/bunzyLaunch';
 
 interface TelegramWebApp {
   openTelegramLink?: (url: string) => void;
@@ -121,26 +119,11 @@ export function openTelegramLink(link: string) {
 }
 
 export default function GroupsStrip() {
-  const [open, setOpen] = useState(false);
-  const [active, setActive] = useState<typeof GROUPS[number] | null>(null);
+  const router = useRouter();
 
-  const openChoice = (g: typeof GROUPS[number]) => {
-    PlatformBridge.hapticFeedback('light');
-    setActive(g);
-    setOpen(true);
-  };
-
-  const openTelegram = () => {
-    if (!active) return;
+  const handleOpenGroup = (g: typeof GROUPS[number]) => {
     PlatformBridge.hapticFeedback('medium');
-    setOpen(false);
-    openTelegramLink(active.link);
-  };
-
-  const openInApp = () => {
-    PlatformBridge.hapticFeedback('medium');
-    setOpen(false);
-    openBunzy('Quisiera unirme al grupo ' + (active?.name ?? 'Rabbitty'));
+    router.push(`/chat/${g.id}`);
   };
 
   return (
@@ -148,9 +131,9 @@ export default function GroupsStrip() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Users size={18} style={{ color: 'var(--text-secondary)' }} />
-          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 900, color: 'var(--text-primary)' }}>Grupos</h3>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 900, color: 'var(--text-primary)' }}>Grupos & Canales</h3>
         </div>
-        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>Comunidad oficial</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>Comunidad in-app</span>
       </div>
 
       <div
@@ -168,7 +151,7 @@ export default function GroupsStrip() {
           <motion.button
             key={g.id}
             whileTap={{ scale: 0.98 }}
-            onClick={() => openChoice(g)}
+            onClick={() => handleOpenGroup(g)}
             style={{
               flex: '0 0 auto',
               minWidth: 220,
@@ -215,62 +198,6 @@ export default function GroupsStrip() {
           </motion.button>
         ))}
       </div>
-
-      <BottomSheet isOpen={open} onClose={() => setOpen(false)} title="Unirse al grupo">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <p style={{ margin: '0 0 4px', fontSize: 14, color: 'var(--text-secondary)' }}>
-            ¿Cómo quieres unirte a <strong style={{ color: 'var(--text-primary)' }}>{active?.name}</strong>?
-          </p>
-
-          <button
-            type="button"
-            onClick={openTelegram}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              padding: '14px 16px',
-              borderRadius: 16,
-              border: '1px solid var(--border-subtle)',
-              background: 'var(--bg-elevated)',
-              color: 'var(--text-primary)',
-              cursor: 'pointer',
-              textAlign: 'left',
-              fontWeight: 800,
-            }}
-          >
-            <span style={{ fontSize: 20 }}>✈️</span>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <span>Abrir en Telegram</span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>Ir al enlace del grupo</span>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={openInApp}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              padding: '14px 16px',
-              borderRadius: 16,
-              border: '1px solid var(--border-subtle)',
-              background: 'linear-gradient(135deg,#E91E63 0%,#FF4081 100%)',
-              color: '#fff',
-              cursor: 'pointer',
-              textAlign: 'left',
-              fontWeight: 800,
-            }}
-          >
-            <span style={{ fontSize: 20 }}>🐰</span>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <span>Chat de Soporte en Rabbitty</span>
-              <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.95 }}>Preguntarle a Bunzy para unirme</span>
-            </div>
-          </button>
-        </div>
-      </BottomSheet>
     </section>
   );
 }

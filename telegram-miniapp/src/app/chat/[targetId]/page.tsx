@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import Image from 'next/image';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -196,6 +197,35 @@ function renderFormattedMarkdown(text: string) {
   );
 }
 
+function TypewriterText({
+  text,
+  onComplete,
+}: {
+  text: string;
+  onComplete?: () => void;
+}) {
+  const [displayedText, setDisplayedText] = useState('');
+
+  useEffect(() => {
+    let currentIdx = 0;
+    // Revelar gradualmente por bloques de caracteres para una animación fluida tipo streaming
+    const totalLen = text.length;
+    const chunkSize = Math.max(1, Math.min(6, Math.floor(totalLen / 35)));
+    const interval = setInterval(() => {
+      currentIdx = Math.min(totalLen, currentIdx + chunkSize);
+      setDisplayedText(text.slice(0, currentIdx));
+      if (currentIdx >= totalLen) {
+        clearInterval(interval);
+        onComplete?.();
+      }
+    }, 18);
+
+    return () => clearInterval(interval);
+  }, [text, onComplete]);
+
+  return renderFormattedMarkdown(displayedText);
+}
+
 function CheckTicks({ read }: { read: boolean }) {
   return (
     <svg width="16" height="11" viewBox="0 0 16 11" fill="none" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -237,6 +267,16 @@ export default function ChatRoomPage() {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showTyping, setShowTyping] = useState(false);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [animatingBotMessageIds, setAnimatingBotMessageIds] = useState<string[]>([]);
+  const mainRef = useRef<HTMLElement>(null);
+  const isAtBottomRef = useRef(true);
+
+  const handleMainScroll = () => {
+    if (!mainRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = mainRef.current;
+    isAtBottomRef.current = scrollHeight - scrollTop - clientHeight < 90;
+  };
   const [orderTarget, setOrderTarget] = useState<{ businessId: string; businessName: string } | null>(null);
   const [orderItems, setOrderItems] = useState('');
   const [orderNotes, setOrderNotes] = useState('');
@@ -344,13 +384,11 @@ export default function ChatRoomPage() {
 
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', updateKeyboard);
-      window.visualViewport.addEventListener('scroll', updateKeyboard);
     }
 
     return () => {
       if (window.visualViewport) {
         window.visualViewport.removeEventListener('resize', updateKeyboard);
-        window.visualViewport.removeEventListener('scroll', updateKeyboard);
       }
     };
   }, []);
@@ -406,7 +444,18 @@ export default function ChatRoomPage() {
       if (data.targetBusinessId !== undefined) setTargetBusinessId(data.targetBusinessId);
       if (data.businessOpen !== undefined) setBusinessOpen(data.businessOpen);
       otherTypingAtRef.current = data.otherTypingAt ?? null;
-      setMessages(data.messages || []);
+      if (data.messages) {
+        setMessages((prev) => {
+          if (prev.length === data.messages!.length) {
+            const lastPrev = prev[prev.length - 1];
+            const lastNew = data.messages![data.messages!.length - 1];
+            if (lastPrev?.id === lastNew?.id && lastPrev?.content === lastNew?.content) {
+              return prev;
+            }
+          }
+          return data.messages!;
+        });
+      }
 
       if (urlPrefill && data.conversationId && !prefillApplied) {
         prefillApplied = true;
@@ -450,8 +499,10 @@ export default function ChatRoomPage() {
   }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, loading, showTyping]);
+    if (isAtBottomRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, loading, showTyping, sending]);
 
   const signalTyping = () => {
     if (isBot) return;
@@ -471,18 +522,31 @@ export default function ChatRoomPage() {
       .catch(() => {});
   };
 
-  const shareLocation = () => {
-    if (!navigator.geolocation || !conversationId) return;
-    PlatformBridge.hapticFeedback('light');
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const c = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setCoords(c);
-        sendMessage('📍 Ubicación compartida', c, 'LOCATION');
-      },
-      () => {},
-      { timeout: 6000 },
-    );
+  const handleShareLocation = async () => {
+    PlatformBridge.hapticFeedback('medium');
+    setLocating(true);
+    showToast('Obteniendo tu ubicación GPS...', 'info');
+
+    try {
+      const loc = await PlatformBridge.getLocation();
+      if (!loc.success || loc.lat == null || loc.lng == null) {
+        throw new Error(loc.error || 'No se pudo obtener la señal GPS');
+      }
+      const c = { lat: loc.lat, lng: loc.lng };
+      setCoords(c);
+
+      if (isBot) {
+        await sendMessage('📍 Aquí está mi ubicación. ¿Qué lugares me recomiendas más cerca?', c, 'LOCATION');
+      } else {
+        await sendMessage('📍 Ubicación compartida', c, 'LOCATION');
+      }
+      showToast('Ubicación compartida con éxito', 'success');
+    } catch (err) {
+      console.error('Error al obtener ubicación:', err);
+      showToast('No se pudo obtener la señal GPS. Verifica los permisos de tu dispositivo.', 'error');
+    } finally {
+      setLocating(false);
+    }
   };
 
   const sendMessage = async (
@@ -491,29 +555,20 @@ export default function ChatRoomPage() {
     msgType?: string,
   ) => {
     const content = raw.trim();
-    if (!content || !conversationId || !user || sending) return;
+    if (!content || !user || sending) return;
 
     const isLoc = msgType === 'LOCATION';
 
-    if (!isLoc && /usar mi ubicacion|compartir ubicacion/i.test(content) && !coords && !explicitCoords && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const newCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          setCoords(newCoords);
-          sendMessage('📍 Ubicación compartida', newCoords, 'LOCATION');
-        },
-        () => {
-          // Si no dio permiso o falló, enviar de todos modos
-          sendMessage('Ver todos los comercios');
-        },
-        { timeout: 6000 }
-      );
+    if (!isLoc && /usar mi ubicacion|compartir ubicacion/i.test(content) && !coords && !explicitCoords) {
+      handleShareLocation();
       return;
     }
 
     setInput('');
     setSuggestions([]);
     setSending(true);
+    isAtBottomRef.current = true;
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
 
     tempCounterRef.current += 1;
     const tempId = `temp-${tempCounterRef.current}`;
@@ -555,7 +610,10 @@ export default function ChatRoomPage() {
         setMessages((prev) => {
           const replaced = prev.map((m) => (m.id === tempId && data.message ? data.message : m));
           const extra: Message[] = [];
-          if (data.botResponse) extra.push(data.botResponse);
+          if (data.botResponse) {
+            extra.push(data.botResponse);
+            setAnimatingBotMessageIds((prev) => [...prev, data.botResponse!.id]);
+          }
           if (data.autoReply) extra.push(data.autoReply);
           return [...replaced, ...extra];
         });
@@ -1014,54 +1072,123 @@ export default function ChatRoomPage() {
   );
 
   const renderOptions = (options: BusinessOption[]) => (
-    <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+    <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
       {options.map((o) => {
-        const metaLine = [
-          o.category,
-          o.distanceKm != null ? `${o.distanceKm.toFixed(1)} km` : null,
-          o.openNow === false ? 'Cerrado' : o.openNow === true ? 'Abierto' : null,
-          o.rewardPercentage != null ? `+${o.rewardPercentage}% bunz` : null,
-        ]
-          .filter(Boolean)
-          .join(' · ');
         return (
           <div
             key={o.businessId}
-            style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 10px', borderRadius: '14px', border: '1px solid var(--border-subtle)', background: 'var(--bg-pressed)' }}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              padding: '12px',
+              borderRadius: '18px',
+              border: '1px solid var(--border-subtle)',
+              background: 'var(--bg-elevated)',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+              width: '100%',
+              boxSizing: 'border-box',
+            }}
           >
-            <button
-              onClick={() => {
-                PlatformBridge.hapticFeedback('light');
-                router.push(`/chat/${o.businessId}`);
-              }}
-              style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}
-            >
-              <div style={{ width: '36px', height: '36px', borderRadius: '10px', overflow: 'hidden', flexShrink: 0, background: '#E91E63', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                {o.logoUrl ? <img src={o.logoUrl} alt={o.businessName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: '16px' }}>🏪</span>}
-              </div>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <p style={{ margin: 0, fontWeight: 800, fontSize: '13.5px', color: 'inherit' }}>{o.businessName}</p>
-                {metaLine && <p style={{ margin: 0, fontSize: '11.5px', opacity: 0.8 }}>{metaLine}</p>}
-              </div>
-            </button>
-            <button
-              onClick={() => {
-                PlatformBridge.hapticFeedback('light');
-                router.push(`/affiliate/${o.businessId}`);
-              }}
-              style={{ flexShrink: 0, border: 'none', background: 'rgba(255,255,255,0.08)', color: '#FFF', fontWeight: 700, fontSize: '11px', padding: '7px 11px', borderRadius: '999px', cursor: 'pointer' }}
-            >
-              🏪 Ver
-            </button>
-            {o.acceptsBunz !== false && (
-              <button
-                onClick={() => openOrder({ businessId: o.businessId, businessName: o.businessName })}
-                style={{ flexShrink: 0, border: 'none', background: 'rgba(233,30,99,0.15)', color: '#E91E63', fontWeight: 800, fontSize: '12px', padding: '8px 12px', borderRadius: '999px', cursor: 'pointer' }}
+            {/* Header info con avatar/cover */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', width: '100%' }}>
+              <div
+                style={{
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: '14px',
+                  overflow: 'hidden',
+                  flexShrink: 0,
+                  background: 'rgba(233,30,99,0.1)',
+                  border: '1px solid var(--border-subtle)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
               >
-                🛒 Pedir
+                {o.logoUrl ? (
+                  <Image src={o.logoUrl} alt={o.businessName} width={48} height={48} unoptimized style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <span style={{ fontSize: '22px' }}>🏪</span>
+                )}
+              </div>
+
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                  <p style={{ margin: 0, fontWeight: 800, fontSize: '14px', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {o.businessName}
+                  </p>
+                  {o.rewardPercentage != null && (
+                    <span style={{ flexShrink: 0, fontSize: '10.5px', fontWeight: 800, color: '#E91E63', background: 'rgba(233,30,99,0.15)', padding: '2px 7px', borderRadius: '999px', border: '1px solid rgba(233,30,99,0.3)' }}>
+                      +{o.rewardPercentage}% bunz
+                    </span>
+                  )}
+                </div>
+
+                <p style={{ margin: '3px 0 0', fontSize: '11.5px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {[o.category, o.distanceKm != null ? `${o.distanceKm.toFixed(1)} km` : null].filter(Boolean).join(' · ')}
+                </p>
+
+                <p style={{ margin: '4px 0 0', fontSize: '11px', fontWeight: 700, color: o.openNow === false ? '#EF4444' : '#10B981', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: o.openNow === false ? '#EF4444' : '#10B981' }} />
+                  {o.openNow === false ? 'Cerrado' : 'Abierto ahora'}
+                </p>
+              </div>
+            </div>
+
+            {/* Botones inferiores con layout espacioso */}
+            <div style={{ display: 'flex', gap: '8px', marginTop: '10px', paddingTop: '8px', borderTop: '1px solid var(--border-subtle)' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  PlatformBridge.hapticFeedback('light');
+                  router.push(`/affiliate/${o.businessId}`);
+                }}
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  border: '1px solid var(--border-subtle)',
+                  background: 'var(--bg-pressed)',
+                  color: 'var(--text-primary)',
+                  fontWeight: 700,
+                  fontSize: '12px',
+                  padding: '8px 12px',
+                  borderRadius: '12px',
+                  cursor: 'pointer',
+                }}
+              >
+                <span>🏪</span>
+                <span>Ver sucursal</span>
               </button>
-            )}
+
+              {o.acceptsBunz !== false && (
+                <button
+                  type="button"
+                  onClick={() => openOrder({ businessId: o.businessId, businessName: o.businessName })}
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #E91E63 0%, #FF4081 100%)',
+                    color: '#FFF',
+                    fontWeight: 800,
+                    fontSize: '12px',
+                    padding: '8px 12px',
+                    borderRadius: '12px',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(233,30,99,0.3)',
+                  }}
+                >
+                  <span>🛒</span>
+                  <span>Pedir</span>
+                </button>
+              )}
+            </div>
           </div>
         );
       })}
@@ -1231,10 +1358,22 @@ export default function ChatRoomPage() {
         }
       }
       if (typedMeta.kind === 'OPTIONS' && Array.isArray(typedMeta.options)) {
+        const isAnimating = animatingBotMessageIds.includes(msg.id);
         return (
           <>
-            {cleanOrEmpty(msg.content) && renderFormattedMarkdown(cleanOrEmpty(msg.content))}
-            {renderOptions(typedMeta.options as BusinessOption[])}
+            {cleanOrEmpty(msg.content) && (
+              isAnimating ? (
+                <TypewriterText
+                  text={cleanOrEmpty(msg.content)}
+                  onComplete={() => {
+                    setAnimatingBotMessageIds((prev) => prev.filter((id) => id !== msg.id));
+                  }}
+                />
+              ) : (
+                renderFormattedMarkdown(cleanOrEmpty(msg.content))
+              )
+            )}
+            {!isAnimating && renderOptions(typedMeta.options as BusinessOption[])}
           </>
         );
       }
@@ -1256,16 +1395,30 @@ export default function ChatRoomPage() {
         ? { id: legacy[1], name: legacy[2], meta: null }
         : null;
 
+    const isAnimating = animatingBotMessageIds.includes(msg.id);
+
     return (
       <>
-        {cleanText && renderFormattedMarkdown(cleanText)}
-        {target && renderBusinessCard(target)}
+        {cleanText && (
+          isAnimating ? (
+            <TypewriterText
+              text={cleanText}
+              onComplete={() => {
+                setAnimatingBotMessageIds((prev) => prev.filter((id) => id !== msg.id));
+              }}
+            />
+          ) : (
+            renderFormattedMarkdown(cleanText)
+          )
+        )}
+        {!isAnimating && target && renderBusinessCard(target)}
       </>
     );
   };
 
-  const headerStatus = isBot ? 'Bunzy IA en línea' : businessOpen === false ? 'Fuera de horario' : 'En línea';
-  const headerColor = isBot || businessOpen !== false ? '#4CAF50' : '#9E9E9E';
+  const isTypingActive = (isBot && (sending || animatingBotMessageIds.length > 0)) || showTyping;
+  const headerStatus = isTypingActive ? 'escribiendo…' : isBot ? 'Bunzy IA en línea' : businessOpen === false ? 'Fuera de horario' : 'En línea';
+  const headerColor = isTypingActive ? 'var(--rabbitty-pink)' : isBot || businessOpen !== false ? '#4CAF50' : '#9E9E9E';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: 'var(--bg-primary)', fontFamily: 'var(--font-family-base)' }}>
@@ -1327,7 +1480,7 @@ export default function ChatRoomPage() {
               {targetName}
             </span>
             <span style={{ fontSize: 11, color: headerColor, fontWeight: 700, lineHeight: 1 }}>
-              {showTyping && !isBot ? 'escribiendo…' : headerStatus}
+              {headerStatus}
             </span>
           </button>
         </div>
@@ -1725,6 +1878,8 @@ export default function ChatRoomPage() {
       </BottomSheet>
 
       <main
+        ref={mainRef}
+        onScroll={handleMainScroll}
         style={{
           flex: 1,
           overflowY: 'auto',
@@ -1734,6 +1889,21 @@ export default function ChatRoomPage() {
           gap: '20px',
         }}
       >
+        {!loading && messages.length === 0 && (
+          <div style={{ margin: 'auto', textAlign: 'center', padding: '40px 20px', maxWidth: '320px' }}>
+            <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(233,30,99,0.1)', color: 'var(--rabbitty-pink)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', margin: '0 auto 16px' }}>
+              {isBot ? '🐰' : '💬'}
+            </div>
+            <h3 style={{ margin: '0 0 8px', fontSize: '16px', fontWeight: 900, color: 'var(--text-primary)' }}>
+              {isBot ? '¡Hola, soy Bunzy!' : 'Conversación iniciada'}
+            </h3>
+            <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              {isBot
+                ? 'Pregúntame por cafés cercanos, recompensas o promociones en tu ciudad.'
+                : 'Aún no hay mensajes en este canal. ¡Sé el primero en escribir!'}
+            </p>
+          </div>
+        )}
         {pinnedId && messages.some((m) => m.id === pinnedId) && (() => {
           const pm = messages.find((m) => m.id === pinnedId)!;
           return (
@@ -1971,6 +2141,7 @@ export default function ChatRoomPage() {
                 onClick={() => {
                   PlatformBridge.hapticFeedback('light');
                   if (isBusinessInbox) setInput(chip);
+                  else if (/usar mi ubicaci[oó]n|compartir ubicaci[oó]n/i.test(chip)) handleShareLocation();
                   else sendMessage(chip);
                 }}
                 style={{
@@ -2116,21 +2287,29 @@ export default function ChatRoomPage() {
         <form onSubmit={handleSend} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           <button
             type="button"
-            onClick={shareLocation}
-            title="Compartir ubicación"
+            onClick={handleShareLocation}
+            disabled={locating}
+            title="Compartir ubicación GPS"
             style={{
               width: '44px',
               height: '44px',
               borderRadius: '50%',
               border: 'none',
-              background: coords ? 'rgba(233,30,99,0.15)' : 'var(--bg-pressed)',
+              background: coords ? 'rgba(233,30,99,0.2)' : 'var(--bg-pressed)',
               color: coords ? '#E91E63' : 'var(--text-muted)',
               fontSize: '18px',
-              cursor: 'pointer',
+              cursor: locating ? 'wait' : 'pointer',
               flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            📍
+            {locating ? (
+              <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: '2px solid #E91E63', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} />
+            ) : (
+              '📍'
+            )}
           </button>
           <input
             type="text"

@@ -5,6 +5,7 @@ import { and, eq, gt, or, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 import { rateLimit, retryAfterSec, checkOnly, registerHit, resetLimit, getClientIp, hashOtp } from '@/lib/otp';
 import { resolveUniqueUsername } from '@/lib/username';
+import { claimWelcomeBonusForUser } from '@/lib/welcomeBonusConfig';
 
 const VERIFY_IP_LIMIT = 30;
 const VERIFY_IP_WINDOW_MS = 15 * 60 * 1000;
@@ -135,6 +136,20 @@ export async function POST(req: NextRequest) {
       }).returning();
     }
 
+    // reclamar automáticamente Bono de Bienvenida reservado en /download (pendingVaults) o promoRef con Split Triangular + Push Notification
+    const welcomeBonus = await claimWelcomeBonusForUser({
+      userId: resolvedUser.id,
+      phoneNumber: resolvedUser.phoneNumber || phone,
+      email: resolvedUser.email || email,
+      promoRef: body?.promoRef || body?.ref || null,
+      requestedBunz: body?.promoBunz ? Number(body.promoBunz) : null,
+    });
+
+    if (welcomeBonus?.awarded) {
+      const refreshed = await db.query.users.findFirst({ where: eq(users.id, resolvedUser.id) });
+      if (refreshed) resolvedUser = refreshed;
+    }
+
     const sessionToken = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
@@ -148,6 +163,7 @@ export async function POST(req: NextRequest) {
       success: true,
       isNewUser,
       sessionToken,
+      welcomeBonus,
       user: {
         id: resolvedUser.id,
         email: resolvedUser.email,

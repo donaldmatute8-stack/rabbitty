@@ -22,6 +22,7 @@ import {
   Play,
   Monitor,
   ShoppingBag,
+  Compass,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -41,12 +42,11 @@ export default function SandboxPage() {
 
   const initSandbox = trpc.sandbox.initSandbox.useMutation({
     onSuccess: (res) => {
-      utils.sandbox.getSandboxStatus.invalidate();
-      utils.admin.getBranches.invalidate();
-      setBranchId(res.branchId);
       if (typeof window !== "undefined") {
         localStorage.setItem("activeBranchId", res.branchId);
       }
+      setBranchId(res.branchId);
+      utils.invalidate();
       toast.success("¡Entorno Sandbox inicializado con tu menú real!");
     },
     onError: (e) => toast.error(e.message),
@@ -78,10 +78,11 @@ export default function SandboxPage() {
 
   const enterSandbox = () => {
     if (status?.hasSandbox && status.sandboxBranch) {
-      setBranchId(status.sandboxBranch.id);
       if (typeof window !== "undefined") {
         localStorage.setItem("activeBranchId", status.sandboxBranch.id);
       }
+      setBranchId(status.sandboxBranch.id);
+      utils.invalidate();
       toast.success("Modo Entrenamiento activado.");
     } else {
       initSandbox.mutate();
@@ -96,10 +97,11 @@ export default function SandboxPage() {
     ) || branches?.[0];
 
     if (mainBranch) {
-      setBranchId(mainBranch.id);
       if (typeof window !== "undefined") {
         localStorage.setItem("activeBranchId", mainBranch.id);
       }
+      setBranchId(mainBranch.id);
+      utils.invalidate();
       toast.info("Regresaste a la sucursal de producción.");
     }
   };
@@ -142,7 +144,43 @@ export default function SandboxPage() {
               <RefreshCw className="h-4 w-4 mr-2 text-gray-400" />
               Reiniciar
             </Button>
+            <Link
+              href="/demo"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 px-4 py-2 text-xs font-black text-cyan-300 transition-all"
+            >
+              <Compass className="h-4 w-4 text-cyan-400" />
+              Tour Guiado (/demo)
+            </Link>
           </div>
+        </div>
+      </div>
+
+      {/* Distinción clara para Tenants: /demo vs /sandbox */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="rounded-2xl border border-cyan-500/25 bg-cyan-500/5 p-4 flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <span className="text-[10px] font-black uppercase tracking-wider text-cyan-300">
+              🧭 Opción A · Recorrido Virtual (/demo)
+            </span>
+            <p className="text-xs text-gray-300 leading-relaxed">
+              Simulador interactivo <strong>100% en memoria</strong> con datos de muestra (POS + Kiosko + Admin + PIN <code>1234</code>). No crea sucursales ni escribe en la base de datos.
+            </p>
+          </div>
+          <Link
+            href="/demo"
+            className="shrink-0 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 px-3 py-1.5 text-xs font-black text-cyan-300 transition-all"
+          >
+            Abrir /demo →
+          </Link>
+        </div>
+
+        <div className="rounded-2xl border border-amber-500/25 bg-amber-500/5 p-4 space-y-1">
+          <span className="text-[10px] font-black uppercase tracking-wider text-amber-300">
+            🧪 Opción B · Modo Sandbox (/sandbox — Estás aquí)
+          </span>
+          <p className="text-xs text-gray-300 leading-relaxed">
+            Crea una sucursal de práctica aislada <strong>exclusiva de tu negocio</strong> clonando tu propio menú y mesas reales. Ideal para capacitar cajeros y meseros con tu carta real sin tocar tu sucursal principal.
+          </p>
         </div>
       </div>
 

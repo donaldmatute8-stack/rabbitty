@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { eq, and, sql, or, ilike } from "drizzle-orm";
-import { router, protectedProcedure, adminOnlyProcedure } from "../trpc";
+import { eq, and } from "drizzle-orm";
+import { router, protectedProcedure, adminOnlyProcedure, type Context } from "../trpc";
 import {
   branches,
   restaurants,
@@ -12,18 +12,62 @@ import {
   orderItems,
   payments,
   expenses,
-  staff,
 } from "@rabbitty/database-restaurant/schema";
+import { ownedBusinesses } from "@rabbitty/database-core/schema";
 import { TRPCError } from "@trpc/server";
+
+const isSandboxBranchName = (name: string) =>
+  name.toLowerCase().includes("sandbox") || name.toLowerCase().includes("entrenamiento");
+
+async function resolveTenantBranches(ctx: Context) {
+  // 1. Si hay un branchId activo en contexto, obtenemos su restaurantId
+  if (ctx.branchId) {
+    const [currentBranch] = await ctx.restaurantDb
+      .select({ restaurantId: branches.restaurantId })
+      .from(branches)
+      .where(eq(branches.id, ctx.branchId))
+      .limit(1);
+
+    if (currentBranch?.restaurantId) {
+      return await ctx.restaurantDb
+        .select()
+        .from(branches)
+        .where(and(eq(branches.restaurantId, currentBranch.restaurantId), eq(branches.isActive, true)));
+    }
+  }
+
+  // 2. Fallback por ownerId del negocio autenticado
+  if (ctx.userId) {
+    const [ownerBiz] = await ctx.coreDb
+      .select({ id: ownedBusinesses.id })
+      .from(ownedBusinesses)
+      .where(eq(ownedBusinesses.ownerId, ctx.userId))
+      .limit(1)
+      .catch(() => []);
+
+    if (ownerBiz?.id) {
+      const [ownRest] = await ctx.restaurantDb
+        .select({ id: restaurants.id })
+        .from(restaurants)
+        .where(eq(restaurants.businessId, ownerBiz.id))
+        .limit(1);
+
+      if (ownRest?.id) {
+        return await ctx.restaurantDb
+          .select()
+          .from(branches)
+          .where(and(eq(branches.restaurantId, ownRest.id), eq(branches.isActive, true)));
+      }
+    }
+  }
+
+  return [];
+}
 
 export const sandboxRouter = router({
   getSandboxStatus: protectedProcedure.query(async ({ ctx }) => {
-    const allBranches = await ctx.restaurantDb.select().from(branches);
-    const sandboxBranch = allBranches.find(
-      (b) =>
-        b.name.toLowerCase().includes("sandbox") ||
-        b.name.toLowerCase().includes("entrenamiento")
-    );
+    const allBranches = await resolveTenantBranches(ctx);
+    const sandboxBranch = allBranches.find((b) => isSandboxBranchName(b.name));
 
     if (!sandboxBranch) {
       return {
@@ -57,23 +101,15 @@ export const sandboxRouter = router({
   }),
 
   initSandbox: adminOnlyProcedure.mutation(async ({ ctx }) => {
-    const allBranches = await ctx.restaurantDb.select().from(branches);
-    let sandboxBranch = allBranches.find(
-      (b) =>
-        b.name.toLowerCase().includes("sandbox") ||
-        b.name.toLowerCase().includes("entrenamiento")
-    );
+    const allBranches = await resolveTenantBranches(ctx);
+    let sandboxBranch = allBranches.find((b) => isSandboxBranchName(b.name));
 
-    const mainBranch = allBranches.find(
-      (b) =>
-        !b.name.toLowerCase().includes("sandbox") &&
-        !b.name.toLowerCase().includes("entrenamiento")
-    ) || allBranches[0];
+    const mainBranch = allBranches.find((b) => !isSandboxBranchName(b.name)) || allBranches[0];
 
     if (!mainBranch) {
       throw new TRPCError({
         code: "PRECONDITION_FAILED",
-        message: "No se encontró ninguna sucursal principal activa para clonar.",
+        message: "No se encontró ninguna sucursal principal activa en tu negocio para clonar.",
       });
     }
 
@@ -198,15 +234,11 @@ export const sandboxRouter = router({
   }),
 
   resetSandbox: adminOnlyProcedure.mutation(async ({ ctx }) => {
-    const allBranches = await ctx.restaurantDb.select().from(branches);
-    const sandboxBranch = allBranches.find(
-      (b) =>
-        b.name.toLowerCase().includes("sandbox") ||
-        b.name.toLowerCase().includes("entrenamiento")
-    );
+    const allBranches = await resolveTenantBranches(ctx);
+    const sandboxBranch = allBranches.find((b) => isSandboxBranchName(b.name));
 
-    if (!sandboxBranch) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "No se encontró sucursal sandbox para reiniciar." });
+    if (!sandboxBranch || !isSandboxBranchName(sandboxBranch.name)) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "No se encontró sucursal sandbox en tu negocio para reiniciar." });
     }
 
     const sandboxOrders = await ctx.restaurantDb
@@ -231,14 +263,10 @@ export const sandboxRouter = router({
   }),
 
   seedDemoData: adminOnlyProcedure.mutation(async ({ ctx }) => {
-    const allBranches = await ctx.restaurantDb.select().from(branches);
-    const sandboxBranch = allBranches.find(
-      (b) =>
-        b.name.toLowerCase().includes("sandbox") ||
-        b.name.toLowerCase().includes("entrenamiento")
-    );
+    const allBranches = await resolveTenantBranches(ctx);
+    const sandboxBranch = allBranches.find((b) => isSandboxBranchName(b.name));
 
-    if (!sandboxBranch) {
+    if (!sandboxBranch || !isSandboxBranchName(sandboxBranch.name)) {
       throw new TRPCError({ code: "NOT_FOUND", message: "Primero debes inicializar el entorno Sandbox." });
     }
 

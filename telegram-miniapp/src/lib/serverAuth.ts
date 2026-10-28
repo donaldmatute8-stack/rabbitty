@@ -9,6 +9,7 @@ export interface AuthenticatedUser {
   telegramId?: string | null;
   username?: string | null;
   phoneNumber?: string | null;
+  email?: string | null;
   role?: string | null;
   tonWalletAddress?: string | null;
   totalBunzEarned?: number | null;
@@ -50,6 +51,7 @@ export async function getAuthenticatedUser(req: Request | NextRequest): Promise<
             telegramId: user.telegramId,
             username: user.username,
             phoneNumber: user.phoneNumber,
+            email: user.email,
             role: user.role,
             tonWalletAddress: user.tonWalletAddress,
             totalBunzEarned: user.totalBunzEarned,
@@ -75,6 +77,7 @@ export async function getAuthenticatedUser(req: Request | NextRequest): Promise<
             telegramId: user.telegramId,
             username: user.username,
             phoneNumber: user.phoneNumber,
+            email: user.email,
             role: user.role,
             tonWalletAddress: user.tonWalletAddress,
             totalBunzEarned: user.totalBunzEarned,

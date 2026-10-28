@@ -260,7 +260,7 @@ export const bunzyRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       // ─── SEGURIDAD: BRANCH ACCESS CHECK ────────────────────────────────
-      let branchId = resolveBranchId(ctx, input.branchId);
+      let branchId = await resolveBranchId(ctx, input.branchId);
 
       // Si el usuario es STAFF, resolveBranchId ya fija ctx.staffBranchId.
       // Si no es STAFF (Dueño/Admin), verificar que la sucursal pertenezca a sus restaurantes/negocios.
@@ -482,7 +482,7 @@ CAPACIDAD DE SOPORTE, REPORTE DE BUGS Y FEEDBACK:
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const branchId = resolveBranchId(ctx, input.branchId);
+      const branchId = await resolveBranchId(ctx, input.branchId);
 
       const formattedMessage = `${input.message} • [Bonificación especial: ${input.incentiveCashbackPercent}% en Bunz]`;
 

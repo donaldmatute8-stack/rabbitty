@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { 
-  Crosshair, Mic, MicOff, Sparkles, Navigation, MessageCircle, 
-  ChevronUp, ChevronDown, Flame, Gift, Compass, Volume2, X 
+  Crosshair, Mic, MicOff, Sparkles, Navigation, 
+  Flame, Gift, Compass, X 
 } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -46,6 +46,8 @@ export interface MapBusiness {
   image?: string;
   imageUrl?: string;
   logoUrl?: string;
+  startTime?: string;
+  endTime?: string;
 }
 
 interface InteractiveMapProps {
@@ -132,14 +134,13 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
   const [selected, setSelected] = useState<MapBusiness | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>('Todos');
   const [activeMode, setActiveMode] = useState<string>('Todos');
-  const [showAllFilters, setShowAllFilters] = useState<boolean>(true);
   
   // Bunzy Copilot Voice & Search State (Gemini-in-car style)
   const [isListening, setIsListening] = useState(false);
   const [copilotQuery, setCopilotQuery] = useState('');
   const [copilotReply, setCopilotReply] = useState<string | null>(null);
-  const [isProcessingVoice, setIsProcessingVoice] = useState(false);
-  const [speechSupported, setSpeechSupported] = useState(false);
+  const speechSupported = typeof window !== 'undefined' && 
+    ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window);
   const isNativeIos = typeof window !== 'undefined' && PlatformBridge.isIos();
   const [nativeMapActive, setNativeMapActive] = useState(false);
 
@@ -175,7 +176,7 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
       RabbittyMap.hideMap().catch(() => {});
       setNativeMapActive(false);
     };
-  }, [isNativeIos]);
+  }, [isNativeIos, businesses]);
 
   // 2. Sincronización de spots en mapa nativo sin recrear la vista (anti-thrash)
   useEffect(() => {
@@ -212,13 +213,7 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
     return modeMatch && categoryMatch;
   });
 
-  // Check speech recognition capability
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const hasSpeech = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
-      setSpeechSupported(hasSpeech);
-    }
-  }, []);
+
 
   // Speech Synthesis TTS Engine
   const speakReply = useCallback((text: string) => {
@@ -240,7 +235,6 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
   // Bunzy voice command processor
   const handleVoiceCommand = useCallback((transcript: string) => {
     setCopilotQuery(transcript);
-    setIsProcessingVoice(true);
     PlatformBridge.hapticFeedback('medium');
 
     const lower = transcript.toLowerCase();
@@ -322,10 +316,6 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
         speakReply(reply);
       }
     }
-
-    setTimeout(() => {
-      setIsProcessingVoice(false);
-    }, 1500);
   }, [businesses, userLat, userLng, onRequestLocation, speakReply]);
 
   const copilotInputRef = useRef<HTMLInputElement>(null);
@@ -333,37 +323,37 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
   const toggleSpeechRecognition = async () => {
     if (typeof window === 'undefined') return;
     PlatformBridge.hapticFeedback('medium');
-    
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const SpeechRec = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
-    
+
     if (isListening) {
       setIsListening(false);
       return;
     }
 
-    if (!SpeechRec) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SpeechRec = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+
+    // En iOS WKWebView / Capacitor o navegadores móviles sin soporte seguro de SpeechRecognition
+    const isIosDevice = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (!SpeechRec || (isIosDevice && (PlatformBridge.isNative() || PlatformBridge.isTelegram()))) {
       copilotInputRef.current?.focus();
-      setCopilotReply('Escribe tu búsqueda o pregunta a Bunzy aquí ✍️');
+      setCopilotReply('Escribe tu búsqueda a Bunzy aquí ✍️');
       setTimeout(() => setCopilotReply(null), 3500);
       return;
     }
 
     try {
-      // Solicitar permiso nativo de micrófono con getUserMedia en navegadores móviles/iOS
-      if (typeof navigator !== 'undefined' && navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          stream.getTracks().forEach((track) => track.stop());
-        } catch {
-          copilotInputRef.current?.focus();
-          setCopilotReply('Micrófono no disponible. Escribe a Bunzy aquí ✍️');
-          setTimeout(() => setCopilotReply(null), 3500);
-          return;
-        }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let recognition: any = null;
+      try {
+        recognition = new SpeechRec();
+      } catch (instErr) {
+        console.warn('[SpeechRec] Could not instantiate speech engine:', instErr);
+        copilotInputRef.current?.focus();
+        setCopilotReply('Escribe tu consulta a Bunzy aquí ✍️');
+        setTimeout(() => setCopilotReply(null), 3500);
+        return;
       }
 
-      const recognition = new SpeechRec();
       recognition.lang = 'es-MX';
       recognition.continuous = false;
       recognition.interimResults = false;
@@ -379,6 +369,7 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
         if (text) handleVoiceCommand(text);
       };
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       recognition.onerror = (err: any) => {
         setIsListening(false);
         copilotInputRef.current?.focus();
@@ -387,15 +378,24 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
         } else {
           setCopilotReply('Escribe a Bunzy aquí ✍️');
         }
-        setTimeout(() => setCopilotReply(null), 4000);
+        setTimeout(() => setCopilotReply(null), 3500);
       };
 
       recognition.onend = () => {
         setIsListening(false);
       };
 
-      recognition.start();
-    } catch {
+      try {
+        recognition.start();
+      } catch (startErr) {
+        console.warn('[SpeechRec] Failed to start recognition:', startErr);
+        setIsListening(false);
+        copilotInputRef.current?.focus();
+        setCopilotReply('Escribe a Bunzy aquí ✍️');
+        setTimeout(() => setCopilotReply(null), 3500);
+      }
+    } catch (outerErr) {
+      console.warn('[SpeechRec] General exception caught:', outerErr);
       setIsListening(false);
       copilotInputRef.current?.focus();
       setCopilotReply('Escribe a Bunzy aquí ✍️');
@@ -429,15 +429,29 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
     
     map.on('click', () => setSelected(null));
 
+    // Observe container resizing (prevents white screen glitch on tab/view switch)
+    let ro: ResizeObserver | null = null;
+    if (mapRef.current && typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => {
+        if (mapInst.current) {
+          mapInst.current.invalidateSize();
+        }
+      });
+      ro.observe(mapRef.current);
+    }
+
     // Leaflet dimension recalculations
     const t1 = setTimeout(() => map.invalidateSize(), 60);
-    const t2 = setTimeout(() => map.invalidateSize(), 250);
-    const t3 = setTimeout(() => map.invalidateSize(), 600);
+    const t2 = setTimeout(() => map.invalidateSize(), 200);
+    const t3 = setTimeout(() => map.invalidateSize(), 500);
+    const t4 = setTimeout(() => map.invalidateSize(), 1000);
 
     return () => { 
+      if (ro) ro.disconnect();
       clearTimeout(t1);
       clearTimeout(t2);
       clearTimeout(t3);
+      clearTimeout(t4);
       map.remove(); 
       mapInst.current = null; 
       tileLayerRef.current = null;
@@ -544,6 +558,10 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
       style={{ background: isDark ? '#0D0914' : '#F8FAFC' }}
     >
       <style dangerouslySetInnerHTML={{__html: `
+        .leaflet-container {
+          background: ${isDark ? '#0D0914' : '#F8F9FA'} !important;
+          outline: none;
+        }
         @keyframes radar-spin {
           from { transform: translate(-50%, -50%) rotate(0deg); }
           to { transform: translate(-50%, -50%) rotate(360deg); }
@@ -805,11 +823,109 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
         </button>
       </div>
 
-      {/* Bottom Floating Filter Dock (Persistent Google Maps Chips - Never Pushed Out) */}
+      {/* Selected Business Action Card (Positioned cleanly ABOVE the bottom filter dock) */}
+      {selected && (
+        <div 
+          className="absolute inset-x-3 z-30 max-w-md mx-auto pointer-events-auto animate-fadeIn transition-all duration-300"
+          style={{ bottom: PlatformBridge.isTelegram() ? 116 : 108 }}
+        >
+          <div 
+            onClick={() => router.push(`/affiliate/${selected.id}`)}
+            className="p-4 rounded-3xl border shadow-2xl backdrop-blur-2xl flex flex-col gap-2.5 cursor-pointer relative overflow-hidden transition-all active:scale-98"
+            style={{
+              background: isDark ? 'rgba(18, 12, 28, 0.98)' : 'rgba(255, 255, 255, 0.98)',
+              borderColor: isDark ? 'rgba(233, 30, 99, 0.45)' : 'rgba(233, 30, 99, 0.3)',
+              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.45)',
+            }}
+          >
+            {/* Grab Handle bar */}
+            <div className="absolute top-1.5 inset-x-0 flex justify-center pointer-events-none">
+              <span className="w-8 h-1 rounded-full bg-white/20" />
+            </div>
+
+            <div className="flex items-center gap-3.5 mt-1">
+              {/* Business Logo / Emoji Avatar */}
+              <div className="w-14 h-14 rounded-2xl overflow-hidden shrink-0 border border-(--border-subtle) bg-(--bg-subtle) flex items-center justify-center">
+                {selected.logoUrl || selected.imageUrl ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img 
+                    src={selected.logoUrl || selected.imageUrl} 
+                    alt={selected.name || 'Comercio'} 
+                    className="w-full h-full object-cover" 
+                  />
+                ) : (
+                  <span className="text-2xl">{getIcon(selected.category || selected.device)}</span>
+                )}
+              </div>
+
+              {/* Info Column */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-1">
+                  <h3 className="m-0 text-base font-black truncate" style={{ color: 'var(--text-primary)' }}>
+                    {selected.name || selected.user}
+                  </h3>
+                  
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelected(null);
+                    }}
+                    className="w-6 h-6 rounded-full bg-(--bg-subtle) hover:bg-[#E91E63]/20 flex items-center justify-center text-(--text-muted) hover:text-[#E91E63] border-none cursor-pointer"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+
+                <p className="m-0 text-xs font-semibold text-(--text-muted) mt-0.5 truncate">
+                  {selected.category || selected.device || 'Comercio Afiliado'} • {selected.distance ? `${selected.distance} km` : 'Cerca de ti'}
+                </p>
+
+                {/* Rewards / Bunz Pills */}
+                <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                  {(selected.givesBunz !== false) && (
+                    <span className="px-2.5 py-0.5 rounded-md text-[10px] font-black bg-[#E91E63]/15 text-[#E91E63] border border-[#E91E63]/30 flex items-center gap-1">
+                      <Flame size={11} className="fill-[#E91E63]" />
+                      +{selected.reward_percentage || selected.rewardPercentage || 10}% Bunz
+                    </span>
+                  )}
+                  {selected.acceptsBunz === true && (
+                    <span className="px-2.5 py-0.5 rounded-md text-[10px] font-black bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 flex items-center gap-1">
+                      <Gift size={11} />
+                      Stock Disponible
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Navigation CTA button */}
+              <div className="w-10 h-10 rounded-2xl bg-[#E91E63] text-white flex items-center justify-center shrink-0 shadow-lg shadow-pink-500/30 hover:scale-105 transition-transform">
+                <Navigation size={18} className="rotate-45" />
+              </div>
+            </div>
+
+            {/* Micro Details Row: Horario / Dirección */}
+            {(selected.address || selected.startTime) && (
+              <div className="pt-2 border-t border-(--border-subtle) flex items-center justify-between text-[11px] text-(--text-muted) font-medium">
+                <span className="truncate max-w-[70%]">
+                  📍 {selected.address || 'Ubicación física'}
+                </span>
+                {selected.startTime && selected.endTime && (
+                  <span className="shrink-0 text-emerald-400 font-bold">
+                    Abierto • {selected.startTime} - {selected.endTime}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Bottom Floating Filter Dock (Always Stays in Place at the Bottom) */}
       <div 
         className="absolute z-20 inset-x-4 flex flex-col gap-2 pointer-events-none transition-all duration-300"
         style={{ 
-          bottom: selected ? (PlatformBridge.isTelegram() ? 135 : 125) : (PlatformBridge.isTelegram() ? 24 : 18),
+          bottom: PlatformBridge.isTelegram() ? 24 : 18,
         }}
       >
         <div 
@@ -875,87 +991,6 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
           </div>
         </div>
       </div>
-
-      {/* Selected Business Action Card (Bottom Sheet inspired by Apple/Google Maps) */}
-      {selected && (
-        <div 
-          className="absolute inset-x-3 z-30 max-w-md mx-auto pointer-events-auto animate-fadeIn"
-          style={{ bottom: PlatformBridge.isTelegram() ? 12 : 10 }}
-        >
-          <div 
-            onClick={() => router.push(`/affiliate/${selected.id}`)}
-            className="p-3.5 rounded-3xl border shadow-2xl backdrop-blur-2xl flex items-center gap-3 cursor-pointer relative overflow-hidden transition-all active:scale-98"
-            style={{
-              background: isDark ? 'rgba(18, 12, 28, 0.96)' : 'rgba(255, 255, 255, 0.98)',
-              borderColor: isDark ? 'rgba(233, 30, 99, 0.4)' : 'rgba(233, 30, 99, 0.25)',
-              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.35)',
-            }}
-          >
-            {/* Grab Handle bar (Apple / Google Maps style) */}
-            <div className="absolute top-1.5 inset-x-0 flex justify-center pointer-events-none">
-              <span className="w-8 h-1 rounded-full bg-white/20" />
-            </div>
-
-            {/* Business Logo / Emoji Avatar */}
-            <div className="w-14 h-14 rounded-2xl overflow-hidden shrink-0 border border-(--border-subtle) bg-(--bg-subtle) flex items-center justify-center mt-1">
-              {selected.logoUrl || selected.imageUrl ? (
-                <img 
-                  src={selected.logoUrl || selected.imageUrl} 
-                  alt={selected.name || 'Comercio'} 
-                  className="w-full h-full object-cover" 
-                />
-              ) : (
-                <span className="text-2xl">{getIcon(selected.category || selected.device)}</span>
-              )}
-            </div>
-
-            {/* Info Column */}
-            <div className="flex-1 min-w-0 mt-1">
-              <div className="flex items-center justify-between gap-1">
-                <h3 className="m-0 text-sm font-black truncate" style={{ color: 'var(--text-primary)' }}>
-                  {selected.name || selected.user}
-                </h3>
-                
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelected(null);
-                  }}
-                  className="w-5 h-5 rounded-full bg-(--bg-subtle) hover:bg-[#E91E63]/20 flex items-center justify-center text-(--text-muted) hover:text-[#E91E63] border-none cursor-pointer"
-                >
-                  <X size={12} />
-                </button>
-              </div>
-
-              <p className="m-0 text-[11px] font-semibold text-(--text-muted) mt-0.5 truncate">
-                {selected.category || selected.device || 'Comercio Afiliado'} • {selected.distance ? `${selected.distance} km` : 'Cerca de ti'}
-              </p>
-
-              {/* Rewards / Bunz Pills */}
-              <div className="flex items-center gap-1.5 mt-1.5">
-                {(selected.givesBunz !== false) && (
-                  <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-[#E91E63]/15 text-[#E91E63] border border-[#E91E63]/30 flex items-center gap-1">
-                    <Flame size={11} className="fill-[#E91E63]" />
-                    +{selected.reward_percentage || selected.rewardPercentage || 10}% Bunz
-                  </span>
-                )}
-                {selected.acceptsBunz === true && (
-                  <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 flex items-center gap-1">
-                    <Gift size={11} />
-                    Stock
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Navigation CTA icon */}
-            <div className="w-9 h-9 rounded-xl bg-[#E91E63] text-white flex items-center justify-center shrink-0 shadow-lg shadow-pink-500/30">
-              <Navigation size={16} className="rotate-45" />
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

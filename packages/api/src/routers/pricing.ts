@@ -96,7 +96,7 @@ export const pricingRouter = router({
         .from(dynamicPricingRules)
         .where(
           and(
-            eq(dynamicPricingRules.branchId, resolveBranchId(ctx, input.branchId)),
+            eq(dynamicPricingRules.branchId, await resolveBranchId(ctx, input.branchId)),
             eq(dynamicPricingRules.isActive, true),
             sql`(${dynamicPricingRules.menuItemId} IS NULL OR ${dynamicPricingRules.menuItemId} = ${input.menuItemId})`,
             sql`(${dynamicPricingRules.dayOfWeek} IS NULL OR ${dynamicPricingRules.dayOfWeek} = ${currentDay})`,

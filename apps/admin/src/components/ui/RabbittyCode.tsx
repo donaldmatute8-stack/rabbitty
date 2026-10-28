@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { barsFromCode, code6FromData } from '../../lib/rabbittyCodeCodec';
 
 interface RabbittyCodeProps {
   data: string;
@@ -7,30 +8,9 @@ interface RabbittyCodeProps {
   className?: string;
 }
 
-function hashString(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < (str || 'rabbitty').length; i++) {
-    hash = (hash << 5) - hash + (str || 'rabbitty').charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash);
-}
-
 export default function RabbittyCode({ data, size = 260, showCardFrame = true, className = '' }: RabbittyCodeProps) {
-  const seed = useMemo(() => hashString(data), [data]);
-
-  // Generate 15 dynamic soundwave bars in the center
-  const waveBars = useMemo(() => {
-    const bars: number[] = [];
-    const count = 13;
-    for (let i = 0; i < count; i++) {
-      const centerFactor = 1 - Math.abs(i - Math.floor(count / 2)) / (count / 2);
-      const raw = ((seed * (i + 7) * 31) % 65) + 25;
-      const height = Math.min(85, Math.max(20, raw * (0.4 + centerFactor * 0.6)));
-      bars.push(height);
-    }
-    return bars;
-  }, [seed]);
+    // Generate 15 dynamic soundwave bars in the center
+  const waveBars = useMemo(() => barsFromCode(code6FromData(String(data ?? ''))), [data]);
 
   // Generate unique concentric ring dash/dot configurations for this user code
   const ringConfigs = useMemo(() => {
@@ -42,7 +22,7 @@ export default function RabbittyCode({ data, size = 260, showCardFrame = true, c
       { r: 72, dash: '10 5', speed: 9 },
       { r: 84, dash: '20 8', speed: 14 },
     ];
-  }, [seed]);
+  }, [data]);
 
   return (
     <div className={`relative inline-flex flex-col items-center justify-center ${className}`} style={{ width: size, height: showCardFrame ? size * 1.8 : size }}>

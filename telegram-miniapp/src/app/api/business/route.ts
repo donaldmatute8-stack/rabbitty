@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { users, ownedBusinesses } from '@/db/schema';
+import { users, ownedBusinesses, auditEntries } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { restaurantDb } from '@/db/restaurant';
 import { restaurants } from '@rabbitty/database-restaurant/schema';
@@ -159,6 +159,7 @@ export async function POST(req: Request) {
       googleClaimed, package: selectedPackage, creditLimit,
       lat: manualLat,
       lng: manualLng,
+      contractSignature,
     } = body;
 
     // Resolve owner: prefer authenticated caller, fall back to Telegram initData.
@@ -195,6 +196,11 @@ export async function POST(req: Request) {
 
     const parsedCredit = parseInt(creditLimit) || 0;
 
+    const combinedVerificationData = {
+      ...(isGoogleVerified ? { verified: true, claimedAt: new Date().toISOString() } : {}),
+      ...(contractSignature ? { contractSignature } : {}),
+    };
+
     const [business] = await db.insert(ownedBusinesses).values({
       ownerId: owner.id,
       name,
@@ -214,9 +220,25 @@ export async function POST(req: Request) {
       gallery: JSON.stringify(gallery || []),
       logoUrl: gallery && gallery.length > 0 ? gallery[0] : null,
       status: isGoogleVerified ? "APPROVED" : "PENDING",
-      verificationMethod: isGoogleVerified ? "google" : null,
-      verificationData: isGoogleVerified ? JSON.stringify({ verified: true, claimedAt: new Date().toISOString() }) : null
+      verificationMethod: isGoogleVerified ? "google" : (contractSignature ? "digital_contract" : null),
+      verificationData: Object.keys(combinedVerificationData).length > 0 ? JSON.stringify(combinedVerificationData) : null
     }).returning();
+
+    if (contractSignature) {
+      await db.insert(auditEntries).values({
+        userId: owner.id,
+        action: 'AFFILIATE_CONTRACT_SIGNED',
+        resource: 'ownedBusinesses',
+        resourceId: business.id,
+        details: JSON.stringify({
+          businessName: name,
+          category,
+          package: selectedPackage || 'none',
+          creditLimit: parsedCredit,
+          contractSignature,
+        }),
+      });
+    }
 
     // Notificación Push & in-app al dueño del negocio
     if (owner?.id) {

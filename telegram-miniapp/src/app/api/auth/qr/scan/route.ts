@@ -21,12 +21,25 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Parámetros faltantes' }, { status: 400 });
     }
 
+    // NOTA DE SEGURIDAD: el "reconocimiento óptico" del QR Neón (RabbittyCode) es
+    // decorativo — el patrón es un hash visual y NO transporta el token de sesión.
+    // Vincular el escaneo a "la sesión pendiente más reciente" permitía un hijack
+    // por carrera (cualquiera podía capturar la sesión de otro). El único canal
+    // seguro de emparejamiento es el token real contenido en el QR escaneado
+    // (qrlogin_<token> → hash → jwtToken de webSessions). Sin token válido no hay login.
+
     const tokenHash = crypto.createHash('sha256').update(qrToken).digest('hex');
 
-    // Buscar la sesión válida
-    const session = await db.query.webSessions.findFirst({
-      where: eq(webSessions.jwtToken, tokenHash)
+    // Buscar la sesión válida por hash exacto o por token directo
+    let session = await db.query.webSessions.findFirst({
+      where: eq(webSessions.jwtToken, tokenHash),
     });
+
+    if (!session) {
+      session = await db.query.webSessions.findFirst({
+        where: eq(webSessions.jwtToken, `qrlogin_${qrToken}`),
+      });
+    }
 
     if (!session) {
       return NextResponse.json({ error: 'Invalid QR code' }, { status: 404 });
@@ -41,7 +54,8 @@ export async function POST(req: Request) {
     }
 
     // Vincular la sesión al usuario verificado que la escaneó
-    await db.update(webSessions)
+    await db
+      .update(webSessions)
       .set({ userId })
       .where(eq(webSessions.id, session.id));
 
@@ -51,4 +65,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
-

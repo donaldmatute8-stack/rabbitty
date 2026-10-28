@@ -39,7 +39,7 @@ export const notificationsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const [event] = await ctx.restaurantDb.insert(events).values({
-        branchId: resolveBranchId(ctx, input.branchId),
+        branchId: await resolveBranchId(ctx, input.branchId),
         type: input.type,
         payload: input.payload,
       }).returning();

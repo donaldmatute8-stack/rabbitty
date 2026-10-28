@@ -1,1357 +1,940 @@
 'use client';
 
+/**
+ * ── GOD CONTROL · Panel móvil del God Admin (rediseño premium) ──
+ * Mobile-native: tabs segmentadas, solo operaciones ejecutables, identidad Rabbitty.
+ * Contratos de API preservados 1:1 con el panel anterior.
+ */
+
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useToast } from '@/contexts/ToastContext';
+import { PlatformBridge } from '@/lib/platform';
 
 let initDataPromise: Promise<string> | null = null;
 function getInitData(): Promise<string> {
   if (!initDataPromise) {
-    initDataPromise = import('@twa-dev/sdk')
-      .then((mod) => mod.default.initData || '')
-      .catch(() => '');
+    initDataPromise = (async () => {
+      try {
+        const mod = await import('@twa-dev/sdk');
+        return mod.default?.initData || '';
+      } catch {
+        return '';
+      }
+    })();
   }
   return initDataPromise;
 }
+
 interface AdminUserLike {
-  telegramId?: string | null;
   id?: string;
+  role?: string | null;
+  username?: string | null;
+  email?: string | null;
+  telegramId?: string | null;
   [key: string]: unknown;
 }
 
-interface LevelItem {
-  id: string;
-  name: string;
-  requiredHops: number;
-  bunzMultiplier: number;
-}
-
-interface TrickItem {
-  id: string;
-  title: string;
-  description: string;
-  rewardHops: number | string;
-  rewardBunz: number | string;
-  conditionType?: string;
-  conditionTarget?: number | string;
-}
-
 async function adminHeaders(user: AdminUserLike | null, json = false): Promise<Record<string, string>> {
-  const initData = await getInitData();
+  const [initData, bridgeHeaders] = await Promise.all([
+    getInitData(),
+    PlatformBridge.getAuthHeaders(),
+  ]);
   return {
+    ...bridgeHeaders,
     ...(json ? { 'Content-Type': 'application/json' } : {}),
     'X-Telegram-Id': user?.telegramId || '',
     'x-init-data': initData,
   };
 }
 
+// ── Tokens de diseño (obsidiana premium Rabbitty) ──
+const T = {
+  bg: '#08080D',
+  card: '#12121B',
+  cardHi: '#181824',
+  border: 'rgba(255,255,255,0.07)',
+  borderHi: 'rgba(255,255,255,0.13)',
+  text: '#F5F5F7',
+  sub: '#8E8EA0',
+  faint: '#5A5A6E',
+  pink: '#EC4899',
+  purple: '#A855F7',
+  amber: '#F59E0B',
+  green: '#10B981',
+  rose: '#F43F5E',
+  cyan: '#38BDF8',
+};
+
+const fmt = (n: number | undefined | null) => (n ?? 0).toLocaleString('es-MX');
+const fmtBunz = (n: number | undefined | null) => `${fmt(n)} Bunz`;
+
+// ── Tipos (contratos existentes) ──
+interface LevelItem { id: string; name: string; requiredHops: number; bunzMultiplier: number }
+interface TrickItem { id: string; title: string; description: string; rewardHops: number | string; rewardBunz: number | string; conditionType?: string; conditionTarget?: number | string }
+interface AdminBusinessItem {
+  id: string; name: string; category: string; status: string;
+  rewardPercentage?: number; bunzBalance?: number; package?: string | null;
+  creditLimit?: number; creditUsed?: number; createdAt?: string | Date;
+  owner?: { firstName?: string | null; username?: string | null; phoneNumber?: string | null } | null;
+}
+interface TreasurySummary {
+  totalSplitDebtGenerated: number; totalSplitDebtSettled: number;
+  netNegativeBalance: number; outstandingDebtAbs: number;
+  totalFeeIncome: number; availableSurplusForSettlement: number;
+  welcomeClaimsCount: number;
+  capConfig?: { default: number; overrides: Record<string, number> };
+  monthlyCapDefault?: number;
+  perBusinessMonthlyUsage?: Array<{ businessId: string; businessName: string; used: number; cap: number }>;
+}
+interface Reconciliation {
+  status: 'HEALTHY' | 'DEVIATION_DETECTED';
+  totalUsersChecked: number; balancedUsers: number; discrepantUsers: number;
+  totalCachedCirculation: number; totalLedgerCirculation: number; systemDifference: number;
+  details: Array<{ userId: string; username: string; cachedBalance: number; ledgerNet: number; discrepancy: number; isBalanced: boolean }>;
+}
+interface ScalingMetric { key: string; label: string; icon: string; value: number; pct: number; max: number; unit?: string }
+interface EcosystemData {
+  businesses?: { total: number; active: number; pending: number; totalCreditLimit: number; totalCreditUsed: number };
+  rabbitters?: { total: number; totalBunzEarned: number; totalBunzSpent: number; circulatingSupply: number };
+  ledger?: { rewardsGiven: number; rewardsCount: number; redemptionsSpent: number; redemptionsCount: number; transfersP2P: number; transfersCount: number };
+  recentLedger?: Array<{ id: string; payer: string; payee: string; amount: number; type: string; createdAt?: string | null }>;
+}
+
+type TabKey = 'resumen' | 'tenants' | 'tesoreria' | 'economia' | 'gamificacion';
+
+const TABS: { key: TabKey; label: string }[] = [
+  { key: 'resumen', label: 'Resumen' },
+  { key: 'tenants', label: 'Tenants' },
+  { key: 'tesoreria', label: 'Tesorería' },
+  { key: 'economia', label: 'Economía' },
+  { key: 'gamificacion', label: 'Juego' },
+];
+
 export default function AdminPanel({ onClose }: { onClose: () => void }) {
   const { user } = useAuth();
   const { showToast } = useToast();
-  
-  const [levels, setLevels] = useState<LevelItem[]>([]);
-  const [tricks, setTricks] = useState<TrickItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showNewTrickForm, setShowNewTrickForm] = useState(false);
-  const [newTrick, setNewTrick] = useState({ title: '', description: '', rewardHops: '100', rewardBunz: '50', conditionType: 'TOTAL_VISITS', conditionTarget: '1' });
+  const [tab, setTab] = useState<TabKey>('resumen');
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  // Settings state
-  const [freeRegistration, setFreeRegistration] = useState(true);
-  const [registrationFee, setRegistrationFee] = useState(5000);
-  const [loadingSettings, setLoadingSettings] = useState(true);
+  // Cross-tab state: pendientes por aprobar (para el resumen)
+  const [pendingCount, setPendingCount] = useState(0);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch('/api/admin/gamification', { headers: await adminHeaders(user) });
-        const data = await res.json();
-        if (data.levels) setLevels(data.levels);
-        if (data.tricks) setTricks(data.tricks);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [user]);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch('/api/admin/settings', { headers: await adminHeaders(user) });
-        const data = await res.json();
-        if (data.settings) {
-          setFreeRegistration(data.settings.free_registration !== 'false');
-          setRegistrationFee(parseInt(data.settings.registration_fee) || 5000);
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoadingSettings(false);
-      }
-    })();
-  }, [user]);
-
-  const handleCreateTrick = async () => {
-    try {
-      const res = await fetch('/api/admin/gamification', {
-        method: 'POST',
-        headers: await adminHeaders(user, true),
-        body: JSON.stringify({ action: 'CREATE_TRICK', payload: newTrick })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setTricks([data.trick, ...tricks]);
-        setShowNewTrickForm(false);
-        showToast('Misión creada exitosamente', 'success');
-        setNewTrick({ title: '', description: '', rewardHops: '100', rewardBunz: '50', conditionType: 'TOTAL_VISITS', conditionTarget: '1' });
-      } else {
-        showToast('Error al crear misión', 'error');
-      }
-    } catch {
-      showToast('Error de conexión', 'error');
-    }
-  };
-
-  // Double check security
-  if (user?.telegramId !== "798431743") {
-    return null;
-  }
+  const refresh = () => setRefreshKey((k) => k + 1);
 
   return (
-    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-      {/* Click outside to close */}
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} onClick={onClose} />
-      
-      <motion.div
-        initial={{ y: '100%' }}
-        animate={{ y: 0 }}
-        exit={{ y: '100%' }}
-        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-        style={{
-          backgroundColor: '#fff',
-          padding: '24px',
-          paddingTop: 'calc(max(var(--safe-top, 0px), 84px) + 24px)',
-          paddingBottom: 'max(env(safe-area-inset-bottom), 24px)',
-          position: 'relative',
-          height: '100vh',
-          width: '100%',
-          overflowY: 'auto'
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h2 style={{ fontSize: 20, fontWeight: 900, color: '#111', margin: 0 }}>Panel de Control <span style={{ color: '#E91E63' }}>God Mode</span></h2>
-          <button 
-            onClick={onClose}
-            style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#F0F0F0', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#111" strokeWidth="2" strokeLinecap="round"><path d="M1 1l12 12M1 13L13 1" /></svg>
-          </button>
-        </div>
-
-        <div style={{ marginBottom: 24 }}>
-          <p style={{ fontSize: 13, color: '#666', lineHeight: 1.5 }}>
-            Bienvenido. Desde aquí puedes modificar la economía de Hops, Bunz y crear nuevos &ldquo;Trucos del Sombrero&rdquo; (Misiones) en tiempo real.
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: T.bg, display: 'flex', flexDirection: 'column' }}>
+      {/* ── Header fijo ── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px 12px',
+        borderBottom: `1px solid ${T.border}`, background: `linear-gradient(180deg, ${T.card} 0%, ${T.bg} 100%)`,
+        flexShrink: 0,
+      }}>
+        <button
+          onClick={onClose}
+          style={{ width: 34, height: 34, borderRadius: 12, border: `1px solid ${T.border}`, background: T.cardHi, color: T.text, fontSize: 15, cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          aria-label="Cerrar"
+        >✕</button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h2 style={{ fontSize: 17, fontWeight: 900, color: T.text, margin: 0, letterSpacing: -0.3, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ background: `linear-gradient(135deg, ${T.pink}, ${T.purple})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+              God Control
+            </span>
+            <span style={{ width: 6, height: 6, borderRadius: 99, background: T.green, boxShadow: `0 0 8px ${T.green}`, flexShrink: 0 }} />
+          </h2>
+          <p style={{ fontSize: 10, color: T.faint, margin: '1px 0 0', fontWeight: 600 }}>
+            {user?.username ? `@${user.username}` : 'Rabbitty Ecosystem'} · Operaciones en vivo
           </p>
         </div>
+        <button
+          onClick={refresh}
+          style={{ width: 34, height: 34, borderRadius: 12, border: `1px solid ${T.border}`, background: T.cardHi, color: T.text, cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          aria-label="Refrescar"
+        >
+          <span style={{ display: 'block', width: 13, height: 13, border: `2px solid ${T.sub}`, borderTopColor: 'transparent', borderRadius: 99 }} />
+        </button>
+      </div>
 
-        {/* SECTION: INVESTOR & ECOSYSTEM METRICS */}
-        <div style={{ backgroundColor: '#09090B', color: '#fff', borderRadius: 16, padding: 18, border: '1px solid #27272A', marginBottom: 16, boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <h3 style={{ fontSize: 16, fontWeight: 900, color: '#fff', margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-              📈 Métricas del Ecosistema · Data Room Inversionistas
-            </h3>
-            <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 999, background: 'rgba(233,30,99,0.15)', color: '#F43F5E', border: '1px solid rgba(233,30,99,0.3)' }}>
-              LIVE LEDGER
-            </span>
-          </div>
-          <EcosystemMetricsSection />
-        </div>
-
-        {/* SECTION: OMNICHANNEL DRIP METRICS */}
-        <div style={{ backgroundColor: '#FAFAFA', borderRadius: 14, padding: 16, border: '1px solid #EAEAEA', marginBottom: 16 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 800, color: '#111', margin: '0 0 12px 0' }}>📊 Métricas Omnicanal & Drip Campaigns</h3>
-          <RoleMetricsSection />
-        </div>
-
-        {/* SECTION: LEDGER RECONCILIATION & INTEGRITY */}
-        <div style={{ backgroundColor: '#FAFAFA', borderRadius: 14, padding: 16, border: '1px solid #EAEAEA', marginBottom: 16 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 800, color: '#111', margin: '0 0 12px 0' }}>⚖️ Salud de la Economía & Ledger (Paso A)</h3>
-          <LedgerReconciliationSection />
-        </div>
-
-        {/* SECTION: BUSINESS APPROVALS */}
-        <div style={{ backgroundColor: '#FAFAFA', borderRadius: 14, padding: 16, border: '1px solid #EAEAEA', marginBottom: 16 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 800, color: '#111', margin: '0 0 12px 0' }}>🏪 Aprobación de Negocios</h3>
-          <BusinessApprovals />
-        </div>
-
-        {/* SECTION: SYSTEM SETTINGS */}
-        <div style={{ backgroundColor: '#FAFAFA', borderRadius: 14, padding: 16, border: '1px solid #EAEAEA', marginBottom: 16 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 800, color: '#111', margin: '0 0 12px 0' }}>⚙️ Configuración del Sistema</h3>
-          {loadingSettings ? (
-            <p style={{ fontSize: 12, color: '#888' }}>Cargando...</p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div>
-                  <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 2px', color: '#333' }}>Registro gratuito</p>
-                  <p style={{ fontSize: 11, color: '#888', margin: 0 }}>
-                    {freeRegistration ? 'Negocios entran sin costo' : 'Se cobra cuota en Bunz'}
-                  </p>
-                </div>
-                <button
-                  onClick={async () => {
-                    const newVal = !freeRegistration;
-                    await fetch('/api/admin/settings', {
-                      method: 'POST',
-                      headers: await adminHeaders(user, true),
-                      body: JSON.stringify({ key: 'free_registration', value: String(newVal) }),
-                    });
-                    setFreeRegistration(newVal);
-                    showToast(`Registro ${newVal ? 'gratuito' : 'con cuota'} activado`, 'success');
-                  }}
-                  style={{
-                    padding: '6px 14px', borderRadius: 20, border: 'none', cursor: 'pointer',
-                    background: freeRegistration ? '#22C55E' : '#EF4444', color: '#fff',
-                    fontSize: 12, fontWeight: 800,
-                  }}
-                >
-                  {freeRegistration ? 'GRATIS' : 'CON CUOTA'}
-                </button>
-              </div>
-
-              {!freeRegistration && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div>
-                    <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 2px', color: '#333' }}>Cuota (Bunz)</p>
-                    <p style={{ fontSize: 11, color: '#888', margin: 0 }}>Valor actual: {registrationFee.toLocaleString()} Bunz</p>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <input
-                      type="number" value={registrationFee}
-                      onChange={e => setRegistrationFee(Number(e.target.value))}
-                      style={{ width: 80, padding: '6px 8px', borderRadius: 6, border: '1px solid #CCC', fontSize: 12, textAlign: 'center' }}
-                    />
-                    <button
-                      onClick={async () => {
-                        await fetch('/api/admin/settings', {
-                          method: 'POST',
-                          headers: await adminHeaders(user, true),
-                          body: JSON.stringify({ key: 'registration_fee', value: String(registrationFee) }),
-                        });
-                        showToast(`Cuota actualizada a ${registrationFee.toLocaleString()} Bunz`, 'success');
-                      }}
-                      style={{ padding: '6px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: '#111', color: '#fff', fontSize: 11, fontWeight: 700 }}
-                    >
-                      Guardar
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* SECTION: GAMIFICATION */}
-        <div style={{ backgroundColor: '#FAFAFA', borderRadius: 14, padding: 16, border: '1px solid #EAEAEA', marginBottom: 16 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 800, color: '#111', margin: '0 0 12px 0' }}>🪄 Trucos del Sombrero ({tricks.length})</h3>
-          
-          {showNewTrickForm ? (
-            <div style={{ backgroundColor: '#fff', padding: 12, borderRadius: 10, border: '1px solid #EEE', marginBottom: 16 }}>
-              <input value={newTrick.title} onChange={e => setNewTrick({...newTrick, title: e.target.value})} placeholder="Título" style={{ width: '100%', marginBottom: 8, padding: 8, borderRadius: 6, border: '1px solid #CCC' }} />
-              <input value={newTrick.description} onChange={e => setNewTrick({...newTrick, description: e.target.value})} placeholder="Descripción" style={{ width: '100%', marginBottom: 8, padding: 8, borderRadius: 6, border: '1px solid #CCC' }} />
-              <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                <input value={newTrick.rewardHops} onChange={e => setNewTrick({...newTrick, rewardHops: e.target.value})} placeholder="Recompensa Hops" type="number" style={{ flex: 1, padding: 8, borderRadius: 6, border: '1px solid #CCC' }} />
-                <input value={newTrick.rewardBunz} onChange={e => setNewTrick({...newTrick, rewardBunz: e.target.value})} placeholder="Recompensa Bunz" type="number" style={{ flex: 1, padding: 8, borderRadius: 6, border: '1px solid #CCC' }} />
-              </div>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                <select value={newTrick.conditionType} onChange={e => setNewTrick({...newTrick, conditionType: e.target.value})} style={{ flex: 1, padding: 8, borderRadius: 6, border: '1px solid #CCC', backgroundColor: '#fff' }}>
-                  <option value="TOTAL_VISITS">Total Consumos</option>
-                  <option value="CATEGORY_VISITS">Consumos Categoria</option>
-                  <option value="REFERRALS_COUNT">Referidos</option>
-                  <option value="RESERVATIONS">Reservas Stock</option>
-                </select>
-                <input value={newTrick.conditionTarget} onChange={e => setNewTrick({...newTrick, conditionTarget: e.target.value})} placeholder="Meta (ej: 5)" type="number" style={{ flex: 1, padding: 8, borderRadius: 6, border: '1px solid #CCC' }} />
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={handleCreateTrick} style={{ flex: 1, backgroundColor: '#E91E63', color: '#fff', padding: 8, borderRadius: 6, border: 'none', fontWeight: 700 }}>Guardar</button>
-                <button onClick={() => setShowNewTrickForm(false)} style={{ flex: 1, backgroundColor: '#EEE', color: '#111', padding: 8, borderRadius: 6, border: 'none', fontWeight: 700 }}>Cancelar</button>
-              </div>
-            </div>
-          ) : (
-            <button onClick={() => setShowNewTrickForm(true)} style={{ width: '100%', backgroundColor: '#111', color: '#fff', padding: '12px', borderRadius: 10, border: 'none', fontWeight: 700, cursor: 'pointer', marginBottom: 12 }}>
-              + Nueva Misión (Truco)
-            </button>
-          )}
-
-          <div style={{ maxHeight: 200, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {tricks.slice(0, 5).map((t) => (
-              <div key={t.id} style={{ backgroundColor: '#fff', padding: 10, borderRadius: 8, border: '1px solid #EEE' }}>
-                <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 800 }}>{t.title}</p>
-                <p style={{ margin: 0, fontSize: 11, color: '#888' }}>Recompensa: {t.rewardHops} Hops | {t.rewardBunz} Bunz</p>
-              </div>
-            ))}
-            {tricks.length > 5 && <p style={{ fontSize: 11, textAlign: 'center', color: '#AAA' }}>Y {tricks.length - 5} más...</p>}
-          </div>
-        </div>
-
-        {/* SECTION: LEVELS */}
-        <div style={{ backgroundColor: '#FAFAFA', borderRadius: 14, padding: 16, border: '1px solid #EAEAEA', marginBottom: 16 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 800, color: '#111', margin: '0 0 12px 0' }}>📈 Niveles y Multiplicadores</h3>
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {loading ? <p>Cargando...</p> : levels.map((l) => (
-              <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff', border: '1px solid #EEE', borderRadius: 8, padding: 10 }}>
-                <div>
-                  <p style={{ margin: '0 0 4px', fontSize: 12, fontWeight: 800 }}>{l.name}</p>
-                  <p style={{ margin: 0, fontSize: 11, color: '#888' }}>Hops req: {l.requiredHops}</p>
-                </div>
-                <div style={{ backgroundColor: '#E91E63', color: '#fff', padding: '4px 8px', borderRadius: 6, fontSize: 12, fontWeight: 800 }}>
-                  x{l.bunzMultiplier}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* SECTION: SCALING DASHBOARD */}
-        <div style={{ backgroundColor: '#FAFAFA', borderRadius: 14, padding: 16, border: '1px solid #EAEAEA', marginBottom: 16 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 800, color: '#111', margin: '0 0 12px 0' }}>📊 Estado de Escalado</h3>
-          <ScalingDashboard />
-        </div>
-
-        {/* SECTION: SCALING GUIDE TOGGLE */}
-        <ScalingGuide />
-
-      </motion.div>
-    </div>
-  );
-}
-
-interface ScalingMetricItem {
-  key: string;
-  icon: string;
-  label: string;
-  value: number;
-  max: number;
-  unit: string;
-  pct: number;
-}
-
-function ScalingDashboard() {
-  const [metrics, setMetrics] = useState<ScalingMetricItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [alertSent, setAlertSent] = useState(false);
-  const { user } = useAuth();
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch('/api/admin/scaling', { headers: await adminHeaders(user) });
-        const data = await res.json();
-        if (data.metrics) setMetrics(data.metrics);
-        if (data.alertTriggered) setAlertSent(true);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [user]);
-
-  if (loading) return <p style={{ fontSize: 13, color: '#888' }}>Cargando metricas...</p>;
-
-  const getColor = (pct: number) => {
-    if (pct >= 90) return '#E91E63';
-    if (pct >= 80) return '#FF6B35';
-    if (pct >= 60) return '#FFB800';
-    return '#22C55E';
-  };
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {alertSent && (
-        <div style={{ backgroundColor: '#FFF3E0', border: '1px solid #FFB800', borderRadius: 8, padding: 8, fontSize: 12, color: '#E65100', fontWeight: 700 }}>
-          🚨 Alerta enviada a @mardelbull
-        </div>
-      )}
-      {metrics.map((m) => (
-        <div key={m.key}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#333' }}>{m.icon} {m.label}</span>
-            <span style={{ fontSize: 12, color: getColor(m.pct), fontWeight: 800 }}>
-              {m.value} / {m.max} {m.unit} ({m.pct.toFixed(0)}%)
-            </span>
-          </div>
-          <div style={{ width: '100%', height: 8, backgroundColor: '#E0E0E0', borderRadius: 4, overflow: 'hidden' }}>
-            <div style={{
-              width: `${m.pct}%`,
-              height: '100%',
-              backgroundColor: getColor(m.pct),
-              borderRadius: 4,
-              transition: 'width 0.5s ease'
-            }} />
-          </div>
-          {m.pct >= 80 && (
-            <p style={{ margin: '4px 0 0', fontSize: 10, color: '#E65100', fontWeight: 700 }}>
-              ⚠️ Umbral de escalado alcanzado
-            </p>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function ScalingGuide() {
-  const [open, setOpen] = useState(false);
-  const { user } = useAuth();
-
-  if (user?.telegramId !== "798431743") return null;
-
-  return (
-    <div style={{ backgroundColor: '#FAFAFA', borderRadius: 14, padding: 16, border: '1px solid #EAEAEA', marginBottom: 16 }}>
-      <button
-        onClick={() => setOpen(!open)}
-        style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-      >
-        <h3 style={{ fontSize: 15, fontWeight: 800, color: '#111', margin: 0 }}>🚀 Guia de Escalado</h3>
-        <span style={{ fontSize: 18, color: '#666', transition: 'transform 0.2s', transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
-      </button>
-
-      {open && (
-        <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <GuideItem
-            icon="🟢"
-            title="0-60% — Stack actual suficiente"
-            desc="Rabbitty funciona bien con Railway + Neon Free. No necesitas cambios."
-          />
-          <GuideItem
-            icon="🟡"
-            title="60-80% — Monitorear"
-            desc="Comienza a planificar. Considera: optimizar queries, agregar indices en DB, cachear con Redis."
-          />
-          <GuideItem
-            icon="🟠"
-            title="80-90% — Preparar migracion"
-            desc="Es hora de escalar. Opciones recomendadas:"
-            bullets={[
-              "Hetzer CX22 (€4/mes) + Coolify — mejor precio/performance",
-              "Upgrade Railway a plan Pro ($5-20/mes)",
-              "Migrar Neon a PostgreSQL dedicado en el VPS",
-              "Agregar Redis para cache y sesiones",
-            ]}
-          />
-          <GuideItem
-            icon="🔴"
-            title="90-100% — Escalar YA"
-            desc="Accion inmediata recomendada:"
-            bullets={[
-              "Hetzer CX32 (€7/mes) o CX42 (€14/mes)",
-              "Separar DB en VPS dedicado (CX22 solo para DB)",
-              "Balanceador de carga si hay +500 usuarios concurrentes",
-              "CDN para assets estaticos (Cloudflare free)",
-            ]}
-          />
-          <GuideItem
-            icon="🛡️"
-            title="Seguridad Sistémica (Próxima Escala)"
-            desc="Reforzamientos recomendados antes de alcanzar el 80-90% de escala para mitigar vectores de ataque avanzados:"
-            bullets={[
-              "BFF Pattern: Migrar JWT de localStorage a cookies HTTP-Only seguras (protección contra XSS).",
-              "Protección CSRF: Implementar tokens anti-CSRF en endpoints de mutación sensibles.",
-              "CSP Estricta: Configurar Content-Security-Policy estricta sin unsafe-eval/inline en producción.",
-              "Smart Contracts (Bunz): Realizar auditoría y deploy formal en blockchain (con límites de emisión y control de pausa).",
-            ]}
-          />
-          <div style={{ backgroundColor: '#F3E8FF', border: '1px solid #D8B4FE', borderRadius: 10, padding: 12, marginTop: 4 }}>
-            <p style={{ margin: 0, fontSize: 12, color: '#6B21A8', fontWeight: 700, lineHeight: 1.5 }}>
-              💡 Recomendacion personal:apenas cruces 60% en usuarios, migra a Hetzner CX22 con Coolify.
-              Es €4/mes, 2GB RAM, SSD NVMe. PostgreSQL ahi mismo. Escalas a CX32 cuando llegues a 80%.
-              Railway es comodo para empezar pero caro al escalar.
-            </p>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function GuideItem({ icon, title, desc, bullets }: { icon: string; title: string; desc: string; bullets?: string[] }) {
-  return (
-    <div style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, border: '1px solid #EEE' }}>
-      <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 800, color: '#111' }}>{icon} {title}</p>
-      <p style={{ margin: 0, fontSize: 12, color: '#666', lineHeight: 1.5 }}>{desc}</p>
-      {bullets && (
-        <ul style={{ margin: '6px 0 0', paddingLeft: 16, fontSize: 12, color: '#555', lineHeight: 1.6 }}>
-          {bullets.map((b, i) => <li key={i}>{b}</li>)}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-interface AdminBusinessItem {
-  id: string;
-  name: string;
-  category: string;
-  address?: string | null;
-  status: string;
-  rewardPercentage?: number;
-  bunzBalance?: number;
-  package?: string | null;
-  creditLimit?: number;
-  creditUsed?: number;
-  lat?: number;
-  lng?: number;
-  logoUrl?: string | null;
-  gallery?: string | null;
-  verificationMethod?: string | null;
-  verificationData?: string | null;
-  activeDays?: string | null;
-  startTime?: string | null;
-  endTime?: string | null;
-  timezone?: string | null;
-  createdAt?: string | Date;
-  owner?: {
-    id: string;
-    firstName?: string | null;
-    lastName?: string | null;
-    username?: string | null;
-    phoneNumber?: string | null;
-    telegramId?: string | null;
-  } | null;
-}
-
-function BusinessApprovals() {
-  const [businesses, setBusinesses] = useState<AdminBusinessItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<string>('PENDING');
-  const { user } = useAuth();
-  const { showToast } = useToast();
-
-  const fetchBusinesses = useCallback(async () => {
-    setLoading(true);
-    try {
-      const headers = await adminHeaders(user);
-      const res = await fetch(`/api/admin/business?t=${Date.now()}`, {
-        headers,
-        cache: 'no-store'
-      });
-      const data = await res.json();
-      if (data.success) setBusinesses(data.businesses || []);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    let active = true;
-    adminHeaders(user)
-      .then((headers) => fetch(`/api/admin/business?t=${Date.now()}`, { headers, cache: 'no-store' }))
-      .then((res) => res.json())
-      .then((data) => {
-        if (active && data.success) {
-          setBusinesses(data.businesses || []);
-        }
-      })
-      .catch((err) => console.error(err))
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [user]);
-
-  const handleAction = async (businessId: string, status: string) => {
-    try {
-      const res = await fetch('/api/admin/business', {
-        method: 'POST',
-        headers: await adminHeaders(user, true),
-        body: JSON.stringify({ businessId, status })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setBusinesses(prev => prev.map(b => b.id === businessId ? { ...b, status } : b));
-        showToast(`Negocio ${status === 'APPROVED' ? 'aprobado' : status === 'REJECTED' ? 'rechazado' : 'en revisión'}`, 'success');
-      } else {
-        showToast('Error: ' + (data.error || 'desconocido'), 'error');
-      }
-    } catch {
-      showToast('Error de conexión', 'error');
-    }
-  };
-
-  const handleProvisionBunz = async (businessId: string, businessName: string, amount: number = 3500) => {
-    try {
-      const res = await fetch('/api/admin/business', {
-        method: 'POST',
-        headers: await adminHeaders(user, true),
-        body: JSON.stringify({ businessId, action: 'PROVISION_BUNZ', amount })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setBusinesses(prev => prev.map(b => b.id === businessId ? { ...b, bunzBalance: data.bunzBalance } : b));
-        showToast(`🎉 +${amount.toLocaleString()} Bunz aprovisionados a ${businessName}`, 'success');
-      } else {
-        showToast('Error: ' + (data.error || 'No se pudo aprovisionar'), 'error');
-      }
-    } catch {
-      showToast('Error de conexión al aprovisionar', 'error');
-    }
-  };
-
-  const filtered = businesses.filter(b => 
-    filter === 'ALL' || 
-    b.status === filter || 
-    (filter === 'PENDING' && b.status === 'PENDING_VERIFICATION')
-  );
-
-  const filters = [
-    { id: 'PENDING', label: 'Pendientes' },
-    { id: 'UNDER_REVIEW', label: 'En Revisión' },
-    { id: 'APPROVED', label: 'Aprobados' },
-    { id: 'REJECTED', label: 'Rechazados' },
-    { id: 'ALL', label: 'Todos' }
-  ];
-
-  return (
-    <div>
-      {/* Filtros Animados Segmentados y botón Refrescar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <div style={{ display: 'flex', gap: 4, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'none' }}>
-          {filters.map(f => {
-            const isActive = filter === f.id;
-            return (
-              <button
-                key={f.id}
-                onClick={() => setFilter(f.id)}
-                style={{
-                position: 'relative',
-                padding: '6px 14px',
-                borderRadius: 999,
-                border: 'none',
-                background: 'transparent',
-                color: isActive ? '#fff' : '#666',
-                fontSize: 12,
-                fontWeight: 800,
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                transition: 'color 0.2s ease',
-                zIndex: 1
+      {/* ── Tabs segmentadas ── */}
+      <div style={{
+        display: 'flex', gap: 6, padding: '10px 14px', overflowX: 'auto', flexShrink: 0,
+        borderBottom: `1px solid ${T.border}`, background: T.bg, scrollbarWidth: 'none',
+      }}>
+        {TABS.map((t) => {
+          const active = tab === t.key;
+          return (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              style={{
+                flexShrink: 0, padding: '8px 16px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                fontSize: 12.5, fontWeight: 800, letterSpacing: 0.2,
+                background: active ? `linear-gradient(135deg, ${T.pink} 0%, ${T.purple} 100%)` : T.cardHi,
+                color: active ? '#fff' : T.sub,
+                boxShadow: active ? `0 4px 18px rgba(236,72,153,0.35)` : 'none',
+                transition: 'all .2s',
               }}
             >
-              {isActive && (
-                <motion.div
-                  layoutId="activeFilter"
-                  style={{
-                    position: 'absolute',
-                    top: 0, left: 0, right: 0, bottom: 0,
-                    backgroundColor: '#111',
-                    borderRadius: 999,
-                    zIndex: -1
-                  }}
-                  transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                />
-              )}
-              {f.label}
+              {t.label}
             </button>
           );
         })}
-        </div>
-        <button
-          onClick={fetchBusinesses}
-          style={{
-            padding: '6px 12px',
-            borderRadius: 8,
-            border: '1px solid #DDD',
-            background: '#fff',
-            color: '#111',
-            fontSize: 11,
-            fontWeight: 700,
-            cursor: 'pointer',
-            marginLeft: 8,
-            flexShrink: 0,
-          }}
-        >
-          Actualizar
-        </button>
       </div>
 
-      {loading && (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '20px 0' }}>
-          <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }} style={{ width: 24, height: 24, border: '3px solid #EEE', borderTopColor: '#E91E63', borderRadius: '50%' }} />
-        </div>
-      )}
-
-      {!loading && filtered.length === 0 && (
-        <motion.div 
-          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-          style={{ padding: '32px 16px', textAlign: 'center', backgroundColor: '#fff', borderRadius: 16, border: '1px dashed #DDD' }}
-        >
-          <span style={{ fontSize: 32, display: 'block', marginBottom: 8 }}>📭</span>
-          <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#444' }}>Todo en orden</p>
-          <p style={{ margin: '4px 0 0', fontSize: 12, color: '#888' }}>No se encontraron negocios para este filtro.</p>
-        </motion.div>
-      )}
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <AnimatePresence>
-          {filtered.slice(0, 25).map((b) => {
-            const isPending = b.status === 'PENDING' || b.status === 'PENDING_VERIFICATION';
-            const isReview = b.status === 'UNDER_REVIEW';
-            const isApproved = b.status === 'APPROVED';
-            
-            return (
-              <motion.div 
-                key={b.id} 
-                layout
-                initial={{ opacity: 0, y: 15, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
-                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                style={{ 
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 10,
-                  backgroundColor: '#ffffff', 
-                  borderRadius: 18, 
-                  padding: '16px', 
-                  boxShadow: '0 4px 16px rgba(0,0,0,0.04)',
-                  border: '1px solid #EAEAEA',
-                  position: 'relative',
-                  overflow: 'hidden',
-                  boxSizing: 'border-box',
-                }}
-              >
-                {/* Accent line on left */}
-                <div style={{ 
-                  position: 'absolute', 
-                  left: 0, 
-                  top: 0, 
-                  bottom: 0, 
-                  width: 5, 
-                  backgroundColor: isPending ? '#F57C00' : isReview ? '#EAB308' : isApproved ? '#22C55E' : '#EF4444' 
-                }} />
-
-                {/* Header Row */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, paddingLeft: 4 }}>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ margin: 0, fontSize: 16, fontWeight: 900, color: '#111827', lineHeight: 1.25 }}>{b.name || 'Sin nombre'}</p>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: '#4B5563', backgroundColor: '#F3F4F6', padding: '2px 8px', borderRadius: 6 }}>{b.category || 'Comercio'}</span>
-                      {b.address && <span style={{ fontSize: 11, color: '#6B7280' }}>📍 {b.address.split(',')[0]}</span>}
-                    </div>
-                  </div>
-                  
-                  {/* Badge */}
-                  <div style={{ 
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '4px 10px', 
-                    borderRadius: 8, 
-                    fontSize: 10, 
-                    fontWeight: 800, 
-                    letterSpacing: 0.5,
-                    whiteSpace: 'nowrap',
-                    lineHeight: 1.2,
-                    backgroundColor: isPending ? 'rgba(245, 124, 0, 0.1)' : isReview ? 'rgba(234, 179, 8, 0.12)' : isApproved ? 'rgba(34, 197, 94, 0.12)' : 'rgba(239, 68, 68, 0.12)', 
-                    color: isPending ? '#D97706' : isReview ? '#CA8A04' : isApproved ? '#16A34A' : '#DC2626',
-                    border: `1px solid ${isPending ? 'rgba(245, 124, 0, 0.25)' : isReview ? 'rgba(234, 179, 8, 0.25)' : isApproved ? 'rgba(34, 197, 94, 0.25)' : 'rgba(239, 68, 68, 0.25)'}`
-                  }}>
-                    {isReview ? 'EN REVISIÓN' : b.status === 'PENDING_VERIFICATION' ? 'PENDING' : b.status}
-                  </div>
-                </div>
-
-                {/* Applicant Box */}
-                <div style={{ backgroundColor: '#F9FAFB', borderRadius: 12, padding: '10px 12px', paddingLeft: 12, border: '1px solid #F3F4F6', marginLeft: 4 }}>
-                  <p style={{ margin: '0 0 4px', fontSize: 10, fontWeight: 800, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5 }}>Solicitante</p>
-                  {b.owner ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <p style={{ margin: 0, fontSize: 12, color: '#1F2937', fontWeight: 700 }}>
-                        👤 {b.owner.firstName || ''} {b.owner.lastName || ''}
-                      </p>
-                      {(b.owner.phoneNumber || b.owner.username || b.owner.telegramId) && (
-                        <p style={{ margin: 0, fontSize: 11, color: '#6B7280', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                          {b.owner.phoneNumber && <span>📞 {b.owner.phoneNumber}</span>}
-                          {b.owner.telegramId && <span>📱 @{b.owner.username || b.owner.telegramId?.slice(0, 8)}</span>}
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <p style={{ margin: 0, fontSize: 11, color: '#9CA3AF', fontStyle: 'italic' }}>Sin usuario asignado</p>
-                  )}
-                </div>
-
-                {/* Row de Balance & Aprovisionamiento Rápido */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: '#F8FAFC', borderRadius: 12, border: '1px solid #E2E8F0', marginLeft: 4 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 14 }}>🐰</span>
-                    <div>
-                      <p style={{ margin: 0, fontSize: 10, fontWeight: 800, color: '#64748B', textTransform: 'uppercase' }}>Inventario Bunz</p>
-                      <p style={{ margin: 0, fontSize: 13, fontWeight: 900, color: '#0F172A' }}>
-                        {(b.bunzBalance || 0).toLocaleString()} <span style={{ fontSize: 10, color: '#E91E63' }}>BUNZ</span>
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => handleProvisionBunz(b.id, b.name || 'Comercio', 3500)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      padding: '6px 12px',
-                      borderRadius: 10,
-                      background: 'linear-gradient(135deg, #E91E63 0%, #D81B60 100%)',
-                      color: '#FFF',
-                      border: 'none',
-                      fontSize: 11,
-                      fontWeight: 800,
-                      cursor: 'pointer',
-                      boxShadow: '0 2px 8px rgba(233,30,99,0.25)',
-                    }}
-                  >
-                    <span>+3,500 Bunz</span>
-                  </button>
-                </div>
-
-                {/* Action Buttons */}
-                {(isPending || isReview) && (
-                  <div style={{ display: 'flex', gap: 8, paddingLeft: 4, marginTop: 2 }}>
-                    {b.status !== 'UNDER_REVIEW' && (
-                      <button 
-                        onClick={() => handleAction(b.id, 'UNDER_REVIEW')} 
-                        style={{ 
-                          flex: 1, 
-                          backgroundColor: '#FEF9C3', 
-                          color: '#854D0E', 
-                          border: 'none', 
-                          padding: '11px 0', 
-                          borderRadius: 10, 
-                          fontWeight: 800, 
-                          fontSize: 12, 
-                          cursor: 'pointer',
-                          boxShadow: '0 2px 6px rgba(234,179,8,0.12)'
-                        }}
-                      >
-                        Pasar a Revisión
-                      </button>
-                    )}
-                    {b.status !== 'REJECTED' && (
-                      <button 
-                        onClick={() => handleAction(b.id, 'REJECTED')} 
-                        style={{ 
-                          width: 42, 
-                          backgroundColor: '#FEF2F2', 
-                          color: '#DC2626', 
-                          border: 'none', 
-                          borderRadius: 10, 
-                          fontWeight: 800, 
-                          fontSize: 18, 
-                          cursor: 'pointer', 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          justifyContent: 'center' 
-                        }}
-                      >
-                        ×
-                      </button>
-                    )}
-                    {b.status !== 'APPROVED' && (
-                      <button 
-                        onClick={() => handleAction(b.id, 'APPROVED')} 
-                        style={{ 
-                          flex: 1.4, 
-                          backgroundColor: '#111827', 
-                          color: '#FFFFFF', 
-                          border: 'none', 
-                          padding: '11px 0', 
-                          borderRadius: 10, 
-                          fontWeight: 800, 
-                          fontSize: 12, 
-                          cursor: 'pointer', 
-                          boxShadow: '0 4px 12px rgba(0,0,0,0.12)' 
-                        }}
-                      >
-                        Aprobar Negocio
-                      </button>
-                    )}
-                  </div>
-                )}
-              </motion.div>
-            );
-          })}
+      {/* ── Contenido ── */}
+      <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '16px 16px 40px' }}>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={`${tab}-${refreshKey}`}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.18 }}
+          >
+            {tab === 'resumen' && <ResumenTab showToast={showToast} user={user} onGoTab={setTab} pendingCount={pendingCount} setPendingCount={setPendingCount} />}
+            {tab === 'tenants' && <TenantsTab showToast={showToast} user={user} setPendingCount={setPendingCount} />}
+            {tab === 'tesoreria' && <TesoreriaTab showToast={showToast} user={user} />}
+            {tab === 'economia' && <EconomiaTab showToast={showToast} user={user} />}
+            {tab === 'gamificacion' && <GamificacionTab showToast={showToast} user={user} />}
+          </motion.div>
         </AnimatePresence>
       </div>
-
-      {businesses.length > 20 && (
-        <p style={{ fontSize: 11, textAlign: 'center', color: '#AAA', marginTop: 12, fontWeight: 700 }}>
-          Mostrando 20 de {businesses.length} registros
-        </p>
-      )}
     </div>
   );
 }
 
-function RoleMetricsSection() {
-  const [roleTab, setRoleTab] = useState<'AFFILIATE' | 'RABBITTER'>('AFFILIATE');
+// ── Primitivas de UI ──
+function Card({ children, accent }: { children: React.ReactNode; accent?: string }) {
+  return (
+    <div style={{
+      background: T.card, borderRadius: 18, border: `1px solid ${accent ?? T.border}`,
+      padding: 16, marginBottom: 12,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+function SectionTitle({ icon, title, right }: { icon: string; title: string; right?: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+      <h3 style={{ fontSize: 13.5, fontWeight: 900, color: T.text, margin: 0, display: 'flex', alignItems: 'center', gap: 7 }}>
+        <span style={{ fontSize: 14 }}>{icon}</span> {title}
+      </h3>
+      {right}
+    </div>
+  );
+}
+
+function Kpi({ label, value, color, sub, onClick }: { label: string; value: string; color: string; sub?: string; onClick?: () => void }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        background: T.card, borderRadius: 16, border: `1px solid ${T.border}`, padding: 14,
+        cursor: onClick ? 'pointer' : 'default', display: 'flex', flexDirection: 'column', gap: 2,
+      }}
+    >
+      <span style={{ fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.6, color: T.faint }}>{label}</span>
+      <span style={{ fontSize: 19, fontWeight: 900, color, lineHeight: 1.15 }}>{value}</span>
+      {sub && <span style={{ fontSize: 9.5, color: T.faint, fontWeight: 600 }}>{sub}</span>}
+    </div>
+  );
+}
+
+function Btn({ children, onClick, kind = 'ghost', disabled, full }: {
+  children: React.ReactNode; onClick?: () => void; kind?: 'primary' | 'danger' | 'success' | 'ghost'; disabled?: boolean; full?: boolean;
+}) {
+  const styles: Record<string, React.CSSProperties> = {
+    primary: { background: `linear-gradient(135deg, ${T.pink} 0%, ${T.purple} 100%)`, color: '#fff', border: 'none' },
+    danger: { background: `linear-gradient(135deg, ${T.rose} 0%, #E11D48 100%)`, color: '#fff', border: 'none' },
+    success: { background: `linear-gradient(135deg, ${T.green} 0%, #059669 100%)`, color: '#fff', border: 'none' },
+    ghost: { background: T.cardHi, color: T.text, border: `1px solid ${T.borderHi}` },
+  };
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        ...styles[kind], padding: '11px 16px', borderRadius: 13, cursor: disabled ? 'not-allowed' : 'pointer',
+        fontSize: 12, fontWeight: 900, letterSpacing: 0.2, width: full ? '100%' : undefined,
+        opacity: disabled ? 0.45 : 1, transition: 'opacity .15s',
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ═══════════════════ TAB: RESUMEN ═══════════════════
+function ResumenTab({ showToast, user, onGoTab, pendingCount, setPendingCount }: {
+  showToast: (m: string, t?: 'success' | 'error') => void;
+  user: AdminUserLike | null;
+  onGoTab: (t: TabKey) => void;
+  pendingCount: number;
+  setPendingCount: (n: number) => void;
+}) {
+  const [eco, setEco] = useState<EcosystemData | null>(null);
+  const [treasury, setTreasury] = useState<TreasurySummary | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    try {
+      const [ecoRes, treRes] = await Promise.all([
+        fetch('/api/admin/ecosystem-metrics', { headers: await adminHeaders(user), cache: 'no-store' }),
+        fetch('/api/admin/treasury-debt', { headers: await adminHeaders(user), cache: 'no-store' }),
+      ]);
+      const ecoJson = await ecoRes.json();
+      if (ecoJson.success && ecoJson.ecosystem) {
+        setEco(ecoJson.ecosystem);
+        setPendingCount(ecoJson.ecosystem.businesses?.pending ?? 0);
+      }
+      const treJson = await treRes.json();
+      if (treJson.success && treJson.summary) setTreasury(treJson.summary);
+    } catch (err) {
+      console.error('[GodPanel] resumen:', err);
+      showToast('Error cargando resumen', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [user, showToast, setPendingCount]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
+  }, [load]);
+
+  const debt = treasury?.outstandingDebtAbs ?? 0;
+  const circulating = eco?.rabbitters?.circulatingSupply ?? 0;
 
   return (
     <div>
-      <div style={{ display: 'flex', backgroundColor: '#EEE', borderRadius: 10, padding: 3, marginBottom: 12 }}>
-        <button
-          onClick={() => setRoleTab('AFFILIATE')}
-          style={{
-            flex: 1, padding: '8px', borderRadius: 8, border: 'none', fontWeight: 800, fontSize: 12, cursor: 'pointer',
-            backgroundColor: roleTab === 'AFFILIATE' ? '#111' : 'transparent', color: roleTab === 'AFFILIATE' ? '#fff' : '#666'
-          }}
-        >
-          🏬 Afiliados (Comercios)
-        </button>
-        <button
-          onClick={() => setRoleTab('RABBITTER')}
-          style={{
-            flex: 1, padding: '8px', borderRadius: 8, border: 'none', fontWeight: 800, fontSize: 12, cursor: 'pointer',
-            backgroundColor: roleTab === 'RABBITTER' ? '#E91E63' : 'transparent', color: roleTab === 'RABBITTER' ? '#fff' : '#666'
-          }}
-        >
-          🐰 Rabbitters (Usuarios)
-        </button>
+      {/* KPIs principales */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+        <Kpi
+          label="Tesorería en Negativo" value={debt > 0 ? `-${fmt(debt)}` : '0 ✓'}
+          color={debt > 0 ? T.rose : T.green} sub={debt > 0 ? 'toca para liquidar' : 'al corriente'}
+          onClick={() => onGoTab('tesoreria')}
+        />
+        <Kpi label="Bunz en Circulación" value={fmt(circulating)} color={T.cyan} sub={`${fmt(eco?.rabbitters?.total)} Rabbitters`} />
+        <Kpi
+          label="Negocios Activos" value={`${eco?.businesses?.active ?? 0}/${eco?.businesses?.total ?? 0}`}
+          color={T.green} sub={`crédito ${fmt(eco?.businesses?.totalCreditUsed)}/${fmt(eco?.businesses?.totalCreditLimit)}`}
+        />
+        <Kpi
+          label="Pendientes Aprobación" value={String(pendingCount)}
+          color={pendingCount > 0 ? T.amber : T.green} sub={pendingCount > 0 ? 'toca para revisar' : 'todo al día'}
+          onClick={() => pendingCount > 0 && onGoTab('tenants')}
+        />
       </div>
 
-      {roleTab === 'AFFILIATE' ? (
+      {/* Acciones rápidas */}
+      <Card>
+        <SectionTitle icon="⚡" title="Acciones rápidas" />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <div style={{ flex: 1, backgroundColor: '#fff', padding: 10, borderRadius: 8, border: '1px solid #EEE', textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: 18, fontWeight: 900, color: '#111' }}>11</p>
-              <p style={{ margin: 0, fontSize: 10, color: '#888', fontWeight: 700 }}>AFILIADOS TOTALES</p>
-            </div>
-            <div style={{ flex: 1, backgroundColor: '#fff', padding: 10, borderRadius: 8, border: '1px solid #EEE', textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: 18, fontWeight: 900, color: '#22C55E' }}>98%</p>
-              <p style={{ margin: 0, fontSize: 10, color: '#888', fontWeight: 700 }}>ENTREGA DRIP EMAIL</p>
-            </div>
-          </div>
-          <div style={{ backgroundColor: '#fff', padding: 10, borderRadius: 8, border: '1px solid #EEE', fontSize: 12 }}>
-            <p style={{ margin: '0 0 6px 0', fontWeight: 800, color: '#111' }}>📬 Estado de Campaña Drip (Negocios)</p>
-            <p style={{ margin: '0 0 4px 0', color: '#666' }}>• Día 0 (Bienvenida & Magic Link): <strong style={{ color: '#22C55E' }}>Activo</strong></p>
-            <p style={{ margin: '0 0 4px 0', color: '#666' }}>• Día 2 (Bunz vs. Descuento): <strong style={{ color: '#22C55E' }}>Activo</strong></p>
-            <p style={{ margin: '0 0 4px 0', color: '#666' }}>• Día 5 (Admin Bidireccional vs POS): <strong style={{ color: '#22C55E' }}>Activo</strong></p>
-            <p style={{ margin: 0, color: '#666' }}>• Día 14 (Analíticas & Retención): <strong style={{ color: '#22C55E' }}>Activo</strong></p>
-          </div>
+          <Btn kind={debt > 0 ? 'danger' : 'ghost'} full onClick={() => onGoTab('tesoreria')} disabled={debt <= 0}>
+            {debt > 0 ? `⚡ Poner Tesorería al Corriente (${fmt(debt)} Bunz)` : '✅ Tesorería al corriente'}
+          </Btn>
+          <Btn kind="ghost" full onClick={() => onGoTab('tenants')}>
+            🏪 Revisar Tenants {pendingCount > 0 ? `(${pendingCount} pendientes)` : ''}
+          </Btn>
+          <Btn kind="ghost" full onClick={() => onGoTab('economia')}>
+            ⚖️ Salud del Ledger & Escalado
+          </Btn>
         </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <div style={{ flex: 1, backgroundColor: '#fff', padding: 10, borderRadius: 8, border: '1px solid #EEE', textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: 18, fontWeight: 900, color: '#E91E63' }}>5</p>
-              <p style={{ margin: 0, fontSize: 10, color: '#888', fontWeight: 700 }}>RABBITTERS ACTIVOS</p>
+      </Card>
+
+      {/* Feed económico en vivo */}
+      <Card>
+        <SectionTitle icon="📡" title="Movimientos recientes" />
+        {loading && <p style={{ fontSize: 12, color: T.faint }}>Cargando…</p>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {(eco?.recentLedger ?? []).slice(0, 6).map((l) => (
+            <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: `1px solid ${T.border}` }}>
+              <span style={{ fontSize: 10.5, color: T.sub, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '62%' }}>
+                {l.type === 'EARN' ? '🎁' : l.type === 'SPEND' ? '🛒' : '🔄'} {String(l.payer).slice(0, 10)} → {String(l.payee).slice(0, 10)}
+              </span>
+              <span style={{ fontSize: 12, fontWeight: 900, color: l.type === 'EARN' ? T.green : l.type === 'SPEND' ? T.rose : T.cyan }}>
+                {l.amount > 0 ? '+' : ''}{fmt(l.amount)}
+              </span>
             </div>
-            <div style={{ flex: 1, backgroundColor: '#fff', padding: 10, borderRadius: 8, border: '1px solid #EEE', textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: 18, fontWeight: 900, color: '#8B5CF6' }}>2.4x</p>
-              <p style={{ margin: 0, fontSize: 10, color: '#888', fontWeight: 700 }}>REPETICIÓN CONSUMO</p>
-            </div>
-          </div>
-          <div style={{ backgroundColor: '#fff', padding: 10, borderRadius: 8, border: '1px solid #EEE', fontSize: 12 }}>
-            <p style={{ margin: '0 0 6px 0', fontWeight: 800, color: '#111' }}>🎯 Misiones & Gamificación Rabbitters</p>
-            <p style={{ margin: '0 0 4px 0', color: '#666' }}>• Nivel Diamante: <strong>1 usuario</strong></p>
-            <p style={{ margin: '0 0 4px 0', color: '#666' }}>• Nivel Rubí / Oro: <strong>3 usuarios</strong></p>
-            <p style={{ margin: 0, color: '#666' }}>• Referidos Activos: <strong>4 invitaciones</strong></p>
-          </div>
+          ))}
+          {!loading && (eco?.recentLedger?.length ?? 0) === 0 && <p style={{ fontSize: 11, color: T.faint }}>Sin movimientos aún</p>}
         </div>
+      </Card>
+    </div>
+  );
+}
+
+// ═══════════════════ TAB: TENANTS ═══════════════════
+function TenantsTab({ showToast, setPendingCount }: {
+  showToast: (m: string, t?: 'success' | 'error') => void;
+  user: AdminUserLike | null;
+  setPendingCount: (n: number) => void;
+}) {
+  const { user } = useAuth();
+  const [businesses, setBusinesses] = useState<AdminBusinessItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('ALL');
+  const [acting, setActing] = useState<string | null>(null);
+  const [provisioning, setProvisioning] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/admin/business?t=${Date.now()}`, { headers: await adminHeaders(user), cache: 'no-store' });
+      const data = await res.json();
+      if (data.success) {
+        setBusinesses(data.businesses || []);
+        setPendingCount((data.businesses || []).filter((b: AdminBusinessItem) => b.status === 'PENDING' || b.status === 'PENDING_VERIFICATION').length);
+      }
+    } catch (err) { console.error(err); } finally { setLoading(false); }
+  }, [user, setPendingCount]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
+  }, [load]);
+
+  const handleAction = async (businessId: string, status: string) => {
+    setActing(businessId);
+    try {
+      const res = await fetch('/api/admin/business', {
+        method: 'POST', headers: await adminHeaders(user, true),
+        body: JSON.stringify({ businessId, status }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBusinesses((prev) => prev.map((b) => (b.id === businessId ? { ...b, status } : b)));
+        showToast(`Negocio ${status === 'APPROVED' ? 'aprobado ✓' : status === 'REJECTED' ? 'rechazado' : 'en revisión'}`, 'success');
+      } else showToast('Error: ' + (data.error || 'desconocido'), 'error');
+    } catch { showToast('Error de conexión', 'error'); } finally { setActing(null); }
+  };
+
+  const handleProvision = async (businessId: string, businessName: string, amount = 3500) => {
+    setProvisioning(businessId);
+    try {
+      const res = await fetch('/api/admin/business', {
+        method: 'POST', headers: await adminHeaders(user, true),
+        body: JSON.stringify({ businessId, action: 'PROVISION_BUNZ', amount }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBusinesses((prev) => prev.map((b) => (b.id === businessId ? { ...b, bunzBalance: data.bunzBalance } : b)));
+        showToast(`🎉 +${fmt(amount)} Bunz → ${businessName}`, 'success');
+      } else showToast('Error: ' + (data.error || 'No se pudo aprovisionar'), 'error');
+    } catch { showToast('Error de conexión al aprovisionar', 'error'); } finally { setProvisioning(null); }
+  };
+
+  const filtered = businesses.filter((b) =>
+    filter === 'ALL' || b.status === filter || (filter === 'PENDING' && b.status === 'PENDING_VERIFICATION')
+  );
+
+  const statusChip = (s: string) => {
+    if (s === 'APPROVED' || s === 'ACTIVE') return { bg: 'rgba(16,185,129,0.14)', c: T.green, t: 'ACTIVO' };
+    if (s === 'PENDING' || s === 'PENDING_VERIFICATION') return { bg: 'rgba(245,158,11,0.14)', c: T.amber, t: 'PENDIENTE' };
+    if (s === 'REJECTED') return { bg: 'rgba(244,63,94,0.14)', c: T.rose, t: 'RECHAZADO' };
+    return { bg: 'rgba(142,142,160,0.14)', c: T.sub, t: s.toUpperCase() };
+  };
+
+  return (
+    <div>
+      {/* Filtros */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12, overflowX: 'auto', scrollbarWidth: 'none' }}>
+        {(['ALL', 'PENDING', 'APPROVED', 'REJECTED'] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            style={{
+              flexShrink: 0, padding: '7px 14px', borderRadius: 999, cursor: 'pointer', fontSize: 11, fontWeight: 800,
+              background: filter === f ? `linear-gradient(135deg, ${T.pink}, ${T.purple})` : T.cardHi,
+              color: filter === f ? '#fff' : T.sub, border: 'none',
+            }}
+          >
+            {f === 'ALL' ? 'Todos' : f === 'PENDING' ? 'Pendientes' : f === 'APPROVED' ? 'Activos' : 'Rechazados'}
+          </button>
+        ))}
+      </div>
+
+      {loading && <p style={{ fontSize: 12, color: T.faint, textAlign: 'center', padding: 20 }}>Cargando tenants…</p>}
+
+      {filtered.map((b) => {
+        const chip = statusChip(b.status);
+        const isPending = b.status === 'PENDING' || b.status === 'PENDING_VERIFICATION';
+        return (
+          <Card key={b.id}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 14.5, fontWeight: 900, color: T.text }}>{b.name}</span>
+                  <span style={{ fontSize: 8.5, fontWeight: 900, padding: '2px 8px', borderRadius: 99, background: chip.bg, color: chip.c, letterSpacing: 0.5 }}>{chip.t}</span>
+                </div>
+                <p style={{ fontSize: 10.5, color: T.faint, margin: '3px 0 0', fontWeight: 600 }}>
+                  {b.category} · {b.owner?.username ? `@${b.owner.username}` : b.owner?.firstName || 'sin owner'}
+                  {b.rewardPercentage ? ` · ${b.rewardPercentage}% Bunz` : ''}
+                </p>
+                <p style={{ fontSize: 10, color: T.faint, margin: '3px 0 0' }}>
+                  Saldo: {fmtBunz(b.bunzBalance)} · Crédito {fmt(b.creditUsed)}/{fmt(b.creditLimit)}
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              {isPending && (
+                <>
+                  <Btn kind="success" onClick={() => handleAction(b.id, 'APPROVED')} disabled={acting === b.id}>✓ Aprobar</Btn>
+                  <Btn kind="danger" onClick={() => handleAction(b.id, 'REJECTED')} disabled={acting === b.id}>✕ Rechazar</Btn>
+                </>
+              )}
+              {!isPending && (
+                <Btn kind="primary" onClick={() => handleProvision(b.id, b.name)} disabled={provisioning === b.id}>
+                  {provisioning === b.id ? 'Aprovisionando…' : '⚡ Aprovisionar +3,500 Bunz'}
+                </Btn>
+              )}
+            </div>
+          </Card>
+        );
+      })}
+
+      {!loading && filtered.length === 0 && (
+        <p style={{ fontSize: 12, color: T.faint, textAlign: 'center', padding: 30 }}>Sin negocios en este filtro</p>
       )}
     </div>
   );
 }
 
-interface ReconcileReportItem {
-  userId: string;
-  username: string;
-  cachedBalance: number;
-  ledgerEarned: number;
-  ledgerSpent: number;
-  ledgerNet: number;
-  discrepancy: number;
-  isBalanced: boolean;
-}
-
-interface ReconcileSummaryData {
-  totalUsersChecked: number;
-  balancedUsers: number;
-  discrepantUsers: number;
-  totalCachedCirculation: number;
-  totalLedgerCirculation: number;
-  systemDifference: number;
-  status: 'HEALTHY' | 'DEVIATION_DETECTED';
-  details: ReconcileReportItem[];
-}
-
-function LedgerReconciliationSection() {
+// ═══════════════════ TAB: TESORERÍA ═══════════════════
+function TesoreriaTab({ showToast }: { showToast: (m: string, t?: 'success' | 'error') => void; user: AdminUserLike | null }) {
   const { user } = useAuth();
-  const { showToast } = useToast();
+  const [summary, setSummary] = useState<TreasurySummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<ReconcileSummaryData | null>(null);
-  const [syncingUser, setSyncingUser] = useState<string | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [settleMode, setSettleMode] = useState<'from_treasury_fees' | 'direct_injection'>('from_treasury_fees');
+  const [customAmount, setCustomAmount] = useState('');
+  const [settling, setSettling] = useState(false);
+  const [capDraft, setCapDraft] = useState<{ default: string; overrides: Record<string, string> }>({ default: '200', overrides: {} });
+  const [savingCap, setSavingCap] = useState(false);
 
-  const fetchReconciliation = async () => {
-    setLoading(true);
+  const load = useCallback(async () => {
     try {
-      const headers = await adminHeaders(user);
-      const res = await fetch('/api/admin/reconcile', { headers });
-      const json = await res.json();
-      if (json.success && json.reconciliation) {
-        setData(json.reconciliation);
+      const res = await fetch('/api/admin/treasury-debt', { headers: await adminHeaders(user), cache: 'no-store' });
+      const data = await res.json();
+      if (data.success && data.summary) {
+        const s: TreasurySummary = data.summary;
+        setSummary(s);
+        setCustomAmount(String(s.outstandingDebtAbs || 0));
+        setCapDraft({
+          default: String(s.capConfig?.default ?? s.monthlyCapDefault ?? 200),
+          overrides: Object.fromEntries((s.perBusinessMonthlyUsage || []).map((b) => [b.businessId, String(s.capConfig?.overrides?.[b.businessId] ?? '')])),
+        });
       }
-    } catch {
-      showToast('Error al consultar reconciliación del ledger', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    let active = true;
-    adminHeaders(user)
-      .then((headers) => fetch('/api/admin/reconcile', { headers }))
-      .then((res) => res.json())
-      .then((json) => {
-        if (active && json.success && json.reconciliation) {
-          setData(json.reconciliation);
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
+    } catch (err) { console.error(err); } finally { setLoading(false); }
   }, [user]);
 
-  const handleSelfHeal = async (userId: string) => {
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
+  }, [load]);
+
+  const handleSettle = async () => {
+    if (!summary || summary.outstandingDebtAbs <= 0) return;
+    setSettling(true);
+    try {
+      const res = await fetch('/api/admin/treasury-debt', {
+        method: 'POST', headers: await adminHeaders(user, true),
+        body: JSON.stringify({ amountToSettle: Number(customAmount) || summary.outstandingDebtAbs, mode: settleMode }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`✅ Tesorería al corriente por ${fmt(data.settledAmount)} Bunz`, 'success');
+        setSummary(data.summary);
+        setShowConfirm(false);
+      } else showToast(data.error || 'No se pudo liquidar', 'error');
+    } catch { showToast('Error de red', 'error'); } finally { setSettling(false); }
+  };
+
+  const handleSaveCap = async () => {
+    setSavingCap(true);
+    try {
+      const overrides: Record<string, number> = {};
+      for (const [bizId, raw] of Object.entries(capDraft.overrides)) {
+        const n = Math.round(Number(raw));
+        if (raw !== '' && Number.isFinite(n) && n > 0) overrides[bizId] = n;
+      }
+      const res = await fetch('/api/admin/treasury-debt', {
+        method: 'POST', headers: await adminHeaders(user, true),
+        body: JSON.stringify({ action: 'update_cap_config', capConfig: { default: Math.round(Number(capDraft.default) || 0), overrides } }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`🎯 Tope mensual: ${fmt(data.capConfig?.default ?? 200)} Bunz/mes`, 'success');
+        setSummary(data.summary);
+      } else showToast(data.error || 'No se pudo guardar', 'error');
+    } catch { showToast('Error de red', 'error'); } finally { setSavingCap(false); }
+  };
+
+  if (loading && !summary) return <p style={{ fontSize: 12, color: T.faint, textAlign: 'center', padding: 20 }}>Cargando tesorería…</p>;
+  if (!summary) return <p style={{ fontSize: 12, color: T.rose, textAlign: 'center', padding: 20 }}>No se pudo cargar el estado</p>;
+
+  const hasDebt = summary.outstandingDebtAbs > 0;
+
+  return (
+    <div>
+      {/* Saldos */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+        <Kpi label="En Negativo (Split)" value={hasDebt ? `-${fmt(summary.netNegativeBalance)}` : '0 ✓'} color={hasDebt ? T.rose : T.green} sub={`${summary.welcomeClaimsCount} bonos co-financiados`} />
+        <Kpi label="Disponible (Fees)" value={`+${fmt(summary.availableSurplusForSettlement)}`} color={T.cyan} sub={`recaudado ${fmt(summary.totalFeeIncome)}`} />
+      </div>
+
+      {/* Liquidación */}
+      <Card accent={hasDebt ? 'rgba(244,63,94,0.4)' : 'rgba(16,185,129,0.35)'}>
+        <SectionTitle icon="🏦" title="Liquidar Deuda de Bienvenida" />
+        {hasDebt ? (
+          <>
+            <Btn kind="danger" full onClick={() => { setCustomAmount(String(summary.outstandingDebtAbs)); setSettleMode(summary.availableSurplusForSettlement >= summary.outstandingDebtAbs ? 'from_treasury_fees' : 'direct_injection'); setShowConfirm(true); }}>
+              ⚡ Poner al Corriente ({fmt(summary.outstandingDebtAbs)} Bunz)
+            </Btn>
+            <p style={{ fontSize: 9.5, color: T.faint, margin: '8px 0 0', fontWeight: 600 }}>
+              Con comisiones acumuladas o respaldo directo de reserva. Queda en audit log.
+            </p>
+          </>
+        ) : (
+          <p style={{ fontSize: 12, color: T.green, fontWeight: 800 }}>✅ Tesorería 100% al corriente — sin deuda pendiente</p>
+        )}
+      </Card>
+
+      {/* Tope mensual por afiliado */}
+      <Card>
+        <SectionTitle icon="🎯" title="Tope Mensual por Afiliado" />
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+          <input
+            type="number" min={0} value={capDraft.default}
+            onChange={(e) => setCapDraft({ ...capDraft, default: e.target.value })}
+            style={{ width: 92, padding: '9px 10px', borderRadius: 11, border: `1px solid ${T.borderHi}`, background: 'rgba(0,0,0,0.4)', color: T.text, fontSize: 14, fontWeight: 900, textAlign: 'center' }}
+          />
+          <span style={{ fontSize: 10, color: T.faint, fontWeight: 700, flex: 1 }}>Bunz/mes fondeados por cada local</span>
+          <Btn onClick={handleSaveCap} disabled={savingCap}>{savingCap ? '…' : '💾'}</Btn>
+        </div>
+        {(summary.perBusinessMonthlyUsage || []).map((b) => {
+          const exhausted = b.used >= b.cap;
+          return (
+            <div key={b.businessId} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 11, background: 'rgba(255,255,255,0.03)', border: `1px solid ${T.border}`, marginBottom: 6 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 11, fontWeight: 900, color: T.text, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.businessName}</p>
+                <p style={{ fontSize: 9.5, color: exhausted ? T.rose : T.faint, margin: '1px 0 0', fontWeight: 700 }}>
+                  Mes: {b.used}/{b.cap}{exhausted ? ' · tope → Tesorería subsidia' : ''}
+                </p>
+              </div>
+              <input
+                type="number" placeholder={String(b.cap)}
+                value={capDraft.overrides[b.businessId] ?? ''}
+                onChange={(e) => setCapDraft({ ...capDraft, overrides: { ...capDraft.overrides, [b.businessId]: e.target.value } })}
+                style={{ width: 66, padding: '6px 8px', borderRadius: 9, border: `1px solid ${T.borderHi}`, background: T.cardHi, color: T.text, fontSize: 12, fontWeight: 800, textAlign: 'center' }}
+              />
+            </div>
+          );
+        })}
+      </Card>
+
+      {/* Modal confirmación */}
+      <AnimatePresence>
+        {showConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+            onClick={() => setShowConfirm(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.94, y: 8 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.96 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{ background: T.card, borderRadius: 20, border: `1px solid ${T.borderHi}`, padding: 20, width: '100%', maxWidth: 360 }}
+            >
+              <h3 style={{ fontSize: 15, fontWeight: 900, color: T.text, margin: '0 0 10px' }}>🛡️ Confirmar Liquidación</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+                {[
+                  { k: 'from_treasury_fees' as const, t: 'Con comisiones en Tesorería', ok: summary.availableSurplusForSettlement > 0 },
+                  { k: 'direct_injection' as const, t: 'Respaldo directo de reserva', ok: true },
+                ].map((opt) => (
+                  <button
+                    key={opt.k}
+                    onClick={() => setSettleMode(opt.k)}
+                    disabled={!opt.ok}
+                    style={{
+                      textAlign: 'left', padding: '11px 14px', borderRadius: 12, cursor: opt.ok ? 'pointer' : 'not-allowed',
+                      border: settleMode === opt.k ? `2px solid ${T.pink}` : `1px solid ${T.borderHi}`,
+                      background: settleMode === opt.k ? 'rgba(236,72,153,0.12)' : T.cardHi,
+                      color: opt.ok ? T.text : T.faint, fontSize: 12, fontWeight: 800, opacity: opt.ok ? 1 : 0.55,
+                    }}
+                  >
+                    {opt.t}{!opt.ok && ' (sin saldo)'}
+                  </button>
+                ))}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                  <span style={{ fontSize: 11, color: T.sub, fontWeight: 700 }}>Monto:</span>
+                  <input
+                    type="number" value={customAmount}
+                    onChange={(e) => setCustomAmount(e.target.value)}
+                    style={{ flex: 1, padding: '9px 12px', borderRadius: 11, border: `1px solid ${T.borderHi}`, background: 'rgba(0,0,0,0.4)', color: T.text, fontSize: 14, fontWeight: 900 }}
+                  />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Btn kind="ghost" full onClick={() => setShowConfirm(false)}>Cancelar</Btn>
+                <Btn kind="danger" full onClick={handleSettle} disabled={settling}>{settling ? 'Liquidando…' : '✓ Confirmar'}</Btn>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ═══════════════════ TAB: ECONOMÍA ═══════════════════
+function EconomiaTab({ showToast }: { showToast: (m: string, t?: 'success' | 'error') => void; user: AdminUserLike | null }) {
+  const { user } = useAuth();
+  const [recon, setRecon] = useState<Reconciliation | null>(null);
+  const [scaling, setScaling] = useState<ScalingMetric[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [syncingUser, setSyncingUser] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const [recRes, scaRes] = await Promise.all([
+        fetch('/api/admin/reconcile', { headers: await adminHeaders(user), cache: 'no-store' }),
+        fetch('/api/admin/scaling', { headers: await adminHeaders(user), cache: 'no-store' }),
+      ]);
+      const recJson = await recRes.json();
+      if (recJson?.status) setRecon(recJson);
+      const scaJson = await scaRes.json();
+      if (scaJson?.metrics) setScaling(scaJson.metrics);
+    } catch (err) { console.error(err); } finally { setLoading(false); }
+  }, [user]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
+  }, [load]);
+
+  const selfHeal = async (userId: string) => {
     setSyncingUser(userId);
     try {
-      const headers = await adminHeaders(user, true);
       const res = await fetch('/api/admin/reconcile', {
-        method: 'POST',
-        headers,
+        method: 'POST', headers: await adminHeaders(user, true),
         body: JSON.stringify({ userId, syncDirection: 'LEDGER_TO_CACHE' }),
       });
       const json = await res.json();
-      if (json.success) {
-        showToast('Balance alineado con el Ledger autoritativo', 'success');
-        fetchReconciliation();
-      } else {
-        showToast(json.error || 'Error al reconciliar', 'error');
-      }
-    } catch {
-      showToast('Error de conexión', 'error');
-    } finally {
-      setSyncingUser(null);
-    }
+      if (json.success) { showToast('Balance alineado con el Ledger ✓', 'success'); void load(); }
+      else showToast(json.error || 'Error al reconciliar', 'error');
+    } catch { showToast('Error de conexión', 'error'); } finally { setSyncingUser(null); }
   };
 
-  if (loading) {
-    return <p style={{ fontSize: 12, color: '#888' }}>Auditando asientos del ledger...</p>;
-  }
-
-  const isHealthy = data?.status === 'HEALTHY';
+  const healthy = recon?.status === 'HEALTHY';
+  const discrepant = (recon?.details ?? []).filter((d) => !d.isBalanced);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {/* Overview Cards */}
-      <div style={{ display: 'flex', gap: 8 }}>
-        <div style={{ flex: 1, backgroundColor: '#fff', padding: 10, borderRadius: 8, border: '1px solid #EEE', textAlign: 'center' }}>
-          <p style={{ margin: 0, fontSize: 16, fontWeight: 900, color: isHealthy ? '#22C55E' : '#EF4444' }}>
-            {isHealthy ? '✅ 100% SANO' : '⚠️ DESVIACIÓN'}
-          </p>
-          <p style={{ margin: 0, fontSize: 10, color: '#888', fontWeight: 700 }}>ESTADO DEL LEDGER</p>
+    <div>
+      {/* Salud del Ledger */}
+      <Card accent={healthy ? 'rgba(16,185,129,0.4)' : 'rgba(244,63,94,0.4)'}>
+        <SectionTitle
+          icon="⚖️" title="Salud del Ledger"
+          right={<span style={{ fontSize: 10, fontWeight: 900, color: healthy ? T.green : T.rose, padding: '3px 10px', borderRadius: 99, background: healthy ? 'rgba(16,185,129,0.12)' : 'rgba(244,63,94,0.12)' }}>{healthy ? 'SANO' : 'DESVIACIÓN'}</span>}
+        />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <Kpi label="Auditados" value={String(recon?.totalUsersChecked ?? '—')} color={T.text} />
+          <Kpi label="Discrepantes" value={String(recon?.discrepantUsers ?? '—')} color={Number(recon?.discrepantUsers) > 0 ? T.rose : T.green} />
+          <Kpi label="Circulante (cache)" value={fmt(recon?.totalCachedCirculation)} color={T.cyan} />
+          <Kpi label="Circulante (ledger)" value={fmt(recon?.totalLedgerCirculation)} color={T.cyan} />
         </div>
+      </Card>
 
-        <div style={{ flex: 1, backgroundColor: '#fff', padding: 10, borderRadius: 8, border: '1px solid #EEE', textAlign: 'center' }}>
-          <p style={{ margin: 0, fontSize: 16, fontWeight: 900, color: '#111' }}>
-            {(data?.totalLedgerCirculation || 0).toLocaleString()}
-          </p>
-          <p style={{ margin: 0, fontSize: 10, color: '#888', fontWeight: 700 }}>CIRCULACIÓN TOTAL BUNZ</p>
-        </div>
-      </div>
-
-      <div style={{ backgroundColor: '#fff', padding: 10, borderRadius: 8, border: '1px solid #EEE', fontSize: 12 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-          <span style={{ fontWeight: 800, color: '#111' }}>Usuarios auditados: {data?.totalUsersChecked || 0}</span>
-          <button
-            onClick={fetchReconciliation}
-            style={{ background: '#111', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}
-          >
-            Re-auditar
-          </button>
-        </div>
-        <p style={{ margin: '0 0 4px', color: '#666' }}>
-          • Balances consistentes: <strong style={{ color: '#22C55E' }}>{data?.balancedUsers || 0}</strong>
-        </p>
-        <p style={{ margin: '0 0 6px', color: '#666' }}>
-          • Cuentas con discrepancia: <strong style={{ color: (data?.discrepantUsers || 0) > 0 ? '#EF4444' : '#22C55E' }}>{data?.discrepantUsers || 0}</strong>
-        </p>
-
-        {/* Details list for discrepant users or summary */}
-        {data?.details && data.details.length > 0 && (
-          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 180, overflowY: 'auto' }}>
-            {data.details.map((rep) => (
-              <div
-                key={rep.userId}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '6px 8px',
-                  borderRadius: 6,
-                  backgroundColor: rep.isBalanced ? '#F9F9F9' : '#FEF2F2',
-                  border: `1px solid ${rep.isBalanced ? '#EEE' : '#FECACA'}`,
-                }}
-              >
-                <div style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
-                  <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    @{rep.username}
-                  </p>
-                  <p style={{ margin: 0, fontSize: 10, color: '#666' }}>
-                    Caché: {rep.cachedBalance} | Ledger: {rep.ledgerNet}
-                  </p>
+      {/* Discrepancias con acción */}
+      {discrepant.length > 0 && (
+        <Card>
+          <SectionTitle icon="🩹" title={`Corregir (${discrepancías(discrepant.length)})`} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {(showAll ? discrepant : discrepant.slice(0, 5)).map((d) => (
+              <div key={d.userId} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 11px', borderRadius: 11, background: 'rgba(244,63,94,0.08)', border: '1px solid rgba(244,63,94,0.25)' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 11, fontWeight: 900, color: T.text, margin: 0 }}>{d.username}</p>
+                  <p style={{ fontSize: 9.5, color: T.faint, margin: 0 }}>cache {d.cachedBalance} vs ledger {d.ledgerNet}</p>
                 </div>
-
-                {!rep.isBalanced ? (
-                  <button
-                    disabled={syncingUser === rep.userId}
-                    onClick={() => handleSelfHeal(rep.userId)}
-                    style={{
-                      background: '#EF4444',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: 4,
-                      padding: '4px 8px',
-                      fontSize: 10,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      flexShrink: 0,
-                    }}
-                  >
-                    {syncingUser === rep.userId ? 'Alineando...' : 'Auto-sanar'}
-                  </button>
-                ) : (
-                  <span style={{ fontSize: 11, color: '#22C55E', fontWeight: 800 }}>✓ OK</span>
-                )}
+                <Btn onClick={() => selfHeal(d.userId)} disabled={syncingUser === d.userId}>
+                  {syncingUser === d.userId ? '…' : 'Alinear'}
+                </Btn>
               </div>
             ))}
+            {discrepant.length > 5 && (
+              <button onClick={() => setShowAll(!showAll)} style={{ background: 'none', border: 'none', color: T.pink, fontSize: 11, fontWeight: 800, cursor: 'pointer', padding: 6 }}>
+                {showAll ? 'Ver menos' : `Ver todas (${discrepant.length})`}
+              </button>
+            )}
           </div>
-        )}
-      </div>
+        </Card>
+      )}
+
+      {/* Escalado */}
+      <Card>
+        <SectionTitle icon="🚀" title="Estado de Escalado" />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {(scaling ?? []).map((m) => (
+            <div key={m.key}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                <span style={{ fontSize: 11, fontWeight: 800, color: T.text }}>{m.icon} {m.label}</span>
+                <span style={{ fontSize: 11, fontWeight: 900, color: m.pct >= 80 ? T.rose : m.pct >= 50 ? T.amber : T.green }}>
+                  {fmt(m.value)}/{fmt(m.max)} ({m.pct.toFixed(0)}%)
+                </span>
+              </div>
+              <div style={{ height: 6, borderRadius: 99, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+                <div style={{ height: '100%', borderRadius: 99, width: `${m.pct}%`, background: m.pct >= 80 ? T.rose : m.pct >= 50 ? T.amber : T.green, transition: 'width .3s' }} />
+              </div>
+            </div>
+          ))}
+          {scaling === null && !loading && <p style={{ fontSize: 11, color: T.faint }}>Sin datos de escalado</p>}
+        </div>
+      </Card>
+
+      {loading && <p style={{ fontSize: 12, color: T.faint, textAlign: 'center', padding: 14 }}>Auditando economía…</p>}
     </div>
   );
 }
 
-interface EcosystemData {
-  businesses?: {
-    total: number;
-    active: number;
-    pending: number;
-    totalCreditLimit: number;
-    totalCreditUsed: number;
-  };
-  rabbitters?: {
-    total: number;
-    totalBunzEarned: number;
-    totalBunzSpent: number;
-    circulatingSupply: number;
-  };
-  ledger?: {
-    rewardsGiven: number;
-    rewardsCount: number;
-    redemptionsSpent: number;
-    redemptionsCount: number;
-    transfersP2P: number;
-    transfersCount: number;
-  };
-  qrTelemetry?: {
-    campaignRef: string;
-    totalScans: number;
-    iosScans: number;
-    androidScans: number;
-  }[];
-  businessesBreakdown?: {
-    id: string;
-    name: string;
-    category: string;
-    status: string;
-    creditLimit: number;
-    creditUsed: number;
-  }[];
-}
+function discrepancías(n: number) { return `${n} discrepancia${n === 1 ? '' : 's'}`; }
 
-function EcosystemMetricsSection() {
+// ═══════════════════ TAB: GAMIFICACIÓN ═══════════════════
+function GamificacionTab({ showToast }: { showToast: (m: string, t?: 'success' | 'error') => void; user: AdminUserLike | null }) {
   const { user } = useAuth();
-  const [data, setData] = useState<EcosystemData | null>(null);
+  const [tricks, setTricks] = useState<TrickItem[]>([]);
+  const [levels, setLevels] = useState<LevelItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savingLevel, setSavingLevel] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, { mult: string; hops: string }>>({});
+  const [form, setForm] = useState({ title: '', description: '', rewardHops: '100', rewardBunz: '50', conditionType: 'TOTAL_VISITS', conditionTarget: '1' });
 
-  const fetchMetrics = useCallback(async () => {
+  const load = useCallback(async () => {
     try {
-      const res = await fetch('/api/admin/ecosystem-metrics', {
-        headers: await adminHeaders(user),
-      });
-      const json = await res.json();
-      if (json.success && json.ecosystem) {
-        setData(json.ecosystem);
+      const res = await fetch('/api/admin/gamification', { headers: await adminHeaders(user), cache: 'no-store' });
+      const data = await res.json();
+      if (data?.levels && data?.tricks) {
+        setLevels(data.levels);
+        setTricks(data.tricks);
+        setDrafts(Object.fromEntries((data.levels as LevelItem[]).map((l) => [l.id, { mult: String(l.bunzMultiplier ?? 1), hops: String(l.requiredHops ?? 0) }])));
       }
-    } catch (err) {
-      console.error('Error fetching ecosystem metrics:', err);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { console.error(err); } finally { setLoading(false); }
   }, [user]);
 
   useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const res = await fetch('/api/admin/ecosystem-metrics', {
-          headers: await adminHeaders(user),
-        });
-        const json = await res.json();
-        if (active && json.success && json.ecosystem) {
-          setData(json.ecosystem);
-        }
-      } catch (err) {
-        console.error('Error fetching ecosystem metrics:', err);
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
+  }, [load]);
 
-    return () => {
-      active = false;
-    };
-  }, [user]);
+  const createTrick = async () => {
+    if (!form.title.trim()) { showToast('Título requerido', 'error'); return; }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/gamification', {
+        method: 'POST', headers: await adminHeaders(user, true),
+        body: JSON.stringify({ action: 'CREATE_TRICK', payload: form }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTricks((prev) => [data.trick, ...prev]);
+        setShowForm(false);
+        setForm({ title: '', description: '', rewardHops: '100', rewardBunz: '50', conditionType: 'TOTAL_VISITS', conditionTarget: '1' });
+        showToast('🪄 Misión creada', 'success');
+      } else showToast('Error al crear misión', 'error');
+    } catch { showToast('Error de conexión', 'error'); } finally { setSaving(false); }
+  };
 
-  if (loading) {
-    return <p style={{ fontSize: 12, color: '#A1A1AA', margin: '8px 0' }}>Cargando métricas del ecosistema...</p>;
-  }
-
-  if (!data) {
-    return <p style={{ fontSize: 12, color: '#EF4444', margin: '8px 0' }}>No se pudieron cargar las métricas.</p>;
-  }
-
-  const b = data.businesses || { total: 0, active: 0, pending: 0, totalCreditLimit: 0, totalCreditUsed: 0 };
-  const r = data.rabbitters || { total: 0, totalBunzEarned: 0, totalBunzSpent: 0, circulatingSupply: 0 };
-  const l = data.ledger || { rewardsGiven: 0, rewardsCount: 0, redemptionsSpent: 0, redemptionsCount: 0, transfersP2P: 0, transfersCount: 0 };
+  const updateLevel = async (id: string) => {
+    const d = drafts[id];
+    if (!d) return;
+    setSavingLevel(id);
+    try {
+      const res = await fetch('/api/admin/gamification', {
+        method: 'POST', headers: await adminHeaders(user, true),
+        body: JSON.stringify({ action: 'UPDATE_LEVEL', payload: { id, bunzMultiplier: Number(d.mult), requiredHops: Number(d.hops) } }),
+      });
+      const data = await res.json();
+      if (data.success) showToast('📈 Nivel actualizado', 'success');
+      else showToast('Error al actualizar', 'error');
+    } catch { showToast('Error de conexión', 'error'); } finally { setSavingLevel(null); }
+  };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* KPI Cards Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
-        <div style={{ background: '#18181B', padding: 12, borderRadius: 12, border: '1px solid #27272A' }}>
-          <span style={{ fontSize: 10, color: '#A1A1AA', textTransform: 'uppercase', fontWeight: 800 }}>🏪 Negocios Afiliados</span>
-          <div style={{ fontSize: 20, fontWeight: 900, color: '#fff', marginTop: 4 }}>
-            {b.active} <span style={{ fontSize: 12, color: '#71717A', fontWeight: 500 }}>/ {b.total}</span>
+    <div>
+      {/* Trucos */}
+      <Card>
+        <SectionTitle
+          icon="🪄" title={`Trucos del Sombrero (${tricks.length})`}
+          right={<Btn onClick={() => setShowForm(!showForm)}>{showForm ? '✕' : '+ Nuevo'}</Btn>}
+        />
+        {showForm && (
+          <div style={{ background: T.cardHi, borderRadius: 13, padding: 12, marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 8, border: `1px solid ${T.borderHi}` }}>
+            <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Título de la misión" style={inputStyle} />
+            <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Descripción" style={inputStyle} />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input value={form.rewardHops} onChange={(e) => setForm({ ...form, rewardHops: e.target.value.replace(/\D/g, '') })} placeholder="Hops" inputMode="numeric" style={{ ...inputStyle, flex: 1 }} />
+              <input value={form.rewardBunz} onChange={(e) => setForm({ ...form, rewardBunz: e.target.value.replace(/\D/g, '') })} placeholder="Bunz" inputMode="numeric" style={{ ...inputStyle, flex: 1 }} />
+            </div>
+            <Btn kind="primary" full onClick={createTrick} disabled={saving}>{saving ? 'Guardando…' : '🪄 Crear Misión'}</Btn>
           </div>
-          <span style={{ fontSize: 10, color: '#34D399', fontWeight: 700 }}>
-            {b.pending > 0 ? `${b.pending} pendientes de aprobar` : '100% al día'}
-          </span>
-        </div>
-
-        <div style={{ background: '#18181B', padding: 12, borderRadius: 12, border: '1px solid #27272A' }}>
-          <span style={{ fontSize: 10, color: '#A1A1AA', textTransform: 'uppercase', fontWeight: 800 }}>👥 Rabbitters Activos</span>
-          <div style={{ fontSize: 20, fontWeight: 900, color: '#fff', marginTop: 4 }}>
-            {r.total.toLocaleString()}
-          </div>
-          <span style={{ fontSize: 10, color: '#F43F5E', fontWeight: 700 }}>
-            {r.circulatingSupply.toLocaleString()} Bunz circulantes
-          </span>
-        </div>
-
-        <div style={{ background: '#18181B', padding: 12, borderRadius: 12, border: '1px solid #27272A' }}>
-          <span style={{ fontSize: 10, color: '#A1A1AA', textTransform: 'uppercase', fontWeight: 800 }}>🎁 Recompensas Emitidas</span>
-          <div style={{ fontSize: 20, fontWeight: 900, color: '#38BDF8', marginTop: 4 }}>
-            ${l.rewardsGiven.toLocaleString()}
-          </div>
-          <span style={{ fontSize: 10, color: '#71717A' }}>
-            {l.rewardsCount} transacciones de cashback
-          </span>
-        </div>
-
-        <div style={{ background: '#18181B', padding: 12, borderRadius: 12, border: '1px solid #27272A' }}>
-          <span style={{ fontSize: 10, color: '#A1A1AA', textTransform: 'uppercase', fontWeight: 800 }}>💳 Canjes en POS</span>
-          <div style={{ fontSize: 20, fontWeight: 900, color: '#F59E0B', marginTop: 4 }}>
-            ${l.redemptionsSpent.toLocaleString()}
-          </div>
-          <span style={{ fontSize: 10, color: '#71717A' }}>
-            {l.redemptionsCount} consumos pagados con Bunz
-          </span>
-        </div>
-      </div>
-
-      {/* QR Scans Breakdown */}
-      {data.qrTelemetry && data.qrTelemetry.length > 0 && (
-        <div style={{ background: '#18181B', padding: 12, borderRadius: 12, border: '1px solid #27272A' }}>
-          <span style={{ fontSize: 11, fontWeight: 800, color: '#fff', display: 'block', marginBottom: 8 }}>
-            📲 Telemetría de Escaneos por Campaña / Negocio
-          </span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {data.qrTelemetry.map((q) => (
-              <div key={q.campaignRef} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, padding: '4px 8px', background: '#27272A', borderRadius: 8 }}>
-                <span style={{ fontWeight: 800, color: '#F43F5E' }}>📍 {q.campaignRef}</span>
-                <span style={{ color: '#E4E4E7' }}>
-                  <strong>{q.totalScans}</strong> escaneos ({q.iosScans} iOS · {q.androidScans} Android)
-                </span>
+        )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {tricks.slice(0, 8).map((t) => (
+            <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 11px', borderRadius: 11, background: 'rgba(255,255,255,0.03)', border: `1px solid ${T.border}` }}>
+              <div style={{ minWidth: 0 }}>
+                <p style={{ fontSize: 11.5, fontWeight: 900, color: T.text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</p>
+                <p style={{ fontSize: 9.5, color: T.faint, margin: '1px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 210 }}>{t.description}</p>
               </div>
-            ))}
-          </div>
+              <span style={{ fontSize: 11, fontWeight: 900, color: T.amber, flexShrink: 0 }}>+{t.rewardBunz} Bunz</span>
+            </div>
+          ))}
+          {!loading && tricks.length === 0 && <p style={{ fontSize: 11, color: T.faint }}>Sin misiones aún</p>}
         </div>
-      )}
+      </Card>
 
-      {/* Individual Business Progress */}
-      {data.businessesBreakdown && data.businessesBreakdown.length > 0 && (
-        <div style={{ background: '#18181B', padding: 12, borderRadius: 12, border: '1px solid #27272A' }}>
-          <span style={{ fontSize: 11, fontWeight: 800, color: '#fff', display: 'block', marginBottom: 8 }}>
-            🏢 Consumo de Cupo Promocional por Afiliado
-          </span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {data.businessesBreakdown.slice(0, 5).map((biz) => {
-              const usedPct = biz.creditLimit > 0 ? Math.min(100, Math.round((biz.creditUsed / biz.creditLimit) * 100)) : 0;
-              return (
-                <div key={biz.id} style={{ fontSize: 11, padding: '6px 8px', background: '#27272A', borderRadius: 8 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span style={{ fontWeight: 800, color: '#fff' }}>{biz.name}</span>
-                    <span style={{ color: '#A1A1AA', fontSize: 10 }}>{biz.creditUsed} / {biz.creditLimit} Bunz ({usedPct}%)</span>
-                  </div>
-                  <div style={{ width: '100%', height: 4, background: '#3F3F46', borderRadius: 2, overflow: 'hidden' }}>
-                    <div style={{ width: `${usedPct}%`, height: '100%', background: '#F43F5E' }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+      {/* Niveles */}
+      <Card>
+        <SectionTitle icon="📈" title="Niveles & Multiplicadores" />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+          {levels.map((l, i) => {
+            const d = drafts[l.id] ?? { mult: String(l.bunzMultiplier ?? 1), hops: String(l.requiredHops ?? 0) };
+            return (
+              <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 10px', borderRadius: 11, background: 'rgba(255,255,255,0.03)', border: `1px solid ${T.border}` }}>
+                <span style={{ fontSize: 10.5, fontWeight: 900, color: T.purple, width: 58, flexShrink: 0 }}>{l.name || `Nv ${i + 1}`}</span>
+                <input
+                  value={d.hops} inputMode="numeric"
+                  onChange={(e) => setDrafts({ ...drafts, [l.id]: { ...d, hops: e.target.value.replace(/\D/g, '') } })}
+                  style={{ ...inputStyle, width: 58, textAlign: 'center', padding: '6px 4px' }}
+                />
+                <span style={{ fontSize: 9, color: T.faint, fontWeight: 700 }}>hops ×</span>
+                <input
+                  value={d.mult}
+                  onChange={(e) => setDrafts({ ...drafts, [l.id]: { ...d, mult: e.target.value } })}
+                  style={{ ...inputStyle, width: 48, textAlign: 'center', padding: '6px 4px' }}
+                />
+                <Btn onClick={() => updateLevel(l.id)} disabled={savingLevel === l.id} kind="ghost">
+                  {savingLevel === l.id ? '…' : '✓'}
+                </Btn>
+              </div>
+            );
+          })}
+          {!loading && levels.length === 0 && <p style={{ fontSize: 11, color: T.faint }}>Sin niveles configurados</p>}
         </div>
-      )}
-
-      <button
-        onClick={fetchMetrics}
-        style={{
-          padding: '8px 12px',
-          borderRadius: 8,
-          border: '1px solid #3F3F46',
-          background: '#27272A',
-          color: '#fff',
-          fontSize: 11,
-          fontWeight: 700,
-          cursor: 'pointer',
-        }}
-      >
-        🔄 Actualizar Métricas en Vivo
-      </button>
+        <p style={{ fontSize: 9, color: T.faint, margin: '8px 0 0', fontWeight: 600 }}>
+          Aplica al instante para todos los Rabbitters
+        </p>
+      </Card>
     </div>
   );
 }
 
+const inputStyle: React.CSSProperties = {
+  width: '100%', padding: '9px 11px', borderRadius: 10,
+  border: `1px solid ${T.borderHi}`, background: 'rgba(0,0,0,0.4)',
+  color: T.text, fontSize: 12.5, fontWeight: 700, outline: 'none',
+};

@@ -2,8 +2,10 @@
 
 import { signIn } from "next-auth/react";
 import { useState, useEffect } from "react";
-import { Mail, Phone, QrCode, Sparkles, UserCheck, Clock, ChevronDown, Check } from "lucide-react";
+import Link from "next/link";
+import { Mail, Phone, QrCode, Sparkles, UserCheck, Clock, ChevronDown, Check, Compass } from "lucide-react";
 import RabbittyCode from "@/components/ui/RabbittyCode";
+import { QRCodeSVG } from "qrcode.react";
 import { resolveApiUrl } from "@/lib/api-config";
 
 interface CountryCode {
@@ -348,13 +350,24 @@ export default function LoginPage() {
             Abre tu app de <strong className="text-white">Rabbitty</strong> en tu celular, ve a <strong className="text-white">Perfil ➔ Escanear</strong> y apunta tu cámara a este código.
           </p>
 
-          <div className="p-4 bg-white/5 border border-pink-500/30 rounded-2xl shadow-[0_0_30px_rgba(236,72,153,0.15)] relative min-w-[212px] min-h-[212px] flex items-center justify-center">
+          <div className="p-4 bg-white/5 border border-pink-500/30 rounded-2xl shadow-[0_0_30px_rgba(236,72,153,0.15)] relative min-w-[212px] min-h-[212px] flex flex-col items-center justify-center gap-3">
             {qrToken ? (
-              <RabbittyCode
-                data={`https://app.rabbitty.me/scan?qrlogin_${qrToken}`}
-                size={180}
-                showCardFrame={false}
-              />
+              <>
+                <RabbittyCode
+                  data={`https://app.rabbitty.me/scan?qrlogin_${qrToken}`}
+                  size={150}
+                  showCardFrame={false}
+                />
+                <div className="bg-white rounded-2xl p-2 shadow-lg">
+                  {/* QR escaneable: cámara del iPhone o escáner de la App Rabbitty */}
+                  <QRCodeSVG
+                    value={`https://app.rabbitty.me/scan?qrlogin_${qrToken}`}
+                    size={128}
+                    level="H"
+                    includeMargin={false}
+                  />
+                </div>
+              </>
             ) : (
               <div className="w-[180px] h-[180px] flex flex-col items-center justify-center text-center p-4 space-y-3 relative overflow-hidden">
                 {/* Concentric Neon Radar Rings */}
@@ -509,6 +522,16 @@ export default function LoginPage() {
             >
               ¿Ya tienes un código OTP? Ingresar código directamente →
             </button>
+
+            <div className="pt-3 border-t border-white/10">
+              <Link
+                href="/demo"
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 font-bold text-xs transition-all"
+              >
+                <Compass className="w-4 h-4 text-cyan-400" />
+                <span>Explorar Recorrido Virtual Interactivo (/demo)</span>
+              </Link>
+            </div>
           </form>
 
           {isLocalDev && (

@@ -11,7 +11,7 @@ export const inventoryRouter = router({
   getItems: protectedProcedure
     .input(z.object({ branchId: z.string().optional() }))
     .query(async ({ ctx, input }) => {
-      const where = eq(inventoryItems.branchId, resolveBranchId(ctx, input.branchId));
+      const where = eq(inventoryItems.branchId, await resolveBranchId(ctx, input.branchId));
       const items = await ctx.restaurantDb.select().from(inventoryItems).where(where);
       return items;
     }),

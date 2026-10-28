@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Bell, CheckCircle2, Info, AlertCircle } from 'lucide-react';
+import { Bell, CheckCircle2, AlertCircle, Gift, Coins, Flame, Home, MessageCircle, Store, Users, ArrowLeftRight, Settings } from 'lucide-react';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { PlatformBridge } from '@/lib/platform';
@@ -88,11 +88,20 @@ export default function NotificationsPage() {
     }
   };
 
+  // ── Identidad visual unificada por tipo de notificación del ecosistema ──
   const getIcon = (type: string) => {
     switch (type) {
-      case 'SUCCESS': return <CheckCircle2 className="w-6 h-6 text-green-500" />;
+      case 'REWARD': return <Gift className="w-6 h-6 text-[#E91E63]" />;
+      case 'HOPS': return <Flame className="w-6 h-6 text-orange-500" />;
+      case 'MADRIGUERA': return <Home className="w-6 h-6 text-[#A855F7]" />;
+      case 'CHAT': return <MessageCircle className="w-6 h-6 text-[#38BDF8]" />;
+      case 'AFFILIATE': return <Store className="w-6 h-6 text-amber-500" />;
+      case 'REFERRAL': return <Users className="w-6 h-6 text-purple-500" />;
+      case 'TRANSFER': return <ArrowLeftRight className="w-6 h-6 text-cyan-500" />;
       case 'ALERT': return <AlertCircle className="w-6 h-6 text-red-500" />;
-      default: return <Info className="w-6 h-6 text-blue-500" />;
+      case 'SUCCESS': return <CheckCircle2 className="w-6 h-6 text-green-500" />;
+      case 'SYSTEM': return <Settings className="w-6 h-6 text-neutral-400" />;
+      default: return <Coins className="w-6 h-6 text-[#E91E63]" />;
     }
   };
 

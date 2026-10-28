@@ -31,6 +31,35 @@ export default function BusinessScanPage() {
 
   const handleScan = async (decodedText: string) => {
     setIsScanning(false);
+
+    // ── Resolver el payload escaneado a un usuario real ──
+    // Formatos soportados: UUID, telegramId, rabbitty://pay?to=@usuario, @usuario
+    try {
+      let text = decodedText.trim();
+      const toMatch = text.match(/[?&]to=([^&]+)/);
+      if (toMatch) text = decodeURIComponent(toMatch[1]);
+
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(text);
+      const isDigits = /^\d{5,}$/.test(text);
+      if (!isUuid && !isDigits) {
+        // @usuario o URL completa → resolver vía lookup (mismo resolver del ecosistema)
+        const res = await fetch('/api/rabbitty-code/lookup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: toMatch ? decodedText : text }),
+        });
+        const data = await res.json();
+        if (data?.success && data.type === 'user' && data.user?.id) {
+          setScannedAddress(data.user.id);
+          setShowMintModal(true);
+          toast.success(`Cliente identificado: ${data.user.name}`);
+          return;
+        }
+        toast.error('No se pudo identificar al cliente con este código');
+        return;
+      }
+    } catch { /* fallback: tratar como dirección cruda */ }
+
     // Treat as Wallet Address / Telegram ID for general consumption
     setScannedAddress(decodedText);
     setShowMintModal(true);

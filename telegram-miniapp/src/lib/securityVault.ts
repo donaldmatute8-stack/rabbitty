@@ -203,13 +203,20 @@ export interface BiometricSupport {
 export async function detectBiometric(): Promise<BiometricSupport> {
   if (typeof window === 'undefined') return { backend: 'none', available: false, label: 'Biometría' };
 
+  const isApple = typeof navigator !== 'undefined' && /iPhone|iPad|Macintosh/i.test(navigator.userAgent);
+
   if (await isNativeApp()) {
     try {
       const { BiometricAuth } = await import('@aparajita/capacitor-biometric-auth');
       const check = await BiometricAuth.checkBiometry();
-      return { backend: 'native', available: check.isAvailable, label: 'Face ID / Touch ID' };
+      if (check.isAvailable) {
+        return { backend: 'native', available: true, label: 'Face ID / Touch ID' };
+      }
     } catch {
-      return { backend: 'native', available: false, label: 'Face ID / Touch ID' };
+      // Fallback a WebAuthn o Apple Passkey si Capacitor plugin falla
+    }
+    if (isApple) {
+      return { backend: 'native', available: true, label: 'Face ID / Touch ID' };
     }
   }
 
@@ -236,6 +243,11 @@ export async function detectBiometric(): Promise<BiometricSupport> {
     // Safari iOS / WebKit allows PublicKeyCredential creation even if the pre-check returns false or is not configured
     return { backend: 'webauthn', available: true, label: 'Face ID / Touch ID' };
   }
+
+  if (isApple) {
+    return { backend: 'webauthn', available: true, label: 'Face ID' };
+  }
+
   return { backend: 'none', available: false, label: 'Biometría' };
 }
 
@@ -275,11 +287,16 @@ export async function enableBiometric(): Promise<BioOutcome> {
 
   /* Native (Capacitor): la verificación real debe pasar antes de activar */
   if (support.backend === 'native') {
-    const { PlatformBridge } = await import('@/lib/platform');
-    const res = await PlatformBridge.authenticateBiometric('Activa la seguridad biométrica de Rabbitty');
-    if (!res.success) return { ok: false, message: 'No se pudo verificar tu biometría. Inténtalo de nuevo.' };
-    writeJson(BIO_KEY, { backend: 'native' } satisfies BioRecord);
-    return { ok: true, message: `${support.label} activado.` };
+    try {
+      const { PlatformBridge } = await import('@/lib/platform');
+      const res = await PlatformBridge.authenticateBiometric('Activa la seguridad biométrica de Rabbitty');
+      if (res.success) {
+        writeJson(BIO_KEY, { backend: 'native' } satisfies BioRecord);
+        return { ok: true, message: `${support.label} activado.` };
+      }
+    } catch {
+      // Fallback a webauthn abajo si falla el bridge nativo
+    }
   }
 
   /* Telegram Mini App: BiometricManager oficial */

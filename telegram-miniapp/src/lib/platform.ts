@@ -441,8 +441,10 @@ export const PlatformBridge = {
       return { success: false, error: 'UNSUPPORTED' };
     }
 
-    // Try primary high-accuracy position first with 3.5s timeout
-    const getPos = (enableHigh: boolean, timeoutMs: number) =>
+    // In iOS / WebKit / Capacitor, high-accuracy GPS often takes 4 to 8 seconds on initial cold fix.
+    // 1. Try immediate low-accuracy or cached fix (maximumAge: 10 mins, timeout: 3s)
+    // 2. If no cached fix, run standard fix with 9s timeout
+    const getPos = (enableHigh: boolean, timeoutMs: number, maxAgeMs = 120000) =>
       new Promise<{
         success: boolean;
         lat?: number;
@@ -458,38 +460,54 @@ export const PlatformBridge = {
           }
         }, timeoutMs);
 
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            if (finished) return;
+        try {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              if (finished) return;
+              finished = true;
+              clearTimeout(timer);
+              resolve({
+                success: true,
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude,
+                accuracy: pos.coords.accuracy,
+              });
+            },
+            (err) => {
+              if (finished) return;
+              finished = true;
+              clearTimeout(timer);
+              let code: 'PERMISSION_DENIED' | 'POSITION_UNAVAILABLE' | 'TIMEOUT' = 'POSITION_UNAVAILABLE';
+              if (err.code === err.PERMISSION_DENIED) code = 'PERMISSION_DENIED';
+              else if (err.code === err.TIMEOUT) code = 'TIMEOUT';
+              resolve({ success: false, error: code });
+            },
+            { enableHighAccuracy: enableHigh, timeout: timeoutMs, maximumAge: maxAgeMs }
+          );
+        } catch {
+          if (!finished) {
             finished = true;
             clearTimeout(timer);
-            resolve({
-              success: true,
-              lat: pos.coords.latitude,
-              lng: pos.coords.longitude,
-              accuracy: pos.coords.accuracy,
-            });
-          },
-          (err) => {
-            if (finished) return;
-            finished = true;
-            clearTimeout(timer);
-            let code: 'PERMISSION_DENIED' | 'POSITION_UNAVAILABLE' | 'TIMEOUT' = 'POSITION_UNAVAILABLE';
-            if (err.code === err.PERMISSION_DENIED) code = 'PERMISSION_DENIED';
-            else if (err.code === err.TIMEOUT) code = 'TIMEOUT';
-            resolve({ success: false, error: code });
-          },
-          { enableHighAccuracy: enableHigh, timeout: timeoutMs, maximumAge: 60000 }
-        );
+            resolve({ success: false, error: 'POSITION_UNAVAILABLE' });
+          }
+        }
       });
 
-    const primary = await getPos(true, 3500);
-    if (primary.success) return primary;
-    if (primary.error === 'PERMISSION_DENIED') return primary;
+    // 1. Fast attempt with relaxed accuracy (cell/WiFi / cache) to acquire lock immediately
+    const fastLock = await getPos(false, 7000, 600000);
+    if (fastLock.success) return fastLock;
+    if (fastLock.error === 'PERMISSION_DENIED') return fastLock;
 
-    // Fast retry with low accuracy (cell/wifi triangulation) if GPS timed out
-    const fallback = await getPos(false, 3000);
-    return fallback;
+    // 2. High-accuracy GPS attempt with generous 10s timeout for iPhone hardware
+    const gpsLock = await getPos(true, 10000, 120000);
+    if (gpsLock.success) return gpsLock;
+    if (gpsLock.error === 'PERMISSION_DENIED') return gpsLock;
+
+    // 3. Fallback: Any cached fix up to 2 hours
+    const cachedFix = await getPos(false, 3000, 7200000);
+    if (cachedFix.success) return cachedFix;
+
+    return gpsLock;
   },
 
   /**

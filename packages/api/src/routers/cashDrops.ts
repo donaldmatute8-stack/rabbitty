@@ -9,7 +9,7 @@ export const cashDropsRouter = router({
   getSettings: protectedProcedure
     .input(z.object({ branchId: z.string().optional() }))
     .query(async ({ ctx, input }) => {
-      const branchId = resolveBranchId(ctx, input.branchId);
+      const branchId = await resolveBranchId(ctx, input.branchId);
       const [branch] = await ctx.restaurantDb
         .select({
           cashDropEnabled: branches.cashDropEnabled,
@@ -30,7 +30,7 @@ export const cashDropsRouter = router({
       cashDropManagerThreshold: z.number().min(0).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const branchId = resolveBranchId(ctx, input.branchId);
+      const branchId = await resolveBranchId(ctx, input.branchId);
       await ctx.restaurantDb
         .update(branches)
         .set({
@@ -45,7 +45,7 @@ export const cashDropsRouter = router({
   getStatus: protectedProcedure
     .input(z.object({ branchId: z.string().optional() }))
     .query(async ({ ctx, input }) => {
-      const branchId = resolveBranchId(ctx, input.branchId);
+      const branchId = await resolveBranchId(ctx, input.branchId);
       
       const [branch] = await ctx.restaurantDb
         .select({
@@ -90,7 +90,7 @@ export const cashDropsRouter = router({
   listToday: protectedProcedure
     .input(z.object({ branchId: z.string().optional() }))
     .query(async ({ ctx, input }) => {
-      const branchId = resolveBranchId(ctx, input.branchId);
+      const branchId = await resolveBranchId(ctx, input.branchId);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
@@ -113,7 +113,7 @@ export const cashDropsRouter = router({
       notes: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const branchId = resolveBranchId(ctx, input.branchId);
+      const branchId = await resolveBranchId(ctx, input.branchId);
       // DEPRECADO: los retiros requieren turno abierto y PIN. Usar cashShifts.withdraw.
       if (branchId) {
         throw new TRPCError({

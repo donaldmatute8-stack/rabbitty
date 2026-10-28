@@ -109,9 +109,24 @@ export default function ProfilePage() {
     // Acceso administrativo: con un solo toque si es owner/admin, o gesto secreto de 5 toques
     if (isOwner || tapCountRef.current >= 5) {
       tapCountRef.current = 0;
+
+      // 🛡️ Capa 1: verificación en SERVIDOR (allowlist + initData firmado).
+      // El gesto de 5 toques no abre el panel a curiosos: sin ser God, ni aparece.
+      try {
+        const probe = await fetch('/api/auth/is-admin', { headers: await PlatformBridge.getAuthHeaders(), cache: 'no-store' });
+        const probeData = await probe.json();
+        if (!probeData?.isAdmin) {
+          PlatformBridge.hapticFeedback('light');
+          showToast('Esta área es exclusiva del equipo Rabbitty 🐰', 'info');
+          return;
+        }
+      } catch {
+        return; // sin red/respuesta válida: no abrir
+      }
+
       PlatformBridge.hapticFeedback('medium');
 
-      // 🛡️ Capa Extra de Seguridad Biométrica: Face ID / Touch ID / PIN
+      // 🛡️ Capa 2: Face ID / Touch ID / PIN del dispositivo
       const auth = await authorizeSensitiveAction(
         promptForPin,
         'Verifica con Face ID para acceder al Panel de Control de Rabbitty'

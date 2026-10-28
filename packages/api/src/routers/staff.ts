@@ -14,7 +14,7 @@ export const staffRouter = router({
   getStaff: protectedProcedure
     .input(z.object({ branchId: z.string().optional() }))
     .query(async ({ ctx, input }) => {
-      const branchId = resolveBranchId(ctx, input.branchId);
+      const branchId = await resolveBranchId(ctx, input.branchId);
       const staff = await ctx.restaurantDb.select().from(staffTable).where(eq(staffTable.branchId, branchId));
       return staff.map((s) => ({ ...s, pinCode: undefined }));
     }),
@@ -62,7 +62,7 @@ export const staffRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const branchId = resolveBranchId(ctx, undefined);
+      const branchId = await resolveBranchId(ctx, undefined);
       const [existing] = await ctx.restaurantDb
         .select()
         .from(staffTable)
@@ -97,7 +97,7 @@ export const staffRouter = router({
       const [existing] = await ctx.restaurantDb
         .select({ id: staffTable.id })
         .from(staffTable)
-        .where(and(eq(staffTable.id, input.id), eq(staffTable.branchId, resolveBranchId(ctx, undefined))));
+        .where(and(eq(staffTable.id, input.id), eq(staffTable.branchId, await resolveBranchId(ctx, undefined))));
       if (!existing) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Empleado no encontrado en esta sucursal" });
       }

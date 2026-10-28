@@ -823,6 +823,9 @@ export default function SettingsPage() {
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
+            {/* 2FA GOD ADMIN + PASSKEYS BIOMÉTRICOS */}
+            <God2FAPasskeysCard />
+
             {/* PIN DE ADMINISTRADOR / AUTORIZACIONES */}
             <Card className={cn(
               "p-6 border backdrop-blur-md transition-all duration-300 lg:col-span-2",
@@ -1170,5 +1173,153 @@ export default function SettingsPage() {
         onClose={() => setPairModalOpen(false)}
       />
     </div>
+  );
+}
+
+// ── 2FA God Admin + Passkeys biométricos (Face ID / Touch ID del dispositivo) ──
+function God2FAPasskeysCard() {
+  const [status, setStatus] = useState<{ required: boolean; verified: boolean; totpConfigured: boolean } | null>(null);
+  const [passkeys, setPasskeys] = useState<Array<{ credId: string; label: string; createdAt: string }>>([]);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const b64 = (bytes: Uint8Array) => {
+    let s = "";
+    for (const b of bytes) s += String.fromCharCode(b);
+    return btoa(s);
+  };
+  const fromB64 = (s: string) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+
+  const loadState = async () => {
+    try {
+      const [st, pk] = await Promise.all([
+        fetch("/api/auth/2fa/verify").then((r) => r.json()),
+        fetch("/api/auth/2fa/passkey", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "list" }) }).then((r) => r.json()),
+      ]);
+      setStatus(st);
+      if (pk?.success) setPasskeys(pk.passkeys || []);
+    } catch { /* noop */ }
+  };
+
+  useEffect(() => { void loadState(); }, []);
+
+  const registerPasskey = async () => {
+    setBusy(true); setMsg("");
+    try {
+      const optRes = await fetch("/api/auth/2fa/passkey", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "register_options" }) });
+      const opt = await optRes.json();
+      if (!opt?.success) throw new Error(opt?.error || "No se pudo iniciar el registro");
+      const cred = await navigator.credentials.create({
+        publicKey: {
+          challenge: fromB64(opt.challenge),
+          rp: opt.rp,
+          user: { id: fromB64(opt.user.id), name: opt.user.name, displayName: opt.user.displayName },
+          pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+          authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required", residentKey: "preferred" },
+          timeout: 60000,
+        },
+      });
+      if (!cred) throw new Error("Sin credencial");
+      const pkCred = cred as PublicKeyCredential;
+      const resp = pkCred.response as unknown as AuthenticatorAttestationResponse;
+      const regRes = await fetch("/api/auth/2fa/passkey", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "register_verify",
+          label: `Biometría ${new Date().toLocaleDateString("es-MX")}`,
+          credentialId: b64(new Uint8Array(pkCred.rawId)),
+          clientDataJSON: b64(new Uint8Array(resp.clientDataJSON)),
+          attestationObject: b64(new Uint8Array(resp.attestationObject)),
+        }),
+      });
+      const reg = await regRes.json();
+      if (!reg?.success) throw new Error(reg?.error || "Registro fallido");
+      setMsg("✅ Passkey biométrica registrada. Ya puedes desbloquear con Face ID / Touch ID en /verify-2fa.");
+      await loadState();
+    } catch (err: unknown) {
+      const m = err instanceof Error ? err.message : "Error";
+      setMsg(m.includes("NotAllowed") ? "Biometría cancelada o no permitida por el dispositivo" : `⚠️ ${m}`);
+    } finally { setBusy(false); }
+  };
+
+  const deletePasskey = async (credId: string) => {
+    setBusy(true);
+    try {
+      await fetch("/api/auth/2fa/passkey", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete", credId }) });
+      await loadState();
+    } finally { setBusy(false); }
+  };
+
+  const isGod = status?.required;
+  if (!isGod) return null;
+
+  return (
+    <Card className="p-6 border border-pink-500/20 bg-pink-500/5 backdrop-blur-md lg:col-span-2">
+      <div className="flex items-center gap-3 pb-4 border-b border-white/5">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-pink-500/10 border border-pink-500/20 text-pink-400 shrink-0">
+          <Fingerprint className="h-6 w-6" />
+        </div>
+        <div>
+          <h3 className="font-bold text-white text-lg">2FA God Admin + Biometría</h3>
+          <p className="text-gray-400 text-xs mt-0.5">
+            TOTP obligatorio para tus operaciones sensibles · Passkey con Face ID / Touch ID para desbloquear sin teclear el código
+          </p>
+        </div>
+        <div className="ml-auto">
+          {status?.verified ? (
+            <Badge variant="success" className="gap-1"><ShieldCheck className="h-3 w-3" /> Sesión 2FA verificada</Badge>
+          ) : (
+            <Badge variant="warning" className="gap-1"><AlertTriangle className="h-3 w-3" /> Sin verificar</Badge>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        <p className="text-xs text-gray-300 leading-relaxed">
+          {status?.totpConfigured
+            ? "✅ TOTP activo en el servidor (GOD_ADMIN_TOTP_SECRET). Cada 12h se pide verificación; regístrate una vez en este dispositivo y desbloquea con tu huella/rostro."
+            : "⚠️ Configura GOD_ADMIN_TOTP_SECRET en las variables del servidor para activar el TOTP."}
+        </p>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            onClick={registerPasskey}
+            disabled={busy || !status?.verified}
+            className="rounded-xl px-4 py-2.5 font-black text-xs bg-linear-to-r from-pink-600 to-purple-600 text-white cursor-pointer disabled:opacity-40"
+          >
+            <Fingerprint className="h-4 w-4 mr-1" />
+            {busy ? "Procesando..." : "Registrar Biometría en este dispositivo"}
+          </Button>
+          {!status?.verified && (
+            <span className="text-[11px] text-amber-400 font-bold">Verifica tu 2FA primero (se te pedirá al recargar el panel).</span>
+          )}
+        </div>
+
+        {msg && <p className="text-[11px] font-bold text-gray-300">{msg}</p>}
+
+        {passkeys.length > 0 && (
+          <div className="space-y-2 pt-2">
+            <span className="text-[10px] font-black uppercase tracking-wider text-gray-500">Passkeys registradas</span>
+            {passkeys.map((p) => (
+              <div key={p.credId} className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-white/5 border border-white/10">
+                <div>
+                  <p className="text-[12px] font-black text-gray-200">{p.label}</p>
+                  <p className="text-[10px] text-gray-500">{new Date(p.createdAt).toLocaleString("es-MX")}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => deletePasskey(p.credId)}
+                  disabled={busy}
+                  className="px-3 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/25 text-rose-400 text-[11px] font-bold hover:bg-rose-500/20 cursor-pointer disabled:opacity-40"
+                >
+                  Eliminar
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </Card>
   );
 }

@@ -141,11 +141,24 @@ const customAdapter: any = {
   },
 };
 
+  // ── Fail-fast: sin AUTH_SECRET en producción, el fallback hardcodeado permitiría
+  //    forjar cookies de sesión de God Admin. Mejor no arrancar que firmar con llave pública. ──
+  function resolveAuthSecret(): string {
+    const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+    if (secret && secret.length >= 32) return secret;
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "[Auth] AUTH_SECRET no configurado (mínimo 32 caracteres). El panel de administración se niega a firmar sesiones con un secreto hardcodeado."
+      );
+    }
+    return "rabbitty-dev-secret-do-not-use-in-production-0123456789";
+  }
+
 const authResult = NextAuth({
   adapter: customAdapter,
   session: { strategy: "jwt" },
   trustHost: true,
-  secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "rabbitty-admin-secret-key-32chars-minimum-length",
+  secret: resolveAuthSecret(),
   providers: [
     Resend({
       from: process.env.AUTH_RESEND_FROM || "Rabbitty Team <hola@rabbitty.me>",
@@ -266,7 +279,7 @@ const authResult = NextAuth({
         }
       },
     }),
-    ...(process.env.E2E_TEST === "true" ? [
+    ...(process.env.E2E_TEST === "true" && process.env.NODE_ENV !== "production" ? [
       Credentials({
         id: "test-e2e",
         name: "E2E Test",

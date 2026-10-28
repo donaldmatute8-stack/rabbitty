@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Smartphone, Send, Sparkles, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Smartphone, Send, Sparkles, ArrowRight, ShieldCheck, CheckCircle2, Phone } from 'lucide-react';
 
 function AppleOfficialIcon({ className = 'w-5 h-5' }: { className?: string }) {
   return (
@@ -29,8 +29,53 @@ function DownloadContent() {
   const SHOW_ANDROID = false;
 
   const [affiliateName, setAffiliateName] = useState('');
-  const [welcomeBunz, setWelcomeBunz] = useState(queryBunz || '');
-  const isAffiliate = Boolean(affiliateName);
+  const [welcomeBunz, setWelcomeBunz] = useState(queryBunz || '25');
+  const [contactInput, setContactInput] = useState('');
+  const [claiming, setClaiming] = useState(false);
+  const [claimResult, setClaimResult] = useState<{
+    ok: boolean;
+    message: string;
+    bunz?: number;
+  } | null>(null);
+  const isAffiliate = Boolean(affiliateName || ref);
+
+  const handleReserveWelcomeBunz = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!contactInput.trim()) return;
+    setClaiming(true);
+    setClaimResult(null);
+    try {
+      const res = await fetch('/api/welcome-claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contact: contactInput.trim(),
+          ref: ref || '626cafe',
+          bunz: welcomeBunz || '25',
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data?.success) {
+        setClaimResult({
+          ok: true,
+          message: data.message,
+          bunz: data.bunzReserved,
+        });
+      } else {
+        setClaimResult({
+          ok: false,
+          message: data?.error || 'No se pudo reservar tu bono. Verifica tus datos.',
+        });
+      }
+    } catch {
+      setClaimResult({
+        ok: false,
+        message: 'Error de conexión. Intenta nuevamente.',
+      });
+    } finally {
+      setClaiming(false);
+    }
+  };
   useEffect(() => {
     if (!ref) return;
     let isCancelled = false;
@@ -126,6 +171,49 @@ function DownloadContent() {
                 : 'Descarga la app oficial de Rabbitty en tu iPhone y acumula Bunz en tus restaurantes favoritos.'}
             </p>
           </div>
+
+          {/* Paso 1: Reserva de Bono vinculada al celular/correo antes de abrir la App */}
+          {welcomeBunz && (
+            <form onSubmit={handleReserveWelcomeBunz} className="mb-5 bg-zinc-900/90 border border-pink-500/30 rounded-2xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-pink-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5" /> 1. Asegura tus +{welcomeBunz} Bunz
+                </span>
+                <span className="text-[10px] font-mono text-zinc-400">=${welcomeBunz} MXN</span>
+              </div>
+              <p className="text-[11px] text-zinc-400 leading-relaxed">
+                Ingresa tu celular o correo con el que entrarás a la App para que tus <strong className="text-white">+{welcomeBunz} Bunz</strong> y tu notificación te esperen al abrirla:
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Tu celular (10 dígitos) o correo"
+                  value={contactInput}
+                  onChange={(e) => setContactInput(e.target.value)}
+                  className="flex-1 bg-black border border-zinc-800 focus:border-pink-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-zinc-500 outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={claiming || !contactInput.trim()}
+                  className="px-4 py-2.5 rounded-xl bg-pink-500 hover:bg-pink-600 disabled:opacity-50 text-white font-black text-xs transition-all cursor-pointer shrink-0"
+                >
+                  {claiming ? 'Reservando...' : 'Reservar'}
+                </button>
+              </div>
+              {claimResult && (
+                <div
+                  className={`flex items-start gap-2 text-xs p-2.5 rounded-xl border ${
+                    claimResult.ok
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                      : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                  }`}
+                >
+                  {claimResult.ok && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />}
+                  <span>{claimResult.message}</span>
+                </div>
+              )}
+            </form>
+          )}
 
           {/* Botones de Descarga / Acceso Directo */}
           <div className="space-y-3">

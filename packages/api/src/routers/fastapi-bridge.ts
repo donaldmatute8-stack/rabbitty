@@ -1,13 +1,13 @@
 import { z } from "zod";
 import { eq, sql } from "drizzle-orm";
-import { router, protectedProcedure } from "../trpc";
+import { router, godAdminProcedure, protectedProcedure } from "../trpc";
 import { bus, EventTypes } from "@rabbitty/events";
 import { miniappClient, configureMiniapp, getMiniappConfig } from "../services/miniapp-client";
 import { ownedBusinesses } from "@rabbitty/database-core";
 import { TRPCError } from "@trpc/server";
 
 export const fastapiBridgeRouter = router({
-  configure: protectedProcedure
+  configure: godAdminProcedure
     .input(
       z.object({
         url: z.string(),
@@ -132,6 +132,17 @@ export const fastapiBridgeRouter = router({
   chargeBunz: protectedProcedure
     .input(z.object({ rabbittyId: z.string(), amountUsd: z.number(), orderId: z.string().optional(), businessId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
+      // ── Guard: cobrar Bunz solo al negocio propio (o God Admin) ──
+      if (input.businessId && !ctx.god2faVerified) {
+        const [owned] = await ctx.coreDb
+          .select({ id: ownedBusinesses.id })
+          .from(ownedBusinesses)
+          .where(eq(ownedBusinesses.ownerId, ctx.userId ?? ""))
+          .limit(1);
+        if (!owned || owned.id !== input.businessId) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Solo puedes cobrar Bunz de tu propio negocio." });
+        }
+      }
       try {
         const result = await miniappClient.chargeBunz(input.rabbittyId, input.amountUsd, input.orderId, input.businessId);
         return { success: true, balanceRemaining: result.balance_remaining, message: result.message };
@@ -140,7 +151,7 @@ export const fastapiBridgeRouter = router({
       }
     }),
 
-  mintBunz: protectedProcedure
+  mintBunz: godAdminProcedure
     .input(z.object({ telegramId: z.string(), businessId: z.string(), fiatAmount: z.number() }))
     .mutation(async ({ ctx, input }) => {
       try {
@@ -151,7 +162,7 @@ export const fastapiBridgeRouter = router({
       }
     }),
 
-  rechargeBusinessBunz: protectedProcedure
+  rechargeBusinessBunz: godAdminProcedure
     .input(z.object({
       businessId: z.string(),
       amount: z.number().int().positive(),

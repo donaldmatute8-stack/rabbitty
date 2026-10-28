@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Bell, Sparkles, ChevronRight, Home } from 'lucide-react';
 import Link from 'next/link';
+import useSWR from 'swr';
 import BottomNav from '@/components/BottomNav';
 import Tabs from '@/components/ui/Tabs';
 import FeedCard from '@/components/ui/FeedCard';
@@ -126,6 +127,16 @@ export default function FeedPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [moodOpen, setMoodOpen] = useState(false);
   const bunzBalance = (user?.totalBunzEarned || 0) - (user?.totalBunzSpent || 0);
+
+  const { data: notifData } = useSWR<{ unreadCount?: number }>(
+    user?.id ? '/api/notifications/unread-count' : null,
+    async (url: string) => {
+      const headers = await PlatformBridge.getAuthHeaders();
+      return fetch(url, { headers }).then((res) => res.json());
+    },
+    { refreshInterval: 12000, revalidateOnFocus: true }
+  );
+  const unreadNotifCount = notifData?.unreadCount || 0;
 
   const handleSpend = async (offerId: string, bunzCost: number, businessName: string, offerTitle: string) => {
     if (user && bunzBalance < bunzCost) {
@@ -586,9 +597,17 @@ export default function FeedPage() {
                   onClick={() => PlatformBridge.hapticFeedback('light')}
                   className="relative w-9 h-9 rounded-full flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.04)] active:scale-95 transition-transform" 
                   style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
+                  aria-label={unreadNotifCount > 0 ? `${unreadNotifCount} notificaciones no leídas` : 'Notificaciones'}
                 >
                   <Bell size={18} strokeWidth={2.5} style={{ color: 'var(--text-primary)' }} />
-                  <div className="absolute top-2 right-2.25 w-1.5 h-1.5 bg-[#E91E63] rounded-full" style={{ border: '1.5px solid var(--bg-elevated)' }} />
+                  {unreadNotifCount > 0 && (
+                    <span 
+                      className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full bg-[#E91E63] text-white text-[10px] font-black flex items-center justify-center shadow-xs"
+                      style={{ border: '1.5px solid var(--bg-elevated)' }}
+                    >
+                      {unreadNotifCount > 99 ? '99+' : unreadNotifCount}
+                    </span>
+                  )}
                 </Link>
 
                 {/* Rabbitty Mood Trigger */}

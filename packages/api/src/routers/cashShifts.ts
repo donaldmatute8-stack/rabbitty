@@ -21,7 +21,7 @@ const branchInput = { branchId: z.string().optional() };
 export const cashShiftsRouter = router({
   /** Estado actual: turno abierto (si existe), totales y bitácora. Sin PIN (solo lectura). */
   current: protectedProcedure.input(z.object(branchInput)).query(async ({ ctx, input }) => {
-    const branchId = resolveBranchId(ctx, input.branchId);
+    const branchId = await resolveBranchId(ctx, input.branchId);
     const [branch] = await ctx.restaurantDb
       .select({
         name: branches.name,
@@ -58,7 +58,7 @@ export const cashShiftsRouter = router({
   open: protectedProcedure
     .input(z.object({ ...branchInput, pin, openingFloat: money, registerId: z.string().default("MAIN") }))
     .mutation(async ({ ctx, input }) => {
-      const branchId = resolveBranchId(ctx, input.branchId);
+      const branchId = await resolveBranchId(ctx, input.branchId);
       const cashier = await findStaffByPin(ctx.restaurantDb, branchId, input.pin, CASHIER_ROLES, "PIN de cajero incorrecto");
       try {
         return await ctx.restaurantDb.transaction(async (tx: any) => {
@@ -107,7 +107,7 @@ export const cashShiftsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const branchId = resolveBranchId(ctx, input.branchId);
+      const branchId = await resolveBranchId(ctx, input.branchId);
       const shift = await getOpenShift(ctx.restaurantDb, branchId);
       if (!shift) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "No hay turno abierto." });
 
@@ -173,7 +173,7 @@ export const cashShiftsRouter = router({
   partialClose: protectedProcedure
     .input(z.object({ ...branchInput, pin, countedCash: money.optional(), notes: z.string().max(300).optional() }))
     .mutation(async ({ ctx, input }) => {
-      const branchId = resolveBranchId(ctx, input.branchId);
+      const branchId = await resolveBranchId(ctx, input.branchId);
       const shift = await getOpenShift(ctx.restaurantDb, branchId);
       if (!shift) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "No hay turno abierto." });
       const actor = await findStaffByPin(ctx.restaurantDb, branchId, input.pin, CASHIER_ROLES);
@@ -221,7 +221,7 @@ export const cashShiftsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const branchId = resolveBranchId(ctx, input.branchId);
+      const branchId = await resolveBranchId(ctx, input.branchId);
       const shift = await getOpenShift(ctx.restaurantDb, branchId);
       if (!shift) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "No hay turno abierto." });
 
@@ -293,7 +293,7 @@ export const cashShiftsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const branchId = resolveBranchId(ctx, input.branchId);
+      const branchId = await resolveBranchId(ctx, input.branchId);
       const shift = await getOpenShift(ctx.restaurantDb, branchId);
       if (!shift) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "No hay turno abierto." });
 
@@ -366,7 +366,7 @@ export const cashShiftsRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      const branchId = resolveBranchId(ctx, input.branchId);
+      const branchId = await resolveBranchId(ctx, input.branchId);
       const conds = [eq(cashShifts.branchId, branchId)];
       if (input.from) conds.push(gte(cashShifts.openedAt, new Date(input.from)));
       if (input.to) conds.push(lte(cashShifts.openedAt, new Date(input.to)));
@@ -391,7 +391,7 @@ export const cashShiftsRouter = router({
   events: adminOnlyProcedure
     .input(z.object({ ...branchInput, shiftId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const branchId = resolveBranchId(ctx, input.branchId);
+      const branchId = await resolveBranchId(ctx, input.branchId);
       const rows = await ctx.restaurantDb
         .select()
         .from(cashShiftEvents)

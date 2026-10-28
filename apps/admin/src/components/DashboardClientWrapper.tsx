@@ -8,7 +8,7 @@ import { CommandMenu } from "./CommandMenu";
 import { SandboxBanner } from "./SandboxBanner";
 import { trpc } from "../lib/trpc-client";
 import Link from "next/link";
-import { TerminalSquare, TabletSmartphone, Smartphone, MessageSquare, X, Bot, Sparkles, Send, RotateCw, CreditCard } from "lucide-react";
+import { TerminalSquare, TabletSmartphone, Smartphone, MessageSquare, X, Bot, Sparkles, Send, RotateCw, CreditCard, Eye } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
 import { ScannerPairModal } from "./ScannerPairModal";
 
@@ -167,11 +167,25 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
 
   useEffect(() => {
     if (branches && branches.length > 0) {
+      const saved = typeof window !== "undefined" ? localStorage.getItem("activeBranchId") : null;
+      const savedBranch = saved ? branches.find((b) => b.id === saved) : null;
+
+      if (branchId === "b1" && savedBranch) {
+        setBranchId(savedBranch.id);
+        return;
+      }
+
       const currentValid = branches.some((b) => b.id === branchId);
       if (!currentValid || branchId === "b1") {
-        setBranchId(branches[0].id);
+        const prodBranch =
+          branches.find(
+            (b) =>
+              !b.name.toLowerCase().includes("sandbox") &&
+              !b.name.toLowerCase().includes("entrenamiento")
+          ) || branches[0]!;
+        setBranchId(prodBranch.id);
         if (typeof window !== "undefined") {
-          localStorage.setItem("activeBranchId", branches[0].id);
+          localStorage.setItem("activeBranchId", prodBranch.id);
         }
       }
     }
@@ -204,6 +218,8 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
     <BranchContext.Provider value={{ branchId, setBranchId }}>
       <SidebarContext.Provider value={{ isCollapsed, setIsCollapsed }}>
         <div className="relative flex h-screen w-full overflow-hidden bg-black text-(--text-primary)">
+          {/* ── Chip: Vista Tenant activa (impersonación God) ── */}
+          <ImpersonationChip />
           {/* Neon Glow Accents */}
           <div className="absolute top-[-10%] right-[-10%] h-125 w-125 rounded-full bg-pink-500/10 blur-[120px] pointer-events-none" />
           <div className="absolute bottom-[-10%] left-[-10%] h-125 w-125 rounded-full bg-purple-500/10 blur-[120px] pointer-events-none" />
@@ -648,5 +664,48 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
         </div>
       </SidebarContext.Provider>
     </BranchContext.Provider>
+  );
+}
+
+// ── Vista Tenant (impersonación God): chip persistente con salida en 1 clic ──
+function ImpersonationChip() {
+  const [imp, setImp] = useState<{ businessName: string; branchName?: string } | null>(null);
+  const [exiting, setExiting] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/admin/impersonate")
+      .then((r) => r.json())
+      .then((d) => setImp(d?.impersonating ?? null))
+      .catch(() => setImp(null));
+  }, []);
+
+  if (!imp) return null;
+
+  const exit = async () => {
+    setExiting(true);
+    try {
+      await fetch("/api/admin/impersonate", { method: "DELETE" });
+      window.location.href = "/";
+    } catch {
+      setExiting(false);
+    }
+  };
+
+  return (
+    <div className="fixed top-2 left-1/2 -translate-x-1/2 z-60 flex items-center gap-2 px-4 py-2 rounded-full bg-linear-to-r from-rose-600 to-pink-600 text-white shadow-[0_0_30px_rgba(244,63,94,0.5)] border border-rose-400/40">
+      <Eye className="h-3.5 w-3.5 shrink-0" />
+      <span className="text-[11px] font-black tracking-wide truncate max-w-56">
+        Vista: {imp.businessName}{imp.branchName ? ` · ${imp.branchName}` : ""}
+      </span>
+      <button
+        type="button"
+        onClick={exit}
+        disabled={exiting}
+        className="ml-1 px-2.5 py-0.5 rounded-full bg-white/20 hover:bg-white/30 text-[10px] font-black transition-all cursor-pointer disabled:opacity-50"
+        title="Salir de la Vista Tenant y volver a God Mode"
+      >
+        {exiting ? "Saliendo…" : "Salir ✕"}
+      </button>
+    </div>
   );
 }

@@ -45,6 +45,31 @@ export default function PhoneAuthFlow({ mode, onBack }: PhoneAuthFlowProps) {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [autoDetecting, setAutoDetecting] = useState(() => PlatformBridge.isTelegram());
+  const [celebration, setCelebration] = useState<{ totalBunz: number; businessName: string } | null>(null);
+  const pendingNavRef = useRef<{ isNewUser: boolean; role?: string } | null>(null);
+
+  // Continúa la navegación post-login (tras cerrar la celebración si aplicó)
+  const continueAfterLogin = (data: { isNewUser?: boolean; user?: { firstName?: string | null; role?: string | null } | null }) => {
+    if (data.isNewUser || !data.user?.firstName) {
+      // New members must complete their identity before entering the app
+      router.replace('/signup?setup=1');
+    } else if (data.user?.role === 'AFFILIATE') {
+      router.replace('/business');
+    } else {
+      router.replace('/');
+    }
+  };
+
+  const closeCelebration = () => {
+    setCelebration(null);
+    const pending = pendingNavRef.current;
+    pendingNavRef.current = null;
+    if (pending) {
+      if (pending.isNewUser) router.replace('/signup?setup=1');
+      else if (pending.role === 'AFFILIATE') router.replace('/business');
+      else router.replace('/');
+    }
+  };
 
   const otpInputRef = useRef<HTMLInputElement>(null);
 
@@ -250,14 +275,15 @@ export default function PhoneAuthFlow({ mode, onBack }: PhoneAuthFlowProps) {
         }
         await checkAuth();
 
-        if (data.isNewUser || !data.user?.firstName) {
-          // New members must complete their identity before entering the app
-          router.replace('/signup?setup=1');
-        } else if (data.user?.role === 'AFFILIATE') {
-          router.replace('/business');
-        } else {
-          router.replace('/');
+        // ── Celebración de Bono de Bienvenida: el usuario VE sus Bunz acreditados
+        //    justo después del login (además de la notificación in-app + push) ──
+        const wb = data.welcomeBonus;
+        if (wb?.awarded) {
+          pendingNavRef.current = { isNewUser: Boolean(data.isNewUser), role: data.user?.role ?? undefined };
+          setCelebration({ totalBunz: Number(wb.totalBunz) || 0, businessName: String(wb.businessName || 'Rabbitty') });
+          return; // la navegación continúa al cerrar la celebración
         }
+        continueAfterLogin(data);
       } else {
         setError(data.error || 'Código incorrecto o expirado.');
         await PlatformBridge.hapticFeedback('error');
@@ -291,6 +317,54 @@ export default function PhoneAuthFlow({ mode, onBack }: PhoneAuthFlowProps) {
       router.push('/onboarding');
     }
   };
+
+  // ── Celebración de Bono de Bienvenida (se muestra sobre cualquier paso) ──
+  if (celebration) {
+    return (
+      <div className="min-h-dvh flex flex-col items-center justify-center bg-[#0A0A0A] px-6 relative overflow-hidden">
+        <div className="absolute top-[-20%] left-1/2 -translate-x-1/2 w-72 h-72 rounded-full bg-[#E91E63]/25 blur-[90px] pointer-events-none" />
+        <motion.div
+          initial={{ scale: 0.7, opacity: 0, y: 20 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 220, damping: 18 }}
+          className="relative z-10 flex flex-col items-center text-center"
+        >
+          <motion.div
+            animate={{ rotate: [0, -8, 8, -5, 5, 0] }}
+            transition={{ duration: 1.2, delay: 0.3 }}
+            className="w-24 h-24 rounded-3xl bg-gradient-to-br from-[#E91E63] to-[#A855F7] flex items-center justify-center text-5xl shadow-[0_0_60px_rgba(233,30,99,0.45)]"
+          >
+            🐰
+          </motion.div>
+          <motion.p
+            initial={{ scale: 0.6, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.45, type: 'spring', stiffness: 260 }}
+            className="mt-6 text-5xl font-black tracking-tight bg-gradient-to-r from-[#E91E63] via-[#F472B6] to-[#A855F7] bg-clip-text text-transparent"
+          >
+            +{celebration.totalBunz}
+          </motion.p>
+          <p className="mt-1 text-base font-black text-white">Bunz acreditados 🎉</p>
+          <p className="mt-2 text-xs text-neutral-400 leading-relaxed max-w-xs">
+            Te esperan en tu billetera, listos para usarlos en{' '}
+            <strong className="text-white">{celebration.businessName}</strong>. Se aplican automáticamente en tu consumo.
+          </p>
+          <button
+            onClick={closeCelebration}
+            className="mt-8 w-full max-w-xs py-3.5 rounded-2xl bg-gradient-to-r from-[#E91E63] to-[#A855F7] text-white font-black text-sm shadow-[0_8px_30px_rgba(233,30,99,0.4)] active:scale-95 transition-transform cursor-pointer"
+          >
+            Empezar a usar mis Bunz →
+          </button>
+          <button
+            onClick={closeCelebration}
+            className="mt-3 text-[11px] font-bold text-neutral-500 hover:text-neutral-300 cursor-pointer"
+          >
+            Continuar
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
 
   if (autoDetecting) {
     return (

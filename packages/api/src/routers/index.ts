@@ -33,6 +33,7 @@ import { cashShiftsRouter } from "./cashShifts";
 import { customerChatRouter } from "./customerChat";
 import { moodRouter } from "./mood";
 import { bunzyRouter } from "./bunzy";
+import { godRouter } from "./god";
 
 import "../services/queue";
 
@@ -71,6 +72,7 @@ export const appRouter = router({
   customerChat: customerChatRouter,
   mood: moodRouter,
   bunzy: bunzyRouter,
+  god: godRouter,
 });
 
 export type AppRouter = typeof appRouter;

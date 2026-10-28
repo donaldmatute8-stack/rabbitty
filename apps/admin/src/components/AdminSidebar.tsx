@@ -44,8 +44,15 @@ import {
   TrendingUp,
   TabletSmartphone,
   TerminalSquare,
+  Crown,
+  Scale,
+  Rocket,
+  Gamepad2,
+  ShieldCheck,
+  Activity,
   Brain,
   FlaskConical,
+  Compass,
   BookOpen,
   Bug,
   MessageSquarePlus,
@@ -111,6 +118,73 @@ const readActiveModules = (): Set<string> | null => {
   return null;
 };
 
+
+// ── GOD MODE: navegación adaptada al God Admin (solo si la sesión es allowlist + 2FA) ──
+const godPillars: MenuPillar[] = [
+  {
+    id: "god_platform",
+    title: "👑 God · Plataforma",
+    icon: Crown,
+    items: [
+      { href: "/god/tenants", label: "Tenants & Vista Prueba", icon: Store },
+      { href: "/god", label: "Centro de Mando God", icon: Crown, badge: "Hub" },
+    ],
+  },
+  {
+    id: "god_treasury",
+    title: "🏦 God · Tesorería",
+    icon: Banknote,
+    items: [
+      { href: "/loyalty", label: "Split & Deuda Bunz", icon: Award },
+      { href: "/god/economia", label: "Economía & Ledger", icon: Scale },
+    ],
+  },
+  {
+    id: "god_growth",
+    title: "📊 God · Ecosistema",
+    icon: TrendingUp,
+    items: [
+      { href: "/god/ecosistema", label: "Métricas Investor", icon: Activity },
+      { href: "/god/escalado", label: "Estado de Escalado", icon: Rocket },
+      { href: "/god/gamificacion", label: "Gamificación Global", icon: Gamepad2 },
+    ],
+  },
+  {
+    id: "god_settings",
+    title: "⚙️ God · Sistema",
+    icon: Settings,
+    items: [
+      { href: "/settings", label: "Ajustes & Seguridad", icon: Settings },
+      { href: "/verify-2fa", label: "Verificación 2FA", icon: ShieldCheck },
+    ],
+  },
+];
+
+// Detecta (en cliente) si la sesión actual es God Admin con 2FA verificada
+function useGodMode() {
+  const [godMode, setGodMode] = useState<{ isGod: boolean; impersonating: string | null }>({ isGod: false, impersonating: null });
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [twoFa, imp] = await Promise.all([
+          fetch("/api/auth/2fa/verify").then((r) => r.json()),
+          fetch("/api/admin/impersonate").then((r) => r.json()),
+        ]);
+        if (cancelled) return;
+        setGodMode({
+          isGod: Boolean(twoFa?.required && twoFa?.verified),
+          impersonating: imp?.impersonating?.businessName ?? null,
+        });
+      } catch {
+        // sin sesión / sin red — vista normal
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+  return godMode;
+}
+
 const menuPillars: MenuPillar[] = [
   {
     id: "operation",
@@ -118,6 +192,7 @@ const menuPillars: MenuPillar[] = [
     icon: Zap,
     items: [
       { href: "/", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/demo", label: "Recorrido Virtual", icon: Compass, badge: "Tour" },
       { href: "/sandbox", label: "Modo Sandbox", icon: FlaskConical, badge: "Test" },
       { href: "/strategy", label: "Estrategia Bunzy", icon: Brain, badge: "IA" },
       { href: "/kitchen", label: "Cocina / KDS", icon: ChefHat },
@@ -179,6 +254,11 @@ const menuPillars: MenuPillar[] = [
 export function AdminSidebar() {
   const pathname = usePathname();
   const { isCollapsed, setIsCollapsed } = useSidebar();
+  const { isGod, impersonating } = useGodMode();
+  // En God Mode el sidebar muestra la navegación God; con 1 clic alterna a la vista afiliado.
+  const [sidebarView, setSidebarView] = useState<"god" | "affiliate">("god");
+  const effectiveView: "god" | "affiliate" = impersonating ? "affiliate" : isGod ? sidebarView : "affiliate";
+  const pillarsToRender = effectiveView === "god" ? godPillars : menuPillars;
 
   // Módulos activos desde settings. null = sin configuración previa → todo visible.
   const [activeModules, setActiveModules] = useState<Set<string> | null>(readActiveModules);
@@ -206,6 +286,10 @@ export function AdminSidebar() {
     menu_stock: true,
     growth: true,
     settings: false,
+    god_platform: true,
+    god_treasury: true,
+    god_growth: true,
+    god_settings: false,
   });
 
   // Auto-expand pillar if current pathname is inside it
@@ -237,6 +321,25 @@ export function AdminSidebar() {
     setFeedbackType(type);
     setFeedbackOpen(true);
   };
+
+  // Toggle God Mode ↔ Vista Afiliado (solo para God Admin, fuera de impersonación)
+  const showGodToggle = isGod && !impersonating;
+  const godToggle = (
+    <button
+      type="button"
+      onClick={() => setSidebarView((v) => (v === "god" ? "affiliate" : "god"))}
+      className={cn(
+        "w-full flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer border",
+        effectiveView === "god"
+          ? "bg-linear-to-r from-amber-500/20 to-pink-500/20 border-amber-500/40 text-amber-300 hover:from-amber-500/30 hover:to-pink-500/30"
+          : "bg-white/5 border-white/10 text-gray-300 hover:bg-white/10"
+      )}
+      title={effectiveView === "god" ? "Cambiar a Vista Afiliado (Ka13 y páginas operativas)" : "Volver a God Mode"}
+    >
+      <Crown className="h-3.5 w-3.5" />
+      {effectiveView === "god" ? "God Mode" : "Vista Afiliado"}
+    </button>
+  );
 
   const handleLogout = async () => {
     try {
@@ -286,9 +389,30 @@ export function AdminSidebar() {
         </button>
       </div>
 
+      {showGodToggle && !isCollapsed && (
+        <div className="px-3 pt-3">{godToggle}</div>
+      )}
+      {showGodToggle && isCollapsed && (
+        <div className="flex justify-center pt-3">
+          <button
+            type="button"
+            onClick={() => setSidebarView((v) => (v === "god" ? "affiliate" : "god"))}
+            className={cn(
+              "rounded-xl p-2 border transition-all cursor-pointer",
+              effectiveView === "god"
+                ? "bg-amber-500/20 border-amber-500/40 text-amber-300"
+                : "bg-white/5 border-white/10 text-gray-300"
+            )}
+            title={effectiveView === "god" ? "God Mode (clic: Vista Afiliado)" : "Vista Afiliado (clic: God Mode)"}
+          >
+            <Crown className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* Navigation Pillars */}
       <nav className="flex-1 space-y-4 px-3 py-4 overflow-y-auto custom-scrollbar">
-        {menuPillars.map((pillar) => {
+        {pillarsToRender.map((pillar) => {
           const items = visibleItems(pillar);
           if (items.length === 0) return null;
           const PillarIcon = pillar.icon;

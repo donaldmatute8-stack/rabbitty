@@ -1,20 +1,18 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { users, ownedBusinesses, ledgerEntries } from "@/db/schema";
 import { sql, desc } from "drizzle-orm";
 import { getAuthenticatedUser } from "@/lib/serverAuth";
 
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
   try {
     const caller = await getAuthenticatedUser(req);
     
-    // Validar rol ADMIN o telegramId/username de control
-    const adminTelegramIds = (process.env.ADMIN_TELEGRAM_IDS || '798431743').split(',').map(s => s.trim());
-    const isAuthorized = 
-      caller?.role === 'ADMIN' || 
-      (caller?.telegramId && adminTelegramIds.includes(caller.telegramId)) ||
-      caller?.username?.toLowerCase() === 'mardelbull' ||
-      caller?.username?.toLowerCase() === 'marco';
+    // Validación canónica (allowlist unificada de adminAuth)
+    const { getVerifiedAdminId, isAdminAllowed } = await import('@/lib/adminAuth');
+    const callerTelegramId = caller?.telegramId ? String(caller.telegramId) : null;
+    const isAuthorized =
+      caller?.role === 'ADMIN' || isAdminAllowed(getVerifiedAdminId(req) || callerTelegramId);
 
     if (!isAuthorized) {
       return NextResponse.json({ error: "Acceso no autorizado al panel de métricas" }, { status: 403 });

@@ -42,6 +42,53 @@ export default function LoyaltyPage() {
   const utils = trpc.useUtils();
   const { data } = trpc.admin.getLoyaltyStats.useQuery(undefined, { retry: false });
   const { data: restaurants } = trpc.admin.getRestaurants.useQuery(undefined, { retry: false });
+  const { data: treasuryWelcome } = trpc.admin.getTreasuryWelcomeStatus.useQuery(undefined, { retry: false });
+  const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
+  const [settleMode, setSettleMode] = useState<"FROM_AVAILABLE_FEES" | "FULL_BALANCE_RESET">("FROM_AVAILABLE_FEES");
+  const [capDraft, setCapDraft] = useState<{ default: string; overrides: Record<string, string> }>({ default: "200", overrides: {} });
+
+  useEffect(() => {
+    if (!treasuryWelcome?.capConfig) return;
+    setCapDraft({
+      default: String(treasuryWelcome.capConfig.default ?? 200),
+      overrides: Object.fromEntries(
+        (treasuryWelcome.perBusinessMonthlyUsage || []).map(
+          (b) => [b.businessId, String(treasuryWelcome.capConfig?.overrides?.[b.businessId] ?? "")]
+        )
+      ),
+    });
+  }, [treasuryWelcome]);
+
+  const saveCapMutation = trpc.admin.setWelcomeCapSettings.useMutation({
+    onSuccess: () => {
+      utils.admin.getTreasuryWelcomeStatus.invalidate();
+      toast.success("🎯 Tope mensual por afiliado actualizado");
+    },
+    onError: (err) => {
+      toast.error(err.message || "Error al guardar el tope mensual");
+    },
+  });
+
+  const handleSaveCap = () => {
+    const overrides: Record<string, number> = {};
+    for (const [bizId, raw] of Object.entries(capDraft.overrides)) {
+      if (raw === "") continue;
+      const n = Math.round(Number(raw));
+      if (Number.isFinite(n) && n > 0) overrides[bizId] = n;
+    }
+    saveCapMutation.mutate({ default: Math.round(Number(capDraft.default) || 0), overrides });
+  };
+
+  const settleTreasuryMutation = trpc.admin.settleTreasuryWelcomeDebt.useMutation({
+    onSuccess: (res) => {
+      utils.admin.getTreasuryWelcomeStatus.invalidate();
+      setIsSettleModalOpen(false);
+      toast.success(`Tesorería puesta al corriente por +${res.settledAmount.toLocaleString()} Bunz`);
+    },
+    onError: (err) => {
+      toast.error(err.message || "Error al liquidar saldo negativo de tesorería");
+    },
+  });
   const updateRewardRate = trpc.admin.updateRestaurant.useMutation({
     onSuccess: () => {
       utils.admin.getRestaurants.invalidate();
@@ -193,6 +240,210 @@ export default function LoyaltyPage() {
           </div>
         </div>
       </div>
+
+      {/* ── God Admin: Tesorería Rabbitty & Split Triangular de Bienvenida ── */}
+      {treasuryWelcome && (
+        <div className="rounded-[2.25rem] border border-pink-500/20 bg-linear-to-r from-slate-950 via-gray-900 to-slate-950 p-7 shadow-2xl">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div className="space-y-1.5 max-w-2xl">
+              <div className="flex items-center gap-2.5">
+                <span className="px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-pink-500/15 text-pink-400 border border-pink-500/30">
+                  🏦 Tesorería God Admin · Split Triangular (60% Afiliado / 40% Rabbitty)
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  Base Homologada: 25 Bunz / Nicho
+                </span>
+              </div>
+              <h2 className="text-2xl font-black text-white">
+                Control de Saldo en Negativo por Bonos de Bienvenida QR
+              </h2>
+              <p className="text-sm text-gray-400">
+                Cada vez que un usuario nuevo reclama sus +25 Bunz de bienvenida desde un QR de mesa, el paquete del Afiliado aporta <strong>15 Bunz (60%)</strong> y la Tesorería de Rabbitty adelanta <strong>10 Bunz (40%)</strong> en negativo. Tú decides manualmente cuándo ponerte al corriente.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="px-5 py-3.5 rounded-2xl bg-black/50 border border-rose-500/30 min-w-45">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-gray-400 block">
+                  Saldo en Negativo (Deuda Split)
+                </span>
+                <span className={cn("text-2xl font-black", treasuryWelcome.netOutstandingDebt > 0 ? "text-rose-400" : "text-emerald-400")}>
+                  {treasuryWelcome.netOutstandingDebt > 0 ? `${treasuryWelcome.netNegativeBalance.toLocaleString()} Bunz` : "0 Bunz ✓"}
+                </span>
+                <span className="text-[11px] text-gray-500 block mt-0.5">
+                  {treasuryWelcome.welcomeBonusesCount} bonos co-financiados
+                </span>
+              </div>
+
+              <div className="px-5 py-3.5 rounded-2xl bg-black/50 border border-cyan-500/30 min-w-45">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-gray-400 block">
+                  Disponible en Tesorería (Fees)
+                </span>
+                <span className="text-2xl font-black text-cyan-400">
+                  +{treasuryWelcome.availableSurplusForSettlement.toLocaleString()} Bunz
+                </span>
+                <span className="text-[11px] text-gray-500 block mt-0.5">
+                  Histórico recaudado: {treasuryWelcome.totalFeeIncome.toLocaleString()} Bunz
+                </span>
+              </div>
+
+              <button
+                type="button"
+                disabled={treasuryWelcome.netOutstandingDebt <= 0}
+                onClick={() => {
+                  setSettleMode(
+                    treasuryWelcome.availableSurplusForSettlement >= treasuryWelcome.netOutstandingDebt
+                      ? "FROM_AVAILABLE_FEES"
+                      : "FULL_BALANCE_RESET"
+                  );
+                  setIsSettleModalOpen(true);
+                }}
+                className={cn(
+                  "px-6 py-4 rounded-2xl font-black text-sm transition-all",
+                  treasuryWelcome.netOutstandingDebt > 0
+                    ? "bg-linear-to-r from-pink-600 to-rose-500 text-white shadow-[0_0_25px_rgba(244,63,94,0.4)] hover:scale-[1.02] cursor-pointer"
+                    : "bg-white/5 text-gray-500 border border-white/10 cursor-not-allowed"
+                )}
+              >
+                {treasuryWelcome.netOutstandingDebt > 0
+                  ? `⚡ Poner al Corriente (${treasuryWelcome.netOutstandingDebt.toLocaleString()} Bunz)`
+                  : "✅ Tesorería al Corriente"}
+              </button>
+            </div>
+          </div>
+
+          {/* ── Tope Mensual por Afiliado (dinámico) ── */}
+          {treasuryWelcome.capConfig && (
+            <div className="mt-6 p-5 rounded-2xl bg-black/40 border border-sky-500/30 space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-black text-white uppercase tracking-wider">
+                  🎯 Tope Mensual por Afiliado (Bunz fondeados por el local)
+                </h4>
+                <span className="text-[11px] text-gray-500">
+                  Al agotarse el tope, Tesorería subsidia el resto del bono (en negativo)
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                  Default
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100000}
+                  value={capDraft.default}
+                  onChange={(e) => setCapDraft({ ...capDraft, default: e.target.value })}
+                  className="w-28 px-3 py-2 rounded-xl bg-gray-950 border border-gray-700 text-white font-black text-sm focus:border-sky-500 outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveCap}
+                  disabled={saveCapMutation.isPending}
+                  className="px-4 py-2 rounded-xl bg-linear-to-r from-sky-600 to-indigo-500 text-white font-black text-xs hover:scale-[1.02] cursor-pointer disabled:opacity-50"
+                >
+                  {saveCapMutation.isPending ? "Guardando..." : "💾 Guardar Tope"}
+                </button>
+              </div>
+              {(treasuryWelcome.perBusinessMonthlyUsage || []).length > 0 && (
+                <div className="space-y-2">
+                  {treasuryWelcome.perBusinessMonthlyUsage.map((b) => (
+                    <div key={b.businessId} className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10">
+                      <div className="min-w-0">
+                        <p className="text-[12px] font-black text-gray-200 truncate">{b.businessName}</p>
+                        <p className={cn("text-[10px] font-bold", b.used >= b.cap ? "text-rose-400" : "text-gray-500")}>
+                          Este mes: {b.used}/{b.cap} Bunz{b.used >= b.cap ? " · tope alcanzado → Tesorería subsidia" : ""}
+                        </p>
+                      </div>
+                      <input
+                        type="number"
+                        min={0}
+                        placeholder={String(b.cap)}
+                        value={capDraft.overrides[b.businessId] ?? ""}
+                        onChange={(e) => setCapDraft({ ...capDraft, overrides: { ...capDraft.overrides, [b.businessId]: e.target.value } })}
+                        className="w-20 px-2.5 py-1.5 rounded-lg bg-gray-950 border border-gray-700 text-white font-black text-xs focus:border-sky-500 outline-none"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {isSettleModalOpen && (
+            <div className="mt-6 p-6 rounded-2xl bg-black/70 border border-pink-500/40 space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-lg font-black text-white">
+                  🛡️ Confirmar Liquidación Manual de Saldo en Negativo ({treasuryWelcome.netOutstandingDebt.toLocaleString()} Bunz)
+                </h4>
+                <button
+                  type="button"
+                  onClick={() => setIsSettleModalOpen(false)}
+                  className="text-gray-400 hover:text-white"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <p className="text-sm text-gray-300">
+                Selecciona cómo deseas saldar los <strong>{treasuryWelcome.netOutstandingDebt.toLocaleString()} Bunz</strong> acumulados en negativo por el Split de Bienvenida:
+              </p>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSettleMode("FROM_AVAILABLE_FEES")}
+                  className={cn(
+                    "p-4 rounded-xl border text-left transition-all",
+                    settleMode === "FROM_AVAILABLE_FEES"
+                      ? "border-cyan-400 bg-cyan-500/10 text-white"
+                      : "border-white/10 bg-white/5 text-gray-400"
+                  )}
+                >
+                  <p className="font-black text-sm">Descontar de Comisiones en Tesorería</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Usa el superávit acumulado de fees (+{treasuryWelcome.availableSurplusForSettlement.toLocaleString()} Bunz disponibles).
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSettleMode("FULL_BALANCE_RESET")}
+                  className={cn(
+                    "p-4 rounded-xl border text-left transition-all",
+                    settleMode === "FULL_BALANCE_RESET"
+                      ? "border-emerald-400 bg-emerald-500/10 text-white"
+                      : "border-white/10 bg-white/5 text-gray-400"
+                  )}
+                >
+                  <p className="font-black text-sm">Respaldo Directo de Reserva Admin</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Pone el contador en 0 Bunz respaldado directamente por la reserva de Rabbitty.
+                  </p>
+                </button>
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsSettleModalOpen(false)}
+                  className="px-5 py-2.5 rounded-xl border border-white/15 text-sm font-bold text-gray-300 hover:bg-white/5"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={settleTreasuryMutation.isPending}
+                  onClick={() =>
+                    settleTreasuryMutation.mutate({
+                      amountToSettle: treasuryWelcome.netOutstandingDebt,
+                      mode: settleMode,
+                    })
+                  }
+                  className="px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm transition-all"
+                >
+                  {settleTreasuryMutation.isPending ? "Liquidando..." : "✓ Confirmar y Poner al Corriente"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-12 gap-8">
         

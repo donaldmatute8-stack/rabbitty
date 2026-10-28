@@ -7,7 +7,7 @@ export const aiRouter = router({
   getStrategy: protectedProcedure
     .input(z.object({ branchId: z.string().optional() }))
     .query(async ({ ctx, input }) => {
-      const branchId = resolveBranchId(ctx, input.branchId);
+      const branchId = await resolveBranchId(ctx, input.branchId);
       const [strategy] = await ctx.restaurantDb
         .select()
         .from(aiStrategies)
@@ -26,7 +26,7 @@ export const aiRouter = router({
       goal: z.string(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const branchId = resolveBranchId(ctx, input.branchId);
+      const branchId = await resolveBranchId(ctx, input.branchId);
       
       // Deactivate old strategies
       await ctx.restaurantDb.update(aiStrategies)

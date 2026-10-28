@@ -12,14 +12,34 @@ export async function GET(req: NextRequest) {
     }
 
     const targetUserId = caller.id;
+    const url = new URL(req.url);
+    const scope = url.searchParams.get("scope") || "personal";
 
-    const rows = await db.query.notifications.findMany({
+    const allRows = await db.query.notifications.findMany({
       where: eq(notifications.userId, targetUserId),
       orderBy: [desc(notifications.createdAt)],
-      limit: 50,
+      limit: 80,
     });
 
-    return NextResponse.json({ success: true, notifications: rows });
+    // En la app móvil personal, aislamos las alertas operativas de comanda / POS de restaurantes
+    const isCommercialStaffAlert = (n: typeof allRows[number]) => {
+      const t = (n.title || "").toLowerCase();
+      const m = (n.message || "").toLowerCase();
+      return (
+        t.includes("nueva comanda") ||
+        t.includes("comanda #") ||
+        t.includes("pedido en mesa") ||
+        m.includes("ordenó") && m.includes("platillo")
+      );
+    };
+
+    const rows = scope === "business"
+      ? allRows.filter(isCommercialStaffAlert)
+      : allRows.filter((n) => !isCommercialStaffAlert(n));
+
+    const unreadCount = rows.filter((r) => !r.isRead).length;
+
+    return NextResponse.json({ success: true, notifications: rows, unreadCount });
   } catch (error) {
     console.error("[NOTIFICATIONS_GET]", error);
     return NextResponse.json({ error: "Error al obtener notificaciones" }, { status: 500 });

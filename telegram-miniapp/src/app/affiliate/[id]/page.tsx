@@ -18,7 +18,7 @@ import {
   Heart,
   ChevronRight,
 } from 'lucide-react';
-import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import Image from 'next/image';
 import BottomNav from '@/components/BottomNav';
 import { useToast } from '@/contexts/ToastContext';
@@ -40,6 +40,7 @@ interface AffiliateData {
   rewardPercentage: number;
   description?: string;
   gallery?: string;
+  coverImageUrl?: string;
   website?: string;
   webUrl?: string;
   supportWhatsApp?: string;
@@ -89,7 +90,7 @@ function AffiliateProfileContent() {
   });
 
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'menu' | 'info' | 'experiences'>('menu');
+  const [activeTab, setActiveTab] = useState<'menu' | 'info'>('menu');
   const [isFavorite, setIsFavorite] = useState(false);
 
   // Initialize table number from searchParams safely without calling setState in render or synchronous effect
@@ -115,13 +116,50 @@ function AffiliateProfileContent() {
   const [showMessageSelector, setShowMessageSelector] = useState(false);
   const [showMoodCheckIn, setShowMoodCheckIn] = useState(false);
 
-  // Header scroll detection
+  // Header scroll & Bottom Nav visibility synchronization
   const [isScrolled, setIsScrolled] = useState(false);
+  const [isNavVisible, setIsNavVisible] = useState(true);
+  const lastScrollY = useRef(0);
+  const accumulatedDelta = useRef(0);
 
   useEffect(() => {
-    const handleScroll = () => setIsScrolled(window.scrollY > 150);
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+      setIsScrolled(currentScrollY > 150);
+
+      const diff = currentScrollY - lastScrollY.current;
+
+      // Al inicio de la pantalla siempre visible
+      if (currentScrollY < 60) {
+        setIsNavVisible(true);
+        accumulatedDelta.current = 0;
+        lastScrollY.current = currentScrollY;
+        return;
+      }
+
+      // Detectar dirección de scroll
+      if (diff > 8) {
+        // Scroll hacia ABAJO -> Ocultar BottomNav y empujar el botón de escanear hacia el fondo
+        accumulatedDelta.current += diff;
+        if (accumulatedDelta.current > 25) {
+          setIsNavVisible(false);
+          accumulatedDelta.current = 0;
+        }
+      } else if (diff < -5) {
+        // Scroll hacia ARRIBA -> Reaparecer BottomNav y subir el botón
+        accumulatedDelta.current = 0;
+        setIsNavVisible(true);
+      }
+
+      lastScrollY.current = Math.max(0, currentScrollY);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    document.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      document.removeEventListener('scroll', handleScroll);
+    };
   }, []);
 
   useEffect(() => {
@@ -256,9 +294,10 @@ function AffiliateProfileContent() {
     /* parse fallback */
   }
   const coverImage =
-    parsedGallery.length > 0
+    affiliate.coverImageUrl ||
+    (parsedGallery.length > 0
       ? parsedGallery[0]
-      : 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=800&q=80';
+      : 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=1200&q=85');
 
   const targetWebsite = affiliate.website || affiliate.webUrl || 'https://rabbitty.me';
   const formattedWebUrl = targetWebsite.startsWith('http')
@@ -396,94 +435,89 @@ function AffiliateProfileContent() {
           </p>
         </div>
 
-        {/* Action Quick Links (Dynamically adapted based on affiliate capabilities & tables) */}
-        <div className={`grid ${capabilities.tableServiceEnabled && tables.length > 0 ? 'grid-cols-4' : 'grid-cols-3'} gap-2.5`}>
-          <motion.div
-            whileTap={{ scale: 0.95 }}
+        {/* Action Quick Links (Minimalist, integrated sleek action bar) */}
+        <div className="flex items-center justify-around py-2 px-1 bg-white/[0.03] border border-white/8 rounded-2xl backdrop-blur-md">
+          <motion.button
+            whileTap={{ scale: 0.92 }}
             onClick={() => setShowMapSelector(true)}
-            className="bg-[#161622] rounded-2xl p-3 flex flex-col items-center gap-1.5 border border-white/10 cursor-pointer shadow-sm"
+            className="flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-colors hover:bg-white/5 active:opacity-80 border-none bg-transparent cursor-pointer"
           >
-            <div className="bg-[#E91E63]/15 text-[#E91E63] p-2.5 rounded-xl">
-              <Navigation size={18} />
+            <div className="w-9 h-9 rounded-full bg-[#E91E63]/12 text-[#E91E63] border border-[#E91E63]/25 flex items-center justify-center">
+              <Navigation size={16} />
             </div>
-            <span className="text-[11px] font-black text-white">Llegar</span>
-          </motion.div>
+            <span className="text-[10px] font-bold text-white/80 tracking-tight">Llegar</span>
+          </motion.button>
 
-          <motion.div
-            whileTap={{ scale: 0.95 }}
+          <motion.button
+            whileTap={{ scale: 0.92 }}
             onClick={() => {
               PlatformBridge.hapticFeedback('medium');
               setShowMoodCheckIn(true);
             }}
-            className="bg-amber-500/10 rounded-2xl p-3 flex flex-col items-center gap-1.5 border border-amber-500/20 cursor-pointer shadow-sm"
+            className="flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-colors hover:bg-white/5 active:opacity-80 border-none bg-transparent cursor-pointer"
           >
-            <div className="bg-amber-500/20 text-amber-400 p-2.5 rounded-xl">
-              <Sparkles size={18} />
+            <div className="w-9 h-9 rounded-full bg-amber-500/12 text-amber-400 border border-amber-500/25 flex items-center justify-center">
+              <Sparkles size={16} />
             </div>
-            <span className="text-[11px] font-black text-amber-400">Mood</span>
-          </motion.div>
+            <span className="text-[10px] font-bold text-amber-400 tracking-tight">Mood</span>
+          </motion.button>
 
           {capabilities.tableServiceEnabled && tables.length > 0 && (
-            <motion.div
-              whileTap={{ scale: 0.95 }}
+            <motion.button
+              whileTap={{ scale: 0.92 }}
               onClick={() => setShowTableSheet(true)}
-              className="bg-[#161622] rounded-2xl p-3 flex flex-col items-center gap-1.5 border border-white/10 cursor-pointer shadow-sm"
+              className="flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-colors hover:bg-white/5 active:opacity-80 border-none bg-transparent cursor-pointer"
             >
-              <div className="bg-purple-500/15 text-purple-400 p-2.5 rounded-xl">
-                <QrCode size={18} />
+              <div className="w-9 h-9 rounded-full bg-purple-500/12 text-purple-400 border border-purple-500/25 flex items-center justify-center">
+                <QrCode size={16} />
               </div>
-              <span className="text-[11px] font-black text-white">
-                {tableNumber ? `Mesa #${tableNumber}` : 'Mesa / Barra'}
+              <span className="text-[10px] font-bold text-white/80 tracking-tight">
+                {tableNumber ? `#${tableNumber}` : 'Mesa'}
               </span>
-            </motion.div>
+            </motion.button>
           )}
 
-          <motion.div
-            whileTap={{ scale: 0.95 }}
+          <motion.button
+            whileTap={{ scale: 0.92 }}
             onClick={() => setShowMessageSelector(true)}
-            className="bg-[#161622] rounded-2xl p-3 flex flex-col items-center gap-1.5 border border-white/10 cursor-pointer shadow-sm"
+            className="flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-colors hover:bg-white/5 active:opacity-80 border-none bg-transparent cursor-pointer"
           >
-            <div className="bg-orange-500/15 text-orange-400 p-2.5 rounded-xl">
-              <MessageCircle size={18} />
+            <div className="w-9 h-9 rounded-full bg-orange-500/12 text-orange-400 border border-orange-500/25 flex items-center justify-center">
+              <MessageCircle size={16} />
             </div>
-            <span className="text-[11px] font-black text-white">Mensaje</span>
-          </motion.div>
+            <span className="text-[10px] font-bold text-white/80 tracking-tight">Mensaje</span>
+          </motion.button>
         </div>
 
-        {/* Interactive Segmented Experience Tabs (Sticky Header) */}
+        {/* Interactive Segmented Experience Tabs (2 tabs, perfectly balanced) */}
         <div className="sticky top-[calc(max(var(--safe-top,0px),env(safe-area-inset-top,0px))+56px)] z-30 -mx-2 px-2 py-2 bg-[#0D0D15]/95 backdrop-blur-xl">
-          <div className="flex p-1 bg-[#161622] rounded-2xl border border-white/10 shadow-lg">
+          <div className="grid grid-cols-2 p-1 bg-[#161622] rounded-2xl border border-white/10 shadow-lg">
             <button
-              onClick={() => setActiveTab('menu')}
-              className={`flex-1 py-2.5 rounded-xl text-xs font-black tracking-wide transition-all flex items-center justify-center gap-1.5 ${
+              onClick={() => {
+                PlatformBridge.hapticFeedback('light');
+                setActiveTab('menu');
+              }}
+              className={`py-2.5 rounded-xl text-xs font-black tracking-wide transition-all flex items-center justify-center gap-2 ${
                 activeTab === 'menu'
                   ? 'bg-[#E91E63] text-white shadow-md shadow-[#E91E63]/30'
                   : 'text-white/60 hover:text-white'
               }`}
             >
-              <Utensils size={14} />
+              <Utensils size={15} />
               <span>Menú y Servicios</span>
             </button>
             <button
-              onClick={() => setActiveTab('experiences')}
-              className={`flex-1 py-2.5 rounded-xl text-xs font-black tracking-wide transition-all flex items-center justify-center gap-1.5 ${
-                activeTab === 'experiences'
-                  ? 'bg-[#E91E63] text-white shadow-md shadow-[#E91E63]/30'
-                  : 'text-white/60 hover:text-white'
-              }`}
-            >
-              <Sparkles size={14} />
-              <span>Rabbitty Mood</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('info')}
-              className={`flex-1 py-2.5 rounded-xl text-xs font-black tracking-wide transition-all flex items-center justify-center gap-1.5 ${
+              onClick={() => {
+                PlatformBridge.hapticFeedback('light');
+                setActiveTab('info');
+              }}
+              className={`py-2.5 rounded-xl text-xs font-black tracking-wide transition-all flex items-center justify-center gap-2 ${
                 activeTab === 'info'
                   ? 'bg-[#E91E63] text-white shadow-md shadow-[#E91E63]/30'
                   : 'text-white/60 hover:text-white'
               }`}
             >
-              <Layers size={14} />
+              <Layers size={15} />
               <span>Sucursal</span>
             </button>
           </div>
@@ -518,44 +552,19 @@ function AffiliateProfileContent() {
           </div>
         )}
 
-        {/* Tab 2: Rabbitty Mood & Experiencias */}
-        {activeTab === 'experiences' && (
-          <div className="space-y-5">
-            <div className="p-5 bg-linear-to-br from-amber-500/15 via-[#161622] to-purple-500/10 rounded-3xl border border-amber-500/20 space-y-3">
-              <div className="flex items-center gap-2.5 text-amber-400">
-                <Sparkles size={18} />
-                <h3 className="text-sm font-black uppercase tracking-wider">
-                  Atmósfera & Pairing de la Casa
-                </h3>
-              </div>
-              <p className="text-xs text-white/70 leading-relaxed">
-                Rabbitty analiza la energía en tiempo real de este local para sugerirte las mejores horas de visita, música sugerida y maridajes del chef.
-              </p>
-              <div className="pt-2 flex gap-2">
-                <button
-                  onClick={() => setShowMoodCheckIn(true)}
-                  className="bg-amber-500 text-black px-4 py-2 rounded-xl text-xs font-black shadow-lg shadow-amber-500/20 active:scale-95 transition-transform"
-                >
-                  Registrar Check-In de Vibe
-                </button>
-              </div>
-            </div>
-
-            {/* Happy Hour Bonus */}
-            <div className="p-5 bg-linear-to-br from-[#E91E63]/15 to-[#AD1457]/10 rounded-3xl border border-[#E91E63]/25 space-y-2">
-              <h4 className="text-sm font-black text-[#FF4081] flex items-center gap-2">
-                <Tag size={16} /> Happy Hour de Bunz
-              </h4>
-              <p className="text-xs text-white/70 leading-relaxed">
-                Escanea tu ticket de compra durante el horario oficial ({affiliate.startTime} a {affiliate.endTime}) para llevarte hasta <strong>+{affiliate.rewardPercentage}%</strong> en recompensas de lealtad.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Tab 3: Sucursal, Ubicación, Galería & Acerca de */}
+        {/* Tab 2: Sucursal, Ubicación, Happy Hour & Galería */}
         {activeTab === 'info' && (
           <div className="space-y-5">
+            {/* Happy Hour Bunz Highlight */}
+            <div className="p-4 bg-linear-to-br from-[#E91E63]/15 to-[#AD1457]/10 rounded-3xl border border-[#E91E63]/25 space-y-2">
+              <h4 className="text-sm font-black text-[#FF4081] flex items-center gap-2">
+                <Tag size={16} /> Recompensa Bunz
+              </h4>
+              <p className="text-xs text-white/75 leading-relaxed">
+                Escanea tu ticket de compra durante el horario oficial ({affiliate.startTime} a {affiliate.endTime}) para recibir <strong>+{affiliate.rewardPercentage}% Bunz</strong> en cada consumo.
+              </p>
+            </div>
+
             {/* Address & Hours card */}
             <div className="bg-[#161622] rounded-3xl p-5 border border-white/10 space-y-4">
               <div className="flex items-start gap-3">
@@ -640,8 +649,14 @@ function AffiliateProfileContent() {
         )}
       </div>
 
-      {/* Persistent Bottom Bar (Cart / Scan) */}
-      <div className="fixed bottom-[calc(max(var(--safe-bottom,0px),env(safe-area-inset-bottom,0px))+76px)] left-0 right-0 px-4 z-40 pointer-events-none">
+      {/* Persistent Bottom Bar (Cart / Scan) with dynamic push-down on scroll */}
+      <div
+        className={`fixed left-0 right-0 px-4 z-40 pointer-events-none transition-all duration-300 ease-out ${
+          isNavVisible
+            ? 'bottom-[calc(max(var(--safe-bottom,0px),env(safe-area-inset-bottom,0px))+76px)]'
+            : 'bottom-[calc(max(var(--safe-bottom,0px),env(safe-area-inset-bottom,0px))+14px)]'
+        }`}
+      >
         <div className="max-w-md mx-auto pointer-events-auto">
           {totalCartCount > 0 ? (
             <motion.button

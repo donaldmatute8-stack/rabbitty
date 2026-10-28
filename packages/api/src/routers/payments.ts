@@ -299,7 +299,7 @@ export const paymentsRouter = router({
       branchId: z.string().optional(),
     }))
     .query(async ({ ctx, input }) => {
-      const branchId = resolveBranchId(ctx, input.branchId);
+      const branchId = await resolveBranchId(ctx, input.branchId);
       const { syncStripeAccountStatus } = await import("../services/stripeConnect");
       return await syncStripeAccountStatus({
         db: ctx.restaurantDb,
@@ -314,7 +314,7 @@ export const paymentsRouter = router({
       returnUrl: z.string().url(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const branchId = resolveBranchId(ctx, input.branchId);
+      const branchId = await resolveBranchId(ctx, input.branchId);
 
       // ── Multi-tenant guard: la sucursal debe pertenecer al negocio del caller ──
       const { restaurants, branches } = await import("@rabbitty/database-restaurant/schema");
@@ -466,7 +466,7 @@ export const paymentsRouter = router({
       endDate: z.string().optional(),
     }))
     .query(async ({ ctx, input }) => {
-      const branchId = resolveBranchId(ctx, input.branchId);
+      const branchId = await resolveBranchId(ctx, input.branchId);
       const start = input.startDate ? new Date(input.startDate) : new Date(Date.now() - 30 * 24 * 3600 * 1000);
       const end = input.endDate ? new Date(input.endDate) : new Date();
       end.setDate(end.getDate() + 1);

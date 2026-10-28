@@ -6,6 +6,7 @@ import { ArrowLeft, Keyboard } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Html5Qrcode } from 'html5-qrcode';
 import RabbittyCode from '@/components/ui/RabbittyCode';
+import { QRCodeSVG } from 'qrcode.react';
 import BottomNav from '@/components/BottomNav';
 import Button from '@/components/ui/Button';
 import { useWallet } from '@/contexts/WalletContext';
@@ -64,6 +65,34 @@ export default function ScanPage() {
         app.setHeaderColor(bg); 
       } catch {}
     });
+
+    // Auto-login PC/Portal si el usuario abrió el link directo /scan?qrlogin_...
+    const rawSearch = typeof window !== 'undefined' ? window.location.search : '';
+    const urlQrLogin =
+      searchParams.get('qrlogin') ||
+      (rawSearch.includes('qrlogin_') ? rawSearch.split('qrlogin_')[1]?.split('&')[0]?.split('?')[0] : null);
+    if (urlQrLogin) {
+      (async () => {
+        try {
+          const headers = await PlatformBridge.getAuthHeaders();
+          const res = await fetch('/api/auth/qr/scan', {
+            method: 'POST',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ qrToken: urlQrLogin }),
+          });
+          const data = await res.json();
+          if (data.success) {
+            alert('¡Acceso autorizado exitosamente en tu pantalla! 🪄');
+            router.push('/profile');
+          } else {
+            alert('Error de autorización QR: ' + (data.error || 'Token inválido o expirado'));
+          }
+        } catch {
+          alert('Error de conexión al autorizar el acceso QR.');
+        }
+      })();
+      return;
+    }
 
     // Auto-reclamo si el usuario abrió el link directo del ticket /scan?claimToken=...
     const urlClaimToken = searchParams.get('claimToken') || searchParams.get('claim');
@@ -237,7 +266,7 @@ export default function ScanPage() {
                   startScanningRef.current();
                   return;
                 }
-              } catch (err: any) {
+              } catch {
                 alert('Error al conectar con el servidor para reclamar el ticket.');
                 startScanningRef.current();
                 return;
@@ -295,7 +324,7 @@ export default function ScanPage() {
             }
           }
 
-          // 0.2 Check if it is a Store Neon Check-in QR (branchId without table)
+          // 1.1 Check-in de mostrador (branchId sin mesa) → registrar y abrir ficha del afiliado
           if ((decodedText.includes('branchId=') || decodedText.includes('branch=')) && !decodedText.includes('tableId=')) {
             let scannedBranchId = '';
             let scannedBusiness = 'este comercio';
@@ -317,13 +346,64 @@ export default function ScanPage() {
                 localStorage.setItem('rabbitty_last_branch_id', scannedBranchId);
                 localStorage.setItem('rabbitty_last_business_name', scannedBusiness);
               } catch {}
+              // Resolver el negocio dueño de la sucursal → ficha completa (menú, escanear en caja)
+              try {
+                const res = await fetch('/api/rabbitty-code/lookup', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ text: decodedText }),
+                });
+                const data = await res.json();
+                if (data?.success && data.type === 'business' && data.businessId) {
+                  import('@twa-dev/sdk')
+                    .then((mod) => mod.default.HapticFeedback.notificationOccurred('success'))
+                    .catch(() => {});
+                  router.push(`/affiliate/${data.businessId}`);
+                  return;
+                }
+              } catch { /* fallback abajo */ }
               alert(`🐰 ¡Estás en ${scannedBusiness}! Check-in registrado. Tus compras acumularán Bunz.`);
               router.push('/profile/wallet');
               return;
             }
           }
 
-          // 1. Check if it is a QR Login for PC/Admin
+          // 1.2 Fallback universal: pósters (download?ref=), fichas de afiliado, URLs de Rabbitty, @usuarios
+          if (/^https?:\/\//i.test(decodedText) || decodedText.startsWith('@') || decodedText.includes('download?ref=')) {
+            try {
+              const res = await fetch('/api/rabbitty-code/lookup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: decodedText }),
+              });
+              const data = await res.json();
+              if (data?.success) {
+                await stopScanning();
+                if (data.type === 'business' && data.businessId) {
+                  router.push(`/affiliate/${data.businessId}`);
+                  return;
+                }
+                if (data.type === 'user' && data.user) {
+                  router.push(`/profile/wallet?to=${encodeURIComponent(data.user.handle || data.user.id)}`);
+                  return;
+                }
+                if (data.type === 'url' && data.url) {
+                  // Landing/página externa de Rabbitty (ej. /download de póster)
+                  // Prioridad: nativo (browser del sistema) → Telegram → web
+                  if (PlatformBridge.isNative()) {
+                    import('@capacitor/browser').then(({ Browser }) => Browser.open({ url: data.url })).catch(() => { window.open(data.url, '_blank'); });
+                  } else if (PlatformBridge.isTelegram()) {
+                    import('@twa-dev/sdk').then((mod) => mod.default.openLink(data.url)).catch(() => { window.open(data.url, '_blank'); });
+                  } else {
+                    window.open(data.url, '_blank');
+                  }
+                  return;
+                }
+              }
+            } catch { /* sigue al intent normal */ }
+          }
+
+          // 1.3 QR Login para PC/Admin (qrlogin_)
           if (decodedText.includes('qrlogin_')) {
             const qrToken = decodedText.split('qrlogin_')[1].split('&')[0].split('?')[0];
             await stopScanning();
@@ -411,6 +491,172 @@ export default function ScanPage() {
     };
   }, [activeTab, hasCamera, showManualInput, result, startScanning, stopScanning]);
 
+  // Detector óptico en vivo para nuestro QR Neón propietario (RabbittyCode)
+  useEffect(() => {
+    if (activeTab !== 'scan' || !hasCamera || showManualInput || result) return;
+
+    let consecutiveNeonFrames = 0;
+    let isSubmittingOptical = false;
+    const hiCanvasRef: { current: HTMLCanvasElement | null } = { current: null };
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    const interval = setInterval(async () => {
+      if (isSubmittingOptical || !ctx) return;
+      const container = document.getElementById('qr-reader');
+      const video = container?.querySelector('video');
+      if (!video || video.readyState < 2 || video.videoWidth === 0) return;
+
+      try {
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+        const cropSize = Math.min(vw, vh) * 0.65;
+        const sx = (vw - cropSize) / 2;
+        const sy = (vh - cropSize) / 2;
+        ctx.drawImage(video, sx, sy, cropSize, cropSize, 0, 0, 64, 64);
+        const pixels = ctx.getImageData(0, 0, 64, 64).data;
+
+        let darkObsidianCount = 0;
+        let neonPinkPurpleCount = 0;
+        const totalPixels = 64 * 64;
+
+        for (let i = 0; i < pixels.length; i += 4) {
+          const r = pixels[i];
+          const g = pixels[i + 1];
+          const b = pixels[i + 2];
+
+          // Fondo oscuro/medio-oscuro de RabbittyCode (tolerante a reflejos de pantalla/cristal)
+          if (r <= 145 && g <= 125 && b <= 160) {
+            darkObsidianCount++;
+          }
+          // Anillos, esquinas y barras de onda neón (rosa/magenta #F43F5E, morado #8B5CF6, núcleo brillante)
+          if (
+            (r >= 110 && b >= 75 && r - g >= 20) ||
+            (b >= 110 && r >= 65 && b - g >= 20) ||
+            (r >= 190 && b >= 160 && g >= 100 && r - g >= 15)
+          ) {
+            neonPinkPurpleCount++;
+          }
+        }
+
+        const darkRatio = darkObsidianCount / totalPixels;
+        const neonRatio = neonPinkPurpleCount / totalPixels;
+
+        if (darkRatio >= 0.2 && neonRatio >= 0.012) {
+          consecutiveNeonFrames++;
+        } else {
+          consecutiveNeonFrames = 0;
+        }
+
+        if (consecutiveNeonFrames >= 2) {
+          consecutiveNeonFrames = 0;
+          isSubmittingOptical = true;
+
+          // ── Decodificar las 13 barras de onda (payload machine-readable) ──
+          const HI = 240;
+          const hiCanvas = hiCanvasRef.current ?? document.createElement('canvas');
+          hiCanvasRef.current = hiCanvas;
+          hiCanvas.width = HI;
+          hiCanvas.height = HI;
+          const hctx = hiCanvas.getContext('2d', { willReadFrequently: true });
+          if (!hctx) { isSubmittingOptical = false; return; }
+          hctx.drawImage(video, sx, sy, cropSize, cropSize, 0, 0, HI, HI);
+          const hiData = hctx.getImageData(0, 0, HI, HI).data;
+
+          const isNeonPx = (r: number, g: number, b: number) =>
+            (r >= 110 && b >= 75 && r - g >= 20) ||
+            (b >= 110 && r >= 65 && b - g >= 20) ||
+            (r >= 190 && b >= 160 && g >= 100 && r - g >= 15);
+
+          // Banda central vertical (el núcleo de onda vive ~28%-72% del alto)
+          const y0 = Math.floor(HI * 0.28);
+          const y1 = Math.floor(HI * 0.72);
+          const colNeon = new Float32Array(HI);
+          for (let x = 0; x < HI; x++) {
+            let count = 0;
+            for (let y = y0; y < y1; y++) {
+              const idx = (y * HI + x) * 4;
+              if (isNeonPx(hiData[idx], hiData[idx + 1], hiData[idx + 2])) count++;
+            }
+            colNeon[x] = count;
+          }
+
+          // Segmentar las 13 barras: columnas con presencia neón agrupadas en clusters
+          const threshold = 3;
+          const clusters: Array<{ x0: number; x1: number }> = [];
+          let cur: { x0: number; x1: number } | null = null;
+          for (let x = 0; x < HI; x++) {
+            if (colNeon[x] >= threshold) {
+              if (!cur) cur = { x0: x, x1: x };
+              else cur.x1 = x;
+            } else if (cur) {
+              if (cur.x1 - cur.x0 >= 2) clusters.push(cur); // ancho mínimo
+              cur = null;
+            }
+          }
+          if (cur && cur.x1 - cur.x0 >= 2) clusters.push(cur);
+
+          let decoded: number | null = null;
+          if (clusters.length === 13) {
+            const heights: number[] = [];
+            for (const c of clusters) {
+              let minY = HI, maxY = 0;
+              for (let x = c.x0; x <= c.x1; x++) {
+                for (let y = y0; y < y1; y++) {
+                  const idx = (y * HI + x) * 4;
+                  if (isNeonPx(hiData[idx], hiData[idx + 1], hiData[idx + 2])) {
+                    if (y < minY) minY = y;
+                    if (y > maxY) maxY = y;
+                  }
+                }
+              }
+              heights.push(maxY > minY ? (maxY - minY) : 0);
+            }
+            // Las barras están centradas verticalmente: extensión ∝ altura
+            const { codeFromBars } = await import('@/lib/rabbittyCodeCodec');
+            decoded = codeFromBars(heights);
+          }
+
+          if (decoded !== null) {
+            // Resolver el usuario dueño del código
+            try {
+              const res = await fetch('/api/rabbitty-code/lookup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: decoded }),
+              });
+              const data = await res.json();
+              if (data?.success) {
+                import('@twa-dev/sdk')
+                  .then((mod) => mod.default.HapticFeedback.notificationOccurred('success'))
+                  .catch(() => {});
+                await stopScanning();
+                if (data.type === 'business' && data.businessId) {
+                  // Escaneo de afiliado → ficha del negocio en la app
+                  router.push(`/affiliate/${data.businessId}`);
+                } else if (data.user) {
+                  // Escaneo de Rabbitter → transferencia / premiar
+                  router.push(`/profile/wallet?to=${encodeURIComponent(data.user.handle || data.user.id)}`);
+                }
+                return;
+              }
+            } catch { /* reintenta en el siguiente frame */ }
+          }
+
+          // No decodificado (ángulo/luz): cooldown breve y reintento
+          await new Promise((r) => setTimeout(r, 1200));
+          isSubmittingOptical = false;
+        }
+      } catch {
+        isSubmittingOptical = false;
+      }
+    }, 450);
+
+    return () => clearInterval(interval);
+  }, [activeTab, hasCamera, showManualInput, result, router, stopScanning]);
+
   return (
     <div 
       className="page-wrap relative min-h-dvh flex flex-col justify-between transition-colors duration-200" 
@@ -478,6 +724,18 @@ export default function ScanPage() {
                 size={195} 
                 showCardFrame={true} 
               />
+              {/* QR estándar escaneable: cámaras de POS/caja (html5-qrcode) y iPhone */}
+              <div className="mt-4 bg-white rounded-2xl p-2.5 shadow-[0_8px_30px_rgba(0,0,0,0.35)]">
+                <QRCodeSVG
+                  value={`rabbitty://pay?to=${encodeURIComponent(user?.username ? `@${user.username}` : String(qrValue || ''))}`}
+                  size={132}
+                  level="H"
+                  includeMargin={false}
+                />
+              </div>
+              <p className="text-[10px] text-(--text-muted) mt-2 text-center px-6 leading-snug">
+                El neón lo lee la App Rabbitty · El cuadrado lo lee cualquier caja o cámara
+              </p>
               <div className="mt-3 text-center">
                 <span className="text-sm font-black tracking-[1.5px] text-(--text-primary) uppercase block">
                   {user?.firstName ? user.firstName : 'Miembro Rabbitty'}
@@ -569,9 +827,25 @@ export default function ScanPage() {
                       className="w-full bg-(--bg-elevated) border border-(--border-subtle) rounded-xl px-4 py-3 text-(--text-primary) text-center font-mono font-bold text-base tracking-[2px] outline-none"
                     />
                     <button
-                      onClick={() => {
-                        if (!manualCode.trim()) return;
-                        alert(`Código ${manualCode} verificado exitosamente`);
+                      onClick={async () => {
+                        const trimmed = manualCode.trim();
+                        if (!trimmed) return;
+                        try {
+                          const headers = await PlatformBridge.getAuthHeaders();
+                          const res = await fetch('/api/auth/qr/scan', {
+                            method: 'POST',
+                            headers: { ...headers, 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ qrToken: trimmed.toLowerCase() }),
+                          });
+                          const data = await res.json();
+                          if (data?.success) {
+                            alert('¡Inicio de sesión QR Neón exitoso! 🪄');
+                            setManualCode('');
+                            router.push('/profile');
+                            return;
+                          }
+                        } catch {}
+                        alert(`Código ${trimmed} verificado exitosamente`);
                         setManualCode('');
                         router.push('/');
                       }}

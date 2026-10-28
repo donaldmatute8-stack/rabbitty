@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useAuth } from '@/features/auth/AuthProvider';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import { BottomSheet } from '@/components/ui/BottomSheet';
@@ -22,7 +22,6 @@ import {
   PinOff,
   Search,
   X,
-  Send,
   MessageCircle,
   Users,
   Settings,
@@ -37,7 +36,7 @@ import {
   RefreshCw,
   Smartphone,
 } from 'lucide-react';
-import { GROUPS, openTelegramLink } from '@/components/groups/GroupsStrip';
+import { GROUPS } from '@/components/groups/GroupsStrip';
 import { setStoredAvatar } from '@/lib/avatar';
 import { useToast } from '@/contexts/ToastContext';
 
@@ -244,16 +243,37 @@ export default function ChatInboxPage() {
   }>>([]);
   const [isSearchingUsers, setIsSearchingUsers] = useState(false);
 
-  useEffect(() => {
-    if (searchQuery.trim().length >= 2) {
-      const handler = setTimeout(() => {
-        searchDirectory(searchQuery.trim());
-      }, 250);
-      return () => clearTimeout(handler);
-    } else {
+  const searchDirectory = useCallback(async (query: string) => {
+    if (!query.trim() || query.trim().length < 2) {
       setUserSearchResults([]);
+      return;
     }
-  }, [searchQuery]);
+    setIsSearchingUsers(true);
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch('/api/contacts', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: query.trim() }),
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.results)) {
+        setUserSearchResults(data.results);
+      }
+    } catch {
+      setUserSearchResults([]);
+    } finally {
+      setIsSearchingUsers(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!searchQuery.trim() || searchQuery.trim().length < 2) return;
+    const handler = setTimeout(() => {
+      searchDirectory(searchQuery.trim());
+    }, 250);
+    return () => clearTimeout(handler);
+  }, [searchQuery, searchDirectory]);
 
   const openSettingsModal = () => {
     const p = profileRes?.profile;
@@ -417,30 +437,6 @@ export default function ChatInboxPage() {
       console.error('Error sincronizando con backend Rabbitty:', e);
     } finally {
       setIsSyncingContacts(false);
-    }
-  };
-
-  const searchDirectory = async (query: string) => {
-    if (!query.trim() || query.trim().length < 2) {
-      setUserSearchResults([]);
-      return;
-    }
-    setIsSearchingUsers(true);
-    try {
-      const headers = await PlatformBridge.getAuthHeaders();
-      const res = await fetch('/api/contacts', {
-        method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: query.trim() }),
-      });
-      const data = await res.json();
-      if (data.success && Array.isArray(data.results)) {
-        setUserSearchResults(data.results);
-      }
-    } catch {
-      setUserSearchResults([]);
-    } finally {
-      setIsSearchingUsers(false);
     }
   };
 
@@ -665,41 +661,59 @@ export default function ChatInboxPage() {
             {dockerItems.map((item) => {
               const active = community === item.id;
               return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    PlatformBridge.hapticFeedback('light');
-                    setCommunity(item.id);
-                  }}
-                  title={item.fullName || item.label}
-                  style={{
-                    width: 52,
-                    height: 52,
-                    borderRadius: 18,
-                    background: active
-                      ? (item.gradient || 'rgba(0, 136, 204, 0.22)')
-                      : 'rgba(255,255,255,0.05)',
-                    border: active
-                      ? `2px solid ${item.color || '#0088CC'}`
-                      : '1px solid rgba(255,255,255,0.08)',
-                    boxShadow: active
-                      ? `0 8px 20px -4px ${item.borderGlow || 'rgba(0,136,204,0.4)'}`
-                      : 'none',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 3,
-                    color: active ? '#fff' : 'rgba(255,255,255,0.7)',
-                    cursor: 'pointer',
-                    flexShrink: 0,
-                  }}
-                  className="active:scale-95 transition-all"
-                >
-                  <span style={{ fontSize: 18, display: 'flex', alignItems: 'center' }}>{item.icon}</span>
-                  <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: -0.2 }}>{item.label}</span>
-                </button>
+                <div key={item.id} className="relative flex items-center justify-center w-full">
+                  {active && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: -2,
+                        width: 3,
+                        height: 20,
+                        borderRadius: '0 4px 4px 0',
+                        background: '#0088CC',
+                      }}
+                    />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      PlatformBridge.hapticFeedback('light');
+                      if (item.id === 'chats') {
+                        setCommunity('chats');
+                      } else if (item.id === 'support') {
+                        router.push('/support');
+                      } else {
+                        // Abrir directamente la conversación in-app sin pantallas intermedias
+                        router.push(`/chat/${item.id}`);
+                      }
+                    }}
+                    title={item.fullName || item.label}
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 14,
+                      background: active
+                        ? 'rgba(0, 136, 204, 0.18)'
+                        : 'rgba(255, 255, 255, 0.04)',
+                      border: active
+                        ? '1px solid rgba(0, 136, 204, 0.4)'
+                        : '1px solid rgba(255, 255, 255, 0.08)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 2,
+                      color: active ? '#FFF' : 'rgba(255, 255, 255, 0.65)',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                      transition: 'all 0.15s ease-out',
+                    }}
+                    className="active:scale-95 transition-all"
+                  >
+                    <span style={{ fontSize: 16, display: 'flex', alignItems: 'center' }}>{item.icon}</span>
+                    <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: -0.2 }}>{item.label}</span>
+                  </button>
+                </div>
               );
             })}
           </motion.aside>
@@ -716,7 +730,7 @@ export default function ChatInboxPage() {
       >
         <ProfileSubpageLayout
           title={
-            <span className="font-bold text-[17px] tracking-tight text-(--text-primary)">
+            <span className="font-bold text-[16px] tracking-tight text-(--text-primary) truncate max-w-[170px] sm:max-w-xs block text-center">
               {activeTab === 'business'
                 ? 'Mi Negocio'
                 : community === 'chats'
@@ -996,45 +1010,33 @@ export default function ChatInboxPage() {
             const g = GROUPS.find((x) => x.id === community);
             if (!g) return null;
             return (
-              <div className="flex flex-col items-center text-center gap-4 pt-6 pb-28">
-                {/* Custom Brand Avatar with Neon Glow */}
+              <div className="flex flex-col items-center text-center gap-4 pt-8 pb-28">
+                {/* Brand Avatar */}
                 <div className="relative">
                   <div
                     style={{
-                      width: 96,
-                      height: 96,
-                      borderRadius: 28,
+                      width: 80,
+                      height: 80,
+                      borderRadius: 24,
                       background: g.gradient || g.color,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       color: '#fff',
-                      boxShadow: `0 16px 36px -8px ${g.borderGlow || 'rgba(0,0,0,0.5)'}`,
-                      border: '1px solid rgba(255,255,255,0.25)',
+                      boxShadow: '0 12px 28px -6px rgba(0,0,0,0.4)',
+                      border: '1px solid rgba(255,255,255,0.2)',
                     }}
                     className="relative z-10"
                   >
-                    <div className="w-12 h-12 flex items-center justify-center">
+                    <div className="w-10 h-10 flex items-center justify-center">
                       {g.iconSvg}
                     </div>
                   </div>
-                  {/* Neon Ambient Halo */}
-                  <div
-                    style={{
-                      position: 'absolute',
-                      inset: -6,
-                      borderRadius: 32,
-                      background: g.gradient || g.color,
-                      opacity: 0.35,
-                      filter: 'blur(16px)',
-                      zIndex: 0,
-                    }}
-                  />
                 </div>
 
-                <div className="flex flex-col items-center gap-1.5 max-w-sm">
+                <div className="flex flex-col items-center gap-1.5 max-w-sm px-4">
                   <div className="flex items-center gap-2">
-                    <h2 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: '#fff', letterSpacing: '-0.3px' }}>
+                    <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: '#fff', letterSpacing: '-0.3px' }}>
                       {g.name}
                     </h2>
                     <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-white/10 text-white border border-white/15">
@@ -1046,32 +1048,25 @@ export default function ChatInboxPage() {
                   </p>
                 </div>
 
-                <div className="w-full flex flex-col gap-2.5 mt-2">
+                <div className="w-full max-w-xs flex flex-col gap-2.5 mt-2">
                   <button
                     type="button"
                     onClick={() => {
                       PlatformBridge.hapticFeedback('medium');
-                      router.push(`/chat/bot?prefill=${encodeURIComponent('Hola Bunzy, quiero soporte de ' + g.name)}`);
+                      router.push(`/chat/${g.id}`);
                     }}
-                    className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl font-bold text-sm bg-linear-to-r from-[#0088CC] to-[#005F8F] text-white cursor-pointer shadow-lg active:scale-98 transition-all"
+                    className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm bg-linear-to-r from-[#E91E63] to-[#FF4081] text-white cursor-pointer shadow-lg active:scale-98 transition-all"
                   >
-                    <MessageCircle size={18} /> Abrir Chat de Soporte In-App
+                    <MessageCircle size={18} /> Entrar a la conversación
                   </button>
                   <button
                     type="button"
-                    onClick={() => { PlatformBridge.hapticFeedback('medium'); openTelegramLink(g.link); }}
-                    className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl font-bold text-sm bg-[#1C1C1E] border border-white/10 text-white cursor-pointer hover:border-white/20 active:scale-98 transition-all"
+                    onClick={() => { PlatformBridge.hapticFeedback('light'); setCommunity('chats'); }}
+                    className="text-xs font-bold text-white/50 cursor-pointer p-2 hover:text-white transition-colors"
                   >
-                    <Send size={16} style={{ color: '#229ED9' }} /> Abrir grupo en Telegram
+                    ← Volver a mis chats
                   </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => { PlatformBridge.hapticFeedback('light'); setCommunity('chats'); }}
-                  className="text-xs font-bold text-[#0088CC] cursor-pointer p-2 hover:underline"
-                >
-                  ← Volver a mis chats
-                </button>
               </div>
             );
           })()}

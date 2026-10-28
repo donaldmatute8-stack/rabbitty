@@ -1,15 +1,14 @@
 import { z } from "zod";
-import { and, eq, inArray, gte, lt, sql } from "drizzle-orm";
-import { router, protectedProcedure, adminOnlyProcedure, platformOnlyProcedure, resolveBranchId } from "../trpc";
+import { and, eq, inArray, gte, lt, sql, desc } from "drizzle-orm";
+import { router, protectedProcedure, adminOnlyProcedure, platformOnlyProcedure, godAdminProcedure, resolveBranchId } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
-import { restaurants, branches, orders, tables, staff } from "@rabbitty/database-restaurant/schema";
-import { referrals, users, levels, ownedBusinesses, transactions } from "@rabbitty/database-core";
+import { restaurants, branches, orders, tables, staff, ledgerEntries } from "@rabbitty/database-restaurant/schema";
+import { referrals, users, levels, ownedBusinesses, transactions, treasury, systemSettings, auditEntries } from "@rabbitty/database-core";
 import { customers } from "@rabbitty/database-restaurant/schema";
 import { miniappClient } from "../services/miniapp-client";
 import * as cheerio from "cheerio";
-
 export const adminRouter = router({
   getProfile: protectedProcedure.query(async ({ ctx }) => {
     return {
@@ -19,7 +18,7 @@ export const adminRouter = router({
     };
   }),
 
-  getPendingBusinesses: protectedProcedure.query(async ({ ctx }) => {
+  getPendingBusinesses: godAdminProcedure.query(async ({ ctx }) => {
     const list = await ctx.coreDb
       .select({
         id: ownedBusinesses.id,
@@ -44,7 +43,7 @@ export const adminRouter = router({
     return list;
   }),
 
-  approveOwnedBusiness: platformOnlyProcedure
+  approveOwnedBusiness: godAdminProcedure
     .input(z.object({ id: z.string(), status: z.enum(["APPROVED", "VERIFIED", "REJECTED"]) }))
     .mutation(async ({ ctx, input }) => {
       const [updated] = await ctx.coreDb
@@ -123,23 +122,46 @@ export const adminRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Soft-guard de ownership (IDOR): si el usuario tiene personal vinculado,
-      // solo puede editar restaurantes de las sucursales de su staff. Si NO tiene
-      // staff vinculado (p.ej. seed o setup inicial), mantiene comportamiento legacy.
+      // ── Guard de ownership (IDOR): permitido solo si
+      //    (a) tiene staff vinculado a sucursales de este restaurante, o
+      //    (b) es dueño del negocio que lo posee, o
+      //    (c) es God Admin identificado.
       const staffRows = await ctx.restaurantDb
         .select({ branchId: staff.branchId })
         .from(staff)
         .where(eq(staff.userId, ctx.userId));
       const branchIds = staffRows.map((s) => s.branchId).filter(Boolean);
+      let allowed = false;
       if (branchIds.length > 0) {
         const branchRows = await ctx.restaurantDb
           .select({ restaurantId: branches.restaurantId })
           .from(branches)
           .where(inArray(branches.id, branchIds));
         const allowedIds = branchRows.map((b) => b.restaurantId).filter(Boolean);
-        if (allowedIds.length > 0 && !allowedIds.includes(input.id)) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "No tienes permisos para modificar este restaurante." });
+        allowed = allowedIds.includes(input.id);
+      }
+      if (!allowed) {
+        // ¿Dueño del negocio dueño del restaurante?
+        const [restRow] = await ctx.restaurantDb
+          .select({ businessId: restaurants.businessId })
+          .from(restaurants)
+          .where(eq(restaurants.id, input.id))
+          .limit(1);
+        if (restRow?.businessId) {
+          const [owned] = await ctx.coreDb
+            .select({ id: ownedBusinesses.id })
+            .from(ownedBusinesses)
+            .where(eq(ownedBusinesses.ownerId, ctx.userId ?? ""))
+            .limit(1);
+          allowed = Boolean(owned && owned.id === restRow.businessId);
         }
+        if (!allowed && ctx.god2faVerified) {
+          const { isGodAdminIdentity } = await import("../services/god2fa");
+          allowed = isGodAdminIdentity(ctx.user?.email, ctx.user?.name);
+        }
+      }
+      if (!allowed) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "No tienes permisos para modificar este restaurante." });
       }
 
       const updateData = { ...input } as any;
@@ -188,7 +210,7 @@ export const adminRouter = router({
 
     }),
 
-  verifyBusiness: platformOnlyProcedure
+  verifyBusiness: godAdminProcedure
     .input(z.object({ businessId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const [restaurant] = await ctx.restaurantDb.select().from(restaurants).where(eq(restaurants.businessId, input.businessId));
@@ -209,7 +231,7 @@ export const adminRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const [category] = await ctx.restaurantDb.insert(dbSchema.menuCategories).values({
-        branchId: resolveBranchId(ctx, undefined),
+        branchId: await resolveBranchId(ctx, undefined),
         name: input.name,
         description: input.description ?? null,
         sortOrder: input.sortOrder ?? 0,
@@ -230,7 +252,7 @@ export const adminRouter = router({
       const [existing] = await ctx.restaurantDb
         .select({ id: dbSchema.menuCategories.id })
         .from(dbSchema.menuCategories)
-        .where(and(eq(dbSchema.menuCategories.id, input.id), eq(dbSchema.menuCategories.branchId, resolveBranchId(ctx, undefined))));
+        .where(and(eq(dbSchema.menuCategories.id, input.id), eq(dbSchema.menuCategories.branchId, await resolveBranchId(ctx, undefined))));
       if (!existing) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Categoría no encontrada en esta sucursal" });
       }
@@ -244,7 +266,7 @@ export const adminRouter = router({
       const [existing] = await ctx.restaurantDb
         .select({ id: dbSchema.menuCategories.id })
         .from(dbSchema.menuCategories)
-        .where(and(eq(dbSchema.menuCategories.id, input.id), eq(dbSchema.menuCategories.branchId, resolveBranchId(ctx, undefined))));
+        .where(and(eq(dbSchema.menuCategories.id, input.id), eq(dbSchema.menuCategories.branchId, await resolveBranchId(ctx, undefined))));
       if (!existing) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Categoría no encontrada en esta sucursal" });
       }
@@ -269,7 +291,7 @@ export const adminRouter = router({
     .mutation(async ({ ctx, input }) => {
       const [menuItem] = await ctx.restaurantDb.insert(dbSchema.menuItems).values({
         categoryId: input.categoryId,
-        branchId: resolveBranchId(ctx, undefined),
+        branchId: await resolveBranchId(ctx, undefined),
         name: input.name,
         description: input.description ?? null,
         price: input.price,
@@ -301,7 +323,7 @@ export const adminRouter = router({
       const [existing] = await ctx.restaurantDb
         .select({ id: dbSchema.menuItems.id })
         .from(dbSchema.menuItems)
-        .where(and(eq(dbSchema.menuItems.id, input.id), eq(dbSchema.menuItems.branchId, resolveBranchId(ctx, undefined))));
+        .where(and(eq(dbSchema.menuItems.id, input.id), eq(dbSchema.menuItems.branchId, await resolveBranchId(ctx, undefined))));
       if (!existing) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Platillo no encontrado en esta sucursal" });
       }
@@ -315,7 +337,7 @@ export const adminRouter = router({
       const [existing] = await ctx.restaurantDb
         .select({ id: dbSchema.menuItems.id })
         .from(dbSchema.menuItems)
-        .where(and(eq(dbSchema.menuItems.id, input.id), eq(dbSchema.menuItems.branchId, resolveBranchId(ctx, undefined))));
+        .where(and(eq(dbSchema.menuItems.id, input.id), eq(dbSchema.menuItems.branchId, await resolveBranchId(ctx, undefined))));
       if (!existing) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Platillo no encontrado en esta sucursal" });
       }
@@ -351,7 +373,7 @@ export const adminRouter = router({
     .input(z.object({ branchId: z.string(), url: z.string().url() }))
     .mutation(async ({ ctx, input }) => {
       try {
-        const branchId = resolveBranchId(ctx, input.branchId);
+        const branchId = await resolveBranchId(ctx, input.branchId);
         const response = await fetch(input.url, {
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
@@ -506,7 +528,7 @@ export const adminRouter = router({
 
   getBranches: protectedProcedure.query(async ({ ctx }) => {
     if (ctx.staffRole && ctx.staffBranchId) {
-      return await ctx.restaurantDb.select().from(branches).where(eq(branches.id, ctx.staffBranchId));
+      return await ctx.restaurantDb.select().from(branches).where(and(eq(branches.id, ctx.staffBranchId), eq(branches.isActive, true)));
     }
     // ── Multi-tenant guard: un OWNER (no staff) solo ve las branches de SU negocio ──
     if (ctx.userId) {
@@ -517,12 +539,13 @@ export const adminRouter = router({
         const ownRest = await ctx.restaurantDb.select({ id: restaurants.id }).from(restaurants)
           .where(eq(restaurants.businessId, ownerBiz[0].id));
         if (ownRest[0]?.id) {
-          return await ctx.restaurantDb.select().from(branches).where(eq(branches.restaurantId, ownRest[0].id));
+          return await ctx.restaurantDb.select().from(branches)
+            .where(and(eq(branches.restaurantId, ownRest[0].id), eq(branches.isActive, true)));
         }
         return [];
       }
     }
-    return await ctx.restaurantDb.select().from(branches);
+    return await ctx.restaurantDb.select().from(branches).where(eq(branches.isActive, true));
   }),
 
   getCrossStoreKpis: protectedProcedure.query(async ({ ctx }) => {
@@ -530,6 +553,10 @@ export const adminRouter = router({
     if (ctx.staffRole && ctx.staffBranchId) {
       allBranches = allBranches.filter(b => b.id === ctx.staffBranchId);
     }
+    // Excluir sucursales de entrenamiento (Sandbox) del consolidado financiero Multi-Sucursal de producción
+    allBranches = allBranches.filter(
+      (b) => !b.name.toLowerCase().includes("sandbox") && !b.name.toLowerCase().includes("entrenamiento")
+    );
 
     const branchKpis = await Promise.all(
       allBranches.map(async (branch) => {
@@ -863,4 +890,296 @@ export const adminRouter = router({
       };
     }
   }),
+
+  getTreasuryWelcomeStatus: godAdminProcedure.query(async ({ ctx }) => {
+    const allRows = await ctx.coreDb
+      .select()
+      .from(treasury)
+      .orderBy(desc(treasury.createdAt));
+
+    let grossWelcomeDebt = 0;
+    let settledWelcomeDebt = 0;
+    let grossTreasurySurplus = 0;
+    let surplusUsedForSettlements = 0;
+    let welcomeBonusesCount = 0;
+
+    for (const row of allRows) {
+      const amt = Number(row.amount || 0);
+      if (row.type === "welcome_split_debt") {
+        grossWelcomeDebt += Math.abs(amt);
+        welcomeBonusesCount += 1;
+      } else if (row.type === "welcome_debt_settlement") {
+        settledWelcomeDebt += Math.max(0, amt);
+      } else if (row.type === "fee_used_for_welcome_settlement") {
+        surplusUsedForSettlements += Math.abs(amt);
+      } else if (amt > 0) {
+        grossTreasurySurplus += amt;
+      }
+    }
+
+    const netOutstandingDebt = Math.max(0, grossWelcomeDebt - settledWelcomeDebt);
+    const netNegativeBalance = -netOutstandingDebt;
+    const availableSurplusForSettlement = Math.max(0, grossTreasurySurplus - surplusUsedForSettlements);
+
+    // Tope mensual dinámico por afiliado + consumo del mes (tramo afiliado en ledger)
+    const [capSetting] = await ctx.coreDb
+      .select()
+      .from(systemSettings)
+      .where(eq(systemSettings.key, "welcome_bonus_monthly_cap"))
+      .limit(1);
+    let capConfig: { default: number; overrides: Record<string, number> } = { default: 200, overrides: {} };
+    if (capSetting?.value) {
+      try {
+        const parsed = JSON.parse(capSetting.value);
+        capConfig = {
+          default: Math.max(0, Number(parsed.default) || 200),
+          overrides: parsed.overrides && typeof parsed.overrides === "object" ? parsed.overrides : {},
+        };
+      } catch {
+        // keep defaults
+      }
+    }
+
+    const now = new Date();
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const welcomeLedgerRows = await ctx.coreDb
+      .select({ payerSubjectId: ledgerEntries.payerSubjectId, amount: ledgerEntries.amount })
+      .from(ledgerEntries)
+      .where(
+        and(
+          sql`"idempotencyKey" LIKE 'welcome_aff_%'`,
+          sql`"createdAt" >= ${monthStart.toISOString()}`
+        )
+      );
+    const usageByBiz: Record<string, number> = {};
+    for (const r of welcomeLedgerRows) {
+      usageByBiz[r.payerSubjectId] = (usageByBiz[r.payerSubjectId] || 0) + Math.max(0, Number(r.amount) || 0);
+    }
+    const businessList = await ctx.coreDb
+      .select({ id: ownedBusinesses.id, name: ownedBusinesses.name })
+      .from(ownedBusinesses);
+    const nameById = new Map(businessList.map((b) => [b.id, b.name]));
+    const perBusinessMonthlyUsage = Object.entries(usageByBiz)
+      .map(([businessId, used]) => ({
+        businessId,
+        businessName: nameById.get(businessId) || businessId.slice(0, 8),
+        used,
+        cap: capConfig.overrides[businessId] ?? capConfig.default,
+      }))
+      .sort((a, b) => b.used - a.used)
+      .slice(0, 15);
+
+    return {
+      netNegativeBalance,
+      netOutstandingDebt,
+      grossWelcomeDebt,
+      settledWelcomeDebt,
+      welcomeBonusesCount,
+      totalFeeIncome: grossTreasurySurplus,
+      availableSurplusForSettlement,
+      recentEntries: allRows
+        .filter((r) => r.type === "welcome_split_debt" || r.type === "welcome_debt_settlement")
+        .slice(0, 10),
+      capConfig,
+      perBusinessMonthlyUsage,
+    };
+  }),
+
+  settleTreasuryWelcomeDebt: godAdminProcedure
+    .input(
+      z.object({
+        amountToSettle: z.number().min(1).optional(),
+        mode: z.enum(["FROM_AVAILABLE_FEES", "FULL_BALANCE_RESET"]).default("FROM_AVAILABLE_FEES"),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const allRows = await ctx.coreDb.select().from(treasury);
+      let grossWelcomeDebt = 0;
+      let settledWelcomeDebt = 0;
+      let grossTreasurySurplus = 0;
+      let surplusUsedForSettlements = 0;
+
+      for (const row of allRows) {
+        const amt = Number(row.amount || 0);
+        if (row.type === "welcome_split_debt") grossWelcomeDebt += Math.abs(amt);
+        else if (row.type === "welcome_debt_settlement") settledWelcomeDebt += Math.max(0, amt);
+        else if (row.type === "fee_used_for_welcome_settlement") surplusUsedForSettlements += Math.abs(amt);
+        else if (amt > 0) grossTreasurySurplus += amt;
+      }
+
+      const netOutstandingDebt = Math.max(0, grossWelcomeDebt - settledWelcomeDebt);
+      const availableSurplusForSettlement = Math.max(0, grossTreasurySurplus - surplusUsedForSettlements);
+
+      if (netOutstandingDebt <= 0) {
+        return {
+          success: true,
+          settledAmount: 0,
+          remainingDebt: 0,
+          message: "La Tesorería ya está 100% al corriente.",
+        };
+      }
+
+      let targetSettle = input.amountToSettle
+        ? Math.min(input.amountToSettle, netOutstandingDebt)
+        : netOutstandingDebt;
+
+      if (input.mode === "FROM_AVAILABLE_FEES") {
+        if (availableSurplusForSettlement <= 0) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message:
+              "Aún no hay suficientes Bunz acumulados por comisiones en Tesorería. Puedes elegir Respaldo Directo de Reserva Admin.",
+          });
+        }
+        targetSettle = Math.min(targetSettle, availableSurplusForSettlement);
+      }
+
+      await ctx.coreDb.insert(treasury).values({
+        concept: `Liquidación Manual de Deuda por Bonos de Bienvenida (${
+          input.mode === "FROM_AVAILABLE_FEES" ? "Con Comisiones Acumuladas" : "Ajuste de Reserva God Admin"
+        })`,
+        amount: targetSettle,
+        type: "welcome_debt_settlement",
+        referenceId: String(ctx.userId || "god_admin"),
+        notes: JSON.stringify({
+          settledBy: ctx.userId,
+          mode: input.mode,
+          previousDebt: netOutstandingDebt,
+          settledAmount: targetSettle,
+          remainingDebt: netOutstandingDebt - targetSettle,
+          timestamp: new Date().toISOString(),
+        }),
+      });
+
+      if (input.mode === "FROM_AVAILABLE_FEES") {
+        await ctx.coreDb.insert(treasury).values({
+          concept: "Aplicación de Comisiones de Tesorería para Amortizar Bonos de Bienvenida",
+          amount: -targetSettle,
+          type: "fee_used_for_welcome_settlement",
+          referenceId: String(ctx.userId || "god_admin"),
+          notes: `Compensación manual autorizada desde Admin Web (${ctx.userId})`,
+        });
+      }
+
+      await ctx.coreDb.insert(auditEntries).values({
+        userId: String(ctx.userId || "god_admin"),
+        action: "TREASURY_WELCOME_DEBT_SETTLEMENT",
+        resource: "treasury",
+        resourceId: "sys_rabbitty_treasury",
+        details: JSON.stringify({
+          mode: input.mode,
+          settledAmount: targetSettle,
+          remainingDebt: netOutstandingDebt - targetSettle,
+        }),
+      });
+
+      return {
+        success: true,
+        settledAmount: targetSettle,
+        remainingDebt: netOutstandingDebt - targetSettle,
+      };
+    }),
+
+  getWelcomeCapSettings: godAdminProcedure.query(async ({ ctx }) => {
+    const [capSetting] = await ctx.coreDb
+      .select()
+      .from(systemSettings)
+      .where(eq(systemSettings.key, "welcome_bonus_monthly_cap"))
+      .limit(1);
+
+    let capConfig: { default: number; overrides: Record<string, number> } = {
+      default: 200,
+      overrides: {},
+    };
+    if (capSetting?.value) {
+      try {
+        const parsed = JSON.parse(capSetting.value);
+        capConfig = {
+          default: Math.max(0, Number(parsed.default) || 200),
+          overrides: parsed.overrides && typeof parsed.overrides === "object" ? parsed.overrides : {},
+        };
+      } catch {
+        // keep defaults
+      }
+    }
+
+    const now = new Date();
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const welcomeRows = await ctx.coreDb
+      .select({
+        payerSubjectId: ledgerEntries.payerSubjectId,
+        amount: ledgerEntries.amount,
+      })
+      .from(ledgerEntries)
+      .where(
+        and(
+          sql`"idempotencyKey" LIKE 'welcome_aff_%'`,
+          sql`"createdAt" >= ${monthStart.toISOString()}`
+        )
+      );
+
+    const usage: Record<string, number> = {};
+    for (const r of welcomeRows) {
+      usage[r.payerSubjectId] = (usage[r.payerSubjectId] || 0) + Math.max(0, Number(r.amount) || 0);
+    }
+
+    const businessList = await ctx.coreDb
+      .select({ id: ownedBusinesses.id, name: ownedBusinesses.name, status: ownedBusinesses.status })
+      .from(ownedBusinesses);
+    const nameById = new Map(businessList.map((b) => [b.id, b.name]));
+
+    return {
+      capConfig,
+      usage: Object.entries(usage)
+        .map(([businessId, used]) => ({
+          businessId,
+          businessName: nameById.get(businessId) || businessId.slice(0, 8),
+          used,
+          cap: capConfig.overrides[businessId] ?? capConfig.default,
+        }))
+        .sort((a, b) => b.used - a.used)
+        .slice(0, 15),
+    };
+  }),
+
+  setWelcomeCapSettings: godAdminProcedure
+    .input(
+      z.object({
+        default: z.number().min(0).max(100000),
+        overrides: z.record(z.string(), z.number().min(0).max(100000)).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const clean = {
+        default: Math.round(input.default),
+        overrides: {} as Record<string, number>,
+      };
+      for (const [bizId, cap] of Object.entries(input.overrides || {})) {
+        const n = Math.round(cap);
+        if (bizId && n > 0) clean.overrides[bizId] = n;
+      }
+      const [existing] = await ctx.coreDb
+        .select()
+        .from(systemSettings)
+        .where(eq(systemSettings.key, "welcome_bonus_monthly_cap"))
+        .limit(1);
+      if (existing) {
+        await ctx.coreDb
+          .update(systemSettings)
+          .set({ value: JSON.stringify(clean), updatedAt: new Date() })
+          .where(eq(systemSettings.key, "welcome_bonus_monthly_cap"));
+      } else {
+        await ctx.coreDb
+          .insert(systemSettings)
+          .values({ key: "welcome_bonus_monthly_cap", value: JSON.stringify(clean) });
+      }
+      await ctx.coreDb.insert(auditEntries).values({
+        userId: String(ctx.userId || "god_admin"),
+        action: "WELCOME_BONUS_CAP_UPDATED",
+        resource: "systemSettings",
+        resourceId: "welcome_bonus_monthly_cap",
+        details: JSON.stringify(clean),
+      });
+      return { success: true, capConfig: clean };
+    }),
 });

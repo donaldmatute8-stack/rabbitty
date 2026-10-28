@@ -6,7 +6,7 @@ import {
   Printer, Sparkles, Smartphone, ArrowRight, CheckCircle2, ShieldCheck, 
   Search, ChevronDown, Check, Building2,
   SlidersHorizontal, Image as ImageIcon,
-  Lock, QrCode, X, KeyRound
+  Lock, QrCode, X, KeyRound, RefreshCw, LogOut
 } from 'lucide-react';
 import { SimpleQRCode } from '@/components/SimpleQRCode';
 import { useSearchParams } from 'next/navigation';
@@ -20,6 +20,7 @@ interface BusinessItem {
   address: string;
   refCode: string;
   logoUrl?: string | null;
+  welcomeBunz?: number;
 }
 
 // Plantillas de contenido curadas y protegidas por nicho de mercado
@@ -232,10 +233,33 @@ function ImpresosContent() {
   const [authCodeInput, setAuthCodeInput] = useState('');
   const [authError, setAuthError] = useState('');
   const [showQrModal, setShowQrModal] = useState(false);
+  const [authMode, setAuthMode] = useState<'admin' | 'affiliate'>(() => {
+    if (typeof window === 'undefined') return 'admin';
+    try {
+      const stored = localStorage.getItem(AUTH_STORAGE_KEY) || '';
+      return stored.startsWith('affiliate_') ? 'affiliate' : 'admin';
+    } catch {
+      return 'admin';
+    }
+  });
+  const [authUserName, setAuthUserName] = useState<string>('');
+  const [qrSessionId, setQrSessionId] = useState<string | null>(null);
+  const [qrSessionData, setQrSessionData] = useState<string>('');
+  const [qrLoading, setQrLoading] = useState<boolean>(false);
+  const [qrStatusMsg, setQrStatusMsg] = useState<string>('');
 
   const [businessName, setBusinessName] = useState(initialName);
   const [welcomeBunz, setWelcomeBunz] = useState(initialBunz);
   const [appUrl, setAppUrl] = useState(initialUrl);
+  const [activeRef, setActiveRef] = useState(initialRef);
+  const [selectedBusinessId, setSelectedBusinessId] = useState<string | null>(null);
+  const [urlManuallyEdited, setUrlManuallyEdited] = useState(false);
+  const clampWelcomeBunz = (raw: string | number): number => {
+    const n = Math.round(Number(String(raw).replace(/\D/g, '')) || 0);
+    return Math.min(200, Math.max(5, n));
+  };
+  const buildDownloadUrl = (ref: string, bunz: number) =>
+    `https://rabbitty.me/download?ref=${encodeURIComponent(ref)}&bunz=${bunz}`;
   const [businessLogo, setBusinessLogo] = useState(initialLogo);
   const [selectedTemplateKey, setSelectedTemplateKey] = useState<string>(() => {
     return detectNicheKey(initialNicheParam || initialName);
@@ -250,6 +274,118 @@ function ImpresosContent() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const currentTemplate = NICHE_TEMPLATES[selectedTemplateKey] || NICHE_TEMPLATES.coffee;
+
+  const generateNeonQrSession = async () => {
+    setQrLoading(true);
+    setQrStatusMsg('');
+    try {
+      const res = await fetch('/api/auth/qr-impresos', { method: 'POST' });
+      const data = await res.json();
+      if (data?.success && data.sessionId && data.qrData) {
+        setQrSessionId(data.sessionId);
+        setQrSessionData(data.qrData);
+      } else {
+        setQrStatusMsg(data?.error || 'No se pudo generar el QR Neón');
+      }
+    } catch {
+      setQrStatusMsg('Error de red al generar sesión QR Neón');
+    } finally {
+      setQrLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAuthorized) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/auth/qr-impresos', { method: 'POST' });
+        const data = await res.json();
+        if (cancelled) return;
+        if (data?.success && data.sessionId && data.qrData) {
+          setQrSessionId(data.sessionId);
+          setQrSessionData(data.qrData);
+          setQrStatusMsg('');
+        } else {
+          setQrStatusMsg(data?.error || 'No se pudo generar el QR Neón');
+        }
+      } catch {
+        if (!cancelled) {
+          setQrStatusMsg('Error de red al generar sesión QR Neón');
+        }
+      } finally {
+        if (!cancelled) {
+          setQrLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthorized]);
+
+  useEffect(() => {
+    if (isAuthorized || !qrSessionId) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/auth/qr-impresos?sessionId=${encodeURIComponent(qrSessionId)}`);
+        const data = await res.json();
+        if (!data?.success) return;
+
+        if (data.expired) {
+          void generateNeonQrSession();
+          return;
+        }
+
+        if (data.authenticated) {
+          if (data.authorized && (data.mode === 'admin' || data.mode === 'affiliate')) {
+            const resolvedMode = data.mode as 'admin' | 'affiliate';
+            setAuthMode(resolvedMode);
+            setAuthUserName(data.user?.name || (resolvedMode === 'admin' ? 'Admin Rabbitty' : 'Afiliado'));
+
+            if (resolvedMode === 'affiliate' && data.business) {
+              const b = data.business as BusinessItem;
+              setBusinessName(b.name);
+              const bunzVal = clampWelcomeBunz(b.welcomeBunz ?? 25);
+              setWelcomeBunz(String(bunzVal));
+              setActiveRef(b.refCode);
+              setSelectedBusinessId(b.id);
+              setUrlManuallyEdited(false);
+              setAppUrl(buildDownloadUrl(b.refCode, bunzVal));
+              setBusinessLogo(b.logoUrl || '/icon_ra.png');
+              setSelectedTemplateKey(detectNicheKey(`${b.category} ${b.name}`));
+              try {
+                localStorage.setItem(AUTH_STORAGE_KEY, `affiliate_${b.refCode}`);
+              } catch {}
+            } else {
+              try {
+                localStorage.setItem(AUTH_STORAGE_KEY, 'admin');
+              } catch {}
+            }
+
+            setIsAuthorized(true);
+            setShowQrModal(false);
+            setAuthError('');
+          } else {
+            // Es un Rabbitter (cliente regular): denegar acceso y regenerar QR
+            setAuthError(
+              data.message ||
+                '🚫 Tu cuenta es de Rabbitter (Cliente). Este generador es exclusivo para Comercios Afiliados y Administradores.'
+            );
+            setQrStatusMsg(
+              data.message ||
+                '🚫 Acceso exclusivo para Afiliados y Administradores (Rabbitters no autorizados).'
+            );
+            void generateNeonQrSession();
+          }
+        }
+      } catch {
+        // continuar sondeando
+      }
+    }, 2200);
+
+    return () => clearInterval(interval);
+  }, [isAuthorized, qrSessionId]);
 
   useEffect(() => {
     fetch('/api/affiliates')
@@ -286,16 +422,53 @@ function ImpresosContent() {
 
   const handleSelectBusiness = (b: BusinessItem) => {
     setBusinessName(b.name);
-    const bunzVal = String(b.rewardPercentage || '25');
-    setWelcomeBunz(bunzVal);
-    const generatedUrl = `https://rabbitty.me/download?ref=${b.refCode}&bunz=${bunzVal}`;
-    setAppUrl(generatedUrl);
+    const bunzVal = clampWelcomeBunz(b.welcomeBunz ?? 25);
+    setWelcomeBunz(String(bunzVal));
+    setActiveRef(b.refCode);
+    setSelectedBusinessId(b.id);
+    setUrlManuallyEdited(false);
+    setAppUrl(buildDownloadUrl(b.refCode, bunzVal));
     setBusinessLogo(b.logoUrl || '/icon_ra.png');
     const detected = detectNicheKey(`${b.category} ${b.name}`);
     setSelectedTemplateKey(detected);
     setIsDropdownOpen(false);
     setSearchQuery('');
   };
+
+  // ── Sincronización Bono de Bienvenida ↔ URL del QR (y persistencia por tenant) ──
+  const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (urlManuallyEdited) return;
+    const bunz = clampWelcomeBunz(welcomeBunz);
+    setAppUrl((prev) => {
+      // Solo regenerar si la URL actual es la autogenerada (el usuario no la editó a mano)
+      if (prev.startsWith('https://rabbitty.me/download?ref=')) {
+        return buildDownloadUrl(activeRef, bunz);
+      }
+      return prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [welcomeBunz, activeRef, urlManuallyEdited]);
+
+  useEffect(() => {
+    if (!selectedBusinessId) return;
+    const bunz = clampWelcomeBunz(welcomeBunz);
+    if (persistTimer.current) clearTimeout(persistTimer.current);
+    persistTimer.current = setTimeout(() => {
+      fetch('/api/auth/qr-impresos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'SET_WELCOME_BUNZ', sessionId: qrSessionId || '', businessId: selectedBusinessId, bunz }),
+      })
+        .then((r) => r.json())
+        .then((d) => {
+          if (!d?.success) console.warn('[impresos] bono no persistido:', d?.error);
+        })
+        .catch(() => {});
+    }, 900);
+    return () => { if (persistTimer.current) clearTimeout(persistTimer.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [welcomeBunz, selectedBusinessId]);
 
   const filteredBusinesses = businesses.filter((b) =>
     b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -385,100 +558,148 @@ function ImpresosContent() {
         <div className="min-h-screen bg-[#09090B] text-zinc-100 flex flex-col items-center justify-center p-6 relative overflow-hidden">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-pink-500/10 rounded-full blur-3xl pointer-events-none" />
 
-          <div className="relative z-10 w-full max-w-md bg-zinc-900/90 border border-zinc-800 rounded-3xl p-8 backdrop-blur-xl shadow-2xl">
-            <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-pink-500/10 border border-pink-500/20 text-pink-400 mx-auto mb-5 shadow-lg shadow-pink-500/10">
-              <Lock className="w-7 h-7" />
-            </div>
-
-            <div className="text-center mb-6">
-              <span className="text-[10px] font-black uppercase tracking-widest text-pink-500 px-3 py-1 rounded-full bg-pink-500/10 border border-pink-500/20 inline-block mb-2">
-                Área Restringida
+          <div className="relative z-10 w-full max-w-2xl bg-zinc-900/90 border border-zinc-800 rounded-3xl p-8 backdrop-blur-xl shadow-2xl grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+            {/* COLUMNA IZQUIERDA: ESCANEO QR NEÓN CON APP RABBITTY */}
+            <div className="flex flex-col items-center text-center border-b md:border-b-0 md:border-r border-zinc-800 pb-6 md:pb-0 md:pr-6">
+              <span className="text-[10px] font-black uppercase tracking-widest text-pink-400 px-3 py-1 rounded-full bg-pink-500/10 border border-pink-500/20 inline-flex items-center gap-1.5 mb-3">
+                <Sparkles className="w-3 h-3" /> QR Neón · Afiliados & Admin
               </span>
-              <h1 className="text-2xl font-black tracking-tight text-white">
-                Kit de Materiales Impresos
-              </h1>
-              <p className="text-xs text-zinc-400 mt-2 leading-relaxed">
-                Este portal genera los habladores, carteles A3 y guías de caja oficiales. El acceso está restringido únicamente a <strong className="text-zinc-200">Comercios Afiliados</strong> y a la <strong className="text-zinc-200">Dirección de Rabbitty</strong>.
+              <h2 className="text-lg font-black text-white">Escanea con tu App Rabbitty</h2>
+              <p className="text-[11px] text-zinc-400 mt-1 mb-4 leading-relaxed">
+                Abre tu App de <strong className="text-white">Rabbitty</strong> (Escáner o Cámara). Acceso exclusivo para <strong className="text-pink-400">Negocios Afiliados</strong> y <strong className="text-pink-400">God Admin</strong> (Rabbitters no autorizados).
               </p>
-            </div>
 
-            <form onSubmit={handleUnlock} className="space-y-4">
-              <div>
-                <label className="block text-[11px] font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">
-                  Clave de Admin o Código de Afiliado (RefCode)
-                </label>
-                <div className="relative">
-                  <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                  <input
-                    type="password"
-                    placeholder="Ej. 626cafe o Clave Admin"
-                    value={authCodeInput}
-                    onChange={(e) => setAuthCodeInput(e.target.value)}
-                    className="w-full bg-black/60 border border-zinc-800 focus:border-pink-500 focus:ring-1 focus:ring-pink-500 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-zinc-600 outline-none transition-all"
-                  />
-                </div>
-                {authError && (
-                  <p className="text-xs text-rose-400 mt-2 font-medium">{authError}</p>
+              <div className="relative flex items-center justify-center my-1">
+                {qrSessionData && !qrLoading ? (
+                  <SimpleQRCode value={qrSessionData} size={220} />
+                ) : (
+                  <div className="w-56 h-56 rounded-4xl bg-[#110520] border-2 border-pink-500/40 flex flex-col items-center justify-center gap-3 p-4">
+                    <RefreshCw className="w-7 h-7 text-pink-400 animate-spin" />
+                    <span className="text-xs font-bold text-zinc-300">Generando QR Neón...</span>
+                  </div>
                 )}
               </div>
 
-              <button
-                type="submit"
-                className="w-full bg-linear-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white font-black text-sm py-3 rounded-xl shadow-lg shadow-pink-500/20 active:scale-[0.98] transition-all cursor-pointer"
-              >
-                Acceder al Generador de Impresos
-              </button>
-            </form>
+              <div className="mt-3 flex items-center gap-2 text-[11px] text-emerald-400 font-mono">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>Esperando escaneo en vivo...</span>
+                <button
+                  type="button"
+                  onClick={() => void generateNeonQrSession()}
+                  className="text-zinc-400 hover:text-white ml-1 cursor-pointer"
+                  title="Regenerar código QR Neón"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+              </div>
 
-            <div className="mt-6 pt-5 border-t border-zinc-800/80 flex items-center justify-between text-xs text-zinc-500">
-              <Link href="/" className="hover:text-zinc-300 transition-colors">
-                ← Volver al inicio
-              </Link>
-              <button
-                type="button"
-                onClick={() => setShowQrModal(true)}
-                className="flex items-center gap-1.5 text-pink-400 hover:text-pink-300 font-bold transition-colors cursor-pointer"
-              >
-                <QrCode className="w-3.5 h-3.5" /> Escanear QR Admin
-              </button>
+              {qrStatusMsg && (
+                <p className="text-[11px] text-rose-400 font-semibold mt-2 bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2">
+                  {qrStatusMsg}
+                </p>
+              )}
+            </div>
+
+            {/* COLUMNA DERECHA: ACCESO POR CLAVE O REFCODE */}
+            <div className="flex flex-col justify-center">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex items-center justify-center w-11 h-11 rounded-2xl bg-pink-500/10 border border-pink-500/20 text-pink-400 shrink-0">
+                  <Lock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h1 className="text-xl font-black tracking-tight text-white">
+                    Kit de Materiales Impresos
+                  </h1>
+                  <p className="text-[11px] text-zinc-400">
+                    Habladores de mesa, carteles A3 y señalética POS
+                  </p>
+                </div>
+              </div>
+
+              <form onSubmit={handleUnlock} className="space-y-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">
+                    O ingresa Clave Admin / RefCode de Afiliado
+                  </label>
+                  <div className="relative">
+                    <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                    <input
+                      type="password"
+                      placeholder="Ej. 626cafe o Clave Admin"
+                      value={authCodeInput}
+                      onChange={(e) => setAuthCodeInput(e.target.value)}
+                      className="w-full bg-black/60 border border-zinc-800 focus:border-pink-500 focus:ring-1 focus:ring-pink-500 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-zinc-600 outline-none transition-all"
+                    />
+                  </div>
+                  {authError && (
+                    <p className="text-xs text-rose-400 mt-2 font-medium">{authError}</p>
+                  )}
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full bg-linear-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white font-black text-sm py-3 rounded-xl shadow-lg shadow-pink-500/20 active:scale-[0.98] transition-all cursor-pointer"
+                >
+                  Acceder con Clave
+                </button>
+              </form>
+
+              <div className="mt-6 pt-5 border-t border-zinc-800/80 flex items-center justify-between text-xs text-zinc-500">
+                <Link href="/" className="hover:text-zinc-300 transition-colors">
+                  ← Volver al inicio
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowQrModal(true);
+                    if (!qrSessionData) void generateNeonQrSession();
+                  }}
+                  className="flex items-center gap-1.5 text-pink-400 hover:text-pink-300 font-bold transition-colors cursor-pointer"
+                >
+                  <QrCode className="w-3.5 h-3.5" /> Ampliar QR Neón
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Modal de QR para autenticación instantánea con teléfono de Admin */}
+          {/* Modal de QR Neón Ampliado */}
           {showQrModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
               <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 max-w-sm w-full text-center relative shadow-2xl">
                 <button
                   type="button"
                   onClick={() => setShowQrModal(false)}
-                  className="absolute top-4 right-4 text-zinc-400 hover:text-white"
+                  className="absolute top-4 right-4 text-zinc-400 hover:text-white cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
                 <div className="w-12 h-12 rounded-2xl bg-pink-500/10 border border-pink-500/20 text-pink-400 flex items-center justify-center mx-auto mb-3">
                   <QrCode className="w-6 h-6" />
                 </div>
-                <h3 className="text-lg font-black text-white">Desbloqueo con Teléfono</h3>
+                <h3 className="text-lg font-black text-white">Acceso QR Neón Rabbitty</h3>
                 <p className="text-xs text-zinc-400 mt-1 mb-4">
-                  Apunta la cámara de tu teléfono para ingresar directamente como Administrador.
+                  Escanea con el lector de tu App Rabbitty. Válido únicamente para <strong className="text-white">Afiliados</strong> y <strong className="text-white">God Admin</strong>.
                 </p>
-                <div className="bg-white p-4 rounded-2xl inline-block shadow-inner mb-4">
-                  <SimpleQRCode 
-                    value={`https://rabbitty.me/impresos?admin_key=${ADMIN_SECRET}`} 
-                    size={180} 
-                  />
+                <div className="inline-block mb-4 pt-6">
+                  {qrSessionData && !qrLoading ? (
+                    <SimpleQRCode value={qrSessionData} size={210} />
+                  ) : (
+                    <div className="w-60 h-60 rounded-4xl bg-[#110520] border-2 border-pink-500/40 flex flex-col items-center justify-center gap-3 p-4">
+                      <RefreshCw className="w-7 h-7 text-pink-400 animate-spin" />
+                      <span className="text-xs font-bold text-zinc-300">Sincronizando QR Neón...</span>
+                    </div>
+                  )}
                 </div>
+                {qrStatusMsg && (
+                  <p className="text-xs text-rose-400 mb-3 font-medium">{qrStatusMsg}</p>
+                )}
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      localStorage.setItem(AUTH_STORAGE_KEY, 'admin');
-                      setIsAuthorized(true);
-                      setShowQrModal(false);
-                    }}
-                    className="w-full py-2.5 rounded-xl bg-pink-500 text-white font-bold text-xs"
+                    onClick={() => void generateNeonQrSession()}
+                    className="w-full py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    Desbloquear en este equipo
+                    <RefreshCw className="w-3.5 h-3.5" /> Actualizar Código QR
                   </button>
                 </div>
               </div>
@@ -502,6 +723,9 @@ function ImpresosContent() {
             <span className="text-zinc-600 font-mono text-xs">/</span>
             <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-pink-500/10 text-pink-400 border border-pink-500/20 flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5 text-pink-400" /> Kit Impresos Piloto Oficial
+            </span>
+            <span className="text-[11px] font-mono px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-700 text-zinc-300">
+              {authMode === 'admin' ? `👑 Admin${authUserName ? ` · ${authUserName}` : ''}` : `🏪 Afiliado · ${businessName}`}
             </span>
           </div>
 
@@ -551,6 +775,21 @@ function ImpresosContent() {
             >
               <Printer className="w-4 h-4" />
               Imprimir / Exportar PDF
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  localStorage.removeItem(AUTH_STORAGE_KEY);
+                } catch {}
+                setIsAuthorized(false);
+              }}
+              className="flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white font-bold text-xs px-3 py-2.5 rounded-xl transition-colors cursor-pointer"
+              title="Cerrar sesión / Probar escaneo QR Neón"
+            >
+              <LogOut className="w-3.5 h-3.5 text-pink-400" />
+              <span className="hidden sm:inline">Salir</span>
             </button>
           </div>
         </div>
@@ -753,7 +992,7 @@ function ImpresosContent() {
                 <input
                   type="text"
                   value={appUrl}
-                  onChange={(e) => setAppUrl(e.target.value)}
+                  onChange={(e) => { setUrlManuallyEdited(true); setAppUrl(e.target.value); }}
                   placeholder="https://rabbitty.me/download?ref=..."
                   className="w-full bg-black border border-zinc-800 rounded-xl px-3 py-2 text-xs text-pink-400 font-mono focus:outline-none focus:border-pink-500"
                 />
@@ -889,7 +1128,7 @@ function ImpresosContent() {
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src="/logo_conejo.png" alt="Rabbitty" className="w-7 h-7 object-contain" />
+                    <img src="/logo_conejo_blk.png" alt="Rabbitty" className="w-7 h-7 object-contain" />
                     <span className="font-black tracking-tight text-black text-lg">RABBITTY</span>
                   </div>
 
@@ -1038,7 +1277,7 @@ function ImpresosContent() {
               <div className="flex items-center justify-between pb-6 border-b border-zinc-200 gap-4">
                 <div className="flex items-center gap-3">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/logo_conejo.png" alt="Rabbitty" className="w-10 h-10 object-contain" />
+                  <img src="/logo_conejo_blk.png" alt="Rabbitty" className="w-10 h-10 object-contain" />
                   <div>
                     <h2 className="text-xl font-black text-black tracking-tight">RABBITTY FOR BUSINESS</h2>
                     <p className="text-xs text-zinc-500 font-mono">Guía de Lanzamiento Piloto · {businessName}</p>

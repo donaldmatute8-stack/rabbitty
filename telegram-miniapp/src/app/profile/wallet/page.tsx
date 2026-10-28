@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import RabbittyCode from '@/components/ui/RabbittyCode';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import { ArrowUpRight, ArrowDownLeft, Copy, RefreshCw, X } from 'lucide-react';
 import { useWallet } from '@/contexts/WalletContext';
@@ -19,7 +20,7 @@ interface Transaction {
 }
 
 export default function WalletPage() {
-  const { balance, refreshBalance, address } = useWallet();
+  const { balance, refreshBalance } = useWallet();
   const { user } = useAuth();
   const [history, setHistory] = useState<Transaction[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -54,7 +55,7 @@ export default function WalletPage() {
 
   useEffect(() => {
     let active = true;
-    if (!user?.id && !address) return;
+    if (!user?.id) return;
 
     Promise.resolve().then(() => {
       if (active) setHistoryLoading(true);
@@ -78,7 +79,7 @@ export default function WalletPage() {
     return () => {
       active = false;
     };
-  }, [user?.id, address]);
+  }, [user?.id]);
 
   const fetchHistory = async () => {
     setHistoryLoading(true);
@@ -120,13 +121,6 @@ export default function WalletPage() {
     await refreshBalance();
     await fetchHistory();
     setRefreshing(false);
-  };
-
-  const handleCopy = () => {
-    if (address) {
-      navigator.clipboard.writeText(address);
-      alert('¡Dirección copiada!');
-    }
   };
 
   const formatDate = (iso: string) =>
@@ -229,24 +223,26 @@ export default function WalletPage() {
             </button>
           </div>
 
-          {/* Address */}
-          {address ? (
-            <div className="relative z-1 bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.06)] rounded-[20px] p-4 flex items-center justify-between">
-              <div className="overflow-hidden pr-4">
-                <p className="text-[rgba(255,255,255,0.4)] text-[9px] font-extrabold tracking-widest uppercase mb-1.5">Billetera Conectada</p>
-                <p className="text-[rgba(255,255,255,0.85)] text-[13px] font-mono tracking-wide truncate">
-                  {address.substring(0, 8)}...{address.substring(address.length - 8)}
-                </p>
-              </div>
-              <button onClick={handleCopy} className="p-3 bg-[rgba(255,255,255,0.08)] rounded-[14px] border border-[rgba(255,255,255,0.05)] cursor-pointer shrink-0">
-                <Copy size={16} color="rgba(255,255,255,0.7)" />
-              </button>
+          {/* Rabbitter Identifier Pill */}
+          <div className="relative z-1 bg-white/[0.06] border border-white/10 rounded-2xl p-4 flex items-center justify-between">
+            <div className="overflow-hidden pr-3">
+              <p className="text-white/40 text-[9px] font-extrabold tracking-widest uppercase mb-1">Tu Identificador Bunz</p>
+              <p className="text-white font-mono font-bold text-sm tracking-wide truncate">
+                {payHandle || `@${user?.username || 'rabbitter'}`}
+              </p>
             </div>
-          ) : (
-            <div className="relative z-1 bg-[rgba(233,30,99,0.1)] border border-[rgba(233,30,99,0.2)] rounded-[20px] p-4 text-[#F48FB1] text-xs leading-relaxed text-center font-medium">
-              Tu cuenta está lista para transferir Bunz libremente.
-            </div>
-          )}
+            <button
+              onClick={() => {
+                const h = payHandle || `@${user?.username || 'rabbitter'}`;
+                navigator.clipboard.writeText(h);
+                alert(`¡${h} copiado!`);
+              }}
+              className="p-2.5 bg-white/10 hover:bg-white/20 border-none rounded-xl cursor-pointer shrink-0 text-white transition-colors"
+              title="Copiar identificador"
+            >
+              <Copy size={16} />
+            </button>
+          </div>
         </div>
 
         {/* Action buttons */}
@@ -325,47 +321,65 @@ export default function WalletPage() {
 
       </div>
 
-      {/* RECEIVE MODAL */}
+      {/* RECEIVE MODAL — Con QR Neón de Rabbitty */}
       {showReceive && (
-        <div className="fixed inset-0 z-9999 flex items-center justify-center bg-[rgba(0,0,0,0.7)] backdrop-blur-sm p-5">
-          <div className="bg-[#181824] border border-white/10 text-white rounded-2xl w-full max-w-100 p-6 relative shadow-2xl">
-            <button onClick={() => setShowReceive(false)} className="absolute top-4 right-4 bg-transparent border-0 cursor-pointer text-white/60 hover:text-white">
-              <X size={22} />
+        <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+          <div className="bg-[#120B1D] border border-pink-500/30 text-white rounded-3xl w-full max-w-sm p-6 relative shadow-[0_0_50px_rgba(233,30,99,0.25)] flex flex-col items-center text-center">
+            <button 
+              onClick={() => setShowReceive(false)} 
+              className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 border-none rounded-full w-8 h-8 flex items-center justify-center cursor-pointer text-white/70 hover:text-white transition-colors"
+            >
+              <X size={18} />
             </button>
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-8 h-8 rounded-full bg-[#3B82F6]/20 flex items-center justify-center text-[#3B82F6]">
+
+            <div className="flex items-center gap-2 mb-1.5 self-start">
+              <div className="w-8 h-8 rounded-full bg-[#E91E63]/20 flex items-center justify-center text-[#E91E63]">
                 <ArrowDownLeft size={18} strokeWidth={2.5} />
               </div>
-              <h3 className="text-xl font-extrabold m-0">Recibir Bunz</h3>
+              <h3 className="text-lg font-black m-0 text-white">Recibir Bunz</h3>
             </div>
-            <p className="text-[13px] text-white/60 mb-4">Muestra este código para que te transfieran Bunz. Escanéalo desde la pestaña de escáner de Rabbitty.</p>
-            <div className="rounded-3xl p-4 text-center mb-5 flex justify-center bg-white border border-pink-500/30">
-              {payPayload ? (
-                <QRCodeSVG
-                  value={payPayload}
-                  size={180}
-                  level="H"
-                  bgColor="#ffffff"
-                  fgColor="#111111"
-                  imageSettings={{ src: '/logo_conejo.png', height: 42, width: 42, excavate: true }}
-                />
-              ) : (
-                <span className="text-[#111] text-sm py-16">Inicia sesión para generar tu código</span>
-              )}
+            
+            <p className="text-xs text-white/60 mb-4 text-left self-start">
+              Muestra tu QR Neón para que otros Rabbitters o comercios te transfieran Bunz escaneando directamente desde su app Rabbitty.
+            </p>
+
+            {/* QR escaneable (cámara estándar / app Rabbitty) con marco + firma neón */}
+            <div className="w-full flex flex-col items-center py-2 mb-3">
+              <div className="p-3 rounded-[32px] bg-[#0A0314] border-2 border-pink-500/40 shadow-[0_0_35px_rgba(233,30,99,0.3)]">
+                <div className="bg-white rounded-2xl p-2.5">
+                  <QRCodeSVG
+                    value={payPayload || `rabbitty://pay?to=${encodeURIComponent(user?.username || 'rabbitter')}`}
+                    size={172}
+                    level="H"
+                    includeMargin={false}
+                  />
+                </div>
+                <div className="mt-1.5 flex justify-center opacity-95">
+                  <RabbittyCode
+                    data={payPayload || `rabbitty://pay?to=${encodeURIComponent(user?.username || 'rabbitter')}`}
+                    size={64}
+                    showCardFrame={false}
+                  />
+                </div>
+              </div>
             </div>
-            <p className="text-[11px] font-extrabold text-white/40 uppercase mb-2 text-center">Tu Identificador para recibir</p>
-            <div className="flex items-center justify-between bg-white/5 border border-white/10 p-3 rounded-xl">
-              <p className="text-xs font-mono m-0 truncate text-white/80">{payHandle || 'rabbitty_user'}</p>
+            <p className="text-[10px] text-white/50 mb-3 text-left self-start leading-snug">
+              Escanea el QR con la cámara del iPhone o con el escáner de la App Rabbitty 📷 · La onda neón es tu firma Rabbitty
+            </p>
+
+            <p className="text-[10px] font-black text-[#E91E63] uppercase tracking-wider mb-2">Tu Identificador para recibir</p>
+            <div className="w-full flex items-center justify-between bg-white/5 border border-white/10 p-3 rounded-2xl">
+              <p className="text-xs font-mono font-bold m-0 truncate text-white">{payHandle || `@${user?.username || 'rabbitter'}`}</p>
               <button
                 onClick={() => {
-                  if (payHandle) {
-                    navigator.clipboard.writeText(payHandle);
-                    alert(`¡${payHandle} copiado!`);
-                  }
+                  const val = payHandle || `@${user?.username || 'rabbitter'}`;
+                  navigator.clipboard.writeText(val);
+                  alert(`¡${val} copiado!`);
                 }}
-                className="bg-white/10 hover:bg-white/20 border-0 cursor-pointer p-2 rounded-lg text-white"
+                className="bg-white/10 hover:bg-white/20 border-none cursor-pointer p-2 rounded-xl text-white transition-colors flex items-center gap-1 text-xs font-bold"
               >
-                <Copy size={16} />
+                <Copy size={14} />
+                <span>Copiar</span>
               </button>
             </div>
           </div>
@@ -504,7 +518,6 @@ export default function WalletPage() {
       )}
 
       <style dangerouslySetInnerHTML={{__html: `
-        .my-ton-btn button { border-radius: 999px !important; height: 36px !important; font-weight: 700 !important; font-size: 12px !important; }
         @keyframes spin { to { transform: rotate(360deg); } }
       `}} />
     </ProfileSubpageLayout>
