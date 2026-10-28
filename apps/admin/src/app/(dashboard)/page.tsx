@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { trpc } from "../../lib/trpc-client";
-import { Card, cn } from "@rabbitty/ui";
-import { TrendingUp, DollarSign, ShoppingCart, UtensilsCrossed, ArrowUpRight, Activity, Building2, Lock, ArrowRight, ShieldAlert } from "lucide-react";
+import { Card, Dialog, Button, Input, toast, cn } from "@rabbitty/ui";
+import { TrendingUp, DollarSign, ShoppingCart, UtensilsCrossed, ArrowUpRight, Activity, Building2, Lock, ArrowRight, ShieldAlert, Trash2 } from "lucide-react";
 import { motion, type Variants } from "framer-motion";
 import { useBranch } from "../../components/DashboardClientWrapper";
 import { BranchSelector } from "../../components/BranchSelector";
@@ -31,6 +31,52 @@ export default function AdminPage() {
   const { data: tables } = trpc.pos.getTables.useQuery(undefined, { retry: false });
   const { data: crossStore } = trpc.admin.getCrossStoreKpis.useQuery(undefined, { retry: false });
   const { data: pinStatus } = trpc.staff.getAdminPinStatus.useQuery(undefined, { retry: false });
+
+  const utils = trpc.useUtils();
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
+  const [voidModalOrder, setVoidModalOrder] = useState<{ id: string; title: string; total: number } | null>(null);
+  const [voidAdminPin, setVoidAdminPin] = useState("");
+  const verifyPinMutation = trpc.staff.verifyAdminPin.useMutation();
+
+  const voidOrderMutation = trpc.pos.voidOrder.useMutation({
+    onSuccess: () => {
+      utils.pos.getOrders.invalidate();
+      setCancellingOrderId(null);
+    },
+    onError: (err) => {
+      toast.error(`Error al cancelar orden: ${err.message}`);
+      setCancellingOrderId(null);
+    },
+  });
+
+  const handleVoidOrder = (orderId: string, orderTitle: string, total: number) => {
+    setVoidAdminPin("");
+    setVoidModalOrder({ id: orderId, title: orderTitle, total });
+  };
+
+  const handleConfirmVoidWithPin = async () => {
+    if (!voidModalOrder) return;
+    if (pinStatus?.hasAdminPin && voidAdminPin.length !== 4) {
+      toast.error("Ingresa los 4 dígitos del PIN de Administrador");
+      return;
+    }
+
+    try {
+      if (pinStatus?.hasAdminPin) {
+        await verifyPinMutation.mutateAsync({ pin: voidAdminPin });
+      }
+      setCancellingOrderId(voidModalOrder.id);
+      await voidOrderMutation.mutateAsync({
+        orderId: voidModalOrder.id,
+        reason: "Anulada por administrador desde el Dashboard",
+      });
+      toast.success(`🐰 Orden "${voidModalOrder.title}" anulada correctamente`);
+      setVoidModalOrder(null);
+      setVoidAdminPin("");
+    } catch (err: any) {
+      toast.error(err?.message || "PIN no autorizado o error al anular comanda");
+    }
+  };
 
   const openOrders = orders?.filter((o) => o.status === "PENDING" || o.status === "OPEN") ?? [];
   const paidOrders = orders?.filter((o) => o.status === "PAID" || o.status === "COMPLETED") ?? [];
@@ -262,31 +308,49 @@ export default function AdminPage() {
               </div>
             ) : (
               <div className="space-y-3 flex-1 overflow-y-auto max-h-87.5 pr-1">
-                {openOrders.map((order) => (
-                  <div
-                    key={order.id}
-                    className="flex items-center justify-between rounded-xl px-4 py-3.5 bg-white/5 border border-white/5 hover:border-white/10 hover:bg-white/10 transition-all duration-300"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
-                      <div>
-                        <span className="font-bold text-sm text-gray-200">
-                          {order.tableId ? `Mesa #${order.id.slice(0, 6)}` : "Para Llevar"}
-                        </span>
-                        <p className="text-[10px] text-gray-500 font-semibold mt-0.5">
-                          Iniciada: {new Date(order.createdAt ?? new Date()).toLocaleTimeString("es-MX", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
+                {openOrders.map((order) => {
+                  const title = order.tableId ? `Mesa #${order.id.slice(0, 6)}` : "Para Llevar";
+                  const isPending = order.status === "PENDING" || order.status === "OPEN";
+                  return (
+                    <div
+                      key={order.id}
+                      className="flex items-center justify-between rounded-xl px-4 py-3.5 bg-white/5 border border-white/5 hover:border-white/10 hover:bg-white/10 transition-all duration-300"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                        <div>
+                          <span className="font-bold text-sm text-gray-200">
+                            {title}
+                          </span>
+                          <p className="text-[10px] text-gray-500 font-semibold mt-0.5">
+                            Iniciada: {new Date(order.createdAt ?? new Date()).toLocaleTimeString("es-MX", {
+                              timeZone: "America/Mexico_City",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <span className="font-extrabold text-sm text-amber-500">${order.total.toFixed(2)}</span>
+                          <p className="text-[9px] uppercase tracking-wider text-gray-500 font-bold mt-0.5">{order.status}</p>
+                        </div>
+                        {isPending && (
+                          <button
+                            type="button"
+                            onClick={() => handleVoidOrder(order.id, title, order.total)}
+                            disabled={cancellingOrderId === order.id}
+                            title="Anular y quitar orden"
+                            className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/25 transition-all cursor-pointer hover:scale-105 active:scale-95 disabled:opacity-50"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                       </div>
                     </div>
-                    <div className="text-right">
-                      <span className="font-extrabold text-sm text-amber-500">${order.total.toFixed(2)}</span>
-                      <p className="text-[9px] uppercase tracking-wider text-gray-500 font-bold mt-0.5">{order.status}</p>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -332,6 +396,80 @@ export default function AdminPage() {
 
       {/* 5. Guía General / Onboarding Wizard AL FINAL DEL DASHBOARD */}
       <OnboardingWizard />
+
+      {/* Modal de Anulación de Orden con PIN de Administrador */}
+      <Dialog
+        open={!!voidModalOrder}
+        onClose={() => {
+          setVoidModalOrder(null);
+          setVoidAdminPin("");
+        }}
+        title="Anular Comanda Activa"
+        className="max-w-sm w-full"
+      >
+        <div className="space-y-4 p-1">
+          <div className="p-3.5 rounded-2xl bg-red-500/10 border border-red-500/30 text-xs text-red-300 flex items-start gap-2.5">
+            <Trash2 className="h-4 w-4 shrink-0 text-red-400 mt-0.5" />
+            <div>
+              <p className="font-bold text-white mb-0.5">
+                {voidModalOrder?.title} (${voidModalOrder?.total.toFixed(2)} MXN)
+              </p>
+              <p className="text-[11px] text-gray-400 leading-relaxed">
+                Esta acción cancelará la comanda y liberará la mesa o mostrador en el POS de inmediato.
+              </p>
+            </div>
+          </div>
+
+          {pinStatus?.hasAdminPin ? (
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-gray-300">
+                PIN de Administrador / Gerente (4 dígitos)
+              </label>
+              <Input
+                type="password"
+                maxLength={4}
+                value={voidAdminPin}
+                onChange={(e) => setVoidAdminPin(e.target.value.replace(/\D/g, ""))}
+                placeholder="••••"
+                className="text-center text-lg tracking-widest font-black py-2.5"
+                autoFocus
+              />
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400">
+              ¿Confirmas la anulación de esta orden activa?
+            </p>
+          )}
+
+          <div className="flex gap-2 pt-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setVoidModalOrder(null);
+                setVoidAdminPin("");
+              }}
+              className="flex-1 py-2 font-bold text-xs"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmVoidWithPin}
+              disabled={
+                (pinStatus?.hasAdminPin && voidAdminPin.length !== 4) ||
+                verifyPinMutation.isPending ||
+                voidOrderMutation.isPending
+              }
+              className="flex-1 py-2 font-black text-xs bg-red-600 hover:bg-red-500 text-white disabled:opacity-40"
+            >
+              {verifyPinMutation.isPending || voidOrderMutation.isPending
+                ? "Anulando..."
+                : "Autorizar Anulación"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }

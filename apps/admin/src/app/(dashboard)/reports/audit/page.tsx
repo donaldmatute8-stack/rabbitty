@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   RefreshCw,
   Sparkles,
+  FileSpreadsheet,
 } from "lucide-react";
 
 interface AuditSummary {
@@ -51,10 +52,12 @@ interface OrderData {
   bunzReward: number;
   bunzPaid: number;
   order_date: string;
-  payment_id: string;
-  payment_method: string;
-  payment_amount: number;
-  payment_status: string;
+  payment_id?: string;
+  payment_method?: string;
+  primary_method?: string;
+  payment_amount?: number;
+  payment_status?: string;
+  payments?: Array<{ id: string; method: string; amount: number }>;
   items: OrderItem[];
 }
 
@@ -78,6 +81,18 @@ export default function AuditReportPage() {
   const fromParam = searchParams.get("from") || "";
   const toParam = searchParams.get("to") || "";
 
+  const mxTodayStr = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City" }).format(new Date());
+  const getPastDateStr = (daysAgo: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() - daysAgo);
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City" }).format(d);
+  };
+
+  const [dateFilterMode, setDateFilterMode] = useState<"today" | "yesterday" | "week" | "all" | "custom">(
+    fromParam === "all" ? "all" : (fromParam ? "custom" : "today")
+  );
+  const [selectedDate, setSelectedDate] = useState<string>(fromParam && fromParam !== "all" ? fromParam : mxTodayStr());
+
   const [loading, setLoading] = useState(true);
   const [logoError, setLogoError] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
@@ -95,14 +110,19 @@ export default function AuditReportPage() {
     sha256Fingerprint?: string;
   } | null>(null);
 
-  const fetchReport = async () => {
+  const fetchReport = async (overrideFrom?: string, overrideTo?: string) => {
     setLoading(true);
     try {
       const q = new URLSearchParams();
       if (branchId) q.set("branchId", branchId);
       if (shiftId) q.set("shiftId", shiftId);
-      if (fromParam) q.set("from", fromParam);
-      if (toParam) q.set("to", toParam);
+
+      const effectiveFrom = overrideFrom !== undefined ? overrideFrom : (fromParam || mxTodayStr());
+      const effectiveTo = overrideTo !== undefined ? overrideTo : (toParam || effectiveFrom);
+
+      if (effectiveFrom) q.set("from", effectiveFrom);
+      if (effectiveTo && effectiveFrom !== "all") q.set("to", effectiveTo);
+
       const url = `/api/audit/report?${q.toString()}`;
       const res = await fetch(url);
       const data = await res.json();
@@ -116,12 +136,61 @@ export default function AuditReportPage() {
     }
   };
 
+  const applyFilter = (mode: "today" | "yesterday" | "week" | "all" | "custom", dateVal?: string) => {
+    setDateFilterMode(mode);
+    if (mode === "today") {
+      const t = mxTodayStr();
+      setSelectedDate(t);
+      fetchReport(t, t);
+    } else if (mode === "yesterday") {
+      const y = getPastDateStr(1);
+      setSelectedDate(y);
+      fetchReport(y, y);
+    } else if (mode === "week") {
+      const w = getPastDateStr(7);
+      const t = mxTodayStr();
+      fetchReport(w, t);
+    } else if (mode === "all") {
+      fetchReport("all", "");
+    } else if (mode === "custom" && dateVal) {
+      setSelectedDate(dateVal);
+      fetchReport(dateVal, dateVal);
+    }
+  };
+
   useEffect(() => {
     fetchReport();
-  }, [branchId, shiftId, fromParam, toParam]);
+  }, [branchId, shiftId]);
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleExportCSV = () => {
+    if (!report || !report.orders) return;
+    const headers = ["Folio Ticket", "Fecha / Hora", "Productos", "Método", "Subtotal (Base)", "IVA (16%)", "Total MXN"];
+    const rows = report.orders.map((ord) => {
+      const products = ord.items.map((it) => `${it.quantity}x ${it.name}`).join("; ");
+      const method = ((ord.payment_method || ord.primary_method || ord.payments?.[0]?.method || "CASH") === "CASH") ? "Efectivo" : "Tarjeta";
+      const dateStr = new Date(ord.order_date).toLocaleString("es-MX", { timeZone: "America/Mexico_City" });
+      return [
+        `"#${ord.order_id.slice(0, 8)}"`,
+        `"${dateStr}"`,
+        `"${products.replace(/"/g, '""')}"`,
+        `"${method}"`,
+        Number(ord.subtotal).toFixed(2),
+        Number(ord.tax).toFixed(2),
+        Number(ord.total).toFixed(2),
+      ].join(",");
+    });
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Auditoria_${report.business?.restaurantName || "Rabbitty"}_${selectedDate || "reporte"}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleExportJSON = () => {
@@ -151,7 +220,7 @@ export default function AuditReportPage() {
       <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-8">
         <p className="text-rose-400 font-bold mb-4">No se pudo cargar el reporte de auditoría.</p>
         <button
-          onClick={fetchReport}
+          onClick={() => fetchReport()}
           className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold flex items-center gap-2"
         >
           <RefreshCw size={16} /> Reintentar
@@ -238,29 +307,106 @@ export default function AuditReportPage() {
       `}</style>
 
       {/* Action Bar (Hidden on Print) */}
-      <div className="max-w-5xl mx-auto mb-6 flex flex-wrap items-center justify-between gap-4 no-print">
-        <div>
-          <span className="text-xs font-bold uppercase tracking-widest text-pink-400 flex items-center gap-1.5 mb-1">
-            <ShieldCheck size={14} /> Rabbitty Business Intelligence
-          </span>
-          <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-            Reporte Oficial de Auditoría y Cuadre de Caja
-          </h1>
+      <div className="max-w-5xl mx-auto mb-6 flex flex-col gap-4 no-print">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <span className="text-xs font-bold uppercase tracking-widest text-pink-400 flex items-center gap-1.5 mb-1">
+              <ShieldCheck size={14} /> Rabbitty Business Intelligence
+            </span>
+            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+              Reporte Oficial de Auditoría y Cuadre de Caja
+            </h1>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              onClick={handleExportCSV}
+              className="px-3.5 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 text-xs font-bold flex items-center gap-2 border border-emerald-500/30 transition-all cursor-pointer shadow-sm"
+              title="Descargar archivo compatible con Excel / Numbers"
+            >
+              <FileSpreadsheet size={15} /> Exportar Excel (CSV)
+            </button>
+            <button
+              onClick={handleExportJSON}
+              className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold flex items-center gap-2 border border-white/10 transition-all cursor-pointer"
+            >
+              <Download size={15} /> Exportar JSON
+            </button>
+            <button
+              onClick={handlePrint}
+              className="px-4 py-2 rounded-xl bg-linear-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white text-xs font-black flex items-center gap-2 shadow-lg shadow-pink-500/25 transition-all cursor-pointer"
+            >
+              <Printer size={15} /> Imprimir / Guardar PDF
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleExportJSON}
-            className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold flex items-center gap-2 border border-white/10 transition-all cursor-pointer"
-          >
-            <Download size={15} /> Exportar JSON
-          </button>
-          <button
-            onClick={handlePrint}
-            className="px-5 py-2.5 rounded-xl bg-linear-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white text-xs font-black flex items-center gap-2 shadow-lg shadow-pink-500/25 transition-all cursor-pointer"
-          >
-            <Printer size={15} /> Imprimir / Guardar PDF
-          </button>
+        {/* Date Filter & iPad Guidance */}
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold text-gray-400 flex items-center gap-1.5 mr-1">
+              <Calendar size={14} className="text-pink-400" /> Período:
+            </span>
+            <button
+              type="button"
+              onClick={() => applyFilter("today")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                dateFilterMode === "today"
+                  ? "bg-pink-500 text-white shadow-md shadow-pink-500/20"
+                  : "bg-white/5 text-gray-300 hover:bg-white/10 border border-white/5"
+              }`}
+            >
+              Hoy
+            </button>
+            <button
+              type="button"
+              onClick={() => applyFilter("yesterday")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                dateFilterMode === "yesterday"
+                  ? "bg-pink-500 text-white shadow-md shadow-pink-500/20"
+                  : "bg-white/5 text-gray-300 hover:bg-white/10 border border-white/5"
+              }`}
+            >
+              Ayer
+            </button>
+            <button
+              type="button"
+              onClick={() => applyFilter("week")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                dateFilterMode === "week"
+                  ? "bg-pink-500 text-white shadow-md shadow-pink-500/20"
+                  : "bg-white/5 text-gray-300 hover:bg-white/10 border border-white/5"
+              }`}
+            >
+              Últimos 7 días
+            </button>
+            <button
+              type="button"
+              onClick={() => applyFilter("all")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                dateFilterMode === "all"
+                  ? "bg-pink-500 text-white shadow-md shadow-pink-500/20"
+                  : "bg-white/5 text-gray-300 hover:bg-white/10 border border-white/5"
+              }`}
+            >
+              Todo el Histórico
+            </button>
+
+            <div className="flex items-center gap-1.5 ml-1">
+              <span className="text-[11px] text-gray-400 font-semibold">Día específico:</span>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => applyFilter("custom", e.target.value)}
+                className="px-2.5 py-1 rounded-xl bg-black/60 border border-white/15 text-white text-xs font-mono focus:border-pink-500 focus:outline-none cursor-pointer"
+              />
+            </div>
+          </div>
+
+          <div className="text-[11px] text-gray-400 font-medium flex items-center gap-1.5">
+            <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>💡 En iPad: Al pulsar <b>Imprimir</b>, pellizca con dos dedos (zoom) la vista previa para guardarlo en PDF.</span>
+          </div>
         </div>
       </div>
 
@@ -483,15 +629,21 @@ export default function AuditReportPage() {
                       ))}
                     </td>
                     <td className="py-3 px-3 text-center whitespace-nowrap">
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase ${
-                          ord.payment_method === "CASH"
-                            ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 print:border-emerald-600 print:text-emerald-700"
-                            : "bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 print:border-cyan-600 print:text-cyan-700"
-                        }`}
-                      >
-                        {ord.payment_method === "CASH" ? "Efectivo" : "Tarjeta"}
-                      </span>
+                      {(() => {
+                        const m = (ord.payment_method || ord.primary_method || ord.payments?.[0]?.method || "CASH");
+                        const isCash = m === "CASH";
+                        return (
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase ${
+                              isCash
+                                ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 print:border-emerald-600 print:text-emerald-700"
+                                : "bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 print:border-cyan-600 print:text-cyan-700"
+                            }`}
+                          >
+                            {isCash ? "Efectivo" : "Tarjeta"}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="py-3 px-3 text-right font-medium text-gray-400 print:text-gray-600">
                       ${Number(ord.subtotal).toFixed(2)}

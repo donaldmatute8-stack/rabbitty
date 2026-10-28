@@ -668,14 +668,18 @@ export function CashShiftBadge({ onClick }: { onClick: () => void }) {
       type="button"
       onClick={onClick}
       className={cn(
-        "flex items-center gap-2 rounded-2xl px-3 py-2 border text-xs font-bold transition-all active:scale-95",
+        "flex items-center gap-2 rounded-xl px-3.5 py-1.5 border text-xs font-bold transition-all active:scale-95 whitespace-nowrap shrink-0 cursor-pointer shadow-sm",
         isOpen
           ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20"
           : "bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500/25 animate-pulse"
       )}
     >
-      {isOpen ? <Banknote className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-      {isOpen ? "Caja abierta" : "Caja cerrada · Abrir"}
+      {isOpen ? (
+        <Banknote className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+      ) : (
+        <Lock className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+      )}
+      <span>{isOpen ? "Caja Abierta" : "Abrir Caja"}</span>
     </button>
   );
 }

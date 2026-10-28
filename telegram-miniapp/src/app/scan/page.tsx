@@ -92,6 +92,8 @@ export default function ScanPage() {
     // Auto-vinculación a mesa si el usuario abrió el link directo /scan?tableId=... o /scan?table=...
     const urlTableId = searchParams.get('tableId') || searchParams.get('table');
     const urlBranchId = searchParams.get('branchId') || searchParams.get('branch');
+    const urlBusiness = searchParams.get('business') || 'este comercio';
+
     if (urlTableId) {
       (async () => {
         try {
@@ -112,6 +114,14 @@ export default function ScanPage() {
           alert('Error al conectar con el servidor para vincular a la mesa.');
         }
       })();
+    } else if (urlBranchId && !urlClaimToken) {
+      // 🐰 Check-in de mostrador (QR Neón sin mesa)
+      try {
+        localStorage.setItem('rabbitty_last_branch_id', urlBranchId);
+        localStorage.setItem('rabbitty_last_business_name', urlBusiness);
+      } catch {}
+      alert(`🐰 ¡Estás en ${urlBusiness}! Check-in registrado. Tus compras acumulan Bunz automáticamente.`);
+      router.push('/profile/wallet');
     }
   }, [isDark, searchParams, router]);
 
@@ -282,6 +292,34 @@ export default function ScanPage() {
                 startScanningRef.current();
                 return;
               }
+            }
+          }
+
+          // 0.2 Check if it is a Store Neon Check-in QR (branchId without table)
+          if ((decodedText.includes('branchId=') || decodedText.includes('branch=')) && !decodedText.includes('tableId=')) {
+            let scannedBranchId = '';
+            let scannedBusiness = 'este comercio';
+            try {
+              if (decodedText.startsWith('http')) {
+                const urlObj = new URL(decodedText);
+                scannedBranchId = urlObj.searchParams.get('branchId') || urlObj.searchParams.get('branch') || '';
+                scannedBusiness = urlObj.searchParams.get('business') || 'este comercio';
+              } else {
+                const params = new URLSearchParams(decodedText.split('?')[1] || decodedText);
+                scannedBranchId = params.get('branchId') || params.get('branch') || '';
+                scannedBusiness = params.get('business') || 'este comercio';
+              }
+            } catch {}
+
+            if (scannedBranchId) {
+              await stopScanning();
+              try {
+                localStorage.setItem('rabbitty_last_branch_id', scannedBranchId);
+                localStorage.setItem('rabbitty_last_business_name', scannedBusiness);
+              } catch {}
+              alert(`🐰 ¡Estás en ${scannedBusiness}! Check-in registrado. Tus compras acumularán Bunz.`);
+              router.push('/profile/wallet');
+              return;
             }
           }
 

@@ -202,6 +202,37 @@ export const staffRouter = router({
         .from(staffTable)
         .where(eq(staffTable.branchId, ctx.branchId));
 
+      // ── Guard: no permitir sobreescribir silenciosamente un PIN admin existente.
+      //    Solo dueño del negocio o staff de plataforma puede reemplazarlo. ──
+      const existingPinHolder = staffList.find(
+        (s) => ["ADMIN", "MANAGER", "admin", "manager"].includes(s.role) && !!s.pinCode
+      );
+      if (existingPinHolder && !ctx.staffRole) {
+        const { restaurants, branches } = await import("@rabbitty/database-restaurant/schema");
+        const coreOwned = await import("@rabbitty/database-core/schema").then(m => m.ownedBusinesses);
+        const [branchRow] = await ctx.restaurantDb
+          .select({ restaurantId: branches.restaurantId })
+          .from(branches)
+          .where(eq(branches.id, ctx.branchId))
+          .limit(1);
+        const [restaurantRow] = branchRow
+          ? await ctx.restaurantDb
+              .select({ businessId: restaurants.businessId })
+              .from(restaurants)
+              .where(eq(restaurants.id, branchRow.restaurantId))
+              .limit(1)
+          : [];
+        if (!restaurantRow) throw new TRPCError({ code: "NOT_FOUND", message: "Sucursal sin restaurante asociado." });
+        const [owned] = await ctx.coreDb
+          .select({ id: coreOwned.id })
+          .from(coreOwned)
+          .where(eq(coreOwned.ownerId, ctx.userId))
+          .limit(1);
+        if (!owned || owned.id !== restaurantRow.businessId) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Solo el dueño del negocio puede reemplazar el PIN del Administrador." });
+        }
+      }
+
       const admin = staffList.find(
         (s) => ["ADMIN", "MANAGER", "admin", "manager"].includes(s.role)
       );

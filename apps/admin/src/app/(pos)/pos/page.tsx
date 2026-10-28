@@ -6,6 +6,7 @@ import { Button, Dialog, Input, toast, cn, useWakeLock } from "@rabbitty/ui";
 import { Clock, Wifi, Search, User, Users, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, Table2, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, FileText, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, Unlock, ClipboardCheck, Camera, History, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import { QRCodeSVG } from "qrcode.react";
 import { TicketTemplate, TicketData } from "../../../components/TicketTemplate";
 import { CashShiftModal, CashShiftBadge } from "../../../components/CashShiftModal";
 import { 
@@ -28,9 +29,9 @@ function PosClock() {
   }, []);
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/5 border border-white/10">
-      <Clock className="h-5 w-5 text-gray-400" />
-      <span className="text-xl font-bold tracking-wider">{time}</span>
+    <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-gray-200 shrink-0">
+      <Clock className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+      <span className="text-xs font-mono font-bold tracking-wider">{time}</span>
     </div>
   );
 }
@@ -289,6 +290,111 @@ export default function PosPage() {
     } catch {}
   }, [selectedRabbitter]);
 
+  // ── Controlador reactivo de la cámara para escanear Rabbitter ──
+  const scannerInstanceRef = useRef<any>(null);
+
+  useEffect(() => {
+    let active = true;
+    if (!rabbitterModalOpen || !isScanningRabbitter) {
+      if (scannerInstanceRef.current) {
+        scannerInstanceRef.current.stop().catch(() => {});
+        scannerInstanceRef.current = null;
+      }
+      return;
+    }
+
+    const startScanner = async () => {
+      try {
+        const { Html5Qrcode } = await import("html5-qrcode");
+        if (!active) return;
+        const readerElement = document.getElementById("rabbitter-cam-reader");
+        if (!readerElement) return;
+
+        const scanner = new Html5Qrcode("rabbitter-cam-reader");
+        scannerInstanceRef.current = scanner;
+
+        const cameras = await Html5Qrcode.getCameras().catch(() => []);
+        const config = { fps: 10, qrbox: { width: 220, height: 220 } };
+
+        const onScanSuccess = async (decodedText: string) => {
+          if (!active) return;
+          try {
+            await scanner.stop().catch(() => {});
+          } catch {}
+          scannerInstanceRef.current = null;
+          setIsScanningRabbitter(false);
+
+          let cleaned = decodedText.trim();
+          if (cleaned.includes("to=")) {
+            const m = cleaned.match(/[?&]to=([^&]+)/);
+            if (m) cleaned = decodeURIComponent(m[1]);
+          } else if (cleaned.includes("user=")) {
+            const m = cleaned.match(/[?&]user=([^&]+)/);
+            if (m) cleaned = decodeURIComponent(m[1]);
+          } else if (cleaned.includes("phone=")) {
+            const m = cleaned.match(/[?&]phone=([^&]+)/);
+            if (m) cleaned = decodeURIComponent(m[1]);
+          }
+          cleaned = cleaned.replace(/^@/, "").trim();
+
+          setIsSearchingRabbitter(true);
+          try {
+            const res = await utils.pos.lookupRabbitter.fetch({ query: cleaned });
+            if (res) {
+              setRabbitterQuery("");
+              if (receiptModal && lastPaidOrderId) {
+                const linked = await linkPostCheckout.mutateAsync({
+                  orderId: lastPaidOrderId,
+                  customerId: res.id,
+                  customerPhone: res.phoneNumber || res.telegramId || "sin-telefono",
+                  customerName: res.name,
+                  awardBunz: true,
+                });
+                setRabbitterModalOpen(false);
+                setLastPaidOrderId(null);
+                setPaidTicketData((prev: any) => prev ? { ...prev, awardedBunz: linked.awardedBunz || prev.awardedBunz } : prev);
+                toast.success(linked.awardedBunz > 0
+                  ? `🐰 ¡Asignado y recompensado: ${linked.awardedBunz} Bunz a ${res.name}!`
+                  : `🐰 Cliente asignado a la venta.`);
+                return;
+              }
+              setSelectedRabbitter(res);
+              setRabbitterModalOpen(false);
+              toast.success(`🐰 ¡Rabbitter vinculado: ${res.name}!`);
+            } else {
+              toast.error("Código no encontrado. Verifica con el cliente.");
+            }
+          } catch (err: any) {
+            toast.error(err?.message || "Error al buscar Rabbitter");
+          } finally {
+            setIsSearchingRabbitter(false);
+          }
+        };
+
+        if (cameras && cameras.length > 0) {
+          const backCam = cameras.find((c) => /back|rear|environment|trasera/i.test(c.label)) || cameras[0];
+          await scanner.start(backCam.id, config, onScanSuccess, () => {});
+        } else {
+          await scanner.start({ facingMode: "environment" }, config, onScanSuccess, () => {});
+        }
+      } catch (camErr: any) {
+        console.warn("[POS] Camera error:", camErr);
+        toast.error("Cámara no disponible o permiso denegado.");
+        setIsScanningRabbitter(false);
+      }
+    };
+
+    const timer = setTimeout(startScanner, 200);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+      if (scannerInstanceRef.current) {
+        scannerInstanceRef.current.stop().catch(() => {});
+        scannerInstanceRef.current = null;
+      }
+    };
+  }, [rabbitterModalOpen, isScanningRabbitter]);
+
   const [cashDropAmount, setCashDropAmount] = useState("");
   const [cashDropNotes, setCashDropNotes] = useState("");
   const [corteModalOpen, setCorteModalOpen] = useState(false);
@@ -336,6 +442,47 @@ export default function PosPage() {
       setSelectedTableId(tables[0].id);
     }
   }, [tables, selectedTableId, orderType]);
+
+  const { data: adminPinStatus, refetch: refetchAdminPinStatus } = trpc.staff.getAdminPinStatus.useQuery(undefined, { retry: false });
+  const setAdminPinMutation = trpc.staff.setAdminPin.useMutation({
+    onSuccess: (data) => {
+      refetchAdminPinStatus();
+      toast.success(data.message || "PIN configurado correctamente");
+    },
+    onError: (err: any) => toast.error(err?.message || "Error al configurar PIN"),
+  });
+
+  const handleKeypadPress = async (digit: string) => {
+    if (exitPin.length >= 4 || verifyPinMutation.isPending || setAdminPinMutation.isPending) return;
+    const nextPin = exitPin + digit;
+    setExitPin(nextPin);
+
+    if (nextPin.length === 4) {
+      if (!adminPinStatus?.hasAdminPin) {
+        // Inicializar PIN de administrador si la sucursal no tiene uno
+        try {
+          await setAdminPinMutation.mutateAsync({ pin: nextPin });
+          setAdminPinModal(false);
+          setExitPin("");
+          toast.success("🐰 PIN de Administrador definido. Saliendo al Dashboard...");
+          window.location.href = "/";
+        } catch {
+          setExitPin("");
+        }
+      } else {
+        // Validar PIN existente
+        try {
+          await verifyPinMutation.mutateAsync({ pin: nextPin });
+          setAdminPinModal(false);
+          setExitPin("");
+          toast.success("PIN autorizado. Accediendo al Dashboard...");
+          window.location.href = "/";
+        } catch {
+          setExitPin("");
+        }
+      }
+    }
+  };
 
   const verifyPinMutation = trpc.staff.verifyAdminPin.useMutation({
     onSuccess: () => {
@@ -851,170 +998,163 @@ export default function PosPage() {
       )}
 
       {/* ── Top Header ── */}
-      <header className="flex h-22 shrink-0 items-center justify-between bg-black/60 backdrop-blur-2xl px-6 border-b border-white/5 relative z-20">
-        <div className="flex items-center gap-4 lg:gap-6">
-          {isEmployeeRole ? (
-            <button
-              type="button"
-              onClick={() => {
-                setExitPin("");
-                setAdminPinModal(true);
-              }}
-              className="flex items-center gap-3 rounded-2xl bg-amber-500/10 p-2 pr-4 lg:pr-5 border border-amber-500/25 hover:bg-amber-500/20 transition-all cursor-pointer shadow-lg active:scale-95"
-              title="Modo Kiosco / Empleado: Requiere PIN de Administrador para salir"
-            >
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400">
-                <Lock className="h-5 w-5" />
-              </div>
-              <div className="text-left">
-                <div className="text-[10px] uppercase tracking-widest text-amber-400 font-bold mb-0.5">Modo Kiosco POS</div>
-                <div className="font-black text-sm lg:text-base leading-none text-white flex items-center gap-1.5">
-                  Desbloquear Admin
-                </div>
-              </div>
-            </button>
-          ) : (
-            <Link href="/" className="flex items-center gap-3 rounded-2xl bg-white/5 p-2 pr-4 lg:pr-6 border border-white/5 hover:bg-white/10 hover:border-white/20 transition-all cursor-pointer shadow-lg active:scale-95">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-linear-to-br from-cyan-500 to-blue-600 shadow-[0_0_20px_rgba(6,182,212,0.5)]">
-                <ChevronLeft className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <div className="text-[10px] uppercase tracking-widest text-cyan-400 font-bold mb-0.5">Cerrar Terminal</div>
-                <div className="font-black text-base lg:text-lg leading-none tracking-wide">Salir a Dashboard</div>
-              </div>
-            </Link>
-          )}
-
-          <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 px-3.5 py-2 border border-emerald-500/20 shadow-[inset_0_0_12px_rgba(16,185,129,0.1)]">
-            <div className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-            </div>
-            <span className="text-xs lg:text-sm font-bold text-emerald-400 uppercase tracking-widest">Online</span>
-          </div>
-
-          {/* Estado de caja (abrir / ver turno) */}
-          <CashShiftBadge onClick={() => setCorteModalOpen(true)} />
-
-          {/* Acceso Rápido 1-Clic: Corte X (Reporte de Supervisión estilo SoftRestaurant) */}
-          {cashStatus?.shiftOpen && (
-            <button
-              id="pos-quick-corte-x"
-              type="button"
-              onClick={() => {
-                setCorteInitialMode("partial");
-                setCorteModalOpen(true);
-              }}
-              className="flex items-center gap-1.5 rounded-2xl px-3 py-2 border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 text-xs font-bold transition-all active:scale-95 shadow-[0_0_12px_rgba(6,182,212,0.15)]"
-              title="Sacar Corte X de supervisión e imprimir ticket rápido para cuadrar vouchers y efectivo sin cerrar el turno"
-            >
-              <ClipboardCheck className="h-4 w-4 text-cyan-400" />
-              <span>Corte X</span>
-            </button>
-          )}
-
-          {/* Bluetooth Thermal Printer Indicator / Connect */}
-          {btConnected ? (
-            <button
-              onClick={handleDisconnectBluetooth}
-              className="flex items-center gap-2 rounded-xl bg-blue-500/20 px-3.5 py-2 border border-blue-500/40 text-blue-300 text-xs font-bold hover:bg-blue-500/30 transition-all cursor-pointer"
-              title={`Impresora Bluetooth Conectada: ${btDeviceName}. Toca para desconectar.`}
-            >
-              <BluetoothConnected className="h-4 w-4 text-blue-400" />
-              <span className="hidden md:inline">{btDeviceName || "POS-58"}</span>
-            </button>
-          ) : (
-            <button
-              onClick={handleConnectBluetooth}
-              className="flex items-center gap-2 rounded-xl bg-white/5 hover:bg-white/10 px-3.5 py-2 border border-white/10 text-gray-400 hover:text-blue-400 hover:border-blue-500/30 text-xs font-bold transition-all cursor-pointer"
-              title="Vincular ticketera térmica Bluetooth directa"
-            >
-              <Bluetooth className="h-4 w-4" />
-              <span className="hidden md:inline">Vincular Printer</span>
-            </button>
-          )}
-
-          {/* Pending Offline Tickets Queue Indicator */}
-          {queueCount > 0 && (
-            <button
-              onClick={handleFlushQueue}
-              className="flex items-center gap-1.5 rounded-xl bg-amber-500/20 px-3 py-2 border border-amber-500/40 text-amber-300 text-xs font-bold hover:bg-amber-500/30 transition-all cursor-pointer animate-pulse"
-              title={`${queueCount} ticket(s) en cola. Toca para imprimir ahora.`}
-            >
-              <span className="h-2 w-2 rounded-full bg-amber-400" />
-              <span>Cola ({queueCount})</span>
-            </button>
-          )}
-
-          {/* Comandas en Pausa / En Espera (Ticket Parcheado Óptima POS) */}
+      {/* ── Modern Streamlined POS Header ── */}
+      <header className="flex h-16 shrink-0 items-center justify-between bg-black/80 backdrop-blur-2xl px-4 lg:px-6 border-b border-white/10 relative z-20 gap-3">
+        {/* Left: Brand & Compact Exit */}
+        <div className="flex items-center gap-2.5 shrink-0">
           <button
-            onClick={() => setPausedCartsModal(true)}
-            className={cn(
-              "flex items-center gap-2 rounded-xl px-3.5 py-2 border text-xs font-black transition-all cursor-pointer active:scale-95",
-              pausedCarts.length > 0
-                ? "bg-amber-500/20 border-amber-500/40 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.2)] animate-pulse"
-                : "bg-white/5 border-white/10 text-gray-400 hover:text-white hover:bg-white/10"
-            )}
-            title="Ver transacciones pausadas / comensales en espera"
-          >
-            <Pause className="h-4 w-4 text-amber-400" />
-            <span>En Espera ({pausedCarts.length})</span>
-          </button>
-
-          {/* Rabbitty Tabs / Comandas Activas */}
-          <button
-            onClick={() => setActiveTabsModal(true)}
-            className="flex items-center gap-2 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 px-3.5 py-2 border border-purple-500/30 text-purple-300 text-xs font-black transition-all cursor-pointer shadow-[0_0_15px_rgba(168,85,247,0.15)] active:scale-95"
-            title="Ver comandas y clientes activos en tienda"
-          >
-            <Users className="h-4 w-4 text-purple-400" />
-            <span>Tabs ({activeTabsData?.totalActiveCount ?? 0})</span>
-          </button>
-
-          {/* Reimprimir Tickets / Historial Rápido */}
-          <button
+            type="button"
             onClick={() => {
-              setRecentOrdersModal(true);
-              refetchRecentOrders();
+              setExitPin("");
+              setAdminPinModal(true);
             }}
-            className="flex items-center gap-2 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 px-3.5 py-2 border border-cyan-500/30 text-cyan-300 text-xs font-black transition-all cursor-pointer shadow-[0_0_15px_rgba(6,182,212,0.15)] active:scale-95"
-            title="Reimprimir tickets cobrados recientemente"
+            className="flex items-center gap-2 rounded-xl bg-white/5 hover:bg-white/10 px-3 py-2 border border-white/10 text-gray-200 hover:text-white text-xs font-bold transition-all cursor-pointer shadow-sm active:scale-95 group"
+            title="Terminal Protegida: Requiere PIN de Administrador para salir al Dashboard"
           >
-            <History className="h-4 w-4 text-cyan-400" />
-            <span>Reimprimir</span>
+            <Lock className="h-3.5 w-3.5 text-amber-400 group-hover:text-amber-300" />
+            <ChevronLeft className="h-4 w-4 text-cyan-400 -ml-1" />
+            <span>Dashboard</span>
           </button>
 
-          {/* QR Neón del Negocio (Mostrar al cliente en pantalla para escanear en mostrador) */}
-          <button
-            onClick={() => setShowBusinessQrModal(true)}
-            className="flex items-center gap-2 rounded-xl bg-pink-500/15 hover:bg-pink-500/25 px-3.5 py-2 border border-pink-500/30 text-pink-300 text-xs font-black transition-all cursor-pointer shadow-[0_0_20px_rgba(236,72,153,0.2)] active:scale-95"
-            title="Mostrar QR Neón al cliente para identificarse o ganar Bunz"
-          >
-            <QrCode className="h-4 w-4 text-pink-400 animate-pulse" />
-            <span>QR Mostrador</span>
-          </button>
+          {/* Business & Status Pill */}
+          <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/5 shrink-0">
+            <span className="text-xs font-black text-white">{ticketContext?.restaurant?.name || "626 Café"}</span>
+            <div className="flex items-center gap-1.5">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Online</span>
+            </div>
+          </div>
         </div>
 
-        <div className="flex items-center gap-4 lg:gap-6">
-          <div className="relative group">
-            <div className="absolute -inset-1 rounded-full bg-linear-to-r from-cyan-500 to-purple-500 opacity-0 group-focus-within:opacity-30 blur transition duration-500"></div>
-            <div className="relative flex items-center bg-gray-900 border border-white/10 rounded-full h-14 w-60 lg:w-80 px-4 shadow-inner">
-              <Search className="h-5 w-5 text-gray-400 mr-3 shrink-0" />
-              <input 
-                type="text" 
-                placeholder="Buscar platillo..." 
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-transparent text-base lg:text-lg text-white placeholder-gray-500 focus:outline-none"
-              />
-            </div>
+        {/* Center: Operation & Customer Tools in Sleek Clusters */}
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+          {/* Shift / Drawer Control */}
+          <div className="flex items-center shrink-0">
+            <CashShiftBadge onClick={() => setCorteModalOpen(true)} />
+            {cashStatus?.shiftOpen && (
+              <button
+                id="pos-quick-corte-x"
+                type="button"
+                onClick={() => {
+                  setCorteInitialMode("partial");
+                  setCorteModalOpen(true);
+                }}
+                className="ml-1.5 flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white/5 border border-white/10 text-cyan-300 hover:bg-cyan-500/15 text-xs font-bold transition-all active:scale-95 cursor-pointer whitespace-nowrap"
+                title="Corte X de supervisión"
+              >
+                <ClipboardCheck className="h-3.5 w-3.5 text-cyan-400" />
+                <span className="hidden xl:inline">Corte X</span>
+              </button>
+            )}
           </div>
-          
+
+          {/* Orders Cluster: Tabs + En Espera */}
+          <div className="flex items-center rounded-xl bg-white/5 border border-white/10 p-0.5">
+            <button
+              onClick={() => setActiveTabsModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-purple-300 hover:bg-purple-500/15 text-xs font-bold transition-all cursor-pointer active:scale-95"
+              title="Comandas activas en mesas / tienda"
+            >
+              <Users className="h-3.5 w-3.5 text-purple-400" />
+              <span>Tabs</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-purple-500/30 text-purple-200">
+                {activeTabsData?.totalActiveCount ?? 0}
+              </span>
+            </button>
+            <button
+              onClick={() => setPausedCartsModal(true)}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer active:scale-95",
+                pausedCarts.length > 0 ? "text-amber-300 bg-amber-500/20 animate-pulse" : "text-gray-400 hover:bg-white/10"
+              )}
+              title="Ventas pausadas en espera"
+            >
+              <Pause className="h-3.5 w-3.5 text-amber-400" />
+              <span>Espera</span>
+              {pausedCarts.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-500/40 text-amber-100">
+                  {pausedCarts.length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Loyalty & Scan Tools (Direct Access) */}
+          <div className="flex items-center rounded-xl bg-white/5 border border-white/10 p-0.5">
+            <button
+              onClick={() => setShowBusinessQrModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-pink-500/15 hover:bg-pink-500/25 text-pink-300 text-xs font-black transition-all cursor-pointer active:scale-95 shadow-sm"
+              title="Mostrar QR Neón del negocio en pantalla para que el cliente lo escanee"
+            >
+              <QrCode className="h-3.5 w-3.5 text-pink-400 animate-pulse" />
+              <span>QR Neón</span>
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setRabbitterModalOpen(true);
+                setIsScanningRabbitter(true);
+              }}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-gray-300 hover:text-white text-xs font-bold transition-all cursor-pointer active:scale-95"
+              title="Escanear Rabbitter con la cámara"
+            >
+              <Camera className="h-3.5 w-3.5 text-cyan-400" />
+              <span className="hidden lg:inline">Escanear</span>
+            </button>
+          </div>
+
+          {/* Hardware & History */}
+          <div className="flex items-center gap-1">
+            {btConnected ? (
+              <button
+                onClick={handleDisconnectBluetooth}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-blue-500/20 text-blue-300 border border-blue-500/30 text-xs font-bold hover:bg-blue-500/30 transition-all cursor-pointer"
+                title={`Impresora conectada: ${btDeviceName}`}
+              >
+                <BluetoothConnected className="h-3.5 w-3.5 text-blue-400" />
+                <span className="hidden xl:inline">{btDeviceName || "Printer"}</span>
+              </button>
+            ) : (
+              <button
+                onClick={handleConnectBluetooth}
+                className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-blue-400 border border-white/10 transition-all cursor-pointer"
+                title="Vincular impresora térmica Bluetooth"
+              >
+                <Bluetooth className="h-4 w-4" />
+              </button>
+            )}
+
+            <button
+              onClick={() => {
+                setRecentOrdersModal(true);
+                refetchRecentOrders();
+              }}
+              className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-cyan-300 border border-white/10 transition-all cursor-pointer"
+              title="Reimprimir tickets recientes"
+            >
+              <History className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Right: Search & Clock */}
+        <div className="flex items-center gap-2.5 shrink-0">
+          <div className="relative flex items-center bg-gray-900 border border-white/10 rounded-xl h-9 w-28 sm:w-36 md:w-44 lg:w-56 px-2.5 shadow-inner">
+            <Search className="h-3.5 w-3.5 text-gray-400 mr-2 shrink-0" />
+            <input 
+              type="text" 
+              placeholder="Buscar..." 
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full bg-transparent text-xs text-white placeholder-gray-500 focus:outline-none"
+            />
+          </div>
           <PosClock />
-          
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-linear-to-br from-pink-500/20 to-purple-500/20 border border-pink-500/30 text-pink-400 shadow-[inset_0_0_20px_rgba(236,72,153,0.2)]">
-            <User className="h-6 w-6" />
-          </div>
         </div>
       </header>
 
@@ -1348,19 +1488,46 @@ export default function PosPage() {
                   </button>
                 </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setRabbitterModalOpen(true)}
-                  className="w-full flex items-center justify-between rounded-xl bg-white/5 hover:bg-pink-500/15 border border-white/10 hover:border-pink-500/30 px-2.5 py-1.5 text-xs font-bold text-gray-300 hover:text-pink-300 transition-all cursor-pointer group"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm">🐰</span>
-                    <span className="text-[11px] font-black tracking-wide">Identificar Rabbitter (Recompensa Directa)</span>
+                <div className="w-full flex items-center justify-between rounded-xl bg-white/5 border border-white/10 p-1.5 gap-2">
+                  <div className="flex items-center gap-1.5 pl-1 min-w-0">
+                    <span className="text-sm shrink-0">🐰</span>
+                    <div className="text-left truncate">
+                      <div className="text-[11px] font-black text-gray-200 truncate">Recompensa Rabbitter</div>
+                      <div className="text-[9px] text-gray-400">Cashback Bunz</div>
+                    </div>
                   </div>
-                  <span className="text-[10px] font-extrabold text-pink-400 bg-pink-500/15 group-hover:bg-pink-500/25 px-1.5 py-0.5 rounded-md border border-pink-500/20">
-                    + Vincular
-                  </span>
-                </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRabbitterModalOpen(true);
+                        setIsScanningRabbitter(true);
+                      }}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-pink-500/20 hover:bg-pink-500/30 text-pink-300 border border-pink-500/30 text-[10px] font-black transition-all cursor-pointer active:scale-95 shadow-sm"
+                      title="Escanear QR de cliente Rabbitter con cámara"
+                    >
+                      <Camera className="h-3 w-3" />
+                      <span>Escanear</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowBusinessQrModal(true)}
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/10 hover:bg-white/15 text-white border border-white/15 text-[10px] font-black transition-all cursor-pointer active:scale-95 shadow-sm"
+                      title="Mostrar QR Neón del negocio en pantalla"
+                    >
+                      <QrCode className="h-3 w-3 text-pink-400 animate-pulse" />
+                      <span>QR Neón</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRabbitterModalOpen(true)}
+                      className="p-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white border border-white/10 transition-all cursor-pointer"
+                      title="Buscar cliente por teléfono o usuario"
+                    >
+                      <Search className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           </div>
@@ -1570,6 +1737,36 @@ export default function PosPage() {
                 </div>
               )}
             </div>
+
+            {/* Loyalty Quick Actions right before payment */}
+            {!selectedRabbitter && total > 0 && (
+              <div className="flex items-center justify-between px-2.5 py-1 rounded-xl bg-pink-500/10 border border-pink-500/20 mb-2">
+                <span className="text-[10px] font-black text-pink-300 flex items-center gap-1">
+                  <span>🐰</span> ¿Cliente Rabbitter?
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRabbitterModalOpen(true);
+                      setIsScanningRabbitter(true);
+                    }}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-pink-500/20 hover:bg-pink-500/30 text-pink-300 text-[10px] font-bold transition-all cursor-pointer active:scale-95"
+                  >
+                    <Camera className="h-3 w-3" />
+                    <span>Escanear</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowBusinessQrModal(true)}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white/10 hover:bg-white/15 text-white text-[10px] font-bold transition-all cursor-pointer active:scale-95"
+                  >
+                    <QrCode className="h-3 w-3 text-pink-400" />
+                    <span>QR Neón</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Quick Payment Methods */}
             <div className="grid grid-cols-4 gap-1.5 mb-2">
@@ -2515,69 +2712,11 @@ export default function PosPage() {
           ) : (
             <button
               type="button"
-              onClick={async () => {
-                setIsScanningRabbitter(true);
-                setTimeout(async () => {
-                  try {
-                    const { Html5Qrcode } = await import("html5-qrcode");
-                    const scanner = new Html5Qrcode("rabbitter-cam-reader");
-                    await scanner.start(
-                      { facingMode: "environment" },
-                      { fps: 10, qrbox: { width: 220, height: 220 } },
-                      async (decodedText: string) => {
-                        await scanner.stop().catch(() => {});
-                        setIsScanningRabbitter(false);
-                        // Clean clean query if scanned a URL (e.g. rabbitty.me/profile?user=... or phone)
-                        const cleaned = decodedText.includes("?") 
-                          ? new URL(decodedText).searchParams.get("user") || new URL(decodedText).searchParams.get("phone") || decodedText
-                          : decodedText;
-                        
-                        setIsSearchingRabbitter(true);
-                        try {
-                          const res = await utils.pos.lookupRabbitter.fetch({ query: cleaned.trim() });
-                          if (res) {
-                            setRabbitterQuery("");
-                            if (receiptModal && lastPaidOrderId) {
-                              // ── Asignación POST-cobro con emisión atómica e idempotente ──
-                              const linked = await linkPostCheckout.mutateAsync({
-                                orderId: lastPaidOrderId,
-                                customerId: res.id,
-                                customerPhone: res.phoneNumber || res.telegramId || "sin-telefono",
-                                customerName: res.name,
-                                awardBunz: true,
-                              });
-                              setRabbitterModalOpen(false);
-                              setLastPaidOrderId(null);
-                              setPaidTicketData((prev: any) => prev ? { ...prev, awardedBunz: linked.awardedBunz || prev.awardedBunz } : prev);
-                              toast.success(linked.awardedBunz > 0
-                                ? `🐰 ¡Asignado y recompensado: ${linked.awardedBunz} Bunz a ${res.name}!`
-                                : `🐰 Cliente asignado a la venta.`);
-                              return;
-                            }
-                            setSelectedRabbitter(res);
-                            setRabbitterModalOpen(false);
-                            toast.success(`🐰 ¡Rabbitter vinculado: ${res.name}!`);
-                          } else {
-                            toast.error("Código no encontrado. Verifica con el cliente.");
-                          }
-                        } catch (err: any) {
-                          toast.error(err?.message || "Error al buscar Rabbitter");
-                        } finally {
-                          setIsSearchingRabbitter(false);
-                        }
-                      },
-                      () => {}
-                    );
-                  } catch (e: any) {
-                    toast.error("No se pudo acceder a la cámara.");
-                    setIsScanningRabbitter(false);
-                  }
-                }, 150);
-              }}
+              onClick={() => setIsScanningRabbitter(true)}
               className="w-full flex items-center justify-center gap-2.5 py-3 rounded-2xl bg-pink-500/15 hover:bg-pink-500/25 border border-pink-500/30 text-pink-300 text-xs font-black transition-all cursor-pointer shadow-[0_0_20px_rgba(236,72,153,0.15)] active:scale-95"
             >
               <Camera className="h-4 w-4 text-pink-400 animate-pulse" />
-              <span>Escanear QR de la App del Cliente</span>
+              <span>Activar Cámara para Escanear Rabbitter</span>
             </button>
           )}
 
@@ -2683,12 +2822,21 @@ export default function PosPage() {
             Muestra esta pantalla al cliente para que apunte con la cámara de su celular o abra su app de Rabbitty / Telegram y reciba sus Bunz.
           </p>
 
-          <div className="relative p-6 rounded-[2.5rem] bg-gray-900 border-2 border-pink-500/50 shadow-[0_0_50px_rgba(236,72,153,0.35)] flex flex-col items-center">
-            <div className="h-64 w-64 bg-white p-3 rounded-3xl shadow-xl flex items-center justify-center">
-              <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(`https://rabbitty.me/scan?branchId=${ticketContext?.branch?.id || "default"}&business=${encodeURIComponent(ticketContext?.restaurant?.name || "Rabbitty")}`)}`}
-                alt="QR Mostrador Rabbitty"
-                className="h-full w-full object-contain"
+          <div className="relative p-6 rounded-[2.5rem] bg-gray-950 border-2 border-pink-500/60 shadow-[0_0_60px_rgba(236,72,153,0.4)] flex flex-col items-center">
+            <div className="p-4 bg-white rounded-3xl shadow-2xl flex items-center justify-center">
+              <QRCodeSVG
+                value={`https://rabbitty.me/scan?branchId=${ticketContext?.branch?.id || "default"}&business=${encodeURIComponent(ticketContext?.restaurant?.name || "Rabbitty")}`}
+                size={220}
+                level="H"
+                includeMargin={false}
+                imageSettings={{
+                  src: "/Ra.png",
+                  x: undefined,
+                  y: undefined,
+                  height: 44,
+                  width: 44,
+                  excavate: true,
+                }}
               />
             </div>
             <div className="mt-4 flex items-center gap-2">
@@ -3145,59 +3293,97 @@ export default function PosPage() {
         </div>
       </Dialog>
 
-      {/* ── Modal de Desbloqueo Admin para Salir de Kiosco ── */}
+      {/* ── Modal de Seguridad: Teclado Numérico Táctil para Salir al Dashboard ── */}
       <Dialog
         open={adminPinModal}
-        onClose={() => setAdminPinModal(false)}
-        title="Modo Kiosco: Desbloquear Salida al Dashboard"
-        className="max-w-sm w-full"
+        onClose={() => {
+          setAdminPinModal(false);
+          setExitPin("");
+        }}
+        title={!adminPinStatus?.hasAdminPin ? "Definir PIN de Administrador" : "Seguridad: Acceso al Dashboard"}
+        className="max-w-xs w-full"
       >
-        <div className="space-y-4 p-1">
-          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2">
-            <Lock className="h-5 w-5 shrink-0 text-amber-400" />
-            <span>Esta terminal está operando con perfil de empleado. Ingresa el PIN de Administrador o Gerente para salir.</span>
+        <div className="space-y-4 p-1 flex flex-col items-center">
+          <div className="text-center space-y-1">
+            <div className="inline-flex p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 mb-1">
+              <Lock className="h-5 w-5" />
+            </div>
+            <p className="text-xs text-gray-400 max-w-[240px] leading-relaxed">
+              {!adminPinStatus?.hasAdminPin
+                ? "Esta sucursal aún no tiene PIN maestro. Teclea 4 dígitos para definir tu PIN de Administrador y salir."
+                : "Ingresa el PIN de 4 dígitos de Administrador o Gerente para acceder al Dashboard."}
+            </p>
           </div>
 
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-gray-300">PIN de Supervisor / Admin (4 dígitos)</label>
-            <Input
-              type="password"
-              maxLength={4}
-              value={exitPin}
-              onChange={(e) => setExitPin(e.target.value.replace(/\D/g, ""))}
-              placeholder="••••"
-              className="text-center text-lg tracking-widest font-black py-2.5"
-              autoFocus
-            />
+          {/* 4 Indicadores Visuales de Dígitos */}
+          <div className="flex items-center gap-3.5 py-1">
+            {[0, 1, 2, 3].map((index) => {
+              const isFilled = exitPin.length > index;
+              return (
+                <div
+                  key={index}
+                  className={cn(
+                    "w-3.5 h-3.5 rounded-full border-2 transition-all duration-150",
+                    isFilled
+                      ? "bg-amber-400 border-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.6)] scale-110"
+                      : "bg-white/5 border-white/20"
+                  )}
+                />
+              );
+            })}
           </div>
 
-          <div className="flex gap-2 pt-2">
-            <Button
-              variant="secondary"
-              onClick={() => setAdminPinModal(false)}
-              className="flex-1 py-2 font-bold text-xs"
+          {/* Teclado Táctil 3x4 Especial para iPad */}
+          <div className="grid grid-cols-3 gap-2 w-full max-w-[240px]">
+            {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((num) => (
+              <button
+                key={num}
+                type="button"
+                onClick={() => handleKeypadPress(num)}
+                disabled={verifyPinMutation.isPending || setAdminPinMutation.isPending}
+                className="h-12 rounded-2xl bg-white/5 hover:bg-white/10 active:bg-amber-500/20 border border-white/10 active:border-amber-500/40 text-lg font-black text-white transition-all cursor-pointer shadow-sm active:scale-95 flex items-center justify-center select-none"
+              >
+                {num}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setExitPin("")}
+              disabled={verifyPinMutation.isPending || setAdminPinMutation.isPending}
+              className="h-12 rounded-2xl bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 text-xs font-black text-gray-400 hover:text-white transition-all cursor-pointer active:scale-95 flex items-center justify-center select-none"
             >
-              Cancelar
-            </Button>
+              C
+            </button>
+            <button
+              type="button"
+              onClick={() => handleKeypadPress("0")}
+              disabled={verifyPinMutation.isPending || setAdminPinMutation.isPending}
+              className="h-12 rounded-2xl bg-white/5 hover:bg-white/10 active:bg-amber-500/20 border border-white/10 active:border-amber-500/40 text-lg font-black text-white transition-all cursor-pointer shadow-sm active:scale-95 flex items-center justify-center select-none"
+            >
+              0
+            </button>
+            <button
+              type="button"
+              onClick={() => setExitPin((prev) => prev.slice(0, -1))}
+              disabled={verifyPinMutation.isPending || setAdminPinMutation.isPending}
+              className="h-12 rounded-2xl bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 text-xs font-black text-gray-400 hover:text-white transition-all cursor-pointer active:scale-95 flex items-center justify-center select-none"
+            >
+              ⌫
+            </button>
+          </div>
+
+          <div className="w-full pt-1">
             <Button
-              onClick={async () => {
-                if (exitPin.length !== 4) {
-                  toast.error("Ingresa los 4 dígitos del PIN");
-                  return;
-                }
-                try {
-                  await verifyPinMutation.mutateAsync({ pin: exitPin });
-                  setAdminPinModal(false);
-                  toast.success("PIN autorizado. Saliendo al dashboard...");
-                  window.location.href = "/";
-                } catch (err: any) {
-                  toast.error(err?.message || "PIN no autorizado");
-                }
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setAdminPinModal(false);
+                setExitPin("");
               }}
-              disabled={exitPin.length !== 4 || verifyPinMutation.isPending}
-              className="flex-1 py-2 font-black text-xs bg-cyan-500 hover:bg-cyan-400 text-gray-950 disabled:opacity-40"
+              className="text-xs text-gray-400 hover:text-white font-bold w-full"
             >
-              {verifyPinMutation.isPending ? "Validando..." : "Desbloquear y Salir"}
+              Permanecer en la Caja
             </Button>
           </div>
         </div>

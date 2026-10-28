@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
 
     const db = getRestaurantDb();
 
-    // 1. Resolve date range: optional from/to or cash shift
+    // 1. Resolve date range: optional from/to or cash shift (Mexico City timezone default)
     let fromDate: Date | null = null;
     let toDate: Date | null = null;
     let shiftInfo: Record<string, unknown> | null = null;
@@ -38,15 +38,34 @@ export async function GET(req: NextRequest) {
         fromDate = shiftInfo.openedAt ? new Date(shiftInfo.openedAt as string) : null;
         toDate = shiftInfo.closedAt ? new Date(shiftInfo.closedAt as string) : new Date();
       }
-    } else {
-      if (fromParam) {
-        const parsedFrom = new Date(fromParam);
-        if (!isNaN(parsedFrom.getTime())) fromDate = parsedFrom;
+    } else if (fromParam === "all") {
+      // Explicitly view all history without date bounds
+      fromDate = null;
+      toDate = null;
+    } else if (fromParam) {
+      // If YYYY-MM-DD is passed, pin to Mexico City time (-06:00)
+      if (fromParam.length === 10) {
+        fromDate = new Date(`${fromParam}T00:00:00-06:00`);
+      } else {
+        const p = new Date(fromParam);
+        if (!isNaN(p.getTime())) fromDate = p;
       }
       if (toParam) {
-        const parsedTo = new Date(toParam);
-        if (!isNaN(parsedTo.getTime())) toDate = parsedTo;
+        if (toParam.length === 10) {
+          toDate = new Date(`${toParam}T23:59:59.999-06:00`);
+        } else {
+          const p = new Date(toParam);
+          if (!isNaN(p.getTime())) toDate = p;
+        }
+      } else if (fromParam.length === 10) {
+        // Single day filter
+        toDate = new Date(`${fromParam}T23:59:59.999-06:00`);
       }
+    } else {
+      // Default: today in Mexico City timezone
+      const mxTodayStr = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City" }).format(new Date());
+      fromDate = new Date(`${mxTodayStr}T00:00:00-06:00`);
+      toDate = new Date(`${mxTodayStr}T23:59:59.999-06:00`);
     }
 
     // 2. Resolve Business & Branch metadata (clean join via restaurantId / businessId)
@@ -168,6 +187,7 @@ export async function GET(req: NextRequest) {
     }
 
     // 5. Aggregate metrics
+    // 5. Aggregate metrics
     let totalGross = 0;
     let totalSubtotal = 0;
     let totalTax = 0;
@@ -176,9 +196,23 @@ export async function GET(req: NextRequest) {
     const productBreakdown: Record<string, { quantity: number; revenue: number }> = {};
 
     for (const ord of ordersList) {
-      totalGross += Number(ord.total) || 0;
-      totalSubtotal += Number(ord.subtotal) || 0;
-      totalTax += Number(ord.tax) || 0;
+      const gross = Number(ord.total) || 0;
+      let sub = Number(ord.subtotal) || 0;
+      let tx = Number(ord.tax) || 0;
+
+      // Desglose fiscal canónico mexicano (Precios incluyen IVA al 16%):
+      // Si el subtotal y el IVA no cuadran con el total bruto o provienen de tickets heredados invertidos:
+      if (gross > 0 && (sub + tx > gross || Math.abs(sub + tx - gross) > 0.05 || sub >= gross)) {
+        sub = Math.round((gross / 1.16) * 100) / 100;
+        tx = Math.round((gross - sub) * 100) / 100;
+      }
+      ord.subtotal = sub;
+      ord.tax = tx;
+      ord.total = gross;
+
+      totalGross += gross;
+      totalSubtotal += sub;
+      totalTax += tx;
       totalBunzPaid += Number(ord.bunzPaid) || 0;
       totalBunzReward += Number(ord.bunzReward) || 0;
 
@@ -196,7 +230,9 @@ export async function GET(req: NextRequest) {
       const ordId = String(ord.order_id);
       const matchedPayments = paymentsByOrder.get(ordId) || [];
       ord.payments = matchedPayments;
-      ord.primary_method = matchedPayments.length > 0 ? matchedPayments[0].method : "CASH";
+      const primaryMethod = matchedPayments.length > 0 ? matchedPayments[0].method : "CASH";
+      ord.primary_method = primaryMethod;
+      ord.payment_method = primaryMethod; // Provee ambos campos para compatibilidad con la tabla
     }
 
     // Aggregate payments breakdown accurately from payment rows
@@ -212,27 +248,47 @@ export async function GET(req: NextRequest) {
 
     const generatedAt = new Date().toISOString();
 
-    // 6. Compute Cryptographic SHA-256 Digest of immutable report content
-    // 4b. Gastos de operación vs retiros (sangría) del/los turno(s) del rango (con binding, sin sql.raw)
+    // 6. Gastos de operación (tabla expenses + cash_drops tipo EXPENSE) vs retiros/sangría a caja fuerte (SAFE)
     let totalExpenses = 0;
     let totalSafeWithdrawals = 0;
     try {
       const dropConds: SQL[] = [];
-      if (fromDate) dropConds.push(sql`d."createdAt" >= ${fromDate}::timestamptz`);
-      if (toDate) dropConds.push(sql`d."createdAt" <= ${toDate}::timestamptz`);
+      if (fromDate) dropConds.push(sql`d."createdAt" >= ${fromDate.toISOString()}::timestamptz`);
+      if (toDate) dropConds.push(sql`d."createdAt" <= ${toDate.toISOString()}::timestamptz`);
       if (branchId) dropConds.push(sql`d."branchId" = ${branchId}`);
-      if (dropConds.length > 0) {
-        const dropsRes = await db.execute(
-          sql`SELECT COALESCE(d.category, 'SAFE') as category, SUM(d.amount) as total FROM cash_drops d WHERE ${sql.join(dropConds, sql` AND `)} GROUP BY 1`
-        );
-        const dropsRows = ((dropsRes as unknown as { rows?: Record<string, unknown>[] }).rows || (dropsRes as unknown as Record<string, unknown>[]) || []) as Record<string, unknown>[];
-        for (const r of dropsRows) {
-          if (String(r.category) === "EXPENSE") totalExpenses = Number(r.total) || 0;
-          else totalSafeWithdrawals = Number(r.total) || 0;
-        }
+      
+      const dropsRes = await db.execute(
+        dropConds.length > 0
+          ? sql`SELECT COALESCE(d.category, 'SAFE') as category, SUM(d.amount) as total FROM cash_drops d WHERE ${sql.join(dropConds, sql` AND `)} GROUP BY 1`
+          : sql`SELECT COALESCE(d.category, 'SAFE') as category, SUM(d.amount) as total FROM cash_drops d GROUP BY 1`
+      );
+      const dropsRows = ((dropsRes as unknown as { rows?: Record<string, unknown>[] }).rows || (dropsRes as unknown as Record<string, unknown>[]) || []) as Record<string, unknown>[];
+      for (const r of dropsRows) {
+        if (String(r.category) === "EXPENSE") totalExpenses += Number(r.total) || 0;
+        else totalSafeWithdrawals += Number(r.total) || 0;
       }
     } catch (dropErr) {
       console.warn("[AUDIT_REPORT] drops query failed:", dropErr);
+    }
+
+    // Sumar gastos registrados en la tabla operacional 'expenses' (insumos, servicios, fletes, etc.)
+    try {
+      const expConds: SQL[] = [];
+      if (fromDate) expConds.push(sql`e."expenseDate" >= ${fromDate.toISOString()}::timestamptz`);
+      if (toDate) expConds.push(sql`e."expenseDate" <= ${toDate.toISOString()}::timestamptz`);
+      if (branchId) expConds.push(sql`e."branchId" = ${branchId}`);
+
+      const expRes = await db.execute(
+        expConds.length > 0
+          ? sql`SELECT COALESCE(SUM(e.amount), 0) as total FROM expenses e WHERE ${sql.join(expConds, sql` AND `)}`
+          : sql`SELECT COALESCE(SUM(e.amount), 0) as total FROM expenses e`
+      );
+      const expRows = ((expRes as unknown as { rows?: Record<string, unknown>[] }).rows || (expRes as unknown as Record<string, unknown>[]) || []) as Record<string, unknown>[];
+      if (expRows.length > 0) {
+        totalExpenses += Number(expRows[0].total) || 0;
+      }
+    } catch (expErr) {
+      console.warn("[AUDIT_REPORT] expenses query failed:", expErr);
     }
 
         const payloadForHashing = JSON.stringify({

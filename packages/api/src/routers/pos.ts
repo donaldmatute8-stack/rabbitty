@@ -57,16 +57,33 @@ export const posRouter = router({
   lookupRabbitter: protectedProcedure
     .input(z.object({ query: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
-      const q = input.query.trim();
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(q);
+      let raw = input.query.trim();
+      // Extraer identificador si viene en formato URL / URI scheme (ej. rabbitty://pay?to=@username)
+      if (raw.includes("to=")) {
+        const match = raw.match(/[?&]to=([^&]+)/);
+        if (match) raw = decodeURIComponent(match[1] ?? raw);
+      } else if (raw.includes("user=")) {
+        const match = raw.match(/[?&]user=([^&]+)/);
+        if (match) raw = decodeURIComponent(match[1] ?? raw);
+      } else if (raw.includes("phone=")) {
+        const match = raw.match(/[?&]phone=([^&]+)/);
+        if (match) raw = decodeURIComponent(match[1] ?? raw);
+      }
+
+      // Limpiar @ inicial si se ingresó o escaneó un handle
+      const cleanQ = raw.replace(/^@/, "").trim();
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanQ);
 
       const conditions = [
-        eq(coreUsers.telegramId, q),
-        eq(coreUsers.phoneNumber, q),
-        eq(coreUsers.username, q),
+        eq(coreUsers.telegramId, cleanQ),
+        eq(coreUsers.telegramId, raw),
+        eq(coreUsers.phoneNumber, cleanQ),
+        eq(coreUsers.phoneNumber, raw),
+        ilike(coreUsers.username, cleanQ),
+        ilike(coreUsers.username, raw),
       ];
       if (isUuid) {
-        conditions.push(eq(coreUsers.id, q));
+        conditions.push(eq(coreUsers.id, cleanQ));
       }
 
       const [user] = await ctx.coreDb
@@ -760,6 +777,47 @@ export const posRouter = router({
   voidOrder: protectedProcedure
     .input(z.object({ orderId: z.string(), reason: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const [orderRow] = await ctx.restaurantDb
+        .select({ branchId: orders.branchId, status: orders.status })
+        .from(orders)
+        .where(eq(orders.id, input.orderId))
+        .limit(1);
+      if (!orderRow) throw new TRPCError({ code: "NOT_FOUND", message: "Orden no encontrada" });
+
+      // ── Multi-tenant guard: solo staff de plataforma, dueño del negocio,
+      //    o staff de la misma sucursal pueden anular la orden ──
+      if (orderRow.branchId) {
+        const isPlatformStaff = Boolean(ctx.staffRole);
+        if (!isPlatformStaff) {
+          const isBranchStaff = ctx.branchId && ctx.branchId === orderRow.branchId;
+          if (!isBranchStaff) {
+            const { restaurants, branches } = await import("@rabbitty/database-restaurant/schema");
+            const coreOwned = await import("@rabbitty/database-core/schema").then(m => m.ownedBusinesses);
+            const [branchRow] = await ctx.restaurantDb
+              .select({ restaurantId: branches.restaurantId })
+              .from(branches)
+              .where(eq(branches.id, orderRow.branchId))
+              .limit(1);
+            const [restaurantRow] = branchRow
+              ? await ctx.restaurantDb
+                  .select({ businessId: restaurants.businessId })
+                  .from(restaurants)
+                  .where(eq(restaurants.id, branchRow.restaurantId))
+                  .limit(1)
+              : [];
+            if (!restaurantRow) throw new TRPCError({ code: "NOT_FOUND", message: "Sucursal sin restaurante asociado." });
+            const [owned] = await ctx.coreDb
+              .select({ id: coreOwned.id })
+              .from(coreOwned)
+              .where(eq(coreOwned.ownerId, ctx.userId))
+              .limit(1);
+            if (!owned || owned.id !== restaurantRow.businessId) {
+              throw new TRPCError({ code: "FORBIDDEN", message: "Esta orden no pertenece a tu negocio." });
+            }
+          }
+        }
+      }
+
       await ctx.restaurantDb.update(orders).set({
         status: "VOIDED",
         voidReason: input.reason,
