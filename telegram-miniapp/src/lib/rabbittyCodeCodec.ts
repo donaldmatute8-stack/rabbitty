@@ -26,7 +26,9 @@ export function code6FromData(data: string): number {
 
 const H_MIN = 20;
 const H_MAX = 85;
-const LEVELS = 4;
+// ── 3 NIVELES (base-3): gaps de ~21.7% entre niveles — mucho más robustos de
+//    cuantizar en cámara que 4 niveles. 3^13 = 1,594,323 ≥ 1,000,000. ──
+const LEVELS = 3;
 export function levelToHeight(d: number): number {
   return H_MIN + (d * (H_MAX - H_MIN)) / (LEVELS - 1);
 }
@@ -35,42 +37,32 @@ export function levelToHeight(d: number): number {
 export function barsFromCode(code: number): number[] {
   const value = Math.max(0, Math.min(999_999, Math.round(code)));
   const digits: number[] = [];
-  for (let i = 9; i >= 0; i--) {
-    digits.push(Math.floor(value / Math.pow(4, i)) % 4);
+  for (let i = 12; i >= 0; i--) {
+    digits.push(Math.floor(value / Math.pow(3, i)) % 3);
   }
-  const parity = digits.reduce((a, b) => a + b, 0) % 4;
-  return [
-    ...digits.map(levelToHeight),
-    levelToHeight(parity),
-    H_MAX, // ancla alta
-    H_MIN, // ancla baja
-  ];
+  return digits.map(levelToHeight);
 }
 
-/** Decodifica alturas medidas (0..1 relativas o 20..85) → código de 6 dígitos o null. */
+/**
+ * Decodifica alturas medidas (0..1 relativas o 20..85) → código de 6 dígitos o null.
+ * Cuantización a 3 niveles con RECHAZO de barras ambiguas (fuera de zona de decisión).
+ */
 export function codeFromBars(rawHeights: number[]): number | null {
   if (!rawHeights || rawHeights.length !== 13) return null;
   const heights = rawHeights.map((h) => Number(h) || 0);
   const max = Math.max(...heights);
   const min = Math.min(...heights);
   if (max - min < 1e-6) return null;
-  // Normalizar al rango 20..85 usando anclas dinámicas del propio frame
   const norm = heights.map((h) => H_MIN + ((h - min) / (max - min)) * (H_MAX - H_MIN));
 
-  const digits: number[] = [];
-  for (let i = 0; i < 10; i++) {
-    const h = norm[i];
-    const d = Math.round(((h - H_MIN) / (H_MAX - H_MIN)) * (LEVELS - 1));
-    if (d < 0 || d > 3) return null;
-    digits.push(d);
-  }
-  const parity = norm[10] ?? 0;
-  const parityDigit = Math.round(((parity - H_MIN) / (H_MAX - H_MIN)) * (LEVELS - 1));
-  const expectedParity = digits.reduce((a, b) => a + b, 0) % 4;
-  if (parityDigit !== expectedParity) return null;
-
+  const margin = (H_MAX - H_MIN) * 0.18; // zona de rechazo entre niveles
   let value = 0;
-  for (const d of digits) value = value * 4 + d;
+  for (const h of norm) {
+    const d = Math.round(((h - H_MIN) / (H_MAX - H_MIN)) * (LEVELS - 1));
+    const ideal = levelToHeight(d);
+    if (Math.abs(h - ideal) > margin) return null; // barra ambigua → frame inválido
+    value = value * 3 + d;
+  }
   if (value > 999_999) return null;
   return value;
 }

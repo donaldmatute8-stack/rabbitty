@@ -251,6 +251,7 @@ function ImpresosContent() {
   const [tempScopePick, setTempScopePick] = useState<string>('ALL');
   const [authUserName, setAuthUserName] = useState<string>('');
   const [qrSessionId, setQrSessionId] = useState<string | null>(null);
+  const [qrGateCode, setQrGateCode] = useState<string>('');
   const [qrSessionData, setQrSessionData] = useState<string>('');
   const [qrLoading, setQrLoading] = useState<boolean>(false);
   const [qrStatusMsg, setQrStatusMsg] = useState<string>('');
@@ -315,6 +316,7 @@ function ImpresosContent() {
       if (data?.success && data.sessionId && data.qrData) {
         setQrSessionId(data.sessionId);
         setQrSessionData(data.qrData);
+        setQrGateCode(data.gateCode || '');
       } else {
         setQrStatusMsg(data?.error || 'No se pudo generar el QR Neón');
       }
@@ -633,16 +635,24 @@ function ImpresosContent() {
             {/* COLUMNA IZQUIERDA: ESCANEO QR NEÓN CON APP RABBITTY */}
             <div className="flex flex-col items-center text-center border-b md:border-b-0 md:border-r border-zinc-800 pb-6 md:pb-0 md:pr-6">
               <span className="text-[10px] font-black uppercase tracking-widest text-pink-400 px-3 py-1 rounded-full bg-pink-500/10 border border-pink-500/20 inline-flex items-center gap-1.5 mb-3">
-                <Sparkles className="w-3 h-3" /> QR Neón · Afiliados & Admin
+                <Sparkles className="w-3 h-3" /> QR Neón · Afiliados
               </span>
               <h2 className="text-lg font-black text-white">Escanea con tu App Rabbitty</h2>
               <p className="text-[11px] text-zinc-400 mt-1 mb-4 leading-relaxed">
-                Abre tu App de <strong className="text-white">Rabbitty</strong> (Escáner o Cámara). Acceso exclusivo para <strong className="text-pink-400">Negocios Afiliados</strong> y <strong className="text-pink-400">God Admin</strong> (Rabbitters no autorizados).
+                Abre tu App de <strong className="text-white">Rabbitty</strong> (Escáner o Cámara). Acceso exclusivo para <strong className="text-pink-400">Negocios Afiliados</strong>.
               </p>
 
               <div className="relative flex items-center justify-center my-1">
                 {qrSessionData && !qrLoading ? (
-                  <NeonQRCode value={qrSessionData} size={230} />
+                  <div className="flex flex-col items-center">
+                    <NeonQRCode value={qrSessionData} size={230} />
+                    {qrGateCode && (
+                      <p className="mt-2 text-xs text-zinc-400">
+                        ¿No puedes escanear? En la App: <b className="text-white">Escáner → código manual</b> y teclea{' '}
+                        <b className="text-pink-400 font-mono tracking-[2px]">{qrGateCode}</b>
+                      </p>
+                    )}
+                  </div>
                 ) : (
                   <div className="w-56 h-56 rounded-4xl bg-[#110520] border-2 border-pink-500/40 flex flex-col items-center justify-center gap-3 p-4">
                     <RefreshCw className="w-7 h-7 text-pink-400 animate-spin" />
@@ -749,7 +759,7 @@ function ImpresosContent() {
                 </div>
                 <h3 className="text-lg font-black text-white">Acceso QR Neón Rabbitty</h3>
                 <p className="text-xs text-zinc-400 mt-1 mb-4">
-                  Escanea con el lector de tu App Rabbitty. Válido únicamente para <strong className="text-white">Afiliados</strong> y <strong className="text-white">God Admin</strong>.
+                  Escanea con el lector de tu App Rabbitty. Válido únicamente para <strong className="text-white">Afiliados</strong>.
                 </p>
                 <div className="inline-block mb-4 pt-6">
                   {qrSessionData && !qrLoading ? (
@@ -796,7 +806,7 @@ function ImpresosContent() {
               <Sparkles className="w-3.5 h-3.5 text-pink-400" /> Kit Impresos Piloto Oficial
             </span>
             <span className="text-[11px] font-mono px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-700 text-zinc-300">
-              {authMode === 'admin' ? `👑 Admin${authUserName ? ` · ${authUserName}` : ''}` : authMode === 'temp' ? `⏳ Acceso temporal · ${tempAccessInfo?.label ?? 'Invitado'}` : `🏪 Afiliado · ${businessName}`}
+              {authMode === 'admin' ? `✅ Acceso autorizado${authUserName ? ` · ${authUserName}` : ''}` : authMode === 'temp' ? `⏳ Acceso temporal · ${tempAccessInfo?.label ?? 'Invitado'}` : `🏪 Afiliado · ${businessName}`}
             </span>
             {(authMode === 'admin' || authMode === 'affiliate') && (
               <button

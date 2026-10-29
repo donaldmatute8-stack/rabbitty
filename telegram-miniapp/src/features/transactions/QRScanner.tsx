@@ -21,6 +21,8 @@ export default function QRScanner({ onScan, onClose }: QRScannerProps) {
     let consecutiveNeonFrames = 0;
     let decodeFailCount = 0;
     let hintShown = false;
+    let lastDecoded: number | null = null;
+    let consecutiveAgree = 0;
     let isDecoding = false;
     let stopped = false;
     const HI = 360;
@@ -72,6 +74,19 @@ export default function QRScanner({ onScan, onClose }: QRScannerProps) {
         let decoded: number | null = null;
         if (heights) {
           decoded = codeFromBars(heights);
+          if (decoded !== null) {
+            if (lastDecoded === decoded) {
+              consecutiveAgree += 1;
+            } else {
+              consecutiveAgree = 0;
+            }
+            lastDecoded = decoded;
+            if (consecutiveAgree < 1) {
+              isDecoding = false;
+              return;
+            }
+            consecutiveAgree = 0;
+          }
         }
 
         if (decoded !== null) {

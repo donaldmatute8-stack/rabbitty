@@ -390,6 +390,8 @@ export default function ScanPage() {
     let isSubmittingOptical = false;
     let decodeFailCount = 0;
     let hintShown = false;
+    let lastDecoded: number | null = null;
+    let consecutiveAgree = 0;
     const hiCanvasRef: { current: HTMLCanvasElement | null } = { current: null };
     const canvas = document.createElement('canvas');
     canvas.width = 64;
@@ -464,6 +466,20 @@ export default function ScanPage() {
           let decoded: number | null = null;
           if (heights) {
             decoded = codeFromBars(heights);
+            if (decoded !== null) {
+              // ── Acuerdo multi-frame: 2 frames consecutivos con el mismo código ──
+              if (lastDecoded === decoded) {
+                consecutiveAgree += 1;
+              } else {
+                consecutiveAgree = 0;
+              }
+              lastDecoded = decoded;
+              if (consecutiveAgree < 1) {
+                isSubmittingOptical = false;
+                return; // esperar confirmación del siguiente frame
+              }
+              consecutiveAgree = 0;
+            }
           }
 
           if (decoded !== null) {
@@ -649,6 +665,49 @@ export default function ScanPage() {
                       onClick={async () => {
                         const trimmed = manualCode.trim();
                         if (!trimmed) return;
+
+                        // ── Código numérico de 6 dígitos (RabbittyCode manual) ──
+                        if (/^\d{6}$/.test(trimmed)) {
+                          try {
+                            const res = await fetch('/api/rabbitty-code/lookup', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ code: Number(trimmed) }),
+                            });
+                            const data = await res.json();
+                            if (data?.success) {
+                              if (data.type === 'qrlogin' && data.qrToken) {
+                                const headers = await PlatformBridge.getAuthHeaders();
+                                const bind = await fetch('/api/auth/qr/scan', {
+                                  method: 'POST',
+                                  headers: { ...headers, 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ qrToken: data.qrToken }),
+                                });
+                                const bindData = await bind.json();
+                                if (bindData?.success) {
+                                  alert('¡Acceso autorizado en la pantalla! 🪄');
+                                  setManualCode('');
+                                  router.push('/profile');
+                                  return;
+                                }
+                              } else if (data.type === 'user' && data.user) {
+                                setManualCode('');
+                                router.push(`/profile/wallet?to=${encodeURIComponent(data.user.handle || data.user.id)}`);
+                                return;
+                              } else if (data.type === 'business' && data.businessId) {
+                                setManualCode('');
+                                router.push(`/affiliate/${data.businessId}`);
+                                return;
+                              }
+                            }
+                            alert(data?.error || 'Código no reconocido. Verifica con la pantalla.');
+                            return;
+                          } catch {
+                            alert('Error de red al resolver el código');
+                            return;
+                          }
+                        }
+
                         try {
                           const headers = await PlatformBridge.getAuthHeaders();
                           const res = await fetch('/api/auth/qr/scan', {

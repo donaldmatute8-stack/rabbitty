@@ -213,6 +213,7 @@ export async function POST(req: Request) {
       sessionId,
       qrToken,
       qrData: gateUrl,
+      gateCode: String(gateCode).padStart(6, '0'),
       expiresAt: expiresAt.toISOString(),
     });
   } catch (error) {
