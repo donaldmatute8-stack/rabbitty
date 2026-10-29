@@ -806,11 +806,16 @@ function ImpresosContent() {
 
               <div className="relative flex items-center justify-center my-1">
                 {qrSessionData && !qrLoading ? (
-                  <div className="flex flex-col items-center">
-                    <NeonQRCode value={qrSessionData} size={230} />
+                  <div className="flex flex-col items-center gap-3">
+                    <NeonQRCode value={qrSessionData} size={170} />
+                    <div className="bg-white rounded-2xl p-2 shadow-[0_0_30px_rgba(236,72,153,0.25)]">
+                      {/* Escaneable con la cámara del iPhone: Universal Link → abre la App nativa → autoriza */}
+                      <SimpleQRCode value={qrSessionData} size={150} />
+                    </div>
                     {qrGateCode && (
-                      <p className="mt-2 text-xs text-zinc-400">
-                        ¿No puedes escanear? En la App: <b className="text-white">Escáner → código manual</b> y teclea{' '}
+                      <p className="text-xs text-zinc-400 text-center leading-snug">
+                        Escanea el <b className="text-white">QR cuadrado</b> con la cámara del iPhone → se abre la App y autoriza.<br />
+                        ¿Ya dentro de la App? <b className="text-white">Escáner → código manual</b>:{' '}
                         <b className="text-pink-400 font-mono tracking-[2px]">{qrGateCode}</b>
                       </p>
                     )}
