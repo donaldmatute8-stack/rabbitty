@@ -25,7 +25,7 @@ export default function QRScanner({ onScan, onClose }: QRScannerProps) {
     let consecutiveAgree = 0;
     let isDecoding = false;
     let stopped = false;
-    const HI = 360;
+    const HI = 520;
     const hiCanvas = document.createElement('canvas');
     hiCanvas.width = HI;
     hiCanvas.height = HI;

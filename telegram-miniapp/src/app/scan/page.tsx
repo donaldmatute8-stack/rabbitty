@@ -88,6 +88,8 @@ export default function ScanPage() {
       (rawSearch.includes('qrlogin_') ? rawSearch.split('qrlogin_')[1]?.split('&')[0]?.split('?')[0] : null);
     if (urlQrLogin) {
       // Confirmación EXPLÍCITA: el usuario ve a QUÉ pantalla está autorizando
+      setScanLoader(null);
+      setScanLoaderCode(null);
       setQrConfirm({ qrToken: urlQrLogin, origin: 'www.rabbitty.me/impresos' });
       return;
     }

@@ -189,7 +189,7 @@ export function NeonQRCode({
           {waveBars.map((h, i) => (
             <div
               key={i}
-              className="w-1 rounded-full transition-all duration-300 bg-linear-to-t from-purple-600 via-pink-500 to-cyan-300 drop-shadow-[0_0_8px_rgba(244,63,94,0.8)]"
+              className="w-[7px] rounded-full transition-all duration-300 bg-linear-to-t from-purple-600 via-pink-500 to-cyan-300 drop-shadow-[0_0_8px_rgba(244,63,94,0.8)]"
               style={{
                 height: `${h * (size / 260)}px`,
                 opacity: 0.9,
