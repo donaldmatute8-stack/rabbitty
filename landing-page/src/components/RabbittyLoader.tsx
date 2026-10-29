@@ -7,10 +7,12 @@
  */
 
 import { motion } from 'framer-motion';
+import { NeonQRCode } from '@/components/SimpleQRCode';
 
 interface RabbittyLoaderProps {
   message?: string;      // "Verificando…" / "Autorizando…" / "Acreditando Bunz…"
   compact?: boolean;     // inline (no overlay)
+  codeData?: string;     // código de la sesión: el neón se muestra decodificándose
 }
 
 const RINGS = [
@@ -19,9 +21,17 @@ const RINGS = [
   { r: 74, dash: '8 8',   color: '#F43F5E', delay: 0.3 },
 ];
 
-export default function RabbittyLoader({ message = 'Verificando…', compact = false }: RabbittyLoaderProps) {
+export default function RabbittyLoader({ message = 'Verificando…', compact = false, codeData }: RabbittyLoaderProps) {
   const inner = (
     <div className="flex flex-col items-center gap-3">
+      {codeData && (
+        <motion.div
+          animate={{ scale: [1, 1.03, 1], opacity: [0.85, 1, 0.85] }}
+          transition={{ repeat: Infinity, duration: 1.4, ease: 'easeInOut' }}
+        >
+          <NeonQRCode value={codeData} size={150} />
+        </motion.div>
+      )}
       <div className="relative flex items-center justify-center" style={{ width: 120, height: 120 }}>
         {/* Anillos neón expandiéndose (eco del RabbittyCode) */}
         {RINGS.map((ring, i) => (
