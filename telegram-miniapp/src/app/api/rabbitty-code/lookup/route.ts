@@ -21,6 +21,88 @@ function rateLimit(key: string): boolean {
   return entry.count <= 60; // 60 lookups/min por IP
 }
 
+interface CodeIndexEntry {
+  type: 'business' | 'user';
+  id: string;
+  name: string;
+  handle?: string;
+  username?: string | null;
+}
+
+// ── Reverse index en memoria (O(1)) con TTL de 60s y detección de colisiones ──
+let reverseIndexCache: Map<number, CodeIndexEntry[]> | null = null;
+let indexExpiresAt = 0;
+
+async function getOrBuildReverseIndex(): Promise<Map<number, CodeIndexEntry[]>> {
+  const now = Date.now();
+  if (reverseIndexCache && now < indexExpiresAt) {
+    return reverseIndexCache;
+  }
+
+  const map = new Map<number, CodeIndexEntry[]>();
+
+  const addEntry = (code: number, entry: CodeIndexEntry) => {
+    const list = map.get(code) || [];
+    if (!list.some(e => e.id === entry.id)) {
+      list.push(entry);
+    }
+    map.set(code, list);
+  };
+
+  // 1. Negocios aprobados
+  const bizRows = await db
+    .select({ id: ownedBusinesses.id, name: ownedBusinesses.name, slug: ownedBusinesses.slug })
+    .from(ownedBusinesses)
+    .where(eq(ownedBusinesses.status, "APPROVED"))
+    .orderBy(ownedBusinesses.createdAt)
+    .limit(5000);
+
+  for (const b of bizRows) {
+    const variants = [`business_${b.id}`, b.slug || "", b.name || ""].filter(Boolean);
+    for (const v of variants) {
+      addEntry(code6FromData(v), { type: 'business', id: b.id, name: b.name });
+    }
+  }
+
+  // 2. Usuarios
+  const candidates = await db
+    .select({
+      id: users.id,
+      username: users.username,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      telegramId: users.telegramId,
+    })
+    .from(users)
+    .orderBy(users.createdAt)
+    .limit(5000);
+
+  for (const u of candidates) {
+    const handle = u.username ? `@${u.username}` : u.id;
+    const fullName = [u.firstName, u.lastName].filter(Boolean).join(" ") || u.username || "Rabbitter";
+    const variants = [
+      `rabbitty://pay?to=${encodeURIComponent(handle)}`,
+      `rabbitty://pay?to=${encodeURIComponent(u.id)}`,
+      u.id,
+      u.telegramId || "",
+    ].filter(Boolean);
+
+    for (const v of variants) {
+      addEntry(code6FromData(v), {
+        type: 'user',
+        id: u.id,
+        username: u.username,
+        name: fullName,
+        handle,
+      });
+    }
+  }
+
+  reverseIndexCache = map;
+  indexExpiresAt = now + 60_000;
+  return map;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
@@ -166,61 +248,40 @@ export async function POST(req: NextRequest) {
         }
       } catch {}
 
-      // 2.2 Comercios aprobados: buscar coincidencia en businesses activos
-      const bizRows = await db
-        .select({ id: ownedBusinesses.id, name: ownedBusinesses.name, slug: ownedBusinesses.slug })
-        .from(ownedBusinesses)
-        .where(eq(ownedBusinesses.status, "APPROVED"))
-        .orderBy(ownedBusinesses.createdAt)
-        .limit(5000);
+      // 2.2 Consulta O(1) vía Reverse Index en memoria con gestión explícita de colisiones
+      const index = await getOrBuildReverseIndex();
+      const matches = index.get(code) || [];
 
-      for (const b of bizRows) {
-        const variants = [`business_${b.id}`, b.slug || "", b.name || ""].filter(Boolean);
-        if (variants.some((v) => code6FromData(v) === code)) {
+      // ── Detección explícita de colisiones: si más de una entidad comparte el mismo código,
+      // se rechaza responder a ciegas para evitar transferencias o cobros equivocados.
+      if (matches.length > 1) {
+        return NextResponse.json({
+          success: false,
+          error: "Colisión detectada: múltiples miembros comparten este código óptico. Por favor escanea el código QR estándar.",
+          collision: true,
+        }, { status: 409 });
+      }
+
+      if (matches.length === 1) {
+        const match = matches[0];
+        if (match.type === 'business') {
           return NextResponse.json({
             success: true,
             type: "business",
-            businessId: b.id,
-            name: b.name,
+            businessId: match.id,
+            name: match.name,
           });
         }
-      }
-
-      // 2.3 Usuarios: buscar coincidencia
-      const candidates = await db
-        .select({
-          id: users.id,
-          username: users.username,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          telegramId: users.telegramId,
-        })
-        .from(users)
-        .orderBy(users.createdAt)
-        .limit(5000);
-
-      for (const u of candidates) {
-        const handle = u.username ? `@${u.username}` : u.id;
-        const variants = [
-          `rabbitty://pay?to=${encodeURIComponent(handle)}`,
-          `rabbitty://pay?to=${encodeURIComponent(u.id)}`,
-          u.id,
-          u.telegramId || "",
-        ].filter(Boolean);
-
-        if (variants.some((v) => code6FromData(v) === code)) {
-          const fullName = [u.firstName, u.lastName].filter(Boolean).join(" ") || u.username || "Rabbitter";
-          return NextResponse.json({
-            success: true,
-            type: "user",
-            user: {
-              id: u.id,
-              username: u.username,
-              name: fullName,
-              handle,
-            },
-          });
-        }
+        return NextResponse.json({
+          success: true,
+          type: "user",
+          user: {
+            id: match.id,
+            username: match.username,
+            name: match.name,
+            handle: match.handle || match.id,
+          },
+        });
       }
     }
 

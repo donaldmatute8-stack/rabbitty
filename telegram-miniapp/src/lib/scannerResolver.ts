@@ -67,6 +67,13 @@ export interface ScanResolution {
  * Resuelve cualquier payload escaneado (texto de QR estándar, URL, @usuario o código numérico).
  * Consulta el resolver del servidor de forma transparente cuando se requiere validación DB.
  */
+function getEndpoint(path: string): string {
+  if (typeof window !== 'undefined' && window.location) {
+    return path;
+  }
+  return `https://rabbitty.me${path}`;
+}
+
 export async function resolveScannedPayload(input: string | number): Promise<ScanResolution> {
   const isNumber = typeof input === 'number' || (typeof input === 'string' && /^\d{5,6}$/.test(input.trim()));
   const rawText = typeof input === 'string' ? input.trim() : String(input);
@@ -79,7 +86,7 @@ export async function resolveScannedPayload(input: string | number): Promise<Sca
   if (isNumber) {
     const codeNum = Number(input);
     try {
-      const res = await fetch('/api/rabbitty-code/lookup', {
+      const res = await fetch(getEndpoint('/api/rabbitty-code/lookup'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: codeNum }),
@@ -128,7 +135,7 @@ export async function resolveScannedPayload(input: string | number): Promise<Sca
         // Si el servidor no responde, entregamos el handle con flag para que el
         // consumidor no lo use como id sin resolver.
         try {
-          const res = await fetch('/api/rabbitty-code/lookup', {
+          const res = await fetch(getEndpoint('/api/rabbitty-code/lookup'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text: rawText }),
@@ -184,7 +191,7 @@ export async function resolveScannedPayload(input: string | number): Promise<Sca
       let branchId: string | undefined = undefined;
 
       if (rawText.includes('/qr/table/')) {
-        const match = rawText.match(/\/qr\/table\/([0-9a-f-]{10,})/i);
+        const match = rawText.match(/\/qr\/table\/([^/?&#\s]+)/i);
         if (match) tableId = match[1];
       }
       if (!tableId) {
@@ -205,7 +212,7 @@ export async function resolveScannedPayload(input: string | number): Promise<Sca
       const params = new URLSearchParams(rawText.includes('?') ? rawText.split('?')[1] : rawText);
       const branchId = params.get('branchId') || params.get('branch');
       if (branchId && !params.get('tableId') && !params.get('claimToken')) {
-        const res = await fetch('/api/rabbitty-code/lookup', {
+        const res = await fetch(getEndpoint('/api/rabbitty-code/lookup'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: rawText }),
@@ -226,7 +233,7 @@ export async function resolveScannedPayload(input: string | number): Promise<Sca
   // ── 7. Handle de usuario directo (@usuario o UUID) ──
   if (rawText.startsWith('@') || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawText)) {
     try {
-      const res = await fetch('/api/rabbitty-code/lookup', {
+      const res = await fetch(getEndpoint('/api/rabbitty-code/lookup'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: rawText }),

@@ -394,12 +394,18 @@ export const PlatformBridge = {
    * Obtiene la ubicación del usuario de forma unificada (Native/Web/Telegram)
    * Maneja permisos, timeouts y devuelve estado claro
    */
-  async getLocation(): Promise<{
+  /**
+   * Obtiene la ubicación del usuario de forma unificada (Native/Web/Telegram)
+   * Separa explícitamente lecturas de caché (para render inicial de mapa)
+   * de lecturas en tiempo real frescas (para proximidad y geocercas).
+   */
+  async getLocation(options: { allowCached?: boolean; maxAgeMs?: number } = {}): Promise<{
     success: boolean;
     lat?: number;
     lng?: number;
     accuracy?: number;
     timestamp?: number;
+    isFresh?: boolean;
     error?: 'PERMISSION_DENIED' | 'POSITION_UNAVAILABLE' | 'TIMEOUT' | 'UNSUPPORTED';
   }> {
     if (typeof window === 'undefined') {
@@ -433,7 +439,7 @@ export const PlatformBridge = {
           }
         });
         if (tgLoc?.lat != null && tgLoc?.lng != null) {
-          return { success: true, lat: tgLoc.lat, lng: tgLoc.lng, timestamp: Date.now() };
+          return { success: true, lat: tgLoc.lat, lng: tgLoc.lng, timestamp: Date.now(), isFresh: true };
         }
       }
     } catch {}
@@ -442,14 +448,14 @@ export const PlatformBridge = {
       return { success: false, error: 'UNSUPPORTED' };
     }
 
-    // In iOS / WebKit / Capacitor, high-accuracy GPS often takes 4 to 8 seconds on initial cold fix.
-    const getPos = (enableHigh: boolean, timeoutMs: number, maxAgeMs = 120000) =>
+    const getPos = (enableHigh: boolean, timeoutMs: number, maxAgeMs: number) =>
       new Promise<{
         success: boolean;
         lat?: number;
         lng?: number;
         accuracy?: number;
         timestamp?: number;
+        isFresh?: boolean;
         error?: 'PERMISSION_DENIED' | 'POSITION_UNAVAILABLE' | 'TIMEOUT';
       }>((resolve) => {
         let finished = false;
@@ -466,12 +472,14 @@ export const PlatformBridge = {
               if (finished) return;
               finished = true;
               clearTimeout(timer);
+              const age = Date.now() - (pos.timestamp || Date.now());
               resolve({
                 success: true,
                 lat: pos.coords.latitude,
                 lng: pos.coords.longitude,
                 accuracy: pos.coords.accuracy,
                 timestamp: pos.timestamp || Date.now(),
+                isFresh: age < 30_000,
               });
             },
             (err) => {
@@ -494,21 +502,20 @@ export const PlatformBridge = {
         }
       });
 
-    // 1. Fast attempt with relaxed accuracy (cell/WiFi / cache) to acquire lock immediately
-    const fastLock = await getPos(false, 7000, 600000);
-    if (fastLock.success) return fastLock;
-    if (fastLock.error === 'PERMISSION_DENIED') return fastLock;
+    // 1. Si se permite explícitamente lectura en caché (solo para dibujar mapa rápido)
+    if (options.allowCached) {
+      const cached = await getPos(false, 3000, options.maxAgeMs || 300_000);
+      if (cached.success) return cached;
+    }
 
-    // 2. High-accuracy GPS attempt with generous 10s timeout for iPhone hardware
-    const gpsLock = await getPos(true, 10000, 120000);
-    if (gpsLock.success) return gpsLock;
-    if (gpsLock.error === 'PERMISSION_DENIED') return gpsLock;
+    // 2. Lectura GPS fresca en tiempo real (alta precisión, máximo 15s de antigüedad de hardware)
+    const freshGps = await getPos(true, 10_000, 15_000);
+    if (freshGps.success) return freshGps;
+    if (freshGps.error === 'PERMISSION_DENIED') return freshGps;
 
-    // 3. Fallback: Any cached fix up to 2 hours
-    const cachedFix = await getPos(false, 3000, 7200000);
-    if (cachedFix.success) return cachedFix;
-
-    return gpsLock;
+    // 3. Fallback de red celular/WiFi de respaldo (máximo 45s de antigüedad)
+    const cellBackup = await getPos(false, 6000, 45_000);
+    return cellBackup;
   },
 
   /**

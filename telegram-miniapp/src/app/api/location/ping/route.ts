@@ -54,10 +54,19 @@ export async function POST(req: NextRequest) {
   try {
     const caller = await getAuthenticatedUser(req);
     const body = await req.json();
-    const { lat, lng, accuracy } = body;
+    const { lat, lng, accuracy, timestamp } = body;
 
     if (typeof lat !== "number" || typeof lng !== "number") {
       return NextResponse.json({ error: "lat and lng are required numbers" }, { status: 400 });
+    }
+
+    // Validación estricta de frescura: rechazar lecturas de geolocalización obsoletas (>60s)
+    if (typeof timestamp === "number" && Date.now() - timestamp > 60_000) {
+      return NextResponse.json({
+        success: false,
+        error: "Lectura GPS obsoleta. El motor de proximidad exige coordenadas en tiempo real (<60s).",
+        reason: "stale_location",
+      }, { status: 400 });
     }
 
     if (caller?.id) {
@@ -157,7 +166,7 @@ export async function POST(req: NextRequest) {
         boostTitle: activeBoost?.headline || activeBoost?.title,
       };
 
-      if (caller && dist <= 250 && (!accuracy || accuracy <= 400)) {
+      if (caller && dist <= 250 && (!accuracy || accuracy <= 200)) {
         const visitCount = visitCountMap.get(b.id) ?? 0;
 
         // Si el comercio tiene un Flash Boost activo, priorizar la oferta de proximidad especial

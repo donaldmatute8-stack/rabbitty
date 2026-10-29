@@ -199,7 +199,12 @@ export default function FeedPage() {
           fetch('/api/location/ping', {
             method: 'POST',
             headers: { ...headers, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ lat: loc.lat, lng: loc.lng, accuracy: loc.accuracy }),
+            body: JSON.stringify({
+              lat: loc.lat,
+              lng: loc.lng,
+              accuracy: loc.accuracy,
+              timestamp: loc.timestamp || Date.now(),
+            }),
           })
             .then((r) => r.json())
             .then((res) => {
