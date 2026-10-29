@@ -469,6 +469,48 @@ const authResult = NextAuth({
       },
     }),
     Credentials({
+      id: "passkey",
+      name: "Passkey",
+      credentials: {
+        token: { label: "Token", type: "text" },
+        email: { label: "Email", type: "email" },
+      },
+      async authorize(credentials) {
+        if (!credentials?.token || !credentials?.email) return null;
+        try {
+          const db = getCoreDb();
+          const identifier = `pk_login:${(credentials.email as string).trim().toLowerCase()}`;
+          // Single-use atómico: buscar y borrar el token en un solo paso
+          const [row] = await db
+            .select()
+            .from(verificationTokens)
+            .where(eq(verificationTokens.token, credentials.token as string))
+            .limit(1);
+          if (!row || row.identifier !== identifier) return null;
+          if (new Date(row.expires) < new Date()) return null;
+          await db.delete(verificationTokens).where(eq(verificationTokens.token, credentials.token as string));
+
+          // Upsert adminAuthUsers (misma ruta que el email-token provider)
+          const pool = await getPool();
+          await pool.query(
+            `INSERT INTO "adminAuthUsers" ("id", "email", "emailVerified")
+             VALUES (gen_random_uuid()::text, $1, NOW())
+             ON CONFLICT ("email") DO UPDATE SET "emailVerified" = NOW()`,
+            [(credentials.email as string).trim().toLowerCase()]
+          );
+          const res = await pool.query(`SELECT "id", "email" FROM "adminAuthUsers" WHERE "email" = $1`, [(credentials.email as string).trim().toLowerCase()]);
+          await pool.end();
+          const user = res.rows[0];
+          if (!user) return null;
+          console.log("[passkey] ✅ Login con passkey:", user.email);
+          return { id: user.id, email: user.email, name: user.email };
+        } catch (err) {
+          console.error("[passkey] authorize error:", err);
+          return null;
+        }
+      },
+    }),
+    Credentials({
       id: "magic-link",
       name: "Magic Link",
       credentials: {

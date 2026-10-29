@@ -3,7 +3,7 @@
 import { signIn } from "next-auth/react";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Mail, Phone, QrCode, Sparkles, UserCheck, Clock, ChevronDown, Check, Compass } from "lucide-react";
+import { Mail, Phone, QrCode, Sparkles, UserCheck, Clock, ChevronDown, Check, Compass, ScanFace } from "lucide-react";
 import QRDiscovery from "@/components/QRDiscovery";
 import { resolveApiUrl } from "@/lib/api-config";
 
@@ -34,6 +34,69 @@ export default function LoginPage() {
   const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
 
   const [otpCode, setOtpCode] = useState("");
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
+
+  const handlePasskeyLogin = async () => {
+    if (passkeyBusy) return;
+    setPasskeyBusy(true);
+    try {
+      const b64urlToBytes = (s: string) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+      const bytesToB64url = (b: Uint8Array) => btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+      // 1. Options (challenge server-side, single-use)
+      const optRes = await fetch(resolveApiUrl("/api/trpc/passkeys.loginOptions?batch=1"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ "0": { json: null } }) });
+      const optData = await optRes.json();
+      if (optData?.[0]?.error) throw new Error(optData[0].error.message);
+      const optionsRes = optData[0].result.data.json;
+      const options = optionsRes.options;
+
+      // 2. Face ID / Touch ID / Windows Hello elige la passkey
+      const cred = (await navigator.credentials.get({
+        publicKey: {
+          challenge: b64urlToBytes(options.challenge),
+          userVerification: options.userVerification ?? 'required',
+          timeout: options.timeout ?? 60000,
+          rpId: options.rpId,
+        },
+      })) as PublicKeyCredential | null;
+      if (!cred) throw new Error('Sin credencial');
+
+      const resp = cred.response as unknown as AuthenticatorAssertionResponse;
+
+      // 3. Verificación server-side + token single-use
+      const verRes = await fetch(resolveApiUrl("/api/trpc/passkeys.loginVerify?batch=1"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ "0": { json: { loginId: optionsRes.loginId, response: {
+          id: bytesToB64url(new Uint8Array(cred.rawId)),
+          rawId: bytesToB64url(new Uint8Array(cred.rawId)),
+          type: cred.type,
+          authenticatorData: bytesToB64url(new Uint8Array(resp.authenticatorData)),
+          clientDataJSON: bytesToB64url(new Uint8Array(resp.clientDataJSON)),
+          signature: bytesToB64url(new Uint8Array(resp.signature)),
+        } } } }),
+      });
+      const verData = await verRes.json();
+      if (verData?.[0]?.error) throw new Error(verData[0].error.message);
+      const verify = verData[0].result.data.json;
+      if (!verify?.success) throw new Error('Verificación fallida');
+
+      if (!verify?.success) throw new Error('Verificación fallida');
+
+      // 4. Sesión NextAuth
+      const result = await signIn('passkey', { token: verify.token, email: verify.email, redirect: false });
+      if (result?.error) throw new Error('No se pudo crear la sesión');
+      window.location.href = '/';
+    } catch (err: any) {
+      const m = err?.message || err?.name || 'Error';
+      if (m.includes('NotAllowed')) {
+        console.warn('[PasskeyLogin] cancelado o no permitido');
+      } else if (m.includes('No passkey') || m.includes('no registrada')) {
+        alert('No hay passkeys registradas en este servidor. Entra con OTP y registra tu Face ID en Configuración → Seguridad.');
+      } else {
+        alert(`Error passkey: ${m}`);
+      }
+    } finally {
+      setPasskeyBusy(false);
+    }
+  };
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError] = useState("");
   const [submitLoading, setSubmitLoading] = useState(false);
@@ -514,6 +577,15 @@ export default function LoginPage() {
             </button>
 
             <div className="pt-3 border-t border-white/10">
+              <button
+                type="button"
+                onClick={handlePasskeyLogin}
+                disabled={passkeyBusy}
+                className="w-full flex h-11 items-center justify-center gap-2 rounded-2xl border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 font-bold text-xs transition-all cursor-pointer disabled:opacity-50"
+              >
+                <ScanFace className="w-4 h-4" />
+                {passkeyBusy ? "Verificando con Face ID…" : "Entrar con Face ID / Passkey"}
+              </button>
               <Link
                 href="/demo"
                 className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 font-bold text-xs transition-all"

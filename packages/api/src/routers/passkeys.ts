@@ -1,4 +1,5 @@
 import { z } from "zod";
+import crypto from "crypto";
 import { eq } from "drizzle-orm";
 import { verify as verifyTotp } from "otplib";
 import {
@@ -9,7 +10,7 @@ import {
 } from "@simplewebauthn/server";
 import type { AuthenticatorTransportFuture } from "@simplewebauthn/server";
 import { router, protectedProcedure, publicLimitedProcedure } from "../trpc";
-import { passkeys, users } from "@rabbitty/database-core";
+import { passkeys, users, verificationTokens } from "@rabbitty/database-core";
 import { TRPCError } from "@trpc/server";
 import { decryptText } from "../services/crypto";
 
@@ -142,6 +143,79 @@ export const passkeysRouter = router({
       await ctx.coreDb.update(passkeys).set({ counter: verification.authenticationInfo.newCounter }).where(eq(passkeys.id, cred.id));
 
       return { success: true, credentialId: cred.id };
+    }),
+
+  // ── LOGIN con passkey (público): options → verify → token single-use para NextAuth ──
+  loginOptions: publicLimitedProcedure.mutation(async ({ ctx }) => {
+    const options = await generateAuthenticationOptions({
+      rpID,
+      allowCredentials: [], // discoverable credentials (Face ID elige la passkey)
+      userVerification: "required",
+    });
+    const loginId = crypto.randomBytes(16).toString("hex");
+    await ctx.coreDb.insert(verificationTokens).values({
+      identifier: `pk_challenge:${loginId}`,
+      token: options.challenge,
+      expires: new Date(Date.now() + 3 * 60 * 1000),
+    });
+    return { options, loginId };
+  }),
+
+  loginVerify: publicLimitedProcedure
+    .input(z.object({ response: z.any(), loginId: z.string().min(10) }))
+    .mutation(async ({ ctx, input }) => {
+      const idKey = `pk_challenge:${input.loginId}`;
+      const [challengeRow] = await ctx.coreDb
+        .select()
+        .from(verificationTokens)
+        .where(eq(verificationTokens.identifier, idKey))
+        .limit(1);
+      if (!challengeRow || new Date(challengeRow.expires) < new Date()) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Challenge expirado. Intenta de nuevo." });
+      }
+      const challenge = challengeRow.token;
+
+      // Localizar la credencial por rawId
+      let credentialId = "";
+      try {
+        const resp = input.response as { id?: string; rawId?: string };
+        credentialId = resp.id || resp.rawId || "";
+      } catch {}
+      if (!credentialId) throw new TRPCError({ code: "BAD_REQUEST", message: "Respuesta inválida" });
+
+      const [cred] = await ctx.coreDb.select().from(passkeys).where(eq(passkeys.credentialId, credentialId)).limit(1);
+      if (!cred) throw new TRPCError({ code: "NOT_FOUND", message: "Passkey no registrada en este servidor" });
+
+      const verification = await verifyAuthenticationResponse({
+        response: input.response,
+        expectedChallenge: challenge,
+        expectedOrigin: origin,
+        expectedRPID: rpID,
+        credential: {
+          id: cred.credentialId,
+          publicKey: Buffer.from(cred.publicKey, "base64url"),
+          counter: cred.counter,
+          transports: JSON.parse(cred.transports || "[]") as AuthenticatorTransportFuture[],
+        },
+      });
+      if (!verification.verified) throw new TRPCError({ code: "BAD_REQUEST", message: "Verificación fallida" });
+
+      await ctx.coreDb.update(passkeys).set({ counter: verification.authenticationInfo.newCounter }).where(eq(passkeys.id, cred.id));
+      // challenge single-use
+      await ctx.coreDb.delete(verificationTokens).where(eq(verificationTokens.identifier, idKey));
+
+      const [user] = await ctx.coreDb.select({ email: users.email, firstName: users.firstName }).from(users).where(eq(users.id, cred.userId)).limit(1);
+      const email = (user?.email || `passkey-${cred.userId}@rabbitty.me`).toLowerCase();
+
+      // Token single-use (5 min) para el proveedor NextAuth "passkey"
+      const loginToken = crypto.randomBytes(32).toString("hex");
+      await ctx.coreDb.insert(verificationTokens).values({
+        identifier: `pk_login:${email}`,
+        token: loginToken,
+        expires: new Date(Date.now() + 5 * 60 * 1000),
+      });
+
+      return { success: true, token: loginToken, email };
     }),
 
   list: protectedProcedure.query(async ({ ctx }) => {
