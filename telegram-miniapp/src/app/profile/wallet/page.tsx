@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
 import RabbittyCode from '@/components/ui/RabbittyCode';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import { ArrowUpRight, ArrowDownLeft, Copy, RefreshCw, X } from 'lucide-react';
@@ -356,28 +355,16 @@ export default function WalletPage() {
               Muestra tu QR Neón para que otros Rabbitters o comercios te transfieran Bunz escaneando directamente desde su app Rabbitty.
             </p>
 
-            {/* QR escaneable (cámara estándar / app Rabbitty) con marco + firma neón */}
+            {/* QR Neón Oficial RabbittyCode */}
             <div className="w-full flex flex-col items-center py-2 mb-3">
-              <div className="p-3 rounded-[32px] bg-[#0A0314] border-2 border-pink-500/40 shadow-[0_0_35px_rgba(233,30,99,0.3)]">
-                <div className="bg-white rounded-2xl p-2.5">
-                  <QRCodeSVG
-                    value={payPayload || `rabbitty://pay?to=${encodeURIComponent(user?.username || 'rabbitter')}`}
-                    size={172}
-                    level="H"
-                    includeMargin={false}
-                  />
-                </div>
-                <div className="mt-1.5 flex justify-center opacity-95">
-                  <RabbittyCode
-                    data={payPayload || `rabbitty://pay?to=${encodeURIComponent(user?.username || 'rabbitter')}`}
-                    size={64}
-                    showCardFrame={false}
-                  />
-                </div>
-              </div>
+              <RabbittyCode
+                data={payPayload || `rabbitty://pay?to=${encodeURIComponent(user?.username || 'rabbitter')}`}
+                size={200}
+                showCardFrame={true}
+              />
             </div>
-            <p className="text-[10px] text-white/50 mb-3 text-left self-start leading-snug">
-              Escanea el QR con la cámara del iPhone o con el escáner de la App Rabbitty 📷 · La onda neón es tu firma Rabbitty
+            <p className="text-[10px] text-white/50 mb-3 text-center self-center leading-snug">
+              Muestra este código para recibir transferencias de Bunz directamente en la red Rabbitty.
             </p>
 
             <p className="text-[10px] font-black text-[#E91E63] uppercase tracking-wider mb-2">Tu Identificador para recibir</p>

@@ -5,7 +5,6 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Mail, Phone, QrCode, Sparkles, UserCheck, Clock, ChevronDown, Check, Compass } from "lucide-react";
 import RabbittyCode from "@/components/ui/RabbittyCode";
-import { QRCodeSVG } from "qrcode.react";
 import { resolveApiUrl } from "@/lib/api-config";
 
 interface CountryCode {
@@ -352,22 +351,11 @@ export default function LoginPage() {
 
           <div className="p-4 bg-white/5 border border-pink-500/30 rounded-2xl shadow-[0_0_30px_rgba(236,72,153,0.15)] relative min-w-[212px] min-h-[212px] flex flex-col items-center justify-center gap-3">
             {qrToken ? (
-              <>
-                <RabbittyCode
-                  data={`https://app.rabbitty.me/scan?qrlogin_${qrToken}`}
-                  size={150}
-                  showCardFrame={false}
-                />
-                <div className="bg-white rounded-2xl p-2 shadow-lg">
-                  {/* QR escaneable: cámara del iPhone o escáner de la App Rabbitty */}
-                  <QRCodeSVG
-                    value={`https://app.rabbitty.me/scan?qrlogin_${qrToken}`}
-                    size={128}
-                    level="H"
-                    includeMargin={false}
-                  />
-                </div>
-              </>
+              <RabbittyCode
+                data={`https://app.rabbitty.me/scan?qrlogin_${qrToken}`}
+                size={190}
+                showCardFrame={true}
+              />
             ) : (
               <div className="w-[180px] h-[180px] flex flex-col items-center justify-center text-center p-4 space-y-3 relative overflow-hidden">
                 {/* Concentric Neon Radar Rings */}

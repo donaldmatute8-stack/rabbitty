@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from "react";
 import { X, Smartphone, Copy, Check, ExternalLink, Loader2, RefreshCw, Send, ShieldCheck, QrCode } from "lucide-react";
-import RabbittyCode from "./ui/RabbittyCode";
 import { QRCodeSVG } from "qrcode.react";
 
 interface ScannerPairModalProps {

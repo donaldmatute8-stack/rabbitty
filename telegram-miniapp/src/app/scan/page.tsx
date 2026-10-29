@@ -6,7 +6,6 @@ import { ArrowLeft, Keyboard } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Html5Qrcode } from 'html5-qrcode';
 import RabbittyCode from '@/components/ui/RabbittyCode';
-import { QRCodeSVG } from 'qrcode.react';
 import BottomNav from '@/components/BottomNav';
 import Button from '@/components/ui/Button';
 import { useWallet } from '@/contexts/WalletContext';
@@ -553,22 +552,10 @@ export default function ScanPage() {
             <div className="flex flex-col items-center justify-center pt-8">
               <RabbittyCode 
                 data={String(qrValue || 'rabbitty_guest')} 
-                size={195} 
+                size={230} 
                 showCardFrame={true} 
               />
-              {/* QR estándar escaneable: cámaras de POS/caja (html5-qrcode) y iPhone */}
-              <div className="mt-4 bg-white rounded-2xl p-2.5 shadow-[0_8px_30px_rgba(0,0,0,0.35)]">
-                <QRCodeSVG
-                  value={`rabbitty://pay?to=${encodeURIComponent(user?.username ? `@${user.username}` : String(qrValue || ''))}`}
-                  size={132}
-                  level="H"
-                  includeMargin={false}
-                />
-              </div>
-              <p className="text-[10px] text-(--text-muted) mt-2 text-center px-6 leading-snug">
-                El neón lo lee la App Rabbitty · El cuadrado lo lee cualquier caja o cámara
-              </p>
-              <div className="mt-3 text-center">
+              <div className="mt-5 text-center">
                 <span className="text-sm font-black tracking-[1.5px] text-(--text-primary) uppercase block">
                   {user?.firstName ? user.firstName : 'Miembro Rabbitty'}
                 </span>
