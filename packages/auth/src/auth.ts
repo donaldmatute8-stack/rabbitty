@@ -141,11 +141,15 @@ const customAdapter: any = {
   },
 };
 
-  // ── Fail-fast: sin AUTH_SECRET en producción, el fallback hardcodeado permitiría
-  //    forjar cookies de sesión de God Admin. Mejor no arrancar que firmar con llave pública. ──
+  // ── Fail-fast SOLO en runtime: durante el build (sin envs) usamos un secreto
+  //    efímero que jamás sirve tráfico; en runtime de producción sin AUTH_SECRET
+  //    el panel se niega a arrancar antes que firmar sesiones con llave pública. ──
   function resolveAuthSecret(): string {
     const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
     if (secret && secret.length >= 32) return secret;
+    if (process.env.NEXT_PHASE === "phase-production-build") {
+      return crypto.randomBytes(32).toString("hex");
+    }
     if (process.env.NODE_ENV === "production") {
       throw new Error(
         "[Auth] AUTH_SECRET no configurado (mínimo 32 caracteres). El panel de administración se niega a firmar sesiones con un secreto hardcodeado."

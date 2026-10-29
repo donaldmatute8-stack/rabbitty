@@ -241,6 +241,7 @@ const menuPillars: MenuPillar[] = [
     icon: Settings,
     items: [
       { href: "/restaurants", label: "Mis Sucursales & Afiliados", icon: Store },
+      { href: "https://www.rabbitty.me/impresos", label: "Kit Impresos (nueva pestaña)", icon: Printer, badge: "PDF" },
       { href: "/settings?tab=payments", label: "Pasarela & Stripe Connect", icon: CreditCard, badge: "Pay" },
       { href: "/staff", label: "Personal & Roles", icon: Users },
       { href: "/hardware", label: "Impresoras & Hardware", icon: Printer },

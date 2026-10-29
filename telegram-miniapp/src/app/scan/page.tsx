@@ -633,7 +633,23 @@ export default function ScanPage() {
                   .then((mod) => mod.default.HapticFeedback.notificationOccurred('success'))
                   .catch(() => {});
                 await stopScanning();
-                if (data.type === 'business' && data.businessId) {
+                if (data.type === 'qrlogin' && data.qrToken) {
+                  // Gate de /impresos: vincular la sesión pendiente (login seguro)
+                  try {
+                    const headers = await PlatformBridge.getAuthHeaders();
+                    const bindRes = await fetch('/api/auth/qr/scan', {
+                      method: 'POST',
+                      headers: { ...headers, 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ qrToken: data.qrToken }),
+                    });
+                    const bindData = await bindRes.json();
+                    if (bindData?.success) {
+                      import('@twa-dev/sdk').then((mod) => mod.default.HapticFeedback.notificationOccurred('success')).catch(() => {});
+                      alert('¡Acceso autorizado a /impresos en la pantalla! 🪄');
+                      return;
+                    }
+                  } catch { /* reintenta */ }
+                } else if (data.type === 'business' && data.businessId) {
                   // Escaneo de afiliado → ficha del negocio en la app
                   router.push(`/affiliate/${data.businessId}`);
                 } else if (data.user) {

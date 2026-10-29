@@ -8,7 +8,7 @@ import {
   SlidersHorizontal, Image as ImageIcon,
   Lock, QrCode, X, KeyRound, RefreshCw, LogOut
 } from 'lucide-react';
-import { SimpleQRCode } from '@/components/SimpleQRCode';
+import { SimpleQRCode, NeonQRCode } from '@/components/SimpleQRCode';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 
@@ -201,7 +201,6 @@ function ImpresosContent() {
   const [isAuthorized, setIsAuthorized] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     const keyParam = searchParams?.get('admin_key') || searchParams?.get('auth');
-    const roleParam = searchParams?.get('role');
     const refParam = searchParams?.get('ref');
 
     // 1. Clave secreta de Admin
@@ -213,17 +212,15 @@ function ImpresosContent() {
       return true;
     }
 
-    // 2. Acceso de afiliado verificado por parámetro de rol o refCode registrado
-    if (roleParam === 'affiliate' || (refParam && refParam.length > 2)) {
-      try {
-        localStorage.setItem(AUTH_STORAGE_KEY, `affiliate_${refParam || 'default'}`);
-      } catch {}
-      return true;
-    }
-
-    // 3. Revisar localStorage previo
+    // 2. Revisar localStorage previo (admin / affiliate por QR / temp con expiry)
     try {
       const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (stored?.startsWith('temp:')) {
+        const exp = Number(stored.split(':')[2] || 0);
+        if (exp > Date.now()) return true;
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+        return false;
+      }
       return Boolean(stored);
     } catch {
       return false;
@@ -233,20 +230,52 @@ function ImpresosContent() {
   const [authCodeInput, setAuthCodeInput] = useState('');
   const [authError, setAuthError] = useState('');
   const [showQrModal, setShowQrModal] = useState(false);
-  const [authMode, setAuthMode] = useState<'admin' | 'affiliate'>(() => {
+  const [authMode, setAuthMode] = useState<'admin' | 'affiliate' | 'temp'>(() => {
     if (typeof window === 'undefined') return 'admin';
     try {
       const stored = localStorage.getItem(AUTH_STORAGE_KEY) || '';
+      if (stored.startsWith('temp_')) {
+        const exp = Number(stored.split(':')[2] || 0);
+        if (exp > Date.now()) return 'temp';
+      }
       return stored.startsWith('affiliate_') ? 'affiliate' : 'admin';
     } catch {
       return 'admin';
     }
   });
+  const [tempAccessInfo, setTempAccessInfo] = useState<{ label: string; expiresAt: string } | null>(null);
+  const [tempScopeBusinessId, setTempScopeBusinessId] = useState<string | null>(null);
+  const [tempGenerated, setTempGenerated] = useState<{ code: string; url: string; expiresAt: string } | null>(null);
+  const [tempLabel, setTempLabel] = useState('Impresor');
   const [authUserName, setAuthUserName] = useState<string>('');
   const [qrSessionId, setQrSessionId] = useState<string | null>(null);
   const [qrSessionData, setQrSessionData] = useState<string>('');
   const [qrLoading, setQrLoading] = useState<boolean>(false);
   const [qrStatusMsg, setQrStatusMsg] = useState<string>('');
+
+  // ── Acceso temporal via ?access=CODE (redeem server-side, 24h) ──
+  useEffect(() => {
+    const accessParam = searchParams?.get('access');
+    if (!accessParam || !/^[A-Z0-9]{8}$/i.test(accessParam)) return;
+    fetch('/api/auth/qr-impresos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'REDEEM_TEMP_CODE', code: accessParam.toUpperCase() }),
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.success) {
+          localStorage.setItem(AUTH_STORAGE_KEY, `temp:${accessParam.toUpperCase()}:${new Date(d.expiresAt).getTime()}`);
+          setAuthMode('temp');
+          setTempAccessInfo({ label: d.label || 'Invitado', expiresAt: d.expiresAt });
+          setTempScopeBusinessId(d.scopeBusinessId ?? null);
+          setIsAuthorized(true);
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [businessName, setBusinessName] = useState(initialName);
   const [welcomeBunz, setWelcomeBunz] = useState(initialBunz);
@@ -409,6 +438,24 @@ function ImpresosContent() {
       .finally(() => setLoadingBusinesses(false));
   }, [initialLogo, initialName, initialRef]);
 
+  // 🔒 Temp con scope: fijar SU negocio cuando la lista carga
+  useEffect(() => {
+    if (!tempScopeBusinessId || businesses.length === 0) return;
+    const mine = businesses.find((b) => b.id === tempScopeBusinessId);
+    if (mine && selectedBusinessId !== mine.id) {
+      setBusinessName(mine.name);
+      setActiveRef(mine.refCode);
+      setSelectedBusinessId(mine.id);
+      setUrlManuallyEdited(false);
+      const bunzVal = clampWelcomeBunz(mine.welcomeBunz ?? 25);
+      setWelcomeBunz(String(bunzVal));
+      setAppUrl(buildDownloadUrl(mine.refCode, bunzVal));
+      setBusinessLogo(mine.logoUrl || '/icon_ra.png');
+      setSelectedTemplateKey(detectNicheKey(`${mine.category} ${mine.name}`));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tempScopeBusinessId, businesses]);
+
   // Cerrar dropdown al hacer click fuera
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -440,18 +487,21 @@ function ImpresosContent() {
   useEffect(() => {
     if (urlManuallyEdited) return;
     const bunz = clampWelcomeBunz(welcomeBunz);
-    setAppUrl((prev) => {
-      // Solo regenerar si la URL actual es la autogenerada (el usuario no la editó a mano)
-      if (prev.startsWith('https://rabbitty.me/download?ref=')) {
-        return buildDownloadUrl(activeRef, bunz);
-      }
-      return prev;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const t = setTimeout(() => {
+      setAppUrl((prev) => {
+        // Solo regenerar si la URL actual es la autogenerada (el usuario no la editó a mano)
+        if (prev.startsWith('https://rabbitty.me/download?ref=')) {
+          return buildDownloadUrl(activeRef, bunz);
+        }
+        return prev;
+      });
+    }, 0);
+    return () => clearTimeout(t);
   }, [welcomeBunz, activeRef, urlManuallyEdited]);
 
   useEffect(() => {
     if (!selectedBusinessId) return;
+    if (authMode === 'temp') return; // acceso temporal: solo vista/impresión
     const bunz = clampWelcomeBunz(welcomeBunz);
     if (persistTimer.current) clearTimeout(persistTimer.current);
     persistTimer.current = setTimeout(() => {
@@ -470,6 +520,8 @@ function ImpresosContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [welcomeBunz, selectedBusinessId]);
 
+  // 🔒 Lock del selector: afiliados y accesos temporales con scope solo ven SU negocio
+  const selectorLocked = authMode === 'affiliate' || (authMode === 'temp' && Boolean(tempScopeBusinessId));
   const filteredBusinesses = businesses.filter((b) =>
     b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     b.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -524,10 +576,38 @@ function ImpresosContent() {
     );
   };
 
-  const handleUnlock = (e: React.FormEvent) => {
+  const handleUnlock = async (e: React.FormEvent) => {
       e.preventDefault();
       const clean = authCodeInput.trim();
-      if (clean === ADMIN_SECRET || clean.toLowerCase() === 'marco' || clean === 'admin2026') {
+
+      // Código temporal (24h) — validado server-side
+      if (/^[A-Z0-9]{8}$/i.test(clean)) {
+        try {
+          const res = await fetch('/api/auth/qr-impresos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'REDEEM_TEMP_CODE', code: clean.toUpperCase() }),
+          });
+          const d = await res.json();
+          if (d?.success) {
+            localStorage.setItem(AUTH_STORAGE_KEY, `temp:${clean.toUpperCase()}:${new Date(d.expiresAt).getTime()}`);
+            setAuthMode('temp');
+            setTempAccessInfo({ label: d.label || 'Invitado', expiresAt: d.expiresAt });
+            setTempScopeBusinessId(d.scopeBusinessId ?? null);
+            setIsAuthorized(true);
+            setAuthError('');
+            return;
+          }
+          setAuthError(d?.error || 'Código inválido o expirado');
+          return;
+        } catch {
+          setAuthError('Error de red al validar el código');
+          return;
+        }
+      }
+
+      // Clave de Admin (variable de entorno — sin bypass hardcodeado)
+      if (ADMIN_SECRET && clean === ADMIN_SECRET) {
         try {
           localStorage.setItem(AUTH_STORAGE_KEY, 'admin');
         } catch {}
@@ -536,21 +616,8 @@ function ImpresosContent() {
         return;
       }
 
-      // Validar si ingresó un refCode de comercio (ej. 626cafe, surfco, etc.)
-      const isAffiliateMatch = businesses.some(b => 
-        b.refCode?.toLowerCase() === clean.toLowerCase() ||
-        b.name?.toLowerCase().includes(clean.toLowerCase())
-      );
-      if (isAffiliateMatch || clean.length >= 3) {
-        try {
-          localStorage.setItem(AUTH_STORAGE_KEY, `affiliate_${clean.toLowerCase()}`);
-        } catch {}
-        setIsAuthorized(true);
-        setAuthError('');
-        return;
-      }
-
-      setAuthError('Código no válido. Introduce la clave de Admin o el código de tu comercio afiliado.');
+      // Afiliados: SOLO vía escaneo QR con prueba de propiedad (sin atajos)
+      setAuthError('Clave incorrecta. Usa tu clave de Admin, un código de acceso temporal, o escanea el QR con la App Rabbitty.');
     };
 
     if (!isAuthorized) {
@@ -571,7 +638,7 @@ function ImpresosContent() {
 
               <div className="relative flex items-center justify-center my-1">
                 {qrSessionData && !qrLoading ? (
-                  <SimpleQRCode value={qrSessionData} size={220} />
+                  <NeonQRCode value={qrSessionData} size={230} />
                 ) : (
                   <div className="w-56 h-56 rounded-4xl bg-[#110520] border-2 border-pink-500/40 flex flex-col items-center justify-center gap-3 p-4">
                     <RefreshCw className="w-7 h-7 text-pink-400 animate-spin" />
@@ -619,13 +686,13 @@ function ImpresosContent() {
               <form onSubmit={handleUnlock} className="space-y-4">
                 <div>
                   <label className="block text-[11px] font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">
-                    O ingresa Clave Admin / RefCode de Afiliado
+                    Clave Admin o Código de Acceso (24h)
                   </label>
                   <div className="relative">
                     <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                     <input
                       type="password"
-                      placeholder="Ej. 626cafe o Clave Admin"
+                      placeholder="Código temporal (8 caracteres) o Clave Admin"
                       value={authCodeInput}
                       onChange={(e) => setAuthCodeInput(e.target.value)}
                       className="w-full bg-black/60 border border-zinc-800 focus:border-pink-500 focus:ring-1 focus:ring-pink-500 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-zinc-600 outline-none transition-all"
@@ -682,7 +749,7 @@ function ImpresosContent() {
                 </p>
                 <div className="inline-block mb-4 pt-6">
                   {qrSessionData && !qrLoading ? (
-                    <SimpleQRCode value={qrSessionData} size={210} />
+                    <NeonQRCode value={qrSessionData} size={210} />
                   ) : (
                     <div className="w-60 h-60 rounded-4xl bg-[#110520] border-2 border-pink-500/40 flex flex-col items-center justify-center gap-3 p-4">
                       <RefreshCw className="w-7 h-7 text-pink-400 animate-spin" />
@@ -725,8 +792,43 @@ function ImpresosContent() {
               <Sparkles className="w-3.5 h-3.5 text-pink-400" /> Kit Impresos Piloto Oficial
             </span>
             <span className="text-[11px] font-mono px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-700 text-zinc-300">
-              {authMode === 'admin' ? `👑 Admin${authUserName ? ` · ${authUserName}` : ''}` : `🏪 Afiliado · ${businessName}`}
+              {authMode === 'admin' ? `👑 Admin${authUserName ? ` · ${authUserName}` : ''}` : authMode === 'temp' ? `⏳ Acceso temporal · ${tempAccessInfo?.label ?? 'Invitado'}` : `🏪 Afiliado · ${businessName}`}
             </span>
+            {(authMode === 'admin' || authMode === 'affiliate') && (
+              <button
+                type="button"
+                onClick={async () => {
+                  const label = window.prompt('¿Para quién es el acceso? (ej. Impresor, Marketing)', tempLabel) || '';
+                  if (!label.trim()) return;
+                  setTempLabel(label.trim());
+                  try {
+                    const res = await fetch('/api/auth/qr-impresos', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ action: 'GENERATE_TEMP_CODE', sessionId: qrSessionId || '', label: label.trim() }),
+                    });
+                    const d = await res.json();
+                    if (d?.success) {
+                      setTempGenerated({ code: d.code, url: d.url, expiresAt: d.expiresAt });
+                      navigator.clipboard.writeText(d.url).catch(() => {});
+                    } else {
+                      window.alert(d?.error || 'No se pudo generar el acceso');
+                    }
+                  } catch {
+                    window.alert('Error de red al generar el acceso');
+                  }
+                }}
+                className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/25 hover:bg-sky-500/20 transition-all cursor-pointer"
+                title="Genera un código de acceso de 24h para impresor / marketing"
+              >
+                🔑 Acceso temporal (24h)
+              </button>
+            )}
+            {tempGenerated && (
+              <span className="text-[11px] font-mono px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+                {tempGenerated.code} · copiado {tempGenerated.url.replace('https://www.rabbitty.me', '')} · expira {new Date(tempGenerated.expiresAt).toLocaleString('es-MX', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-3">
@@ -819,13 +921,14 @@ function ImpresosContent() {
             {/* Smart Business Selector */}
             <div className="mb-4 pt-2 border-t border-zinc-800 relative" ref={dropdownRef}>
               <label className="text-[11px] font-bold text-pink-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                <Building2 className="w-3.5 h-3.5" /> 1. Seleccionar Negocio Afiliado de la Red
+                <Building2 className="w-3.5 h-3.5" /> {selectorLocked ? 'Tu Negocio Afiliado' : '1. Seleccionar Negocio Afiliado de la Red'}
               </label>
               <div className="relative">
                 <button
                   type="button"
-                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  className="w-full bg-black border border-zinc-800 hover:border-pink-500/50 rounded-xl px-4 py-2.5 text-sm text-left flex items-center justify-between text-white transition-colors cursor-pointer"
+                  onClick={() => { if (!selectorLocked) setIsDropdownOpen(!isDropdownOpen); }}
+                  disabled={selectorLocked}
+                  className={`w-full bg-black border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-left flex items-center justify-between text-white transition-colors ${selectorLocked ? 'opacity-70 cursor-not-allowed' : 'hover:border-pink-500/50 cursor-pointer'}`}
                 >
                   <div className="flex items-center gap-3">
                     {businessLogo ? (
@@ -843,7 +946,7 @@ function ImpresosContent() {
                   </div>
                 </button>
 
-                {isDropdownOpen && (
+                {isDropdownOpen && !selectorLocked && (
                   <div className="absolute left-0 right-0 top-full mt-2 z-50 bg-[#121216] border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-2xl">
                     <div className="p-3 border-b border-zinc-800 flex items-center gap-2 bg-zinc-950/60">
                       <Search className="w-4 h-4 text-zinc-500" />

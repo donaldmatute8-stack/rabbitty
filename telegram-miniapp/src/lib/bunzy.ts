@@ -377,6 +377,39 @@ async function loadHistory(conversationId: string): Promise<ChatMessage[]> {
 function heuristicReply(content: string, ctx: BunzyContext, lat?: number | null, lng?: number | null): BunzyReply {
   const nc = normalizeText(content);
 
+  // 0.7 Kit de impresos /impresos y acceso temporal para su equipo
+  if (/impresos|imprimir mis|carteles|hablador|men[uú] impreso|kit de materiales|dar acceso a mi impresor|acceso temporal|acceso para mi equipo/.test(nc)) {
+    return {
+      content:
+        `🖨️ **Kit de Materiales Impresos** — https://www.rabbitty.me/impresos\n\n` +
+        `Desde ahí generas habladores de mesa, carteles A3, señalética POS y stickers con **QRs permanentes** (aunque evolucionemos rutas internas, tus impresos siguen funcionando).\n\n` +
+        `**Cómo entras**: escanea el código de acceso con tu App Rabbitty — tu rol de dueño queda autorizado.\n\n` +
+        `**Para tu equipo (impresor, marketing)**: en la barra superior toca **🔑 Acceso temporal (24h)** — genera un código que solo les deja **ver e imprimir TU material**, sin modificar nada.`,
+      type: 'TEXT',
+      metadata: null,
+      suggestions: ['¿Cómo escaneo el código de acceso?', 'Ver mi portal de negocio'],
+      options: [],
+      orderDraft: null,
+    };
+  }
+
+  // 0.75 RabbittyCode: qué es y cómo funciona
+  if (/rabbitty ?code|c[oó]digo ne[oó]n|qr ne[oó]n|mi c[oó]digo qr|escanea mi c[oó]digo/.test(nc)) {
+    return {
+      content:
+        `🐰 **RabbittyCode** es nuestro QR neón propietario (anillos de onda + esquinas holográficas).\n\n` +
+        `**Solo la App Rabbitty lo escanea** — la cámara normal no lo lee, por eso es exclusivo de nuestra red.\n\n` +
+        `· **Rabbitters**: lo encuentran en **/scan → Mi Código**. Muéstralo en caja para acumular bunz o para que otro Rabbitter te transfiera.\n` +
+        `· **Afiliados**: lo tienen en su portal de negocio para check-in e identificación.\n` +
+        `· Donde se necesita cámara genérica (iPads de caja, impresos) usamos QR estándar complementario.`,
+      type: 'TEXT',
+      metadata: null,
+      suggestions: ['¿Cómo imprimo mis materiales?', 'Mi Código'],
+      options: [],
+      orderDraft: null,
+    };
+  }
+
   // 0.8 Pregunta sobre bunz pendientes / saldo / por qué no han llegado mis bunz
   if (/no me han llegado|no llegan mis bunz|mis bunz no|donde estan mis bunz|no veo mis bunz|saldo no actualizado|no me llego el cashback|tardan mis bunz/.test(nc)) {
     const balance = ctx.user?.balance ?? 0;

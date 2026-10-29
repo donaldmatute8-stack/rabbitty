@@ -131,6 +131,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Código no reconocido" }, { status: 404 });
     }
 
+    // ── 0. Gate de /impresos: código de sesión pendiente (RabbittyCode del candado) ──
+    try {
+      const pendingRows = await db.execute(
+        sql`SELECT value FROM "systemSettings" WHERE key = 'impresos_pending_codes' LIMIT 1`
+      );
+      const pendingRaw = (pendingRows as unknown as { rows?: Array<{ value: string }> }).rows?.[0]?.value
+        ?? (pendingRows as unknown as Array<{ value: string }>)?.[0]?.value;
+      if (pendingRaw) {
+        const pending = JSON.parse(pendingRaw) as Record<string, { sessionId: string; token: string; expiresAt: string }>;
+        const entry = pending[String(code)];
+        if (entry && new Date(entry.expiresAt).getTime() > Date.now()) {
+          return NextResponse.json({ success: true, type: 'qrlogin', qrToken: entry.token, sessionId: entry.sessionId });
+        }
+      }
+    } catch { /* sin gate pendiente — sigue */ }
+
     // ── 1. Negocios afiliados (portal de negocio muestra business_<id>) ──
     const bizRows = await db
       .select({ id: ownedBusinesses.id, name: ownedBusinesses.name, slug: ownedBusinesses.slug })

@@ -160,7 +160,17 @@ export const SUPPORT_KNOWLEDGE =
   '· Soporte Demos (S): Demostraciones guiadas y onboarding para nuevos usuarios y comercios.\n' +
   '· Affiliates Circle (A): Comunidad de negocios y comercios afiliados.\n' +
   '· Rabbitters Zone (R): Círculo exclusivo de Rabbitters (Nodos de la red).\n' +
-  'Nota para Bunzy: Cuando un usuario pregunte por grupos, soporte o comunidades, puedes darle asistencia directa in-app y ofrecerle el enlace directo si desea entrar al grupo de Telegram.';
+  'Nota para Bunzy: Cuando un usuario pregunte por grupos, soporte o comunidades, puedes darle asistencia directa in-app y ofrecerle el enlace directo si desea entrar al grupo de Telegram.\n\n' +
+  'RABBITTY CODE (QR NEÓN PROPIETARIO):\n' +
+  '· El RabbittyCode es el QR neón propietario de Rabbitty (anillos de onda + esquinas holográficas). NO es un QR estándar: SOLO la App Rabbitty puede escanearlo (el escáner interno decodifica sus barras de onda). La cámara normal del iPhone NO lo lee.\n' +
+  '· Cada Rabbitter tiene su RabbittyCode en /scan?tab=my-code ("Mi Código"). Los comercios afiliados tienen el suyo en su portal de negocio. Sirve para identificarse, transferir bunz entre Rabbitters y check-in en locales.\n' +
+  '· Donde se necesita cámara genérica (cajas con iPad, impresos), Rabbitty usa QR estándar complementario o QRs con tokens.\n\n' +
+  'KIT DE MATERIALES IMPRESOS (/impresos):\n' +
+  '· Los afiliados y el God Admin generan habladores de mesa, carteles A3, señalética POS y stickers en https://www.rabbitty.me/impresos — dinámicos por tenant con QRs permanentes (los QRs impresos no cambian aunque evolucionen las rutas internas).\n' +
+  '· ACCESO: los dueños de negocio entran escaneando el código de acceso con su App Rabbitty (queda autorizado su rol de afiliado). El God Admin entra igual o con su clave.\n' +
+  '· Cada afiliado puede generar CÓDIGOS DE ACCESO TEMPORALES (24 h) desde la barra superior de /impresos para su equipo (impresor, marketing): solo ven/impresan SU material, sin poder modificar nada. El God Admin puede generar accesos con vista de todos los tenants.\n' +
+  '· El porcentaje de bunz del material sale del mismo % configurado en el Admin (fuente única), y el bono de bienvenida del QR lo define el dueño (split triangular 60% afiliado / 40% Tesorería Rabbitty con tope mensual).\n' +
+  'Nota para Bunzy: si un afiliado pregunta cómo imprimir sus materiales o dar acceso a su impresor, refiérelo a https://www.rabbitty.me/impresos (desde su Admin también puede abrirlo) y explícale el acceso temporal de 24 h para su equipo.';
 
 const SUPPORT_STOPWORDS = new Set([
   'que', 'con', 'para', 'por', 'los', 'las', 'una', 'uno', 'unos', 'unas', 'del', 'esta', 'este',

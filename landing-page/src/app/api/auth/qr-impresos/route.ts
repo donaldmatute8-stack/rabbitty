@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { code6FromData } from '@/lib/rabbittyCodeCodec';
 
 function getDbUrl(): string | undefined {
   return process.env.CORE_DATABASE_URL || process.env.POSTGRES_URL;
@@ -68,6 +69,95 @@ export async function POST(req: Request) {
 
       return NextResponse.json({ success: true, businessId, welcomeBunz: bunz });
     }
+
+    // ── Códigos de acceso temporal a /impresos (24h) para impresor/marketing ──
+    if (body?.action === 'GENERATE_TEMP_CODE') {
+      try {
+        const sessionId = String(body.sessionId || '');
+        const label = String(body.label || 'Invitado').slice(0, 40);
+        if (!sessionId) {
+          return NextResponse.json({ success: false, error: 'Sesión requerida' }, { status: 401 });
+        }
+        const postgres = (await import('postgres')).default;
+        const sql = postgres(dbUrl, { ssl: 'require', max: 1 });
+        const sessions = await sql`SELECT id, "userId" FROM "webSessions" WHERE id = ${sessionId} LIMIT 1`;
+        const session = sessions[0];
+        if (!session?.userId) { await sql.end(); return NextResponse.json({ success: false, error: 'Sesión no autenticada' }, { status: 401 }); }
+        const userRows = await sql`SELECT username, email, role FROM users WHERE id = ${session.userId} LIMIT 1`;
+        const user = userRows[0];
+        const isGod = ['admin@rabbitty.com', 'marco.munoz9@gmail.com'].includes(String(user?.email || '').toLowerCase()) ||
+          ['deltoro', 'mardelbull'].includes(String(user?.username || '').toLowerCase()) ||
+          String(user?.role || '').toUpperCase() === 'ADMIN';
+        await sql.end();
+
+        // God → scope global (ve todos los tenants). Dueño de negocio → scope a SU negocio.
+        let scopeBusinessId: string | null = null;
+        let scopeName = 'todos los tenants (God)';
+        if (!isGod) {
+          const postgres3 = (await import('postgres')).default;
+          const sql3 = postgres3(dbUrl, { ssl: 'require', max: 1 });
+          const ownedRows = await sql3`
+            SELECT b.id, b.name FROM "ownedBusinesses" b WHERE b."ownerId" = ${session.userId}
+            AND (b.status = 'APPROVED' OR b.status = 'ACTIVE') LIMIT 1`;
+          await sql3.end();
+          if (!ownedRows[0]) {
+            return NextResponse.json({ success: false, error: 'Sin negocio afiliado asociado a tu cuenta' }, { status: 403 });
+          }
+          scopeBusinessId = ownedRows[0].id;
+          scopeName = ownedRows[0].name;
+        }
+
+        const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        let code = '';
+        const bytes = crypto.randomBytes(8);
+        for (let i = 0; i < 8; i++) code += alphabet[bytes[i] % alphabet.length];
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+        const postgres2 = (await import('postgres')).default;
+        const sql2 = postgres2(dbUrl, { ssl: 'require', max: 1 });
+        const cfgRows = await sql2`SELECT value FROM "systemSettings" WHERE key = 'impresos_temp_access' LIMIT 1`;
+        let config: Record<string, { label: string; createdAt: string; expiresAt: string; scopeBusinessId?: string | null }> = {};
+        try { if (cfgRows[0]?.value) config = JSON.parse(cfgRows[0].value); } catch { config = {}; }
+        const now = Date.now();
+        for (const [k, v] of Object.entries(config)) {
+          if (new Date(v.expiresAt).getTime() < now) delete config[k];
+        }
+        config[code] = { label, createdAt: new Date().toISOString(), expiresAt, scopeBusinessId };
+        if (cfgRows.length > 0) {
+          await sql2`UPDATE "systemSettings" SET value = ${JSON.stringify(config)} WHERE key = 'impresos_temp_access'`;
+        } else {
+          await sql2`INSERT INTO "systemSettings" (key, value) VALUES ('impresos_temp_access', ${JSON.stringify(config)})`;
+        }
+        await sql2.end();
+        return NextResponse.json({ success: true, code, label, expiresAt, scopeBusinessId, scopeName, url: `https://www.rabbitty.me/impresos?access=${code}` });
+      } catch (err) {
+        console.error('[QR_IMPRESOS GENERATE_TEMP]', err);
+        return NextResponse.json({ success: false, error: 'Error generando acceso' }, { status: 500 });
+      }
+    }
+
+    if (body?.action === 'REDEEM_TEMP_CODE') {
+      try {
+        const code = String(body.code || '').trim().toUpperCase();
+        if (!/^[A-Z0-9]{8}$/.test(code)) {
+          return NextResponse.json({ success: false, error: 'Formato de código inválido' }, { status: 400 });
+        }
+        const postgres = (await import('postgres')).default;
+        const sql = postgres(dbUrl, { ssl: 'require', max: 1 });
+        const cfgRows = await sql`SELECT value FROM "systemSettings" WHERE key = 'impresos_temp_access' LIMIT 1`;
+        await sql.end();
+        let config: Record<string, { label: string; createdAt: string; expiresAt: string; scopeBusinessId?: string | null }> = {};
+        try { if (cfgRows[0]?.value) config = JSON.parse(cfgRows[0].value); } catch { config = {}; }
+        const entry = config[code];
+        if (!entry || new Date(entry.expiresAt).getTime() < Date.now()) {
+          return NextResponse.json({ success: false, error: 'Código inválido o expirado' }, { status: 401 });
+        }
+        return NextResponse.json({ success: true, label: entry.label, expiresAt: entry.expiresAt, scopeBusinessId: entry.scopeBusinessId ?? null });
+      } catch (err) {
+        console.error('[QR_IMPRESOS REDEEM_TEMP]', err);
+        return NextResponse.json({ success: false, error: 'Error validando acceso' }, { status: 500 });
+      }
+    }
   } catch (err) {
     console.error('[QR_IMPRESOS SET_WELCOME_BUNZ]', err);
     return NextResponse.json({ success: false, error: 'Error al guardar el bono' }, { status: 500 });
@@ -87,13 +177,32 @@ export async function POST(req: Request) {
       VALUES (${sessionId}, ${tokenHash}, ${expiresAt})
     `;
 
+    // ── Gate scaneable por NEÓN: mapear el código de 6 dígitos del RabbittyCode
+    //    de esta sesión → {sessionId, token}, para que el decoder de la App
+    //    vincule la sesión sin QR cuadrado. ──
+    const gateUrl = `https://app.rabbitty.me/scan?qrlogin_${qrToken}`;
+    const gateCode = code6FromData(gateUrl);
+    const cfgRows = await sql`SELECT value FROM "systemSettings" WHERE key = 'impresos_pending_codes' LIMIT 1`;
+    let pending: Record<string, { sessionId: string; token: string; expiresAt: string }> = {};
+    try { if (cfgRows[0]?.value) pending = JSON.parse(cfgRows[0].value); } catch { pending = {}; }
+    const nowMs = Date.now();
+    for (const [k, v] of Object.entries(pending)) {
+      if (new Date(v.expiresAt).getTime() < nowMs) delete pending[k];
+    }
+    pending[String(gateCode)] = { sessionId, token: qrToken, expiresAt: expiresAt.toISOString() };
+    if (cfgRows.length > 0) {
+      await sql`UPDATE "systemSettings" SET value = ${JSON.stringify(pending)} WHERE key = 'impresos_pending_codes'`;
+    } else {
+      await sql`INSERT INTO "systemSettings" (key, value) VALUES ('impresos_pending_codes', ${JSON.stringify(pending)})`;
+    }
+
     await sql.end();
 
     return NextResponse.json({
       success: true,
       sessionId,
       qrToken,
-      qrData: `https://app.rabbitty.me/scan?qrlogin_${qrToken}`,
+      qrData: gateUrl,
       expiresAt: expiresAt.toISOString(),
     });
   } catch (error) {
