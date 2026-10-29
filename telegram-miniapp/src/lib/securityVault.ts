@@ -212,11 +212,11 @@ export async function detectBiometric(): Promise<BiometricSupport> {
       if (check.isAvailable) {
         return { backend: 'native', available: true, label: 'Face ID / Touch ID' };
       }
+      // Plugin presente pero biometría del dispositivo no configurada → honesto
+      return { backend: 'native', available: false, label: 'Face ID / Touch ID' };
     } catch {
-      // Fallback a WebAuthn o Apple Passkey si Capacitor plugin falla
-    }
-    if (isApple) {
-      return { backend: 'native', available: true, label: 'Face ID / Touch ID' };
+      // Plugin NO compilado en este build nativo → NO fingir disponible.
+      // Cae a Telegram/WebAuthn/PIN; la app nativa necesita rebuild con el plugin.
     }
   }
 
@@ -297,8 +297,15 @@ export async function enableBiometric(): Promise<BioOutcome> {
         writeJson(BIO_KEY, { backend: 'native' } satisfies BioRecord);
         return { ok: true, message: `${support.label} activado.` };
       }
+      return {
+        ok: false,
+        message:
+          res.error === 'biometry_unavailable'
+            ? 'Configura Face ID en tu dispositivo (Ajustes → Face ID y código).'
+            : 'No se pudo verificar tu biometría. Inténtalo de nuevo o usa un PIN.',
+      };
     } catch {
-      // Fallback a webauthn abajo si falla el bridge nativo
+      return { ok: false, message: 'No se pudo activar la biometría. Usa un PIN de seguridad.' };
     }
   }
 

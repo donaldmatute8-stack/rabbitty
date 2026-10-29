@@ -145,6 +145,19 @@ export default function WalletPage() {
     setSending(true);
     try {
       await PlatformBridge.hapticFeedback('medium');
+
+      // ── Gate local: Face ID / PIN antes de enviar Bunz ──
+      const [{ authorizeSensitiveAction }, { promptForPin }] = await Promise.all([
+        import('@/lib/securityVault'),
+        import('@/components/security/PinPromptModal'),
+      ]);
+      const auth = await authorizeSensitiveAction(promptForPin, `Autoriza el envío de ${amt} Bunz`);
+      if (!auth.ok) {
+        setSending(false);
+        if (auth.reason === 'locked') alert('Demasiados intentos de PIN. Espera un momento.');
+        return;
+      }
+
       const headers = await PlatformBridge.getAuthHeaders();
       const res = await fetch('/api/wallet/transfer', {
         method: 'POST',
