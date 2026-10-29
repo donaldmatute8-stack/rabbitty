@@ -1214,8 +1214,9 @@ function God2FAPasskeysCard() {
           challenge: fromB64(opt.challenge),
           rp: opt.rp,
           user: { id: fromB64(opt.user.id), name: opt.user.name, displayName: opt.user.displayName },
-          pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+          pubKeyCredParams: [{ type: "public-key", alg: -7 }], // ES256/P-256 — Face ID/iCloud Keychain/Google PM
           authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required", residentKey: "preferred" },
+          // residentKey + plataforma = llave guardada en Llavero de iCloud / Google Password Manager
           timeout: 60000,
         },
       });
