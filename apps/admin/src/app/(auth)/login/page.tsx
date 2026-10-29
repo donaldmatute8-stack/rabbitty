@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Mail, Phone, QrCode, Sparkles, UserCheck, Clock, ChevronDown, Check, Compass, ScanFace } from "lucide-react";
 import QRDiscovery from "@/components/QRDiscovery";
+import RabbittyLoader from "@/components/RabbittyLoader";
 import { resolveApiUrl } from "@/lib/api-config";
 
 interface CountryCode {
@@ -457,6 +458,8 @@ export default function LoginPage() {
               Ingresa con tu correo registrado o número celular con código OTP
             </p>
           </div>
+
+          {passkeyBusy && <RabbittyLoader message="Verificando tu identidad…" />}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">

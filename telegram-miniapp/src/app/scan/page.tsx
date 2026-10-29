@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Html5Qrcode } from 'html5-qrcode';
 import RabbittyCode from '@/components/ui/RabbittyCode';
 import QRDiscovery from '@/components/QRDiscovery';
+import RabbittyLoader from '@/components/RabbittyLoader';
 import BottomNav from '@/components/BottomNav';
 import Button from '@/components/ui/Button';
 import { useWallet } from '@/contexts/WalletContext';
@@ -63,6 +64,7 @@ export default function ScanPage() {
   const [showManualInput, setShowManualInput] = useState(false);
   const [activeTab, setActiveTab] = useState<'scan' | 'my-code'>(initialTab);
   const [qrConfirm, setQrConfirm] = useState<{ qrToken: string; origin: string } | null>(null);
+  const [scanLoader, setScanLoader] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isTransitioningRef = useRef(false);
   const startScanningRef = useRef<() => void>(() => {});
@@ -206,9 +208,11 @@ export default function ScanPage() {
 
   const handleDispatchPayload = useCallback(async (rawPayload: string | number) => {
     PlatformBridge.hapticFeedback('success');
+    setScanLoader('Leyendo tu código…');
 
     const res = await resolveScannedPayload(rawPayload);
     if (!res.success) {
+      setScanLoader(null);
       if (res.error) alert(res.error);
       startScanningRef.current();
       return;
@@ -234,9 +238,11 @@ export default function ScanPage() {
         const claimData = await claimRes.json();
         if (claimData.success) {
           alert(`🐰 ¡Felicidades! Se han acreditado +${claimData.bunzAwarded} Bunz a tu cuenta por el ticket #${claimData.orderNumber}.`);
+          setScanLoader(null);
           router.push('/profile/wallet');
           return;
         } else {
+          setScanLoader(null);
           alert(claimData.error || 'No se pudo reclamar este ticket.');
           startScanningRef.current();
           return;
@@ -510,6 +516,15 @@ export default function ScanPage() {
 
     return () => clearInterval(interval);
   }, [activeTab, hasCamera, showManualInput, result, router, stopScanning, handleDispatchPayload, showToast]);
+
+  // ── Loader: verificación animada Rabbitty tras escaneo ──
+  if (scanLoader) {
+    return (
+      <div className="min-h-dvh flex items-center justify-center bg-black">
+        <RabbittyLoader message={scanLoader} />
+      </div>
+    );
+  }
 
   // ── Modal: ¿Autorizar el acceso? (qrlogin gate) ──
   if (qrConfirm) {

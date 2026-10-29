@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { SimpleQRCode, NeonQRCode } from '@/components/SimpleQRCode';
 import QRDiscovery from '@/components/QRDiscovery';
+import RabbittyLoader from '@/components/RabbittyLoader';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 
@@ -349,6 +350,7 @@ function ImpresosContent() {
 
   const [qrSessionId, setQrSessionId] = useState<string | null>(null);
   const [qrGateCode, setQrGateCode] = useState<string>('');
+  const [showAuthLoader, setShowAuthLoader] = useState(false);
   const [qrSessionData, setQrSessionData] = useState<string>('');
   const [qrLoading, setQrLoading] = useState<boolean>(false);
   const [qrStatusMsg, setQrStatusMsg] = useState<string>('');
@@ -496,6 +498,8 @@ function ImpresosContent() {
             const resolvedMode = data.mode as 'admin' | 'affiliate';
             setAuthMode(resolvedMode);
             setAuthUserName(data.user?.name || (resolvedMode === 'admin' ? 'Admin Rabbitty' : 'Afiliado'));
+            setShowAuthLoader(true);
+            setTimeout(() => setShowAuthLoader(false), 900);
 
             if (resolvedMode === 'affiliate' && data.business) {
               const b = data.business as BusinessItem;
@@ -790,6 +794,14 @@ function ImpresosContent() {
     };
 
     if (!isAuthorized) {
+    if (showAuthLoader) {
+      return (
+        <div className="min-h-screen bg-[#09090B] text-zinc-100 flex flex-col items-center justify-center p-6 relative overflow-hidden">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-pink-500/10 rounded-full blur-3xl pointer-events-none" />
+          <RabbittyLoader message="Acceso confirmado — abriendo…" />
+        </div>
+      );
+    }
       return (
         <div className="min-h-screen bg-[#09090B] text-zinc-100 flex flex-col items-center justify-center p-6 relative overflow-hidden">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-pink-500/10 rounded-full blur-3xl pointer-events-none" />
