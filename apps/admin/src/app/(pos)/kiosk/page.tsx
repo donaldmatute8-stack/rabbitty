@@ -14,7 +14,7 @@ export default function KioskPage() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [cart, setCart] = useState<any[]>([]);
   const [view, setView] = useState<"welcome" | "menu" | "checkout" | "qr_payment" | "success">("welcome");
-  const [intent, setIntent] = useState<{ orderId: string; intentId: string; payUrl: string; total: number } | null>(null);
+  const [intent, setIntent] = useState<{ orderId: string; intentId: string; payUrl: string; total: number; claimToken?: string } | null>(null);
   const [payError, setPayError] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
   const [adminPinModal, setAdminPinModal] = useState(false);
@@ -168,8 +168,23 @@ export default function KioskPage() {
             <p className="text-[6rem] font-black text-emerald-400 leading-none">842</p>
           </div>
           
+          {intent?.claimToken && (
+            <div className="mb-12 flex flex-col items-center gap-4">
+              <p className="text-2xl text-pink-300 font-black">🎁 Escanea para llevar tus Bunz</p>
+              <div className="bg-white p-5 rounded-[2rem] shadow-[0_0_60px_rgba(236,72,153,0.3)]">
+                <QRDiscovery
+                  value={`https://app.rabbitty.me/scan?claimToken=${intent.claimToken}`}
+                  variant="rabbitter"
+                  size={200}
+                  revealMode="immediate"
+                  surfaceKey="kiosk-claim"
+                />
+              </div>
+              <p className="text-sm text-gray-500 max-w-md">Apunta la cámara de tu teléfono — tus Bunz se acreditan al instante en tu cuenta.</p>
+            </div>
+          )}
           <button 
-            onClick={() => { setCart([]); setView("welcome"); }}
+            onClick={() => { setCart([]); setIntent(null); setView("welcome"); }}
             className="rounded-[2.5rem] bg-white/10 px-16 py-8 text-3xl font-black text-white backdrop-blur-xl border border-white/20 active:scale-95 transition-all hover:bg-white/20"
           >
             Nueva Orden
@@ -533,7 +548,7 @@ export default function KioskPage() {
                     const res = await kioskIntentMutation.mutateAsync({
                       items: cart.map((i) => ({ menuItemId: i.id, quantity: i.quantity })),
                     });
-                    setIntent({ orderId: res.orderId, intentId: res.intentId, payUrl: res.payUrl, total: res.total });
+                    setIntent({ orderId: res.orderId, intentId: res.intentId, payUrl: res.payUrl, total: res.total, claimToken: (res as unknown as { claimToken?: string }).claimToken });
                     setView("qr_payment");
                   } catch (err) {
                     console.error("[KIOSK] intent error:", err);
