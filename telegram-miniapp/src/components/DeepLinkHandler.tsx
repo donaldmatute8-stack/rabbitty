@@ -26,6 +26,10 @@ export default function DeepLinkHandler() {
           router.push('/scan?tab=my-code');
           return;
         }
+        if (path.startsWith('/kiosk-confirm')) {
+          router.push(`${path}${url.search}`);
+          return;
+        }
         if (path.startsWith('/affiliate')) {
           router.push(`${path}${url.search}`);
           return;

@@ -59,6 +59,42 @@ export default function KioskPage() {
     };
   }, [resetIdleTimer]);
 
+  const [pairToken, setPairToken] = useState<string | null>(null);
+  const [pairCustomer, setPairCustomer] = useState<{ id: string; name: string } | null>(null);
+  const [pairUrl, setPairUrl] = useState<string>('');
+
+  // ── Identificación del cliente (opcional, antes de pagar) ──
+  const startPairing = async () => {
+    try {
+      const res = await fetch('/api/kiosk/pair/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ restaurantName: ticketContext?.restaurant?.name || 'Kiosko Rabbitty' }),
+      });
+      const data = await res.json();
+      if (data?.success) {
+        setPairToken(data.token);
+        setPairCustomer(null);
+        setPairUrl(`https://app.rabbitty.me/kiosk-confirm?token=${data.token}`);
+      }
+    } catch { /* noop */ }
+  };
+
+  useEffect(() => {
+    if (view !== 'checkout' || !pairToken || pairCustomer) return;
+    const poll = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/kiosk/pair/status?token=${encodeURIComponent(pairToken)}`);
+        const d = await res.json();
+        if (d?.linked && d.customerId) {
+          setPairCustomer({ id: d.customerId, name: d.customerName || 'Rabbitter' });
+          // haptic: kiosk
+        }
+      } catch { /* noop */ }
+    }, 2500);
+    return () => clearInterval(poll);
+  }, [view, pairToken, pairCustomer]);
+
   const kioskIntentMutation = trpc.pos.createStripeChargeIntent.useMutation();
   const kioskIntentCancel = trpc.payments.cancelPaymentIntent.useMutation();
   const { data: categories } = trpc.pos.getCategories.useQuery(undefined, { retry: false });
@@ -510,8 +546,56 @@ export default function KioskPage() {
           </div>
 
           {/* Right Column: Summary & Checkout CTA */}
-          <div className="w-105 lg:w-120 shrink-0 flex flex-col justify-between rounded-[2.5rem] bg-gray-900/90 backdrop-blur-2xl border border-white/10 p-8 shadow-2xl">
+          <div className="w-105 lg:w-120 shrink-0 flex flex-col justify-between gap-4 rounded-[2.5rem] bg-gray-900/90 backdrop-blur-2xl border border-white/10 p-8 shadow-2xl">
             <div className="space-y-6">
+              <div className="w-full shrink-0 rounded-[2rem] border border-pink-500/25 bg-pink-500/5 p-6">
+                {pairCustomer ? (
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="h-12 w-12 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-2xl">✓</div>
+                      <div>
+                        <p className="text-lg font-black text-emerald-300">¡Hola, {pairCustomer.name}!</p>
+                        <p className="text-xs text-gray-400">Tus Bunz de esta orden se acreditan automáticamente.</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      {pairToken ? (
+                        <div className="rounded-2xl bg-white p-2">
+                          <QRDiscovery
+                            value={pairUrl}
+                            variant="rabbitter"
+                            size={110}
+                            revealMode="immediate"
+                            surfaceKey="kiosk-pair"
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-31 h-31 rounded-2xl bg-black/40 flex items-center justify-center">
+                          <span className="text-4xl">🐰</span>
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-lg font-black text-white">🏆 Gana Bunz con esta orden</p>
+                        <p className="text-xs text-gray-400 mt-1 max-w-xs leading-snug">
+                          Escanea con la cámara de tu teléfono y confirma en la App — se acreditan solos.
+                        </p>
+                      </div>
+                    </div>
+                    {!pairToken && (
+                      <button
+                        onClick={() => void startPairing()}
+                        className="rounded-xl border border-pink-500/30 bg-pink-500/10 hover:bg-pink-500/20 px-5 py-2.5 text-xs font-black text-pink-300 transition-all cursor-pointer"
+                      >
+                        Generar QR
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <h3 className="text-2xl font-black text-white border-b border-white/10 pb-4">Resumen de Cuenta</h3>
               
               <div className="space-y-4">
@@ -547,6 +631,7 @@ export default function KioskPage() {
                   try {
                     const res = await kioskIntentMutation.mutateAsync({
                       items: cart.map((i) => ({ menuItemId: i.id, quantity: i.quantity })),
+                      ...(pairCustomer ? { customerId: pairCustomer.id, customerName: pairCustomer.name } : {}),
                     });
                     setIntent({ orderId: res.orderId, intentId: res.intentId, payUrl: res.payUrl, total: res.total, claimToken: (res as unknown as { claimToken?: string }).claimToken });
                     setView("qr_payment");

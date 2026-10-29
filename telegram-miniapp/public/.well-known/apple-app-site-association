@@ -2,13 +2,30 @@
   "applinks": {
     "details": [
       {
-        "appIDs": ["FW97275K5X.com.rabbitty.app"],
+        "appIDs": [
+          "FW97275K5X.com.rabbitty.app"
+        ],
         "components": [
-          { "/": "/scan*", "comment": "Tickets QR y vinculación de mesa" },
-          { "/": "/qr/*" },
-          { "/": "/pay/*" },
-          { "/": "/download*" },
-          { "/": "/affiliate/*" }
+          {
+            "/": "/scan*",
+            "comment": "Tickets QR y vinculaci\u00f3n de mesa"
+          },
+          {
+            "/": "/qr/*"
+          },
+          {
+            "/": "/pay/*"
+          },
+          {
+            "/": "/download*"
+          },
+          {
+            "/": "/affiliate/*"
+          },
+          {
+            "/": "/kiosk-confirm*",
+            "comment": "Identidad del cliente para el kiosko"
+          }
         ]
       }
     ]

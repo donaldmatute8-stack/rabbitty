@@ -7,24 +7,24 @@
         ],
         "components": [
           {
-            "/": "/download*",
-            "comment": "P\u00f3sters impresos: miembros abren la app; no instalados \u2192 landing con App Store"
-          },
-          {
             "/": "/scan*",
-            "comment": "Esc\u00e1ner / check-in / qrlogin"
+            "comment": "Tickets QR y vinculaci\u00f3n de mesa"
           },
           {
-            "/": "/qr/*",
-            "comment": "QRs de mesa"
+            "/": "/qr/*"
           },
           {
-            "/": "/pay/*",
-            "comment": "Pagos POS"
+            "/": "/pay/*"
           },
           {
-            "/": "/affiliate/*",
-            "comment": "Fichas de afiliados"
+            "/": "/download*"
+          },
+          {
+            "/": "/affiliate/*"
+          },
+          {
+            "/": "/kiosk-confirm*",
+            "comment": "Identidad del cliente para el kiosko"
           }
         ]
       }
