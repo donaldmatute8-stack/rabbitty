@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { trpc } from "../../../lib/trpc-client";
+import { QRCodeSVG } from "qrcode.react";
 import { cn, useWakeLock } from "@rabbitty/ui";
 import { ShoppingBag, ChevronRight, CheckCircle2, ChevronLeft, Minus, Plus, Scan, X, QrCode, Lock, KeyRound, ArrowRight } from "lucide-react";
 
@@ -12,6 +13,8 @@ export default function KioskPage() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [cart, setCart] = useState<any[]>([]);
   const [view, setView] = useState<"welcome" | "menu" | "checkout" | "qr_payment" | "success">("welcome");
+  const [intent, setIntent] = useState<{ orderId: string; intentId: string; payUrl: string; total: number } | null>(null);
+  const [payError, setPayError] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
   const [adminPinModal, setAdminPinModal] = useState(false);
   const [adminPin, setAdminPin] = useState("");
@@ -55,6 +58,8 @@ export default function KioskPage() {
     };
   }, [resetIdleTimer]);
 
+  const kioskIntentMutation = trpc.pos.createStripeChargeIntent.useMutation();
+  const kioskIntentCancel = trpc.payments.cancelPaymentIntent.useMutation();
   const { data: categories } = trpc.pos.getCategories.useQuery(undefined, { retry: false });
   const { data: menuItems } = trpc.pos.getMenuItems.useQuery({}, { retry: false });
 
@@ -175,39 +180,73 @@ export default function KioskPage() {
 
   // 3. QR PAYMENT SCREEN
   if (view === "qr_payment") {
+    // ── Polling del intent real (Rabbitty Pay) ──
+    useEffect(() => {
+      if (!intent) return;
+      const poll = setInterval(async () => {
+        try {
+          const inputStr = encodeURIComponent(JSON.stringify({ "0": { intentId: intent.intentId } }));
+          const res = await fetch(`/api/trpc/payments.getPaymentIntent?batch=1&input=${inputStr}`);
+          const data = await res.json();
+          const st = data?.[0]?.result?.data?.json?.status;
+          if (st === "SUCCEEDED") {
+            clearInterval(poll);
+            setView("success");
+          } else if (st === "CANCELED" || st === "FAILED") {
+            clearInterval(poll);
+            setPayError("El pago fue cancelado. Vuelve a intentar.");
+            setView("checkout");
+          }
+        } catch { /* reintenta */ }
+      }, 2500);
+      return () => clearInterval(poll);
+    }, [intent]);
+
     return (
       <div className="flex h-dvh w-full flex-col items-center justify-center bg-gray-950 text-white select-none relative overflow-hidden">
         <div className="absolute inset-0 bg-linear-to-tr from-purple-900/30 to-black" />
-        
-        {/* Header */}
-        <header className="absolute top-0 left-0 w-full p-8 flex justify-between items-center">
-          <button 
-            onClick={() => setView("checkout")}
+
+        <header className="absolute top-0 left-0 w-full p-8 flex justify-between items-center z-10">
+          <button
+            onClick={async () => {
+              try { await kioskIntentCancel?.mutateAsync({ intentId: intent?.intentId || "", reason: "Kiosko: cliente regresó" }); } catch {}
+              setIntent(null);
+              setView("checkout");
+            }}
             className="flex h-16 w-16 items-center justify-center rounded-full bg-white/10 text-white active:bg-white/20 transition-all border border-white/20"
           >
             <ChevronLeft className="h-8 w-8" />
           </button>
-          <div className="text-3xl font-black text-purple-400">${total.toFixed(2)}</div>
+          <div className="text-3xl font-black text-purple-400">${(intent?.total ?? total).toFixed(2)}</div>
         </header>
 
         <div className="relative z-10 flex flex-col items-center text-center max-w-3xl">
           <h1 className="text-5xl font-black mb-4">Escanea para Pagar</h1>
-          <p className="text-2xl text-gray-400 mb-12">Usa tu cámara o la App de Rabbitty para completar el pago y sumar Bunz.</p>
-          
-          {/* Mock QR */}
-          <div className="bg-white p-6 rounded-[3rem] shadow-[0_0_100px_rgba(168,85,247,0.3)] mb-12">
-            <div className="w-100 h-100 bg-black rounded-3xl flex items-center justify-center relative overflow-hidden">
-              <QrCode className="h-48 w-48 text-white/20" />
-              <div className="absolute top-0 left-0 w-full h-2 bg-purple-500 shadow-[0_0_20px_#a855f7] animate-[scan_2s_ease-in-out_infinite]" />
+          <p className="text-2xl text-gray-400 mb-10">Con la App Rabbitty o la cámara de tu teléfono — pagas desde tu celular y ganas Bunz.</p>
+
+          {intent ? (
+            <div className="bg-white p-6 rounded-[3rem] shadow-[0_0_100px_rgba(168,85,247,0.35)] mb-10">
+              <QRCodeSVG
+                value={`rabbitty://pay?intent=${intent.intentId}`}
+                size={280}
+                level="H"
+                includeMargin={false}
+              />
             </div>
+          ) : (
+            <div className="w-70 h-70 flex items-center justify-center mb-10">
+              <div className="w-14 h-14 rounded-full border-4 border-purple-500 border-t-transparent animate-spin" />
+            </div>
+          )}
+
+          <p className="text-lg text-gray-500 font-mono mb-6 break-all max-w-2xl">{intent?.payUrl}</p>
+
+          <div className="flex items-center gap-3 text-xl text-purple-300 font-bold">
+            <span className="w-3 h-3 rounded-full bg-purple-400 animate-pulse" />
+            Esperando confirmación de pago…
           </div>
 
-          <button 
-            onClick={() => setView("success")}
-            className="rounded-[2.5rem] bg-purple-500 px-16 py-6 text-2xl font-black text-white shadow-[0_15px_40px_rgba(168,85,247,0.4)] active:scale-95 transition-all hover:bg-purple-400"
-          >
-            SIMULAR PAGO EXITOSO
-          </button>
+          {payError && <p className="mt-4 text-rose-400 font-bold">{payError}</p>}
         </div>
       </div>
     );
@@ -487,7 +526,17 @@ export default function KioskPage() {
             <div className="space-y-4 pt-6">
               <button 
                 disabled={cart.length === 0}
-                onClick={() => setView("qr_payment")}
+                onClick={async () => {
+                  try {
+                    const res = await kioskIntentMutation.mutateAsync({
+                      items: cart.map((i) => ({ menuItemId: i.id, quantity: i.quantity })),
+                    });
+                    setIntent({ orderId: res.orderId, intentId: res.intentId, payUrl: res.payUrl, total: res.total });
+                    setView("qr_payment");
+                  } catch (err) {
+                    console.error("[KIOSK] intent error:", err);
+                  }
+                }}
                 className="w-full flex items-center justify-center gap-3 rounded-2xl bg-linear-to-r from-purple-500 to-pink-500 py-6 text-2xl font-black text-white shadow-[0_15px_40px_rgba(168,85,247,0.4)] active:scale-95 disabled:opacity-40 transition-all cursor-pointer"
               >
                 PAGAR ORDEN <ChevronRight className="h-7 w-7" />
