@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { PlatformBridge } from '@/lib/platform';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { getFastLogin, verifyBiometric, hasAnyLocalSecurity } from '@/lib/securityVault';
 
 interface CountryCode {
   code: string;
@@ -46,6 +47,8 @@ export default function PhoneAuthFlow({ mode, onBack }: PhoneAuthFlowProps) {
   const [message, setMessage] = useState('');
   const [autoDetecting, setAutoDetecting] = useState(() => PlatformBridge.isTelegram());
   const [celebration, setCelebration] = useState<{ totalBunz: number; businessName: string } | null>(null);
+  const [fastLoginAvailable, setFastLoginAvailable] = useState(false);
+  const [fastLoginBusy, setFastLoginBusy] = useState(false);
   const pendingNavRef = useRef<{ isNewUser: boolean; role?: string } | null>(null);
 
   // Continúa la navegación post-login (tras cerrar la celebración si aplicó)
@@ -89,6 +92,42 @@ export default function PhoneAuthFlow({ mode, onBack }: PhoneAuthFlowProps) {
       }
     }
   }, [user, authLoading, router]);
+
+  // ── Fast login: detectar stash de sesión (tras logout con seguridad activa) ──
+  useEffect(() => {
+    if (autoDetecting) return;
+    (async () => {
+      try {
+        const stash = getFastLogin();
+        if (stash?.token && hasAnyLocalSecurity()) setFastLoginAvailable(true);
+      } catch { /* noop */ }
+    })();
+  }, [autoDetecting]);
+
+  const handleFastLogin = async () => {
+    const stash = getFastLogin();
+    if (!stash) return;
+    setFastLoginBusy(true);
+    try {
+      const bio = await verifyBiometric('Entrada rápida a tu cuenta Rabbitty');
+      if (!bio.ok) { setFastLoginBusy(false); return; } // cancelado/fallido → OTP normal
+      await PlatformBridge.setSessionToken(stash.token);
+      // Verificar que la sesión sigue válida en el server
+      const checkRes = await fetch('/api/auth/session', { headers: { Authorization: `Bearer ${stash.token}` } });
+      if (checkRes.ok) {
+        PlatformBridge.hapticFeedback('success');
+        await checkAuth();
+        router.replace('/');
+      } else {
+        // sesión expirada/revocada → limpiar stash, OTP normal
+        localStorage.removeItem('rabbitty_fastlogin_v1');
+        setFastLoginAvailable(false);
+        setFastLoginBusy(false);
+      }
+    } catch {
+      setFastLoginBusy(false);
+    }
+  };
 
   // Determinar si lo que escribe parece teléfono
   const isPhoneNumber = (() => {

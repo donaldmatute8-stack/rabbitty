@@ -550,3 +550,31 @@ export async function authorizeSensitiveAction(
 
   return { ok: true, reason: 'none' };
 }
+
+/* ───────────────────────── Fast Login (tras cerrar sesión) ───────────────────────── */
+
+const FASTLOGIN_KEY = 'rabbitty_fastlogin_v1';
+
+/** Guarda la sesión activa para re-login biométrico (SOLO si hay Face ID/PIN activo). */
+export async function stashFastLogin(sessionToken: string): Promise<void> {
+  if (!sessionToken) return;
+  if (!hasAnyLocalSecurity()) return; // sin Face ID ni PIN → no hay fast login
+  try {
+    writeJson(FASTLOGIN_KEY, {
+      token: sessionToken,
+      savedAt: Date.now(),
+      // La sesión del server expira en 30d — el fastlogin muere con ella
+      expiresAt: Date.now() + 30 * 86400_000,
+    });
+  } catch { /* noop */ }
+}
+
+export function getFastLogin(): { token: string } | null {
+  const rec = readJson<{ token: string; expiresAt: number }>(FASTLOGIN_KEY);
+  if (!rec?.token || Date.now() > rec.expiresAt) return null;
+  return { token: rec.token };
+}
+
+export function clearFastLogin(): void {
+  try { localStorage.removeItem(FASTLOGIN_KEY); } catch { /* noop */ }
+}

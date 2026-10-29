@@ -159,6 +159,13 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const logout = async () => {
     try {
       const token = sessionToken || (await PlatformBridge.getSessionToken());
+      // ── Fast login: stash la sesión para re-entrada con Face ID/PIN ──
+      if (token) {
+        try {
+          const { stashFastLogin } = await import('@/lib/securityVault');
+          await stashFastLogin(token);
+        } catch { /* noop */ }
+      }
       if (token) {
         await fetch('/api/auth/logout', {
           method: 'POST',
