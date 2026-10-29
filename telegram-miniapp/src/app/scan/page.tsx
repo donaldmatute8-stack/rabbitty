@@ -304,6 +304,10 @@ export default function ScanPage() {
         // 6. QR Login (/impresos o PC) — CONFIRMACIÓN EXPLÍCITA antes de vincular
     if (res.type === 'qrlogin' && res.qrLogin) {
       await stopScanning();
+      // ── CRÍTICO: limpiar el loader ANTES de mostrar el modal — el loader tiene
+      //    prioridad de render y taparía el modal de confirmación si sigue activo ──
+      setScanLoader(null);
+      setScanLoaderCode(null);
       setQrConfirm({ qrToken: res.qrLogin.qrToken, origin: 'www.rabbitty.me' });
       return;
     }
