@@ -574,70 +574,11 @@ export default function ScanPage() {
             (b >= 110 && r >= 65 && b - g >= 20) ||
             (r >= 190 && b >= 160 && g >= 100 && r - g >= 15);
 
-          // Banda central vertical (el núcleo de onda vive ~22%-78% del alto)
-          const y0 = Math.floor(HI * 0.22);
-          const y1 = Math.floor(HI * 0.78);
-          const colNeon = new Float32Array(HI);
-          for (let x = 0; x < HI; x++) {
-            let count = 0;
-            for (let y = y0; y < y1; y++) {
-              const idx = (y * HI + x) * 4;
-              if (isNeonPx(hiData[idx], hiData[idx + 1], hiData[idx + 2])) count++;
-            }
-            colNeon[x] = count;
-          }
-
-          // Segmentar las 13 barras: clusters neón con tolerancia a reflejos
-          // (merge de gaps pequeños hasta llegar a exactamente 13)
-          const threshold = 2;
-          let clusters: Array<{ x0: number; x1: number }> = [];
-          let cur: { x0: number; x1: number } | null = null;
-          for (let x = 0; x < HI; x++) {
-            if (colNeon[x] >= threshold) {
-              if (!cur) cur = { x0: x, x1: x };
-              else cur.x1 = x;
-            } else if (cur) {
-              if (cur.x1 - cur.x0 >= 1) clusters.push(cur);
-              cur = null;
-            }
-          }
-          if (cur && cur.x1 - cur.x0 >= 1) clusters.push(cur);
-
-          // Normalizar a exactamente 13: primero merge de gaps de 1-2px,
-          // luego fusionar los pares vecinos con menor separación
-          const mergeSmallest = (list: Array<{ x0: number; x1: number }>) => {
-            if (list.length < 2) return list;
-            let best = 0;
-            let bestGap = Infinity;
-            for (let i = 0; i < list.length - 1; i++) {
-              const gap = list[i + 1].x0 - list[i].x1;
-              if (gap < bestGap) { bestGap = gap; best = i; }
-            }
-            const merged = [...list];
-            merged[best] = { x0: merged[best].x0, x1: merged[best + 1].x1 };
-            merged.splice(best + 1, 1);
-            return merged;
-          };
-          while (clusters.length > 13) clusters = mergeSmallest(clusters);
-
+          // Medir las 13 barras por POSICIÓN ESPERADA (equidistantes — robusto a resolución/reflejos)
+          const { measureBarsFromFrame, codeFromBars } = await import('@/lib/rabbittyCodeCodec');
+          const heights = measureBarsFromFrame(hiData, HI);
           let decoded: number | null = null;
-          if (clusters.length === 13) {
-            const heights: number[] = [];
-            for (const c of clusters) {
-              let minY = HI, maxY = 0;
-              for (let x = c.x0; x <= c.x1; x++) {
-                for (let y = y0; y < y1; y++) {
-                  const idx = (y * HI + x) * 4;
-                  if (isNeonPx(hiData[idx], hiData[idx + 1], hiData[idx + 2])) {
-                    if (y < minY) minY = y;
-                    if (y > maxY) maxY = y;
-                  }
-                }
-              }
-              heights.push(maxY > minY ? (maxY - minY) : 0);
-            }
-            // Las barras están centradas verticalmente: extensión ∝ altura
-            const { codeFromBars } = await import('@/lib/rabbittyCodeCodec');
+          if (heights) {
             decoded = codeFromBars(heights);
           }
 

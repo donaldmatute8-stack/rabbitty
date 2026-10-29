@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
-import { codeFromBars } from '@/lib/rabbittyCodeCodec';
+import { codeFromBars, measureBarsFromFrame } from '@/lib/rabbittyCodeCodec';
 import { PlatformBridge } from '@/lib/platform';
 import { toast } from 'sonner';
 
@@ -22,7 +22,7 @@ export default function QRScanner({ onScan, onClose }: QRScannerProps) {
     let hintShown = false;
     let isDecoding = false;
     let stopped = false;
-    const HI = 240;
+    const HI = 360;
     const hiCanvas = document.createElement('canvas');
     hiCanvas.width = HI;
     hiCanvas.height = HI;
@@ -66,62 +66,10 @@ export default function QRScanner({ onScan, onClose }: QRScannerProps) {
         consecutiveNeonFrames = 0;
         isDecoding = true;
 
-        // Medir las 13 barras de onda
-        const y0 = Math.floor(HI * 0.22);
-        const y1 = Math.floor(HI * 0.78);
-        const colNeon = new Float32Array(HI);
-        for (let x = 0; x < HI; x++) {
-          let count = 0;
-          for (let y = y0; y < y1; y++) {
-            const idx = (y * HI + x) * 4;
-            if (isNeonPx(data[idx], data[idx + 1], data[idx + 2])) count++;
-          }
-          colNeon[x] = count;
-        }
-        const threshold = 2;
-        let clusters: Array<{ x0: number; x1: number }> = [];
-        let cur: { x0: number; x1: number } | null = null;
-        for (let x = 0; x < HI; x++) {
-          if (colNeon[x] >= threshold) {
-            if (!cur) cur = { x0: x, x1: x };
-            else cur.x1 = x;
-          } else if (cur) {
-            if (cur.x1 - cur.x0 >= 1) clusters.push(cur);
-            cur = null;
-          }
-        }
-        if (cur && cur.x1 - cur.x0 >= 1) clusters.push(cur);
-        const mergeSmallest = (list: Array<{ x0: number; x1: number }>) => {
-          if (list.length < 2) return list;
-          let best = 0;
-          let bestGap = Infinity;
-          for (let i = 0; i < list.length - 1; i++) {
-            const gap = list[i + 1].x0 - list[i].x1;
-            if (gap < bestGap) { bestGap = gap; best = i; }
-          }
-          const merged = [...list];
-          merged[best] = { x0: merged[best].x0, x1: merged[best + 1].x1 };
-          merged.splice(best + 1, 1);
-          return merged;
-        };
-        while (clusters.length > 13) clusters = mergeSmallest(clusters);
-
+        // Medir las 13 barras por POSICIÓN ESPERADA (equidistantes — robusto)
+        const heights = measureBarsFromFrame(data, HI);
         let decoded: number | null = null;
-        if (clusters.length === 13) {
-          const heights: number[] = [];
-          for (const c of clusters) {
-            let minY = HI, maxY = 0;
-            for (let x = c.x0; x <= c.x1; x++) {
-              for (let y = y0; y < y1; y++) {
-                const idx = (y * HI + x) * 4;
-                if (isNeonPx(data[idx], data[idx + 1], data[idx + 2])) {
-                  if (y < minY) minY = y;
-                  if (y > maxY) maxY = y;
-                }
-              }
-            }
-            heights.push(maxY > minY ? maxY - minY : 0);
-          }
+        if (heights) {
           decoded = codeFromBars(heights);
         }
 
