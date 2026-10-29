@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { codeFromBars, measureBarsFromFrame } from '@/lib/rabbittyCodeCodec';
 import { PlatformBridge } from '@/lib/platform';
+import { resolveScannedPayload } from '@/lib/scannerResolver';
 import { toast } from 'sonner';
 
 interface QRScannerProps {
@@ -75,17 +76,12 @@ export default function QRScanner({ onScan, onClose }: QRScannerProps) {
 
         if (decoded !== null) {
           try {
-            const res = await fetch('/api/rabbitty-code/lookup', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ code: decoded }),
-            });
-            const d = await res.json();
-            if (d?.success && d.type === 'user' && d.user) {
+            const resolution = await resolveScannedPayload(decoded);
+            if (resolution.success && resolution.type === 'user' && resolution.user) {
               stopped = true;
               try { await scannerRef.current?.stop(); } catch {}
               PlatformBridge.hapticFeedback('success');
-              onScan(`rabbitty://pay?to=${encodeURIComponent(d.user.handle || d.user.id)}`);
+              onScan(`rabbitty://pay?to=${encodeURIComponent(resolution.user.handle || resolution.user.id)}`);
               return;
             }
           } catch { /* reintenta */ }
@@ -103,8 +99,6 @@ export default function QRScanner({ onScan, onClose }: QRScannerProps) {
       }
     }, 400);
 
-    const stopNeon = () => { stopped = true; clearInterval(interval); };
-
     const scanner = new Html5Qrcode("reader");
     scannerRef.current = scanner;
 
@@ -115,6 +109,8 @@ export default function QRScanner({ onScan, onClose }: QRScannerProps) {
         qrbox: { width: 250, height: 250 },
       },
       (decodedText) => {
+        stopped = true;
+        clearInterval(interval);
         // Stop scanning once we get a result to prevent multiple triggers
         scanner.stop().then(() => {
           onScan(decodedText);
@@ -123,7 +119,7 @@ export default function QRScanner({ onScan, onClose }: QRScannerProps) {
           onScan(decodedText);
         });
       },
-      (errorMessage) => {
+      () => {
         // parse error, ignored usually
       }
     ).catch(err => {
@@ -132,6 +128,8 @@ export default function QRScanner({ onScan, onClose }: QRScannerProps) {
     });
 
     return () => {
+      stopped = true;
+      clearInterval(interval);
       if (scannerRef.current?.isScanning) {
         scannerRef.current.stop().catch(console.error);
       }
@@ -141,11 +139,11 @@ export default function QRScanner({ onScan, onClose }: QRScannerProps) {
   return (
     <div className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center">
       <div className="w-full max-w-md p-4 flex flex-col items-center">
-        <div className="w-full bg-white rounded-[24px] overflow-hidden relative">
-          <div id="reader" className="w-full bg-black min-h-[300px]"></div>
+        <div className="w-full bg-white rounded-3xl overflow-hidden relative">
+          <div id="reader" className="w-full bg-black min-h-75"></div>
           
-          <div className="absolute inset-0 border-[40px] border-black/40 pointer-events-none z-10" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200px] h-[200px] border-2 border-pink-500 rounded-3xl pointer-events-none z-20" />
+          <div className="absolute inset-0 border-40 border-black/40 pointer-events-none z-10" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-50 h-50 border-2 border-pink-500 rounded-3xl pointer-events-none z-20" />
         </div>
 
         {error && <p className="text-red-500 font-bold mt-4 text-center">{error}</p>}

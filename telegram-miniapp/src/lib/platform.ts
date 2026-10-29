@@ -399,6 +399,7 @@ export const PlatformBridge = {
     lat?: number;
     lng?: number;
     accuracy?: number;
+    timestamp?: number;
     error?: 'PERMISSION_DENIED' | 'POSITION_UNAVAILABLE' | 'TIMEOUT' | 'UNSUPPORTED';
   }> {
     if (typeof window === 'undefined') {
@@ -432,7 +433,7 @@ export const PlatformBridge = {
           }
         });
         if (tgLoc?.lat != null && tgLoc?.lng != null) {
-          return { success: true, lat: tgLoc.lat, lng: tgLoc.lng };
+          return { success: true, lat: tgLoc.lat, lng: tgLoc.lng, timestamp: Date.now() };
         }
       }
     } catch {}
@@ -442,14 +443,13 @@ export const PlatformBridge = {
     }
 
     // In iOS / WebKit / Capacitor, high-accuracy GPS often takes 4 to 8 seconds on initial cold fix.
-    // 1. Try immediate low-accuracy or cached fix (maximumAge: 10 mins, timeout: 3s)
-    // 2. If no cached fix, run standard fix with 9s timeout
     const getPos = (enableHigh: boolean, timeoutMs: number, maxAgeMs = 120000) =>
       new Promise<{
         success: boolean;
         lat?: number;
         lng?: number;
         accuracy?: number;
+        timestamp?: number;
         error?: 'PERMISSION_DENIED' | 'POSITION_UNAVAILABLE' | 'TIMEOUT';
       }>((resolve) => {
         let finished = false;
@@ -471,6 +471,7 @@ export const PlatformBridge = {
                 lat: pos.coords.latitude,
                 lng: pos.coords.longitude,
                 accuracy: pos.coords.accuracy,
+                timestamp: pos.timestamp || Date.now(),
               });
             },
             (err) => {

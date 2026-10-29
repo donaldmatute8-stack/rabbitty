@@ -54,6 +54,8 @@ interface InteractiveMapProps {
   businesses: MapBusiness[];
   userLat?: number | null;
   userLng?: number | null;
+  accuracy?: number | null;
+  locationTimestamp?: number | null;
   onRequestLocation?: () => void;
   isLocating?: boolean;
 }
@@ -122,7 +124,15 @@ function userMarkerHTML() {
     </div>`;
 }
 
-export default function InteractiveMap({ businesses, userLat, userLng, onRequestLocation, isLocating }: InteractiveMapProps) {
+export default function InteractiveMap({
+  businesses,
+  userLat,
+  userLng,
+  accuracy,
+  locationTimestamp,
+  onRequestLocation,
+  isLocating,
+}: InteractiveMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInst = useRef<L.Map | null>(null);
   const layerGroup = useRef<L.LayerGroup | null>(null);
@@ -659,14 +669,32 @@ export default function InteractiveMap({ businesses, userLat, userLng, onRequest
                 if (mapInst.current) {
                   mapInst.current.flyTo([userLat, userLng], 16.5, { duration: 1 });
                 }
+                if (onRequestLocation && locationTimestamp && Date.now() - locationTimestamp > 60_000) {
+                  onRequestLocation();
+                }
               }}
               className="px-2.5 py-1 rounded-full text-[10px] font-black text-emerald-300 border border-emerald-500/30 bg-emerald-950/70 backdrop-blur-md flex items-center gap-1.5 shadow-md active:scale-95 cursor-pointer"
-              title="Centrar en mi ubicación GPS"
+              title={`Centrar en mi ubicación GPS${accuracy ? ` (Precisión: ±${Math.round(accuracy)}m)` : ''}`}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span>GPS Activo</span>
+              <span>{accuracy ? `GPS Activo (±${Math.round(accuracy)}m)` : 'GPS Activo'}</span>
             </button>
-          ) : null}
+          ) : (
+            onRequestLocation && (
+              <button
+                type="button"
+                onClick={() => {
+                  PlatformBridge.hapticFeedback('light');
+                  onRequestLocation();
+                }}
+                className="px-2.5 py-1 rounded-full text-[10px] font-bold text-gray-300 border border-white/10 bg-black/60 backdrop-blur-md flex items-center gap-1.5 shadow-md active:scale-95 cursor-pointer hover:text-white"
+                title="Activar GPS"
+              >
+                <Crosshair size={10} className="text-pink-400" />
+                <span>Activar GPS</span>
+              </button>
+            )
+          )}
         </div>
       </div>
 

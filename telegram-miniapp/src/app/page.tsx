@@ -122,6 +122,8 @@ export default function FeedPage() {
   const userAvatar = useUserAvatar(user, 'E91E63');
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
+  const [userAccuracy, setUserAccuracy] = useState<number | null>(null);
+  const [locationTimestamp, setLocationTimestamp] = useState<number | null>(null);
 
   const { isDark } = useTheme();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -186,15 +188,18 @@ export default function FeedPage() {
       if (loc.success && loc.lat != null && loc.lng != null) {
         setUserLat(loc.lat);
         setUserLng(loc.lng);
+        setUserAccuracy(loc.accuracy || null);
+        setLocationTimestamp(loc.timestamp || Date.now());
         PlatformBridge.hapticFeedback('success');
-        showToast('📍 GPS activado: Ubicación actualizada.', 'success');
+        const accInfo = loc.accuracy ? ` (±${Math.round(loc.accuracy)}m)` : '';
+        showToast(`📍 GPS activado: Ubicación actualizada${accInfo}.`, 'success');
 
         // Ping proximity engine in background to evaluate loyalty rewards and local alerts
         PlatformBridge.getAuthHeaders().then((headers) => {
           fetch('/api/location/ping', {
             method: 'POST',
             headers: { ...headers, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ lat: loc.lat, lng: loc.lng }),
+            body: JSON.stringify({ lat: loc.lat, lng: loc.lng, accuracy: loc.accuracy }),
           })
             .then((r) => r.json())
             .then((res) => {
@@ -922,6 +927,8 @@ export default function FeedPage() {
                   businesses={postsWithDistance}
                   userLat={userLat}
                   userLng={userLng}
+                  accuracy={userAccuracy}
+                  locationTimestamp={locationTimestamp}
                   onRequestLocation={requestLocation}
                   isLocating={isLocating}
                 />

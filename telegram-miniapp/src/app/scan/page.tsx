@@ -12,6 +12,7 @@ import Button from '@/components/ui/Button';
 import { useWallet } from '@/contexts/WalletContext';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useTheme } from '@/contexts/ThemeContext';
+import { resolveScannedPayload } from '@/lib/scannerResolver';
 
 import { PlatformBridge } from '@/lib/platform';
 import { useToast } from '@/contexts/ToastContext';
@@ -185,6 +186,161 @@ export default function ScanPage() {
     isTransitioningRef.current = false;
   }, []);
 
+  const handleDispatchPayload = useCallback(async (rawPayload: string | number) => {
+    PlatformBridge.hapticFeedback('success');
+
+    const res = await resolveScannedPayload(rawPayload);
+    if (!res.success) {
+      if (res.error) alert(res.error);
+      startScanningRef.current();
+      return;
+    }
+
+    // 1. Magic Link (terminal iPad / caja)
+    if (res.type === 'magic_link' && res.magicLink) {
+      await stopScanning();
+      router.push(`/magic-link?token=${encodeURIComponent(res.magicLink.token)}&sid=${encodeURIComponent(res.magicLink.sid)}`);
+      return;
+    }
+
+    // 2. Ticket Claim (claimToken)
+    if (res.type === 'claim' && res.claimToken) {
+      await stopScanning();
+      try {
+        const headers = await PlatformBridge.getAuthHeaders();
+        const claimRes = await fetch('/api/pos/claim-ticket', {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ claimToken: res.claimToken }),
+        });
+        const claimData = await claimRes.json();
+        if (claimData.success) {
+          alert(`🐰 ¡Felicidades! Se han acreditado +${claimData.bunzAwarded} Bunz a tu cuenta por el ticket #${claimData.orderNumber}.`);
+          router.push('/profile/wallet');
+          return;
+        } else {
+          alert(claimData.error || 'No se pudo reclamar este ticket.');
+          startScanningRef.current();
+          return;
+        }
+      } catch {
+        alert('Error al conectar con el servidor para reclamar el ticket.');
+        startScanningRef.current();
+        return;
+      }
+    }
+
+    // 3. Table QR
+    if (res.type === 'table' && res.table) {
+      await stopScanning();
+      try {
+        const headers = await PlatformBridge.getAuthHeaders();
+        const tableRes = await fetch('/api/pos/claim-table', {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tableId: res.table.tableId, branchId: res.table.branchId }),
+        });
+        const tableData = await tableRes.json();
+        if (tableData.success) {
+          alert(`🐰 ¡Conectado a la Mesa #${tableData.table.number}! Tu comanda está abierta en caja y acumularás Bunz.`);
+          router.push(`/pos-menu/${res.table.tableId}`);
+          return;
+        } else {
+          alert(tableData.error || 'No se pudo vincular a la mesa.');
+          startScanningRef.current();
+          return;
+        }
+      } catch {
+        alert('Error al conectar con el servidor para vincular a la mesa.');
+        startScanningRef.current();
+        return;
+      }
+    }
+
+    // 4. Negocio afiliado / check-in
+    if (res.type === 'business' && res.business) {
+      await stopScanning();
+      router.push(`/affiliate/${res.business.id}`);
+      return;
+    }
+
+    // 5. Usuario (@handle / id)
+    if (res.type === 'user' && res.user) {
+      await stopScanning();
+      router.push(`/profile/wallet?to=${encodeURIComponent(res.user.handle || res.user.id)}`);
+      return;
+    }
+
+    // 6. QR Login (/impresos o PC)
+    if (res.type === 'qrlogin' && res.qrLogin) {
+      await stopScanning();
+      try {
+        const headers = await PlatformBridge.getAuthHeaders();
+        const bindRes = await fetch('/api/auth/qr/scan', {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ qrToken: res.qrLogin.qrToken }),
+        });
+        const bindData = await bindRes.json();
+        if (bindData?.success) {
+          alert('¡Acceso autorizado en la pantalla! 🪄');
+          return;
+        }
+      } catch {}
+      startScanningRef.current();
+      return;
+    }
+
+    // 7. URL externa
+    if (res.type === 'url' && res.url) {
+      await stopScanning();
+      if (PlatformBridge.isNative()) {
+        import('@capacitor/browser').then(({ Browser }) => Browser.open({ url: res.url! })).catch(() => { window.open(res.url, '_blank'); });
+      } else if (PlatformBridge.isTelegram()) {
+        import('@twa-dev/sdk').then((mod) => mod.default.openLink(res.url!)).catch(() => { window.open(res.url, '_blank'); });
+      } else {
+        window.open(res.url, '_blank');
+      }
+      return;
+    }
+
+    // 8. POS Payment Intent
+    let intentId = res.intent || (typeof rawPayload === 'string' ? rawPayload.trim() : '');
+    if (intentId.includes('pay_')) {
+      intentId = intentId.split('pay_')[1].split(/[&?#\s]/)[0];
+    } else if (intentId.includes('pi_')) {
+      intentId = 'pi_' + intentId.split('pi_')[1].split(/[&?#\s]/)[0];
+    }
+
+    if (intentId) {
+      await stopScanning();
+      const authHeader = await getAuthHeader();
+      const inputStr = encodeURIComponent(JSON.stringify({ "0": { intentId } }));
+      fetch(`${API_SERVER_URL}/payments.getIntent?batch=1&input=${inputStr}`, {
+        headers: { "Authorization": authHeader }
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data[0] && data[0].result && data[0].result.data) {
+          setResult(data[0].result.data);
+        } else {
+          alert("Intención de pago no encontrada o inválida.");
+          setResult(null);
+          startScanningRef.current();
+        }
+      })
+      .catch(() => {
+        alert("Error al contactar el servidor.");
+        setResult(null);
+        startScanningRef.current();
+      });
+      return;
+    }
+
+    // Fallback no reconocido
+    startScanningRef.current();
+  }, [API_SERVER_URL, router, stopScanning]);
+
   const startScanning = useCallback(async () => {
     if (isTransitioningRef.current || scannerRef.current?.isScanning) return;
     const el = document.getElementById("qr-reader");
@@ -199,273 +355,7 @@ export default function ScanPage() {
         { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 250, height: 250 } },
         async (decodedText: string) => {
-          import('@twa-dev/sdk').then((mod) => {
-            mod.default.HapticFeedback.notificationOccurred('success');
-          }).catch(()=>{});
-
-          // P2P payment link or POS intent link
-          if (/^rabbitty:\/\/pay/i.test(decodedText.trim())) {
-            try {
-              const parsed = new URL(decodedText.trim());
-              const to = parsed.searchParams.get('to');
-              const intent = parsed.searchParams.get('intent');
-              if (intent) {
-                // If it's a POS payment intent from Rabbitty POS
-                decodedText = intent;
-              } else if (to) {
-                await stopScanning();
-                router.push(`/profile/wallet?to=${encodeURIComponent(to)}`);
-                return;
-              }
-            } catch {}
-          }
-
-          // 0. Enlace de vinculación del panel de negocio (iPad) → este teléfono
-          if (decodedText.includes('/magic-link') && decodedText.includes('token=') && decodedText.includes('sid=')) {
-            try {
-              const url = new URL(decodedText, window.location.origin);
-              const token = url.searchParams.get('token');
-              const sid = url.searchParams.get('sid');
-              if (token && sid) {
-                await stopScanning();
-                router.push(`/magic-link?token=${encodeURIComponent(token)}&sid=${encodeURIComponent(sid)}`);
-                return;
-              }
-            } catch {}
-          }
-
-          // 0.1 Reclamación de recompensa mediante Ticket QR (claimToken)
-          if (decodedText.includes('claimToken=') || decodedText.includes('claim=')) {
-            let tokenToClaim = '';
-            try {
-              if (decodedText.startsWith('http')) {
-                const urlObj = new URL(decodedText);
-                tokenToClaim = urlObj.searchParams.get('claimToken') || urlObj.searchParams.get('claim') || '';
-              } else {
-                const params = new URLSearchParams(decodedText.split('?')[1] || decodedText);
-                tokenToClaim = params.get('claimToken') || params.get('claim') || '';
-              }
-            } catch {
-              tokenToClaim = decodedText.split('claimToken=')[1]?.split('&')[0] || decodedText.split('claim=')[1]?.split('&')[0] || '';
-            }
-
-            if (tokenToClaim) {
-              await stopScanning();
-              try {
-                const headers = await PlatformBridge.getAuthHeaders();
-                const claimRes = await fetch('/api/pos/claim-ticket', {
-                  method: 'POST',
-                  headers: { ...headers, 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ claimToken: tokenToClaim }),
-                });
-                const claimData = await claimRes.json();
-                if (claimData.success) {
-                  alert(`🐰 ¡Felicidades! Se han acreditado +${claimData.bunzAwarded} Bunz a tu cuenta por el ticket #${claimData.orderNumber}.`);
-                  router.push('/profile/wallet');
-                  return;
-                } else {
-                  alert(claimData.error || 'No se pudo reclamar este ticket.');
-                  startScanningRef.current();
-                  return;
-                }
-              } catch {
-                alert('Error al conectar con el servidor para reclamar el ticket.');
-                startScanningRef.current();
-                return;
-              }
-            }
-          }
-
-          // 0. Check if it is a Table QR (/qr/table/[tableId], /pos-menu/[tableId], or tableId parameter)
-          if (decodedText.includes('/qr/table/') || decodedText.includes('/pos-menu/') || decodedText.includes('tableId=')) {
-            let scannedTableId = '';
-            let scannedBranchId: string | undefined = undefined;
-
-            try {
-              if (decodedText.includes('/qr/table/')) {
-                const afterPrefix = decodedText.split('/qr/table/')[1];
-                scannedTableId = afterPrefix.split(/[?&#\s]/)[0];
-              } else if (decodedText.includes('/pos-menu/')) {
-                const afterPrefix = decodedText.split('/pos-menu/')[1];
-                scannedTableId = afterPrefix.split(/[?&#\s]/)[0];
-              } else if (decodedText.includes('tableId=')) {
-                scannedTableId = decodedText.split('tableId=')[1].split(/[&#\s]/)[0];
-              }
-
-              if (decodedText.includes('branch=')) {
-                scannedBranchId = decodedText.split('branch=')[1].split(/[&#\s]/)[0];
-              } else if (decodedText.includes('branchId=')) {
-                scannedBranchId = decodedText.split('branchId=')[1].split(/[&#\s]/)[0];
-              }
-            } catch {}
-
-            if (scannedTableId) {
-              await stopScanning();
-              try {
-                const headers = await PlatformBridge.getAuthHeaders();
-                const tableRes = await fetch('/api/pos/claim-table', {
-                  method: 'POST',
-                  headers: { ...headers, 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ tableId: scannedTableId, branchId: scannedBranchId }),
-                });
-                const tableData = await tableRes.json();
-                if (tableData.success) {
-                  alert(`🐰 ¡Conectado a la Mesa #${tableData.table.number}! Tu comanda está abierta en caja y acumularás Bunz.`);
-                  router.push(`/pos-menu/${scannedTableId}`);
-                  return;
-                } else {
-                  alert(tableData.error || 'No se pudo vincular a la mesa.');
-                  startScanningRef.current();
-                  return;
-                }
-              } catch {
-                alert('Error al conectar con el servidor para vincular a la mesa.');
-                startScanningRef.current();
-                return;
-              }
-            }
-          }
-
-          // 1.1 Check-in de mostrador (branchId sin mesa) → registrar y abrir ficha del afiliado
-          if ((decodedText.includes('branchId=') || decodedText.includes('branch=')) && !decodedText.includes('tableId=')) {
-            let scannedBranchId = '';
-            let scannedBusiness = 'este comercio';
-            try {
-              if (decodedText.startsWith('http')) {
-                const urlObj = new URL(decodedText);
-                scannedBranchId = urlObj.searchParams.get('branchId') || urlObj.searchParams.get('branch') || '';
-                scannedBusiness = urlObj.searchParams.get('business') || 'este comercio';
-              } else {
-                const params = new URLSearchParams(decodedText.split('?')[1] || decodedText);
-                scannedBranchId = params.get('branchId') || params.get('branch') || '';
-                scannedBusiness = params.get('business') || 'este comercio';
-              }
-            } catch {}
-
-            if (scannedBranchId) {
-              await stopScanning();
-              try {
-                localStorage.setItem('rabbitty_last_branch_id', scannedBranchId);
-                localStorage.setItem('rabbitty_last_business_name', scannedBusiness);
-              } catch {}
-              // Resolver el negocio dueño de la sucursal → ficha completa (menú, escanear en caja)
-              try {
-                const res = await fetch('/api/rabbitty-code/lookup', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ text: decodedText }),
-                });
-                const data = await res.json();
-                if (data?.success && data.type === 'business' && data.businessId) {
-                  import('@twa-dev/sdk')
-                    .then((mod) => mod.default.HapticFeedback.notificationOccurred('success'))
-                    .catch(() => {});
-                  router.push(`/affiliate/${data.businessId}`);
-                  return;
-                }
-              } catch { /* fallback abajo */ }
-              alert(`🐰 ¡Estás en ${scannedBusiness}! Check-in registrado. Tus compras acumularán Bunz.`);
-              router.push('/profile/wallet');
-              return;
-            }
-          }
-
-          // 1.2 Fallback universal: pósters (download?ref=), fichas de afiliado, URLs de Rabbitty, @usuarios
-          if (/^https?:\/\//i.test(decodedText) || decodedText.startsWith('@') || decodedText.includes('download?ref=')) {
-            try {
-              const res = await fetch('/api/rabbitty-code/lookup', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text: decodedText }),
-              });
-              const data = await res.json();
-              if (data?.success) {
-                await stopScanning();
-                if (data.type === 'business' && data.businessId) {
-                  router.push(`/affiliate/${data.businessId}`);
-                  return;
-                }
-                if (data.type === 'user' && data.user) {
-                  router.push(`/profile/wallet?to=${encodeURIComponent(data.user.handle || data.user.id)}`);
-                  return;
-                }
-                if (data.type === 'url' && data.url) {
-                  // Landing/página externa de Rabbitty (ej. /download de póster)
-                  // Prioridad: nativo (browser del sistema) → Telegram → web
-                  if (PlatformBridge.isNative()) {
-                    import('@capacitor/browser').then(({ Browser }) => Browser.open({ url: data.url })).catch(() => { window.open(data.url, '_blank'); });
-                  } else if (PlatformBridge.isTelegram()) {
-                    import('@twa-dev/sdk').then((mod) => mod.default.openLink(data.url)).catch(() => { window.open(data.url, '_blank'); });
-                  } else {
-                    window.open(data.url, '_blank');
-                  }
-                  return;
-                }
-              }
-            } catch { /* sigue al intent normal */ }
-          }
-
-          // 1.3 QR Login para PC/Admin (qrlogin_)
-          if (decodedText.includes('qrlogin_')) {
-            const qrToken = decodedText.split('qrlogin_')[1].split('&')[0].split('?')[0];
-            await stopScanning();
-            try {
-              const headers = await PlatformBridge.getAuthHeaders();
-              const res = await fetch('/api/auth/qr/scan', {
-                method: 'POST',
-                headers: { ...headers, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ qrToken })
-              });
-              const data = await res.json();
-              if (data.success) {
-                alert("¡Inicio de sesión exitoso en la PC! 🪄");
-                router.push('/profile');
-                return;
-              } else {
-                alert("Error de inicio de sesión QR: " + (data.error || 'Token inválido'));
-                startScanningRef.current();
-                return;
-              }
-            } catch {
-              alert("Error de conexión al validar el QR.");
-              startScanningRef.current();
-              return;
-            }
-          }
-
-          // 2. Extract intent ID and resolve it (POS Payment)
-          let intentId = decodedText.trim();
-          if (intentId.includes('pay_')) {
-            const rawAfterPay = intentId.split('pay_')[1];
-            intentId = rawAfterPay.split(/[&?#\s]/)[0];
-          } else if (intentId.includes('pi_')) {
-            const rawAfterPi = 'pi_' + intentId.split('pi_')[1];
-            intentId = rawAfterPi.split(/[&?#\s]/)[0];
-          }
-
-          await stopScanning();
-
-          // Resolve intent
-          const authHeader = await getAuthHeader();
-          const inputStr = encodeURIComponent(JSON.stringify({ "0": { intentId } }));
-          fetch(`${API_SERVER_URL}/payments.getIntent?batch=1&input=${inputStr}`, {
-            headers: { "Authorization": authHeader }
-          })
-          .then(res => res.json())
-          .then(data => {
-            if (data[0] && data[0].result && data[0].result.data) {
-              setResult(data[0].result.data); // Store the full intent
-            } else {
-              alert("Intención de pago no encontrada o inválida.");
-              setResult(null);
-              startScanningRef.current();
-            }
-          })
-          .catch(() => {
-            alert("Error al contactar el servidor.");
-            setResult(null);
-            startScanningRef.current();
-          });
+          await handleDispatchPayload(decodedText);
         },
         () => {}
       );
@@ -475,7 +365,7 @@ export default function ScanPage() {
     } finally {
       isTransitioningRef.current = false;
     }
-  }, [API_SERVER_URL, router, stopScanning]);
+  }, [handleDispatchPayload]);
 
   useEffect(() => {
     startScanningRef.current = startScanning;
@@ -569,11 +459,6 @@ export default function ScanPage() {
           hctx.drawImage(video, sx, sy, cropSize, cropSize, 0, 0, HI, HI);
           const hiData = hctx.getImageData(0, 0, HI, HI).data;
 
-          const isNeonPx = (r: number, g: number, b: number) =>
-            (r >= 110 && b >= 75 && r - g >= 20) ||
-            (b >= 110 && r >= 65 && b - g >= 20) ||
-            (r >= 190 && b >= 160 && g >= 100 && r - g >= 15);
-
           // Medir las 13 barras por POSICIÓN ESPERADA (equidistantes — robusto a resolución/reflejos)
           const { measureBarsFromFrame, codeFromBars } = await import('@/lib/rabbittyCodeCodec');
           const heights = measureBarsFromFrame(hiData, HI);
@@ -583,45 +468,8 @@ export default function ScanPage() {
           }
 
           if (decoded !== null) {
-            // Resolver el usuario dueño del código
-            try {
-              const res = await fetch('/api/rabbitty-code/lookup', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code: decoded }),
-              });
-              const data = await res.json();
-              if (data?.success) {
-                import('@twa-dev/sdk')
-                  .then((mod) => mod.default.HapticFeedback.notificationOccurred('success'))
-                  .catch(() => {});
-                await stopScanning();
-                if (data.type === 'qrlogin' && data.qrToken) {
-                  // Gate de /impresos: vincular la sesión pendiente (login seguro)
-                  try {
-                    const headers = await PlatformBridge.getAuthHeaders();
-                    const bindRes = await fetch('/api/auth/qr/scan', {
-                      method: 'POST',
-                      headers: { ...headers, 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ qrToken: data.qrToken }),
-                    });
-                    const bindData = await bindRes.json();
-                    if (bindData?.success) {
-                      import('@twa-dev/sdk').then((mod) => mod.default.HapticFeedback.notificationOccurred('success')).catch(() => {});
-                      alert('¡Acceso autorizado a /impresos en la pantalla! 🪄');
-                      return;
-                    }
-                  } catch { /* reintenta */ }
-                } else if (data.type === 'business' && data.businessId) {
-                  // Escaneo de afiliado → ficha del negocio en la app
-                  router.push(`/affiliate/${data.businessId}`);
-                } else if (data.user) {
-                  // Escaneo de Rabbitter → transferencia / premiar
-                  router.push(`/profile/wallet?to=${encodeURIComponent(data.user.handle || data.user.id)}`);
-                }
-                return;
-              }
-            } catch { /* reintenta en el siguiente frame */ }
+            await handleDispatchPayload(decoded);
+            return;
           }
 
           // No decodificado (ángulo/luz): cooldown, reintento y pista al 3er intento
@@ -639,7 +487,7 @@ export default function ScanPage() {
     }, 450);
 
     return () => clearInterval(interval);
-  }, [activeTab, hasCamera, showManualInput, result, router, stopScanning]);
+  }, [activeTab, hasCamera, showManualInput, result, router, stopScanning, handleDispatchPayload, showToast]);
 
   return (
     <div 

@@ -5,10 +5,16 @@ import QRScanner from '@/features/transactions/QRScanner';
 import { toast } from 'sonner';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { PlatformBridge } from '@/lib/platform';
+import { resolveScannedPayload } from '@/lib/scannerResolver';
+
+interface MerchantBusiness {
+  id: string;
+  name?: string;
+}
 
 export default function BusinessScanPage() {
   const { user } = useAuth();
-  const [business, setBusiness] = useState<any>(null);
+  const [business, setBusiness] = useState<MerchantBusiness | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [showMintModal, setShowMintModal] = useState(false);
   const [scannedAddress, setScannedAddress] = useState('');
@@ -32,35 +38,24 @@ export default function BusinessScanPage() {
   const handleScan = async (decodedText: string) => {
     setIsScanning(false);
 
-    // ── Resolver el payload escaneado a un usuario real ──
-    // Formatos soportados: UUID, telegramId, rabbitty://pay?to=@usuario, @usuario
+    // ── Fuente única de la verdad: resolver el payload con el motor central ──
     try {
-      let text = decodedText.trim();
-      const toMatch = text.match(/[?&]to=([^&]+)/);
-      if (toMatch) text = decodeURIComponent(toMatch[1]);
-
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(text);
-      const isDigits = /^\d{5,}$/.test(text);
-      if (!isUuid && !isDigits) {
-        // @usuario o URL completa → resolver vía lookup (mismo resolver del ecosistema)
-        const res = await fetch('/api/rabbitty-code/lookup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: toMatch ? decodedText : text }),
-        });
-        const data = await res.json();
-        if (data?.success && data.type === 'user' && data.user?.id) {
-          setScannedAddress(data.user.id);
-          setShowMintModal(true);
-          toast.success(`Cliente identificado: ${data.user.name}`);
-          return;
-        }
-        toast.error('No se pudo identificar al cliente con este código');
+      const res = await resolveScannedPayload(decodedText);
+      if (res.type === 'user' && res.user?.id) {
+        setScannedAddress(res.user.id);
+        setShowMintModal(true);
+        toast.success(`Cliente identificado: ${res.user.name}`);
         return;
       }
-    } catch { /* fallback: tratar como dirección cruda */ }
+      if (res.raw) {
+        setScannedAddress(res.raw);
+        setShowMintModal(true);
+        return;
+      }
+    } catch (err) {
+      console.warn('[BusinessScanPage] Error resolving scanned customer:', err);
+    }
 
-    // Treat as Wallet Address / Telegram ID for general consumption
     setScannedAddress(decodedText);
     setShowMintModal(true);
   };
@@ -148,7 +143,7 @@ export default function BusinessScanPage() {
       {/* Mint Modal */}
       {showMintModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-[32px] w-full max-w-md p-6 shadow-2xl relative">
+          <div className="bg-white rounded-4xl w-full max-w-md p-6 shadow-2xl relative">
             <h2 className="text-2xl font-black text-gray-900 mb-1">Registrar Consumo</h2>
             <p className="text-sm text-gray-500 mb-6">
               Ingresa el total pagado por el cliente para calcular automáticamente su recompensa en Bunz.

@@ -26,8 +26,6 @@ function getDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: numbe
 
 import { checkRateLimit } from "@/lib/rateLimit";
 
-// In-memory fallback cooldown cache
-const memoryCooldowns = new Map<string, number>();
 const COOLDOWN_SECONDS = 12 * 60 * 60; // 12 horas
 
 async function isCooldownActive(key: string, cooldownSec: number): Promise<boolean> {
@@ -159,7 +157,7 @@ export async function POST(req: NextRequest) {
         boostTitle: activeBoost?.headline || activeBoost?.title,
       };
 
-      if (caller && dist <= 250) {
+      if (caller && dist <= 250 && (!accuracy || accuracy <= 400)) {
         const visitCount = visitCountMap.get(b.id) ?? 0;
 
         // Si el comercio tiene un Flash Boost activo, priorizar la oferta de proximidad especial
