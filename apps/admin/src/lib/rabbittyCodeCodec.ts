@@ -21,7 +21,7 @@ export function hashString(str: string): number {
 
 /** Código de 6 dígitos (0..999999) determinista para cualquier payload. */
 export function code6FromData(data: string): number {
-  return hashString(data || 'rabbitty') % 1_000_000;
+  return hashString(data || 'rabbitty') % (MAX_SCAN_CODE + 1);
 }
 
 const H_MIN = 20;
@@ -33,14 +33,17 @@ export function levelToHeight(d: number): number {
   return H_MIN + (d * (H_MAX - H_MIN)) / (LEVELS - 1);
 }
 
-/** Alturas de las 13 barras (porcentaje 20–85) que codifican el código. */
+export const MAX_SCAN_CODE = 531_440; // 3^12 - 1 (12 trits de datos + 1 de paridad)
+
+/** Alturas de las 13 barras: 12 trits de datos + paridad (checksum tritario). */
 export function barsFromCode(code: number): number[] {
-  const value = Math.max(0, Math.min(999_999, Math.round(code)));
+  const value = Math.max(0, Math.min(MAX_SCAN_CODE, Math.round(code)));
   const digits: number[] = [];
-  for (let i = 12; i >= 0; i--) {
+  for (let i = 11; i >= 0; i--) {
     digits.push(Math.floor(value / Math.pow(3, i)) % 3);
   }
-  return digits.map(levelToHeight);
+  const parity = digits.reduce((a, b) => a + b, 0) % 3;
+  return [...digits.map(levelToHeight), levelToHeight(parity)];
 }
 
 /**
@@ -52,19 +55,49 @@ export function codeFromBars(rawHeights: number[]): number | null {
   const heights = rawHeights.map((h) => Number(h) || 0);
   const max = Math.max(...heights);
   const min = Math.min(...heights);
-  if (max - min < 1e-6) return null;
-  const norm = heights.map((h) => H_MIN + ((h - min) / (max - min)) * (H_MAX - H_MIN));
+  if (max - min < (H_MAX - H_MIN) * 0.12) return null; // todo igual → sin señal
 
-  const margin = (H_MAX - H_MIN) * 0.18; // zona de rechazo entre niveles
-  let value = 0;
-  for (const h of norm) {
-    const d = Math.round(((h - H_MIN) / (H_MAX - H_MIN)) * (LEVELS - 1));
-    const ideal = levelToHeight(d);
-    if (Math.abs(h - ideal) > margin) return null; // barra ambigua → frame inválido
-    value = value * 3 + d;
+  // ── Clustering de niveles: ordenar y separar por gaps grandes (hasta 3 grupos) ──
+  const sorted = [...heights].sort((a, b) => a - b);
+  const span = max - min;
+  const gapThreshold = span * 0.22;
+  const centers: number[] = [sorted[0]];
+  for (let i = 1; i < 13; i++) {
+    if (sorted[i] - sorted[i - 1] > gapThreshold && centers.length < 3) {
+      centers.push(sorted[i]);
+    }
   }
-  if (value > 999_999) return null;
-  return value;
+  const k = centers.length; // 2 o 3 niveles presentes en este frame
+  if (k < 2) return null;
+
+  // Mapear cada barra al cluster más cercano (con margen de rechazo)
+  const groupIdx: number[] = [];
+  const margin = span * 0.14;
+  for (const h of heights) {
+    let best = 0;
+    let bestDist = Infinity;
+    for (let gi = 0; gi < k; gi++) {
+      const d = Math.abs(h - centers[gi]);
+      if (d < bestDist) { bestDist = d; best = gi; }
+    }
+    if (bestDist > margin) return null; // barra ambigua → frame inválido
+    groupIdx.push(best);
+  }
+
+  // Desambiguación: probar desplazamientos de los grupos a niveles base-3
+  // (k=3 → [0,1,2]; k=2 → [0,1] o [1,2]). La paridad decide cuál es válida.
+  const shifts = k === 3 ? [0] : [0, 3 - k];
+  for (const shift of shifts) {
+    const digits = groupIdx.map((g) => g + shift);
+    const parity = digits.pop() ?? 0;
+    if (parity !== digits.reduce((a, b) => a + b, 0) % 3) continue;
+    if (digits.some((d) => d > 2)) continue;
+    let value = 0;
+    for (const d of digits) value = value * 3 + d;
+    if (value > MAX_SCAN_CODE) continue;
+    return value;
+  }
+  return null;
 }
 
 /** Detector de neón (mismos umbrales del escáner): rosa/magenta, morado, núcleo claro. */

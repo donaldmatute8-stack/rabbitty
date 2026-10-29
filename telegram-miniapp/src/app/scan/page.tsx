@@ -34,6 +34,14 @@ export default function ScanPage() {
   const { isDark } = useTheme();
   const { showToast } = useToast();
   
+  const [myScanCode, setMyScanCode] = useState<string>('');
+  useEffect(() => {
+    if (!user) return;
+    fetch('/api/rabbitty-code/mine', { headers: undefined })
+      .then((r) => r.json())
+      .then((d) => { if (d?.success && d.code) setMyScanCode(String(d.code)); })
+      .catch(() => {});
+  }, [user]);
   const qrValue = user?.id || user?.telegramId || address || 'rabbitty_guest';
   const API_SERVER_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
@@ -567,7 +575,7 @@ export default function ScanPage() {
             
             <div className="flex flex-col items-center justify-center pt-8">
               <RabbittyCode 
-                data={String(qrValue || 'rabbitty_guest')} 
+                data={myScanCode ? `rc:${myScanCode}` : String(qrValue || 'rabbitty_guest')} 
                 size={230} 
                 showCardFrame={true} 
               />

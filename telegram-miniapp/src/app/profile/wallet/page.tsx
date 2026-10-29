@@ -37,6 +37,14 @@ export default function WalletPage() {
 
   // Resolvable P2P handle: @username (preferred, human) or uuid id (always exists).
   const payHandle = user?.username ? `@${user.username}` : (user?.id || '');
+  const [myScanCode, setMyScanCode] = useState<string>('');
+  useEffect(() => {
+    if (!user) return;
+    fetch('/api/rabbitty-code/mine')
+      .then((r) => r.json())
+      .then((d) => { if (d?.success && d.code) setMyScanCode(String(d.code)); })
+      .catch(() => {});
+  }, [user]);
   const payPayload = payHandle ? `rabbitty://pay?to=${encodeURIComponent(payHandle)}` : '';
 
   const newIdempotencyKey = () =>

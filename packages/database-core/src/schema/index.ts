@@ -33,6 +33,7 @@ export const users = pgTable("users", {
   requireTotpForLogin: boolean("requireTotpForLogin").default(false).notNull(),
   twoFactorMethods: text("twoFactorMethods").default("[]").notNull(), // JSON: ["email","phone"] (OTP); TOTP se deriva de totpEnabled
   ...timestamps,
+  scanCode: integer("scanCode").unique(), // Código óptico del RabbittyCode (asignado por el servidor)
 });
 
 export const verificationTokens = pgTable("verificationTokens", {
@@ -76,6 +77,7 @@ export const ownedBusinesses = pgTable("ownedBusinesses", {
   rarity: text("rarity").default("common").notNull(),
   package: text("package"), // Starter, Growth, Pro, Enterprise
   creditLimit: integer("creditLimit").default(0).notNull(), // Máximo de Bunz que puede mintear
+  scanCode: integer("scanCode").unique(), // Código óptico del RabbittyCode (asignado por el servidor)
   creditUsed: integer("creditUsed").default(0).notNull(),   // Bunz ya minteados
   givesBunz: boolean("givesBunz").default(true).notNull(),
   acceptsBunz: boolean("acceptsBunz").default(false).notNull(),

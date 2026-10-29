@@ -793,105 +793,43 @@ function ImpresosContent() {
   return (
     <div className="min-h-screen bg-[#09090B] text-zinc-100 selection:bg-pink-500 selection:text-white">
       {/* BARRA SUPERIOR DE CONTROL (No imprimible) */}
-      <header className="print:hidden sticky top-0 z-50 backdrop-blur-xl bg-black/80 border-b border-zinc-800 px-6 py-4">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Link href="/" className="flex items-center gap-2 group">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo_conejo.png" alt="Rabbitty" className="w-8 h-8 object-contain transition-transform group-hover:scale-110" />
-              <span className="font-black text-xl tracking-tight text-white">RABBITTY</span>
-            </Link>
-            <span className="text-zinc-600 font-mono text-xs">/</span>
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-pink-500/10 text-pink-400 border border-pink-500/20 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-pink-400" /> Kit Impresos Piloto Oficial
-            </span>
-            <span className="text-[11px] font-mono px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-700 text-zinc-300">
-              {authMode === 'admin' ? `✅ Acceso autorizado${authUserName ? ` · ${authUserName}` : ''}` : authMode === 'temp' ? `⏳ Acceso temporal · ${tempAccessInfo?.label ?? 'Invitado'}` : `🏪 Afiliado · ${businessName}`}
-            </span>
-            {(authMode === 'admin' || authMode === 'affiliate') && (
-              <button
-                type="button"
-                onClick={() => setShowTempForm((v) => !v)}
-                className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/25 hover:bg-sky-500/20 transition-all cursor-pointer"
-                title="Genera un código de acceso de 24h para impresor / marketing"
-              >
-                🔑 Acceso temporal (24h)
-              </button>
-            )}
-          </div>
+      <header className="print:hidden sticky top-0 z-40 backdrop-blur-xl bg-black/85 border-b border-zinc-800 px-6 py-2.5">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+          {/* LADO IZQUIERDO: Marca + Kit en Fila 1; Pills compactas en Fila 2 */}
+          <div className="flex flex-col gap-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <Link href="/" className="flex items-center gap-2 group shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/logo_conejo.png" alt="Rabbitty" className="w-7 h-7 object-contain transition-transform group-hover:scale-110" />
+                <span className="font-black text-lg tracking-tight text-white">RABBITTY</span>
+              </Link>
+              <span className="text-zinc-600 font-mono text-xs">/</span>
+              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-pink-500/10 text-pink-400 border border-pink-500/20 flex items-center gap-1.5 shrink-0">
+                <Sparkles className="w-3.5 h-3.5 text-pink-400" /> Kit Impresos Piloto Oficial
+              </span>
+            </div>
 
-          {showTempForm && (authMode === 'admin' || authMode === 'affiliate') && (
-            <div className="mb-4 p-4 rounded-2xl bg-sky-500/5 border border-sky-500/30 space-y-3">
-              <p className="text-[11px] font-black uppercase tracking-wider text-sky-300">
-                🔑 Nuevo Acceso Temporal (24h){authMode === 'affiliate' ? ' · scope: tu negocio' : ''}
-              </p>
-              <div className="grid sm:grid-cols-2 gap-2">
-                <input
-                  value={tempLabel}
-                  onChange={(e) => setTempLabel(e.target.value)}
-                  placeholder="¿Para quién? (Impresor, Marketing…)"
-                  className="bg-black border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500"
-                />
-                {authMode === 'admin' ? (
-                  <select
-                    value={tempScopePick}
-                    onChange={(e) => setTempScopePick(e.target.value)}
-                    className="bg-black border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500 cursor-pointer"
-                  >
-                    <option value="ALL">👁️ Ver todos los tenants</option>
-                    {businesses.map((b) => (
-                      <option key={b.id} value={b.id}>🏪 Solo {b.name}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <div className="bg-black border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-400">
-                    Scope: {businessName} (fijo)
-                  </div>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={async () => {
-                  if (!tempLabel.trim()) { window.alert('Pon para quién es el acceso'); return; }
-                  try {
-                    const res = await fetch('/api/auth/qr-impresos', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        action: 'GENERATE_TEMP_CODE',
-                        sessionId: qrSessionId || '',
-                        label: tempLabel.trim(),
-                        ...(authMode === 'admin' && tempScopePick !== 'ALL' ? { businessId: tempScopePick } : {}),
-                      }),
-                    });
-                    const d = await res.json();
-                    if (d?.success) {
-                      setTempGenerated({ code: d.code, url: d.url, expiresAt: d.expiresAt, scopeName: d.scopeName });
-                      navigator.clipboard.writeText(d.url).catch(() => {});
-                    } else {
-                      window.alert(d?.error || 'No se pudo generar el acceso');
-                    }
-                  } catch {
-                    window.alert('Error de red al generar el acceso');
-                  }
-                }}
-                className="px-4 py-2 rounded-xl bg-linear-to-r from-sky-600 to-indigo-600 text-white text-xs font-black cursor-pointer hover:scale-[1.02] transition-transform"
-              >
-                ⚡ Generar Código
-              </button>
-              {tempGenerated && (
-                <div className="pt-1 space-y-1">
-                  <p className="text-sm font-mono font-black text-emerald-400 tracking-[3px]">{tempGenerated.code}</p>
-                  <p className="text-[11px] text-zinc-400">
-                    {tempGenerated.url} · expira {new Date(tempGenerated.expiresAt).toLocaleString('es-MX', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
-                    {tempGenerated.scopeName ? ` · verá: ${tempGenerated.scopeName}` : ''}
-                  </p>
-                </div>
+            {/* Fila 2: Pills secundarias más pequeñas */}
+            <div className="flex items-center gap-1.5 pl-0.5">
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-700 text-zinc-300 shrink-0">
+                {authMode === 'admin' ? `✅ Acceso autorizado${authUserName ? ` · ${authUserName}` : ''}` : authMode === 'temp' ? `⏳ Acceso temporal · ${tempAccessInfo?.label ?? 'Invitado'}` : `🏪 Afiliado · ${businessName}`}
+              </span>
+              {(authMode === 'admin' || authMode === 'affiliate') && (
+                <button
+                  type="button"
+                  onClick={() => setShowTempForm(true)}
+                  className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/25 hover:bg-sky-500/20 transition-all cursor-pointer flex items-center gap-1 shrink-0"
+                  title="Generar acceso temporal de 24 horas"
+                >
+                  <KeyRound className="w-2.5 h-2.5" />
+                  <span>🔑 Acceso temporal (24h)</span>
+                </button>
               )}
             </div>
-          )}
+          </div>
 
-          <div className="flex items-center gap-3">
+          {/* LADO DERECHO: Tabs + Imprimir + Salir alineados a la derecha */}
+          <div className="flex items-center gap-2.5 shrink-0 ml-auto">
             <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-xl p-1 text-xs font-medium">
               <button 
                 type="button"
@@ -933,10 +871,10 @@ function ImpresosContent() {
             <button
               type="button"
               onClick={handlePrint}
-              className="flex items-center gap-2 bg-linear-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white font-black text-sm px-5 py-2.5 rounded-xl shadow-lg shadow-pink-500/25 transition-all active:scale-95 cursor-pointer"
+              className="flex items-center gap-2 bg-linear-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white font-black text-xs sm:text-sm px-4 py-2 rounded-xl shadow-lg shadow-pink-500/25 transition-all active:scale-95 cursor-pointer"
             >
               <Printer className="w-4 h-4" />
-              Imprimir / Exportar PDF
+              <span>Imprimir / Exportar PDF</span>
             </button>
 
             <button
@@ -947,7 +885,7 @@ function ImpresosContent() {
                 } catch {}
                 setIsAuthorized(false);
               }}
-              className="flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white font-bold text-xs px-3 py-2.5 rounded-xl transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white font-bold text-xs px-3 py-2 rounded-xl transition-colors cursor-pointer"
               title="Cerrar sesión / Probar escaneo QR Neón"
             >
               <LogOut className="w-3.5 h-3.5 text-pink-400" />
@@ -956,6 +894,135 @@ function ImpresosContent() {
           </div>
         </div>
       </header>
+
+      {/* MODAL DE ACCESO TEMPORAL (24H) */}
+      {showTempForm && (authMode === 'admin' || authMode === 'affiliate') && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
+          onClick={() => setShowTempForm(false)}
+        >
+          <div 
+            className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 max-w-lg w-full relative shadow-2xl shadow-sky-950/40 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+              <div className="flex items-center gap-2.5">
+                <span className="p-2 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                  <KeyRound className="w-4 h-4" />
+                </span>
+                <div>
+                  <h3 className="text-sm font-black text-white">Generar Acceso Temporal (24h)</h3>
+                  <p className="text-[11px] text-zinc-400">
+                    {authMode === 'affiliate' ? `Acceso limitado a ${businessName}` : 'Crea un pase temporal de 24 horas para impresores o marketing'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTempForm(false)}
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 pt-1">
+              <div>
+                <label className="block text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                  Nombre o Destinatario
+                </label>
+                <input
+                  value={tempLabel}
+                  onChange={(e) => setTempLabel(e.target.value)}
+                  placeholder="Ej: Imprenta Rápida, Diseñador, Juan Pérez..."
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-sky-500"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                  Alcance / Negocio visible
+                </label>
+                {authMode === 'admin' ? (
+                  <select
+                    value={tempScopePick}
+                    onChange={(e) => setTempScopePick(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-sky-500 cursor-pointer"
+                  >
+                    <option value="ALL">👁️ Ver todos los negocios (Full Access)</option>
+                    {businesses.map((b) => (
+                      <option key={b.id} value={b.id}>🏪 Solo {b.name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-zinc-300 flex items-center justify-between">
+                    <span>🏪 {businessName}</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">(fijo)</span>
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!tempLabel.trim()) { window.alert('Pon para quién es el acceso'); return; }
+                  try {
+                    const res = await fetch('/api/auth/qr-impresos', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        action: 'GENERATE_TEMP_CODE',
+                        sessionId: qrSessionId || '',
+                        label: tempLabel.trim(),
+                        ...(authMode === 'admin' && tempScopePick !== 'ALL' ? { businessId: tempScopePick } : {}),
+                      }),
+                    });
+                    const d = await res.json();
+                    if (d?.success) {
+                      setTempGenerated({ code: d.code, url: d.url, expiresAt: d.expiresAt, scopeName: d.scopeName });
+                      navigator.clipboard.writeText(d.url).catch(() => {});
+                    } else {
+                      window.alert(d?.error || 'No se pudo generar el acceso');
+                    }
+                  } catch {
+                    window.alert('Error de red al generar el acceso');
+                  }
+                }}
+                className="w-full py-2.5 rounded-xl bg-linear-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white text-xs font-black cursor-pointer shadow-lg shadow-sky-500/20 transition-all active:scale-[0.99] flex items-center justify-center gap-2"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>⚡ Generar Código de 24 Horas</span>
+              </button>
+
+              {tempGenerated && (
+                <div className="p-3.5 rounded-2xl bg-sky-500/10 border border-sky-500/30 space-y-2 mt-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-sky-400">Código de Acceso Activo</span>
+                    <span className="text-[10px] text-zinc-400">Válido 24 horas</span>
+                  </div>
+                  <div className="flex items-center justify-between bg-black/60 rounded-xl px-3 py-2 border border-sky-500/20">
+                    <span className="text-base font-mono font-black text-emerald-400 tracking-[3px]">{tempGenerated.code}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(tempGenerated.url || tempGenerated.code).catch(() => {});
+                        window.alert('¡Enlace y código copiados al portapapeles!');
+                      }}
+                      className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 transition-colors cursor-pointer"
+                    >
+                      Copiar Enlace
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-zinc-400 break-all">
+                    {tempGenerated.url} · {tempGenerated.scopeName ? `Alcance: ${tempGenerated.scopeName}` : 'Todos los negocios'}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* PANEL DE PERSONALIZACIÓN Y SELECCIÓN DE TEMPLATE (No imprimible) */}
       <section className="print:hidden border-b border-zinc-900 bg-zinc-950/70 py-6 px-6">

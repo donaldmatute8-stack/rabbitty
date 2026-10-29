@@ -9,9 +9,14 @@ interface RabbittyCodeProps {
 }
 
 export default function RabbittyCode({ data, size = 260, showCardFrame = true, className = '' }: RabbittyCodeProps) {
-  // ── Barras machine-readable: codifican el código de 6 dígitos del payload ──
-  // (decodificable por el escáner de la app; ver lib/rabbittyCodeCodec.ts)
-  const waveBars = useMemo(() => barsFromCode(code6FromData(String(data ?? ''))), [data]);
+  // ── Barras machine-readable: codifican el código asignado por el servidor ──
+  // data soporta prefijo "rc:<código>" (asignado por server, sin colisiones).
+  // Sin prefijo: fallback hash (decorativo/compat).
+  const waveBars = useMemo(() => {
+    const d = String(data ?? '');
+    const m = d.match(/^rc:(\d{1,6})$/);
+    return barsFromCode(m ? Number(m[1]) : code6FromData(d));
+  }, [data]);
 
   // Generate unique concentric ring dash/dot configurations for this user code
   const ringConfigs = useMemo(() => {

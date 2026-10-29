@@ -248,44 +248,38 @@ export async function POST(req: NextRequest) {
         }
       } catch {}
 
-      // 2.2 Consulta O(1) vía Reverse Index en memoria con gestión explícita de colisiones
-      const index = await getOrBuildReverseIndex();
-      const matches = index.get(code) || [];
-
-      // ── Detección explícita de colisiones: si más de una entidad comparte el mismo código,
-      // se rechaza responder a ciegas para evitar transferencias o cobros equivocados.
-      if (matches.length > 1) {
-        return NextResponse.json({
-          success: false,
-          error: "Colisión detectada: múltiples miembros comparten este código óptico. Por favor escanea el código QR estándar.",
-          collision: true,
-        }, { status: 409 });
+      // 2.2 Resolución O(1): código asignado por el servidor (sin colisiones, sin iteración)
+      const [bizMatch] = await db
+        .select({ id: ownedBusinesses.id, name: ownedBusinesses.name })
+        .from(ownedBusinesses)
+        .where(eq(ownedBusinesses.scanCode, code))
+        .limit(1);
+      if (bizMatch) {
+        return NextResponse.json({ success: true, type: "business", businessId: bizMatch.id, name: bizMatch.name });
       }
 
-      if (matches.length === 1) {
-        const match = matches[0];
-        if (match.type === 'business') {
-          return NextResponse.json({
-            success: true,
-            type: "business",
-            businessId: match.id,
-            name: match.name,
-          });
-        }
+      const [userMatch] = await db
+        .select({
+          id: users.id,
+          username: users.username,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        })
+        .from(users)
+        .where(eq(users.scanCode, code))
+        .limit(1);
+      if (userMatch) {
+        const handle = userMatch.username ? `@${userMatch.username}` : userMatch.id;
+        const fullName = [userMatch.firstName, userMatch.lastName].filter(Boolean).join(" ") || userMatch.username || "Rabbitter";
         return NextResponse.json({
           success: true,
           type: "user",
-          user: {
-            id: match.id,
-            username: match.username,
-            name: match.name,
-            handle: match.handle || match.id,
-          },
+          user: { id: userMatch.id, username: userMatch.username, name: fullName, handle },
         });
       }
-    }
 
-    return NextResponse.json({ success: false, error: "Código no reconocido" }, { status: 404 });
+      return NextResponse.json({ success: false, error: "Código no reconocido" }, { status: 404 });
+    }
   } catch (err) {
     console.error("[RABBITTY_CODE_LOOKUP]", err);
     return NextResponse.json({ success: false, error: "Error interno" }, { status: 500 });
