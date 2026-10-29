@@ -155,7 +155,7 @@ export async function verifyPin(pin: string): Promise<PinVerifyResult> {
 
 /* ───────────────────────── Biometría ───────────────────────── */
 
-export type BiometricBackend = 'native' | 'telegram' | 'webauthn' | 'none';
+export type BiometricBackend = 'native' | 'telegram' | 'webauthn' | 'local' | 'none';
 
 interface BioRecord { backend: BiometricBackend; credId?: string; userId?: string }
 
@@ -228,8 +228,11 @@ export async function detectBiometric(): Promise<BiometricSupport> {
         const label = bm.biometricType === 'face' ? 'Face ID' : bm.biometricType === 'finger' ? 'Huella digital' : 'Biometría del dispositivo';
         return { backend: 'telegram', available: true, label };
       }
+      // En Telegram el WebAuthn está bloqueado por el iframe de WebKit — no caer a WebAuthn:
+      // devolvemos 'telegram' no disponible para guiar al usuario a activarlo en Ajustes.
+      return { backend: 'telegram', available: false, label: 'Face ID (Telegram)' };
     } catch {
-      // Fallback a webauthn
+      return { backend: 'telegram', available: false, label: 'Face ID (Telegram)' };
     }
   }
 
@@ -315,25 +318,47 @@ export async function enableBiometric(): Promise<BioOutcome> {
     return { ok: true, message: `${support.label} activado.` };
   }
 
-  /* WebAuthn: crear credencial y verificarla de inmediato */
+  /* WebAuthn / Apple Passkeys: crear credencial y verificarla si el contexto lo permite */
   try {
     const userId = crypto.getRandomValues(new Uint8Array(16));
-    const credential = (await navigator.credentials.create({
-      publicKey: {
-        challenge: toBuffer(crypto.getRandomValues(new Uint8Array(32))),
-        rp: { name: 'Rabbitty' },
-        user: { id: toBuffer(userId), name: `rabbitty-${b64url(userId).slice(0, 10)}`, displayName: 'Rabbitty' },
-        pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
-        authenticatorSelection: { authenticatorAttachment: 'platform', residentKey: 'preferred', userVerification: 'required' },
-        timeout: 60_000,
-        attestation: 'none',
-      },
-    })) as PublicKeyCredential | null;
-    if (!credential) return { ok: false, message: 'El navegador no devolvió una credencial.' };
-    writeJson(BIO_KEY, { backend: 'webauthn', credId: b64url(new Uint8Array(credential.rawId)), userId: b64url(userId) } satisfies BioRecord);
-    return { ok: true, message: `${support.label} activado.` };
-  } catch (err) {
-    return { ok: false, message: webauthnMessage(err) };
+    const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+    const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+    if ((isHttps || isLocalhost) && typeof navigator !== 'undefined' && navigator.credentials) {
+      try {
+        const credential = (await navigator.credentials.create({
+          publicKey: {
+            challenge: toBuffer(crypto.getRandomValues(new Uint8Array(32))),
+            rp: { name: 'Rabbitty' },
+            user: { id: toBuffer(userId), name: `rabbitty-${b64url(userId).slice(0, 8)}`, displayName: 'Rabbitty User' },
+            pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+            authenticatorSelection: { residentKey: 'preferred', userVerification: 'required' },
+            timeout: 30_000,
+          },
+        })) as PublicKeyCredential | null;
+
+        if (credential) {
+          writeJson(BIO_KEY, { backend: 'webauthn', credId: b64url(new Uint8Array(credential.rawId)), userId: b64url(userId) } satisfies BioRecord);
+          return { ok: true, message: `${support.label} activado.` };
+        }
+      } catch (webauthnErr) {
+        // Entorno que bloquea WebAuthn (iframe de Telegram, etc.): respuesta HONESTA.
+        // El usuario activa Face ID en Ajustes de Telegram, o usa el PIN como respaldo.
+        return {
+          ok: false,
+          message:
+            'Tu entorno no permite activar biometría web aquí. Activa Face ID en Ajustes de Telegram o configura un PIN de seguridad — ambos protegen tus transferencias.',
+        };
+      }
+    }
+
+    return {
+      ok: false,
+      message:
+        'No se pudo activar la biometría en este entorno. Usa un PIN de seguridad — protege tus transferencias igual.',
+    };
+  } catch {
+    return { ok: false, message: 'No se pudo activar la biometría. Usa un PIN de seguridad.' };
   }
 }
 

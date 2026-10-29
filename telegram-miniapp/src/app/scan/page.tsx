@@ -14,6 +14,7 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { useTheme } from '@/contexts/ThemeContext';
 
 import { PlatformBridge } from '@/lib/platform';
+import { useToast } from '@/contexts/ToastContext';
 
 interface PaymentIntentData {
   id?: string;
@@ -31,6 +32,7 @@ export default function ScanPage() {
   const { address } = useWallet();
   const { user } = useAuth();
   const { isDark } = useTheme();
+  const { showToast } = useToast();
   
   const qrValue = user?.id || user?.telegramId || address || 'rabbitty_guest';
   const API_SERVER_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
@@ -497,6 +499,8 @@ export default function ScanPage() {
 
     let consecutiveNeonFrames = 0;
     let isSubmittingOptical = false;
+    let decodeFailCount = 0;
+    let hintShown = false;
     const hiCanvasRef: { current: HTMLCanvasElement | null } = { current: null };
     const canvas = document.createElement('canvas');
     canvas.width = 64;
@@ -570,9 +574,9 @@ export default function ScanPage() {
             (b >= 110 && r >= 65 && b - g >= 20) ||
             (r >= 190 && b >= 160 && g >= 100 && r - g >= 15);
 
-          // Banda central vertical (el núcleo de onda vive ~28%-72% del alto)
-          const y0 = Math.floor(HI * 0.28);
-          const y1 = Math.floor(HI * 0.72);
+          // Banda central vertical (el núcleo de onda vive ~22%-78% del alto)
+          const y0 = Math.floor(HI * 0.22);
+          const y1 = Math.floor(HI * 0.78);
           const colNeon = new Float32Array(HI);
           for (let x = 0; x < HI; x++) {
             let count = 0;
@@ -583,20 +587,38 @@ export default function ScanPage() {
             colNeon[x] = count;
           }
 
-          // Segmentar las 13 barras: columnas con presencia neón agrupadas en clusters
-          const threshold = 3;
-          const clusters: Array<{ x0: number; x1: number }> = [];
+          // Segmentar las 13 barras: clusters neón con tolerancia a reflejos
+          // (merge de gaps pequeños hasta llegar a exactamente 13)
+          const threshold = 2;
+          let clusters: Array<{ x0: number; x1: number }> = [];
           let cur: { x0: number; x1: number } | null = null;
           for (let x = 0; x < HI; x++) {
             if (colNeon[x] >= threshold) {
               if (!cur) cur = { x0: x, x1: x };
               else cur.x1 = x;
             } else if (cur) {
-              if (cur.x1 - cur.x0 >= 2) clusters.push(cur); // ancho mínimo
+              if (cur.x1 - cur.x0 >= 1) clusters.push(cur);
               cur = null;
             }
           }
-          if (cur && cur.x1 - cur.x0 >= 2) clusters.push(cur);
+          if (cur && cur.x1 - cur.x0 >= 1) clusters.push(cur);
+
+          // Normalizar a exactamente 13: primero merge de gaps de 1-2px,
+          // luego fusionar los pares vecinos con menor separación
+          const mergeSmallest = (list: Array<{ x0: number; x1: number }>) => {
+            if (list.length < 2) return list;
+            let best = 0;
+            let bestGap = Infinity;
+            for (let i = 0; i < list.length - 1; i++) {
+              const gap = list[i + 1].x0 - list[i].x1;
+              if (gap < bestGap) { bestGap = gap; best = i; }
+            }
+            const merged = [...list];
+            merged[best] = { x0: merged[best].x0, x1: merged[best + 1].x1 };
+            merged.splice(best + 1, 1);
+            return merged;
+          };
+          while (clusters.length > 13) clusters = mergeSmallest(clusters);
 
           let decoded: number | null = null;
           if (clusters.length === 13) {
@@ -661,8 +683,13 @@ export default function ScanPage() {
             } catch { /* reintenta en el siguiente frame */ }
           }
 
-          // No decodificado (ángulo/luz): cooldown breve y reintento
-          await new Promise((r) => setTimeout(r, 1200));
+          // No decodificado (ángulo/luz): cooldown, reintento y pista al 3er intento
+          decodeFailCount += 1;
+          if (decodeFailCount === 3 && !hintShown) {
+            hintShown = true;
+            showToast('Casi… acércate (~15-25 cm), de frente y con buena luz 🐰', 'info');
+          }
+          await new Promise((r) => setTimeout(r, 1000));
           isSubmittingOptical = false;
         }
       } catch {

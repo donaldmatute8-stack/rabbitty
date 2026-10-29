@@ -112,6 +112,7 @@ export function SmartBiometricPrompt() {
       const res = await enableBiometric();
       if (res.ok) {
         PlatformBridge.hapticFeedback('success');
+        SmartPromptOrchestrator.releaseLock();
         localStorage.setItem(BIOMETRIC_PROMPT_KEY, 'enabled');
         showToast(`${label} activado con éxito.`, 'success');
         setShow(false);
