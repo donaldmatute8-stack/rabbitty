@@ -11,6 +11,7 @@ import Link from "next/link";
 import { TerminalSquare, TabletSmartphone, Smartphone, MessageSquare, X, Bot, Sparkles, Send, RotateCw, CreditCard, Eye } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
 import { ScannerPairModal } from "./ScannerPairModal";
+import ReadinessBar from "./ReadinessBar";
 
 const SidebarContext = createContext<{
   isCollapsed: boolean;
@@ -220,6 +221,10 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
         <div className="relative flex h-screen w-full overflow-hidden bg-black text-(--text-primary)">
           {/* ── Chip: Vista Tenant activa (impersonación God) ── */}
           <ImpersonationChip />
+          {/* ── ReadinessBar: perfil del negocio (afiliados) ── */}
+          <div className="fixed top-2 left-1/2 -translate-x-1/2 z-40 w-72 hidden lg:block print:hidden">
+            <ReadinessBar />
+          </div>
           {/* Neon Glow Accents */}
           <div className="absolute top-[-10%] right-[-10%] h-125 w-125 rounded-full bg-pink-500/10 blur-[120px] pointer-events-none" />
           <div className="absolute bottom-[-10%] left-[-10%] h-125 w-125 rounded-full bg-purple-500/10 blur-[120px] pointer-events-none" />

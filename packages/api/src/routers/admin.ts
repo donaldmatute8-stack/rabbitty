@@ -4,7 +4,7 @@ import { router, protectedProcedure, adminOnlyProcedure, platformOnlyProcedure, 
 import { TRPCError } from "@trpc/server";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
-import { restaurants, branches, orders, tables, staff, ledgerEntries } from "@rabbitty/database-restaurant/schema";
+import { restaurants, branches, orders, tables, staff, ledgerEntries, menuCategories, menuItems } from "@rabbitty/database-restaurant/schema";
 import { referrals, users, levels, ownedBusinesses, transactions, treasury, systemSettings, auditEntries } from "@rabbitty/database-core";
 import { customers } from "@rabbitty/database-restaurant/schema";
 import { miniappClient } from "../services/miniapp-client";
@@ -1079,6 +1079,77 @@ export const adminRouter = router({
         remainingDebt: netOutstandingDebt - targetSettle,
       };
     }),
+
+  // ── Readiness del negocio afiliado: checklist REAL con accionables y niveles ──
+  getReadiness: protectedProcedure.query(async ({ ctx }) => {
+    const branchId = await resolveBranchId(ctx, ctx.branchId);
+    const [branchRow] = await ctx.restaurantDb
+      .select({ restaurantId: branches.restaurantId, address: branches.address, name: branches.name })
+      .from(branches)
+      .where(eq(branches.id, branchId))
+      .limit(1);
+    const restaurantId = branchRow?.restaurantId ?? "";
+    const [rest] = restaurantId
+      ? await ctx.restaurantDb
+          .select({ name: restaurants.name, phone: restaurants.phone, logoUrl: restaurants.logoUrl })
+          .from(restaurants)
+          .where(eq(restaurants.id, restaurantId))
+          .limit(1)
+      : [];
+    const [biz] = await ctx.coreDb
+      .select({ name: ownedBusinesses.name, category: ownedBusinesses.category, rewardPercentage: ownedBusinesses.rewardPercentage, slug: ownedBusinesses.slug, logoUrl: ownedBusinesses.logoUrl, description: ownedBusinesses.description, verificationData: ownedBusinesses.verificationData })
+      .from(ownedBusinesses)
+      .where(eq(ownedBusinesses.id, sql`SELECT "businessId" FROM restaurants WHERE id = ${restaurantId}`))
+      .limit(1);
+
+    const catRows = await ctx.restaurantDb
+      .select({ catCount: sql<number>`COUNT(*)::int` })
+      .from(menuCategories)
+      .where(eq(menuCategories.branchId, branchId));
+    const catCount = Number(catRows[0]?.catCount ?? 0);
+    const items = await ctx.restaurantDb
+      .select({ id: menuItems.id, name: menuItems.name, imageUrl: menuItems.imageUrl, isActive: menuItems.isActive })
+      .from(menuItems)
+      .where(eq(menuItems.branchId, branchId));
+    const liveItems = items.filter((i) => i.isActive);
+    const itemsWithPhoto = liveItems.filter((i) => (i.imageUrl || "").trim().length > 0);
+
+    const has = (v?: string | null) => Boolean((v || "").trim());
+    const pct = Math.round(Number(biz?.rewardPercentage ?? 10));
+
+    type Item = { id: string; label: string; done: boolean; href: string; level: "min" | "top"; cta: string };
+    const all: Item[] = [
+      { id: "name", label: "Nombre del negocio", done: has(rest?.name || biz?.name), href: "/settings", level: "min", cta: "Completar nombre" },
+      { id: "phone", label: "Teléfono de contacto", done: has(rest?.phone), href: "/settings", level: "min", cta: "Agregar teléfono" },
+      { id: "address", label: "Dirección física", done: has(branchRow?.address), href: "/settings", level: "min", cta: "Agregar dirección" },
+      { id: "reward", label: `% de recompensa configurado`, done: pct > 0, href: "/settings", level: "min", cta: "Configurar %" },
+      { id: "category", label: "Categoría / nicho de mercado", done: has(biz?.category), href: "/settings", level: "min", cta: "Elegir nicho" },
+      { id: "categories", label: "Categorías de menú creadas", done: catCount > 0, href: "/menu", level: "min", cta: "Crear categorías" },
+      { id: "items3", label: "Al menos 3 platillos/productos", done: liveItems.length >= 3, href: "/menu", level: "min", cta: "Cargar menú" },
+      { id: "description", label: "Descripción del negocio", done: has(biz?.description), href: "/settings", level: "top", cta: "Escribir descripción" },
+      { id: "logo", label: "Logo del negocio", done: has(rest?.logoUrl || biz?.logoUrl), href: "/settings", level: "top", cta: "Subir logo" },
+      { id: "photos", label: `Fotos en platillos (${itemsWithPhoto.length}/${liveItems.length || 0}${liveItems.length ? `, mínimo 3` : ""})`, done: liveItems.length > 0 && itemsWithPhoto.length >= Math.min(3, liveItems.length) && itemsWithPhoto.length / liveItems.length >= 0.7, href: "/menu", level: "top", cta: "Subir fotos" },
+      { id: "hours", label: "Horario y días de atención", done: Boolean(biz?.verificationData && JSON.stringify(biz.verificationData).includes("activeDays")), href: "/settings", level: "top", cta: "Configurar horario" },
+      { id: "website", label: "Sitio web propio o Landing Rabbitty", done: false, href: "https://www.rabbitty.me", level: "top", cta: "Reclamar landing" },
+    ];
+
+    const minItems = all.filter((i) => i.level === "min");
+    const topItems = all.filter((i) => i.level === "top");
+    const minDone = minItems.filter((i) => i.done).length;
+    const topDone = all.filter((i) => i.done).length;
+    const percent = Math.round((topDone / all.length) * 100);
+    const minComplete = minDone === minItems.length;
+
+    return {
+      businessName: rest?.name || biz?.name || branchRow?.name || "Mi Negocio",
+      slug: biz?.slug ?? null,
+      percent,
+      minComplete,
+      min: { done: minDone, total: minItems.length, items: minItems },
+      top: { done: topDone, total: all.length, items: all },
+      faltantes: all.filter((i) => !i.done),
+    };
+  }),
 
   getWelcomeCapSettings: godAdminProcedure.query(async ({ ctx }) => {
     const [capSetting] = await ctx.coreDb
