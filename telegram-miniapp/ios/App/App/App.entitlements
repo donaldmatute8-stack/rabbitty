@@ -7,6 +7,8 @@
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>applinks:app.rabbitty.me</string>
+		<string>applinks:rabbitty.me</string>
+		<string>applinks:www.rabbitty.me</string>
 	</array>
 </dict>
 </plist>

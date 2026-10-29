@@ -6,7 +6,9 @@
         "components": [
           { "/": "/scan*", "comment": "Tickets QR y vinculación de mesa" },
           { "/": "/qr/*" },
-          { "/": "/pay/*" }
+          { "/": "/pay/*" },
+          { "/": "/download*" },
+          { "/": "/affiliate/*" }
         ]
       }
     ]

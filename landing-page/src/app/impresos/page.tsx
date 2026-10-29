@@ -175,11 +175,105 @@ const NICHE_TEMPLATES: Record<string, NicheTemplate> = {
 function detectNicheKey(categoryOrName?: string | null): string {
   if (!categoryOrName) return 'coffee';
   const text = categoryOrName.toLowerCase();
-  if (text.includes('mar') || text.includes('marisco') || text.includes('pescad') || text.includes('cevich') || text.includes('aguachile')) return 'seafood';
-  if (text.includes('rest') || text.includes('comida') || text.includes('gourmet') || text.includes('taco') || text.includes('burger') || text.includes('pizza') || text.includes('sushi')) return 'restaurant';
-  if (text.includes('ropa') || text.includes('boutique') || text.includes('moda') || text.includes('vestid') || text.includes('fashion') || text.includes('calzad') || text.includes('zapateria')) return 'fashion';
-  if (text.includes('barber') || text.includes('corte') || text.includes('peluquer') || text.includes('salon') || text.includes('belleza') || text.includes('spa')) return 'barber';
-  if (text.includes('pan') || text.includes('pastel') || text.includes('postre') || text.includes('bakery') || text.includes('dulc') || text.includes('reposter')) return 'bakery';
+
+  // 1. Cafetería / Café de Especialidad (prioridad ante nombres con "Café", "Coffee", etc.)
+  if (
+    text.includes('café') ||
+    text.includes('cafe') ||
+    text.includes('coffee') ||
+    text.includes('cafeter') ||
+    text.includes('barista') ||
+    text.includes('espresso') ||
+    text.includes('cappuccino') ||
+    text.includes('latte') ||
+    text.includes('tostador')
+  ) {
+    return 'coffee';
+  }
+
+  // 2. Panadería / Pastelería / Repostería
+  if (
+    text.includes('pan') ||
+    text.includes('panader') ||
+    text.includes('pastel') ||
+    text.includes('postre') ||
+    text.includes('bakery') ||
+    text.includes('dulc') ||
+    text.includes('reposter') ||
+    text.includes('croissant') ||
+    text.includes('dona') ||
+    text.includes('galleta')
+  ) {
+    return 'bakery';
+  }
+
+  // 3. Barbería / Salón de Belleza / Cuidado Personal
+  if (
+    text.includes('barber') ||
+    text.includes('corte') ||
+    text.includes('peluquer') ||
+    text.includes('salon') ||
+    text.includes('salón') ||
+    text.includes('belleza') ||
+    text.includes('spa') ||
+    text.includes('estetica') ||
+    text.includes('estética') ||
+    text.includes('uñas') ||
+    text.includes('nails')
+  ) {
+    return 'barber';
+  }
+
+  // 4. Mariscos / Pescados / Ceviches
+  if (
+    text.includes('marisco') ||
+    text.includes('pescad') ||
+    text.includes('cevich') ||
+    text.includes('aguachile') ||
+    text.includes('ostion') ||
+    text.includes('camaron') ||
+    text.includes('camarón') ||
+    text.includes('mar')
+  ) {
+    return 'seafood';
+  }
+
+  // 5. Ropa / Boutique / Moda
+  if (
+    text.includes('ropa') ||
+    text.includes('boutique') ||
+    text.includes('moda') ||
+    text.includes('vestid') ||
+    text.includes('fashion') ||
+    text.includes('calzad') ||
+    text.includes('zapater') ||
+    text.includes('sneaker') ||
+    text.includes('accesorios')
+  ) {
+    return 'fashion';
+  }
+
+  // 6. Restaurante / Gastronomía General
+  if (
+    text.includes('rest') ||
+    text.includes('comida') ||
+    text.includes('gourmet') ||
+    text.includes('taco') ||
+    text.includes('taquer') ||
+    text.includes('burger') ||
+    text.includes('hamburguesa') ||
+    text.includes('pizza') ||
+    text.includes('pizzer') ||
+    text.includes('sushi') ||
+    text.includes('cocina') ||
+    text.includes('bar') ||
+    text.includes('cantina') ||
+    text.includes('bistro') ||
+    text.includes('alimento')
+  ) {
+    return 'restaurant';
+  }
+
   return 'coffee';
 }
 
@@ -426,41 +520,67 @@ function ImpresosContent() {
       .then((data) => {
         if (data?.success && Array.isArray(data.businesses)) {
           setBusinesses(data.businesses);
-          // Si no vino logo en URL o vino vacío, y estamos con el negocio inicial, auto-asignar el logo registrado
-          if (!initialLogo) {
-            const match = data.businesses.find((b: BusinessItem) => 
-              b.name.toLowerCase() === initialName.toLowerCase() || 
-              b.refCode?.toLowerCase() === initialRef.toLowerCase()
-            );
-            if (match?.logoUrl) {
+          // Si no vino logo en URL o vino vacío, y estamos con el negocio inicial, auto-asignar el logo registrado y detectar nicho
+          const match = data.businesses.find((b: BusinessItem) => 
+            b.name.toLowerCase() === initialName.toLowerCase() || 
+            b.refCode?.toLowerCase() === initialRef.toLowerCase()
+          );
+          if (match) {
+            if (!initialLogo && match.logoUrl) {
               setBusinessLogo(match.logoUrl);
+            }
+            if (!initialNicheParam) {
+              setSelectedTemplateKey(detectNicheKey(`${match.category || ''} ${match.name}`));
             }
           }
         }
       })
       .catch((err) => console.error('Error cargando afiliados:', err))
       .finally(() => setLoadingBusinesses(false));
-  }, [initialLogo, initialName, initialRef]);
+  }, [initialLogo, initialName, initialRef, initialNicheParam]);
 
   // 🔒 Temp con scope: fijar SU negocio cuando la lista carga
   useEffect(() => {
-    if (!tempScopeBusinessId || businesses.length === 0) return;
-    const mine = businesses.find((b) => b.id === tempScopeBusinessId);
-    if (mine && selectedBusinessId !== mine.id) {
-      const t = setTimeout(() => {
-        setBusinessName(mine.name);
-        setActiveRef(mine.refCode);
-        setSelectedBusinessId(mine.id);
-        setUrlManuallyEdited(false);
-        const bunzVal = clampWelcomeBunz(mine.welcomeBunz ?? 25);
-        setWelcomeBunz(String(bunzVal));
-        setAppUrl(buildDownloadUrl(mine.refCode, bunzVal));
-        setBusinessLogo(mine.logoUrl || '/icon_ra.png');
-        setSelectedTemplateKey(detectNicheKey(`${mine.category} ${mine.name}`));
-      }, 0);
-      return () => clearTimeout(t);
+    if (authMode !== 'temp' || businesses.length === 0) return;
+
+    if (tempScopeBusinessId) {
+      const mine = businesses.find((b) => b.id === tempScopeBusinessId);
+      if (mine && selectedBusinessId !== mine.id) {
+        const t = setTimeout(() => {
+          setBusinessName(mine.name);
+          setActiveRef(mine.refCode);
+          setSelectedBusinessId(mine.id);
+          setUrlManuallyEdited(false);
+          const bunzVal = clampWelcomeBunz(mine.welcomeBunz ?? 25);
+          setWelcomeBunz(String(bunzVal));
+          setAppUrl(buildDownloadUrl(mine.refCode, bunzVal));
+          setBusinessLogo(mine.logoUrl || '/icon_ra.png');
+          setSelectedTemplateKey(detectNicheKey(`${mine.category || ''} ${mine.name}`));
+        }, 0);
+        return () => clearTimeout(t);
+      }
+    } else if (!selectedBusinessId) {
+      // Temp global (sin scope de un solo negocio): inicializar con el que haga match o el primer afiliado
+      const target = businesses.find((b) => 
+        b.name.toLowerCase() === initialName.toLowerCase() || 
+        b.refCode?.toLowerCase() === initialRef.toLowerCase()
+      ) || businesses[0];
+      if (target) {
+        const t = setTimeout(() => {
+          setBusinessName(target.name);
+          setActiveRef(target.refCode);
+          setSelectedBusinessId(target.id);
+          setUrlManuallyEdited(false);
+          const bunzVal = clampWelcomeBunz(target.welcomeBunz ?? 25);
+          setWelcomeBunz(String(bunzVal));
+          setAppUrl(buildDownloadUrl(target.refCode, bunzVal));
+          setBusinessLogo(target.logoUrl || '/icon_ra.png');
+          setSelectedTemplateKey(detectNicheKey(`${target.category || ''} ${target.name}`));
+        }, 0);
+        return () => clearTimeout(t);
+      }
     }
-  }, [tempScopeBusinessId, businesses]);
+  }, [authMode, tempScopeBusinessId, businesses, selectedBusinessId, initialName, initialRef]);
 
   // Cerrar dropdown al hacer click fuera
   useEffect(() => {
@@ -814,6 +934,35 @@ function ImpresosContent() {
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-700 text-zinc-300 shrink-0">
                 {authMode === 'admin' ? `✅ Acceso autorizado${authUserName ? ` · ${authUserName}` : ''}` : authMode === 'temp' ? `⏳ Acceso temporal · ${tempAccessInfo?.label ?? 'Invitado'}` : `🏪 Afiliado · ${businessName}`}
               </span>
+
+              {/* Si es invitado temporal, mostrar el negocio activo y switcher si tiene acceso global */}
+              {authMode === 'temp' && (
+                !tempScopeBusinessId && businesses.length > 1 ? (
+                  <div className="relative inline-flex items-center shrink-0">
+                    <select
+                      value={selectedBusinessId || ''}
+                      onChange={(e) => {
+                        const found = businesses.find((b) => b.id === e.target.value);
+                        if (found) handleSelectBusiness(found);
+                      }}
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-pink-500/10 text-pink-300 border border-pink-500/25 hover:bg-pink-500/20 transition-all cursor-pointer appearance-none pr-5 focus:outline-none"
+                      title="Cambiar negocio a imprimir"
+                    >
+                      {businesses.map((b) => (
+                        <option key={b.id} value={b.id} className="bg-zinc-900 text-white">
+                          🏪 {b.name}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="w-2.5 h-2.5 text-pink-400 absolute right-1.5 pointer-events-none" />
+                  </div>
+                ) : (
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-pink-500/10 border border-pink-500/20 text-pink-300 shrink-0">
+                    🏪 {businessName}
+                  </span>
+                )
+              )}
+
               {(authMode === 'admin' || authMode === 'affiliate') && (
                 <button
                   type="button"
@@ -1024,8 +1173,9 @@ function ImpresosContent() {
         </div>
       )}
 
-      {/* PANEL DE PERSONALIZACIÓN Y SELECCIÓN DE TEMPLATE (No imprimible) */}
-      <section className="print:hidden border-b border-zinc-900 bg-zinc-950/70 py-6 px-6">
+      {/* PANEL DE PERSONALIZACIÓN Y SELECCIÓN DE TEMPLATE (Solo visible para Admin y Afiliados; oculto para Invitados) */}
+      {authMode !== 'temp' && (
+        <section className="print:hidden border-b border-zinc-900 bg-zinc-950/70 py-6 px-6">
         <div className="max-w-7xl mx-auto space-y-4">
           <div className="bg-zinc-900/80 border border-zinc-800/80 rounded-2xl p-5 shadow-2xl backdrop-blur-md">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-4">
@@ -1231,6 +1381,7 @@ function ImpresosContent() {
           </div>
         </div>
       </section>
+      )}
 
       {/* ÁREA DE CONTENIDO IMPRESO / RENDERIZADO */}
       <main className="max-w-7xl mx-auto p-6 md:p-12 space-y-16 print:p-0 print:space-y-0 print:m-0">

@@ -21,6 +21,15 @@ export default function DeepLinkHandler() {
         const url = new URL(rawUrl);
         const isScheme = url.protocol === 'rabbitty:';
         const path = isScheme ? `/${url.host}${url.pathname}`.replace(/\/+$/, '') : url.pathname;
+        if (path.startsWith('/download')) {
+          // Miembro existente escanea un póster: ya tiene la app → su Mi Código
+          router.push('/scan?tab=my-code');
+          return;
+        }
+        if (path.startsWith('/affiliate')) {
+          router.push(`${path}${url.search}`);
+          return;
+        }
         if (path.startsWith('/scan') || path.startsWith('/qr') || path.startsWith('/pay')) {
           router.push(`${path}${url.search}`);
         }
