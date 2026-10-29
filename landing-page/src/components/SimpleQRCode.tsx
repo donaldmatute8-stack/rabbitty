@@ -1,16 +1,7 @@
 'use client';
 
 import React, { useMemo } from 'react';
-
-function hashString(str: string): number {
-  const safeStr = typeof str === 'string' ? str : String(str || 'rabbitty');
-  let hash = 0;
-  for (let i = 0; i < safeStr.length; i++) {
-    hash = (hash << 5) - hash + safeStr.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash);
-}
+import { barsFromCode, code6FromData } from '@/lib/rabbittyCodeCodec';
 
 /**
  * Standard scannable QR Code for printed marketing pieces (Table Tents, Flyers, Stickers)
@@ -96,19 +87,8 @@ export function NeonQRCode({
   showCardFrame?: boolean;
   className?: string;
 }) {
-  const seed = useMemo(() => hashString(value), [value]);
-
-  const waveBars = useMemo(() => {
-    const bars: number[] = [];
-    const count = 13;
-    for (let i = 0; i < count; i++) {
-      const centerFactor = 1 - Math.abs(i - Math.floor(count / 2)) / (count / 2);
-      const raw = ((seed * (i + 7) * 31) % 65) + 25;
-      const height = Math.min(85, Math.max(20, raw * (0.4 + centerFactor * 0.6)));
-      bars.push(height);
-    }
-    return bars;
-  }, [seed]);
+  // ── Barras machine-readable: el escáner de la App decodifica este patrón ──
+  const waveBars = useMemo(() => barsFromCode(code6FromData(String(value ?? ''))), [value]);
 
   const ringConfigs = useMemo(() => {
     return [

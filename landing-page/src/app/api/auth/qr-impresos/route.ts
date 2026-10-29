@@ -90,9 +90,19 @@ export async function POST(req: Request) {
           String(user?.role || '').toUpperCase() === 'ADMIN';
         await sql.end();
 
-        // God → scope global (ve todos los tenants). Dueño de negocio → scope a SU negocio.
+        // God → elige el tenant del scope (o todos). Dueño de negocio → scope a SU negocio.
         let scopeBusinessId: string | null = null;
         let scopeName = 'todos los tenants (God)';
+        if (isGod && body.businessId) {
+          const postgres4 = (await import('postgres')).default;
+          const sql4 = postgres4(dbUrl, { ssl: 'require', max: 1 });
+          const bizRows = await sql4`SELECT id, name FROM "ownedBusinesses" WHERE id = ${String(body.businessId)} LIMIT 1`;
+          await sql4.end();
+          if (bizRows[0]) {
+            scopeBusinessId = bizRows[0].id;
+            scopeName = bizRows[0].name;
+          }
+        }
         if (!isGod) {
           const postgres3 = (await import('postgres')).default;
           const sql3 = postgres3(dbUrl, { ssl: 'require', max: 1 });

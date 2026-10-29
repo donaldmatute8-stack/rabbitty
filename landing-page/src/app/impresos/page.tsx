@@ -245,8 +245,10 @@ function ImpresosContent() {
   });
   const [tempAccessInfo, setTempAccessInfo] = useState<{ label: string; expiresAt: string } | null>(null);
   const [tempScopeBusinessId, setTempScopeBusinessId] = useState<string | null>(null);
-  const [tempGenerated, setTempGenerated] = useState<{ code: string; url: string; expiresAt: string } | null>(null);
+  const [tempGenerated, setTempGenerated] = useState<{ code: string; url: string; expiresAt: string; scopeName?: string } | null>(null);
   const [tempLabel, setTempLabel] = useState('Impresor');
+  const [showTempForm, setShowTempForm] = useState(false);
+  const [tempScopePick, setTempScopePick] = useState<string>('ALL');
   const [authUserName, setAuthUserName] = useState<string>('');
   const [qrSessionId, setQrSessionId] = useState<string | null>(null);
   const [qrSessionData, setQrSessionData] = useState<string>('');
@@ -443,17 +445,19 @@ function ImpresosContent() {
     if (!tempScopeBusinessId || businesses.length === 0) return;
     const mine = businesses.find((b) => b.id === tempScopeBusinessId);
     if (mine && selectedBusinessId !== mine.id) {
-      setBusinessName(mine.name);
-      setActiveRef(mine.refCode);
-      setSelectedBusinessId(mine.id);
-      setUrlManuallyEdited(false);
-      const bunzVal = clampWelcomeBunz(mine.welcomeBunz ?? 25);
-      setWelcomeBunz(String(bunzVal));
-      setAppUrl(buildDownloadUrl(mine.refCode, bunzVal));
-      setBusinessLogo(mine.logoUrl || '/icon_ra.png');
-      setSelectedTemplateKey(detectNicheKey(`${mine.category} ${mine.name}`));
+      const t = setTimeout(() => {
+        setBusinessName(mine.name);
+        setActiveRef(mine.refCode);
+        setSelectedBusinessId(mine.id);
+        setUrlManuallyEdited(false);
+        const bunzVal = clampWelcomeBunz(mine.welcomeBunz ?? 25);
+        setWelcomeBunz(String(bunzVal));
+        setAppUrl(buildDownloadUrl(mine.refCode, bunzVal));
+        setBusinessLogo(mine.logoUrl || '/icon_ra.png');
+        setSelectedTemplateKey(detectNicheKey(`${mine.category} ${mine.name}`));
+      }, 0);
+      return () => clearTimeout(t);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tempScopeBusinessId, businesses]);
 
   // Cerrar dropdown al hacer click fuera
@@ -797,19 +801,62 @@ function ImpresosContent() {
             {(authMode === 'admin' || authMode === 'affiliate') && (
               <button
                 type="button"
+                onClick={() => setShowTempForm((v) => !v)}
+                className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/25 hover:bg-sky-500/20 transition-all cursor-pointer"
+                title="Genera un código de acceso de 24h para impresor / marketing"
+              >
+                🔑 Acceso temporal (24h)
+              </button>
+            )}
+          </div>
+
+          {showTempForm && (authMode === 'admin' || authMode === 'affiliate') && (
+            <div className="mb-4 p-4 rounded-2xl bg-sky-500/5 border border-sky-500/30 space-y-3">
+              <p className="text-[11px] font-black uppercase tracking-wider text-sky-300">
+                🔑 Nuevo Acceso Temporal (24h){authMode === 'affiliate' ? ' · scope: tu negocio' : ''}
+              </p>
+              <div className="grid sm:grid-cols-2 gap-2">
+                <input
+                  value={tempLabel}
+                  onChange={(e) => setTempLabel(e.target.value)}
+                  placeholder="¿Para quién? (Impresor, Marketing…)"
+                  className="bg-black border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500"
+                />
+                {authMode === 'admin' ? (
+                  <select
+                    value={tempScopePick}
+                    onChange={(e) => setTempScopePick(e.target.value)}
+                    className="bg-black border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500 cursor-pointer"
+                  >
+                    <option value="ALL">👁️ Ver todos los tenants</option>
+                    {businesses.map((b) => (
+                      <option key={b.id} value={b.id}>🏪 Solo {b.name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="bg-black border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-400">
+                    Scope: {businessName} (fijo)
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
                 onClick={async () => {
-                  const label = window.prompt('¿Para quién es el acceso? (ej. Impresor, Marketing)', tempLabel) || '';
-                  if (!label.trim()) return;
-                  setTempLabel(label.trim());
+                  if (!tempLabel.trim()) { window.alert('Pon para quién es el acceso'); return; }
                   try {
                     const res = await fetch('/api/auth/qr-impresos', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ action: 'GENERATE_TEMP_CODE', sessionId: qrSessionId || '', label: label.trim() }),
+                      body: JSON.stringify({
+                        action: 'GENERATE_TEMP_CODE',
+                        sessionId: qrSessionId || '',
+                        label: tempLabel.trim(),
+                        ...(authMode === 'admin' && tempScopePick !== 'ALL' ? { businessId: tempScopePick } : {}),
+                      }),
                     });
                     const d = await res.json();
                     if (d?.success) {
-                      setTempGenerated({ code: d.code, url: d.url, expiresAt: d.expiresAt });
+                      setTempGenerated({ code: d.code, url: d.url, expiresAt: d.expiresAt, scopeName: d.scopeName });
                       navigator.clipboard.writeText(d.url).catch(() => {});
                     } else {
                       window.alert(d?.error || 'No se pudo generar el acceso');
@@ -818,18 +865,21 @@ function ImpresosContent() {
                     window.alert('Error de red al generar el acceso');
                   }
                 }}
-                className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/25 hover:bg-sky-500/20 transition-all cursor-pointer"
-                title="Genera un código de acceso de 24h para impresor / marketing"
+                className="px-4 py-2 rounded-xl bg-linear-to-r from-sky-600 to-indigo-600 text-white text-xs font-black cursor-pointer hover:scale-[1.02] transition-transform"
               >
-                🔑 Acceso temporal (24h)
+                ⚡ Generar Código
               </button>
-            )}
-            {tempGenerated && (
-              <span className="text-[11px] font-mono px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
-                {tempGenerated.code} · copiado {tempGenerated.url.replace('https://www.rabbitty.me', '')} · expira {new Date(tempGenerated.expiresAt).toLocaleString('es-MX', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
-              </span>
-            )}
-          </div>
+              {tempGenerated && (
+                <div className="pt-1 space-y-1">
+                  <p className="text-sm font-mono font-black text-emerald-400 tracking-[3px]">{tempGenerated.code}</p>
+                  <p className="text-[11px] text-zinc-400">
+                    {tempGenerated.url} · expira {new Date(tempGenerated.expiresAt).toLocaleString('es-MX', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
+                    {tempGenerated.scopeName ? ` · verá: ${tempGenerated.scopeName}` : ''}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex items-center gap-3">
             <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-xl p-1 text-xs font-medium">
