@@ -245,6 +245,15 @@ export async function resolveScannedPayload(input: string | number): Promise<Sca
     } catch {}
   }
 
+  // ── 7.5 QR Login (gate /impresos, PC) — string puro, ANTES del server-lookup
+  //    (el lookup clasifica esta URL como 'url' genérica y la mandaría al browser) ──
+  if (rawText.includes('qrlogin_')) {
+    const qrToken = rawText.split('qrlogin_')[1]?.split('&')[0]?.split('?')[0] || '';
+    if (qrToken) {
+      return { success: true, type: 'qrlogin', raw: rawText, qrLogin: { qrToken, sessionId: '' } };
+    }
+  }
+
   // ── 8. Consulta de respaldo en el backend para cualquier texto / URL ──
   try {
     const res = await fetch('/api/rabbitty-code/lookup', {
