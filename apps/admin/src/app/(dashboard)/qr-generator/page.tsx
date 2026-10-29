@@ -4,6 +4,7 @@ import { useState } from "react";
 import { skipToken } from "@tanstack/react-query";
 import { trpc } from "../../../lib/trpc-client";
 import { QrCode, RefreshCw, CheckCircle, AlertTriangle } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { toast } from "@rabbitty/ui";
 
 export default function QRGeneratorPage() {
@@ -73,11 +74,7 @@ export default function QRGeneratorPage() {
 
                   <div className="flex flex-col items-center gap-4">
                     <div className="rounded-xl bg-white p-4 shadow-lg">
-                      <img
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrData.qrCode || "")}`}
-                        alt="QR Code"
-                        className="mx-auto"
-                      />
+                      <QRCodeSVG value={qrData.qrCode || ""} size={200} level="M" includeMargin={false} />
                     </div>
                     <div className="w-full max-w-md rounded-lg bg-gray-50 p-4">
                       <p className="text-xs text-gray-500 mb-1">URL del QR:</p>

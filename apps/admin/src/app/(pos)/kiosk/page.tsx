@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { QRCodeSVG } from "qrcode.react";
+import QRDiscovery from "@/components/QRDiscovery";
 import { cn, useWakeLock } from "@rabbitty/ui";
 import { ShoppingBag, ChevronRight, CheckCircle2, ChevronLeft, Minus, Plus, Scan, X, QrCode, Lock, KeyRound, ArrowRight } from "lucide-react";
 
@@ -226,11 +227,12 @@ export default function KioskPage() {
 
           {intent ? (
             <div className="bg-white p-6 rounded-[3rem] shadow-[0_0_100px_rgba(168,85,247,0.35)] mb-10">
-              <QRCodeSVG
+              <QRDiscovery
                 value={`rabbitty://pay?intent=${intent.intentId}`}
+                variant="rabbitter"
                 size={280}
-                level="H"
-                includeMargin={false}
+                revealMode="immediate"
+                surfaceKey="kiosk-pay"
               />
             </div>
           ) : (
@@ -633,11 +635,13 @@ export default function KioskPage() {
             </p>
 
             <div className="bg-white p-4 rounded-3xl shadow-2xl mb-6">
-              <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(`https://rabbitty.me/scan?branchId=${ticketContext?.branch?.id || "default"}&business=${encodeURIComponent(ticketContext?.restaurant?.name || "Rabbitty")}`)}`}
-                alt="QR Kiosko Rabbitty"
-                className="h-64 w-64 object-contain"
-              />
+              <QRDiscovery
+                  value={`https://rabbitty.me/scan?branchId=${ticketContext?.branch?.id || "default"}&business=${encodeURIComponent(ticketContext?.restaurant?.name || "Rabbitty")}`}
+                  variant="rabbitter"
+                  size={280}
+                  revealMode="immediate"
+                  surfaceKey="kiosk-checkin"
+                />
             </div>
 
             <div className="flex items-center gap-2 mb-6">

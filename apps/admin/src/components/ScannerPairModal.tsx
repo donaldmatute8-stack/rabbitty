@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { X, Smartphone, Copy, Check, ExternalLink, Loader2, RefreshCw, Send, ShieldCheck, QrCode } from "lucide-react";
-import { QRCodeSVG } from "qrcode.react";
+import QRDiscovery from "@/components/QRDiscovery";
 
 interface ScannerPairModalProps {
   isOpen: boolean;
@@ -161,20 +161,7 @@ export function ScannerPairModal({ isOpen, onClose }: ScannerPairModalProps) {
             <div className="flex flex-col items-center space-y-4 w-full">
               {/* QR Container */}
               <div className="relative p-3.5 rounded-2xl bg-white border border-white/20 shadow-[0_0_30px_rgba(236,72,153,0.25)]">
-                <QRCodeSVG
-                  value={pairingUrl}
-                  size={190}
-                  level="M"
-                  includeMargin={false}
-                  imageSettings={{
-                    src: "/Rabbitty_vector.png",
-                    x: undefined,
-                    y: undefined,
-                    height: 38,
-                    width: 38,
-                    excavate: true,
-                  }}
-                />
+                <QRDiscovery value={pairingUrl} variant="admin" size={190} revealMode="immediate" surfaceKey="scanner-pair" />
               </div>
 
               {/* Countdown badge */}

@@ -7,6 +7,7 @@ import { Clock, Wifi, Search, User, Users, CreditCard, Banknote, QrCode, SplitSq
 import Link from "next/link";
 import Image from "next/image";
 import { QRCodeSVG } from "qrcode.react";
+import QRDiscovery from "@/components/QRDiscovery";
 import { TicketTemplate, TicketData } from "../../../components/TicketTemplate";
 import { CashShiftModal, CashShiftBadge } from "../../../components/CashShiftModal";
 import { 
@@ -2511,10 +2512,13 @@ export default function PosPage() {
             {paidTicketData?.claimToken && (
               <div className="flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/10">
                 <span className="text-[10px] text-gray-400 leading-snug pr-2">El comensal también puede reclamar escaneando el QR impreso de su ticket (48 h, un solo uso).</span>
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=88x88&data=${encodeURIComponent(`https://app.rabbitty.me/scan?claimToken=${paidTicketData.claimToken}`)}`}
-                  alt="QR de reclamo en pantalla" className="h-16 w-16 bg-white p-1 rounded-lg shrink-0"
-                />
+                <QRDiscovery
+                    value={`https://app.rabbitty.me/scan?claimToken=${paidTicketData.claimToken}`}
+                    variant="rabbitter"
+                    size={96}
+                    revealMode="immediate"
+                    surfaceKey="pos-ticket"
+                  />
               </div>
             )}
             <Button
@@ -2609,11 +2613,13 @@ export default function PosPage() {
                   <span className="text-emerald-600 font-bold">¡Pago Verificado!</span>
                 </div>
               ) : null}
-              <img 
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(`rabbitty://pay?intent=${qrPaymentModal.intentId}&fallback=https://rabbitty.me/scan`)}`} 
-                alt="QR Code para pagar con Bunz" 
-                className="w-50 h-50 sm:w-62.5 sm:h-62.5"
-              />
+              <QRDiscovery
+                  value={`rabbitty://pay?intent=${qrPaymentModal.intentId}&fallback=https://rabbitty.me/scan`}
+                  variant="rabbitter"
+                  size={250}
+                  revealMode="immediate"
+                  surfaceKey="pos-pay"
+                />
             </div>
 
             <div className="text-center w-full max-w-sm">
@@ -2642,9 +2648,13 @@ export default function PosPage() {
                       </p>
                     </div>
                     <div className="bg-white p-4 rounded-2xl shadow-[0_0_40px_rgba(6,182,212,0.35)] border-4 border-cyan-500 relative">
-                      <img
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(stripePayModal.payUrl)}`}
-                        alt="QR Rabbitty Pay" className="w-50 h-50" />
+                      <QRDiscovery
+                  value={stripePayModal.payUrl}
+                  variant="rabbitter"
+                  size={250}
+                  revealMode="immediate"
+                  surfaceKey="pos-stripe"
+                />
                     </div>
                     <div className="flex flex-col items-center gap-1 text-center">
                       <p className="text-xs text-gray-400">La comanda se liquida automáticamente en el POS al confirmar el pago.</p>

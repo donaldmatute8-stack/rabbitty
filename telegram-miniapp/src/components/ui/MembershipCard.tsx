@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useSyncExternalStore } from 'react';
+import { useState, useEffect, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QrCode, Sparkles, ChevronRight, X, ShieldCheck } from 'lucide-react';
@@ -34,6 +34,13 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
 
   const bunzBalance = (user?.totalBunzEarned || 0) - (user?.totalBunzSpent || 0);
   const qrIdentifier = user?.id || user?.telegramId || 'rabbitty_guest';
+  const [assignedCode, setAssignedCode] = useState<string>('');
+  useEffect(() => {
+    fetch('/api/rabbitty-code/mine')
+      .then((r) => r.json())
+      .then((d) => { if (d?.success && d.code) setAssignedCode(String(d.code)); })
+      .catch(() => {});
+  }, []);
   const memberName = user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'Explorador Rabbitty';
   const username = user?.username ? `@${user.username}` : '@miembro';
 
@@ -272,7 +279,7 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
                 {/* Rabbitty Holographic Code presentation */}
                 <div className="py-2 flex items-center justify-center w-full">
                   <RabbittyCode
-                    data={String(qrIdentifier)}
+                    data={String(qrIdentifier).startsWith('rc:') ? String(qrIdentifier) : String(qrIdentifier)}
                     size={190}
                     showCardFrame={false}
                   />
