@@ -35,6 +35,7 @@ import {
   UserCheck,
   RefreshCw,
   Smartphone,
+  HelpCircle,
 } from 'lucide-react';
 import { GROUPS } from '@/components/groups/GroupsStrip';
 import { setStoredAvatar } from '@/lib/avatar';
@@ -591,7 +592,7 @@ export default function ChatInboxPage() {
     {
       id: 'support',
       label: 'Ayuda',
-      icon: '🛟',
+      icon: <HelpCircle size={18} strokeWidth={1.8} />,
       color: '#00BCD4',
       gradient: 'linear-gradient(135deg, #00BCD4 0%, #008BA3 100%)',
       borderGlow: 'rgba(0, 188, 212, 0.4)',
@@ -710,8 +711,8 @@ export default function ChatInboxPage() {
                     }}
                     className="active:scale-95 transition-all"
                   >
-                    <span style={{ fontSize: 16, display: 'flex', alignItems: 'center' }}>{item.icon}</span>
-                    <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: -0.2 }}>{item.label}</span>
+                    <span style={{ fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item.icon}</span>
+                    <span style={{ fontSize: 7.5, fontWeight: 600, letterSpacing: -0.1, opacity: 0.9 }}>{item.label}</span>
                   </button>
                 </div>
               );

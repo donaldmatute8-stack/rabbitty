@@ -33,7 +33,7 @@ export const GROUPS: GroupDefinition[] = [
     gradient: 'linear-gradient(135deg, #0088CC 0%, #005F8F 100%)',
     borderGlow: 'rgba(0, 136, 204, 0.4)',
     iconSvg: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="m3 11 18-5v12L3 13v-2z" />
         <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
       </svg>
@@ -49,7 +49,7 @@ export const GROUPS: GroupDefinition[] = [
     gradient: 'linear-gradient(135deg, #A855F7 0%, #7E22CE 100%)',
     borderGlow: 'rgba(168, 85, 247, 0.4)',
     iconSvg: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
       </svg>
     ),
@@ -64,9 +64,8 @@ export const GROUPS: GroupDefinition[] = [
     gradient: 'linear-gradient(135deg, #EC4899 0%, #BE185D 100%)',
     borderGlow: 'rgba(236, 72, 153, 0.4)',
     iconSvg: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        <polygon points="5 3 19 12 5 21 5 3" fill="currentColor" fillOpacity="0.2" />
-        <polygon points="5 3 19 12 5 21 5 3" />
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="6 4 18 12 6 20 6 4" />
       </svg>
     ),
   },
@@ -80,7 +79,7 @@ export const GROUPS: GroupDefinition[] = [
     gradient: 'linear-gradient(135deg, #FF8A00 0%, #D9534F 100%)',
     borderGlow: 'rgba(255, 138, 0, 0.4)',
     iconSvg: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7" />
         <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
         <path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4" />
@@ -96,10 +95,10 @@ export const GROUPS: GroupDefinition[] = [
     link: 'https://t.me/rabbittyhub/3',
     color: '#10B981',
     gradient: 'linear-gradient(135deg, #10B981 0%, #047857 100%)',
-    borderGlow: 'rgba(16, 185, 129, 0.4)',
+    borderGlow: 'rgba(168, 85, 247, 0.4)',
     iconSvg: (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
       </svg>
     ),
   },

@@ -110,7 +110,7 @@ export function ScannerPairModal({ isOpen, onClose }: ScannerPairModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-      <div className="relative w-full max-w-md rounded-3xl border border-white/10 bg-gradient-to-b from-gray-900 via-gray-950 to-black p-6 shadow-2xl text-white space-y-5 overflow-hidden">
+      <div className="relative w-full max-w-md rounded-3xl border border-white/10 bg-linear-to-b from-gray-900 via-gray-950 to-black p-6 shadow-2xl text-white space-y-5 overflow-hidden">
         {/* Glow Accent */}
         <div className="absolute top-0 right-0 h-44 w-44 rounded-full bg-pink-500/15 blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 left-0 h-36 w-36 rounded-full bg-cyan-500/10 blur-3xl pointer-events-none" />
@@ -118,7 +118,7 @@ export function ScannerPairModal({ isOpen, onClose }: ScannerPairModalProps) {
         {/* Header */}
         <div className="flex items-center justify-between relative z-10">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-pink-500/20 to-purple-500/20 border border-pink-500/30 text-pink-400">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-linear-to-br from-pink-500/20 to-purple-500/20 border border-pink-500/30 text-pink-400">
               <Smartphone className="h-5 w-5" />
             </div>
             <div>
