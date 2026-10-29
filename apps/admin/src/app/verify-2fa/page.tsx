@@ -62,50 +62,67 @@ export default function Verify2FAPage() {
 
   const unlockWithPasskey = async () => {
     setPasskeyLoading(true);
-    setError("");
+    setError('');
     try {
-      // 1. Pedir opciones al servidor (ret challenge + credenciales registradas)
-      const optRes = await fetch("/api/auth/2fa/passkey", { method: "POST", body: JSON.stringify({ action: "unlock_options" }) });
-      const options = await optRes.json();
-      if (!options?.success) throw new Error(options?.error || "No hay passkeys registradas en este servidor");
+      // 1. Options del server (trpc — passkeys del god admin)
+      const optRes = await fetch('/api/trpc/passkeys.generateAuthenticationOptions?batch=1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ '0': { json: null } }),
+      });
+      const optData = await optRes.json();
+      if (optData?.[0]?.error) throw new Error(optData[0].error.message);
+      const options = optData[0].result.data.json;
 
-      // 2. Ceremony WebAuthn (Face ID / Touch ID del dispositivo)
+      // 2. Face ID / Touch ID
+      const b64u = (s2: string) => s2.replace(/-/g, '+').replace(/_/g, '/');
+      const fromB64u = (s2: string) => Uint8Array.from(atob(b64u(s2)), (c) => c.charCodeAt(0));
+      const toB64 = (b: Uint8Array) => btoa(String.fromCharCode(...b));
+
       const cred = await navigator.credentials.get({
         publicKey: {
-          challenge: Uint8Array.from(atob(options.challenge.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0)),
-          allowCredentials: (options.allowCredentialIds || []).map((id: string) => ({
-            type: "public-key" as const,
-            id: Uint8Array.from(atob(id.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0)),
-          })),
-          userVerification: "required",
+          challenge: fromB64u(options.challenge),
+          userVerification: 'required',
           timeout: 60000,
+          rpId: options.rpId,
         },
       });
-      if (!cred) throw new Error("Sin credencial");
+      if (!cred) throw new Error('Sin credencial');
+      const pk = cred as PublicKeyCredential;
+      const resp = pk.response as unknown as AuthenticatorAssertionResponse;
 
-      // 3. Verificar server-side
-      const pkCred = cred as PublicKeyCredential;
-      const resp = pkCred.response as unknown as AuthenticatorAssertionResponse;
-      const verifyRes = await fetch("/api/auth/2fa/passkey", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "unlock_verify",
-          credentialId: b64(new Uint8Array(pkCred.rawId)),
-          authenticatorData: b64(new Uint8Array(resp.authenticatorData)),
-          clientDataJSON: b64(new Uint8Array(resp.clientDataJSON)),
-          signature: b64(new Uint8Array(resp.signature)),
-        }),
+      // 3. Verificación server-side (trpc.passkeys — @simplewebauthn)
+      const verRes = await fetch('/api/trpc/passkeys.verifyAuthentication?batch=1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ '0': { json: { credential: {
+          id: toB64(new Uint8Array(pk.rawId)),
+          rawId: toB64(new Uint8Array(pk.rawId)),
+          type: pk.type,
+          response: {
+            authenticatorData: toB64(new Uint8Array(resp.authenticatorData)),
+            clientDataJSON: toB64(new Uint8Array(resp.clientDataJSON)),
+            signature: toB64(new Uint8Array(resp.signature)),
+            userHandle: resp.userHandle ? toB64(new Uint8Array(resp.userHandle)) : undefined,
+          },
+          clientExtensionResults: {},
+        } } } }),
       });
-      const verifyData = await verifyRes.json();
-      if (verifyData.success) {
-        window.location.href = "/";
-        return;
-      }
-      throw new Error(verifyData.error || "Verificación fallida");
+      const verData = await verRes.json();
+      if (verData?.[0]?.error) throw new Error(verData[0].error.message);
+
+      // 4. Canjear el unlockCode por la cookie god2fa
+      const grantRes = await fetch('/api/auth/2fa/grant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ verified: true }),
+      });
+      const grantData = await grantRes.json();
+      if (!grantData?.success) throw new Error(grantData?.error || 'No se pudo otorgar el acceso');
+      window.location.href = '/';
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Biometría no disponible";
-      setError(msg.includes("NotAllowed") || msg.includes("not allowed") ? "Biometría cancelada o no permitida" : msg);
+      const m = err instanceof Error ? err.message : 'Error';
+      setError(m.includes('NotAllowed') ? 'Biometría cancelada' : m);
     } finally {
       setPasskeyLoading(false);
     }
