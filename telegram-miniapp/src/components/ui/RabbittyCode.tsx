@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { motion } from 'framer-motion';
 import { barsFromCode, code6FromData } from '@/lib/rabbittyCodeCodec';
 
 interface RabbittyCodeProps {
@@ -6,9 +7,10 @@ interface RabbittyCodeProps {
   size?: number;
   showCardFrame?: boolean;
   className?: string;
+  state?: 'idle' | 'decoding'; // decoding: barras ondulando + anillos girando (caja fuerte abriéndose)
 }
 
-export default function RabbittyCode({ data, size = 260, showCardFrame = true, className = '' }: RabbittyCodeProps) {
+export default function RabbittyCode({ data, size = 260, showCardFrame = true, className = '', state = 'idle' }: RabbittyCodeProps) {
   // ── Barras machine-readable: codifican el código asignado por el servidor ──
   // data soporta prefijo "rc:<código>" (asignado por server, sin colisiones).
   // Sin prefijo: fallback hash (decorativo/compat).
@@ -57,6 +59,11 @@ export default function RabbittyCode({ data, size = 260, showCardFrame = true, c
         <div className="absolute inset-0 bg-radial from-pink-500/20 via-purple-600/10 to-transparent pointer-events-none" />
 
         {/* 1. Concentric Wave Code Matrix (Anillos de Código Propietario) */}
+        <motion.div
+          className="absolute inset-0 m-auto pointer-events-none"
+          animate={state === 'decoding' ? { rotate: 360 } : { rotate: 0 }}
+          transition={state === 'decoding' ? { repeat: Infinity, duration: 2.5, ease: 'linear' } : { duration: 0.3 }}
+        >
         <svg width={size * 0.95} height={size * 0.95} viewBox="0 0 200 200" fill="none" className="absolute inset-0 m-auto pointer-events-none">
           {ringConfigs.map((cfg, idx) => (
             <circle
@@ -72,6 +79,7 @@ export default function RabbittyCode({ data, size = 260, showCardFrame = true, c
             />
           ))}
         </svg>
+        </motion.div>
 
         {/* 2. Four Corner Holographic Position Ring Targets (Reemplaza a los módulos QR genéricos) */}
         <div className="absolute inset-7 pointer-events-none flex flex-col justify-between p-1 z-10">

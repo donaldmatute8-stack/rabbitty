@@ -65,6 +65,7 @@ export default function ScanPage() {
   const [activeTab, setActiveTab] = useState<'scan' | 'my-code'>(initialTab);
   const [qrConfirm, setQrConfirm] = useState<{ qrToken: string; origin: string } | null>(null);
   const [scanLoader, setScanLoader] = useState<string | null>(null);
+  const [scanLoaderCode, setScanLoaderCode] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isTransitioningRef = useRef(false);
   const startScanningRef = useRef<() => void>(() => {});
@@ -209,10 +210,12 @@ export default function ScanPage() {
   const handleDispatchPayload = useCallback(async (rawPayload: string | number) => {
     PlatformBridge.hapticFeedback('success');
     setScanLoader('Leyendo tu código…');
+    if (typeof rawPayload === 'string') setScanLoaderCode(rawPayload);
 
     const res = await resolveScannedPayload(rawPayload);
     if (!res.success) {
       setScanLoader(null);
+      setScanLoaderCode(null);
       if (res.error) alert(res.error);
       startScanningRef.current();
       return;
@@ -496,6 +499,8 @@ export default function ScanPage() {
           }
 
           if (decoded !== null) {
+            setScanLoaderCode(`rc:${decoded}`);
+            setScanLoader('Decodificando tu Rabbitty Code…');
             await handleDispatchPayload(decoded);
             return;
           }
@@ -521,7 +526,7 @@ export default function ScanPage() {
   if (scanLoader) {
     return (
       <div className="min-h-dvh flex items-center justify-center bg-black">
-        <RabbittyLoader message={scanLoader} />
+        <RabbittyLoader message={scanLoader} codeData={scanLoaderCode ?? undefined} />
       </div>
     );
   }
