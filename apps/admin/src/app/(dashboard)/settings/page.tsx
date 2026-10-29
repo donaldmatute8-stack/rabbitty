@@ -391,7 +391,16 @@ export default function SettingsPage() {
     setRegisteringPasskey(true);
     try {
       const options = await generatePasskeyOptions.mutateAsync();
-      const credential = await navigator.credentials.create({ publicKey: options as any });
+      // challenge base64url → Uint8Array (el browser EXIGE ArrayBuffer)
+      const challengeBytes = Uint8Array.from(atob(options.challenge.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+      const userIdBytes = Uint8Array.from(atob((options.user?.id || '').replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+      const credential = await navigator.credentials.create({
+        publicKey: {
+          ...(options as any),
+          challenge: challengeBytes,
+          user: { ...(options as any).user, id: userIdBytes },
+        },
+      });
       if (!credential) { toast.error("Registro cancelado"); return; }
       const response = (credential as any).response;
       const transports = response.getTransports?.() ?? [];
@@ -1301,7 +1310,9 @@ function God2FAPasskeysCard() {
 
         {passkeys.length > 0 && (
           <div className="space-y-2 pt-2">
-            <span className="text-[10px] font-black uppercase tracking-wider text-gray-500">Passkeys registradas</span>
+            <span className="text-[10px] font-black uppercase tracking-wider text-gray-500">
+              🔐 Passkeys de Desbloqueo 2FA (usadas en /verify-2fa)
+            </span>
             {passkeys.map((p) => (
               <div key={p.credId} className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-white/5 border border-white/10">
                 <div>
@@ -1320,7 +1331,46 @@ function God2FAPasskeysCard() {
             ))}
           </div>
         )}
+
+        {/* ── Passkeys de Cuenta (trpc.passkeys — usadas para login/2FA de la cuenta) ── */}
+        <AccountPasskeysList />
       </div>
     </Card>
+  );
+}
+
+
+// ── Passkeys de Cuenta (trpc.passkeys) — listado + eliminación en el mismo lugar ──
+function AccountPasskeysList() {
+  const passkeysQuery = trpc.passkeys.list.useQuery();
+  const deletePasskey = trpc.passkeys.delete.useMutation({
+    onSuccess: () => { toast.success("Passkey de cuenta eliminada"); },
+    onError: (e: any) => toast.error(e.message || "Error al eliminar"),
+  });
+  const list = passkeysQuery.data ?? [];
+
+  if (list.length === 0) return null;
+
+  return (
+    <div className="space-y-2 pt-2">
+      <span className="text-[10px] font-black uppercase tracking-wider text-gray-500">
+        🔑 Passkeys de Cuenta (login / 2FA verificación)
+      </span>
+      {list.map((pk) => (
+        <div key={pk.id} className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-white/5 border border-white/10">
+          <div>
+            <p className="text-[12px] font-black text-gray-200">{pk.deviceName || "Passkey"}</p>
+            <p className="text-[10px] text-gray-500">{pk.createdAt ? new Date(pk.createdAt).toLocaleString("es-MX") : ""}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => deletePasskey.mutate({ id: pk.id })}
+            className="px-3 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/25 text-rose-400 text-[11px] font-bold hover:bg-rose-500/20 cursor-pointer"
+          >
+            Eliminar
+          </button>
+        </div>
+      ))}
+    </div>
   );
 }
