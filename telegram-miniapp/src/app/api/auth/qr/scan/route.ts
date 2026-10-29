@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { webSessions } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 import crypto from 'crypto';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 
@@ -53,11 +53,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'QR code already used' }, { status: 400 });
     }
 
-    // Vincular la sesión al usuario verificado que la escaneó
-    await db
+    // Vinculación ATÓMICA: solo reclama si la sesión sigue sin dueño
+    // (doble escaneo / dos teléfonos: el segundo pierde, nunca roba la sesión)
+    const claimed = await db
       .update(webSessions)
       .set({ userId })
-      .where(eq(webSessions.id, session.id));
+      .where(and(eq(webSessions.id, session.id), isNull(webSessions.userId)))
+      .returning({ id: webSessions.id });
+
+    if (claimed.length === 0) {
+      return NextResponse.json({ error: 'QR code already used' }, { status: 400 });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

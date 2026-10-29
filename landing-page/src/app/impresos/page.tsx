@@ -9,6 +9,7 @@ import {
   Lock, QrCode, X, KeyRound, RefreshCw, LogOut
 } from 'lucide-react';
 import { SimpleQRCode, NeonQRCode } from '@/components/SimpleQRCode';
+import QRDiscovery from '@/components/QRDiscovery';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 
@@ -806,12 +807,14 @@ function ImpresosContent() {
 
               <div className="relative flex items-center justify-center my-1">
                 {qrSessionData && !qrLoading ? (
-                  <div className="flex flex-col items-center gap-3">
-                    <NeonQRCode value={qrSessionData} size={170} />
-                    <div className="bg-white rounded-2xl p-2 shadow-[0_0_30px_rgba(236,72,153,0.25)]">
-                      {/* Escaneable con la cámara del iPhone: Universal Link → abre la App nativa → autoriza */}
-                      <SimpleQRCode value={qrSessionData} size={150} />
-                    </div>
+                  <div className="flex flex-col items-center gap-2">
+                    <QRDiscovery
+                      value={qrSessionData}
+                      variant="affiliate"
+                      size={230}
+                      revealMode="discovery"
+                      surfaceKey="impresos-gate"
+                    />
                     {qrGateCode && (
                       <p className="text-xs text-zinc-400 text-center leading-snug">
                         Escanea el <b className="text-white">QR cuadrado</b> con la cámara del iPhone → se abre la App y autoriza.<br />
@@ -930,7 +933,13 @@ function ImpresosContent() {
                 </p>
                 <div className="inline-block mb-4 pt-6">
                   {qrSessionData && !qrLoading ? (
-                    <NeonQRCode value={qrSessionData} size={210} />
+                    <QRDiscovery
+                      value={qrSessionData}
+                      variant="affiliate"
+                      size={210}
+                      revealMode="discovery"
+                      surfaceKey="impresos-gate-modal"
+                    />
                   ) : (
                     <div className="w-60 h-60 rounded-4xl bg-[#110520] border-2 border-pink-500/40 flex flex-col items-center justify-center gap-3 p-4">
                       <RefreshCw className="w-7 h-7 text-pink-400 animate-spin" />

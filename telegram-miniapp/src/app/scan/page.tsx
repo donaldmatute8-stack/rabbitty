@@ -6,6 +6,7 @@ import { ArrowLeft, Keyboard } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Html5Qrcode } from 'html5-qrcode';
 import RabbittyCode from '@/components/ui/RabbittyCode';
+import QRDiscovery from '@/components/QRDiscovery';
 import BottomNav from '@/components/BottomNav';
 import Button from '@/components/ui/Button';
 import { useWallet } from '@/contexts/WalletContext';
@@ -61,6 +62,7 @@ export default function ScanPage() {
   const [manualCode, setManualCode] = useState('');
   const [showManualInput, setShowManualInput] = useState(false);
   const [activeTab, setActiveTab] = useState<'scan' | 'my-code'>(initialTab);
+  const [qrConfirm, setQrConfirm] = useState<{ qrToken: string; origin: string } | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isTransitioningRef = useRef(false);
   const startScanningRef = useRef<() => void>(() => {});
@@ -82,25 +84,8 @@ export default function ScanPage() {
       searchParams.get('qrlogin') ||
       (rawSearch.includes('qrlogin_') ? rawSearch.split('qrlogin_')[1]?.split('&')[0]?.split('?')[0] : null);
     if (urlQrLogin) {
-      (async () => {
-        try {
-          const headers = await PlatformBridge.getAuthHeaders();
-          const res = await fetch('/api/auth/qr/scan', {
-            method: 'POST',
-            headers: { ...headers, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ qrToken: urlQrLogin }),
-          });
-          const data = await res.json();
-          if (data.success) {
-            alert('¡Acceso autorizado exitosamente en tu pantalla! 🪄');
-            router.push('/profile');
-          } else {
-            alert('Error de autorización QR: ' + (data.error || 'Token inválido o expirado'));
-          }
-        } catch {
-          alert('Error de conexión al autorizar el acceso QR.');
-        }
-      })();
+      // Confirmación EXPLÍCITA: el usuario ve a QUÉ pantalla está autorizando
+      setQrConfirm({ qrToken: urlQrLogin, origin: 'www.rabbitty.me/impresos' });
       return;
     }
 
@@ -175,6 +160,32 @@ export default function ScanPage() {
         setHasCamera(false);
       }
     }
+  };
+
+
+  const bindQrSession = async (qrToken: string, onDone?: () => void) => {
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch('/api/auth/qr/scan', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ qrToken }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        PlatformBridge.hapticFeedback('success');
+        alert('¡Acceso autorizado en tu pantalla! 🪄');
+        setQrConfirm(null);
+        router.push('/profile');
+      } else {
+        alert('Error de autorización QR: ' + (data.error || 'Token inválido o expirado'));
+        setQrConfirm(null);
+      }
+    } catch {
+      alert('Error de conexión al autorizar el acceso QR.');
+      setQrConfirm(null);
+    }
+    onDone?.();
   };
 
   const stopScanning = useCallback(async () => {
@@ -512,6 +523,41 @@ export default function ScanPage() {
     return () => clearInterval(interval);
   }, [activeTab, hasCamera, showManualInput, result, router, stopScanning, handleDispatchPayload, showToast]);
 
+  // ── Modal: ¿Autorizar el acceso? (qrlogin gate) ──
+  if (qrConfirm) {
+    return (
+      <div className="min-h-dvh flex flex-col items-center justify-center bg-black px-6 relative overflow-hidden">
+        <div className="absolute top-[-15%] w-64 h-64 rounded-full bg-[#E91E63]/20 blur-[80px] pointer-events-none" />
+        <motion.div
+          initial={{ scale: 0.92, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="relative z-10 w-full max-w-sm rounded-[2rem] border border-white/10 bg-[#12121B] p-7 text-center"
+        >
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-[#E91E63]/15 border border-[#E91E63]/30 flex items-center justify-center text-3xl">
+            🔐
+          </div>
+          <h2 className="mt-4 text-lg font-black text-white">¿Autorizar el acceso?</h2>
+          <p className="mt-2 text-xs text-neutral-400 leading-relaxed">
+            Se dará acceso a <strong className="text-white">{qrConfirm.origin}</strong> en la pantalla donde se mostró el código.<br />
+            <span className="text-neutral-500">Sesión: {qrConfirm.qrToken.slice(0, 8)}… · un solo uso · expira pronto</span>
+          </p>
+          <button
+            onClick={async () => { await bindQrSession(qrConfirm.qrToken); }}
+            className="mt-6 w-full py-3.5 rounded-2xl bg-[#E91E63] text-white font-black text-sm active:scale-95 transition-transform cursor-pointer"
+          >
+            Autorizar acceso
+          </button>
+          <button
+            onClick={() => setQrConfirm(null)}
+            className="mt-2 w-full py-3 rounded-2xl bg-white/5 border border-white/10 text-neutral-400 font-bold text-xs cursor-pointer"
+          >
+            Cancelar
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
     <div 
       className="page-wrap relative min-h-dvh flex flex-col justify-between transition-colors duration-200" 
@@ -574,10 +620,12 @@ export default function ScanPage() {
             </div>
             
             <div className="flex flex-col items-center justify-center pt-8">
-              <RabbittyCode 
-                data={myScanCode ? `rc:${myScanCode}` : String(qrValue || 'rabbitty_guest')} 
-                size={230} 
-                showCardFrame={true} 
+              <QRDiscovery
+                value={myScanCode ? `rabbitty://pay?to=${encodeURIComponent(user?.username ? `@${user.username}` : String(qrValue || ''))}` : String(qrValue || 'rabbitty_guest')}
+                variant="rabbitter"
+                size={210}
+                revealMode="discovery"
+                surfaceKey="my-code"
               />
               <div className="mt-5 text-center">
                 <span className="text-sm font-black tracking-[1.5px] text-(--text-primary) uppercase block">
@@ -685,19 +733,9 @@ export default function ScanPage() {
                             const data = await res.json();
                             if (data?.success) {
                               if (data.type === 'qrlogin' && data.qrToken) {
-                                const headers = await PlatformBridge.getAuthHeaders();
-                                const bind = await fetch('/api/auth/qr/scan', {
-                                  method: 'POST',
-                                  headers: { ...headers, 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ qrToken: data.qrToken }),
-                                });
-                                const bindData = await bind.json();
-                                if (bindData?.success) {
-                                  alert('¡Acceso autorizado en la pantalla! 🪄');
-                                  setManualCode('');
-                                  router.push('/profile');
-                                  return;
-                                }
+                                setManualCode('');
+                                setQrConfirm({ qrToken: data.qrToken, origin: 'www.rabbitty.me/impresos' });
+                                return;
                               } else if (data.type === 'user' && data.user) {
                                 setManualCode('');
                                 router.push(`/profile/wallet?to=${encodeURIComponent(data.user.handle || data.user.id)}`);

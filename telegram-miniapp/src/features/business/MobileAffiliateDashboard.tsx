@@ -3,6 +3,7 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QrCode, Inbox, Check, X, ArrowLeft, BookOpen, AlertTriangle, BarChart3, Users, Settings2, Zap } from 'lucide-react';
 import RabbittyCode from '@/components/ui/RabbittyCode';
+import QRDiscovery from '@/components/QRDiscovery';
 import { PlatformBridge } from '@/lib/platform';
 
 interface BusinessProfile {
@@ -395,7 +396,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
             className="rounded-xl p-1.5 flex items-center justify-center cursor-pointer active:scale-95 transition-transform"
             style={{ backgroundColor: '#180B28', border: '1px solid rgba(233,30,99,0.3)' }}
           >
-            <RabbittyCode data={business?.scanCode ? `rc:${business.scanCode}` : `business_${business?.id}`} size={38} showCardFrame={false} />
+            <QRDiscovery value={`rc:${business?.scanCode ?? ''}`} variant="affiliate" size={38} revealMode="immediate" surfaceKey="biz-mini" />
           </div>
         </motion.div>
 
@@ -1230,7 +1231,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
           className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 cursor-pointer"
         >
           <div className="flex flex-col items-center animate-in fade-in zoom-in duration-200">
-            <RabbittyCode data={business?.scanCode ? `rc:${business.scanCode}` : `business_${business?.id}`} size={240} showCardFrame={true} />
+            <QRDiscovery value={`rc:${business?.scanCode ?? ''}`} variant="affiliate" size={220} revealMode="discovery" surfaceKey="biz-portal" />
             <p className="text-white/80 font-bold text-sm mt-6 bg-white/10 backdrop-blur-md px-6 py-2 rounded-full border border-white/10">
               Escanea para registrar consumo
             </p>

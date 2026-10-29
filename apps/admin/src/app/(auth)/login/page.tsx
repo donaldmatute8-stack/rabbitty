@@ -4,7 +4,7 @@ import { signIn } from "next-auth/react";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Mail, Phone, QrCode, Sparkles, UserCheck, Clock, ChevronDown, Check, Compass } from "lucide-react";
-import RabbittyCode from "@/components/ui/RabbittyCode";
+import QRDiscovery from "@/components/QRDiscovery";
 import { resolveApiUrl } from "@/lib/api-config";
 
 interface CountryCode {
@@ -351,10 +351,12 @@ export default function LoginPage() {
 
           <div className="p-4 bg-white/5 border border-pink-500/30 rounded-2xl shadow-[0_0_30px_rgba(236,72,153,0.15)] relative min-w-[212px] min-h-[212px] flex flex-col items-center justify-center gap-3">
             {qrToken ? (
-              <RabbittyCode
-                data={`https://app.rabbitty.me/scan?qrlogin_${qrToken}`}
-                size={190}
-                showCardFrame={true}
+              <QRDiscovery
+                value={`https://app.rabbitty.me/scan?qrlogin_${qrToken}`}
+                variant="admin"
+                size={210}
+                revealMode="discovery"
+                surfaceKey="admin-login"
               />
             ) : (
               <div className="w-[180px] h-[180px] flex flex-col items-center justify-center text-center p-4 space-y-3 relative overflow-hidden">

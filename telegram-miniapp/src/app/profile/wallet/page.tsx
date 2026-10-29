@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import RabbittyCode from '@/components/ui/RabbittyCode';
+import QRDiscovery from '@/components/QRDiscovery';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import { ArrowUpRight, ArrowDownLeft, Copy, RefreshCw, X } from 'lucide-react';
 import { useWallet } from '@/contexts/WalletContext';
@@ -363,12 +363,14 @@ export default function WalletPage() {
               Muestra tu QR Neón para que otros Rabbitters o comercios te transfieran Bunz escaneando directamente desde su app Rabbitty.
             </p>
 
-            {/* QR Neón Oficial RabbittyCode */}
+            {/* QR Discovery: neón 1a vez → QR inmediato (caja no espera) */}
             <div className="w-full flex flex-col items-center py-2 mb-3">
-              <RabbittyCode
-                data={payPayload || `rabbitty://pay?to=${encodeURIComponent(user?.username || 'rabbitter')}`}
+              <QRDiscovery
+                value={payPayload || `rabbitty://pay?to=${encodeURIComponent(user?.username || 'rabbitter')}`}
+                variant="rabbitter"
                 size={200}
-                showCardFrame={true}
+                revealMode="immediate"
+                surfaceKey="wallet-receive"
               />
             </div>
             <p className="text-[10px] text-white/50 mb-3 text-center self-center leading-snug">
