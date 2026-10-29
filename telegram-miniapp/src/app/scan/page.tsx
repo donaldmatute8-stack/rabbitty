@@ -290,22 +290,10 @@ export default function ScanPage() {
     }
 
     // 6. QR Login (/impresos o PC)
+        // 6. QR Login (/impresos o PC) — CONFIRMACIÓN EXPLÍCITA antes de vincular
     if (res.type === 'qrlogin' && res.qrLogin) {
       await stopScanning();
-      try {
-        const headers = await PlatformBridge.getAuthHeaders();
-        const bindRes = await fetch('/api/auth/qr/scan', {
-          method: 'POST',
-          headers: { ...headers, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ qrToken: res.qrLogin.qrToken }),
-        });
-        const bindData = await bindRes.json();
-        if (bindData?.success) {
-          alert('¡Acceso autorizado en la pantalla! 🪄');
-          return;
-        }
-      } catch {}
-      startScanningRef.current();
+      setQrConfirm({ qrToken: res.qrLogin.qrToken, origin: 'www.rabbitty.me' });
       return;
     }
 
