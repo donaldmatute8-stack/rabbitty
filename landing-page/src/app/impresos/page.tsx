@@ -344,6 +344,8 @@ function ImpresosContent() {
   const [showTempForm, setShowTempForm] = useState(false);
   const [tempScopePick, setTempScopePick] = useState<string>('ALL');
   const [authUserName, setAuthUserName] = useState<string>('');
+
+
   const [qrSessionId, setQrSessionId] = useState<string | null>(null);
   const [qrGateCode, setQrGateCode] = useState<string>('');
   const [qrSessionData, setQrSessionData] = useState<string>('');
@@ -376,6 +378,30 @@ function ImpresosContent() {
 
   const [businessName, setBusinessName] = useState(initialName);
   const [welcomeBunz, setWelcomeBunz] = useState(initialBunz);
+  // ── Políticas de piezas (regla rectora: permanentes venden hábito/acceso; promocionales venden incentivo) ──
+  type PiecePolicy = 'hero' | 'reward' | 'evergreen';
+  const PIECE_DEFAULT_POLICY: Record<string, PiecePolicy> = {
+    poster: 'evergreen', // A3 vidriera: EVERGREEN default; REWARD opcional
+    table: 'hero',       // A5 frontal: HERO
+    cashier: 'evergreen', // A6 caja: EVERGREEN default; REWARD opcional
+    guide: 'hero',       // A4 comercial: HERO
+  };
+  const [pieceModeOverrides, setPieceModeOverrides] = useState<Record<string, PiecePolicy>>({});
+  const [permanentMode, setPermanentMode] = useState(false);
+  const [welcomeBonusActive, setWelcomeBonusActive] = useState(true);
+  const [rewardPct, setRewardPct] = useState<number>(0);
+  const [bunzDirty, setBunzDirty] = useState(false);
+  const bunzNum = Math.max(0, Number(welcomeBunz) || 0);
+  const effectivePolicy = (piece: string): PiecePolicy =>
+    permanentMode ? 'evergreen' : (pieceModeOverrides[piece] ?? PIECE_DEFAULT_POLICY[piece] ?? 'evergreen');
+  // hero: renderiza el monto SOLO si la promoción está activa y configurada (>0)
+  const showBunz = (piece: string) => effectivePolicy(piece) === 'hero' && welcomeBonusActive && bunzNum >= 5;
+  // reward: solo si la pieza es REWARD y hay % real (>0) — nunca 0% ni undefined
+  const showPct = (piece: string) => {
+    if (effectivePolicy(piece) !== 'reward') return false;
+    const pct = Math.round(rewardPct);
+    return pct > 0;
+  };
   const [appUrl, setAppUrl] = useState(initialUrl);
   const [activeRef, setActiveRef] = useState(initialRef);
   const [selectedBusinessId, setSelectedBusinessId] = useState<string | null>(null);
@@ -480,6 +506,7 @@ function ImpresosContent() {
               setUrlManuallyEdited(false);
               setAppUrl(buildDownloadUrl(b.refCode, bunzVal));
               setBusinessLogo(b.logoUrl || '/icon_ra.png');
+              setRewardPct(b.rewardPercentage || 0);
               setSelectedTemplateKey(detectNicheKey(`${b.category} ${b.name}`));
               try {
                 localStorage.setItem(AUTH_STORAGE_KEY, `affiliate_${b.refCode}`);
@@ -520,6 +547,7 @@ function ImpresosContent() {
       .then((data) => {
         if (data?.success && Array.isArray(data.businesses)) {
           setBusinesses(data.businesses);
+          if (typeof data.welcomeBonusActive === 'boolean') setWelcomeBonusActive(data.welcomeBonusActive);
           // Si no vino logo en URL o vino vacío, y estamos con el negocio inicial, auto-asignar el logo registrado y detectar nicho
           const match = data.businesses.find((b: BusinessItem) => 
             b.name.toLowerCase() === initialName.toLowerCase() || 
@@ -602,6 +630,7 @@ function ImpresosContent() {
     setUrlManuallyEdited(false);
     setAppUrl(buildDownloadUrl(b.refCode, bunzVal));
     setBusinessLogo(b.logoUrl || '/icon_ra.png');
+    setRewardPct(b.rewardPercentage || 0);
     const detected = detectNicheKey(`${b.category} ${b.name}`);
     setSelectedTemplateKey(detected);
     setIsDropdownOpen(false);
@@ -655,6 +684,19 @@ function ImpresosContent() {
   );
 
   const handlePrint = () => {
+    // ── Versionado: snapshot inmutable de la config al momento de enviar a imprenta ──
+    try {
+      const key = `rabbitty_impresos_versions_${selectedBusinessId || 'default'}`;
+      const prev = JSON.parse(localStorage.getItem(key) || '[]');
+      prev.unshift({
+        date: new Date().toISOString(),
+        bunz: welcomeBunz,
+        pct: rewardPct,
+        template: currentTemplate.label,
+        policy: permanentMode ? 'evergreen' : 'mixto',
+      });
+      localStorage.setItem(key, JSON.stringify(prev.slice(0, 20)));
+    } catch {}
     window.print();
   };
 
@@ -1188,6 +1230,51 @@ function ImpresosContent() {
                   Elige tu negocio afiliado, la plantilla de copy curada para tu nicho de mercado y posiciona tu logotipo estratégico.
                 </p>
               </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-3 pb-4 border-b border-zinc-800/60">
+                <button
+                  type="button"
+                  onClick={() => setPermanentMode((v) => !v)}
+                  className={`text-[11px] font-bold px-3 py-1.5 rounded-full border transition-all cursor-pointer ${
+                    permanentMode
+                      ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                      : 'bg-white/5 text-zinc-400 border-zinc-700 hover:bg-white/10'
+                  }`}
+                  title="Fuerza TODAS las piezas en versión evergreen (sin cifras) — señalética de larga duración"
+                >
+                  {permanentMode ? '🌿 Modo permanente activo' : '🌿 Modo permanente (sin cifras)'}
+                </button>
+
+                {/* A3/A6: elegir REWARD (con %) o EVERGREEN */}
+                <div className="flex items-center gap-2 text-[11px] text-zinc-400">
+                  <span className="font-bold uppercase tracking-wider">A3 Vidriera:</span>
+                  <select
+                    value={pieceModeOverrides.poster ?? 'evergreen'}
+                    onChange={(e) => setPieceModeOverrides((p) => ({ ...p, poster: e.target.value as PiecePolicy }))}
+                    className="bg-black border border-zinc-800 rounded-lg px-2 py-1 text-[10px] text-white cursor-pointer focus:outline-none"
+                  >
+                    <option value="evergreen">🌿 Sin cifras (durable)</option>
+                    <option value="reward">📊 Con %{Math.round(rewardPct)} (garantizado)</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2 text-[11px] text-zinc-400">
+                  <span className="font-bold uppercase tracking-wider">A6 Caja:</span>
+                  <select
+                    value={pieceModeOverrides.cashier ?? 'evergreen'}
+                    onChange={(e) => setPieceModeOverrides((p) => ({ ...p, cashier: e.target.value as PiecePolicy }))}
+                    className="bg-black border border-zinc-800 rounded-lg px-2 py-1 text-[10px] text-white cursor-pointer focus:outline-none"
+                  >
+                    <option value="evergreen">🌿 Sin cifras (durable)</option>
+                    <option value="reward">📊 Con %{Math.round(rewardPct)} (garantizado)</option>
+                  </select>
+                </div>
+
+                {bunzDirty && (
+                  <span className="text-[11px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-full">
+                    ⚠️ Cambiar el bono obsoleta: A5 frontal + A4 — reimprímelas o activa Modo permanente
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-mono text-zinc-400 bg-zinc-800/60 px-2.5 py-1 rounded-md border border-zinc-700/50">
                   Piloto Rabbitty 2026
@@ -1343,7 +1430,7 @@ function ImpresosContent() {
                 <input
                   type="text"
                   value={welcomeBunz}
-                  onChange={(e) => setWelcomeBunz(e.target.value)}
+                  onChange={(e) => { setBunzDirty(true); setWelcomeBunz(e.target.value); }}
                   className="w-full bg-black border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500 font-medium"
                 />
               </div>
@@ -1457,14 +1544,29 @@ function ImpresosContent() {
               {/* Centro: Oferta + QR Gigante */}
               <div className="my-8 bg-zinc-950/80 border border-zinc-800 rounded-3xl p-8 flex flex-col md:flex-row items-center justify-between gap-8 relative z-10">
                 <div className="flex-1 space-y-3 text-center md:text-left">
-                  <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 font-bold">Beneficio Inmediato</span>
-                  <div className="flex items-baseline justify-center md:justify-start gap-1">
-                    <span className="text-5xl md:text-6xl font-black tracking-tighter text-white">${welcomeBunz}</span>
-                    <span className="text-xl md:text-2xl font-black text-pink-500 tracking-tight">BUNZ</span>
-                  </div>
-                  <p className="text-xs text-zinc-300 font-medium">
-                    Equivalentes a <strong className="text-white">${welcomeBunz} MXN</strong> en tu cuenta listos para usar en tus consumos en {businessName}.
-                  </p>
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 font-bold">
+                    {showPct('poster') ? 'Beneficio Permanente' : 'Únete a la Red'}
+                  </span>
+                  {showPct('poster') ? (
+                    <>
+                      <div className="flex items-baseline justify-center md:justify-start gap-1">
+                        <span className="text-5xl md:text-6xl font-black tracking-tighter text-white">+{Math.round(rewardPct)}%</span>
+                        <span className="text-xl md:text-2xl font-black text-pink-500 tracking-tight">BUNZ</span>
+                      </div>
+                      <p className="text-xs text-zinc-300 font-medium">
+                        En cada consumo en <strong className="text-white">{businessName}</strong>. Acumula y canjea cuando quieras.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-baseline justify-center md:justify-start gap-1">
+                        <span className="text-4xl md:text-5xl font-black tracking-tighter text-white">GANA BUNZ</span>
+                      </div>
+                      <p className="text-xs text-zinc-300 font-medium">
+                        En cada visita a <strong className="text-white">{businessName}</strong>. Únete a la red y descubre tu red de beneficios.
+                      </p>
+                    </>
+                  )}
                   <div className="pt-2 flex items-center justify-center md:justify-start gap-2 text-[11px] text-zinc-400">
                     <CheckCircle2 className="w-3.5 h-3.5 text-pink-500" /> Sin trámites engorrosos · Registro en 30s
                   </div>
@@ -1523,7 +1625,11 @@ function ImpresosContent() {
                   </span>
                   <h3 className="text-2xl md:text-3xl font-black tracking-tight text-black mt-1 leading-tight">
                     {currentTemplate.tableHeadline} <br />
-                    DE <span className="text-pink-600">${welcomeBunz} BUNZ</span>
+                    {showBunz('table') ? (
+                      <>DE <span className="text-pink-600">${welcomeBunz} BUNZ</span> DE BIENVENIDA</>
+                    ) : (
+                      <>GANA <span className="text-pink-600">BUNZ</span> EN CADA VISITA</>
+                    )}
                   </h3>
                   <p className="text-xs text-zinc-600 mt-2 font-medium">
                     1. Escanea el código con tu celular.<br />
@@ -1630,7 +1736,9 @@ function ImpresosContent() {
                   ¿YA TIENES TU CUENTA?
                 </h3>
                 <p className="text-xs text-zinc-400 mt-1 max-w-xs">
-                  {currentTemplate.cashierCallout} (<strong className="text-white">${welcomeBunz} Bunz</strong> de bienvenida).
+                  {showBunz('guide')
+                    ? `${currentTemplate.cashierCallout} (${welcomeBunz} Bunz de bienvenida para nuevos Rabbitters).`
+                    : `${currentTemplate.cashierCallout} — presenta tu Mi Código y acumula Bunz en cada visita.`}
                 </p>
               </div>
 
@@ -1697,8 +1805,8 @@ function ImpresosContent() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="p-4 rounded-xl border border-zinc-200 bg-zinc-50/50">
                     <span className="text-[10px] font-mono text-zinc-500 font-bold uppercase block">Bono Bienvenida</span>
-                    <span className="text-xl font-black text-black">${welcomeBunz} Bunz</span>
-                    <span className="text-[11px] text-zinc-500 block mt-0.5">(= ${welcomeBunz} MXN)</span>
+                    <span className="text-xl font-black text-black">{welcomeBonusActive && bunzNum >= 5 ? `$${welcomeBunz} Bunz` : '—'}</span>
+                    <span className="text-[11px] text-zinc-500 block mt-0.5">{welcomeBonusActive && bunzNum >= 5 ? `(= $${welcomeBunz} MXN)` : 'Promoción inactiva'}</span>
                   </div>
                   <div className="p-4 rounded-xl border border-zinc-200 bg-zinc-50/50">
                     <span className="text-[10px] font-mono text-zinc-500 font-bold uppercase block">Nicho Seleccionado</span>

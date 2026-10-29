@@ -68,6 +68,15 @@ export async function GET() {
       if (cfgRows[0]?.value) welcomeConfig = JSON.parse(cfgRows[0].value);
     } catch { welcomeConfig = {}; }
 
+    // Interruptor global de la promoción de bienvenida (default true)
+    let welcomeBonusActive = true;
+    try {
+      const flagRows = await sql`SELECT value FROM "systemSettings" WHERE key = 'welcome_bonus_active' LIMIT 1`;
+      if (flagRows[0]?.value !== undefined && flagRows[0]?.value !== null) {
+        welcomeBonusActive = flagRows[0].value === 'true';
+      }
+    } catch { welcomeBonusActive = true; }
+
     const businesses = (rows as unknown as DbBusinessRow[]).map((r) => ({
       id: r.id,
       name: r.name,
@@ -93,7 +102,7 @@ export async function GET() {
       });
     }
 
-    return NextResponse.json({ success: true, businesses });
+    return NextResponse.json({ success: true, businesses, welcomeBonusActive });
   } catch (err) {
     console.error('Error fetching businesses for impresos:', err);
     return NextResponse.json({
