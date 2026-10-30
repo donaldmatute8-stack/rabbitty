@@ -479,4 +479,164 @@ export const campaignRedemptions = pgTable("campaignRedemptions", {
 
 
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 🎟️  MEMBERSHIPS MODULE — Fase 15.1 (Web2 MVP)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * 🗂️ Membership Plans
+ * Catálogo de planes que un afiliado crea y configura.
+ * `currentVersionId` apunta a la versión publicada activa; permite versionado
+ * sin romper suscripciones existentes.
+ */
+export const membershipPlans = pgTable("membership_plans", {
+  id: id(),
+  businessId: fkId("businessId").references(() => ownedBusinesses.id, { onDelete: "cascade" }),
+  slug: text("slug").notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  coverImageUrl: text("coverImageUrl"),
+  badgeColor: text("badgeColor").default("#E91E63").notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  currentVersionId: fkIdOpt("currentVersionId"), // FK set after insert to avoid circular
+  ...timestamps,
+});
+
+/**
+ * 📋 Membership Plan Versions
+ * Cada edición de precio o beneficios crea una nueva versión inmutable.
+ * Los suscriptores activos permanecen en su versión hasta que renuevan.
+ */
+export const membershipPlanVersions = pgTable("membership_plan_versions", {
+  id: id(),
+  planId: fkId("planId").references(() => membershipPlans.id, { onDelete: "cascade" }),
+  versionNumber: integer("versionNumber").notNull(),
+  priceFiat: real("priceFiat").notNull(),               // Precio en moneda local (MXN por defecto)
+  currency: text("currency").default("MXN").notNull(),
+  // 'MONTHLY' | 'QUARTERLY' | 'SEMIANNUAL' | 'ANNUAL' | 'ONE_TIME'
+  billingInterval: text("billingInterval").notNull(),
+  // Array de reglas de beneficios: [{ type, targetRefId, quotaPerCycle, cycleResetType, ... }]
+  benefitRules: jsonb("benefitRules").notNull(),
+  // [] = todas las sucursales; de lo contrario, array de branchIds permitidos
+  branchesAllowed: jsonb("branchesAllowed").default([]).notNull(),
+  maxMembersLimit: integer("maxMembersLimit"),           // null = ilimitado
+  isPublished: boolean("isPublished").default(false).notNull(),
+  stripeProductId: text("stripeProductId"),             // Fase 15.1 Stripe Connect
+  stripePriceId: text("stripePriceId"),
+  ...timestamps,
+});
+
+/**
+ * 🪪 Membership Subscriptions
+ * Registro de un usuario suscrito a un plan concreto.
+ * `qrPassSecret` es la semilla TOTP para el QR dinámico del Membership Pass.
+ */
+export const membershipSubscriptions = pgTable("membership_subscriptions", {
+  id: id(),
+  userId: fkId("userId").references(() => users.id, { onDelete: "cascade" }),
+  businessId: fkId("businessId").references(() => ownedBusinesses.id, { onDelete: "restrict" }),
+  planVersionId: fkId("planVersionId").references(() => membershipPlanVersions.id, { onDelete: "restrict" }),
+  // 'ACTIVE' | 'PAST_DUE' | 'GRACE_PERIOD' | 'CANCELLED' | 'EXPIRED'
+  status: text("status").notNull(),
+  currentPeriodStart: timestamp("currentPeriodStart").notNull(),
+  currentPeriodEnd: timestamp("currentPeriodEnd").notNull(),
+  cancelAtPeriodEnd: boolean("cancelAtPeriodEnd").default(false).notNull(),
+  // 'STRIPE' | 'CASH_POS' | 'APPLE_IAP' | 'PROMO'
+  paymentProvider: text("paymentProvider").notNull(),
+  paymentProviderSubId: text("paymentProviderSubId"),   // Stripe subscription ID, etc.
+  qrPassSecret: text("qrPassSecret").notNull(),          // TOTP seed for dynamic QR
+  ...timestamps,
+});
+
+/**
+ * ✅ Membership Entitlements
+ * Derechos activos de una suscripción en el ciclo actual.
+ * Se regeneran en cada renovación de ciclo (diario, semanal, mensual, etc.).
+ */
+export const membershipEntitlements = pgTable("membership_entitlements", {
+  id: id(),
+  subscriptionId: fkId("subscriptionId").references(() => membershipSubscriptions.id, { onDelete: "cascade" }),
+  // 'INCLUDED_PRODUCT' | 'DISCOUNT_PCT' | 'CREDIT_BALANCE' | 'EVENT_ACCESS' | 'BULK_PACK'
+  benefitType: text("benefitType").notNull(),
+  targetRefId: text("targetRefId"),                     // menuItemId, categoryId, eventId o null (=cualquiera)
+  quotaPerCycle: integer("quotaPerCycle").notNull(),
+  // 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'FIXED'
+  cycleResetType: text("cycleResetType").notNull(),
+  currentUsageInCycle: integer("currentUsageInCycle").default(0).notNull(),
+  cycleStartDate: timestamp("cycleStartDate").notNull(),
+  cycleEndDate: timestamp("cycleEndDate").notNull(),
+  discountPct: real("discountPct"),                     // Solo para DISCOUNT_PCT (0-100)
+  creditBalance: real("creditBalance"),                 // Solo para CREDIT_BALANCE (fiat)
+  ...timestamps,
+});
+
+/**
+ * 📝 Entitlement Usages
+ * Registro atómico e idempotente de cada redención en el POS / kiosco.
+ */
+export const entitlementUsages = pgTable("entitlement_usages", {
+  id: id(),
+  entitlementId: fkId("entitlementId").references(() => membershipEntitlements.id, { onDelete: "restrict" }),
+  subscriptionId: fkId("subscriptionId").references(() => membershipSubscriptions.id, { onDelete: "restrict" }),
+  branchId: text("branchId").notNull(),
+  staffId: text("staffId"),                             // ID del empleado que escaneó
+  orderId: text("orderId"),                             // Referencia al ticket del POS
+  quantityUsed: integer("quantityUsed").default(1).notNull(),
+  idempotencyKey: text("idempotencyKey").notNull().unique(), // Evita doble redención en reintentos
+  redeemedAt: timestamp("redeemedAt").defaultNow().notNull(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔮 WEB2.5 - NOT ACTIVE
+// Schema preparado para la capa NFT de credenciales verificables.
+// No conectar routers ni UI hasta Fase 15.3.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const membershipNftCredentials = pgTable("membership_nft_credentials", {
+  id: id(),
+  subscriptionId: fkId("subscriptionId").references(() => membershipSubscriptions.id, { onDelete: "cascade" }),
+  network: text("network"),                             // 'base' | 'polygon' | 'ton'
+  contractAddress: text("contractAddress"),
+  tokenId: text("tokenId"),
+  walletAddress: text("walletAddress"),
+  // 'NOT_STARTED' | 'PENDING' | 'MINTED' | 'FAILED' | 'REVOKED'
+  mintStatus: text("mintStatus").default("NOT_STARTED").notNull(),
+  txHash: text("txHash"),
+  metadataUri: text("metadataUri"),
+  ...timestamps,
+});
+
+// ── Membership Relations ──────────────────────────────────────────────────────
+
+export const membershipPlansRelations = relations(membershipPlans, ({ one, many }) => ({
+  business: one(ownedBusinesses, { fields: [membershipPlans.businessId], references: [ownedBusinesses.id] }),
+  versions: many(membershipPlanVersions),
+}));
+
+export const membershipPlanVersionsRelations = relations(membershipPlanVersions, ({ one, many }) => ({
+  plan: one(membershipPlans, { fields: [membershipPlanVersions.planId], references: [membershipPlans.id] }),
+  subscriptions: many(membershipSubscriptions),
+}));
+
+export const membershipSubscriptionsRelations = relations(membershipSubscriptions, ({ one, many }) => ({
+  user: one(users, { fields: [membershipSubscriptions.userId], references: [users.id] }),
+  business: one(ownedBusinesses, { fields: [membershipSubscriptions.businessId], references: [ownedBusinesses.id] }),
+  planVersion: one(membershipPlanVersions, { fields: [membershipSubscriptions.planVersionId], references: [membershipPlanVersions.id] }),
+  entitlements: many(membershipEntitlements),
+  nftCredential: one(membershipNftCredentials, { fields: [membershipSubscriptions.id], references: [membershipNftCredentials.subscriptionId] }),
+}));
+
+export const membershipEntitlementsRelations = relations(membershipEntitlements, ({ one, many }) => ({
+  subscription: one(membershipSubscriptions, { fields: [membershipEntitlements.subscriptionId], references: [membershipSubscriptions.id] }),
+  usages: many(entitlementUsages),
+}));
+
+export const entitlementUsagesRelations = relations(entitlementUsages, ({ one }) => ({
+  entitlement: one(membershipEntitlements, { fields: [entitlementUsages.entitlementId], references: [membershipEntitlements.id] }),
+  subscription: one(membershipSubscriptions, { fields: [entitlementUsages.subscriptionId], references: [membershipSubscriptions.id] }),
+}));
+
+export const membershipNftCredentialsRelations = relations(membershipNftCredentials, ({ one }) => ({
+  subscription: one(membershipSubscriptions, { fields: [membershipNftCredentials.subscriptionId], references: [membershipSubscriptions.id] }),
+}));
 

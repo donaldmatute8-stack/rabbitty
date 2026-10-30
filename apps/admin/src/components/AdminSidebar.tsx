@@ -55,6 +55,7 @@ import {
   Compass,
   BookOpen,
   MessageSquarePlus,
+  Ticket,
 } from "lucide-react";
 import { useSidebar } from "./DashboardClientWrapper";
 import { AdminFeedbackModal } from "./AdminFeedbackModal";
@@ -224,6 +225,7 @@ const menuPillars: MenuPillar[] = [
     icon: TrendingUp,
     items: [
       { href: "/loyalty", label: "Cashback Bunz", icon: Award },
+      { href: "/memberships", label: "Membresías", icon: Ticket, badge: "Nuevo" },
       { href: "/campaigns", label: "Marketing & Campañas", icon: Megaphone },
       { href: "/marketing/mood", label: "Rabbitty Mood & Telemetría", icon: Sparkles, badge: "IA" },
       { href: "/customers", label: "Clientes Rabbitters", icon: UserRound },

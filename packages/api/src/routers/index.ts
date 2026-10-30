@@ -20,6 +20,7 @@ import { invoicesRouter } from "./invoices";
 import { cateringRouter } from "./catering";
 import { pricingRouter } from "./pricing";
 import { campaignsRouter } from "./campaigns";
+import { membershipsRouter } from "./memberships";
 import { loyaltyRouter } from "./loyalty";
 import { tableLayoutRouter } from "./tableLayout";
 import { settingsRouter } from "./settings";
@@ -59,6 +60,7 @@ export const appRouter = router({
   catering: cateringRouter,
   pricing: pricingRouter,
   campaigns: campaignsRouter,
+  memberships: membershipsRouter,
   loyalty: loyaltyRouter,
   tableLayout: tableLayoutRouter,
   settings: settingsRouter,

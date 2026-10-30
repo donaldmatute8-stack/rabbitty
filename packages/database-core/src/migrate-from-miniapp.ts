@@ -123,7 +123,7 @@ async function migrate() {
     const chunkSize = 100;
     for (let i = 0; i < rows.length; i += chunkSize) {
       const chunk = rows.slice(i, i + chunkSize).map(cfg.insert);
-      await core.insert(coreSchema[tableName as keyof typeof coreSchema]).values(chunk as any).onConflictDoNothing();
+      await core.insert(coreSchema[tableName as keyof typeof coreSchema] as any).values(chunk as any).onConflictDoNothing();
     }
 
     console.log(`  Inserted ${rows.length} rows into core DB`);

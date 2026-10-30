@@ -321,6 +321,20 @@ export default function PosPage() {
 
         const onScanSuccess = async (decodedText: string) => {
           if (!active) return;
+
+          let cleanedRaw = decodedText.trim();
+          // ── QR de Membresía: <subscriptionId>.<window>.<hmac24> → canje directo ──
+          const memToken = cleanedRaw.match(/^([0-9a-fA-F-]{36})\.(\d+)\.([0-9a-f]{24})$/);
+          if (memToken) {
+            try { await scanner.stop().catch(() => {}); } catch {}
+            scannerInstanceRef.current = null;
+            neonDecoderStopRef.current?.();
+            neonDecoderStopRef.current = null;
+            setIsScanningRabbitter(false);
+            await handleMembershipRedeem(cleanedRaw);
+            return;
+          }
+
           try {
             await scanner.stop().catch(() => {});
           } catch {}
@@ -408,6 +422,40 @@ export default function PosPage() {
       }
     };
   }, [rabbitterModalOpen, isScanningRabbitter]);
+
+
+  // ── Canje de Membresía por escáner (token <subId>.<window>.<hmac>) ──
+  const redeemMembership = trpc.memberships.redeemAtPOS.useMutation();
+  const handleMembershipRedeem = async (qrToken: string) => {
+    try {
+      const subId = qrToken.split(".")[0];
+      const ctxBiz = await utils.memberships.myBusinessForContext.fetch();
+      if (!ctxBiz?.businessId) {
+        toast.error("Este POS no tiene un negocio de membresías vinculado");
+        return;
+      }
+      const res = await redeemMembership.mutateAsync({
+        businessId: ctxBiz.businessId,
+        qrToken,
+        branchId: ticketContext?.branch?.id || "pos",
+        quantity: 1,
+        idempotencyKey: `pos_scan_${subId}_${Math.floor(Date.now() / 1000 / 30)}`,
+      });
+      if (res?.duplicate) {
+        const dupMember = res.memberName ? ` de ${res.memberName}` : "";
+        toast.info(`🐰 Membresía ya canjeada hace un momento${dupMember} (duplicado ignorado)`);
+        return;
+      }
+      if (res?.success) {
+        const member = res.memberName ? ` de ${res.memberName}` : "";
+        toast.success(`🎟️ Canje OK${member} — quedan ${res.remaining} usos este ciclo`);
+      } else {
+        toast.error("No se pudo canjear la membresía");
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Membresía inválida o no vigente");
+    }
+  };
 
   const [cashDropAmount, setCashDropAmount] = useState("");
   const [cashDropNotes, setCashDropNotes] = useState("");
