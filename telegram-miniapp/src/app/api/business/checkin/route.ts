@@ -36,9 +36,7 @@ export async function POST(req: NextRequest) {
         eq(ledgerEntries.idempotencyKey, `checkin_${biz.id}_${caller.id}_${dayStart.toISOString().slice(0, 10)}`),
         gte(ledgerEntries.createdAt, dayStart),
       ));
-    if (Number(todayRow?.n ?? 0) > 0) {
-      return NextResponse.json({ success: true, checkIn: 'already', message: 'Ya hiciste check-in hoy aquí 🐰' });
-    }
+    const alreadyToday = Number(todayRow?.n ?? 0) > 0;
 
     // Registro atómico: ledger con clave única diaria + contador de visitas
     const idempotencyKey = `checkin_${biz.id}_${caller.id}_${dayStart.toISOString().slice(0, 10)}`;
@@ -53,7 +51,7 @@ export async function POST(req: NextRequest) {
       metadata: { kind: 'CHECK_IN', businessId: biz.id, businessName: biz.name },
     }).onConflictDoNothing({ target: ledgerEntries.idempotencyKey }).returning();
 
-    if (inserted.length > 0) {
+    if (!alreadyToday && inserted.length > 0) {
       await db.update(users)
         .set({ visitedBusinesses: sql`COALESCE(${users.visitedBusinesses}, 0) + 1`, updatedAt: new Date() })
         .where(eq(users.id, caller.id));

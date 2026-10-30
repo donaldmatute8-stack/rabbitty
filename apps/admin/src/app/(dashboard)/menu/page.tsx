@@ -77,7 +77,7 @@ export default function MenuPage() {
   };
 
   const openCatEdit = (cat: NonNullable<typeof categories>[number]) => {
-    setCatForm({ name: cat.name, description: "" });
+    setCatForm({ name: cat.name, description: (cat as any).description ?? "" });
     setCatDialog({ mode: "edit", id: cat.id });
   };
 
@@ -93,7 +93,7 @@ export default function MenuPage() {
     if (catDialog?.mode === "create") {
       createCategory.mutate({ ...catForm });
     } else if (catDialog?.id) {
-      updateCategory.mutate({ id: catDialog.id, name: catForm.name });
+      updateCategory.mutate({ id: catDialog.id, name: catForm.name, description: catForm.description || undefined });
     }
   };
 
@@ -145,7 +145,7 @@ export default function MenuPage() {
             >
               {cat.name}
             </button>
-            <div className="absolute -right-1.5 -top-1.5 hidden gap-1 group-hover:flex z-20">
+            <div className="absolute -right-1.5 -top-1.5 flex gap-1 z-20">
               <button
                 onClick={() => openCatEdit(cat)}
                 className="flex h-6 w-6 items-center justify-center rounded-full bg-neutral-900 border border-white/10 text-gray-400 shadow-lg hover:text-white hover:bg-white/10 transition-all"

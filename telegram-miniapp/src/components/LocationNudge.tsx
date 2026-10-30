@@ -69,7 +69,7 @@ export default function LocationNudge() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 20, scale: 0.96 }}
           transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-          className="fixed inset-x-3.5 bottom-24 z-[90] overflow-hidden rounded-[26px] p-4"
+          className="fixed inset-x-3.5 bottom-24 z-90 overflow-hidden rounded-[26px] p-4"
           style={{
             background: 'linear-gradient(165deg, rgba(26, 24, 34, 0.96) 0%, rgba(14, 13, 20, 0.98) 100%)',
             backdropFilter: 'blur(28px)',

@@ -457,6 +457,21 @@ export default function PosPage() {
         toast.info(`🐰 ${c.name} llegó al local — check-in activo`);
       }
     }
+    // ── QR de mostrador: si alguien acaba de escanearlo (presencia nueva) → cerrar
+    // automáticamente el QR y mostrar al rabbitter para proceder al cobro ──
+    useEffect(() => {
+      if (!showBusinessQrModal) return;
+      const openAt = Date.now() - 15_000; // tolerancia: señal posterior a la apertura
+      const fresh = (activeCheckIns || []).find((c: any) => new Date(c.at).getTime() >= openAt);
+      if (fresh) {
+        setShowBusinessQrModal(false);
+        toast.info(`📸 ${fresh.name} escaneó tu QR — cliente en el local`);
+        utils.pos.lookupRabbitter.fetch({ query: fresh.userId })
+          .then((res) => { if (res) setSelectedRabbitter(res); })
+          .catch(() => {});
+      }
+    }, [showBusinessQrModal, activeCheckIns]);
+
     // ── Auto-vínculo: si hay EXACTAMENTE un rabbitter presente y no hay ninguno vinculado,
     // preselecciónalo para el cobro (el banner permite cambiarlo si son varios). ──
     if (!selectedRabbitter && (activeCheckIns?.length ?? 0) === 1) {
@@ -1620,15 +1635,6 @@ export default function PosPage() {
                     >
                       <Camera className="h-3 w-3" />
                       <span>Escanear</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowBusinessQrModal(true)}
-                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/10 hover:bg-white/15 text-white border border-white/15 text-[10px] font-black transition-all cursor-pointer active:scale-95 shadow-sm"
-                      title="Mostrar QR Neón del negocio en pantalla"
-                    >
-                      <QrCode className="h-3 w-3 text-pink-400 animate-pulse" />
-                      <span>QR Neón</span>
                     </button>
                     <button
                       type="button"

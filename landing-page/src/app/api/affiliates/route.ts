@@ -77,6 +77,44 @@ export async function GET() {
       }
     } catch { welcomeBonusActive = true; }
 
+    // Planes de membresía publicados por negocio (fuente única desde Affiliates Admin)
+    interface DbPlanRow {
+      businessId: string;
+      planId: string;
+      name: string;
+      description: string | null;
+      badgeColor: string;
+      priceFiat: number;
+      currency: string;
+      billingInterval: string;
+      benefitRules: unknown;
+    }
+    const plansByBusiness: Record<string, DbPlanRow[]> = {};
+    try {
+      const planRows = await sql`
+        SELECT
+          mp."businessId",
+          mp.id as "planId",
+          mp.name,
+          mp.description,
+          mp."badgeColor",
+          mpv."priceFiat",
+          mpv.currency,
+          mpv."billingInterval",
+          mpv."benefitRules"
+        FROM "membership_plans" mp
+        INNER JOIN "membership_plan_versions" mpv ON mpv.id = mp."currentVersionId"
+        WHERE mp."isActive" = true AND mpv."isPublished" = true
+        ORDER BY mpv."priceFiat" ASC
+      `;
+      for (const p of planRows as unknown as DbPlanRow[]) {
+        if (!plansByBusiness[p.businessId]) plansByBusiness[p.businessId] = [];
+        plansByBusiness[p.businessId].push(p);
+      }
+    } catch {
+      // Si la migración 0010 aún no corre en este entorno, continúa sin romper impresos
+    }
+
     const businesses = (rows as unknown as DbBusinessRow[]).map((r) => ({
       id: r.id,
       name: r.name,
@@ -86,6 +124,7 @@ export async function GET() {
       logoUrl: r.logoUrl || parseFirstGalleryImage(r.gallery) || null,
       refCode: r.refCode || r.name.toLowerCase().replace(/[^a-z0-9]/g, ''),
       welcomeBunz: welcomeConfig[r.id] ?? 25,
+      membershipPlans: plansByBusiness[r.id] || [],
     }));
 
     // Asegurar que 626 Café siempre esté disponible en el dropdown
