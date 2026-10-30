@@ -465,7 +465,7 @@ function CourtesyPanel({ businessId }: { businessId: string }) {
           <input className={inputCls} placeholder="Nota de regalo (opcional) — ej. 'Para mi hermana ☕'" value={giftNote} onChange={(e) => setGiftNote(e.target.value)} maxLength={300} />
 
           <Button className="w-full" disabled={!targetUserId || grant.isPending}
-            onClick={() => targetUserId && grant.mutate({ targetUserId, benefitRules: rules.map((r) => ({ ...r, quotaPerCycle: Math.max(1, parseInt(r.quotaPerCycle || "0", 10) || 1) })), durationMonths: duration, giftNote: giftNote.trim() || undefined })}>
+            onClick={() => targetUserId && grant.mutate({ businessId, targetUserId, benefitRules: rules.map((r) => ({ ...r, quotaPerCycle: Math.max(1, parseInt(r.quotaPerCycle || "0", 10) || 1) })), durationMonths: duration, giftNote: giftNote.trim() || undefined })}>
             {grant.isPending ? "Otorgando…" : `🎁 Otorgar a ${targetName || "…"}`}
           </Button>
         </div>

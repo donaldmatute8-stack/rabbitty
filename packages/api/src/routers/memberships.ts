@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, eq, desc, sql, lt, gt } from "drizzle-orm";
+import { and, eq, desc, sql, lt, gt, inArray } from "drizzle-orm";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../trpc";
@@ -182,6 +182,7 @@ export const membershipsRouter = router({
    */
   grantCourtesy: protectedProcedure
     .input(z.object({
+      businessId: z.string().optional(),
       targetUserId: z.string(),
       benefitRules: z.array(benefitRuleSchema).min(1).max(10),
       durationMonths: z.union([z.literal(3), z.literal(6), z.literal(12), z.literal(0)]), // 0 = indefinida (revocable)
@@ -189,9 +190,20 @@ export const membershipsRouter = router({
       label: z.string().max(60).optional(), // etiqueta visible opcional (ej. "Cortesía Familiar")
     }))
     .mutation(async ({ ctx, input }) => {
+      // ── Negocio desde el selector del panel, validado contra el contexto merchant:
+      // owner directo, staff de la branch, o god (todos los negocios). ──
+      const { resolveMerchantContext } = await import("../services/merchantContext");
+      const mctx = await resolveMerchantContext(ctx);
+      const allowedIds = mctx.isGod
+        ? (await ctx.coreDb.select({ id: ownedBusinesses.id }).from(ownedBusinesses)).map((b: { id: string }) => b.id)
+        : mctx.businessIds;
+      if (allowedIds.length === 0) throw new TRPCError({ code: "FORBIDDEN", message: "No administras ningún negocio" });
+      const chosen = input.businessId && allowedIds.includes(input.businessId)
+        ? input.businessId
+        : allowedIds[0];
       const [biz] = await ctx.coreDb.select({ id: ownedBusinesses.id, name: ownedBusinesses.name })
-        .from(ownedBusinesses).where(eq(ownedBusinesses.ownerId, ctx.userId)).limit(1);
-      if (!biz) throw new TRPCError({ code: "FORBIDDEN", message: "No eres dueño de un negocio" });
+        .from(ownedBusinesses).where(inArray(ownedBusinesses.id, [chosen])).limit(1);
+      if (!biz) throw new TRPCError({ code: "FORBIDDEN", message: "No administras este negocio" });
       if (input.targetUserId === ctx.userId) throw new TRPCError({ code: "BAD_REQUEST", message: "No puedes otorgártela a ti mismo" });
 
       const now = new Date();
@@ -332,7 +344,11 @@ export const membershipsRouter = router({
   listCourtesies: protectedProcedure
     .input(z.object({ businessId: z.string() }))
     .query(async ({ ctx, input }) => {
-      await assertBusinessOwner(ctx, input.businessId);
+      const { resolveMerchantContext } = await import("../services/merchantContext");
+      const mctx = await resolveMerchantContext(ctx);
+      if (!mctx.isGod && !mctx.businessIds.includes(input.businessId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "No administras este negocio" });
+      }
       const rows = await ctx.coreDb.select({
         sub: membershipSubscriptions,
       }).from(membershipSubscriptions)
