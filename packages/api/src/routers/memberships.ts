@@ -153,10 +153,36 @@ export const membershipsRouter = router({
         .from(ownedBusinesses)
         .orderBy(ownedBusinesses.name);
     }
-    return await ctx.coreDb
+    const mine = await ctx.coreDb
       .select({ id: ownedBusinesses.id, name: ownedBusinesses.name, isGod: sql<boolean>`false` })
       .from(ownedBusinesses)
       .where(eq(ownedBusinesses.ownerId, ctx.userId));
+    if (mine.length > 0) return mine;
+    // Staff/cajero sin ownership: el negocio de SU branch (venta en caja) — mismo criterio
+    // que assertCanRedeem, para que el botón "Nuevo plan" funcione en el tenant del staff.
+    if (ctx.branchId) {
+      const [br] = await ctx.restaurantDb
+        .select({ restaurantId: branches.restaurantId })
+        .from(branches)
+        .where(eq(branches.id, ctx.branchId))
+        .limit(1);
+      if (br?.restaurantId) {
+        const [rest] = await ctx.restaurantDb
+          .select({ businessId: restaurants.businessId })
+          .from(restaurants)
+          .where(eq(restaurants.id, br.restaurantId))
+          .limit(1);
+        if (rest?.businessId) {
+          const [biz] = await ctx.coreDb
+            .select({ id: ownedBusinesses.id, name: ownedBusinesses.name, isGod: sql<boolean>`false` })
+            .from(ownedBusinesses)
+            .where(eq(ownedBusinesses.id, rest.businessId))
+            .limit(1);
+          if (biz) return [biz];
+        }
+      }
+    }
+    return mine;
   }),
 
   /** Planes publicados de un negocio (versión vigente). */
