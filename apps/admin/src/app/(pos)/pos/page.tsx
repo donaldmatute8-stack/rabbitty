@@ -424,6 +424,21 @@ export default function PosPage() {
   }, [rabbitterModalOpen, isScanningRabbitter]);
 
 
+
+  // ── Notificación del sistema (Mac/iPad) cuando concluye un cobro con recompensa ──
+  const notifySystem = (title: string, body: string) => {
+    try {
+      if (typeof Notification === "undefined") return;
+      if (Notification.permission === "granted") {
+        new Notification(title, { body, icon: "/Ra.png" });
+      } else if (Notification.permission === "default") {
+        Notification.requestPermission().then((p) => {
+          if (p === "granted") new Notification(title, { body, icon: "/Ra.png" });
+        }).catch(() => {});
+      }
+    } catch { /* noop */ }
+  };
+
   // ── Canje de Membresía por escáner (token <subId>.<window>.<hmac>) ──
   const redeemMembership = trpc.memberships.redeemAtPOS.useMutation();
   const { data: activeCheckIns, refetch: refetchCheckIns } = trpc.pos.getActiveCheckIns.useQuery(undefined, {
@@ -994,7 +1009,11 @@ export default function PosPage() {
         }
 
         if (checkoutResult.awardedBunz && checkoutResult.awardedBunz > 0) {
-          toast.success(`🐰 ¡Orden #${realOrderNumber} pagada! +${checkoutResult.awardedBunz} Bunz acreditados a ${selectedRabbitter?.name || "cliente"}.`);
+          const rewardMsg = `+${checkoutResult.awardedBunz} Bunz acreditados a ${selectedRabbitter?.name || "cliente"}`;
+          toast.success(`🐰 ¡Orden #${realOrderNumber} pagada! ${rewardMsg}.`);
+          notifySystem(`🐰 Cobro concluido — ${rewardMsg}`, `Orden #${realOrderNumber} · ${selectedRabbitter?.name || "cliente"} recibió ${checkoutResult.awardedBunz} Bunz`);
+        } else if (selectedRabbitter) {
+          notifySystem(`⚠️ Cobro sin recompensa automática`, `Orden #${realOrderNumber} pagada pero el mint no confirmó — el cliente puede reclamar con el QR del ticket.`);
         } else {
           toast.success(`Orden #${realOrderNumber} registrada y pagada en el sistema`);
         }

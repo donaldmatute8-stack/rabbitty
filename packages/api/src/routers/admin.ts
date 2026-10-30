@@ -3,6 +3,7 @@ import { and, eq, inArray, gte, lt, sql, desc } from "drizzle-orm";
 import { router, protectedProcedure, adminOnlyProcedure, platformOnlyProcedure, godAdminProcedure, resolveBranchId } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import * as dbSchema from "@rabbitty/database-restaurant";
+import { ledgerEntries as ledgerEntries2, branches as dbSchemaBranches, restaurants as dbSchemaRestaurants } from "@rabbitty/database-restaurant/schema";
 import { bus, EventTypes } from "@rabbitty/events";
 import { restaurants, branches, orders, tables, staff, ledgerEntries, menuCategories, menuItems } from "@rabbitty/database-restaurant/schema";
 import { referrals, users, levels, ownedBusinesses, transactions, treasury, systemSettings, auditEntries } from "@rabbitty/database-core";
@@ -830,21 +831,71 @@ export const adminRouter = router({
         firstBiz = foundFirst;
       }
 
+      // ── Resolución por branch (cajeros/pairing con email distinto al owner) —
+      // el espejo del negocio que opera la sesión; sin esto cae a firstBiz global. ──
+      if (!biz && ctx.branchId) {
+        try {
+          const [br] = await ctx.restaurantDb
+            .select({ restaurantId: dbSchemaBranches.restaurantId })
+            .from(dbSchemaBranches)
+            .where(eq(dbSchemaBranches.id, ctx.branchId))
+            .limit(1);
+          if (br?.restaurantId) {
+            const [rest] = await ctx.restaurantDb
+              .select({ businessId: dbSchemaRestaurants.businessId })
+              .from(dbSchemaRestaurants)
+              .where(eq(dbSchemaRestaurants.id, br.restaurantId))
+              .limit(1);
+            if (rest?.businessId) {
+              const [foundByBranch] = await ctx.coreDb
+                .select({
+                  id: ownedBusinesses.id,
+                  name: ownedBusinesses.name,
+                  category: ownedBusinesses.category,
+                  bunzBalance: ownedBusinesses.bunzBalance,
+                  package: ownedBusinesses.package,
+                  rewardPercentage: ownedBusinesses.rewardPercentage,
+                  status: ownedBusinesses.status,
+                  creditLimit: ownedBusinesses.creditLimit,
+                })
+                .from(ownedBusinesses)
+                .where(eq(ownedBusinesses.id, rest.businessId))
+                .limit(1);
+              if (foundByBranch) biz = foundByBranch;
+            }
+          }
+        } catch (brErr) {
+          console.warn("[getAffiliateBunzInventory] branch resolution falló:", brErr);
+        }
+      }
+
       const targetBiz = biz || firstBiz;
 
+      // ── Métricas desde el LEDGER (libro autoritativo) + fallback a transactions ──
       let totalBunzMinted = 0;
+      let totalBunzRedimido = 0;
       if (targetBiz?.id) {
-        // Calcular total de Bunz minteados/otorgados desde las transacciones del negocio
         try {
-          const [txAgg] = await ctx.coreDb
+          const [ledgerAgg] = await ctx.coreDb
             .select({
-              total: sql<number>`COALESCE(SUM(${transactions.bunzMinted}), 0)::int`,
+              delivered: sql<number>`COALESCE(SUM(${ledgerEntries2.amount}) FILTER (WHERE ${ledgerEntries2.type} = 'EARN'), 0)::int`,
+              redeemed: sql<number>`COALESCE(SUM(${ledgerEntries2.amount}) FILTER (WHERE ${ledgerEntries2.type} = 'SPEND'), 0)::int`,
             })
-            .from(transactions)
-            .where(eq(transactions.businessId, targetBiz.id));
-          totalBunzMinted = Number(txAgg?.total ?? 0);
-        } catch (aggErr) {
-          console.warn("[getAffiliateBunzInventory] Could not aggregate transactions:", aggErr);
+            .from(ledgerEntries2)
+            .where(sql`${ledgerEntries2.payerSubjectId} = ${targetBiz.id} OR ${ledgerEntries2.payeeSubjectId} = ${targetBiz.id}`);
+          totalBunzMinted = Number(ledgerAgg?.delivered ?? 0);
+          totalBunzRedimido = Number(ledgerAgg?.redeemed ?? 0);
+        } catch {
+          // Fallback al agregado de transactions
+          try {
+            const [txAgg] = await ctx.coreDb
+              .select({ total: sql<number>`COALESCE(SUM(${transactions.bunzMinted}), 0)::int` })
+              .from(transactions)
+              .where(eq(transactions.businessId, targetBiz.id));
+            totalBunzMinted = Number(txAgg?.total ?? 0);
+          } catch (aggErr) {
+            console.warn("[getAffiliateBunzInventory] Could not aggregate:", aggErr);
+          }
         }
       }
 
@@ -856,6 +907,7 @@ export const adminRouter = router({
           category: biz.category,
           bunzBalance: biz.bunzBalance ?? 0,
           totalBunzMinted,
+          totalBunzRedimido,
           package: biz.package || "Personalizado",
           rewardPercentage: biz.rewardPercentage ?? 10,
           status: biz.status,

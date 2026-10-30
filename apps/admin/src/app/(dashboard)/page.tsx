@@ -190,9 +190,13 @@ export default function AdminPage() {
                   </p>
                 </div>
                 <div className="pl-4">
-                  <span className="text-[10px] uppercase tracking-wider text-amber-300 font-black block">Minteados / Otorgados</span>
+                  <span className="text-[10px] uppercase tracking-wider text-amber-300 font-black block">Entregados</span>
                   <p className="text-base font-black text-white leading-none mt-0.5">
                     {((bunzInventory as any)?.totalBunzMinted ?? 0).toLocaleString()} <span className="text-xs font-bold text-amber-400">BZ</span>
+                  </p>
+                  <span className="text-[10px] uppercase tracking-wider text-emerald-300 font-black block mt-1.5">Redimidos</span>
+                  <p className="text-base font-black text-white leading-none mt-0.5">
+                    {((bunzInventory as any)?.totalBunzRedimido ?? 0).toLocaleString()} <span className="text-xs font-bold text-emerald-400">BZ</span>
                   </p>
                 </div>
               </div>
