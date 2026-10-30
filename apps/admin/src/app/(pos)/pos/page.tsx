@@ -634,7 +634,8 @@ export default function PosPage() {
     },
   });
 
-  const API_SERVER_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+  // Authority: el appRouter del ADMIN (vivo) — los intents de Rabbitty Pay corren aquí
+  const API_SERVER_URL = process.env.NEXT_PUBLIC_API_URL || "https://admin.rabbitty.me/api/trpc";
 
   const getPosAuthToken = () => {
     if (typeof window !== "undefined") {

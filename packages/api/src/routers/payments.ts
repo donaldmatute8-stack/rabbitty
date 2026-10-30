@@ -540,5 +540,61 @@ export const paymentsRouter = router({
         })),
       };
     }),
-});
 
+  // ==========================================
+  // Rabbitty Pay — QR BUNZ (puerto del api-server, vivo en producción vía este appRouter)
+  // El POS crea el intent; el cliente lo aprueba desde su app (con gate biométrico);
+  // el settle hace débito + ledger + cashback (tasa real) + completa la orden.
+  // ==========================================
+
+  /** POS: crea un intent de pago BUNZ para la branch del contexto. */
+  createIntent: protectedProcedure
+    .input(z.object({
+      amountMxn: z.number().positive(),
+      tenantId: z.string().optional(),   // compat: se ignora — tenant = ctx.branchId
+      orderId: z.string().optional(),
+      idempotencyKey: z.string(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { PaymentIntentService } = await import("../services/paymentIntentDomain");
+      const intent = await PaymentIntentService.createIntent({
+        tenantId: ctx.branchId,
+        creatorSubjectId: ctx.userId,
+        amountMxn: input.amountMxn,
+        orderId: input.orderId,
+        idempotencyKey: input.idempotencyKey,
+      });
+      // Shape compatible con el api-server (id/tenantId/amountMxn/bunzAmount/status/expiresAt)
+      return intent;
+    }),
+
+  /** POS + Miniapp: lee el intent sin PII. */
+  getIntent: protectedProcedure
+    .input(z.object({ intentId: z.string() }))
+    .query(async ({ input }) => {
+      const { PaymentIntentService } = await import("../services/paymentIntentDomain");
+      const intent = await PaymentIntentService.getIntent(input.intentId);
+      if (!intent) throw new TRPCError({ code: "NOT_FOUND", message: "INTENT_NOT_FOUND" });
+      return {
+        id: intent.id,
+        tenantId: intent.tenantId,
+        orderId: intent.orderId,
+        amountMxn: intent.amountMxn,
+        bunzAmount: intent.bunzAmount,
+        currency: intent.currency,
+        status: intent.status,
+        expiresAt: intent.expiresAt,
+        createdAt: intent.createdAt,
+      };
+    }),
+
+  /** Miniapp: el cliente aprueba el pago con SUS bunz (settles atómico con cashback real). */
+  approveIntent: protectedProcedure
+    .input(z.object({ intentId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const { PaymentIntentService } = await import("../services/paymentIntentDomain");
+      // El payer es la SESIÓN autenticada (identidad del que paga, inmutable server-side)
+      const intent = await PaymentIntentService.approveIntent(input.intentId, ctx.userId as string);
+      return intent;
+    }),
+});

@@ -45,7 +45,8 @@ export default function ScanPage() {
       .catch(() => {});
   }, [user]);
   const qrValue = user?.id || user?.telegramId || address || 'rabbitty_guest';
-  const API_SERVER_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+  // Authority: el appRouter del ADMIN (vivo en producción)
+  const API_SERVER_URL = process.env.NEXT_PUBLIC_API_URL || "https://admin.rabbitty.me/api/trpc";
 
   const getAuthHeader = async () => {
     try {
