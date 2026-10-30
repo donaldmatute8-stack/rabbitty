@@ -142,6 +142,32 @@ export async function GET(req: Request) {
       where: eq(ownedBusinesses.ownerId, caller.id)
     });
 
+    // Auto-asignar scanCode del RabbittyCode del negocio (igual que usuarios en /api/rabbitty-code/mine)
+    if (business && !business.scanCode) {
+      const [userCodes, bizCodes] = await Promise.all([
+        db.select({ c: users.scanCode }).from(users),
+        db.select({ c: ownedBusinesses.scanCode }).from(ownedBusinesses),
+      ]);
+      const used = new Set([...userCodes, ...bizCodes].map((r) => r.c).filter(Boolean) as number[]);
+      // Degenerate = barras ambiguas (todo el mismo nivel) — mismo criterio del codec
+      const degenerate = (n: number) => {
+        let hasLow = false, hasMid = false, hasHigh = false;
+        for (let i = 0; i < 13; i++) {
+          const d = Math.floor(n / Math.pow(3, i)) % 3;
+          if (d === 0) hasLow = true;
+          else if (d === 1) hasMid = true;
+          else hasHigh = true;
+        }
+        return !(hasLow && hasMid && hasHigh);
+      };
+      let code = 100000 + Math.floor(Math.random() * 431441);
+      for (let tries = 0; tries < 50 && (used.has(code) || degenerate(code)); tries++) {
+        code = 100000 + Math.floor(Math.random() * 431441);
+      }
+      await db.update(ownedBusinesses).set({ scanCode: code }).where(eq(ownedBusinesses.id, business.id));
+      business.scanCode = code;
+    }
+
     return NextResponse.json({ success: true, business });
   } catch (error) {
     console.error('Business API GET Error:', error);

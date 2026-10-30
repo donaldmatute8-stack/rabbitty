@@ -125,8 +125,9 @@ const godPillars: MenuPillar[] = [
     title: "👑 God · Plataforma",
     icon: Crown,
     items: [
-      { href: "/god/tenants", label: "Tenants & Vista Prueba", icon: Store },
+      { href: "/", label: "Resumen Operativo", icon: LayoutDashboard },
       { href: "/god", label: "Centro de Mando God", icon: Crown, badge: "Hub" },
+      { href: "/god/tenants", label: "Tenants & Vista Prueba", icon: Store },
     ],
   },
   {
@@ -154,7 +155,6 @@ const godPillars: MenuPillar[] = [
     icon: Settings,
     items: [
       { href: "/settings", label: "Ajustes & Seguridad", icon: Settings },
-      { href: "/verify-2fa", label: "Verificación 2FA", icon: ShieldCheck },
     ],
   },
 ];

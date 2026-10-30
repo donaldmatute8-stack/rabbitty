@@ -153,6 +153,8 @@ export async function POST(req: NextRequest) {
               or(
                 eq(ownedBusinesses.slug, cleanRef),
                 eq(ownedBusinesses.id, cleanRef),
+                // refCode de /impresos trunca el UUID a 8 chars cuando no hay slug
+                sql`left(${ownedBusinesses.id}::text, 8) = ${cleanRef}`,
                 ilike(ownedBusinesses.name, cleanRef)
               )
             )
