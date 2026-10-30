@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import RabbitterScannerModal from "@/components/RabbitterScannerModal";
+import { useState, useEffect } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { Button, cn, toast } from "@rabbitty/ui";
 import { Ticket, Plus, Users, ScanLine, X, Trash2, Send, Gift } from "lucide-react";
@@ -338,15 +339,39 @@ function CourtesyPanel({ businessId }: { businessId: string }) {
   const { data: courtesies, refetch } = trpc.memberships.listCourtesies.useQuery({ businessId }, { refetchInterval: 30000 });
   const [wizardOpen, setWizardOpen] = useState(false);
   const [targetQuery, setTargetQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [targetUserId, setTargetUserId] = useState<string | null>(null);
   const [targetName, setTargetName] = useState("");
+  const [showScanner, setShowScanner] = useState(false);
+
+  // Debounce del lookup (evita tormenta de queries mientras se escribe)
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(targetQuery.trim()), 400);
+    return () => clearTimeout(t);
+  }, [targetQuery]);
+
+  // Payload decodificado (QR: rabbitty://pay?to=@x / user=/phone= · neón: scanCode numérico)
+  const applyDecoded = async (decoded: string) => {
+    let q = decoded;
+    if (q.includes("to=")) { const m = q.match(/[?&]to=([^&]+)/); if (m) q = decodeURIComponent(m[1]); }
+    else if (q.includes("user=")) { const m = q.match(/[?&]user=([^&]+)/); if (m) q = decodeURIComponent(m[1]); }
+    else if (q.includes("phone=")) { const m = q.match(/[?&]phone=([^&]+)/); if (m) q = decodeURIComponent(m[1]); }
+    q = q.replace(/^@/, "").trim();
+    setTargetQuery(q);
+    setDebouncedQuery(q);
+    try {
+      const res = await utils.pos.lookupRabbitter.fetch({ query: q });
+      if (res) { setTargetUserId(res.id); setTargetName(res.name); toast.success(`🐰 ${res.name} identificado por escaneo`); }
+      else toast.error("Código leído, pero no se encontró al rabbitter");
+    } catch { toast.error("No se pudo resolver el código escaneado"); }
+  };
   const [duration, setDuration] = useState<0 | 3 | 6 | 12>(12);
   const [giftNote, setGiftNote] = useState("");
   const [rules, setRules] = useState<RuleDraft[]>([{ type: "INCLUDED_PRODUCT", quotaPerCycle: "1", cycleResetType: "MONTHLY" }]);
 
   const lookupCustomer = trpc.pos.lookupRabbitter.useQuery(
-    { query: targetQuery.trim() },
-    { enabled: wizardOpen && targetQuery.trim().length > 2, retry: false },
+    { query: debouncedQuery },
+    { enabled: wizardOpen && debouncedQuery.length > 0 && !targetUserId, retry: false },
   );
   const grant = trpc.memberships.grantCourtesy.useMutation({
     onSuccess: (d) => {
@@ -378,13 +403,32 @@ function CourtesyPanel({ businessId }: { businessId: string }) {
       {wizardOpen && (
         <div className="rounded-2xl border border-pink-500/30 bg-pink-500/5 p-4 space-y-3">
           <p className="text-sm font-bold text-white">1 · Destinatario</p>
-          <input className={inputCls} placeholder="@handle, teléfono o código del rabbitter" value={targetQuery}
-            onChange={(e) => { setTargetQuery(e.target.value); setTargetUserId(null); setTargetName(""); }} />
-          {lookupCustomer.data && !targetUserId && (
-            <button onClick={() => { const lk = lookupCustomer.data; if (!lk) return; setTargetUserId(lk.id); setTargetName(lk.name); }}
-              className="w-full text-left px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-sm text-white hover:border-pink-500/50">
-              🐰 {lookupCustomer.data.name}{lookupCustomer.data.phoneNumber ? ` · ${lookupCustomer.data.phoneNumber}` : ""} — click para elegir
+          <div className="flex gap-2">
+            <input className={inputCls} placeholder="@handle, teléfono, código o nombre del rabbitter" value={targetQuery}
+              onChange={(e) => { setTargetQuery(e.target.value); setTargetUserId(null); setTargetName(""); }} />
+            <button onClick={() => setShowScanner(true)} title="Escanear su código (QR o neón)"
+              className="shrink-0 px-3 py-2 rounded-xl bg-pink-500/20 border border-pink-500/40 text-pink-200 hover:bg-pink-500/30">
+              <ScanLine className="w-4 h-4" />
             </button>
+          </div>
+          {lookupCustomer.isFetching && debouncedQuery.length > 0 && !targetUserId && (
+            <p className="text-xs text-white/40 px-1">Buscando rabbitter…</p>
+          )}
+          {lookupCustomer.data && !targetUserId && (lookupCustomer.data as any).id ? (
+            <button onClick={() => { const lk = lookupCustomer.data as any; setTargetUserId(lk.id); setTargetName(lk.name); }}
+              className="w-full text-left px-3 py-2 rounded-xl bg-white/5 border border-pink-500/40 text-sm text-white hover:bg-white/10">
+              🐰 {lookupCustomer.data!.name}{lookupCustomer.data!.phoneNumber ? ` · ${lookupCustomer.data!.phoneNumber}` : ""} — click para elegir
+            </button>
+          ) : (
+            debouncedQuery.length > 0 && !lookupCustomer.isFetching && !targetUserId && (
+              <p className="text-xs text-white/50 px-1">
+                Sin coincidencia para "<span className="text-white/80">{debouncedQuery}</span>" — prueba @handle, teléfono, código numérico o escanea su código 📷.
+              </p>
+            )
+          )}
+
+          {showScanner && (
+            <RabbitterScannerModal onDecoded={applyDecoded} onClose={() => setShowScanner(false)} />
           )}
 
           <p className="text-sm font-bold text-white pt-1">2 · Beneficios personalizados (solo para esta persona)</p>

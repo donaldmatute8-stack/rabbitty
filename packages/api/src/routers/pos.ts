@@ -163,6 +163,11 @@ export const posRouter = router({
       if (isUuid) {
         conditions.push(eq(coreUsers.id, cleanQ));
       }
+      // Nombre/apellido (wizard de cortesías, search del POS): mínimo 3 chars para evitar ruido
+      if (cleanQ.length >= 3) {
+        conditions.push(ilike(coreUsers.firstName, cleanQ));
+        conditions.push(ilike(coreUsers.lastName, cleanQ));
+      }
       // RabbittyCode numérico (13 barras decodificadas o tecleado): match exacto por scanCode
       const numeric = /^\d{1,9}$/.test(cleanQ);
       if (numeric) {
