@@ -137,6 +137,7 @@ const godPillars: MenuPillar[] = [
     icon: Banknote,
     items: [
       { href: "/loyalty", label: "Split & Deuda Bunz", icon: Award },
+      { href: "/god/conciliaciones", label: "Conciliaciones", icon: Scale },
       { href: "/god/economia", label: "Economía & Ledger", icon: Scale },
     ],
   },
@@ -226,6 +227,7 @@ const menuPillars: MenuPillar[] = [
     items: [
       { href: "/loyalty", label: "Cashback Bunz", icon: Award },
       { href: "/memberships", label: "Membresías", icon: Ticket, badge: "Nuevo" },
+      { href: "/conciliaciones", label: "Conciliaciones", icon: Scale },
       { href: "/campaigns", label: "Marketing & Campañas", icon: Megaphone },
       { href: "/marketing/mood", label: "Rabbitty Mood & Telemetría", icon: Sparkles, badge: "IA" },
       { href: "/customers", label: "Clientes Rabbitters", icon: UserRound },

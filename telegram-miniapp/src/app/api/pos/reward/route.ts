@@ -160,21 +160,11 @@ export async function POST(request: Request) {
       }
     }
 
-    // 2. Fetch Business Inventory (atomic update)
-    let hasEnoughInventory = true;
+    // 2. El débito de inventario vive DENTRO de la tx del usuario (atómico con ledger
+    //    y crédito — nunca más débito huérfano). El vault path NO debita: el claim
+    //    (claim-ticket / bot) debita al momento de acreditar al usuario.
     const businessId = effectiveBusinessId || business_id || "unknown";
-    if (effectiveBusinessId) {
-      const result = await db.update(ownedBusinesses)
-        .set({ bunzBalance: sql`"bunzBalance" - ${bunzToMint}` })
-        .where(
-          and(
-            eq(ownedBusinesses.id, effectiveBusinessId),
-            gte(ownedBusinesses.bunzBalance, bunzToMint)
-          )
-        )
-        .returning({ bunzBalance: ownedBusinesses.bunzBalance });
-      hasEnoughInventory = result.length > 0;
-    }
+    let hasEnoughInventory = true; // se re-evalúa dentro de la tx
 
     const expirationDate = new Date();
     expirationDate.setMonth(expirationDate.getMonth() + 3);
@@ -191,32 +181,6 @@ export async function POST(request: Request) {
     const existingUserArray = await db.select().from(users).where(or(...conditions)).limit(1);
     const existingUser = existingUserArray[0];
 
-    if (!hasEnoughInventory) {
-      // Business is out of Bunz, queue it as WAITING_BUSINESS_RECHARGE for BOTH existing and new users
-      if (order_id) {
-        const [existingVault] = await db.select().from(pendingVaults).where(eq(pendingVaults.orderId, order_id)).limit(1);
-        if (existingVault) {
-          return NextResponse.json({ success: true, message: 'Reward already queued', bunz: existingVault.bunzAmount, status: existingVault.status });
-        }
-      }
-      await db.insert(pendingVaults).values({
-        id: crypto.randomUUID(),
-        phoneNumber: phone,
-        bunzAmount: bunzToMint,
-        orderId: order_id,
-        businessId: businessId !== 'unknown' ? businessId : null,
-        status: 'WAITING_BUSINESS_RECHARGE',
-        expiresAt: expirationDate,
-      });
-
-      return NextResponse.json({ 
-        success: true, 
-        message: 'Reward queued pending business recharge', 
-        bunz: bunzToMint,
-        status: 'WAITING_BUSINESS_RECHARGE'
-      });
-    }
-
     if (existingUser) {
       // 4a. Existing User: Pay off offline debt first
       const currentDebt = existingUser.pendingDebtBunz ?? 0;
@@ -229,6 +193,7 @@ export async function POST(request: Request) {
       }
 
       // Atomic SQL transaction with pessimistic row lock and authoritative Ledger entry
+      let inventoryShort = false;
       await db.transaction(async (tx) => {
         const [lockedUser] = await tx
           .select()
@@ -243,6 +208,34 @@ export async function POST(request: Request) {
         const prior = await findLedgerEntry(idempotencyKey, tx);
         if (prior) {
           return;
+        }
+
+        // ── Débito de inventario ATÓMICO (junto a ledger y crédito) ──
+        if (effectiveBusinessId) {
+          const debited = await tx.update(ownedBusinesses)
+            .set({ bunzBalance: sql`"bunzBalance" - ${bunzToMint}` })
+            .where(and(
+              eq(ownedBusinesses.id, effectiveBusinessId),
+              gte(ownedBusinesses.bunzBalance, bunzToMint)
+            ))
+            .returning({ bunzBalance: ownedBusinesses.bunzBalance });
+          if (debited.length === 0) {
+            // Inventario insuficiente → vault WAITING (sin débito, sin crédito)
+            const [dupVault] = await tx.select().from(pendingVaults).where(eq(pendingVaults.orderId, order_id || '')).limit(1);
+            if (!dupVault && order_id) {
+              await tx.insert(pendingVaults).values({
+                id: crypto.randomUUID(),
+                phoneNumber: phone,
+                bunzAmount: bunzToMint,
+                orderId: order_id,
+                businessId: effectiveBusinessId,
+                status: 'WAITING_BUSINESS_RECHARGE',
+                expiresAt: expirationDate,
+              });
+            }
+            inventoryShort = true;
+            return;
+          }
         }
 
         await tx.update(users)
@@ -277,6 +270,15 @@ export async function POST(request: Request) {
           tx
         );
       });
+
+      if (inventoryShort) {
+        return NextResponse.json({
+          success: true,
+          message: 'Reward queued pending business recharge',
+          bunz: bunzToMint,
+          status: 'WAITING_BUSINESS_RECHARGE',
+        });
+      }
 
       // Push notification al usuario que recibió los Bunz en POS
       await sendEcosystemNotification({

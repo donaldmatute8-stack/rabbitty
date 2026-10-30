@@ -21,6 +21,7 @@ import { cateringRouter } from "./catering";
 import { pricingRouter } from "./pricing";
 import { campaignsRouter } from "./campaigns";
 import { membershipsRouter } from "./memberships";
+import { reconciliationRouter } from "./reconciliation";
 import { loyaltyRouter } from "./loyalty";
 import { tableLayoutRouter } from "./tableLayout";
 import { settingsRouter } from "./settings";
@@ -61,6 +62,7 @@ export const appRouter = router({
   pricing: pricingRouter,
   campaigns: campaignsRouter,
   memberships: membershipsRouter,
+  reconciliation: reconciliationRouter,
   loyalty: loyaltyRouter,
   tableLayout: tableLayoutRouter,
   settings: settingsRouter,

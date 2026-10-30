@@ -606,6 +606,45 @@ export const membershipNftCredentials = pgTable("membership_nft_credentials", {
   ...timestamps,
 });
 
+
+// ── Reconciliation Requests (conciliación de recompensas) ────────────────────
+// El Rabbitter reclama una recompensa no entregada; el afiliado resuelve comercial;
+// God Admin autoriza la entrega. Los montos son SNAPSHOT server-side al reclamar.
+// La entrega reutiliza el mint idempotente existente (pos_rwd_<orderId>) — nunca mintea
+// por declaración: restituye la diferencia demostrable (ver informe de compatibilidad).
+
+export const reconciliationRequests = pgTable("reconciliationRequests", {
+  id: id(),
+  orderId: text("orderId").notNull().unique(),          // 1 conciliación por orden
+  userId: text("userId").notNull(),                     // rabbitter reclamante (comprador)
+  businessId: text("businessId").notNull(),             // negocio involucrado (text ids en prod)
+  branchId: text("branchId"),                           // branch donde compró (si se resolvió)
+  // ── Snapshot contable al momento de la petición ──
+  expectedBunz: integer("expectedBunz").notNull(),      // lo que correspondía (server calc)
+  creditedBunz: integer("creditedBunz").default(0).notNull(),  // ya acreditado en ledger
+  pendingBunz: integer("pendingBunz").default(0).notNull(),    // pendiente en vault
+  claimedBunz: integer("claimedBunz").notNull(),        // diferencia = lo reclamable
+  rewardRuleRef: text("rewardRuleRef"),                 // p.ej. "rewardPercentage:15"
+  // ── Evidencia ──
+  note: text("note").notNull(),                         // motivo obligatorio del rabbitter
+  evidenceUrl: text("evidenceUrl"),                     // evidencia opcional (futura)
+  // ── Máquina de estados ──
+  // PENDING_AFFILIATE → AFFILIATE_APPROVED | AFFILIATE_REJECTED → PENDING_GOD
+  //   → DELIVERY_PROCESSING → DELIVERED | GOD_REJECTED
+  status: text("status").default("PENDING_AFFILIATE").notNull(),
+  affiliateNote: text("affiliateNote"),
+  affiliateUserId: text("affiliateUserId"),             // quién resolvió (owner/staff)
+  godNote: text("godNote"),                             // motivo obligatorio de la decisión god
+  godUserId: text("godUserId"),                         // quién autorizó/rechazó
+  ledgerEntryId: text("ledgerEntryId"),                 // movimiento contable resultante
+  idempotencyKey: text("idempotencyKey").notNull(),     // pos_rwd_<orderId> (referencia)
+  deliveryAttempts: integer("deliveryAttempts").default(0).notNull(),
+  affiliateRespondedAt: timestamp("affiliateRespondedAt"),
+  godResolvedAt: timestamp("godResolvedAt"),
+  deliveredAt: timestamp("deliveredAt"),
+  ...timestamps,
+});
+
 // ── Membership Relations ──────────────────────────────────────────────────────
 
 export const membershipPlansRelations = relations(membershipPlans, ({ one, many }) => ({
@@ -638,5 +677,9 @@ export const entitlementUsagesRelations = relations(entitlementUsages, ({ one })
 
 export const membershipNftCredentialsRelations = relations(membershipNftCredentials, ({ one }) => ({
   subscription: one(membershipSubscriptions, { fields: [membershipNftCredentials.subscriptionId], references: [membershipSubscriptions.id] }),
+}));
+
+export const reconciliationRequestsRelations = relations(reconciliationRequests, ({ one }) => ({
+  user: one(users, { fields: [reconciliationRequests.userId], references: [users.id] }),
 }));
 

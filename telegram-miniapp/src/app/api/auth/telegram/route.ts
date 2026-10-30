@@ -169,6 +169,13 @@ export async function POST(req: Request) {
               return;
             }
 
+            // Débito de inventario del negocio (consistente con claim-ticket — floor a 0)
+            if (vault.businessId) {
+              await tx.update(ownedBusinesses)
+                .set({ bunzBalance: sql`GREATEST(0, "bunzBalance" - ${bunzToAward})` })
+                .where(eq(ownedBusinesses.id, vault.businessId));
+            }
+
             await tx
               .update(users)
               .set({ totalBunzEarned: sql`COALESCE(${users.totalBunzEarned}, 0) + ${bunzToAward}` })
