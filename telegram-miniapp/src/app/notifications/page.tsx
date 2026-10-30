@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Bell, CheckCircle2, AlertCircle, Gift, Coins, Flame, Home, MessageCircle, Store, Users, ArrowLeftRight, Settings } from 'lucide-react';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -12,12 +13,14 @@ interface Notification {
   message: string;
   type: string;
   isRead: boolean;
+  route?: string | null;
   createdAt: string;
 }
 
 interface ApiNotification {
   id: string;
   title: string;
+  route?: string | null;
   message: string;
   type: string;
   isRead?: boolean;
@@ -27,6 +30,7 @@ interface ApiNotification {
 }
 
 export default function NotificationsPage() {
+  const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const { user, loading: authLoading } = useAuth();
   const [fetching, setFetching] = useState(true);
@@ -122,7 +126,10 @@ export default function NotificationsPage() {
           notifications.map(notif => (
             <div 
               key={notif.id} 
-              onClick={() => !notif.isRead && markAsRead(notif.id)}
+              onClick={() => {
+                if (!notif.isRead) markAsRead(notif.id);
+                if (notif.route) router.push(notif.route);
+              }}
               className={`bg-(--bg-elevated) p-4 rounded-2xl border transition-all ${notif.isRead ? 'opacity-60 border-(--border-subtle) shadow-sm' : 'border-pink-500/30 shadow-md cursor-pointer'}`}
             >
               <div className="flex items-start gap-3">

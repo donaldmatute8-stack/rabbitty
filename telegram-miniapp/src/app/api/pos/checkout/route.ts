@@ -82,7 +82,7 @@ export async function POST(req: Request) {
                 title: `🍽️ Nueva Comanda - Mesa #${table.number}`,
                 message: `${customerName} ordenó ${typedItems.length} platillo(s) ($${grandTotal} MXN).`,
                 type: 'SYSTEM',
-                route: '/pos',
+                route: '/business-dashboard',
                 threadId: 'table_orders',
               });
             }

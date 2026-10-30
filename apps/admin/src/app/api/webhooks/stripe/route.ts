@@ -18,6 +18,27 @@ import { eq } from "drizzle-orm";
 
 export const runtime = "nodejs";
 
+// ── Notificación in-app para el dueño de la membresía (webhook no tiene acceso al
+//    push de la miniapp; insert directo en core notifications, con deep-link) ──
+async function notifyMembershipUser(
+  coreDb: ReturnType<typeof getCoreDb>,
+  userId: string,
+  title: string,
+  message: string,
+  route = "/memberships"
+) {
+  try {
+    await coreDb.execute(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (await import("drizzle-orm")).sql`INSERT INTO "notifications" ("id", "userId", "title", "message", "type", "route") VALUES (gen_random_uuid()::text, ${userId}, ${title}, ${message}, 'REWARD', ${route})`
+    );
+  } catch (e) {
+    console.error("[Stripe Webhook] notificación membresía falló:", e);
+  }
+}
+
+
+
 /**
  * Endpoint oficial de Webhooks de Stripe Connect para Rabbitty Pay.
  * 1. Lee el cuerpo binario crudo (raw body) para verificar la firma de Stripe.
@@ -172,6 +193,7 @@ export async function POST(req: Request) {
               qrPassSecret: (await import("crypto")).randomBytes(32).toString("hex"),
             });
             console.log(`[Stripe Webhook] Membresía activada: user=${meta.userId} plan=${meta.planVersionId}`);
+            await notifyMembershipUser(coreDb, meta.userId, "🎟️ ¡Membresía activada!", "Tu pago fue confirmado y tu membresía ya está activa. Muéstrala en caja con su QR dorado.", "/memberships");
           }
         }
         break;
@@ -199,6 +221,7 @@ export async function POST(req: Request) {
               .set({ currentPeriodEnd: newEnd, status: "ACTIVE", updatedAt: new Date() })
               .where(eq(membershipSubscriptions.id, sub.sub.id));
             console.log(`[Stripe Webhook] Renovación aplicada: sub=${sub.sub.id} → ${newEnd.toISOString()}`);
+            await notifyMembershipUser(coreDb, sub.sub.userId, "🔄 Membresía renovada", `Tu cuota se pagó correctamente — membresía vigente hasta ${newEnd.toLocaleDateString("es-MX")}.`, "/memberships");
           }
         }
         break;
@@ -208,9 +231,16 @@ export async function POST(req: Request) {
         // ── Membresías: Stripe canceló la suscripción → EXPIRED ──
         const stripeSub = event.data.object;
         const coreDb = getCoreDb();
+        const [expiredSub] = await coreDb.select({ userId: membershipSubscriptions.userId })
+          .from(membershipSubscriptions)
+          .where(eq(membershipSubscriptions.paymentProviderSubId, String(stripeSub.id)))
+          .limit(1);
         await coreDb.update(membershipSubscriptions)
           .set({ status: "EXPIRED", updatedAt: new Date() })
           .where(eq(membershipSubscriptions.paymentProviderSubId, String(stripeSub.id)));
+        if (expiredSub?.userId) {
+          await notifyMembershipUser(coreDb, expiredSub.userId, "⚠️ Tu membresía expiró", "El periodo pagado terminó. Renuévate desde el perfil del negocio para seguir disfrutando tus beneficios.", "/memberships");
+        }
         break;
       }
 

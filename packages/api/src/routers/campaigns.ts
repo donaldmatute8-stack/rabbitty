@@ -322,6 +322,31 @@ export const campaignsRouter = router({
         .where(eq(affiliateCampaigns.id, campaign.id))
         .returning();
 
+      // ── Activación: notificar a los que guardaron el negocio (Madriguera) ──
+      if (nextStatus === "ACTIVE" && (campaign.campaignType === "FLASH_OFFER" || campaign.campaignType === "FLASH_BOOST")) {
+        try {
+          const [biz] = await ctx.coreDb.select({ name: ownedBusinesses.name })
+            .from(ownedBusinesses).where(eq(ownedBusinesses.id, campaign.businessId)).limit(1);
+          const saveRows = await ctx.coreDb.execute(
+            sql`SELECT DISTINCT "userId" FROM "business_interactions" WHERE "businessId" = ${campaign.businessId} AND action = 'SAVE' AND "userId" IS NOT NULL LIMIT 100`
+          ).then((r: unknown) => ((r as { rows?: Array<{ userId: string }> }).rows || (r as unknown as Array<{ userId: string }>)) as Array<{ userId: string }>);
+          const { miniappClient } = await import("../services/miniapp-client");
+          for (const s2 of saveRows) {
+            try {
+              await miniappClient.sendNotification({
+                userId: s2.userId,
+                title: `🔥 Nueva oferta en ${biz?.name || 'tu negocio guardado'}`,
+                message: campaign.headline || `${campaign.campaignType === "FLASH_OFFER" ? `Cashback boost: ${campaign.rewardPercentage}% por tiempo limitado` : 'Promoción especial activa'} — ¡no te lo pierdas!`,
+                type: "AFFILIATE",
+                route: `/affiliate/${campaign.businessId}`,
+              } as any);
+            } catch { /* best-effort */ }
+          }
+        } catch (saveErr) {
+          console.error("[campaigns] notify saves falló:", saveErr);
+        }
+      }
+
       return { success: true, campaign: updated };
     }),
 });

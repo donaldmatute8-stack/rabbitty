@@ -143,27 +143,34 @@ export async function POST(req: NextRequest) {
         tx
       );
 
-      // 6. In-app notifications for both parties
-      await tx.insert(notifications).values([
-        {
-          userId: receiver.id,
-          title: "¡Recibiste Bunz! 🐰✨",
-          message: `${sender.firstName || sender.username || "Un amigo"} te envió ${bunzAmount} BUNZ${cleanNote ? `: "${cleanNote}"` : "."}`,
-          type: "TRANSFER",
-        },
-        {
-          userId: sender.id,
-          title: "Transferencia enviada",
-          message: `Enviaste ${bunzAmount} BUNZ a @${receiver.username || receiver.firstName || "usuario"}.`,
-          type: "TRANSFER",
-        },
-      ]);
-
       return {
         senderNewBalance: availableBalance - bunzAmount,
         recipientName: receiver.username || receiver.firstName || "Usuario",
       };
     });
+
+    // 6. In-app notifications POST-commit (jamás dentro de la tx del dinero — un fallo
+    //    de notificación jamás revierte una transferencia)
+    try {
+      await db.insert(notifications).values([
+        {
+          userId: targetUser.id,
+          title: "¡Recibiste Bunz! 🐰✨",
+          message: `${caller.username || "Un amigo"} te envió ${bunzAmount} BUNZ${cleanNote ? `: "${cleanNote}"` : "."}`,
+          type: "TRANSFER",
+          route: "/profile/wallet",
+        },
+        {
+          userId: caller.id,
+          title: "Transferencia enviada",
+          message: `Enviaste ${bunzAmount} BUNZ a @${targetUser.username || targetUser.firstName || "usuario"}.`,
+          type: "TRANSFER",
+          route: "/profile/wallet",
+        },
+      ]);
+    } catch (notifyErr) {
+      console.error("[WALLET_TRANSFER_NOTIFY]", notifyErr);
+    }
 
     // Best-effort native push to the recipient (never blocks or fails the transfer).
     if (isApnsConfigured()) {

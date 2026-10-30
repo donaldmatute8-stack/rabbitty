@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
             title: '⚖️ Un cliente pidió una conciliación',
             message: `Reclama ${result.claimedBunz} Bunz de una compra de $${order.total} (ticket ${order.id.slice(-4).toUpperCase()}). Revísala en Admin → Conciliaciones.`,
             type: 'SYSTEM',
-            route: '/dashboard',
+            route: '/business-dashboard',
           });
         }
         const godRows = await db.select({ id: users.id }).from(users).where(eq(users.role, 'ADMIN'));

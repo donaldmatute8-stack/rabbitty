@@ -48,16 +48,22 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const caller = await getAuthenticatedUser(req);
-    if (!caller) {
+    // Server-to-server: packages/api (miniappClient.sendNotification) usa RABBITTY_API_SECRET
+    // y manda el userId objetivo + route en el body.
+    const serverSecret = process.env.RABBITTY_API_SECRET;
+    const authHeader = req.headers.get("authorization");
+    const isServerToServer = !!serverSecret && authHeader === `Bearer ${serverSecret}`;
+
+    const caller = isServerToServer ? null : await getAuthenticatedUser(req);
+    if (!caller && !isServerToServer) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
     const body = await req.json();
-    const { title, message, type } = body;
-    const userId = caller.id;
+    const { title, message, type, route } = body;
+    const userId = isServerToServer ? String(body.userId || "") : caller!.id;
 
-    if (!title || !message) {
+    if (!title || !message || (isServerToServer && !userId)) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
@@ -66,6 +72,7 @@ export async function POST(req: NextRequest) {
       title,
       message,
       type: type || "SYSTEM",
+      ...(route ? { route: String(route) } : {}),
     }).returning();
 
     return NextResponse.json({ success: true, notification });

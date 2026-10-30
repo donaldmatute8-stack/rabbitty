@@ -32,6 +32,7 @@ export async function sendEcosystemNotification(params: SendEcosystemNotificatio
       title,
       message,
       type,
+      ...(resolvedRoute ? { route: resolvedRoute } : {}),
     });
   } catch (err) {
     console.warn("[ECOSYSTEM_NOTIFICATION] Error persisting in-app notification:", err);

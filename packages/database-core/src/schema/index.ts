@@ -183,6 +183,7 @@ export const notifications = pgTable("notifications", {
   message: text("message").notNull(),
   isRead: boolean("isRead").default(false).notNull(),
   type: text("type").default("SYSTEM").notNull(),
+  route: text("route"),                                 // deep-link in-app al tocar la notificación
   createdAt: timestamp("createdAt").defaultNow(),
 });
 

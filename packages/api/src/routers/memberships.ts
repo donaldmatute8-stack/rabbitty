@@ -14,6 +14,7 @@ import {
 } from "@rabbitty/database-core/schema";
 import { branches, restaurants } from "@rabbitty/database-restaurant/schema";
 import { isGodAdminIdentity } from "../services/god2fa";
+import { miniappClient } from "../services/miniapp-client";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -335,6 +336,29 @@ export const membershipsRouter = router({
         await tx.update(membershipPlans).set({ currentVersionId: input.versionId, updatedAt: new Date() })
           .where(eq(membershipPlans.id, row.plan.id));
       });
+
+      // ── Notificar a los usuarios que guardaron el negocio (Madriguera) ──
+      try {
+        const [biz] = await ctx.coreDb.select({ name: ownedBusinesses.name })
+          .from(ownedBusinesses).where(eq(ownedBusinesses.id, row.plan.businessId)).limit(1);
+        const saveRows = await ctx.coreDb.execute(
+          sql`SELECT DISTINCT "userId" FROM "business_interactions" WHERE "businessId" = ${row.plan.businessId} AND action = 'SAVE' AND "userId" IS NOT NULL LIMIT 100`
+        ).then((r: unknown) => ((r as { rows?: Array<{ userId: string }> }).rows || (r as unknown as Array<{ userId: string }>)) as Array<{ userId: string }>);
+        for (const s2 of saveRows) {
+          try {
+            await miniappClient.sendNotification({
+              userId: s2.userId,
+              title: `🎟️ Nuevo plan en ${biz?.name || 'tu negocio guardado'}`,
+              message: `Publicaron la membresía "${row.plan.name}"${row.version.priceFiat ? ` ($${Number(row.version.priceFiat)} / ${row.version.billingInterval.toLowerCase()})` : ''}. Échale un ojo en su perfil.`,
+              type: "AFFILIATE",
+              route: `/affiliate/${row.plan.businessId}`,
+            } as any);
+          } catch { /* best-effort */ }
+        }
+      } catch (saveErr) {
+        console.error("[memberships] notify saves falló:", saveErr);
+      }
+
       return { success: true };
     }),
 
@@ -417,6 +441,21 @@ export const membershipsRouter = router({
           qrPassSecret: randomBytes(32).toString("hex"),
         }).returning();
         await tx.insert(membershipEntitlements).values(buildEntitlementRows(sub.id, rules, now, periodEnd));
+
+        // Notificar al cliente (venta en caja / promo) — vía el canal S2S de la miniapp
+        if (targetUserId !== ctx.userId) {
+          try {
+            await miniappClient.sendNotification({
+              userId: targetUserId,
+              title: "🎟️ ¡Membresía activada!",
+              message: `El negocio activó tu membresía "${row.plan.name}". Ya puedes mostrarla en caja con su QR dorado.`,
+              type: "REWARD",
+              route: "/memberships",
+            } as any);
+          } catch (notifyErr) {
+            console.error("[memberships] notificación al cliente falló:", notifyErr);
+          }
+        }
         return { subscriptionId: sub.id };
       });
     }),
