@@ -91,6 +91,8 @@ function AffiliateProfileContent() {
 
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'menu' | 'info'>('menu');
+  const [membershipPlans, setMembershipPlans] = useState<{ planId: string; planName: string; planDescription?: string | null; versionId: string; priceFiat: number; currency: string; billingInterval: string; alreadySubscribed: boolean }[]>([]);
+  const [subscribing, setSubscribing] = useState<string | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
 
   // Initialize table number from searchParams safely without calling setState in render or synchronous effect
@@ -164,6 +166,16 @@ function AffiliateProfileContent() {
 
   useEffect(() => {
     if (!id) return;
+    // Planes de membresía publicados del negocio
+    (async () => {
+      try {
+        const headers = await PlatformBridge.getAuthHeaders();
+        const res = await fetch(`/api/memberships/plans?businessId=${id}`, { headers });
+        const data = await res.json();
+        if (data?.success) setMembershipPlans(data.plans || []);
+      } catch { /* sin planes */ }
+    })();
+
     fetch(`/api/business/${id}`)
       .then(res => res.json())
       .then((data: { success: boolean } & BusinessResponse) => {
@@ -553,6 +565,59 @@ function AffiliateProfileContent() {
         )}
 
         {/* Tab 2: Sucursal, Ubicación, Happy Hour & Galería */}
+        {/* ── Membresías del negocio (Stripe Connect) ── */}
+        {membershipPlans.length > 0 && (
+          <div className="space-y-3">
+            <h3 className="text-sm font-black text-white/90 tracking-wide uppercase">🎟️ Membresías</h3>
+            {membershipPlans.map((mp) => (
+              <div key={mp.versionId} className="rounded-2xl p-4 border" style={{ backgroundColor: 'rgba(233,30,99,0.06)', borderColor: 'rgba(233,30,99,0.25)' }}>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-white font-bold text-sm truncate">{mp.planName}</p>
+                    <p className="text-white/50 text-xs mt-0.5">${Number(mp.priceFiat).toFixed(0)} {mp.currency} / {mp.billingInterval === 'MONTHLY' ? 'mes' : mp.billingInterval === 'ANNUAL' ? 'año' : mp.billingInterval === 'QUARTERLY' ? 'trimestre' : mp.billingInterval === 'SEMIANNUAL' ? 'semestre' : 'pago único'}</p>
+                  </div>
+                  <button
+                    disabled={mp.alreadySubscribed || subscribing === mp.versionId}
+                    onClick={async () => {
+                      try {
+                        setSubscribing(mp.versionId);
+                        const headers = await PlatformBridge.getAuthHeaders();
+                        const res = await fetch('/api/memberships/checkout', {
+                          method: 'POST',
+                          headers: { ...headers, 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ planVersionId: mp.versionId }),
+                        });
+                        const data = await res.json();
+                        if (data?.url) {
+                          if (PlatformBridge.isNative()) {
+                            const { Browser } = await import('@capacitor/browser');
+                            await Browser.open({ url: data.url });
+                          } else {
+                            window.open(data.url, '_blank');
+                          }
+                        } else {
+                          showToast(data?.error || 'No se pudo iniciar el pago', 'error');
+                        }
+                      } catch {
+                        showToast('Error al iniciar el pago', 'error');
+                      } finally {
+                        setSubscribing(null);
+                      }
+                    }}
+                    className="shrink-0 px-4 py-2 rounded-full text-xs font-bold active:scale-95 transition-transform"
+                    style={{
+                      background: mp.alreadySubscribed ? 'rgba(255,255,255,0.08)' : 'linear-gradient(135deg, #FF2E93 0%, #E91E63 100%)',
+                      color: mp.alreadySubscribed ? 'rgba(255,255,255,0.4)' : '#FFF',
+                    }}
+                  >
+                    {mp.alreadySubscribed ? '✓ Activa' : subscribing === mp.versionId ? 'Abriendo…' : 'Suscribirse'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {activeTab === 'info' && (
           <div className="space-y-5">
             {/* Happy Hour Bunz Highlight */}

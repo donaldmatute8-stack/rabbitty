@@ -92,6 +92,26 @@ export const FAQS: FaqItem[] = [
     q: '¿Me avisan cuando gano o gasto Bunz?',
     a: 'Sí. Recibes una notificación push al instante: "Ticket canjeado con éxito" cuando ganas Bunz, y "Pago realizado con éxito / Has gastado X Bunz en [negocio]" cuando pagas o canjeas. Si no te llegan, revisa que las notificaciones de Rabbitty estén activas en Ajustes de tu iPhone. Todas quedan también en tu centro de notificaciones dentro de la app.',
   },
+  {
+    q: '¿Qué son las Membresías Rabbitty?',
+    a: 'Son planes de un negocio afiliado que te dan derechos recurrentes: consumos incluidos (ej. 1 café al día), descuentos permanentes o saldo de crédito. Pagas una cuota (mensual, trimestral, semestral o anual) y muestras tu QR dorado en caja para canjear tus beneficios.',
+  },
+  {
+    q: '¿Cómo me suscribo a una membresía?',
+    a: 'Entra al perfil del negocio en la app → pestaña Sucursal → sección 🎟️ Membresías → elige el plan y toca "Suscribirse". El pago es seguro con Stripe y al confirmar, tu membresía aparece en Perfil → Mis Membresías con su QR.',
+  },
+  {
+    q: '¿Cómo canjeo mi membresía en el local?',
+    a: 'Abre Perfil → Mis Membresías → toca tu membresía → muestra el QR dorado (se renueva cada 30 segundos por seguridad) al cajero. Él lo escanea y tu beneficio se aplica al instante; verás cuántos usos te quedan del ciclo.',
+  },
+  {
+    q: '¿Cómo cancelo mi membresía?',
+    a: 'En Perfil → Mis Membresías → abre la membresía y usa "Cancelar". Conservas todos tus beneficios hasta el final del periodo ya pagado; no se renueva el siguiente ciclo.',
+  },
+  {
+    q: '¿Qué pasa si se me vence la membresía?',
+    a: 'Cuando termina tu periodo pagado, la membresía pasa a "Expirada" y deja de canjear. Puedes renovarte desde el perfil del negocio en cualquier momento.',
+  },
 ];
 
 export const DOC_SECTIONS: { title: string; body: string }[] = [

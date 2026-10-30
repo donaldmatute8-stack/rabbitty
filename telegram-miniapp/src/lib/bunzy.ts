@@ -786,6 +786,7 @@ Responde de forma concisa, clara y amigable a la consulta del usuario. Reglas cl
 - Retiros y gastos menores (agua, insumos, café): se registran en 'Caja / Turno' -> 'Retiro' con su nota; se descuentan automáticamente del efectivo en gaveta y el sistema avisa si no hay fondos suficientes.
 - Cierre Z: primero cotejar vouchers de terminal bancaria física con la pantalla (tarjetas no van en efectivo); luego contar efectivo de gaveta y firmar con PIN de cajero y PIN de manager.
 - Manual visual imprimible: disponible en '/operations-manual'.
+- Membresías: el afiliado crea planes (precio, cuota mensual/trimestral/semestral/anual y beneficios con ciclo diario/semanal/mensual o toda la vigencia) en Admin → Membresías, los publica, y los vende en caja (pestaña Miembros → Vender plan en caja, buscando al cliente por @handle/teléfono/código). El canje en caja: el cliente muestra su QR dorado (rota cada 30s) y el POS lo escanea en el modal de escaneo de Rabbitter; también hay canje manual en Admin → Membresías → Canje en caja. El pago self-service del cliente es con Stripe Connect (perfil del negocio → Membresías → Suscribirse).
 Tono mexicano profesional, empático y fresco. Máximo 80 palabras.`
       : input.mode === 'marketing_proposal'
         ? `Eres Bunzy 🐰 Co-Pilot de Marketing para Afiliados de Rabbitty.

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Card } from "@rabbitty/ui";
-import { BookOpen, ChevronRight, Building2, DollarSign, Monitor, Store, Award, Megaphone, Cake, QrCode, Gift, Store as StoreIcon, Salad, Truck, Receipt as ReceiptIcon, Clock, Users, Sparkles, Activity, Compass, Headphones, Flame } from "lucide-react";
+import { BookOpen, ChevronRight, Building2, DollarSign, Monitor, Store, Award, Megaphone, Cake, QrCode, Gift, Store as StoreIcon, Salad, Truck, Receipt as ReceiptIcon, Clock, Users, Sparkles, Activity, Compass, Headphones, Flame, Ticket } from "lucide-react";
 
 type GuideRole = "all" | "admin" | "pos" | "marketing" | "phygital";
 
@@ -135,6 +135,50 @@ const guides: Guide[] = [
     desc: "Configura el sistema de recompensas y niveles para tus clientes",
     role: "marketing",
     content: `## Programa de Lealtad\n\nEl programa de lealtad recompensa a los clientes con Bunz por cada compra.\n\n### KPIs disponibles:\n- Usuarios registrados\n- Bunz ganados totales\n- Bunz gastados totales\n- Hops acumulados (experiencia)\n\n### Niveles:\n- Cada nivel requiere cierta cantidad de Hops\n- Los niveles tienen multiplicadores de Bunz\n- Top 10 usuarios por Hops visible en la página\n\n### Ubicación:\nMenú lateral → Lealtad`,
+  },
+
+  {
+    id: "memberships",
+    icon: Ticket,
+    label: "Rabbitty Memberships",
+    desc: "Crea, publica y vende membresías con beneficios recurrentes; canjea con el QR dorado",
+    role: "marketing",
+    content: `## Rabbitty Memberships
+
+Las membresías convierten tus clientes frecuentes en ingreso **recurrente y predecible**: pagan una cuota (mensual, trimestral, semestral o anual) y reciben beneficios que se renuevan solos.
+
+### 1. Crea tu plan (Admin → Membresías → Nuevo plan)
+- **Precio y periodicidad**: cuota a cobrar y con qué frecuencia se renueva.
+- **Beneficios** (cada uno con su propio ciclo):
+  - **Producto incluido**: ej. "1 café al día" (ciclo diario) o "2 postres al mes" (mensual).
+  - **Descuento %**: ej. 10% en toda la cuenta (el % se define por regla).
+  - **Saldo de crédito**: Bunz/crédito para gastar en tu local.
+  - **Acceso a evento** y **Bolsa de consumos** (paquete con cuota).
+- **Cupo máximo** (opcional): limita cuántos miembros pueden tener el plan.
+
+### 2. Publica el plan
+El plan nace como **borrador**. Al publicarlo, se convierte en la versión vigente. Editar después crea una **versión nueva**: tus miembros actuales conservan sus condiciones — nadie pierde beneficios a mitad de ciclo.
+
+### 3. Vende (3 caminos)
+1. **Self-service con Stripe**: el cliente entra al perfil de tu negocio en la app → 🎟️ Membresías → Suscribirse → paga con Stripe Connect (el dinero llega directo a TU cuenta). Requiere tener Stripe conectado en tu POS.
+2. **Venta en caja**: Admin → Membresías → Miembros → "Vender plan en caja": busca al cliente por @handle, teléfono o su código numérico y actívala con pago CASH_POS.
+3. **Promo**: actívala manualmente como regalo o campaña.
+
+### 4. Canje en caja
+- El cliente abre Perfil → Mis Membresías y muestra su **QR dorado** (rota cada 30 segundos por seguridad).
+- Con el POS en modo escaneo (modal de Rabbitter), el QR se detecta solo: verás el nombre del miembro y cuántos usos quedan.
+- Alternativa manual: Admin → Membresías → Canje en caja (pega el token).
+- El sistema es **a prueba de dobles canjes**: cada escaneo consume la cuota del ciclo de forma atómica; los ciclos (diario/semanal/mensual) se reinician solos.
+
+### 5. Canculaciones y control
+- **Miembros**: Admin → Membresías → Miembros (plan, estado, vencimiento, forma de pago).
+- **Cancelación**: el cliente cancela en su app y conserva beneficios hasta el fin del periodo pagado.
+- **Expiración**: al vencer el periodo, la membresía pasa a Expirada automáticamente (cron) y el canje la rechaza.
+
+### Buenas prácticas
+- Empieza con un plan simple (1 producto incluido diario + 10% descuento) y cuota al 30-40% del gasto promedio del cliente frecuente.
+- Nombra los planes por beneficio claro: "Café Ilimitado", "Mesa VIP", "Comida Semanal".
+- Publica antes de compartir: solo los planes publicados son visibles y comprables.`,
   },
   {
     id: "campaigns",

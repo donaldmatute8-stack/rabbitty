@@ -9,6 +9,11 @@ import {
   releasePaymentIntentHold,
 } from "@rabbitty/api/services/paymentCore";
 import { paymentIntents } from "@rabbitty/database-restaurant/schema";
+import {
+  membershipPlans,
+  membershipPlanVersions,
+  membershipSubscriptions,
+} from "@rabbitty/database-core/schema";
 import { eq } from "drizzle-orm";
 
 export const runtime = "nodejs";
@@ -130,6 +135,93 @@ export async function POST(req: Request) {
           });
           console.log(`[Stripe Webhook] Intento ${internalIntentId} cancelado y hold liberado: ${failureMsg}`);
         }
+        break;
+      }
+
+      case "checkout.session.completed": {
+        // ── Membresías: alta de suscripción tras el pago (Stripe Connect) ──
+        const session = event.data.object;
+        const meta = session.metadata || {};
+        if (meta.kind === "MEMBERSHIP_SUBSCRIPTION" && session.mode === "subscription" && session.subscription) {
+          const coreDb = getCoreDb();
+          const stripe = getStripeClient();
+          const acct = meta.stripeAccount || event.account;
+          // Recuperar la suscripción de Stripe (en la cuenta conectada) para el periodo real
+          const stripeSub = acct
+            ? await stripe.subscriptions.retrieve(session.subscription, {} as any, { stripeAccount: acct })
+            : await stripe.subscriptions.retrieve(session.subscription);
+
+          const periodStart = new Date((stripeSub as any).current_period_start * 1000);
+          const periodEnd = new Date((stripeSub as any).current_period_end * 1000);
+
+          // Idempotente: si ya existe por paymentProviderSubId, no duplicar
+          const [dup] = await coreDb.select({ id: membershipSubscriptions.id })
+            .from(membershipSubscriptions)
+            .where(eq(membershipSubscriptions.paymentProviderSubId, String(session.subscription)))
+            .limit(1);
+          if (!dup) {
+            await coreDb.insert(membershipSubscriptions).values({
+              userId: meta.userId,
+              businessId: meta.businessId,
+              planVersionId: meta.planVersionId,
+              status: "ACTIVE",
+              currentPeriodStart: periodStart,
+              currentPeriodEnd: periodEnd,
+              paymentProvider: "STRIPE",
+              paymentProviderSubId: String(session.subscription),
+              qrPassSecret: (await import("crypto")).randomBytes(32).toString("hex"),
+            });
+            console.log(`[Stripe Webhook] Membresía activada: user=${meta.userId} plan=${meta.planVersionId}`);
+          }
+        }
+        break;
+      }
+
+      case "invoice.paid":
+      case "invoice.payment_succeeded": {
+        // ── Membresías: renovación del ciclo → extender currentPeriodEnd ──
+        const invoice = event.data.object;
+        const stripeSubId = invoice.subscription;
+        if (stripeSubId) {
+          const coreDb = getCoreDb();
+          const [sub] = await coreDb.select({ sub: membershipSubscriptions, version: membershipPlanVersions })
+            .from(membershipSubscriptions)
+            .innerJoin(membershipPlanVersions, eq(membershipPlanVersions.id, membershipSubscriptions.planVersionId))
+            .where(eq(membershipSubscriptions.paymentProviderSubId, String(stripeSubId)))
+            .limit(1);
+          if (sub) {
+            const interval = sub.version.billingInterval;
+            const months = { MONTHLY: 1, QUARTERLY: 3, SEMIANNUAL: 6, ANNUAL: 12, ONE_TIME: 0 }[interval] ?? 1;
+            const base = sub.sub.currentPeriodEnd > new Date() ? sub.sub.currentPeriodEnd : new Date();
+            const newEnd = new Date(base);
+            newEnd.setMonth(newEnd.getMonth() + months);
+            await coreDb.update(membershipSubscriptions)
+              .set({ currentPeriodEnd: newEnd, status: "ACTIVE", updatedAt: new Date() })
+              .where(eq(membershipSubscriptions.id, sub.sub.id));
+            console.log(`[Stripe Webhook] Renovación aplicada: sub=${sub.sub.id} → ${newEnd.toISOString()}`);
+          }
+        }
+        break;
+      }
+
+      case "customer.subscription.deleted": {
+        // ── Membresías: Stripe canceló la suscripción → EXPIRED ──
+        const stripeSub = event.data.object;
+        const coreDb = getCoreDb();
+        await coreDb.update(membershipSubscriptions)
+          .set({ status: "EXPIRED", updatedAt: new Date() })
+          .where(eq(membershipSubscriptions.paymentProviderSubId, String(stripeSub.id)));
+        break;
+      }
+
+      case "customer.subscription.updated": {
+        // ── Membresías: cancel_at_period_end o pausa → reflejar estado ──
+        const stripeSubUpd = event.data.object;
+        const coreDb = getCoreDb();
+        const cancelAtEnd = !!stripeSubUpd.cancel_at_period_end;
+        await coreDb.update(membershipSubscriptions)
+          .set({ cancelAtPeriodEnd: cancelAtEnd, updatedAt: new Date() })
+          .where(eq(membershipSubscriptions.paymentProviderSubId, String(stripeSubUpd.id)));
         break;
       }
 

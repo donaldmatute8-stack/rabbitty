@@ -6,6 +6,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import EmptyState from '@/components/ui/EmptyState';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { useToast } from '@/contexts/ToastContext';
 import { PlatformBridge } from '@/lib/platform';
 
 interface Entitlement {
@@ -95,9 +96,28 @@ function PassQr({ membershipId }: { membershipId: string }) {
 
 export default function MembershipsPage() {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
+
+  // Post-checkout Stripe (?checkout=success|cancelled) → toast + recarga
+  useEffect(() => {
+    const q = typeof window !== 'undefined' ? window.location.search : '';
+    if (q.includes('checkout=success')) {
+      showToast('🎉 ¡Pago confirmado! Tu membresía ya está activa', 'success');
+      if (typeof window !== 'undefined') {
+        window.history.replaceState({}, '', '/memberships');
+        const t = setTimeout(() => window.location.reload(), 1200);
+        return () => clearTimeout(t);
+      }
+    }
+    if (q.includes('checkout=cancelled')) {
+      showToast('Pago cancelado. Puedes intentarlo de nuevo.', 'info');
+      if (typeof window !== 'undefined') window.history.replaceState({}, '', '/memberships');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     let active = true;
