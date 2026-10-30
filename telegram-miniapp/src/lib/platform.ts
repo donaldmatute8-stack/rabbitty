@@ -299,6 +299,7 @@ export const PlatformBridge = {
   async initPushNotifications(handlers?: {
     onToken?: (token: string) => void;
     onNotificationReceived?: (notification: unknown) => void;
+    onNotificationTap?: (route: string) => void;
   }): Promise<string | null> {
     if (typeof window === 'undefined' || !this.isNative()) return null;
 
@@ -338,6 +339,18 @@ export const PlatformBridge = {
         if (handlers?.onNotificationReceived) {
           PushNotifications.addListener('pushNotificationReceived', (notification) => {
             handlers.onNotificationReceived?.(notification);
+          });
+        }
+
+        // Tap del push → deep-link in-app (data.route / data.link)
+        if (handlers?.onNotificationTap) {
+          PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const data = ((action as any).notification?.data || {}) as Record<string, unknown>;
+              const route = String(data.route || data.link || '');
+              if (route) handlers.onNotificationTap?.(route);
+            } catch { /* noop */ }
           });
         }
 

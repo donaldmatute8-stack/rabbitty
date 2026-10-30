@@ -91,6 +91,31 @@ function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
 
 
 export default function FeedPage() {
+  // ── Proximidad: ping silencioso cada 3 min (nativo con permiso concedido) ──
+  useEffect(() => {
+    if (!PlatformBridge.isNative()) return;
+    let stopped = false;
+    const ping = async () => {
+      try {
+        const { Geolocation } = await import('@capacitor/geolocation');
+        const status = await Geolocation.checkPermissions();
+        if (status.location !== 'granted') return;
+        const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: false, timeout: 8000 });
+        const headers = await PlatformBridge.getAuthHeaders();
+        if (!headers?.Authorization || stopped) return;
+        fetch('/api/location/ping', {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy, timestamp: Date.now() }),
+        }).catch(() => {});
+      } catch { /* silencioso */ }
+    };
+    const t0 = setTimeout(ping, 8000);
+    const iv = setInterval(ping, 3 * 60 * 1000);
+    return () => { stopped = true; clearTimeout(t0); clearInterval(iv); };
+  }, []);
+
+
   const router = useRouter();
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window !== 'undefined') {

@@ -211,6 +211,14 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
             }).catch((err) => console.warn('[Push] Error syncing token:', err));
           });
         },
+        // Tap del push → deep-link (membresías, chat, conciliación, ofertas…)
+        onNotificationTap: (route) => {
+          try {
+            router.push(route);
+          } catch (e) {
+            console.warn('[Push] navigate falló:', e);
+          }
+        },
       });
     }
   }, [user?.id]);
