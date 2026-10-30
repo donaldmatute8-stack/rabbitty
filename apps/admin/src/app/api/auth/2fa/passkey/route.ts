@@ -114,12 +114,16 @@ export async function POST(req: NextRequest) {
       if (!verification.verified || !verification.registrationInfo?.credential) throw new Error("Verificación fallida");
       const { credential } = verification.registrationInfo;
 
-      const { x, y } = parseCoseP256(credential.publicKey);
+      const { decodeCredentialPublicKey } = await import("@simplewebauthn/server/helpers");
+      const cose = decodeCredentialPublicKey(credential.publicKey);
+      const xRaw = cose.get(-2 as any);
+      const yRaw = cose.get(-3 as any);
+      if (!xRaw || !yRaw) throw new Error("COSE sin coordenadas P-256");
       const jwk = {
         kty: "EC",
         crv: "P-256",
-        x: x.toString("base64url"),
-        y: y.toString("base64url"),
+        x: Buffer.from(xRaw as any).toString("base64url"),
+        y: Buffer.from(yRaw as any).toString("base64url"),
       };
 
       const passkeys = await loadPasskeys();
@@ -237,37 +241,6 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ success: false, error: "Acción desconocida" }, { status: 400 });
 }
 
-
-// ── Parser CBOR mínimo para COSE key P-256 (extrae x=-2, y=-3) ──
-function parseCoseP256(coseKeyBytes: Uint8Array): { x: Buffer; y: Buffer } {
-  const b = Buffer.from(coseKeyBytes);
-  let i = 0;
-  if ((b[i] & 0xE0) !== 0xA0) throw new Error("COSE key inválida: no es un map");
-  i++;
-  let x: Buffer | null = null;
-  let y: Buffer | null = null;
-  while (i < b.length) {
-    const kb = b[i++];
-    let keyVal: number;
-    if ((kb & 0xE0) === 0x00) keyVal = kb & 0x1F;
-    else if ((kb & 0xE0) === 0x20) keyVal = -1 - (kb & 0x1F);
-    else if (kb === 0x18) keyVal = b[i++];
-    else throw new Error(`COSE: tipo de key desconocido 0x${kb.toString(16)}`);
-    const vb = b[i++];
-    let value: Buffer | number;
-    if ((vb & 0xE0) === 0x40) { value = b.subarray(i, i + (vb & 0x1F)); i += vb & 0x1F; }
-    else if (vb === 0x58) { const len = b[i++]; value = b.subarray(i, i + len); i += len; }
-    else if (vb === 0x59) { const len = b.readUInt16BE(i); i += 2; value = b.subarray(i, i + len); i += len; }
-    else if ((vb & 0xE0) === 0x00) value = vb & 0x1F;
-    else if ((vb & 0xE0) === 0x20) value = -1 - (vb & 0x1F);
-    else if (vb === 0x18) value = b[i++];
-    else throw new Error(`COSE: tipo de value desconocido 0x${vb.toString(16)}`);
-    if (keyVal === -2 && value instanceof Buffer) x = Buffer.from(value);
-    if (keyVal === -3 && value instanceof Buffer) y = Buffer.from(value);
-  }
-  if (!x || !y || x.length !== 32 || y.length !== 32) throw new Error("COSE: coordenadas P-256 ausentes o con longitud inválida");
-  return { x, y };
-}
 
 // ── CBOR encoder para COSE key (solo lo necesario para reconstruir la key) ──
 function encodeCoseKey(cose: Record<number | string, unknown>): Buffer {
