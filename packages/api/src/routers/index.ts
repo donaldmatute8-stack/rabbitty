@@ -13,6 +13,7 @@ import { webhooksRouter } from "./webhooks";
 import { fastapiBridgeRouter } from "./fastapi-bridge";
 import { crmRouter } from "./crm";
 import { analyticsRouter } from "./analytics";
+import { dwellAnalyticsRouter } from "./dwellAnalytics";
 import { waitlistRouter } from "./waitlist";
 import { suppliersRouter } from "./suppliers";
 import { expensesRouter } from "./expenses";
@@ -54,6 +55,7 @@ export const appRouter = router({
   fastapi: fastapiBridgeRouter,
   crm: crmRouter,
   analytics: analyticsRouter,
+  dwellAnalytics: dwellAnalyticsRouter,
   waitlist: waitlistRouter,
   suppliers: suppliersRouter,
   expenses: expensesRouter,

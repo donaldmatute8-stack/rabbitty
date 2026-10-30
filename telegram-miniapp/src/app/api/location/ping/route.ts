@@ -54,7 +54,8 @@ export async function POST(req: NextRequest) {
   try {
     const caller = await getAuthenticatedUser(req);
     const body = await req.json();
-    const { lat, lng, accuracy, timestamp } = body;
+    const { lat, lng, accuracy, timestamp, stationary, prevLat, prevLng } = body;
+    // "Inmóvil": el cliente compara con su ping anterior (dist < 25m) o reporta speed≈0
 
     if (typeof lat !== "number" || typeof lng !== "number") {
       return NextResponse.json({ error: "lat and lng are required numbers" }, { status: 400 });
@@ -309,12 +310,54 @@ export async function POST(req: NextRequest) {
 
     matches.sort((a, b) => a.distanceMeters - b.distanceMeters);
 
+
+    // ── Presencia GPS: si el rabbitter está cerca (≤40m) e inmóvil de UN negocio ──
+    let confirmPresence: { businessId: string; businessName: string } | null = null;
+    if (caller?.id && typeof lat === "number" && typeof lng === "number") {
+      const closest = businesses
+        .map((b) => (typeof b.lat === "number" && typeof b.lng === "number" ? { b, d: getDistanceMeters(lat, lng, b.lat, b.lng) } : null))
+        .filter((x): x is { b: typeof businesses[0]; d: number } => !!x && x.d <= 40)
+        .sort((a, b) => a.d - b.d)[0];
+      if (closest) {
+        const isStationary = stationary === true || (typeof prevLat === "number" && typeof prevLng === "number" && Math.abs(getDistanceMeters(prevLat, prevLng, lat, lng)) < 25);
+        try {
+          const now = new Date();
+          // ¿Sesión abierta de este usuario en este negocio?
+          const [openHere] = await db.execute(
+            sql`SELECT id FROM "presenceSessions" WHERE "userId" = ${caller.id} AND "businessId" = ${closest.b.id} AND "endedAt" IS NULL LIMIT 1`
+          ).then((r: unknown) => ((r as { rows?: Array<{ id: string }> }).rows || (r as unknown as Array<{ id: string }>)));
+          // ¿Sesión abierta en OTRO negocio? → se movió → cerrarla
+          const openOther = await db.execute(
+            sql`SELECT id FROM "presenceSessions" WHERE "userId" = ${caller.id} AND "businessId" != ${closest.b.id} AND "endedAt" IS NULL`
+          ).then((r: unknown) => ((r as { rows?: Array<{ id: string }> }).rows || (r as unknown as Array<{ id: string }>)));
+          for (const other of openOther) {
+            await db.execute(sql`UPDATE "presenceSessions" SET "endedAt" = now(), "updatedAt" = now() WHERE id = ${other.id}`);
+          }
+          if (openHere) {
+            // Refrescar permanencia
+            await db.execute(sql`UPDATE "presenceSessions" SET "lastPingAt" = now(), "updatedAt" = now() WHERE id = ${openHere.id}`);
+          } else if (isStationary) {
+            // No hay sesión y está inmóvil cerca → pedir confirmación (el cliente respeta cooldowns)
+            const [todaySession] = await db.execute(
+              sql`SELECT id FROM "presenceSessions" WHERE "userId" = ${caller.id} AND "businessId" = ${closest.b.id} AND "startedAt" >= now() - interval '12 hours' LIMIT 1`
+            ).then((r: unknown) => ((r as { rows?: Array<{ id: string }> }).rows || (r as unknown as Array<{ id: string }>)));
+            if (!todaySession) {
+              confirmPresence = { businessId: closest.b.id, businessName: closest.b.name };
+            }
+          }
+        } catch (pErr) {
+          console.error("[LOCATION_PING] presencia GPS falló:", pErr);
+        }
+      }
+    }
+
     return NextResponse.json({
       success: true,
       nearbyCount: matches.length,
       immediateMatches: matches.filter((m) => m.distanceMeters <= 250),
       matches: matches.slice(0, 10),
       triggeredOffers,
+      confirmPresence,
     });
   } catch (error) {
     console.error("[LOCATION_PING_ERROR]", error);

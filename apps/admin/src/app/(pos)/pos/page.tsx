@@ -457,7 +457,20 @@ export default function PosPage() {
         toast.info(`🐰 ${c.name} llegó al local — check-in activo`);
       }
     }
-  }, [activeCheckIns]);
+    // ── Auto-vínculo: si hay EXACTAMENTE un rabbitter presente y no hay ninguno vinculado,
+    // preselecciónalo para el cobro (el banner permite cambiarlo si son varios). ──
+    if (!selectedRabbitter && (activeCheckIns?.length ?? 0) === 1) {
+      const only = activeCheckIns![0];
+      utils.pos.lookupRabbitter.fetch({ query: only.userId })
+        .then((res) => {
+          if (res && !selectedRabbitter) {
+            setSelectedRabbitter(res);
+            toast.success(`🐰 ${res.name} ya está en el local — vinculado automáticamente al cobro`);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [activeCheckIns, selectedRabbitter]);
   const handleMembershipRedeem = async (qrToken: string) => {
     try {
       const subId = qrToken.split(".")[0];

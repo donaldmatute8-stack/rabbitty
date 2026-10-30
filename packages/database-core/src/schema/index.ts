@@ -654,6 +654,23 @@ export const reconciliationRequests = pgTable("reconciliationRequests", {
   ...timestamps,
 });
 
+
+// ── Presence Sessions (permanencia de rabbitters en los negocios) ─────────────
+// Se abre con confirmación GPS ("¿Estás en X?") o check-in por escaneo; los pings
+// de ubicación la refrescan mientras el usuario sigue cerca; se cierra lazy
+// (lastPingAt antiguo) o al abrir sesión en OTRO negocio (se movió).
+
+export const presenceSessions = pgTable("presenceSessions", {
+  id: id(),
+  userId: text("userId").notNull(),
+  businessId: text("businessId").notNull(),
+  source: text("source").default("gps").notNull(),   // gps | scan
+  startedAt: timestamp("startedAt").notNull(),
+  lastPingAt: timestamp("lastPingAt").notNull(),
+  endedAt: timestamp("endedAt"),                     // null = sesión abierta
+  ...timestamps,
+});
+
 // ── Membership Relations ──────────────────────────────────────────────────────
 
 export const membershipPlansRelations = relations(membershipPlans, ({ one, many }) => ({

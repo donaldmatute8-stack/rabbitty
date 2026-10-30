@@ -59,7 +59,21 @@ export async function POST(req: NextRequest) {
         .where(eq(users.id, caller.id));
     }
 
-    // ── Señal de presencia SIEMPRE (aunque el check-in diario sea 'already'): el POS
+    // ── Sesión de permanencia (unifica scan y GPS) ──
+    try {
+      const [openS] = await db.execute(
+        sql`SELECT id FROM "presenceSessions" WHERE "userId" = ${caller.id} AND "businessId" = ${biz.id} AND "endedAt" IS NULL LIMIT 1`
+      ).then((r: unknown) => ((r as { rows?: Array<{ id: string }> }).rows || (r as unknown as Array<{ id: string }>)));
+      if (openS) {
+        await db.execute(sql`UPDATE "presenceSessions" SET "lastPingAt" = now(), "updatedAt" = now() WHERE id = ${openS.id}`);
+      } else {
+        await db.execute(sql`UPDATE "presenceSessions" SET "endedAt" = now(), "updatedAt" = now() WHERE "userId" = ${caller.id} AND "endedAt" IS NULL`);
+        await db.execute(sql`INSERT INTO "presenceSessions" ("id", "userId", "businessId", "source", "startedAt", "lastPingAt")
+          VALUES (gen_random_uuid()::text, ${caller.id}, ${biz.id}, 'scan', now(), now())`);
+      }
+    } catch { /* best-effort */ }
+
+        // ── Señal de presencia SIEMPRE (aunque el check-in diario sea 'already'): el POS
     // y el Kiosko pollan estas interacciones — sin esto un re-escaneo no actualizaría nada. ──
     try {
       await db.execute(sql`INSERT INTO "business_interactions" (id, "userId", "businessId", action, channel, metadata)

@@ -140,7 +140,7 @@ function renderFormattedMarkdown(text: string) {
   const lines = text.split('\n');
 
   return (
-    <span style={{ display: 'block', fontSize: '15px', lineHeight: '1.5', margin: 0, wordBreak: 'break-word' }}>
+    <span style={{ display: 'inline', fontSize: '16px', lineHeight: '1.34', margin: 0, wordBreak: 'break-word' }}>
       {lines.map((line, lineIdx) => {
         // Detectar si es elemento de lista numerada como "1. **Nombre**"
         const isListItem = /^\d+\.\s/.test(line);
@@ -152,8 +152,8 @@ function renderFormattedMarkdown(text: string) {
           <span
             key={lineIdx}
             style={{
-              display: 'block',
-              marginBottom: lineIdx === lines.length - 1 ? 0 : line.trim() === '' ? '8px' : '4px',
+              display: lineIdx === lines.length - 1 ? 'inline' : 'block',
+              marginBottom: lineIdx === lines.length - 1 ? 0 : line.trim() === '' ? '6px' : '3px',
               paddingLeft: isListItem ? '4px' : undefined,
             }}
           >
@@ -271,11 +271,14 @@ export default function ChatRoomPage() {
   const [animatingBotMessageIds, setAnimatingBotMessageIds] = useState<string[]>([]);
   const mainRef = useRef<HTMLElement>(null);
   const isAtBottomRef = useRef(true);
+  const [showScrollDown, setShowScrollDown] = useState(false);
 
   const handleMainScroll = () => {
     if (!mainRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = mainRef.current;
-    isAtBottomRef.current = scrollHeight - scrollTop - clientHeight < 90;
+    const nearBottom = scrollHeight - scrollTop - clientHeight < 90;
+    isAtBottomRef.current = nearBottom;
+    setShowScrollDown(!nearBottom && messages.length > 3);
   };
   const [orderTarget, setOrderTarget] = useState<{ businessId: string; businessName: string } | null>(null);
   const [orderItems, setOrderItems] = useState('');
@@ -364,32 +367,44 @@ export default function ChatRoomPage() {
 
   const isBot = targetId === 'bot';
 
-  // Keyboard offset state for native webview / iOS
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  // Visual viewport tracking for iOS native keyboard (keeps input visible above keyboard)
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [vvStyle, setVvStyle] = useState<{ height: string; top: number }>({ height: '100dvh', top: 0 });
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    const vv = window.visualViewport;
+    if (!vv) return;
 
-    const updateKeyboard = () => {
-      if (window.visualViewport) {
-        const currentHeight = window.visualViewport.height;
-        const windowHeight = window.innerHeight;
-        const offset = windowHeight - currentHeight;
-        setKeyboardHeight(offset > 60 ? offset : 0);
+    let baselineHeight = Math.max(window.innerHeight, vv.height);
+
+    const updateViewport = () => {
+      const curH = vv.height;
+      const curTop = vv.offsetTop;
+      if (curH > baselineHeight) baselineHeight = curH;
+      const kbDelta = baselineHeight - curH;
+      const isOpen = kbDelta > 90;
+      setKeyboardOpen(isOpen);
+      setVvStyle({
+        height: `${Math.round(curH)}px`,
+        top: Math.max(0, Math.round(curTop)),
+      });
+      if (isOpen && isAtBottomRef.current) {
+        requestAnimationFrame(() => {
+          bottomRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+        });
       }
-      setTimeout(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-      }, 50);
     };
 
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', updateKeyboard);
-    }
+    updateViewport();
+    vv.addEventListener('resize', updateViewport);
+    vv.addEventListener('scroll', updateViewport);
+    window.addEventListener('orientationchange', updateViewport);
 
     return () => {
-      if (window.visualViewport) {
-        window.visualViewport.removeEventListener('resize', updateKeyboard);
-      }
+      vv.removeEventListener('resize', updateViewport);
+      vv.removeEventListener('scroll', updateViewport);
+      window.removeEventListener('orientationchange', updateViewport);
     };
   }, []);
 
@@ -1421,17 +1436,33 @@ export default function ChatRoomPage() {
   const headerColor = isTypingActive ? 'var(--rabbitty-pink)' : isBot || businessOpen !== false ? '#4CAF50' : '#9E9E9E';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: 'var(--bg-primary)', fontFamily: 'var(--font-family-base)' }}>
+    <div
+      style={{
+        position: 'fixed',
+        left: 0,
+        right: 0,
+        top: vvStyle.top,
+        height: vvStyle.height,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        background: 'radial-gradient(ellipse at top, rgba(233, 30, 99, 0.07) 0%, #09090D 55%, #050507 100%)',
+        fontFamily: 'var(--font-family-base)',
+      }}
+    >
       <header
         style={{
-          position: 'sticky',
+          position: 'absolute',
           top: 0,
+          left: 0,
+          right: 0,
           zIndex: 50,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: 'calc(var(--safe-top, 0px) + 8px) 16px 8px',
-          background: 'transparent',
+          padding: 'calc(var(--safe-top, 0px) + 6px) 12px 8px',
+          background: 'linear-gradient(180deg, rgba(5,5,7,0.72) 0%, rgba(5,5,7,0) 100%)',
+          pointerEvents: 'none',
           gap: 8,
         }}
       >
@@ -1448,38 +1479,53 @@ export default function ChatRoomPage() {
           style={{
             position: 'relative',
             zIndex: 10,
-            background: 'var(--bg-elevated)',
-            border: '1px solid var(--border-subtle)',
+            pointerEvents: 'auto',
+            background: 'rgba(28, 28, 34, 0.78)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
             borderRadius: '50%',
-            width: 38,
-            height: 38,
+            width: 40,
+            height: 40,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
             padding: 0,
-            color: 'var(--text-primary)',
-            boxShadow: '0 2px 10px rgba(0,0,0,0.12)',
+            color: '#FFFFFF',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
             flexShrink: 0,
           }}
         >
-          <svg width="10" height="18" viewBox="0 0 10 18" fill="none">
-            <path d="M9 1L1 9L9 17" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+          <svg width="10" height="17" viewBox="0 0 10 18" fill="none" style={{ transform: 'translateX(-1px)' }}>
+            <path d="M9 1L1 9L9 17" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
-        <div style={{ position: 'absolute', left: 0, right: 0, display: 'flex', justifyContent: 'center', zIndex: 1 }}>
+        <div style={{ position: 'absolute', left: 0, right: 0, display: 'flex', justifyContent: 'center', zIndex: 1, pointerEvents: 'none' }}>
           <button
             onClick={() => { PlatformBridge.hapticFeedback('light'); setTargetInfoOpen(true); }}
             style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
-              background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 999,
-              padding: '6px 16px', boxShadow: '0 2px 10px rgba(0,0,0,0.12)', cursor: 'pointer', maxWidth: '58vw',
+              pointerEvents: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 1,
+              background: 'rgba(28, 28, 34, 0.78)',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              borderRadius: 999,
+              padding: '5px 22px',
+              minWidth: 132,
+              maxWidth: '62vw',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
+              cursor: 'pointer',
             }}
           >
-            <span style={{ fontSize: 15, fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
+            <span style={{ fontSize: 15, fontWeight: 700, color: '#FFFFFF', letterSpacing: '-0.2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', lineHeight: 1.15 }}>
               {targetName}
             </span>
-            <span style={{ fontSize: 11, color: headerColor, fontWeight: 700, lineHeight: 1 }}>
+            <span style={{ fontSize: 11.5, color: headerColor, fontWeight: 500, lineHeight: 1.1 }}>
               {headerStatus}
             </span>
           </button>
@@ -1487,9 +1533,9 @@ export default function ChatRoomPage() {
         <button
           onClick={() => { PlatformBridge.hapticFeedback('light'); setTargetInfoOpen(true); }}
           aria-label={`Perfil de ${targetName}`}
-          style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, position: 'relative', zIndex: 2 }}
+          style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, position: 'relative', zIndex: 2, pointerEvents: 'auto' }}
         >
-          <div style={{ width: 38, height: 38, borderRadius: '50%', background: isBot ? 'var(--rabbitty-pink)' : 'var(--bg-pressed)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, boxShadow: '0 2px 10px rgba(0,0,0,0.12)', overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
+          <div style={{ width: 40, height: 40, borderRadius: '50%', background: isBot ? 'var(--rabbitty-pink)' : 'rgba(28, 28, 34, 0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, boxShadow: '0 4px 16px rgba(0,0,0,0.35)', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.12)' }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             {isBot ? '🐰' : targetAvatar ? <img src={targetAvatar} alt={targetName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '💬'}
           </div>
@@ -1883,10 +1929,11 @@ export default function ChatRoomPage() {
         style={{
           flex: 1,
           overflowY: 'auto',
-          padding: '24px 20px',
+          WebkitOverflowScrolling: 'touch',
+          padding: 'calc(var(--safe-top, 0px) + 58px) 10px 10px',
           display: 'flex',
           flexDirection: 'column',
-          gap: '20px',
+          gap: '4px',
         }}
       >
         {!loading && messages.length === 0 && (
@@ -1947,12 +1994,25 @@ export default function ChatRoomPage() {
           messages.map((msg, idx) => {
             const isMe = msg.senderId === myParticipantId;
             const isSelected = selectedIds.includes(msg.id);
+            const prevMsg = idx > 0 ? messages[idx - 1] : null;
+            const nextMsg = idx < messages.length - 1 ? messages[idx + 1] : null;
+            const sameAsPrev = Boolean(prevMsg && (prevMsg.senderId === myParticipantId) === isMe);
+            const sameAsNext = Boolean(nextMsg && (nextMsg.senderId === myParticipantId) === isMe);
+            const bubbleRadius = isMe
+              ? `${18}px ${sameAsPrev ? 8 : 18}px ${sameAsNext ? 8 : 4}px ${18}px`
+              : `${sameAsPrev ? 8 : 18}px ${18}px ${18}px ${sameAsNext ? 8 : 4}px`;
             return (
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 key={msg.id || idx}
-                style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start', width: '100%', position: 'relative' }}
+                style={{
+                  display: 'flex',
+                  justifyContent: isMe ? 'flex-end' : 'flex-start',
+                  width: '100%',
+                  position: 'relative',
+                  marginTop: idx > 0 && !sameAsPrev ? 6 : 0,
+                }}
               >
                 {/* Telegram-style Reply indicator circle behind message during swipe */}
                 <div
@@ -2017,30 +2077,40 @@ export default function ChatRoomPage() {
                       setSelectedIds((prev) => (prev.includes(msg.id) ? prev.filter((x) => x !== msg.id) : [...prev, msg.id]));
                     }
                   }}
-                  style={{ cursor: selectMode ? 'pointer' : 'grab', position: 'relative', zIndex: 1 }}
+                  style={{ cursor: selectMode ? 'pointer' : 'grab', position: 'relative', zIndex: 1, maxWidth: '82%' }}
                 >
                 <div
                   style={{
-                    maxWidth: '85%',
-                    padding: '12px 16px',
-                    backgroundColor: isMe ? 'var(--rabbitty-pink)' : 'var(--bg-elevated)',
-                    color: isMe ? '#FFFFFF' : 'var(--text-primary)',
-                    borderRadius: isMe ? '20px 20px 4px 20px' : '20px 20px 20px 4px',
-                    boxShadow: 'var(--shadow-sm)',
-                    border: isSelected ? '2px solid #FCD34D' : (isMe ? 'none' : '1px solid var(--border-subtle)'),
+                    position: 'relative',
+                    padding: '7px 11px 6px 12px',
+                    background: isMe
+                      ? 'linear-gradient(135deg, #FF2E93 0%, #E11D74 100%)'
+                      : 'rgba(28, 28, 34, 0.92)',
+                    backdropFilter: isMe ? undefined : 'blur(16px)',
+                    WebkitBackdropFilter: isMe ? undefined : 'blur(16px)',
+                    color: '#FFFFFF',
+                    borderRadius: bubbleRadius,
+                    boxShadow: isMe
+                      ? '0 2px 10px rgba(233, 30, 99, 0.22)'
+                      : '0 1px 4px rgba(0, 0, 0, 0.28)',
+                    border: isSelected
+                      ? '2px solid #FCD34D'
+                      : isMe
+                      ? 'none'
+                      : '1px solid rgba(255, 255, 255, 0.07)',
                     outline: isSelected ? '2px solid rgba(252,211,77,0.5)' : 'none',
                   }}
                 >
                   {msg.type === 'AUTO_REPLY' && (
                     <span
                       style={{
-                        display: 'inline-block',
+                        display: 'block',
                         fontSize: '10px',
                         fontWeight: 800,
                         textTransform: 'uppercase',
                         letterSpacing: '0.04em',
-                        color: 'var(--text-muted)',
-                        marginBottom: '4px',
+                        color: 'rgba(255,255,255,0.5)',
+                        marginBottom: '2px',
                       }}
                     >
                       Respuesta automática
@@ -2051,11 +2121,11 @@ export default function ChatRoomPage() {
                     if (meta && meta.kind === 'REPLY' && meta.replyTo && typeof meta.replyTo === 'object') {
                       const rt = meta.replyTo as { text?: string; sender?: string };
                       return (
-                        <div style={{ marginBottom: 6, paddingLeft: 8, borderLeft: `3px solid ${isMe ? 'rgba(255,255,255,0.7)' : '#E91E63'}`, background: isMe ? 'rgba(255,255,255,0.12)' : 'rgba(233,30,99,0.07)', borderRadius: 8, padding: '4px 8px' }}>
-                          <span style={{ display: 'block', fontSize: 11, fontWeight: 800, opacity: 0.85 }}>
-                            {rt.sender === 'user' ? 'Tú' : 'Otro'}
+                        <div style={{ marginBottom: 5, paddingLeft: 8, borderLeft: `2.5px solid ${isMe ? 'rgba(255,255,255,0.85)' : '#FF2E93'}`, background: isMe ? 'rgba(0,0,0,0.16)' : 'rgba(233,30,99,0.1)', borderRadius: 6, padding: '3px 8px' }}>
+                          <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: isMe ? '#FFFFFF' : '#FF4D9E' }}>
+                            {rt.sender === 'user' ? 'Tú' : targetName}
                           </span>
-                          <span style={{ display: 'block', fontSize: 12, opacity: 0.75, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 220 }}>
+                          <span style={{ display: 'block', fontSize: 12, opacity: 0.82, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 220 }}>
                             {rt.text || ''}
                           </span>
                         </div>
@@ -2064,31 +2134,36 @@ export default function ChatRoomPage() {
                     if (!isMe && meta && meta.kind === 'FORWARDED' && meta.forwardedFrom && typeof meta.forwardedFrom === 'object') {
                       const ff = meta.forwardedFrom as { name?: string };
                       return (
-                        <div style={{ marginBottom: 4, fontSize: 11, fontWeight: 800, fontStyle: 'italic', opacity: 0.7 }}>↪ Reenviado de {ff.name || 'contacto'}</div>
+                        <div style={{ marginBottom: 3, fontSize: 11, fontWeight: 700, color: '#FF4D9E' }}>↪ Reenviado de {ff.name || 'contacto'}</div>
                       );
                     }
                     return null;
                   })()}
-                  {renderContent(msg)}
-                  <span
-                    style={{
-                      display: 'block',
-                      fontSize: '11px',
-                      marginTop: '6px',
-                      opacity: isMe ? 0.85 : 0.5,
-                      textAlign: isMe ? 'right' : 'left',
-                      fontWeight: 500,
-                    }}
-                  >
-                    {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    {isMe && !isBot && (
-                      <span style={{ marginLeft: '4px' }}>
-                        <CheckTicks read={Boolean(msg.readAt)} />
-                      </span>
-                    )}
-                  </span>
+                  <div style={{ fontSize: '16px', lineHeight: '1.34', wordBreak: 'break-word' }}>
+                    {renderContent(msg)}
+                    <span
+                      style={{
+                        float: 'right',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '3px',
+                        fontSize: '11px',
+                        lineHeight: 1,
+                        marginLeft: '9px',
+                        marginTop: '6px',
+                        marginBottom: '-1px',
+                        color: isMe ? 'rgba(255,255,255,0.78)' : 'rgba(255,255,255,0.42)',
+                        whiteSpace: 'nowrap',
+                        fontWeight: 500,
+                        userSelect: 'none',
+                      }}
+                    >
+                      {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {isMe && !isBot && <CheckTicks read={Boolean(msg.readAt)} />}
+                    </span>
+                  </div>
                   {msgReactions[msg.id] && (
-                    <div style={{ position: 'absolute', bottom: -14, [isMe ? 'left' : 'right']: 8, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 999, padding: '2px 7px', fontSize: 13, boxShadow: 'var(--shadow-sm)', lineHeight: 1.2 } as React.CSSProperties}>
+                    <div style={{ position: 'absolute', bottom: -12, [isMe ? 'left' : 'right']: 8, background: 'rgba(28, 28, 34, 0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 999, padding: '2px 7px', fontSize: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.35)', lineHeight: 1.2 } as React.CSSProperties}>
                       {msgReactions[msg.id]}
                     </div>
                   )}
@@ -2124,17 +2199,55 @@ export default function ChatRoomPage() {
 
       <footer
         style={{
-          padding: '12px 16px',
-          paddingBottom: keyboardHeight > 0 
-            ? `${keyboardHeight + 10}px` 
-            : 'calc(max(var(--safe-bottom, 0px), env(safe-area-inset-bottom, 20px)) + 12px)',
-          backgroundColor: 'var(--bg-elevated)',
-          borderTop: '1px solid var(--border-subtle)',
-          transition: 'padding-bottom 0.15s ease-out',
+          position: 'relative',
+          zIndex: 40,
+          padding: '6px 10px',
+          paddingBottom: keyboardOpen
+            ? '6px'
+            : 'calc(max(var(--safe-bottom, 0px), env(safe-area-inset-bottom, 16px)) + 6px)',
+          backgroundColor: 'rgba(12, 12, 16, 0.78)',
+          backdropFilter: 'blur(22px)',
+          WebkitBackdropFilter: 'blur(22px)',
+          borderTop: '1px solid rgba(255, 255, 255, 0.06)',
         }}
       >
-        {(suggestions.length > 0 || isBusinessInbox) && (
-          <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '10px' }}>
+        {/* Botón flotante ir al final (estilo Telegram iOS) */}
+        {showScrollDown && (
+          <button
+            type="button"
+            onClick={() => {
+              PlatformBridge.hapticFeedback('light');
+              bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }}
+            aria-label="Ir al final"
+            style={{
+              position: 'absolute',
+              top: -48,
+              right: 12,
+              width: 38,
+              height: 38,
+              borderRadius: '50%',
+              background: 'rgba(28, 28, 34, 0.88)',
+              backdropFilter: 'blur(18px)',
+              WebkitBackdropFilter: 'blur(18px)',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
+              color: '#FFFFFF',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 14px rgba(0,0,0,0.45)',
+              cursor: 'pointer',
+              zIndex: 45,
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+        )}
+
+        {(suggestions.length > 0 || isBusinessInbox) && !keyboardOpen && (
+          <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '6px' }}>
             {(isBusinessInbox ? BUSINESS_TEMPLATES : suggestions).map((chip) => (
               <button
                 key={chip}
@@ -2146,13 +2259,13 @@ export default function ChatRoomPage() {
                 }}
                 style={{
                   flexShrink: 0,
-                  background: 'var(--bg-pressed)',
-                  border: '1px solid var(--border-subtle)',
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.08)',
                   borderRadius: '100px',
-                  padding: '7px 14px',
+                  padding: '5px 12px',
                   fontSize: '12px',
-                  fontWeight: 700,
-                  color: 'var(--text-secondary)',
+                  fontWeight: 600,
+                  color: 'rgba(255,255,255,0.78)',
                   cursor: 'pointer',
                   whiteSpace: 'nowrap',
                 }}
@@ -2163,81 +2276,52 @@ export default function ChatRoomPage() {
           </div>
         )}
 
-        {!isBot && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+        {!isBot && bunzyNote && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              marginBottom: 6,
+              background: 'rgba(28, 28, 34, 0.92)',
+              border: '1px solid rgba(233, 30, 99, 0.3)',
+              borderRadius: '14px',
+              padding: '7px 10px',
+            }}
+          >
+            <span style={{ flex: 1, fontSize: '12px', lineHeight: 1.35, color: 'rgba(255,255,255,0.85)' }}>
+              <strong style={{ color: '#FF4D9E' }}>Bunzy:</strong> {bunzyNote.text}
+            </span>
+            {(bunzyNote.mode === 'draft' || bunzyNote.mode === 'marketing_proposal') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setInput(bunzyNote.text);
+                  setBunzyNote(null);
+                }}
+                style={{ border: 'none', background: '#E91E63', color: '#fff', borderRadius: '100px', padding: '4px 10px', fontSize: '11px', fontWeight: 800, cursor: 'pointer', flexShrink: 0 }}
+              >
+                Usar
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => {
-                PlatformBridge.hapticFeedback('light');
-                setBunzyOpen(true);
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                background: 'rgba(233,30,99,0.12)',
-                border: '1px solid rgba(233,30,99,0.35)',
-                borderRadius: '100px',
-                padding: '6px 12px',
-                fontSize: '12px',
-                fontWeight: 800,
-                color: '#E91E63',
-                cursor: 'pointer',
-                flexShrink: 0,
-              }}
+              onClick={() => setBunzyNote(null)}
+              style={{ border: 'none', background: 'transparent', color: 'rgba(255,255,255,0.5)', fontSize: '14px', cursor: 'pointer', flexShrink: 0 }}
+              aria-label="Cerrar"
             >
-              🐰 Ayuda de Bunzy
+              ✕
             </button>
-
-            {bunzyNote && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  flex: 1,
-                  minWidth: 0,
-                  background: 'var(--bg-pressed)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: '14px',
-                  padding: '8px 10px',
-                }}
-              >
-                <span style={{ flex: 1, fontSize: '12px', lineHeight: 1.4, color: 'var(--text-secondary)' }}>
-                  <strong style={{ color: '#E91E63' }}>Bunzy:</strong> {bunzyNote.text}
-                </span>
-                {(bunzyNote.mode === 'draft' || bunzyNote.mode === 'marketing_proposal') && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setInput(bunzyNote.text);
-                      setBunzyNote(null);
-                    }}
-                    style={{ border: 'none', background: '#E91E63', color: '#fff', borderRadius: '100px', padding: '5px 10px', fontSize: '11px', fontWeight: 800, cursor: 'pointer', flexShrink: 0 }}
-                  >
-                    Usar
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setBunzyNote(null)}
-                  style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', fontSize: '14px', cursor: 'pointer', flexShrink: 0 }}
-                  aria-label="Cerrar"
-                >
-                  ✕
-                </button>
-              </div>
-            )}
           </div>
         )}
 
         {replyTo && !selectMode && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, background: 'var(--bg-pressed)', border: '1px solid var(--border-subtle)', borderLeft: '3px solid #E91E63', borderRadius: 12, padding: '8px 12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, background: 'rgba(28, 28, 34, 0.9)', border: '1px solid rgba(255,255,255,0.08)', borderLeft: '3px solid #FF2E93', borderRadius: 12, padding: '6px 10px' }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#E91E63' }}>
-                ↩ Respondiendo a {replyTo.sender === 'user' ? 'Tú' : 'Otro'}
+              <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#FF4D9E' }}>
+                ↩ Respondiendo a {replyTo.sender === 'user' ? 'Tú' : targetName}
               </span>
-              <span style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span style={{ display: 'block', fontSize: 12, color: 'rgba(255,255,255,0.72)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {replyTo.text}
               </span>
             </div>
@@ -2245,7 +2329,7 @@ export default function ChatRoomPage() {
               type="button"
               onClick={() => setReplyTo(null)}
               aria-label="Cancelar respuesta"
-              style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', fontSize: 16, cursor: 'pointer', padding: 4 }}
+              style={{ border: 'none', background: 'transparent', color: 'rgba(255,255,255,0.5)', fontSize: 15, cursor: 'pointer', padding: 4 }}
             >
               ✕
             </button>
@@ -2253,22 +2337,22 @@ export default function ChatRoomPage() {
         )}
 
         {!selectMode && recording && (
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <button
               type="button"
               onClick={() => stopRecording(true)}
               aria-label="Cancelar grabación"
-              style={{ width: 44, height: 44, borderRadius: '50%', border: 'none', background: 'var(--bg-pressed)', color: '#D32F2F', fontSize: 18, cursor: 'pointer', flexShrink: 0 }}
+              style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.08)', color: '#EF4444', fontSize: 16, cursor: 'pointer', flexShrink: 0 }}
             >
               🗑️
             </button>
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-pressed)', border: '1px solid #E91E63', borderRadius: 100, padding: '12px 18px' }}>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(28, 28, 34, 0.9)', border: '1px solid #FF2E93', borderRadius: 100, padding: '8px 14px' }}>
               <motion.span
                 animate={{ opacity: [1, 0.2, 1] }}
                 transition={{ repeat: Infinity, duration: 1 }}
-                style={{ width: 10, height: 10, borderRadius: '50%', background: '#E91E63', flexShrink: 0 }}
+                style={{ width: 9, height: 9, borderRadius: '50%', background: '#FF2E93', flexShrink: 0 }}
               />
-              <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: '#FFFFFF', fontVariantNumeric: 'tabular-nums' }}>
                 Grabando… 0:{String(recordDuration).padStart(2, '0')}
               </span>
             </div>
@@ -2276,7 +2360,7 @@ export default function ChatRoomPage() {
               type="button"
               onClick={() => stopRecording(false)}
               aria-label="Enviar nota de voz"
-              style={{ width: 44, height: 44, borderRadius: '50%', border: 'none', background: 'var(--rabbitty-pink)', color: '#fff', fontSize: 18, cursor: 'pointer', flexShrink: 0, boxShadow: '0 4px 12px rgba(233,30,99,0.35)' }}
+              style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'linear-gradient(135deg, #FF2E93 0%, #E11D74 100%)', color: '#fff', fontSize: 16, cursor: 'pointer', flexShrink: 0 }}
             >
               ➤
             </button>
@@ -2284,119 +2368,166 @@ export default function ChatRoomPage() {
         )}
 
         {!selectMode && !recording && (
-        <form onSubmit={handleSend} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <button
-            type="button"
-            onClick={handleShareLocation}
-            disabled={locating}
-            title="Compartir ubicación GPS"
-            style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: '50%',
-              border: 'none',
-              background: coords ? 'rgba(233,30,99,0.2)' : 'var(--bg-pressed)',
-              color: coords ? '#E91E63' : 'var(--text-muted)',
-              fontSize: '18px',
-              cursor: locating ? 'wait' : 'pointer',
-              flexShrink: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            {locating ? (
-              <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: '2px solid #E91E63', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} />
-            ) : (
-              '📍'
+          <form onSubmit={handleSend} style={{ display: 'flex', gap: '7px', alignItems: 'center' }}>
+            {/* Botón asistente Bunzy integrado en la fila de Telegram (píldora sin teclado, círculo con teclado) */}
+            {!isBot && (
+              <button
+                type="button"
+                onClick={() => {
+                  PlatformBridge.hapticFeedback('light');
+                  setBunzyOpen(true);
+                }}
+                aria-label="Ayuda de Bunzy"
+                title="Ayuda de Bunzy"
+                style={{
+                  height: 36,
+                  width: keyboardOpen ? 36 : 'auto',
+                  padding: keyboardOpen ? 0 : '0 11px',
+                  borderRadius: 999,
+                  border: '1px solid rgba(255, 46, 147, 0.45)',
+                  background: 'linear-gradient(135deg, rgba(255, 46, 147, 0.28) 0%, rgba(168, 85, 247, 0.25) 100%)',
+                  color: '#FFFFFF',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                  transition: 'all 0.18s ease',
+                }}
+              >
+                <span style={{ fontSize: 14, lineHeight: 1 }}>🐰</span>
+                {!keyboardOpen && <span>Bunzy</span>}
+              </button>
             )}
-          </button>
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => {
-              setInput(e.target.value);
-              signalTyping();
-            }}
-            placeholder={isBot ? 'Pregúntale a Bunzy...' : isBusinessInbox ? 'Responde a tu cliente...' : 'Escribe un mensaje...'}
-            style={{
-              flex: 1,
-              backgroundColor: 'var(--bg-pressed)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: '100px',
-              padding: '12px 18px',
-              fontSize: '15px',
-              color: 'var(--text-primary)',
-              outline: 'none',
-              transition: 'border-color 0.2s',
-            }}
-            onFocus={(e) => {
-              e.target.style.borderColor = 'var(--rabbitty-pink)';
-              setTimeout(() => {
-                bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-              }, 120);
-            }}
-            onClick={() => {
-              setTimeout(() => {
-                bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-              }, 120);
-            }}
-            onBlur={(e) => (e.target.style.borderColor = 'var(--border-subtle)')}
-          />
-          {input.trim() ? (
-            <button
-              type="submit"
-              disabled={sending}
-              aria-label="Enviar mensaje"
-              style={{
-                width: '44px',
-                height: '44px',
-                backgroundColor: sending ? 'var(--bg-pressed)' : 'var(--rabbitty-pink)',
-                color: sending ? 'var(--text-muted)' : '#FFFFFF',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                border: 'none',
-                cursor: sending ? 'not-allowed' : 'pointer',
-                transition: 'all 0.2s ease',
-                boxShadow: sending ? 'none' : '0 4px 12px rgba(233, 30, 99, 0.35)',
-              }}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: 'translateX(-1px) translateY(1px)' }}>
-                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
-              </svg>
-            </button>
-          ) : (
+
+            {/* Botón clip / ubicación estilo Telegram */}
             <button
               type="button"
-              onClick={startRecording}
-              disabled={sending}
-              title="Grabar nota de voz"
-              aria-label="Grabar nota de voz"
+              onClick={handleShareLocation}
+              disabled={locating}
+              title="Compartir ubicación GPS"
+              aria-label="Compartir ubicación GPS"
               style={{
-                width: '44px',
-                height: '44px',
-                backgroundColor: sending ? 'var(--bg-pressed)' : 'var(--rabbitty-pink)',
-                color: sending ? 'var(--text-muted)' : '#FFFFFF',
+                width: 36,
+                height: 36,
                 borderRadius: '50%',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                background: coords ? 'rgba(233, 30, 99, 0.22)' : 'rgba(28, 28, 34, 0.88)',
+                color: coords ? '#FF2E93' : 'rgba(255, 255, 255, 0.72)',
+                cursor: locating ? 'wait' : 'pointer',
+                flexShrink: 0,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                border: 'none',
-                cursor: sending ? 'not-allowed' : 'pointer',
-                transition: 'all 0.2s ease',
-                boxShadow: sending ? 'none' : '0 4px 12px rgba(233, 30, 99, 0.35)',
               }}
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" y1="19" x2="12" y2="22" />
-              </svg>
+              {locating ? (
+                <div style={{ width: 15, height: 15, borderRadius: '50%', border: '2px solid #FF2E93', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} />
+              ) : (
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                  <circle cx="12" cy="10" r="3" />
+                </svg>
+              )}
             </button>
-          )}
-        </form>
+
+            {/* Cápsula de texto estilo Telegram iOS */}
+            <div
+              style={{
+                flex: 1,
+                minWidth: 0,
+                height: 36,
+                display: 'flex',
+                alignItems: 'center',
+                backgroundColor: 'rgba(28, 28, 34, 0.92)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: 999,
+                padding: '0 14px',
+              }}
+            >
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  signalTyping();
+                }}
+                placeholder={isBot ? 'Mensaje para Bunzy...' : isBusinessInbox ? 'Mensaje...' : 'Mensaje'}
+                style={{
+                  width: '100%',
+                  background: 'transparent',
+                  border: 'none',
+                  padding: 0,
+                  fontSize: '16px',
+                  lineHeight: '20px',
+                  color: '#FFFFFF',
+                  outline: 'none',
+                }}
+                onFocus={() => {
+                  setTimeout(() => {
+                    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                  }, 80);
+                }}
+              />
+            </div>
+
+            {input.trim() ? (
+              <button
+                type="submit"
+                disabled={sending}
+                aria-label="Enviar mensaje"
+                style={{
+                  width: 36,
+                  height: 36,
+                  background: sending ? 'rgba(28, 28, 34, 0.88)' : 'linear-gradient(135deg, #FF2E93 0%, #E11D74 100%)',
+                  color: '#FFFFFF',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: 'none',
+                  cursor: sending ? 'not-allowed' : 'pointer',
+                  flexShrink: 0,
+                  boxShadow: sending ? 'none' : '0 3px 10px rgba(233, 30, 99, 0.4)',
+                }}
+              >
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="19" x2="12" y2="5" />
+                  <polyline points="5 12 12 5 19 12" />
+                </svg>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={startRecording}
+                disabled={sending}
+                title="Grabar nota de voz"
+                aria-label="Grabar nota de voz"
+                style={{
+                  width: 36,
+                  height: 36,
+                  background: 'rgba(28, 28, 34, 0.88)',
+                  color: 'rgba(255, 255, 255, 0.82)',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  cursor: sending ? 'not-allowed' : 'pointer',
+                  flexShrink: 0,
+                }}
+              >
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                  <line x1="12" y1="19" x2="12" y2="22" />
+                </svg>
+              </button>
+            )}
+          </form>
         )}
       </footer>
 

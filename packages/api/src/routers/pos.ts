@@ -109,14 +109,12 @@ export const posRouter = router({
   getActiveCheckIns: protectedProcedure.query(async ({ ctx }) => {
     const bizId = await resolveBusinessIdFromBranch(ctx.restaurantDb, ctx.branchId);
     if (!bizId) return [];
-    // Presencia REAL: cada escaneo del QR del negocio escribe un CHECKIN_SCAN —
-    // ventana de 60 min (el rabbitter re-escanea y su presencia se refresca).
-    const ninetyMinAgo = new Date(Date.now() - 60 * 60 * 1000);
+    // Presencia REAL: sesiones abiertas cuyo último ping esté fresco (GPS pings + escaneos las refrescan)
+    const presenceCutoff = new Date(Date.now() - 60 * 60 * 1000);
     const rows = await ctx.coreDb.execute(
-      sql`SELECT "userId", MAX("createdAt") AS at FROM "business_interactions"
-          WHERE "businessId" = ${bizId} AND action = 'CHECKIN_SCAN' AND "userId" IS NOT NULL
-            AND "createdAt" >= ${ninetyMinAgo}
-          GROUP BY "userId" ORDER BY at DESC LIMIT 12`
+      sql`SELECT "userId", "startedAt" AS at FROM "presenceSessions"
+          WHERE "businessId" = ${bizId} AND "endedAt" IS NULL AND "lastPingAt" >= ${presenceCutoff}
+          ORDER BY "startedAt" DESC LIMIT 12`
     ).then((r: unknown) => ((r as { rows?: Array<{ payeeSubjectId: string; at: string }> }).rows || (r as unknown as Array<{ payeeSubjectId: string; at: string }>)).map((r: any) => ({ payeeSubjectId: `usr_${r.userId}`, at: r.at })));
     const out: Array<{ userId: string; name: string; username: string | null; at: string }> = [];
     for (const row of rows) {

@@ -83,6 +83,7 @@ export default function AdminPage() {
   const totalRevenue = paidOrders.reduce((sum, o) => sum + o.total, 0);
 
   const { data: bunzInventory } = trpc.admin.getAffiliateBunzInventory.useQuery(undefined, { retry: false });
+  const { data: dwell } = trpc.dwellAnalytics.getDwellStats.useQuery(undefined, { refetchInterval: 60000, retry: false });
 
   const stats = [
     {
@@ -474,6 +475,50 @@ export default function AdminPage() {
           </div>
         </div>
       </Dialog>
+
+      {/* ── ⏱️ Permanencia de Rabbitters (presencia GPS + check-in) ── */}
+      <section className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.04] p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+            <h2 className="text-sm font-black uppercase tracking-wider text-gray-400">Permanencia de Rabbitters</h2>
+          </div>
+          <span className="text-[10px] text-gray-500">GPS + check-in · sesión cerrada a los 90 min sin señal</span>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <div className="rounded-xl bg-white/5 border border-white/5 px-3 py-2.5">
+            <p className="text-[10px] uppercase tracking-wider text-emerald-300 font-black">En el local ahora</p>
+            <p className="text-xl font-black text-white mt-0.5">{dwell?.liveNow ?? 0}</p>
+          </div>
+          <div className="rounded-xl bg-white/5 border border-white/5 px-3 py-2.5">
+            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-black">Visitas hoy</p>
+            <p className="text-xl font-black text-white mt-0.5">{dwell?.sessionsToday ?? 0}</p>
+          </div>
+          <div className="rounded-xl bg-white/5 border border-white/5 px-3 py-2.5">
+            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-black">Estancia promedio 7d</p>
+            <p className="text-xl font-black text-white mt-0.5">{dwell?.avgDwell7d ?? 0} <span className="text-xs text-gray-400">min</span></p>
+          </div>
+          <div className="rounded-xl bg-white/5 border border-white/5 px-3 py-2.5">
+            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-black">Recurrentes 7d</p>
+            <p className="text-xl font-black text-white mt-0.5">{dwell?.repeatUsers7d ?? 0}</p>
+          </div>
+        </div>
+        {(dwell?.lastSessions?.length ?? 0) > 0 && (
+          <div className="space-y-1.5">
+            {dwell!.lastSessions.slice(0, 5).map((s: any) => (
+              <div key={s.id} className="flex items-center justify-between text-[12px] rounded-lg bg-white/[0.03] px-3 py-1.5">
+                <span className="text-gray-300 font-bold">
+                  {s.businessName || "Negocio"} · @{s.username || [s.firstName, s.lastName].filter(Boolean).join(" ") || "rabbitter"}
+                </span>
+                <span className="text-gray-500">
+                  {s.source === "gps" ? "📍" : "📷"} {s.dwellMin} min · {new Date(s.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
     </div>
   );
 }

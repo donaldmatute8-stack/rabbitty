@@ -106,8 +106,8 @@ export default function FeedPage() {
         fetch('/api/location/ping', {
           method: 'POST',
           headers: { ...headers, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy, timestamp: Date.now() }),
-        }).catch(() => {});
+          body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy, timestamp: Date.now(), stationary: true }),
+        }).then((r) => r.json()).then((pRes) => { if (pRes) handlePingPresence(pRes); }).catch(() => {});
       } catch { /* silencioso */ }
     };
     const t0 = setTimeout(ping, 8000);
@@ -205,6 +205,19 @@ export default function FeedPage() {
 
 
   const [isLocating, setIsLocating] = useState(false);
+  const [presenceConfirm, setPresenceConfirm] = useState<{ businessId: string; businessName: string } | null>(null);
+  const presenceDeclined = (bizId: string): boolean => {
+    try {
+      const t = Number(localStorage.getItem(`presence_declined_${bizId}`) || 0);
+      return Date.now() - t < 2 * 60 * 60 * 1000; // cooldown 2h tras "Ahora no"
+    } catch { return false; }
+  };
+  const handlePingPresence = (res: any) => {
+    const c = res?.confirmPresence;
+    if (c?.businessId && !presenceConfirm && !presenceDeclined(c.businessId)) {
+      setPresenceConfirm({ businessId: c.businessId, businessName: c.businessName });
+    }
+  };
 
   const requestLocation = async () => {
     setIsLocating(true);
@@ -230,6 +243,16 @@ export default function FeedPage() {
               lng: loc.lng,
               accuracy: loc.accuracy,
               timestamp: loc.timestamp || Date.now(),
+              stationary: (() => {
+                try {
+                  const pl = localStorage.getItem('rabbitty_last_ping_pos');
+                  if (!pl || loc.lat == null || loc.lng == null) return false;
+                  const p = JSON.parse(pl);
+                  const dLat = Math.abs(p.lat - loc.lat!) * 111320;
+                  const dLng = Math.abs(p.lng - loc.lng!) * 111320 * Math.cos(loc.lat! * Math.PI / 180);
+                  return Math.sqrt(dLat * dLat + dLng * dLng) < 25;
+                } catch { return false; }
+              })(),
             }),
           })
             .then((r) => r.json())
@@ -237,6 +260,8 @@ export default function FeedPage() {
               if (res.triggeredOffers && res.triggeredOffers.length > 0) {
                 showToast(`🎁 ¡Cashback especial disponible en ${res.triggeredOffers.join(', ')}!`, 'success');
               }
+              handlePingPresence(res);
+              try { localStorage.setItem('rabbitty_last_ping_pos', JSON.stringify({ lat: loc.lat, lng: loc.lng })); } catch {}
             })
             .catch(() => {});
         });
@@ -530,6 +555,52 @@ export default function FeedPage() {
       }}
     >
       <LocationNudge />
+      {presenceConfirm && (
+        <div className="fixed bottom-20 left-3 right-3 z-[95] rounded-3xl p-5 backdrop-blur-xl"
+          style={{ backgroundColor: 'rgba(18,8,28,0.96)', border: '1px solid rgba(233,30,99,0.4)', boxShadow: '0 12px 48px rgba(233,30,99,0.3)' }}>
+          <div className="flex items-center gap-3 mb-2">
+            <span className="text-3xl">📍</span>
+            <div>
+              <p className="text-white font-black text-base leading-tight">¿Estás en {presenceConfirm.businessName}?</p>
+              <p className="text-white/50 text-[11px] mt-0.5">Detectamos que estás aquí e inmóvil — confirma y el comercio te espera con tu cuenta activa.</p>
+            </div>
+          </div>
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={async () => {
+                try {
+                  const headers = await PlatformBridge.getAuthHeaders();
+                  const res = await fetch('/api/location/confirm-presence', {
+                    method: 'POST',
+                    headers: { ...headers, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ businessId: presenceConfirm.businessId }),
+                  });
+                  if (res.ok) {
+                    PlatformBridge.hapticFeedback('success');
+                    showToast('📍 ¡Check-in registrado! El local ya te ve', 'success');
+                  } else {
+                    showToast('No se pudo registrar el check-in', 'error');
+                  }
+                } catch { showToast('Error de conexión', 'error'); }
+                setPresenceConfirm(null);
+              }}
+              className="flex-1 py-3 rounded-2xl text-sm font-black text-white active:scale-95 transition-transform"
+              style={{ background: 'linear-gradient(135deg, #FF2E93 0%, #E91E63 100%)' }}
+            >
+              Sí, estoy aquí
+            </button>
+            <button
+              onClick={() => {
+                try { localStorage.setItem(`presence_declined_${presenceConfirm.businessId}`, String(Date.now())); } catch {}
+                setPresenceConfirm(null);
+              }}
+              className="px-4 py-3 rounded-2xl text-sm font-bold text-white/50"
+            >
+              Ahora no
+            </button>
+          </div>
+        </div>
+      )}
       {/* Contenedor animado con efecto X/Twitter al abrir el Drawer lateral */}
       <motion.div
         animate={drawerOpen ? {
