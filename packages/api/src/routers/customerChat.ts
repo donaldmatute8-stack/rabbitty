@@ -52,12 +52,44 @@ async function resolveOwnerUserIds(ctx: Context): Promise<string[]> {
 
 async function resolveOwnerBusinesses(ctx: Context): Promise<BusinessRef[]> {
   const ownerIds = await resolveOwnerUserIds(ctx);
-  if (ownerIds.length === 0) return [];
+  const owned = ownerIds.length > 0
+    ? await ctx.coreDb
+        .select({ id: ownedBusinesses.id, name: ownedBusinesses.name })
+        .from(ownedBusinesses)
+        .where(inArray(ownedBusinesses.ownerId, ownerIds))
+    : [];
 
-  return ctx.coreDb
-    .select({ id: ownedBusinesses.id, name: ownedBusinesses.name })
-    .from(ownedBusinesses)
-    .where(inArray(ownedBusinesses.ownerId, ownerIds));
+  // ── Fallback por branch: el inbox del negocio SIEMPRE es visible para quien
+  // opera su sucursal (cajero/pairing con email distinto, god, impersonación) ──
+  if (ctx.branchId) {
+    try {
+      const dbR = await import("@rabbitty/database-restaurant/schema");
+      const [br] = await ctx.restaurantDb
+        .select({ restaurantId: dbR.branches.restaurantId })
+        .from(dbR.branches)
+        .where(eq(dbR.branches.id, ctx.branchId))
+        .limit(1);
+      if (br?.restaurantId) {
+        const [rest] = await ctx.restaurantDb
+          .select({ businessId: dbR.restaurants.businessId })
+          .from(dbR.restaurants)
+          .where(eq(dbR.restaurants.id, br.restaurantId))
+          .limit(1);
+        if (rest?.businessId && !owned.some((b) => b.id === rest.businessId)) {
+          const [biz] = await ctx.coreDb
+            .select({ id: ownedBusinesses.id, name: ownedBusinesses.name })
+            .from(ownedBusinesses)
+            .where(eq(ownedBusinesses.id, rest.businessId))
+            .limit(1);
+          if (biz) owned.unshift(biz);
+        }
+      }
+    } catch (brErr) {
+      console.error("[customerChat] branch fallback falló:", brErr);
+    }
+  }
+
+  return owned;
 }
 
 export const customerChatRouter = router({
@@ -99,7 +131,7 @@ export const customerChatRouter = router({
           .where(eq(users.id, customerId));
 
         const [last] = await ctx.coreDb
-          .select({ content: messages.content, createdAt: messages.createdAt })
+          .select({ content: messages.content, createdAt: messages.createdAt, senderId: messages.senderId })
           .from(messages)
           .where(eq(messages.conversationId, conv.id))
           .orderBy(desc(messages.createdAt))
@@ -118,6 +150,7 @@ export const customerChatRouter = router({
           customerId,
           customerName,
           lastMessage: last?.content ?? "",
+          lastMessageSenderId: last?.senderId ?? null,
           lastMessageAt: last?.createdAt ?? conv.updatedAt,
         };
       })
@@ -195,6 +228,31 @@ export const customerChatRouter = router({
         .update(conversations)
         .set({ updatedAt: new Date() })
         .where(eq(conversations.id, conv.id));
+
+      // Notificar al cliente por el canal completo de la miniapp (in-app + APNs + Telegram)
+      // — fuente única ida y vuelta: el admin responde Y el cliente se entera.
+      if (msg) {
+        try {
+          const url = process.env.RABBITTY_MINIAPP_URL;
+          const secret = process.env.RABBITTY_API_SECRET;
+          if (url && secret) {
+            // El participante cliente de la conversación
+            const customerId = conv.participant1 === businessId ? conv.participant2 : conv.participant1;
+            await fetch(`${url.replace(/\/$/, "")}/api/chat/notify`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
+              body: JSON.stringify({
+                conversationId: conv.id,
+                recipientUserId: customerId,
+                preview: input.content.trim(),
+                senderName: "El negocio",
+              }),
+            });
+          }
+        } catch (notifyErr) {
+          console.error("[customerChat] notify cliente falló:", notifyErr);
+        }
+      }
 
       return msg;
     }),

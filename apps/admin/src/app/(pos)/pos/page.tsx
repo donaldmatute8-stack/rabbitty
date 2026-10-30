@@ -426,6 +426,23 @@ export default function PosPage() {
 
   // ── Canje de Membresía por escáner (token <subId>.<window>.<hmac>) ──
   const redeemMembership = trpc.memberships.redeemAtPOS.useMutation();
+  const { data: activeCheckIns, refetch: refetchCheckIns } = trpc.pos.getActiveCheckIns.useQuery(undefined, {
+    refetchInterval: 30000,
+    retry: false,
+  });
+  const { data: plannedVisits } = trpc.pos.getPlannedVisits.useQuery(undefined, {
+    refetchInterval: 60000,
+    retry: false,
+  });
+  const checkInsShownRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    for (const c of activeCheckIns || []) {
+      if (!checkInsShownRef.current.has(c.userId)) {
+        checkInsShownRef.current.add(c.userId);
+        toast.info(`🐰 ${c.name} llegó al local — check-in activo`);
+      }
+    }
+  }, [activeCheckIns]);
   const handleMembershipRedeem = async (qrToken: string) => {
     try {
       const subId = qrToken.split(".")[0];
@@ -1799,6 +1816,65 @@ export default function PosPage() {
                 </div>
               )}
             </div>
+
+            {/* ── Planean venir (proximidad accionada) ── */}
+            {!selectedRabbitter && (plannedVisits?.length ?? 0) > 0 && (
+              <div className="px-2.5 py-2 rounded-xl bg-purple-500/10 border border-purple-500/25 mb-2">
+                <p className="text-[10px] font-black text-purple-300 flex items-center gap-1 mb-1.5">
+                  <span>🚶</span> PLANean VENIR (últimas 24h)
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {(plannedVisits || []).slice(0, 4).map((c) => (
+                    <button
+                      key={c.userId}
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const res = await utils.pos.lookupRabbitter.fetch({ query: c.userId });
+                          if (res) { setSelectedRabbitter(res); toast.success(`🐰 ${res.name} vinculado (planeó venir)`); }
+                        } catch { toast.error('Error al vincular'); }
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[11px] font-bold text-white hover:border-purple-500/50 active:scale-95 transition-all"
+                    >
+                      {c.name} <span className="text-purple-300">+ vincular</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── Presencia: clientes con check-in activo en el local ── */}
+            {!selectedRabbitter && (activeCheckIns?.length ?? 0) > 0 && (
+              <div className="px-2.5 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/25 mb-2">
+                <p className="text-[10px] font-black text-emerald-300 flex items-center gap-1 mb-1.5">
+                  <span>🟢</span> CLIENTES EN EL LOCAL (check-in activo)
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {(activeCheckIns || []).slice(0, 4).map((c) => (
+                    <button
+                      key={c.userId}
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const res = await utils.pos.lookupRabbitter.fetch({ query: c.userId });
+                          if (res) {
+                            setSelectedRabbitter(res);
+                            toast.success(`🐰 ${res.name} vinculado al cobro (check-in)`);
+                          } else {
+                            toast.error("No se pudo vincular al cliente");
+                          }
+                        } catch {
+                          toast.error("Error al vincular");
+                        }
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[11px] font-bold text-white hover:border-emerald-500/50 active:scale-95 transition-all"
+                    >
+                      {c.name} <span className="text-emerald-300">+ vincular</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Loyalty Quick Actions right before payment */}
             {!selectedRabbitter && total > 0 && (

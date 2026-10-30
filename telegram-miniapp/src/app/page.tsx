@@ -1,4 +1,5 @@
 'use client';
+import LocationNudge from '@/components/LocationNudge';
 
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
@@ -503,6 +504,7 @@ export default function FeedPage() {
         WebkitOverflowScrolling: 'touch',
       }}
     >
+      <LocationNudge />
       {/* Contenedor animado con efecto X/Twitter al abrir el Drawer lateral */}
       <motion.div
         animate={drawerOpen ? {

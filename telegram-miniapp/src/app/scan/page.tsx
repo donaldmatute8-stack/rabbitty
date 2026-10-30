@@ -64,6 +64,7 @@ export default function ScanPage() {
   const [showManualInput, setShowManualInput] = useState(false);
   const [activeTab, setActiveTab] = useState<'scan' | 'my-code'>(initialTab);
   const [qrConfirm, setQrConfirm] = useState<{ qrToken: string; origin: string } | null>(null);
+  const [presenceSheet, setPresenceSheet] = useState<{ businessId: string; businessName: string; already: boolean } | null>(null);
   const [scanLoader, setScanLoader] = useState<string | null>(null);
   const [scanLoaderCode, setScanLoaderCode] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
@@ -322,19 +323,33 @@ export default function ScanPage() {
     if (res.type === 'business' && res.business) {
       await stopScanning();
       // Check-in REAL en el server (1 por negocio por día, ledger + contador de visitas)
+      // El cajero te ve en su POS ("clientes en el local") y te vincula al cobro —
+      // no redirigimos: la presencia es el resultado.
       if (res.business.checkIn) {
         (async () => {
           try {
             const headers = await PlatformBridge.getAuthHeaders();
             if (headers?.Authorization) {
-              await fetch('/api/business/checkin', {
+              const bizId = res.business!.id;
+              const bizName = res.business!.name || 'el negocio';
+              const res2 = await fetch('/api/business/checkin', {
                 method: 'POST',
                 headers: { ...headers, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ businessId: res.business!.id }),
+                body: JSON.stringify({ businessId: bizId }),
               });
+              const d2 = await res2.json().catch(() => ({}));
+              PlatformBridge.hapticFeedback('success');
+              setPresenceSheet({
+                businessId: bizId,
+                businessName: bizName,
+                already: d2?.checkIn === 'already',
+              });
+              return;
             }
-          } catch { /* no bloquea la navegación */ }
+          } catch { /* cae a navegación */ }
         })();
+        // Sin sesión: navegación al perfil como antes (el flujo conservador)
+        return;
       }
       router.push(`/affiliate/${res.business.id}`);
       return;
@@ -577,6 +592,46 @@ export default function ScanPage() {
 
   // ── Loader: verificación animada Rabbitty tras escaneo ──
   if (scanLoader) {
+  // ── Hoja de presencia: estás activo en el negocio (el cajero te ve en su POS) ──
+  if (presenceSheet) {
+    return (
+      <div className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center p-6 text-center">
+        <motion.div
+          initial={{ scale: 0.85, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="flex flex-col items-center"
+        >
+          <div className="w-20 h-20 rounded-full flex items-center justify-center text-4xl mb-4"
+            style={{ background: 'linear-gradient(135deg, #FF2E93 0%, #E91E63 100%)', boxShadow: '0 0 60px rgba(233,30,99,0.5)' }}>
+            🐰
+          </div>
+          <h2 className="text-white text-xl font-black">
+            {presenceSheet.already ? 'Ya estás activo aquí' : '¡Estás activo!'}
+          </h2>
+          <p className="text-white/70 text-sm mt-2 max-w-xs">
+            {presenceSheet.already
+              ? `Ya tenías check-in activo en ${presenceSheet.businessName}. Tus compras acumulan Bunz automáticamente.`
+              : `Check-in registrado en ${presenceSheet.businessName}. El cajero ya puede verte en su POS y vincularte al cobro — tus Bunz llegan solos.`}
+          </p>
+          <div className="flex flex-col gap-2 mt-8 w-full max-w-xs">
+            <button
+              onClick={() => router.push(`/affiliate/${presenceSheet.businessId}`)}
+              className="w-full py-3.5 rounded-2xl bg-white/10 text-white text-sm font-bold active:scale-95 transition-transform"
+            >
+              Ver el negocio
+            </button>
+            <button
+              onClick={() => setPresenceSheet(null)}
+              className="w-full py-3 rounded-2xl text-white/50 text-xs font-bold"
+            >
+              Cerrar
+            </button>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
     return (
       <div className="min-h-dvh flex items-center justify-center bg-black">
         <RabbittyLoader message={scanLoader} codeData={scanLoaderCode ?? undefined} />

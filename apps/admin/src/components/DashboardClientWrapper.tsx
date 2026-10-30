@@ -59,7 +59,19 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
   }, []);
   const [chatDrawerOpen, setChatDrawerOpen] = useState(false);
   const [drawerTab, setDrawerTab] = useState<"bunzy" | "customers">("bunzy");
-  const [activeCustomerChat, setActiveCustomerChat] = useState<string | null>(null);
+  const [activeCustomerChat, setActiveCustomerChatRaw] = useState<string | null>(null);
+  const setActiveCustomerChat = (conversationId: string | null) => {
+    setActiveCustomerChatRaw(conversationId);
+    if (conversationId) {
+      const conv = (conversations || []).find((c: any) => c.id === conversationId);
+      if (conv) {
+        const marker = (conv.lastMessageSenderId && conv.lastMessageSenderId !== conv.businessId)
+          ? 'from_' + String(conv.lastMessageAt || '')
+          : String(conv.lastMessageAt || '');
+        markConversationSeen(conv.id, marker);
+      }
+    }
+  };
   const [chatReply, setChatReply] = useState("");
 
   // Bunzy Co-Pilot conversation state
@@ -115,10 +127,31 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
     isLoading: conversationsLoading,
     refetch: refetchConversations,
   } = trpc.customerChat.listConversations.useQuery(undefined, {
-    enabled: chatDrawerOpen,
-    refetchInterval: chatDrawerOpen ? 8000 : false,
+    refetchInterval: chatDrawerOpen ? 8000 : 45000,
     retry: false,
   });
+
+  // ── Badge de chat sin leer (por conversación, localStorage del navegador) ──
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
+  useEffect(() => {
+    try {
+      const seenMap: Record<string, string> = JSON.parse(localStorage.getItem("rabbitty_admin_chat_seen") || "{}");
+      const unread = (conversations || []).filter((c: any) =>
+        c.lastMessageSenderId && c.lastMessageSenderId !== c.businessId &&
+        c.lastMessageId !== seenMap[c.id]
+      ).length;
+      setChatUnreadCount(unread);
+    } catch { setChatUnreadCount(0); }
+  }, [conversations]);
+
+  const markConversationSeen = (conversationId: string, lastMessageId: string) => {
+    try {
+      const seenMap: Record<string, string> = JSON.parse(localStorage.getItem("rabbitty_admin_chat_seen") || "{}");
+      seenMap[conversationId] = lastMessageId;
+      localStorage.setItem("rabbitty_admin_chat_seen", JSON.stringify(seenMap));
+    } catch { /* noop */ }
+    setChatUnreadCount((n) => Math.max(0, n - 1));
+  };
 
   const {
     data: thread,
@@ -292,6 +325,11 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                 >
                   <span className="text-sm">🐰</span>
                   <span className="font-extrabold tracking-wide">Bunzy</span>
+                  {chatUnreadCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-pink-500 px-1 text-[10px] font-black text-white shadow-lg z-10">
+                      {chatUnreadCount}
+                    </span>
+                  )}
                   <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-pink-500"></span>

@@ -93,6 +93,7 @@ function AffiliateProfileContent() {
   const [activeTab, setActiveTab] = useState<'menu' | 'info'>('menu');
   const [membershipPlans, setMembershipPlans] = useState<{ planId: string; planName: string; planDescription?: string | null; versionId: string; priceFiat: number; currency: string; billingInterval: string; alreadySubscribed: boolean }[]>([]);
   const [subscribing, setSubscribing] = useState<string | null>(null);
+  const [planVisitSent, setPlanVisitSent] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
 
   // Initialize table number from searchParams safely without calling setState in render or synchronous effect
@@ -565,6 +566,38 @@ function AffiliateProfileContent() {
         )}
 
         {/* Tab 2: Sucursal, Ubicación, Happy Hour & Galería */}
+        {/* ── "Planeo ir": acciona la proximidad y avisa al comercio ── */}
+        <div className="rounded-2xl p-4 flex items-center justify-between gap-3" style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div className="min-w-0">
+            <p className="text-white font-bold text-sm">📍 Estoy cerca, planeo ir</p>
+            <p className="text-white/50 text-xs mt-0.5">Avisa al comercio y te reciben con tu oferta lista</p>
+          </div>
+          <button
+            onClick={async () => {
+              try {
+                PlatformBridge.hapticFeedback('light');
+                const headers = await PlatformBridge.getAuthHeaders();
+                const res = await fetch('/api/location/plan-visit', {
+                  method: 'POST',
+                  headers: { ...headers, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ businessId: id }),
+                });
+                const data = await res.json();
+                showToast(data?.message || (data?.error || 'Listo'), data?.success ? 'success' : 'info');
+                setPlanVisitSent(true);
+              } catch { showToast('No se pudo enviar', 'error'); }
+            }}
+            disabled={planVisitSent}
+            className="shrink-0 px-4 py-2.5 rounded-full text-xs font-bold active:scale-95 transition-transform"
+            style={{
+              background: planVisitSent ? 'rgba(255,255,255,0.08)' : 'linear-gradient(135deg, #8B5CF6 0%, #A855F7 100%)',
+              color: planVisitSent ? 'rgba(255,255,255,0.4)' : '#FFF',
+            }}
+          >
+            {planVisitSent ? '✓ Avisado' : 'Voy'}
+          </button>
+        </div>
+
         {/* ── Membresías del negocio (Stripe Connect) ── */}
         {membershipPlans.length > 0 && (
           <div className="space-y-3">

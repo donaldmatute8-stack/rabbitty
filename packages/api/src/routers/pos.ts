@@ -79,6 +79,59 @@ export const posRouter = router({
    * Por QR personal (UUID / telegramId / username) o por teléfono.
    */
 
+
+  /** Clientes con check-in activo en este negocio (últimas 2h) — presencia para el cajero. */
+
+  /** Rabbitters que marcaron "Planeo ir" en las últimas 24h — el cajero los prepara. */
+  getPlannedVisits: protectedProcedure.query(async ({ ctx }) => {
+    const bizId = await resolveBusinessIdFromBranch(ctx.restaurantDb, ctx.branchId);
+    if (!bizId) return [];
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const rows = await ctx.coreDb.execute(
+      sql`SELECT "userId", MAX("createdAt") AS at FROM "business_interactions"
+          WHERE "businessId" = ${bizId} AND action = 'PLAN_VISIT' AND "userId" IS NOT NULL
+            AND "createdAt" >= ${oneDayAgo}
+          GROUP BY "userId" ORDER BY at DESC LIMIT 10`
+    ).then((r: unknown) => ((r as { rows?: Array<{ userId: string; at: string }> }).rows || (r as unknown as Array<{ userId: string; at: string }>)));
+    const out: Array<{ userId: string; name: string; at: string }> = [];
+    for (const row of rows) {
+      const [u] = await ctx.coreDb.select({ firstName: coreUsers.firstName, lastName: coreUsers.lastName, username: coreUsers.username })
+        .from(coreUsers).where(eq(coreUsers.id, row.userId)).limit(1);
+      out.push({
+        userId: row.userId,
+        name: [u?.firstName, u?.lastName].filter(Boolean).join(" ") || u?.username || "Rabbitter",
+        at: row.at,
+      });
+    }
+    return out;
+  }),
+
+  getActiveCheckIns: protectedProcedure.query(async ({ ctx }) => {
+    const bizId = await resolveBusinessIdFromBranch(ctx.restaurantDb, ctx.branchId);
+    if (!bizId) return [];
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const rows = await ctx.coreDb.execute(
+      sql`SELECT "payeeSubjectId", MAX("createdAt") AS at FROM "ledger_entries"
+          WHERE "payerSubjectId" = ${bizId} AND "idempotencyKey" LIKE 'checkin_%' AND type = 'EARN'
+            AND "createdAt" >= ${twoHoursAgo}
+          GROUP BY "payeeSubjectId" ORDER BY at DESC LIMIT 12`
+    ).then((r: unknown) => ((r as { rows?: Array<{ payeeSubjectId: string; at: string }> }).rows || (r as unknown as Array<{ payeeSubjectId: string; at: string }>)));
+    const out: Array<{ userId: string; name: string; username: string | null; at: string }> = [];
+    for (const row of rows) {
+      const userId = (row.payeeSubjectId || "").replace(/^usr_/, "");
+      if (!userId) continue;
+      const [u] = await ctx.coreDb.select({ firstName: coreUsers.firstName, lastName: coreUsers.lastName, username: coreUsers.username })
+        .from(coreUsers).where(eq(coreUsers.id, userId)).limit(1);
+      out.push({
+        userId,
+        name: [u?.firstName, u?.lastName].filter(Boolean).join(" ") || u?.username || "Rabbitter",
+        username: u?.username ?? null,
+        at: row.at,
+      });
+    }
+    return out;
+  }),
+
   lookupRabbitter: protectedProcedure
     .input(z.object({ query: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
