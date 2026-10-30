@@ -141,9 +141,216 @@ function buildEntitlementRows(
   }));
 }
 
+
+/** Tope de cortesías activas por negocio — God Admin configurable (systemSettings). */
+async function getCourtesyCap(coreDb: any, businessId: string): Promise<number> {
+  try {
+    const [row] = await coreDb.select({ value: sql<string>`value` }).from(
+      (await import("@rabbitty/database-core/schema")).systemSettings
+    ).where(sql`key = 'membership_courtesy_cap'`).limit(1);
+    if (row?.value) {
+      const cfg = JSON.parse(row.value);
+      return Number(cfg.overrides?.[businessId] ?? cfg.default ?? 10);
+    }
+  } catch { /* default */ }
+  return 10;
+}
+
+
 // ── Router ───────────────────────────────────────────────────────────────────
 
 export const membershipsRouter = router({
+
+  /**
+   * 🎁 Otorga una cortesía: suscripción individual sin pago, beneficios personalizables
+   * por destinatario (NO altera el plan), revocable por el dueño. Origen COURTESY.
+   * Atómico: suscripción + beneficios + auditoría en UNA transacción; notificación post-commit.
+   */
+  grantCourtesy: protectedProcedure
+    .input(z.object({
+      targetUserId: z.string(),
+      benefitRules: z.array(benefitRuleSchema).min(1).max(10),
+      durationMonths: z.union([z.literal(3), z.literal(6), z.literal(12), z.literal(0)]), // 0 = indefinida (revocable)
+      giftNote: z.string().max(300).optional(),
+      label: z.string().max(60).optional(), // etiqueta visible opcional (ej. "Cortesía Familiar")
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const [biz] = await ctx.coreDb.select({ id: ownedBusinesses.id, name: ownedBusinesses.name })
+        .from(ownedBusinesses).where(eq(ownedBusinesses.ownerId, ctx.userId)).limit(1);
+      if (!biz) throw new TRPCError({ code: "FORBIDDEN", message: "No eres dueño de un negocio" });
+      if (input.targetUserId === ctx.userId) throw new TRPCError({ code: "BAD_REQUEST", message: "No puedes otorgártela a ti mismo" });
+
+      const now = new Date();
+      const indefinite = input.durationMonths === 0;
+      const periodEnd = indefinite ? null : (() => { const d = new Date(now); d.setMonth(d.getMonth() + input.durationMonths); return d; })();
+      // Entitlements FIXED necesitan fecha concreta (contadores internos): +99 años para indefinidas
+      const entitlementHardEnd = periodEnd ?? (() => { const d = new Date(now); d.setFullYear(d.getFullYear() + 99); return d; })();
+
+      const sub = await ctx.coreDb.transaction(async (tx: any) => {
+        // Cap server-side ATÓMICO: contar cortesías activas DENTRO de la tx
+        const [countRow] = await tx
+          .select({ count: sql<number>`count(*)::int` })
+          .from(membershipSubscriptions)
+          .where(and(
+            eq(membershipSubscriptions.businessId, biz.id),
+            eq(membershipSubscriptions.membershipOrigin, "COURTESY"),
+            eq(membershipSubscriptions.status, "ACTIVE"),
+          ));
+        const cap = await getCourtesyCap(ctx.coreDb, biz.id);
+        if ((countRow?.count ?? 0) >= cap) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Tope de cortesías activas alcanzado (${cap}). Revoca una para liberar cupo.` });
+        }
+
+        const [target] = await tx.select({ id: users.id }).from(users).where(eq(users.id, input.targetUserId)).limit(1);
+        if (!target) throw new TRPCError({ code: "BAD_REQUEST", message: "Destinatario no encontrado" });
+
+        // Unicidad: el destinatario no puede tener 2 cortesías activas del mismo negocio
+        const [dup] = await tx.select({ id: membershipSubscriptions.id })
+          .from(membershipSubscriptions)
+          .where(and(
+            eq(membershipSubscriptions.userId, input.targetUserId),
+            eq(membershipSubscriptions.businessId, biz.id),
+            eq(membershipSubscriptions.membershipOrigin, "COURTESY"),
+            eq(membershipSubscriptions.status, "ACTIVE"),
+          ))
+          .limit(1);
+        if (dup) throw new TRPCError({ code: "CONFLICT", message: "Ese usuario ya tiene una cortesía activa de este negocio" });
+
+        const [created] = await tx.insert(membershipSubscriptions).values({
+          userId: input.targetUserId,
+          businessId: biz.id,
+          planVersionId: null,                       // cortesía = suscripción individual, sin plan
+          status: "ACTIVE",
+          currentPeriodStart: now,
+          currentPeriodEnd: periodEnd,               // null = indefinida real (revocable)
+          noExpiration: indefinite,
+          paymentProvider: null,                     // sin pago — el origen lo dice
+          membershipOrigin: "COURTESY",
+          issuedByUserId: ctx.userId,
+          giftNote: input.giftNote || null,
+          qrPassSecret: randomBytes(32).toString("hex"),
+        }).returning();
+
+        await tx.insert(membershipEntitlements).values(
+          buildEntitlementRows(created.id, input.benefitRules, now, entitlementHardEnd)
+        );
+
+        await tx.insert((await import("@rabbitty/database-core/schema")).auditEntries).values({
+          userId: ctx.userId,
+          action: "COURTESY_GRANTED",
+          resource: "membership_subscriptions",
+          resourceId: created.id,
+          details: `${biz.name} → user ${input.targetUserId} · ${input.durationMonths === 0 ? "indefinida" : `${input.durationMonths}m`} · ${input.benefitRules.length} beneficios`,
+        }).catch(() => {});
+
+        return created;
+      });
+
+      // Notificación POST-commit (nunca anuncia lo que no se confirmó)
+      try {
+        await miniappClient.sendNotification({
+          userId: input.targetUserId,
+          title: `🎁 ${biz.name} te otorgó una membresía`,
+          message: input.giftNote ? `Con nota: "${input.giftNote}" — ábrela en Mis Membresías y muéstrala en caja.` : "Está activa desde ya — muéstrala en caja con su QR dorado.",
+          type: "REWARD",
+          route: "/memberships",
+        } as any);
+      } catch (notifyErr) {
+        console.error("[memberships] notify cortesía falló:", notifyErr);
+      }
+
+      return { subscriptionId: sub.id, periodEnd, indefinite };
+    }),
+
+  /**
+   * Revoca una cortesía: inmediata, server-side, auditada. El QR deja de funcionar
+   * porque redeemAtPOS re-verifica el estado CON lock dentro de la transacción.
+   */
+  revokeCourtesy: protectedProcedure
+    .input(z.object({ subscriptionId: z.string(), reason: z.string().max(300).optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const result = await ctx.coreDb.transaction(async (tx: any) => {
+        const [sub] = await tx.select().from(membershipSubscriptions)
+          .where(eq(membershipSubscriptions.id, input.subscriptionId))
+          .for("update");
+        if (!sub) throw new TRPCError({ code: "NOT_FOUND", message: "Membresía no encontrada" });
+        const [biz] = await tx.select({ ownerId: ownedBusinesses.ownerId, name: ownedBusinesses.name })
+          .from(ownedBusinesses).where(eq(ownedBusinesses.id, sub.businessId)).limit(1);
+        if (biz?.ownerId !== ctx.userId && !isGodAdminIdentity(ctx.user?.email, ctx.user?.name)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Solo el dueño puede revocar" });
+        }
+        if (sub.membershipOrigin !== "COURTESY") throw new TRPCError({ code: "BAD_REQUEST", message: "Solo se revocan cortesías" });
+        if (sub.status !== "ACTIVE") throw new TRPCError({ code: "BAD_REQUEST", message: "Ya no está activa" });
+
+        await tx.update(membershipSubscriptions).set({
+          status: "REVOKED",
+          revokedAt: new Date(),
+          revokedByUserId: ctx.userId,
+          revocationReason: input.reason || null,
+          updatedAt: new Date(),
+        }).where(eq(membershipSubscriptions.id, sub.id));
+
+        await tx.insert((await import("@rabbitty/database-core/schema")).auditEntries).values({
+          userId: ctx.userId,
+          action: "COURTESY_REVOKED",
+          resource: "membership_subscriptions",
+          resourceId: sub.id,
+          details: input.reason || "Sin motivo especificado",
+        }).catch(() => {});
+
+        return { userId: sub.userId, businessName: biz?.name || "el negocio" };
+      });
+
+      try {
+        await miniappClient.sendNotification({
+          userId: result.userId,
+          title: `Tu cortesía de ${result.businessName} fue revocada`,
+          message: input.reason?.trim() ? `Motivo: ${input.reason}` : "La membresía de cortesía ya no está activa.",
+          type: "SYSTEM",
+          route: "/memberships",
+        } as any);
+      } catch { /* best-effort */ }
+
+      return { success: true };
+    }),
+
+  /** Lista de cortesías del negocio (owner): estado, destinatario y consumo por beneficio. */
+  listCourtesies: protectedProcedure
+    .input(z.object({ businessId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      await assertBusinessOwner(ctx, input.businessId);
+      const rows = await ctx.coreDb.select({
+        sub: membershipSubscriptions,
+      }).from(membershipSubscriptions)
+        .where(and(
+          eq(membershipSubscriptions.businessId, input.businessId),
+          eq(membershipSubscriptions.membershipOrigin, "COURTESY"),
+        ))
+        .orderBy(desc(membershipSubscriptions.createdAt))
+        .limit(100);
+      const out = [];
+      for (const r of rows) {
+        const [member] = await ctx.coreDb.select({ firstName: users.firstName, lastName: users.lastName, username: users.username })
+          .from(users).where(eq(users.id, r.sub.userId)).limit(1);
+        const ents = await ctx.coreDb.select().from(membershipEntitlements)
+          .where(eq(membershipEntitlements.subscriptionId, r.sub.id));
+        out.push({
+          id: r.sub.id,
+          memberName: [member?.firstName, member?.lastName].filter(Boolean).join(" ") || member?.username || "Miembro",
+          memberUsername: member?.username ?? null,
+          status: r.sub.status,
+          noExpiration: r.sub.noExpiration,
+          currentPeriodEnd: r.sub.currentPeriodEnd,
+          giftNote: r.sub.giftNote,
+          revokedAt: r.sub.revokedAt,
+          revocationReason: r.sub.revocationReason,
+          entitlements: ents.map((e: any) => ({ id: e.id, type: e.benefitType, quota: e.quotaPerCycle, used: e.currentUsageInCycle, cycleEnd: e.cycleEndDate })),
+        });
+      }
+      return out;
+    }),
+
+
   /** Negocios que administra el usuario autenticado. */
   myBusinesses: protectedProcedure.query(async ({ ctx }) => {
     const isGod = isGodAdminIdentity(ctx.user?.email, ctx.user?.name);
@@ -438,6 +645,7 @@ export const membershipsRouter = router({
           currentPeriodStart: now,
           currentPeriodEnd: periodEnd,
           paymentProvider: input.paymentProvider,
+          membershipOrigin: "PURCHASED",
           qrPassSecret: randomBytes(32).toString("hex"),
         }).returning();
         await tx.insert(membershipEntitlements).values(buildEntitlementRows(sub.id, rules, now, periodEnd));
@@ -497,6 +705,10 @@ export const membershipsRouter = router({
         .where(and(eq(membershipSubscriptions.id, input.subscriptionId), eq(membershipSubscriptions.userId, ctx.userId)))
         .limit(1);
       if (!sub) throw new TRPCError({ code: "NOT_FOUND", message: "Membresía no encontrada" });
+      if (sub.status !== "ACTIVE") throw new TRPCError({ code: "BAD_REQUEST", message: "Membresía no vigente" });
+      if (!sub.noExpiration && (!sub.currentPeriodEnd || sub.currentPeriodEnd < new Date())) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Membresía no vigente (periodo vencido)" });
+      }
       return {
         qrToken: buildQrToken(sub.id, sub.qrPassSecret),
         expiresInSeconds: QR_WINDOW_SECONDS - (Math.floor(Date.now() / 1000) % QR_WINDOW_SECONDS),
@@ -541,8 +753,9 @@ export const membershipsRouter = router({
       if (expected.length !== given.length || !timingSafeEqual(expected, given)) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "QR inválido" });
       }
-      if (sub.status !== "ACTIVE" || sub.currentPeriodEnd < new Date()) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Membresía no vigente" });
+      if (sub.status !== "ACTIVE") throw new TRPCError({ code: "BAD_REQUEST", message: "Membresía no vigente" });
+      if (!sub.noExpiration && (!sub.currentPeriodEnd || sub.currentPeriodEnd < new Date())) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Membresía no vigente (periodo vencido)" });
       }
 
 return await ctx.coreDb.transaction(async (tx: any) => {
@@ -562,13 +775,17 @@ return await ctx.coreDb.transaction(async (tx: any) => {
               .orderBy(membershipEntitlements.cycleEndDate);
 
         let updated: (typeof candidates)[number] | null = null;
+        // Límite para ciclos: el fin del periodo pagado (o lejano en indefinidas — revocables)
+        const cycleHardEnd = (sub as any).noExpiration
+          ? (() => { const d = new Date(now); d.setFullYear(d.getFullYear() + 99); return d; })()
+          : ((sub as any).currentPeriodEnd ?? now);
         for (const ent of candidates) {
           // Rolar ciclo vencido (diario/semanal/mensual) antes de consumir.
-          if (ent.cycleEndDate <= now && ent.cycleResetType !== "FIXED" && ent.cycleEndDate < sub.currentPeriodEnd) {
+          if (ent.cycleEndDate <= now && ent.cycleResetType !== "FIXED" && ent.cycleEndDate < cycleHardEnd) {
             await tx.update(membershipEntitlements).set({
               currentUsageInCycle: 0,
               cycleStartDate: now,
-              cycleEndDate: addCycle(now, ent.cycleResetType, sub.currentPeriodEnd),
+              cycleEndDate: addCycle(now, ent.cycleResetType, cycleHardEnd),
               updatedAt: now,
             }).where(and(eq(membershipEntitlements.id, ent.id), lt(membershipEntitlements.cycleEndDate, now)));
           }
@@ -623,6 +840,25 @@ return await ctx.coreDb.transaction(async (tx: any) => {
         // Nombre del miembro para la confirmación del cajero
         const [member] = await tx.select({ firstName: users.firstName, lastName: users.lastName, username: users.username })
           .from(users).where(eq(users.id, sub.userId)).limit(1);
+
+        // Bidireccional: avisa al dueño cuando canjean su cortesía
+        if (sub.membershipOrigin === "COURTESY") {
+          const memberName2 = [member?.firstName, member?.lastName].filter(Boolean).join(" ") || member?.username || "alguien";
+          const benefitLabels: Record<string, string> = {
+            INCLUDED_PRODUCT: "producto incluido", DISCOUNT_PCT: "descuento",
+            CREDIT_BALANCE: "saldo", EVENT_ACCESS: "acceso", BULK_PACK: "paquete",
+          };
+          try {
+            const { miniappClient: mac2 } = await import("../services/miniapp-client");
+            await mac2.sendNotification({
+              userId: sub.issuedByUserId || sub.userId,
+              title: "🎁 Canje de cortesía",
+              message: `${memberName2} canjeó su ${benefitLabels[updated.benefitType] || "beneficio"} — le quedan ${updated.quotaPerCycle - updated.currentUsageInCycle} de este ciclo.`,
+              type: "AFFILIATE",
+              route: "/memberships",
+            } as any);
+          } catch { /* best-effort */ }
+        }
 
         return {
           success: true,

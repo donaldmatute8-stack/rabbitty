@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
       .set({ status: 'EXPIRED', updatedAt: now })
       .where(and(
         eq(membershipSubscriptions.status, 'ACTIVE'),
+        eq(membershipSubscriptions.noExpiration, false),
         lt(membershipSubscriptions.currentPeriodEnd, now),
       ))
       .returning({ id: membershipSubscriptions.id, userId: membershipSubscriptions.userId });
@@ -50,6 +51,7 @@ export async function GET(req: NextRequest) {
       .from(membershipSubscriptions)
       .where(and(
         eq(membershipSubscriptions.status, 'ACTIVE'),
+        eq(membershipSubscriptions.noExpiration, false),
         gte(membershipSubscriptions.currentPeriodEnd, new Date()),
         lt(membershipSubscriptions.currentPeriodEnd, warningWindow),
       ));

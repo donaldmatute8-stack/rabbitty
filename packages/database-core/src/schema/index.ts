@@ -537,15 +537,23 @@ export const membershipSubscriptions = pgTable("membership_subscriptions", {
   userId: fkId("userId").references(() => users.id, { onDelete: "cascade" }),
   businessId: fkId("businessId").references(() => ownedBusinesses.id, { onDelete: "restrict" }),
   planVersionId: fkId("planVersionId").references(() => membershipPlanVersions.id, { onDelete: "restrict" }),
-  // 'ACTIVE' | 'PAST_DUE' | 'GRACE_PERIOD' | 'CANCELLED' | 'EXPIRED'
+  // 'ACTIVE' | 'PAST_DUE' | 'GRACE_PERIOD' | 'CANCELLED' | 'EXPIRED' | 'REVOKED'
   status: text("status").notNull(),
   currentPeriodStart: timestamp("currentPeriodStart").notNull(),
-  currentPeriodEnd: timestamp("currentPeriodEnd").notNull(),
+  currentPeriodEnd: timestamp("currentPeriodEnd"),       // null = vigencia indefinida (con noExpiration)
+  noExpiration: boolean("noExpiration").default(false).notNull(), // indefinida real — revocable
   cancelAtPeriodEnd: boolean("cancelAtPeriodEnd").default(false).notNull(),
-  // 'STRIPE' | 'CASH_POS' | 'APPLE_IAP' | 'PROMO'
-  paymentProvider: text("paymentProvider").notNull(),
+  // 'STRIPE' | 'CASH_POS' | 'APPLE_IAP' | 'PROMO' — null para membresías sin pago (cortesía)
+  paymentProvider: text("paymentProvider"),
   paymentProviderSubId: text("paymentProviderSubId"),   // Stripe subscription ID, etc.
   qrPassSecret: text("qrPassSecret").notNull(),          // TOTP seed for dynamic QR
+  // ── Origen comercial (independiente del proveedor de pago) ──
+  membershipOrigin: text("membershipOrigin"),            // PURCHASED | COURTESY | INVITATION | PROMOTIONAL (null=legacy→PURCHASED)
+  issuedByUserId: text("issuedByUserId"),                // quién otorgó (cortesía/promo)
+  giftNote: text("giftNote"),                            // mensaje personalizado del regalo
+  revokedAt: timestamp("revokedAt"),
+  revokedByUserId: text("revokedByUserId"),
+  revocationReason: text("revocationReason"),
   ...timestamps,
 });
 

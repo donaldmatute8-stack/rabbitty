@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { Button, cn, toast } from "@rabbitty/ui";
-import { Ticket, Plus, Users, ScanLine, X, Trash2, Send } from "lucide-react";
+import { Ticket, Plus, Users, ScanLine, X, Trash2, Send, Gift } from "lucide-react";
 
 type Interval = "MONTHLY" | "QUARTERLY" | "SEMIANNUAL" | "ANNUAL" | "ONE_TIME";
 type BenefitType = "INCLUDED_PRODUCT" | "DISCOUNT_PCT" | "CREDIT_BALANCE" | "EVENT_ACCESS" | "BULK_PACK";
@@ -39,7 +39,7 @@ export default function MembershipsPage() {
   const { data: businesses } = trpc.memberships.myBusinesses.useQuery(undefined, { retry: false });
   const [selected, setSelected] = useState<string>("");
   const businessId = selected || businesses?.[0]?.id || "";
-  const [tab, setTab] = useState<"plans" | "members" | "scanner">("plans");
+  const [tab, setTab] = useState<"plans" | "members" | "courtesy" | "scanner">("plans");
   const [showForm, setShowForm] = useState(false);
 
   const enabled = !!businessId;
@@ -88,7 +88,7 @@ export default function MembershipsPage() {
       </header>
 
       <nav className="flex gap-2">
-        {([["plans", "Planes", Ticket], ["members", "Miembros", Users], ["scanner", "Canje en caja", ScanLine]] as const).map(([k, label, Icon]) => (
+        {([["plans", "Planes", Ticket], ["members", "Miembros", Users], ["courtesy", "Cortesías 🎁", Gift], ["scanner", "Canje en caja", ScanLine]] as const).map(([k, label, Icon]) => (
           <button
             key={k}
             onClick={() => setTab(k)}
@@ -191,7 +191,7 @@ export default function MembershipsPage() {
                 <tr key={m.id} className="border-t border-white/5 text-white/80">
                   <td className="p-3">{m.planName}</td>
                   <td className="p-3">{m.status}{m.cancelAtPeriodEnd ? " (cancela)" : ""}</td>
-                  <td className="p-3">{new Date(m.currentPeriodEnd).toLocaleDateString()}</td>
+                  <td className="p-3">{m.currentPeriodEnd ? new Date(m.currentPeriodEnd).toLocaleDateString() : 'Indefinida'}</td>
                   <td className="p-3">{m.paymentProvider}</td>
                 </tr>
               ))}
@@ -200,6 +200,9 @@ export default function MembershipsPage() {
         </div>
         </div>
       )}
+
+
+      {enabled && tab === "courtesy" && <CourtesyPanel businessId={businessId} />}
 
       {enabled && tab === "scanner" && <RedeemPanel businessId={businessId} />}
 
@@ -316,3 +319,125 @@ function RedeemPanel({ businessId }: { businessId: string }) {
   );
 }
 
+function CourtesyPanel({ businessId }: { businessId: string }) {
+  const utils = trpc.useUtils();
+  const { data: courtesies, refetch } = trpc.memberships.listCourtesies.useQuery({ businessId }, { refetchInterval: 30000 });
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [targetQuery, setTargetQuery] = useState("");
+  const [targetUserId, setTargetUserId] = useState<string | null>(null);
+  const [targetName, setTargetName] = useState("");
+  const [duration, setDuration] = useState<0 | 3 | 6 | 12>(12);
+  const [giftNote, setGiftNote] = useState("");
+  const [rules, setRules] = useState<RuleDraft[]>([{ type: "INCLUDED_PRODUCT", quotaPerCycle: 1, cycleResetType: "MONTHLY" }]);
+
+  const lookupCustomer = trpc.pos.lookupRabbitter.useQuery(
+    { query: targetQuery.trim() },
+    { enabled: wizardOpen && targetQuery.trim().length > 2, retry: false },
+  );
+  const grant = trpc.memberships.grantCourtesy.useMutation({
+    onSuccess: (d) => {
+      toast.success(d.indefinite ? "🎁 Cortesía indefinida otorgada — el destinatario ya la tiene" : "🎁 Cortesía otorgada — el destinatario recibió la notificación");
+      setWizardOpen(false); setTargetQuery(""); setTargetUserId(null); setTargetName(""); setGiftNote("");
+      utils.memberships.listCourtesies.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const revoke = trpc.memberships.revokeCourtesy.useMutation({
+    onSuccess: () => { toast.info("Cortesía revocada — su QR dejó de funcionar"); refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+
+  const activeCount = (courtesies || []).filter((c) => c.status === "ACTIVE").length;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <p className="text-sm text-white/60">
+          Membresías individuales sin pago, <b className="text-white">personalizables</b> y revocables. Tope: <b className="text-white">{activeCount}/10 activas</b> (configurable por God).
+        </p>
+        <Button onClick={() => setWizardOpen((v) => !v)}>
+          <Gift className="w-4 h-4 mr-1" /> {wizardOpen ? "Cerrar" : "Otorgar cortesía"}
+        </Button>
+      </div>
+
+      {wizardOpen && (
+        <div className="rounded-2xl border border-pink-500/30 bg-pink-500/5 p-4 space-y-3">
+          <p className="text-sm font-bold text-white">1 · Destinatario</p>
+          <input className={inputCls} placeholder="@handle, teléfono o código del rabbitter" value={targetQuery}
+            onChange={(e) => { setTargetQuery(e.target.value); setTargetUserId(null); setTargetName(""); }} />
+          {lookupCustomer.data && !targetUserId && (
+            <button onClick={() => { const lk = lookupCustomer.data; if (!lk) return; setTargetUserId(lk.id); setTargetName(lk.name); }}
+              className="w-full text-left px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-sm text-white hover:border-pink-500/50">
+              🐰 {lookupCustomer.data.name}{lookupCustomer.data.phoneNumber ? ` · ${lookupCustomer.data.phoneNumber}` : ""} — click para elegir
+            </button>
+          )}
+
+          <p className="text-sm font-bold text-white pt-1">2 · Beneficios personalizados (solo para esta persona)</p>
+          {rules.map((r, i) => (
+            <div key={i} className="grid grid-cols-[1fr_70px_1fr_auto] gap-2 items-center">
+              <select className={inputCls} value={r.type} onChange={(e) => setRules(rules.map((x, idx) => idx === i ? { ...x, type: e.target.value as BenefitType } : x))}>
+                {(Object.keys(BENEFIT_LABEL) as BenefitType[]).map((k) => <option key={k} value={k}>{BENEFIT_LABEL[k]}</option>)}
+              </select>
+              <input className={inputCls} type="number" min={1} value={r.quotaPerCycle} onChange={(e) => setRules(rules.map((x, idx) => idx === i ? { ...x, quotaPerCycle: Math.max(1, Number(e.target.value)) } : x))} />
+              <select className={inputCls} value={r.cycleResetType} onChange={(e) => setRules(rules.map((x, idx) => idx === i ? { ...x, cycleResetType: e.target.value as Reset } : x))}>
+                {(Object.keys(RESET_LABEL) as Reset[]).map((k) => <option key={k} value={k}>{RESET_LABEL[k]}</option>)}
+              </select>
+              <button onClick={() => setRules(rules.length > 1 ? rules.filter((_, idx) => idx !== i) : rules)}><Trash2 className="w-4 h-4 text-white/40" /></button>
+            </div>
+          ))}
+          <button className="text-xs text-pink-400" onClick={() => setRules([...rules, { type: "INCLUDED_PRODUCT", quotaPerCycle: 1, cycleResetType: "MONTHLY" }])}>+ Añadir beneficio</button>
+
+          <p className="text-sm font-bold text-white pt-1">3 · Duración y nota</p>
+          <div className="flex gap-2 flex-wrap">
+            {([3, 6, 12, 0] as const).map((d) => (
+              <button key={d} onClick={() => setDuration(d)}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold border ${duration === d ? "bg-pink-500/20 border-pink-500/50 text-white" : "border-white/10 text-white/50"}`}>
+                {d === 0 ? "♾️ Indefinida (revocable)" : `${d} meses`}
+              </button>
+            ))}
+          </div>
+          <input className={inputCls} placeholder="Nota de regalo (opcional) — ej. 'Para mi hermana ☕'" value={giftNote} onChange={(e) => setGiftNote(e.target.value)} maxLength={300} />
+
+          <Button className="w-full" disabled={!targetUserId || grant.isPending}
+            onClick={() => targetUserId && grant.mutate({ targetUserId, benefitRules: rules, durationMonths: duration, giftNote: giftNote.trim() || undefined })}>
+            {grant.isPending ? "Otorgando…" : `🎁 Otorgar a ${targetName || "…"}`}
+          </Button>
+        </div>
+      )}
+
+      {(!courtesies || courtesies.length === 0) && <p className="text-sm text-white/50">Sin cortesías todavía. Otorga la primera con el botón de arriba.</p>}
+
+      <div className="space-y-2">
+        {courtesies?.map((c) => (
+          <div key={c.id} className="rounded-2xl border border-white/10 bg-white/5 p-3 flex items-center justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <p className="text-white font-bold text-sm">🎁 {c.memberName}{c.memberUsername ? ` (@${c.memberUsername})` : ""}</p>
+              <p className="text-xs text-white/50">
+                {c.noExpiration ? "♾️ Indefinida" : c.currentPeriodEnd ? `Vence ${new Date(c.currentPeriodEnd).toLocaleDateString()}` : "—"}
+                {" · "}{c.entitlements.length} beneficio(s)
+                {c.giftNote ? ` · "${c.giftNote}"` : ""}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`text-xs px-2.5 py-1 rounded-full border ${c.status === "ACTIVE" ? "bg-green-500/15 text-green-300 border-green-500/30" : c.status === "REVOKED" ? "bg-red-500/15 text-red-300 border-red-500/30" : "bg-white/5 text-white/50 border-white/10"}`}>
+                {c.status === "ACTIVE" ? "Activa" : c.status === "REVOKED" ? "Revocada" : c.status}
+              </span>
+              {c.status === "ACTIVE" && revokingId !== c.id && (
+                <button onClick={() => setRevokingId(c.id)} className="text-xs text-red-300 hover:text-red-200 font-bold">Revocar</button>
+              )}
+              {revokingId === c.id && (
+                <div className="flex items-center gap-1.5">
+                  <input className={inputCls + " !w-40 !py-1 text-xs"} placeholder="Motivo (opcional)" id={`reason-${c.id}`} />
+                  <button onClick={() => { const el = document.getElementById(`reason-${c.id}`) as HTMLInputElement | null; revoke.mutate({ subscriptionId: c.id, reason: el?.value || undefined }); setRevokingId(null); }}
+                    className="text-xs font-bold text-red-300">Confirmar</button>
+                  <button onClick={() => setRevokingId(null)} className="text-xs text-white/40">✕</button>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

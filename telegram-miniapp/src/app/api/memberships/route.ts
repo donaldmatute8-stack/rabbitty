@@ -16,11 +16,14 @@ export async function GET(req: NextRequest) {
     const caller = await getAuthenticatedUser(req);
     if (!caller) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
-    const rows = await db
+        const rows = await db
       .select({
         id: membershipSubscriptions.id,
         status: membershipSubscriptions.status,
         currentPeriodEnd: membershipSubscriptions.currentPeriodEnd,
+        noExpiration: membershipSubscriptions.noExpiration,
+        membershipOrigin: membershipSubscriptions.membershipOrigin,
+        giftNote: membershipSubscriptions.giftNote,
         cancelAtPeriodEnd: membershipSubscriptions.cancelAtPeriodEnd,
         planName: membershipPlans.name,
         badgeColor: membershipPlans.badgeColor,
@@ -30,8 +33,8 @@ export async function GET(req: NextRequest) {
         billingInterval: membershipPlanVersions.billingInterval,
       })
       .from(membershipSubscriptions)
-      .innerJoin(membershipPlanVersions, eq(membershipPlanVersions.id, membershipSubscriptions.planVersionId))
-      .innerJoin(membershipPlans, eq(membershipPlans.id, membershipPlanVersions.planId))
+      .leftJoin(membershipPlanVersions, eq(membershipPlanVersions.id, membershipSubscriptions.planVersionId))
+      .leftJoin(membershipPlans, eq(membershipPlans.id, membershipPlanVersions.planId))
       .innerJoin(ownedBusinesses, eq(ownedBusinesses.id, membershipSubscriptions.businessId))
       .where(eq(membershipSubscriptions.userId, caller.id))
       .orderBy(desc(membershipSubscriptions.createdAt));

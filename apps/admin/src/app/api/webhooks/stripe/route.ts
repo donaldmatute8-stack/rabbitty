@@ -189,11 +189,20 @@ export async function POST(req: Request) {
               currentPeriodStart: periodStart,
               currentPeriodEnd: periodEnd,
               paymentProvider: "STRIPE",
+              membershipOrigin: "PURCHASED",
               paymentProviderSubId: String(session.subscription),
               qrPassSecret: (await import("crypto")).randomBytes(32).toString("hex"),
             });
             console.log(`[Stripe Webhook] Membresía activada: user=${meta.userId} plan=${meta.planVersionId}`);
             await notifyMembershipUser(coreDb, meta.userId, "🎟️ ¡Membresía activada!", "Tu pago fue confirmado y tu membresía ya está activa. Muéstrala en caja con su QR dorado.", "/memberships");
+            // Bidireccional: avisa al DUEÑO del negocio la venta
+            try {
+              const [bizRow] = await coreDb.select({ ownerId: (await import("@rabbitty/database-core/schema")).ownedBusinesses.ownerId, name: (await import("@rabbitty/database-core/schema")).ownedBusinesses.name })
+                .from((await import("@rabbitty/database-core/schema")).ownedBusinesses)
+                .where((await import("drizzle-orm")).eq((await import("@rabbitty/database-core/schema")).ownedBusinesses.id, meta.businessId))
+                .limit(1);
+              if (bizRow?.ownerId) await notifyMembershipUser(coreDb, bizRow.ownerId, "💸 Vendiste una membresía", `Nuevo miembro activo en ${bizRow.name} — la cuota llega por Stripe.`, "/memberships");
+            } catch (ownErr) { console.error("[Stripe Webhook] notify owner falló:", ownErr); }
           }
         }
         break;
@@ -214,7 +223,7 @@ export async function POST(req: Request) {
           if (sub) {
             const interval = sub.version.billingInterval;
             const months = { MONTHLY: 1, QUARTERLY: 3, SEMIANNUAL: 6, ANNUAL: 12, ONE_TIME: 0 }[interval] ?? 1;
-            const base = sub.sub.currentPeriodEnd > new Date() ? sub.sub.currentPeriodEnd : new Date();
+            const base = sub.sub.currentPeriodEnd && sub.sub.currentPeriodEnd > new Date() ? sub.sub.currentPeriodEnd : new Date();
             const newEnd = new Date(base);
             newEnd.setMonth(newEnd.getMonth() + months);
             await coreDb.update(membershipSubscriptions)

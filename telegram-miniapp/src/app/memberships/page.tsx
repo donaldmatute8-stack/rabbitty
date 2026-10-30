@@ -22,14 +22,17 @@ interface Entitlement {
 interface Membership {
   id: string;
   status: string;
-  currentPeriodEnd: string;
+  currentPeriodEnd: string | null;
+  noExpiration: boolean;
+  membershipOrigin: string | null;
+  giftNote: string | null;
   cancelAtPeriodEnd: boolean;
-  planName: string;
-  badgeColor: string;
+  planName: string | null;
+  badgeColor: string | null;
   businessName: string;
-  priceFiat: number;
-  currency: string;
-  billingInterval: string;
+  priceFiat: number | null;
+  currency: string | null;
+  billingInterval: string | null;
   entitlements: Entitlement[];
 }
 
@@ -147,39 +150,76 @@ export default function MembershipsPage() {
           {memberships.map((m, i) => {
             const active = m.status === 'ACTIVE';
             const open = openId === m.id;
+            const isCourtesy = m.membershipOrigin === 'COURTESY';
+            const accent = m.badgeColor || (isCourtesy ? '#A855F7' : '#E91E63');
+            const gradient = isCourtesy
+              ? `linear-gradient(135deg, rgba(168,85,247,.14) 0%, rgba(233,30,99,.10) 100%)`
+              : `linear-gradient(135deg, rgba(233,30,99,.10) 0%, rgba(168,85,247,.06) 100%)`;
+            const planTitle = isCourtesy ? 'Cortesía' : (m.planName || 'Membresía');
+            const daysLeft = m.currentPeriodEnd ? Math.max(0, Math.ceil((new Date(m.currentPeriodEnd).getTime() - Date.now()) / 86400000)) : null;
             return (
               <motion.div
                 key={m.id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
-                className="bg-(--bg-elevated) rounded-2xl border border-(--border-subtle) overflow-hidden"
+                className="rounded-2xl overflow-hidden"
+                style={{ border: `1px solid ${active ? accent + '55' : 'rgba(255,255,255,.08)'}`, background: gradient, boxShadow: open ? `0 8px 32px ${accent}22` : 'none' }}
               >
-                <button onClick={() => toggle(m.id)} className="w-full text-left p-4 cursor-pointer" style={{ borderLeft: `4px solid ${m.badgeColor}` }}>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-[16px] font-extrabold text-(--text-primary)">{m.planName}</p>
-                      <p className="text-[12px] text-(--text-muted)">{m.businessName}</p>
+                <button onClick={() => toggle(m.id)} className="w-full text-left p-4 cursor-pointer">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-[16px] font-extrabold text-(--text-primary)">{planTitle}</p>
+                        {isCourtesy && (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full" style={{ background: 'rgba(168,85,247,.2)', color: '#C084FC' }}>
+                            🎁 CORTESÍA
+                          </span>
+                        )}
+                        {m.membershipOrigin === 'PURCHASED' && (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full" style={{ background: 'rgba(233,30,99,.15)', color: '#F472B6' }}>
+                            ★ MI PLAN
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[12px] text-(--text-muted) mt-0.5">{m.businessName}</p>
                     </div>
-                    <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ background: active ? 'rgba(76,175,80,.15)' : 'rgba(233,30,99,.15)', color: active ? '#4CAF50' : '#E91E63' }}>
-                      {STATUS_LABEL[m.status] ?? m.status}
+                    <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full shrink-0" style={{ background: active ? 'rgba(76,175,80,.15)' : m.status === 'REVOKED' ? 'rgba(239,68,68,.15)' : 'rgba(233,30,99,.15)', color: active ? '#4CAF50' : m.status === 'REVOKED' ? '#F87171' : '#E91E63' }}>
+                      {m.status === 'REVOKED' ? 'Revocada' : STATUS_LABEL[m.status] ?? m.status}
                     </span>
                   </div>
+                  {m.giftNote && (
+                    <p className="text-[12px] italic mt-2 px-3 py-2 rounded-xl" style={{ background: 'rgba(255,255,255,.05)', borderLeft: `2px solid ${accent}` }}>
+                      "{m.giftNote}"
+                    </p>
+                  )}
                   <p className="text-[12px] text-(--text-muted) mt-2">
-                    {m.cancelAtPeriodEnd ? 'Termina' : 'Vigente hasta'} el {new Date(m.currentPeriodEnd).toLocaleDateString()}
+                    {m.status === 'REVOKED'
+                      ? 'Esta membresía fue revocada'
+                      : m.noExpiration
+                        ? '♾️ Vigencia indefinida'
+                        : m.currentPeriodEnd
+                          ? `${m.cancelAtPeriodEnd ? 'Termina' : 'Vigente hasta'} el ${new Date(m.currentPeriodEnd).toLocaleDateString()}${daysLeft !== null && active ? ` · ${daysLeft} día${daysLeft !== 1 ? 's' : ''}` : ''}`
+                          : ''}
                   </p>
                 </button>
 
                 <AnimatePresence initial={false}>
                   {open && (
                     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="px-4 pb-4">
-                      <ul className="flex flex-col gap-2 mb-2">
+                      <ul className="flex flex-col gap-2.5 mb-2">
                         {m.entitlements.map((e) => {
                           const left = Math.max(0, e.quotaPerCycle - e.used);
+                          const pct = Math.min(100, Math.round((e.used / Math.max(1, e.quotaPerCycle)) * 100));
                           return (
-                            <li key={e.id} className="flex items-center justify-between text-[13px] text-(--text-primary)">
-                              <span>{BENEFIT_LABEL[e.benefitType] ?? e.benefitType}{e.discountPct ? ` ${e.discountPct}%` : ''}</span>
-                              <span className="text-(--text-muted)">{left}/{e.quotaPerCycle} {RESET_LABEL[e.cycleResetType] ?? ''}</span>
+                            <li key={e.id}>
+                              <div className="flex items-center justify-between text-[13px] text-(--text-primary) mb-1">
+                                <span className="font-semibold">{BENEFIT_LABEL[e.benefitType] ?? e.benefitType}{e.discountPct ? ` ${e.discountPct}%` : ''}</span>
+                                <span className="text-(--text-muted)">{left}/{e.quotaPerCycle} · {RESET_LABEL[e.cycleResetType] ?? ''}</span>
+                              </div>
+                              <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,.08)' }}>
+                                <div className="h-full rounded-full" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${accent}, #FF2E93)` }} />
+                              </div>
                             </li>
                           );
                         })}
