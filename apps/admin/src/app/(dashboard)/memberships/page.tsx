@@ -11,7 +11,7 @@ type Reset = "DAILY" | "WEEKLY" | "MONTHLY" | "FIXED";
 
 interface RuleDraft {
   type: BenefitType;
-  quotaPerCycle: number;
+  quotaPerCycle: string;   // string: permite borrar/teclear libre — se valida al submit
   cycleResetType: Reset;
   discountPct?: number;
 }
@@ -222,7 +222,7 @@ function PlanForm({ businessId, onClose, onCreated }: { businessId: string; onCl
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("299");
   const [interval, setInterval_] = useState<Interval>("MONTHLY");
-  const [rules, setRules] = useState<RuleDraft[]>([{ type: "INCLUDED_PRODUCT", quotaPerCycle: 1, cycleResetType: "DAILY" }]);
+  const [rules, setRules] = useState<RuleDraft[]>([{ type: "INCLUDED_PRODUCT", quotaPerCycle: "1", cycleResetType: "DAILY" }]);
 
   const create = trpc.memberships.createPlan.useMutation({
     onSuccess: () => { toast.success("Plan creado como borrador"); onCreated(); },
@@ -241,7 +241,14 @@ function PlanForm({ businessId, onClose, onCreated }: { businessId: string; onCl
         <input className={inputCls} placeholder="Nombre (ej. Plan Mensual)" value={name} onChange={(e) => setName(e.target.value)} />
         <input className={inputCls} placeholder="Descripción" value={description} onChange={(e) => setDescription(e.target.value)} />
         <div className="grid grid-cols-2 gap-3">
-          <input className={inputCls} type="number" min={0} placeholder="Precio MXN" value={price} onChange={(e) => setPrice(e.target.value)} />
+          <input
+            className={inputCls}
+            type="text"
+            inputMode="decimal"
+            placeholder="Precio MXN"
+            value={price}
+            onChange={(e) => setPrice(e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1").slice(0, 10))}
+          />
           <select className={inputCls} value={interval} onChange={(e) => setInterval_(e.target.value as Interval)}>
             {(Object.keys(INTERVAL_LABEL) as Interval[]).map((k) => <option key={k} value={k}>{INTERVAL_LABEL[k]}</option>)}
           </select>
@@ -254,14 +261,21 @@ function PlanForm({ businessId, onClose, onCreated }: { businessId: string; onCl
               <select className={inputCls} value={r.type} onChange={(e) => updateRule(i, { type: e.target.value as BenefitType })}>
                 {(Object.keys(BENEFIT_LABEL) as BenefitType[]).map((k) => <option key={k} value={k}>{BENEFIT_LABEL[k]}</option>)}
               </select>
-              <input className={inputCls} type="number" min={1} value={r.quotaPerCycle} onChange={(e) => updateRule(i, { quotaPerCycle: Math.max(1, Number(e.target.value)) })} />
+              <input
+                className={inputCls}
+                type="text"
+                inputMode="numeric"
+                placeholder="Cantidad"
+                value={r.quotaPerCycle}
+                onChange={(e) => updateRule(i, { quotaPerCycle: e.target.value.replace(/\D/g, "").slice(0, 4) })}
+              />
               <select className={inputCls} value={r.cycleResetType} onChange={(e) => updateRule(i, { cycleResetType: e.target.value as Reset })}>
                 {(Object.keys(RESET_LABEL) as Reset[]).map((k) => <option key={k} value={k}>{RESET_LABEL[k]}</option>)}
               </select>
               <button onClick={() => setRules(rules.filter((_, idx) => idx !== i))} disabled={rules.length === 1}><Trash2 className="w-4 h-4 text-white/40" /></button>
             </div>
           ))}
-          <button className="text-xs text-pink-400" onClick={() => setRules([...rules, { type: "INCLUDED_PRODUCT", quotaPerCycle: 1, cycleResetType: "MONTHLY" }])}>+ Añadir beneficio</button>
+          <button className="text-xs text-pink-400" onClick={() => setRules([...rules, { type: "INCLUDED_PRODUCT", quotaPerCycle: "1", cycleResetType: "MONTHLY" }])}>+ Añadir beneficio</button>
         </div>
 
         <Button
@@ -274,7 +288,7 @@ function PlanForm({ businessId, onClose, onCreated }: { businessId: string; onCl
             priceFiat: Number(price) || 0,
             currency: "MXN",
             billingInterval: interval,
-            benefitRules: rules,
+            benefitRules: rules.map((r) => ({ ...r, quotaPerCycle: Math.max(1, parseInt(r.quotaPerCycle || "0", 10) || 1) })),
             branchesAllowed: [],
           })}
         >
@@ -328,7 +342,7 @@ function CourtesyPanel({ businessId }: { businessId: string }) {
   const [targetName, setTargetName] = useState("");
   const [duration, setDuration] = useState<0 | 3 | 6 | 12>(12);
   const [giftNote, setGiftNote] = useState("");
-  const [rules, setRules] = useState<RuleDraft[]>([{ type: "INCLUDED_PRODUCT", quotaPerCycle: 1, cycleResetType: "MONTHLY" }]);
+  const [rules, setRules] = useState<RuleDraft[]>([{ type: "INCLUDED_PRODUCT", quotaPerCycle: "1", cycleResetType: "MONTHLY" }]);
 
   const lookupCustomer = trpc.pos.lookupRabbitter.useQuery(
     { query: targetQuery.trim() },
@@ -379,14 +393,21 @@ function CourtesyPanel({ businessId }: { businessId: string }) {
               <select className={inputCls} value={r.type} onChange={(e) => setRules(rules.map((x, idx) => idx === i ? { ...x, type: e.target.value as BenefitType } : x))}>
                 {(Object.keys(BENEFIT_LABEL) as BenefitType[]).map((k) => <option key={k} value={k}>{BENEFIT_LABEL[k]}</option>)}
               </select>
-              <input className={inputCls} type="number" min={1} value={r.quotaPerCycle} onChange={(e) => setRules(rules.map((x, idx) => idx === i ? { ...x, quotaPerCycle: Math.max(1, Number(e.target.value)) } : x))} />
+              <input
+                className={inputCls}
+                type="text"
+                inputMode="numeric"
+                placeholder="Cantidad"
+                value={r.quotaPerCycle}
+                onChange={(e) => setRules(rules.map((x, idx) => idx === i ? { ...x, quotaPerCycle: e.target.value.replace(/\D/g, "").slice(0, 4) } : x))}
+              />
               <select className={inputCls} value={r.cycleResetType} onChange={(e) => setRules(rules.map((x, idx) => idx === i ? { ...x, cycleResetType: e.target.value as Reset } : x))}>
                 {(Object.keys(RESET_LABEL) as Reset[]).map((k) => <option key={k} value={k}>{RESET_LABEL[k]}</option>)}
               </select>
               <button onClick={() => setRules(rules.length > 1 ? rules.filter((_, idx) => idx !== i) : rules)}><Trash2 className="w-4 h-4 text-white/40" /></button>
             </div>
           ))}
-          <button className="text-xs text-pink-400" onClick={() => setRules([...rules, { type: "INCLUDED_PRODUCT", quotaPerCycle: 1, cycleResetType: "MONTHLY" }])}>+ Añadir beneficio</button>
+          <button className="text-xs text-pink-400" onClick={() => setRules([...rules, { type: "INCLUDED_PRODUCT", quotaPerCycle: "1", cycleResetType: "MONTHLY" }])}>+ Añadir beneficio</button>
 
           <p className="text-sm font-bold text-white pt-1">3 · Duración y nota</p>
           <div className="flex gap-2 flex-wrap">
@@ -400,7 +421,7 @@ function CourtesyPanel({ businessId }: { businessId: string }) {
           <input className={inputCls} placeholder="Nota de regalo (opcional) — ej. 'Para mi hermana ☕'" value={giftNote} onChange={(e) => setGiftNote(e.target.value)} maxLength={300} />
 
           <Button className="w-full" disabled={!targetUserId || grant.isPending}
-            onClick={() => targetUserId && grant.mutate({ targetUserId, benefitRules: rules, durationMonths: duration, giftNote: giftNote.trim() || undefined })}>
+            onClick={() => targetUserId && grant.mutate({ targetUserId, benefitRules: rules.map((r) => ({ ...r, quotaPerCycle: Math.max(1, parseInt(r.quotaPerCycle || "0", 10) || 1) })), durationMonths: duration, giftNote: giftNote.trim() || undefined })}>
             {grant.isPending ? "Otorgando…" : `🎁 Otorgar a ${targetName || "…"}`}
           </Button>
         </div>
