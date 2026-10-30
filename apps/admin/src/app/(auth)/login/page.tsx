@@ -41,64 +41,60 @@ export default function LoginPage() {
     if (passkeyBusy) return;
     setPasskeyBusy(true);
     try {
-      const b64urlToBytes = (s: string) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+      const b64urlToBytes = (s2: string) => Uint8Array.from(atob(s2.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
       const bytesToB64url = (b: Uint8Array) => btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
-      // 1. Options (challenge server-side, single-use)
-      const optRes = await fetch(resolveApiUrl("/api/trpc/passkeys.loginOptions?batch=1"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ "0": { json: null } }) });
+      const optRes = await fetch(resolveApiUrl("/api/auth/passkey-login"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "options" }),
+      });
       const optData = await optRes.json();
-      if (optData?.[0]?.error) throw new Error(optData[0].error.message);
-      const optionsRes = optData[0].result.data.json;
-      const options = optionsRes.options;
+      if (!optData?.success) throw new Error(optData?.error || "No options");
 
-      // 2. Face ID / Touch ID / Windows Hello elige la passkey
       const cred = (await navigator.credentials.get({
         publicKey: {
-          challenge: b64urlToBytes(options.challenge),
-          userVerification: options.userVerification ?? 'required',
-          timeout: options.timeout ?? 60000,
-          rpId: options.rpId,
+          challenge: b64urlToBytes(optData.challenge),
+          userVerification: 'required',
+          timeout: 60000,
+          rpId: optData.rpId,
         },
       })) as PublicKeyCredential | null;
       if (!cred) throw new Error('Sin credencial');
-
       const resp = cred.response as unknown as AuthenticatorAssertionResponse;
 
-      // 3. Verificación server-side + token single-use
-      const verRes = await fetch(resolveApiUrl("/api/trpc/passkeys.loginVerify?batch=1"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ "0": { json: { loginId: optionsRes.loginId, response: {
-          id: bytesToB64url(new Uint8Array(cred.rawId)),
-          rawId: bytesToB64url(new Uint8Array(cred.rawId)),
-          type: cred.type,
+      const verRes = await fetch(resolveApiUrl("/api/auth/passkey-login"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "verify",
+          loginId: optData.loginId,
+          credentialId: bytesToB64url(new Uint8Array(cred.rawId)),
           authenticatorData: bytesToB64url(new Uint8Array(resp.authenticatorData)),
           clientDataJSON: bytesToB64url(new Uint8Array(resp.clientDataJSON)),
           signature: bytesToB64url(new Uint8Array(resp.signature)),
-        } } } }),
+        }),
       });
       const verData = await verRes.json();
-      if (verData?.[0]?.error) throw new Error(verData[0].error.message);
-      const verify = verData[0].result.data.json;
-      if (!verify?.success) throw new Error('Verificación fallida');
+      if (!verData?.success) throw new Error(verData?.error || 'Verificación fallida');
 
-      if (!verify?.success) throw new Error('Verificación fallida');
-
-      // 4. Sesión NextAuth
-      const result = await signIn('passkey', { token: verify.token, email: verify.email, redirect: false });
+      // Sesión NextAuth vía email-token (token single-use creado por passkey-login)
+      const result = await signIn('email-token', { token: verData.token, email: verData.email, redirect: false });
       if (result?.error) throw new Error('No se pudo crear la sesión');
       window.location.href = '/';
     } catch (err: any) {
       const m = err?.message || err?.name || 'Error';
       if (m.includes('NotAllowed')) {
-        console.warn('[PasskeyLogin] cancelado o no permitido');
-      } else if (m.includes('No passkey') || m.includes('no registrada')) {
-        alert('No hay passkeys registradas en este servidor. Entra con OTP y registra tu Face ID en Configuración → Seguridad.');
+        console.warn('[PasskeyLogin] cancelado');
+      } else if (m.includes('No passkey') || m.includes('Sin passkeys')) {
+        alert('No hay passkeys registradas. Entra con OTP y registra en Configuración → Seguridad.');
       } else {
         alert(`Error passkey: ${m}`);
       }
     } finally {
       setPasskeyBusy(false);
     }
-  };
-  const [otpLoading, setOtpLoading] = useState(false);
+  };  const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError] = useState("");
   const [submitLoading, setSubmitLoading] = useState(false);
 
@@ -579,21 +575,24 @@ export default function LoginPage() {
               ¿Ya tienes un código OTP? Ingresar código directamente →
             </button>
 
-            <div className="pt-3 border-t border-white/10">
+            <div className="pt-4 border-t border-white/10 space-y-2.5">
               <button
                 type="button"
                 onClick={handlePasskeyLogin}
                 disabled={passkeyBusy}
-                className="w-full flex h-11 items-center justify-center gap-2 rounded-2xl border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 font-bold text-xs transition-all cursor-pointer disabled:opacity-50"
+                className="w-full flex h-11 items-center justify-center gap-2.5 rounded-2xl border border-purple-500/25 bg-gradient-to-r from-purple-500/10 via-purple-500/5 to-transparent hover:border-purple-500/40 hover:bg-purple-500/15 text-purple-200 font-bold text-xs transition-all duration-200 cursor-pointer disabled:opacity-50 shadow-sm active:scale-[0.99]"
               >
-                <ScanFace className="w-4 h-4" />
-                {passkeyBusy ? "Verificando con Face ID…" : "Entrar con Face ID / Passkey"}
+                <div className="w-6 h-6 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                  <ScanFace className="w-3.5 h-3.5 text-purple-300" />
+                </div>
+                <span>{passkeyBusy ? "Verificando con Face ID…" : "Entrar con Face ID / Passkey"}</span>
               </button>
+
               <Link
                 href="/demo"
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 font-bold text-xs transition-all"
+                className="w-full flex h-10 items-center justify-center gap-2 rounded-xl text-zinc-400 hover:text-cyan-300 bg-white/[0.02] hover:bg-cyan-500/10 border border-white/5 hover:border-cyan-500/25 text-xs font-semibold transition-all duration-200"
               >
-                <Compass className="w-4 h-4 text-cyan-400" />
+                <Compass className="w-3.5 h-3.5 text-cyan-400/80" />
                 <span>Explorar Recorrido Virtual Interactivo (/demo)</span>
               </Link>
             </div>
