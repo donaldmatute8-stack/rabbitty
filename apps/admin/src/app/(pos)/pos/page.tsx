@@ -8,6 +8,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { QRCodeSVG } from "qrcode.react";
 import QRDiscovery from "@/components/QRDiscovery";
+import { startNeonDecoder } from "@/lib/neonDecoder";
 import { TicketTemplate, TicketData } from "../../../components/TicketTemplate";
 import { CashShiftModal, CashShiftBadge } from "../../../components/CashShiftModal";
 import { 
@@ -293,6 +294,7 @@ export default function PosPage() {
 
   // ── Controlador reactivo de la cámara para escanear Rabbitter ──
   const scannerInstanceRef = useRef<any>(null);
+  const neonDecoderStopRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -377,6 +379,17 @@ export default function PosPage() {
           await scanner.start(backCam.id, config, onScanSuccess, () => {});
         } else {
           await scanner.start({ facingMode: "environment" }, config, onScanSuccess, () => {});
+        }
+        // Decoder de barras neón en paralelo — el cliente puede mostrar su RabbittyCode
+        if (active) {
+          neonDecoderStopRef.current = startNeonDecoder("rabbitter-cam-reader", (code) => {
+            if (!active) return;
+            try { scanner.stop().catch(() => {}); } catch {}
+            scannerInstanceRef.current = null;
+            neonDecoderStopRef.current?.();
+            neonDecoderStopRef.current = null;
+            onScanSuccess(String(code));
+          });
         }
       } catch (camErr: any) {
         console.warn("[POS] Camera error:", camErr);

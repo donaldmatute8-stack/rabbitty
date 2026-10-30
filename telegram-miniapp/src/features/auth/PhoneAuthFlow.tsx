@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { PlatformBridge } from '@/lib/platform';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { getFastLogin, verifyBiometric, hasAnyLocalSecurity } from '@/lib/securityVault';
+import { getFastLogin, verifyBiometric, hasAnyLocalSecurity, isBiometricEnabled, hasPin } from '@/lib/securityVault';
 
 interface CountryCode {
   code: string;
@@ -109,18 +109,42 @@ export default function PhoneAuthFlow({ mode, onBack }: PhoneAuthFlowProps) {
     if (!stash) return;
     setFastLoginBusy(true);
     try {
-      const bio = await verifyBiometric('Entrada rápida a tu cuenta Rabbitty');
-      if (!bio.ok) { setFastLoginBusy(false); return; } // cancelado/fallido → OTP normal
-      await PlatformBridge.setSessionToken(stash.token);
-      // Verificar que la sesión sigue válida en el server
-      const checkRes = await fetch('/api/auth/session', { headers: { Authorization: `Bearer ${stash.token}` } });
-      if (checkRes.ok) {
+      // 1. Gate local: biometría, o PIN si no hay biometría activa
+      let localOk = false;
+      if (await isBiometricEnabled()) {
+        const bio = await verifyBiometric('Entrada rápida a tu cuenta Rabbitty');
+        localOk = bio.ok;
+        if (!bio.ok && !hasPin()) { setFastLoginBusy(false); return; }
+      }
+      if (!localOk) {
+        // Fallback PIN (o único camino si solo hay PIN)
+        const { promptForPin } = await import('@/components/security/PinPromptModal');
+        for (;;) {
+          const { pinLockRemainingMs } = await import('@/lib/securityVault');
+          const remaining = pinLockRemainingMs();
+          if (remaining > 0) { setFastLoginBusy(false); alert('Demasiados intentos. Espera un momento.'); return; }
+          const entered = await promptForPin({ lockedMs: remaining, title: 'Entrar con PIN', description: 'Verifica tu identidad para entrar a Rabbitty' });
+          if (entered === null) { setFastLoginBusy(false); return; }
+          const { verifyPin } = await import('@/lib/securityVault');
+          const res = await verifyPin(entered);
+          if (res.ok) { localOk = true; break; }
+        }
+      }
+      // 2. Canjear el fastToken por una sesión nueva en el server
+      const verifyRes = await fetch('/api/auth/fast-login/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fastToken: stash.token }),
+      });
+      const verifyData = await verifyRes.json();
+      if (verifyData?.success && verifyData.sessionToken) {
+        await PlatformBridge.setSessionToken(verifyData.sessionToken);
         PlatformBridge.hapticFeedback('success');
         await checkAuth();
         router.replace('/');
       } else {
-        // sesión expirada/revocada → limpiar stash, OTP normal
-        localStorage.removeItem('rabbitty_fastlogin_v1');
+        // fastToken expirado/revocado → limpiar stash, OTP normal
+        await import('@/lib/securityVault').then(m => m.clearFastLogin());
         setFastLoginAvailable(false);
         setFastLoginBusy(false);
       }
@@ -560,6 +584,22 @@ export default function PhoneAuthFlow({ mode, onBack }: PhoneAuthFlowProps) {
               >
                 {loading ? 'Enviando código…' : isPhoneNumber ? 'Continuar con Celular 📱' : 'Continuar con Código 🔑'}
               </button>
+
+              {fastLoginAvailable && (
+                <button
+                  onClick={handleFastLogin}
+                  disabled={fastLoginBusy}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-full border border-white/15 bg-white/5 text-white text-sm font-bold active:scale-[0.98] transition-all cursor-pointer"
+                >
+                  {fastLoginBusy ? (
+                    'Verificando…'
+                  ) : (
+                    <>
+                      <span className="text-base">🔐</span> Entrar con Face ID / PIN
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </motion.div>
         ) : (

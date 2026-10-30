@@ -837,6 +837,19 @@ export default function ScanPage() {
                         mod.default.HapticFeedback.notificationOccurred('success');
                       }).catch(()=>{});
 
+                      // ── Gate local: Face ID / PIN antes de debitar Bunz (igual que transfers) ──
+                      try {
+                        const [{ authorizeSensitiveAction }, { promptForPin }] = await Promise.all([
+                          import('@/lib/securityVault'),
+                          import('@/components/security/PinPromptModal'),
+                        ]);
+                        const gate = await authorizeSensitiveAction(promptForPin, 'Autoriza el pago con Bunz');
+                        if (!gate.ok) {
+                          if (gate.reason === 'locked') alert('Demasiados intentos de PIN. Espera un momento.');
+                          return;
+                        }
+                      } catch { /* vault no disponible → no bloquear el pago */ }
+
                       try {
                         const authHeader = await getAuthHeader();
                         const res = await fetch(`${API_SERVER_URL}/payments.approveIntent?batch=1`, {

@@ -174,7 +174,7 @@ function BiometricRow() {
     PlatformBridge.hapticFeedback('medium');
     try {
       if (enabled) {
-        disableBiometric();
+        await disableBiometric();
         setEnabled(false);
         setNote({ text: 'Biometría desactivada.', tone: 'info' });
       } else {

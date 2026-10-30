@@ -85,6 +85,11 @@ export const posRouter = router({
       if (isUuid) {
         conditions.push(eq(coreUsers.id, cleanQ));
       }
+      // RabbittyCode numérico (13 barras decodificadas o tecleado): match exacto por scanCode
+      const numeric = /^\d{1,9}$/.test(cleanQ);
+      if (numeric) {
+        conditions.push(eq(coreUsers.scanCode, Number(cleanQ)));
+      }
 
       const [user] = await ctx.coreDb
         .select({

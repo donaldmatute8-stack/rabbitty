@@ -485,11 +485,12 @@ export async function verifyBiometric(reason = 'Confirma tu identidad para conti
   return { ok: false, message: 'Método biométrico no soportado.' };
 }
 
-export function disableBiometric(): void {
+export async function disableBiometric(): Promise<void> {
   try {
     localStorage.removeItem(BIO_KEY);
     localStorage.removeItem('rabbitty_faceid_cred');
   } catch {}
+  await revokeFastLogin(); // sin biometría el fastToken ya no es safe
 }
 
 /** Comprueba si el usuario tiene PIN o biometría activa configurada localmente. */
@@ -560,13 +561,31 @@ export async function stashFastLogin(sessionToken: string): Promise<void> {
   if (!sessionToken) return;
   if (!hasAnyLocalSecurity()) return; // sin Face ID ni PIN → no hay fast login
   try {
+    const { PlatformBridge } = await import('@/lib/platform');
+    const headers = await PlatformBridge.getAuthHeaders();
+    const res = await fetch('/api/auth/fast-login/stash', {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    const data = await res.json();
+    if (!data?.success || !data.fastToken) return;
     writeJson(FASTLOGIN_KEY, {
-      token: sessionToken,
+      token: data.fastToken, // token DEDICADO — sobrevive al logout (la sesión se revoca)
       savedAt: Date.now(),
-      // La sesión del server expira en 30d — el fastlogin muere con ella
       expiresAt: Date.now() + 30 * 86400_000,
     });
   } catch { /* noop */ }
+}
+
+/** Revoca el fastToken en el server (logout definitivo / biometría desactivada). */
+export async function revokeFastLogin(): Promise<void> {
+  try {
+    const { PlatformBridge } = await import('@/lib/platform');
+    const headers = await PlatformBridge.getAuthHeaders();
+    await fetch('/api/auth/fast-login/revoke', { method: 'POST', headers });
+  } catch { /* noop */ }
+  clearFastLogin();
 }
 
 export function getFastLogin(): { token: string } | null {
