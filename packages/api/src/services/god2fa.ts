@@ -92,7 +92,7 @@ export function verifyGod2faCookieValue(value: string | undefined | null): boole
 
 // ── Rate limit de intentos 2FA — Redis compartido (REDIS_URL) con fallback en memoria ──
 let _redis: import("ioredis").default | null = null;
-function getRedis() {
+async function getRedis() {
   if (_redis !== null) return _redis;
   const url = process.env.REDIS_URL;
   if (!url) { _redis = null; return null; }
@@ -110,7 +110,7 @@ function getRedis() {
 const memoryAttempts = new Map<string, { count: number; resetAt: number }>();
 
 export async function check2faRateLimit(key: string): Promise<boolean> {
-  const redis = getRedis();
+  const redis = await getRedis();
   if (redis) {
     try {
       const rk = `god2fa:${key}`;

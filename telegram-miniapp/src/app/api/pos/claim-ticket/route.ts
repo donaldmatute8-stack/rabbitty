@@ -343,11 +343,10 @@ export async function POST(req: NextRequest) {
         tx
       );
 
-      // a1) Marcar la bóveda CLAIMED (bloquea el doble pago por el canal del bot)
-      if (existingVault) {
-        await tx.update(pendingVaults).set({ status: 'CLAIMED' })
-          .where(and(eq(pendingVaults.id, existingVault.id), eq(pendingVaults.status, 'PENDING')));
-      }
+      // a1) Marcar CLAIMED TODAS las vaults PENDING de esta orden (bloquea el doble pago
+      //     por el canal del bot incluso si quedaron vaults duplicadas del bug histórico)
+      await tx.update(pendingVaults).set({ status: 'CLAIMED' })
+        .where(and(eq(pendingVaults.orderId, orderId), eq(pendingVaults.status, 'PENDING')));
     });
 
     } catch (txErr: unknown) {

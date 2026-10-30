@@ -152,7 +152,12 @@ export async function POST(req: NextRequest) {
         .from(users).where(eq(users.id, user.id)).limit(1);
       const otpHasUse = (otpRow.earned ?? 0) > 0 || (otpRow.spent ?? 0) > 0 || otpRow.tgId;
       if (!otpHasUse) {
-        await db.delete(users).where(eq(users.id, user.id));
+        // Solo borrar si además NO tiene sesiones activas (evita FK violation / login roto)
+        const [activeSession] = await db.select({ id: webSessions.id })
+          .from(webSessions).where(eq(webSessions.userId, user.id)).limit(1);
+        if (!activeSession) {
+          try { await db.delete(users).where(eq(users.id, user.id)); } catch { /* conservador: nunca romper el login */ }
+        }
       }
       user = await db.query.users.findFirst({ where: eq(users.id, telegramIdentityId) });
     }
