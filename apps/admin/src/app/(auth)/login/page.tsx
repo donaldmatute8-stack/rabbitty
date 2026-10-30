@@ -58,6 +58,7 @@ export default function LoginPage() {
           userVerification: 'required',
           timeout: 60000,
           rpId: optData.rpId,
+          allowCredentials: (optData.allowCredentialIds || []).map((id: string) => ({ type: 'public-key', id: b64urlToBytes(id) })),
         },
       })) as PublicKeyCredential | null;
       if (!cred) throw new Error('Sin credencial');

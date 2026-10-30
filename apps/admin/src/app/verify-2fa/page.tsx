@@ -80,6 +80,7 @@ export default function Verify2FAPage() {
           userVerification: 'required',
           timeout: 60000,
           rpId: window.location.hostname,
+          allowCredentials: (optData.allowCredentialIds || []).map((id: string) => ({ type: 'public-key', id: Uint8Array.from(atob(id.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0)) })),
         },
       })) as PublicKeyCredential | null;
       if (!cred) throw new Error('Sin credencial');
