@@ -2,6 +2,16 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   turbopack: {},
+  async redirects() {
+    return [
+      { source: "/campaigns", destination: "/marketing/campaigns", permanent: false },
+      { source: "/customers", destination: "/marketing/audiences", permanent: false },
+      { source: "/birthdays", destination: "/marketing/automations/birthdays", permanent: false },
+      { source: "/referrals", destination: "/marketing/referrals", permanent: false },
+      { source: "/qr-generator", destination: "/marketing/qr", permanent: false },
+      { source: "/atmosphere", destination: "/marketing/atmosphere", permanent: false },
+    ];
+  },
   async headers() {
     return [
       {

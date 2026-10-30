@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { skipToken } from "@tanstack/react-query";
-import { trpc } from "../../../lib/trpc-client";
+import { trpc } from "../../../../lib/trpc-client";
 import { QrCode, RefreshCw, CheckCircle, AlertTriangle } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "@rabbitty/ui";

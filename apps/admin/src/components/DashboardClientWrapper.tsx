@@ -525,7 +525,7 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                               <span className="text-[10px] text-pink-400 font-mono">Verificado →</span>
                             </Link>
                             <Link
-                              href="/campaigns"
+                              href="/marketing/campaigns"
                               onClick={() => setChatDrawerOpen(false)}
                               className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white border border-white/10 text-xs font-bold transition-all flex items-center justify-between no-underline"
                             >

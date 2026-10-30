@@ -1,6 +1,6 @@
 "use client";
 
-import { trpc } from "../../../lib/trpc-client";
+import { trpc } from "../../../../lib/trpc-client";
 import { Card } from "@rabbitty/ui";
 import { Gift, Users, TrendingUp, DollarSign } from "lucide-react";
 

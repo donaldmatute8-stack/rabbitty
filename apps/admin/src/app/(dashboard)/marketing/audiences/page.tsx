@@ -1,6 +1,6 @@
 "use client";
 
-import { trpc } from "../../../lib/trpc-client";
+import { trpc } from "../../../../lib/trpc-client";
 import { useState, useMemo } from "react";
 import { Users, ShoppingBag, TrendingUp, ChevronDown, ChevronUp, Award, Phone, Calendar, Search, ShieldCheck } from "lucide-react";
 import { Card, Input } from "@rabbitty/ui";

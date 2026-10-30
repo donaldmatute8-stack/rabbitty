@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, eq, desc, sql, gte } from "drizzle-orm";
+import { and, eq, desc, sql, gte, inArray } from "drizzle-orm";
 import { router, protectedProcedure, adminOnlyProcedure } from "../trpc";
 import { campaigns, customers, restaurants } from "@rabbitty/database-restaurant";
 import { TRPCError } from "@trpc/server";
@@ -7,10 +7,23 @@ import { enqueueCampaignDelivery } from "../services/queue";
 
 export const campaignsRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
-    const branchScope = ctx.staffRole ? eq(campaigns.branchId, ctx.staffBranchId as string) : undefined;
-    return branchScope
-      ? await ctx.restaurantDb.select().from(campaigns).where(branchScope).orderBy(campaigns.createdAt)
-      : await ctx.restaurantDb.select().from(campaigns).orderBy(campaigns.createdAt);
+    // ── Anti cross-tenant read: staff = su branch; owner = TODAS las branches de SU restaurante;
+    // god = global. Sin scope → devolver vacío (jamás datos ajenos). ──
+    const { resolveMerchantContext } = await import("../services/merchantContext");
+    const mctx = await resolveMerchantContext(ctx);
+    if (mctx.isGod) {
+      return await ctx.restaurantDb.select().from(campaigns).orderBy(campaigns.createdAt);
+    }
+    const branchScope = ctx.staffRole
+      ? (ctx.staffBranchId ? [ctx.staffBranchId as string] : [])
+      : (mctx.restaurantIds.length > 0
+        ? (await ctx.restaurantDb.select({ id: (await import("@rabbitty/database-restaurant/schema")).branches.id })
+            .from((await import("@rabbitty/database-restaurant/schema")).branches)
+            .where(inArray((await import("@rabbitty/database-restaurant/schema")).branches.restaurantId, mctx.restaurantIds))).map((b: { id: string }) => b.id)
+        : []);
+    return branchScope.length > 0
+      ? await ctx.restaurantDb.select().from(campaigns).where(inArray(campaigns.branchId, branchScope)).orderBy(campaigns.createdAt)
+      : [];
   }),
 
   create: protectedProcedure

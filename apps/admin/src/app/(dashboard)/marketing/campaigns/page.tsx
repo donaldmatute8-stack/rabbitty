@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { trpc } from "../../../lib/trpc-client";
+import { trpc } from "../../../../lib/trpc-client";
 import { Card, Button, toast } from "@rabbitty/ui";
 import { Megaphone, Plus, Send, Target, CheckCircle2, XCircle, Printer } from "lucide-react";
 import Link from "next/link";

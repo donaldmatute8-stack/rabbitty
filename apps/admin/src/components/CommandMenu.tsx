@@ -36,14 +36,17 @@ import {
   TrendingUp,
   BookOpen,
   FlaskConical,
-  Brain
+  Brain,
+  Ticket,
+  Sparkles,
+  Compass
 } from "lucide-react";
 import { cn } from "@rabbitty/ui";
 
 type CommandItem = {
   id: string;
   label: string;
-  category: "⚡ Operación En Vivo" | "🍔 Carta & Productos" | "🚀 Crecimiento & Lealtad" | "⚙️ Configuración del Negocio";
+  category: "⚡ Operación En Vivo" | "🍔 Carta & Productos" | "🎟️ Lealtad & Membresías" | "🚀 Marketing Studio" | "⚙️ Configuración del Negocio";
   href: string;
   icon: any;
   keywords?: string[];
@@ -73,20 +76,26 @@ const commands: CommandItem[] = [
   { id: "pricing", label: "Precios Dinámicos", category: "🍔 Carta & Productos", href: "/pricing", icon: DollarSign, keywords: ["descuentos", "happy hour", "tarifas"] },
   { id: "menu-boards", label: "Menú Digital TV", category: "🍔 Carta & Productos", href: "/menu-boards", icon: Monitor, keywords: ["pantalla", "tv", "cartelera"] },
 
-  // 🚀 Crecimiento & Lealtad
-  { id: "loyalty", label: "Cashback Bunz & Lealtad", category: "🚀 Crecimiento & Lealtad", href: "/loyalty", icon: Award, keywords: ["puntos", "recompensas", "regalos"] },
-  { id: "customers", label: "Directorio de Clientes", category: "🚀 Crecimiento & Lealtad", href: "/customers", icon: UserRound, keywords: ["rabbitters", "usuarios", "crm"] },
-  { id: "referrals", label: "Red de Referidos", category: "🚀 Crecimiento & Lealtad", href: "/referrals", icon: Gift, keywords: ["invitaciones", "comisiones", "hops"] },
-  { id: "campaigns", label: "Campañas de Marketing", category: "🚀 Crecimiento & Lealtad", href: "/campaigns", icon: Megaphone, keywords: ["anuncios", "promociones", "push"] },
-  { id: "birthdays", label: "Cumpleaños", category: "🚀 Crecimiento & Lealtad", href: "/birthdays", icon: Cake, keywords: ["festejos", "promos"] },
-  { id: "catering", label: "Eventos & Catering", category: "🚀 Crecimiento & Lealtad", href: "/catering", icon: CalendarCheck, keywords: ["banquetes", "privados"] },
+  // 🎟️ Lealtad & Membresías (Operación)
+  { id: "loyalty", label: "Cashback Bunz & Lealtad", category: "🎟️ Lealtad & Membresías", href: "/loyalty", icon: Award, keywords: ["puntos", "recompensas", "regalos"] },
+  { id: "memberships", label: "Membresías & Planes", category: "🎟️ Lealtad & Membresías", href: "/memberships", icon: Ticket, keywords: ["membresía", "planes", "suscripciones", "pass", "derechos"] },
+  { id: "catering", label: "Eventos & Catering", category: "🎟️ Lealtad & Membresías", href: "/catering", icon: CalendarCheck, keywords: ["banquetes", "privados"] },
+
+  // 🚀 Marketing Studio
+  { id: "marketing-hub", label: "Marketing Studio · Overview", category: "🚀 Marketing Studio", href: "/marketing", icon: Megaphone, keywords: ["marketing", "crecimiento", "studio", "hub"] },
+  { id: "campaigns", label: "Campañas & Promociones", category: "🚀 Marketing Studio", href: "/marketing/campaigns", icon: Megaphone, keywords: ["anuncios", "promociones", "push", "bunzin"] },
+  { id: "mood", label: "Rabbitty Mood & Telemetría", category: "🚀 Marketing Studio", href: "/marketing/mood", icon: Sparkles, keywords: ["mood", "telemetria", "ambiente", "ia"] },
+  { id: "atmosphere", label: "Atmósfera & PoA", category: "🚀 Marketing Studio", href: "/marketing/atmosphere", icon: Compass, keywords: ["atmosfera", "poa", "pasaporte", "musica"] },
+  { id: "customers", label: "Audiencias & Rabbitters", category: "🚀 Marketing Studio", href: "/marketing/audiences", icon: UserRound, keywords: ["rabbitters", "usuarios", "crm", "audiencias", "segmentos"] },
+  { id: "referrals", label: "Red de Referidos & Hops", category: "🚀 Marketing Studio", href: "/marketing/referrals", icon: Gift, keywords: ["invitaciones", "comisiones", "hops"] },
+  { id: "birthdays", label: "Cumpleaños Automáticos", category: "🚀 Marketing Studio", href: "/marketing/automations/birthdays", icon: Cake, keywords: ["festejos", "promos", "cumpleaños"] },
+  { id: "qr-generator", label: "Códigos QR & Presencia Digital", category: "🚀 Marketing Studio", href: "/marketing/qr", icon: QrCode, keywords: ["mesa qr", "escaneo", "impresos"] },
 
   // ⚙️ Configuración del Negocio
   { id: "stripe", label: "Pasarela de Pagos & Stripe Connect", category: "⚙️ Configuración del Negocio", href: "/settings?tab=payments", icon: CreditCard, keywords: ["stripe", "tarjeta", "pagos", "banco", "clabe", "apple pay"] },
   { id: "restaurants", label: "Mis Sucursales", category: "⚙️ Configuración del Negocio", href: "/restaurants", icon: Store, keywords: ["locales", "dirección"] },
   { id: "staff", label: "Personal y Roles", category: "⚙️ Configuración del Negocio", href: "/staff", icon: Users, keywords: ["equipo", "empleados", "permisos", "pin"] },
   { id: "hardware", label: "Impresoras & POS", category: "⚙️ Configuración del Negocio", href: "/hardware", icon: Printer, keywords: ["tickets", "impresora", "kds"] },
-  { id: "qr-generator", label: "Generador de QR", category: "⚙️ Configuración del Negocio", href: "/qr-generator", icon: QrCode, keywords: ["mesa qr", "escaneo"] },
   { id: "sync", label: "Sincronización", category: "⚙️ Configuración del Negocio", href: "/restaurant-sync", icon: Webhook, keywords: ["integraciones", "api"] },
   { id: "settings", label: "Configuración General", category: "⚙️ Configuración del Negocio", href: "/settings", icon: Settings, keywords: ["ajustes", "perfil", "sistema"] },
 ];

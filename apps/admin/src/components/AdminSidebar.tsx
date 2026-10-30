@@ -91,15 +91,16 @@ const MODULE_BY_HREF: Record<string, string> = {
   "/pricing": "pricing",
   "/menu-boards": "menu_boards",
   "/loyalty": "loyalty",
-  "/customers": "customers",
-  "/referrals": "referrals",
-  "/campaigns": "campaigns",
+  "/marketing/audiences": "customers",
+  "/marketing/referrals": "referrals",
+  "/marketing/campaigns": "campaigns",
   "/marketing/mood": "campaigns",
-  "/birthdays": "birthdays",
+  "/marketing/atmosphere": "campaigns",
+  "/marketing/automations/birthdays": "birthdays",
   "/catering": "catering",
   "/staff": "staff",
   "/hardware": "hardware",
-  "/qr-generator": "qr",
+  "/marketing/qr": "qr",
 };
 
 const MODULES_STORAGE_KEY = "rabbitty_active_modules";
@@ -222,17 +223,12 @@ const menuPillars: MenuPillar[] = [
   },
   {
     id: "growth",
-    title: "Crecimiento & Lealtad",
-    icon: TrendingUp,
+    title: "Lealtad & Membresías",
+    icon: Award,
     items: [
       { href: "/loyalty", label: "Cashback Bunz", icon: Award },
-      { href: "/memberships", label: "Membresías", icon: Ticket, badge: "Nuevo" },
+      { href: "/memberships", label: "Membresías & Planes", icon: Ticket, badge: "Nuevo" },
       { href: "/conciliaciones", label: "Conciliaciones", icon: Scale },
-      { href: "/campaigns", label: "Marketing & Campañas", icon: Megaphone },
-      { href: "/marketing/mood", label: "Rabbitty Mood & Telemetría", icon: Sparkles, badge: "IA" },
-      { href: "/customers", label: "Clientes Rabbitters", icon: UserRound },
-      { href: "/referrals", label: "Red de Referidos", icon: Gift },
-      { href: "/birthdays", label: "Cumpleaños", icon: Cake },
       { href: "/catering", label: "Eventos & Catering", icon: CalendarCheck },
       { href: "/academy", label: "Guías & Academy", icon: BookOpen, badge: "Docs" },
       { href: "/operations-manual", label: "Manual Operativo & Caja", icon: BookOpen, badge: "PDF" },
@@ -244,13 +240,52 @@ const menuPillars: MenuPillar[] = [
     icon: Settings,
     items: [
       { href: "/restaurants", label: "Mis Sucursales & Afiliados", icon: Store },
-      { href: "https://www.rabbitty.me/impresos", label: "Kit Impresos (nueva pestaña)", icon: Printer, badge: "PDF" },
       { href: "/settings?tab=payments", label: "Pasarela & Stripe Connect", icon: CreditCard, badge: "Pay" },
       { href: "/staff", label: "Personal & Roles", icon: Users },
       { href: "/hardware", label: "Impresoras & Hardware", icon: Printer },
-      { href: "/qr-generator", label: "Códigos QR", icon: QrCode },
       { href: "/restaurant-sync", label: "Sincronización POS", icon: Webhook },
       { href: "/settings", label: "Ajustes del Sistema", icon: Settings },
+    ],
+  },
+];
+
+// ── MARKETING STUDIO: Espacio dedicado de crecimiento, contenido y audiencias ──
+const marketingPillars: MenuPillar[] = [
+  {
+    id: "mkt_overview",
+    title: "🚀 Marketing Studio",
+    icon: Megaphone,
+    items: [
+      { href: "/marketing", label: "Overview de Marketing", icon: LayoutDashboard, badge: "Hub" },
+      { href: "/marketing/campaigns", label: "Campañas & Promociones", icon: Megaphone },
+      { href: "/marketing/referrals", label: "Red de Referidos & Hops", icon: Gift },
+    ],
+  },
+  {
+    id: "mkt_content",
+    title: "✨ Content & Mood Studio",
+    icon: Sparkles,
+    items: [
+      { href: "/marketing/mood", label: "Rabbitty Mood & Telemetría", icon: Sparkles, badge: "IA" },
+      { href: "/marketing/atmosphere", label: "Atmósfera & PoA", icon: Compass, badge: "V2.0" },
+    ],
+  },
+  {
+    id: "mkt_audience",
+    title: "🎯 Audiencias & Automatización",
+    icon: UserRound,
+    items: [
+      { href: "/marketing/audiences", label: "Audiencias & Rabbitters", icon: UserRound },
+      { href: "/marketing/automations/birthdays", label: "Cumpleaños Automáticos", icon: Cake },
+    ],
+  },
+  {
+    id: "mkt_presence",
+    title: "🖨️ Presencia Digital & Print",
+    icon: QrCode,
+    items: [
+      { href: "/marketing/qr", label: "Códigos QR & Mesas", icon: QrCode },
+      { href: "https://www.rabbitty.me/impresos", label: "Print Center · Impresos", icon: Printer, badge: "PDF" },
     ],
   },
 ];
@@ -261,8 +296,23 @@ export function AdminSidebar() {
   const { isGod, impersonating } = useGodMode();
   // En God Mode el sidebar muestra la navegación God; con 1 clic alterna a la vista afiliado.
   const [sidebarView, setSidebarView] = useState<"god" | "affiliate">("god");
+  const [workspaceArea, setWorkspaceArea] = useState<"operation" | "marketing">(() =>
+    pathname.startsWith("/marketing") ? "marketing" : "operation"
+  );
+
+  useEffect(() => {
+    if (pathname.startsWith("/marketing")) {
+      setWorkspaceArea("marketing");
+    }
+  }, [pathname]);
+
   const effectiveView: "god" | "affiliate" = impersonating ? "affiliate" : isGod ? sidebarView : "affiliate";
-  const pillarsToRender = effectiveView === "god" ? godPillars : menuPillars;
+  const pillarsToRender =
+    effectiveView === "god"
+      ? godPillars
+      : workspaceArea === "marketing"
+      ? marketingPillars
+      : menuPillars;
 
   // Módulos activos desde settings. null = sin configuración previa → todo visible.
   const [activeModules, setActiveModules] = useState<Set<string> | null>(readActiveModules);
@@ -290,6 +340,10 @@ export function AdminSidebar() {
     menu_stock: true,
     growth: true,
     settings: false,
+    mkt_overview: true,
+    mkt_content: true,
+    mkt_audience: true,
+    mkt_presence: true,
     god_platform: true,
     god_treasury: true,
     god_growth: true,
@@ -301,7 +355,7 @@ export function AdminSidebar() {
     setOpenPillars((prev) => {
       let newState = { ...prev };
       let changed = false;
-      for (const pillar of menuPillars) {
+      for (const pillar of [...menuPillars, ...marketingPillars]) {
         if (pillar.items.some((i) => pathname.startsWith(i.href))) {
           if (!newState[pillar.id]) {
             newState[pillar.id] = true;
@@ -411,6 +465,57 @@ export function AdminSidebar() {
           >
             <Crown className="h-4 w-4" />
           </button>
+        </div>
+      )}
+
+      {/* Workspace Switcher: Operación (Affiliates) ↔ Marketing Studio */}
+      {effectiveView === "affiliate" && !isCollapsed && (
+        <div className="px-3 pt-3">
+          <div className="grid grid-cols-2 gap-1 rounded-xl bg-white/5 p-1 border border-white/10">
+            <Link
+              href="/"
+              onClick={() => setWorkspaceArea("operation")}
+              className={cn(
+                "flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-[11px] font-extrabold transition-all no-underline",
+                workspaceArea === "operation"
+                  ? "bg-white/15 text-white shadow-sm"
+                  : "text-gray-400 hover:text-gray-200"
+              )}
+            >
+              <Store className="h-3.5 w-3.5" />
+              Operación
+            </Link>
+            <Link
+              href="/marketing"
+              onClick={() => setWorkspaceArea("marketing")}
+              className={cn(
+                "flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-[11px] font-extrabold transition-all no-underline",
+                workspaceArea === "marketing"
+                  ? "bg-linear-to-r from-pink-500/30 to-purple-500/30 text-pink-200 border border-pink-500/30 shadow-sm"
+                  : "text-gray-400 hover:text-gray-200"
+              )}
+            >
+              <Megaphone className="h-3.5 w-3.5" />
+              Marketing
+            </Link>
+          </div>
+        </div>
+      )}
+      {effectiveView === "affiliate" && isCollapsed && (
+        <div className="flex justify-center pt-3">
+          <Link
+            href={workspaceArea === "marketing" ? "/" : "/marketing"}
+            onClick={() => setWorkspaceArea((w) => (w === "marketing" ? "operation" : "marketing"))}
+            className={cn(
+              "rounded-xl p-2 border transition-all no-underline",
+              workspaceArea === "marketing"
+                ? "bg-pink-500/20 border-pink-500/40 text-pink-300"
+                : "bg-white/5 border-white/10 text-gray-300"
+            )}
+            title={workspaceArea === "marketing" ? "Marketing Studio (clic: ir a Operación)" : "Operación (clic: ir a Marketing Studio)"}
+          >
+            {workspaceArea === "marketing" ? <Megaphone className="h-4 w-4" /> : <Store className="h-4 w-4" />}
+          </Link>
         </div>
       )}
 
