@@ -305,7 +305,8 @@ const AUTH_STORAGE_KEY = 'rabbitty_impresos_auth_v1';
 function ImpresosContent() {
   const searchParams = useSearchParams();
 
-  // Permite que CUALQUIER negocio genere su kit dinámicamente pasando ?name=...&bunz=...&ref=...&logo=...&niche=...
+  // Permite que CUALQUIER negocio genere su kit dinámicamente pasando ?name=...&bunz=...&ref=...&logo=...&niche=...&businessId=...
+  const initialBusinessId = searchParams?.get('businessId') || null;
   const initialName = searchParams?.get('name') || '626 Café';
   const initialBunz = searchParams?.get('bunz') || '25';
   const initialRef = searchParams?.get('ref') || '626cafe';
@@ -427,7 +428,7 @@ function ImpresosContent() {
   };
   const [appUrl, setAppUrl] = useState(initialUrl);
   const [activeRef, setActiveRef] = useState(initialRef);
-  const [selectedBusinessId, setSelectedBusinessId] = useState<string | null>(null);
+  const [selectedBusinessId, setSelectedBusinessId] = useState<string | null>(initialBusinessId);
   const [urlManuallyEdited, setUrlManuallyEdited] = useState(false);
   const clampWelcomeBunz = (raw: string | number): number => {
     const n = Math.round(Number(String(raw).replace(/\D/g, '')) || 0);
@@ -657,12 +658,16 @@ function ImpresosContent() {
         if (data?.success && Array.isArray(data.businesses)) {
           setBusinesses(data.businesses);
           if (typeof data.welcomeBonusActive === 'boolean') setWelcomeBonusActive(data.welcomeBonusActive);
-          // Si no vino logo en URL o vino vacío, y estamos con el negocio inicial, auto-asignar el logo registrado y detectar nicho
+          // Si vino businessId en URL, o estamos con el negocio inicial, auto-asignar los datos del negocio registrado
           const match = data.businesses.find((b: BusinessItem) => 
+            (initialBusinessId && b.id === initialBusinessId) ||
             b.name.toLowerCase() === initialName.toLowerCase() || 
             b.refCode?.toLowerCase() === initialRef.toLowerCase()
           );
           if (match) {
+            setSelectedBusinessId(match.id);
+            setBusinessName(match.name);
+            setActiveRef(match.refCode);
             if (!initialLogo && match.logoUrl) {
               setBusinessLogo(match.logoUrl);
             }
@@ -674,7 +679,7 @@ function ImpresosContent() {
       })
       .catch((err) => console.error('Error cargando afiliados:', err))
       .finally(() => setLoadingBusinesses(false));
-  }, [initialLogo, initialName, initialRef, initialNicheParam]);
+  }, [initialBusinessId, initialLogo, initialName, initialRef, initialNicheParam]);
 
   // 🔒 Temp con scope: fijar SU negocio cuando la lista carga
   useEffect(() => {

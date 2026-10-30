@@ -189,6 +189,17 @@ export const posRouter = router({
         })
         .from(coreUsers)
         .where(or(...conditions))
+        // ── Prioridad determinista: matches EXACTOS (identidad: username/scan/tel/uuid)
+        // antes que fuzzy de nombre — evita wrong-match con homónimos ──
+        .orderBy(sql`(
+          CASE
+            WHEN lower(${coreUsers.username}) = ${cleanQ.toLowerCase()} THEN 0
+            WHEN "scanCode"::text = ${/^\d{1,9}$/.test(cleanQ) ? cleanQ : "\N"} THEN 1
+            WHEN ${coreUsers.telegramId} = ${cleanQ} THEN 2
+            WHEN regexp_replace(COALESCE(${coreUsers.phoneNumber}, ''), '\D', '', 'g') = ${cleanQ.replace(/\D/g, "")} AND ${cleanQ.replace(/\D/g, "")} != '' THEN 3
+            WHEN id = ${isUuid ? cleanQ : ""} THEN 4
+            ELSE 5
+          END) ASC, id ASC`)
         .limit(1);
 
       if (!user) {
@@ -517,242 +528,228 @@ export const posRouter = router({
       if (input.method === "CASH") {
         await assertOpenShiftForCash(ctx.restaurantDb, ctx.branchId);
       }
+
       // ── Seg. STRIX-0010: transacción + lock pesimista — la decisión de pago es
-      // atómica; doble click / concurrencia jamás duplica pagos ni recompensas. ──
-      return await ctx.restaurantDb.transaction(async (tx: any) => {
-        const [orderRow] = await tx.select().from(orders).where(and(eq(orders.id, input.orderId), eq(orders.branchId, ctx.branchId))).for("update");
+      // atómica; doble click / concurrencia jamás duplica pagos ni recompensas.
+      // La llamada HTTP de lealtad sale del lock (post-commit). ──
+      const result = await ctx.restaurantDb.transaction(async (tx: any) => {
+        const [orderRow] = await tx
+          .select()
+          .from(orders)
+          .where(and(eq(orders.id, input.orderId), eq(orders.branchId, ctx.branchId)))
+          .for("update");
         if (!orderRow) {
-          throw new Error("Orden no encontrada");
+          throw new TRPCError({ code: "NOT_FOUND", message: "Orden no encontrada" });
         }
         if (orderRow.status === "COMPLETED" || orderRow.status === "PAID") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "La orden ya está pagada" });
         }
 
-        // Server-side discount calculation (trust the server, not the client)
-      // orders.total is always the amount actually owed (net of discount).
-      // Gross is recovered as total + stored discount to avoid double discounting.
-      let finalAmount = r2(input.amount);
-      let calculatedDiscount = orderRow.discount || 0;
-      let orderNetTotal = orderRow.total;
-      if (input.discountPercent && input.discountPercent > 0) {
-        const gross = r2(orderRow.total + (orderRow.discount || 0));
-        const net = r2(gross * (1 - input.discountPercent / 100));
-        if (Math.abs(net - input.amount) > 1) {
-          throw new Error("Monto de descuento inválido");
-        }
-        finalAmount = net;
-        calculatedDiscount = r2(gross - net);
-        orderNetTotal = net;
-        const t = calcTax(net);
-        await tx.update(orders)
-          .set({ discount: calculatedDiscount, total: t.total, subtotal: t.subtotal, tax: t.tax })
-          .where(eq(orders.id, input.orderId));
-      }
-
-      const [payment] = await tx.insert(payments).values({
-        orderId: input.orderId,
-        method: input.method,
-        amount: finalAmount,
-        reference: input.reference ?? null,
-      }).returning();
-      
-      const existingPayments = await tx.select().from(payments).where(eq(payments.orderId, input.orderId));
-      const totalPaid = existingPayments.reduce((sum: number, p: { amount: number }) => sum + p.amount, 0);
-      
-      if (input.method === "BUNZ") {
-        await tx.update(orders)
-          .set({ bunzPaid: (orderRow.bunzPaid || 0) + finalAmount })
-          .where(eq(orders.id, input.orderId));
-      }
-
-      const targetPayableAmount = Math.max(0, orderNetTotal);
-      if (r2(totalPaid) >= targetPayableAmount) {
-        await tx.update(orders).set({ status: "COMPLETED" }).where(eq(orders.id, input.orderId));
-
-        // Liberar la mesa también en el pago de órdenes existentes (kiosko/self-tab):
-        // cierra la sesión activa de la tabla para el próximo comensal.
-        const paidOrderRow = await tx.select({ tableId: orders.tableId }).from(orders).where(eq(orders.id, input.orderId)).limit(1);
-        if (paidOrderRow[0]?.tableId) {
-          await tx.update(tableSessions).set({
-            status: "CLOSED",
-            closedAt: new Date(),
-          }).where(and(
-            eq(tableSessions.tableId, paidOrderRow[0].tableId),
-            eq(tableSessions.status, "OPEN")
-          ));
-        }
-
-        // INVENTORY DEDUCTION LOGIC (recursive for sub-recipes)
-        const items = await tx.select().from(orderItems).where(eq(orderItems.orderId, input.orderId));
-
-        const deductRecipe = async (menuItemId: string, qty: number, path: Set<string>) => {
-          if (path.has(menuItemId)) return;
-          path.add(menuItemId);
-          const ingredients = await tx.select()
-            .from(dbSchema.menuItemIngredients)
-            .where(eq(dbSchema.menuItemIngredients.menuItemId, menuItemId));
-
-          for (const ing of ingredients) {
-            if (ing.inventoryItemId) {
-              const deductionAmount = ing.quantityRequired * qty;
-
-              // Insert movement
-              await tx.insert(dbSchema.inventoryMovements).values({
-                itemId: ing.inventoryItemId,
-                branchId: ctx.branchId,
-                type: "SALE_DEDUCTION",
-                quantity: deductionAmount,
-                reference: input.orderId,
-                notes: `Order ${input.orderId} completed`,
-              });
-
-              // Update stock
-              await tx.execute(sql`
-                UPDATE inventory_items 
-                SET stock = stock - ${deductionAmount} 
-                WHERE id = ${ing.inventoryItemId}
-              `);
-            } else if (ing.subRecipeId) {
-              await deductRecipe(ing.subRecipeId, ing.quantityRequired * qty, path);
-            }
+        let finalAmount = r2(input.amount);
+        let calculatedDiscount = orderRow.discount || 0;
+        let orderNetTotal = orderRow.total;
+        if (input.discountPercent && input.discountPercent > 0) {
+          const gross = r2(orderRow.total + (orderRow.discount || 0));
+          const net = r2(gross * (1 - input.discountPercent / 100));
+          if (Math.abs(net - input.amount) > 1) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Monto de descuento inválido" });
           }
-          path.delete(menuItemId);
-        };
-
-        for (const item of items) {
-          await deductRecipe(item.menuItemId, item.quantity, new Set());
-        }
-      } else {
-        await tx.update(orders).set({ status: "PARTIAL_PAID" }).where(eq(orders.id, input.orderId));
-      }
-
-      const branchesTable = dbSchema.branches;
-      const [branch] = await tx.select().from(branchesTable).where(eq(branchesTable.id, ctx.branchId));
-      if (!branch) throw new Error("Sucursal no encontrada");
-      
-      const [restaurant] = await tx.select().from(restaurants).where(eq(restaurants.id, branch.restaurantId));
-      if (!restaurant) throw new Error("Restaurante no encontrado");
-      
-      // defaultRewardRate se almacena como porcentaje entero (20 = 20%).
-      // Si por datos legacy es una fracción (< 1), se normaliza a porcentaje
-      // y luego se divide entre 100 para obtener el multiplicador.
-      const normalizeToPercent = (v: number | null | undefined) =>
-        typeof v === "number" && v > 0 && v < 1 ? v * 100 : v;
-
-      let rewardRate = (normalizeToPercent(restaurant.defaultRewardRate) ?? 20) / 100;
-
-      if (restaurant.happyHourStart && restaurant.happyHourEnd) {
-        const now = new Date();
-        const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-        if (timeString >= restaurant.happyHourStart && timeString <= restaurant.happyHourEnd) {
-          rewardRate = (normalizeToPercent(restaurant.happyHourRewardRate) ?? (normalizeToPercent(restaurant.defaultRewardRate) ?? 20)) / 100;
-        }
-      }
-
-      // Sync with miniapp & CRM
-      if (orderRow.customerPhone) {
-        // CRM Auto-segmentation
-        const [existingCustomer] = await tx.select().from(dbSchema.customers).where(
-          and(
-            eq(dbSchema.customers.restaurantId, restaurant.id),
-            eq(dbSchema.customers.phone, orderRow.customerPhone)
-          )
-        );
-
-        let newVisits = 1;
-        let newSpent = input.amount;
-        
-        if (existingCustomer) {
-          newVisits = existingCustomer.totalVisits + 1;
-          newSpent = existingCustomer.totalSpent + input.amount;
-          
-          let newSegment = "NEW";
-          if (newVisits >= 5) newSegment = "VIP";
-          else if (newVisits > 1) newSegment = "RECURRENT";
-
-          await tx.update(dbSchema.customers).set({
-            totalVisits: newVisits,
-            totalSpent: newSpent,
-            lastVisitAt: new Date(),
-            segment: newSegment,
-            name: orderRow.customerName ?? existingCustomer.name
-          }).where(eq(dbSchema.customers.id, existingCustomer.id));
-        } else {
-          await tx.insert(dbSchema.customers).values({
-            restaurantId: restaurant.id,
-            phone: orderRow.customerPhone,
-            name: orderRow.customerName,
-            totalVisits: 1,
-            totalSpent: input.amount,
-            lastVisitAt: new Date(),
-            segment: "NEW"
-          });
+          finalAmount = net;
+          calculatedDiscount = r2(gross - net);
+          orderNetTotal = net;
+          const t = calcTax(net);
+          await tx.update(orders)
+            .set({ discount: calculatedDiscount, total: t.total, subtotal: t.subtotal, tax: t.tax })
+            .where(eq(orders.id, input.orderId));
         }
 
-        const calculatedReward = Math.floor(input.amount * rewardRate);
-        const rewardPhone = String(orderRow.customerPhone); // narrowing estable dentro del closure
-        let rewardQueued = true; // el servicio de lealtad entregó (o ya había entregado) la recompensa
+        const [payment] = await tx.insert(payments).values({
+          orderId: input.orderId,
+          method: input.method,
+          amount: finalAmount,
+          reference: input.reference ?? null,
+        }).returning();
 
-        const loyaltyBusinessId = (await resolveBusinessIdFromBranch(tx, ctx.branchId)) || ctx.branchId;
-        const callWithRetry = async (fnName: "chargeBunz" | "rewardBunz") => {
-          // Idempotente por diseño (ledger key pos_rwd_${orderId}): un reintento jamás doble-otorga.
-          const attempt = async () =>
-            fnName === "chargeBunz"
-              ? miniappClient.chargeBunz(rewardPhone, input.amount, input.orderId, loyaltyBusinessId)
-              : miniappClient.rewardBunz(rewardPhone, input.amount, input.orderId, loyaltyBusinessId);
-
-          try {
-            return { ok: true as const, result: await attempt() };
-          } catch (firstErr) {
-            console.error("[POSCHECKOUT_REWARD_FAIL] orderId=" + input.orderId + " intento 1:", firstErr);
-            try {
-              await new Promise((r) => setTimeout(r, 800));
-              return { ok: true as const, result: await attempt() };
-            } catch (secondErr) {
-              console.error("[POSCHECKOUT_REWARD_FAIL] orderId=" + input.orderId + " intento 2 definitivo:", secondErr);
-              return { ok: false as const, result: null };
-            }
-          }
-        };
+        const existingPayments = await tx.select().from(payments).where(eq(payments.orderId, input.orderId));
+        const totalPaid = existingPayments.reduce((sum: number, p: { amount: number }) => sum + p.amount, 0);
 
         if (input.method === "BUNZ") {
-          const outcome = await callWithRetry("chargeBunz");
-          rewardQueued = outcome.ok;
-          if (outcome.ok && outcome.result) {
-            const result = outcome.result as { balance_remaining: number };
+          await tx.update(orders)
+            .set({ bunzPaid: (orderRow.bunzPaid || 0) + finalAmount })
+            .where(eq(orders.id, input.orderId));
+        }
+
+        const targetPayableAmount = Math.max(0, orderNetTotal);
+        if (r2(totalPaid) >= targetPayableAmount) {
+          await tx.update(orders).set({ status: "COMPLETED" }).where(eq(orders.id, input.orderId));
+
+          const paidOrderRow = await tx.select({ tableId: orders.tableId }).from(orders).where(eq(orders.id, input.orderId)).limit(1);
+          if (paidOrderRow[0]?.tableId) {
+            await tx.update(tableSessions).set({
+              status: "CLOSED",
+              closedAt: new Date(),
+            }).where(and(
+              eq(tableSessions.tableId, paidOrderRow[0].tableId),
+              eq(tableSessions.status, "OPEN")
+            ));
+          }
+
+          // INVENTORY DEDUCTION LOGIC (recursive for sub-recipes)
+          const items = await tx.select().from(orderItems).where(eq(orderItems.orderId, input.orderId));
+          const deductRecipe = async (menuItemId: string, qty: number, path: Set<string>) => {
+            if (path.has(menuItemId)) return;
+            path.add(menuItemId);
+            const ingredients = await tx
+              .select()
+              .from(dbSchema.menuItemIngredients)
+              .where(eq(dbSchema.menuItemIngredients.menuItemId, menuItemId));
+            for (const ing of ingredients) {
+              if (ing.inventoryItemId) {
+                const deductionAmount = ing.quantityRequired * qty;
+                await tx.insert(dbSchema.inventoryMovements).values({
+                  itemId: ing.inventoryItemId,
+                  branchId: ctx.branchId,
+                  type: "SALE_DEDUCTION",
+                  quantity: deductionAmount,
+                  reference: input.orderId,
+                  notes: `Order ${input.orderId} completed`,
+                });
+                await tx.execute(sql`UPDATE inventory_items SET stock = stock - ${deductionAmount} WHERE id = ${ing.inventoryItemId}`);
+              } else if (ing.subRecipeId) {
+                await deductRecipe(ing.subRecipeId, ing.quantityRequired * qty, path);
+              }
+            }
+            path.delete(menuItemId);
+          };
+          for (const item of items) {
+            await deductRecipe(item.menuItemId, item.quantity, new Set());
+          }
+        } else {
+          await tx.update(orders).set({ status: "PARTIAL_PAID" }).where(eq(orders.id, input.orderId));
+        }
+
+        // ── CRM Auto-segmentation (server-side, dentro de la tx) ──
+        const loyaltyParams: {
+          rewardPhone: string;
+          loyaltyBusinessId: string;
+          customerName: string;
+          calculatedReward: number;
+        } = {
+          rewardPhone: "",
+          loyaltyBusinessId: "",
+          customerName: "",
+          calculatedReward: 0,
+        };
+        if (orderRow.customerPhone) {
+          const branchesTable = dbSchema.branches;
+          const [branch] = await tx.select().from(branchesTable).where(eq(branchesTable.id, ctx.branchId));
+          if (branch) {
+            const [restaurant] = await tx.select().from(dbSchema.restaurants).where(eq(dbSchema.restaurants.id, branch.restaurantId));
+            if (restaurant) {
+              loyaltyParams.loyaltyBusinessId = (await resolveBusinessIdFromBranch(ctx.restaurantDb, ctx.branchId)) || ctx.branchId;
+              const normalizeToPercent = (v: number | null | undefined) =>
+                typeof v === "number" && v > 0 && v < 1 ? v * 100 : v;
+              const [existingCustomer] = await tx.select().from(dbSchema.customers).where(
+                and(eq(dbSchema.customers.restaurantId, restaurant.id), eq(dbSchema.customers.phone, orderRow.customerPhone))
+              );
+              if (existingCustomer) {
+                const newVisits = existingCustomer.totalVisits + 1;
+                let newSegment = "NEW";
+                if (newVisits >= 5) newSegment = "VIP";
+                else if (newVisits > 1) newSegment = "RECURRENT";
+                await tx.update(dbSchema.customers).set({
+                  totalVisits: newVisits,
+                  totalSpent: existingCustomer.totalSpent + finalAmount,
+                  lastVisitAt: new Date(),
+                  segment: newSegment,
+                  name: orderRow.customerName ?? existingCustomer.name,
+                }).where(eq(dbSchema.customers.id, existingCustomer.id));
+              } else {
+                await tx.insert(dbSchema.customers).values({
+                  restaurantId: restaurant.id,
+                  phone: orderRow.customerPhone,
+                  name: orderRow.customerName,
+                  totalVisits: 1,
+                  totalSpent: finalAmount,
+                  lastVisitAt: new Date(),
+                  segment: "NEW",
+                });
+              }
+            }
+          }
+          loyaltyParams.rewardPhone = String(orderRow.customerPhone);
+          loyaltyParams.customerName = String(orderRow.customerName ?? "");
+        }
+
+        bus.emit(EventTypes.BUNZ_REWARD, { customerId: orderRow.customerPhone, rewardPoints: loyaltyParams.calculatedReward });
+        return {
+          success: true,
+          loyaltyParams,
+        };
+      });
+
+      // ── Post-commit: lealtad FUERA del lock (STRIX riesgo-bajo) ──
+      if (!(result as any)?.success) return result;
+      const lp = (result as any).loyaltyParams as { rewardPhone: string; loyaltyBusinessId: string; customerName: string };
+      const callWithRetry = async (fnName: "chargeBunz" | "rewardBunz") => {
+        const attempt = async () =>
+          fnName === "chargeBunz"
+            ? miniappClient.chargeBunz(lp.rewardPhone, input.amount, input.orderId, lp.loyaltyBusinessId)
+            : miniappClient.rewardBunz(lp.rewardPhone, input.amount, input.orderId, lp.loyaltyBusinessId);
+        try {
+          return { ok: true as const, result: await attempt() };
+        } catch (firstErr) {
+          console.error("[POS_PAYORDER_REWARD_FAIL] orderId=" + input.orderId + " intento 1:", firstErr);
+          try {
+            await new Promise((r) => setTimeout(r, 800));
+            return { ok: true as const, result: await attempt() };
+          } catch (secondErr) {
+            console.error("[POS_PAYORDER_REWARD_FAIL] orderId=" + input.orderId + " intento 2 definitivo:", secondErr);
+            return { ok: false as const, result: null };
+          }
+        }
+      };
+
+      if (!lp.rewardPhone) {
+        bus.emit(EventTypes.ORDER_PAID, { orderId: input.orderId });
+        return { success: true, rewardQueued: true };
+      }
+
+      let rewardQueued = true;
+      if (input.method === "BUNZ") {
+        const outcome = await callWithRetry("chargeBunz");
+        rewardQueued = outcome.ok;
+        if (outcome.ok && outcome.result) {
+          const r2 = outcome.result as { balance_remaining: number };
+          try {
+            await miniappClient.sendNotification({
+              userId: lp.rewardPhone,
+              title: "Pago con Bunz",
+              message: `Pagaste $${input.amount} con Bunz en tu restaurante. Saldo restante: ${r2.balance_remaining} Bunz.`,
+              type: "REWARD",
+            });
+          } catch {}
+        }
+      } else {
+        const outcome = await callWithRetry("rewardBunz");
+        rewardQueued = outcome.ok;
+        if (outcome.ok && outcome.result) {
+          const r2 = outcome.result as { userId?: string; bunz: number };
+          if (r2.userId) {
             try {
               await miniappClient.sendNotification({
-                userId: rewardPhone,
-                title: "Pago con Bunz",
-                message: `Pagaste $${input.amount} con Bunz en tu restaurante. Saldo restante: ${result.balance_remaining} Bunz.`,
+                userId: r2.userId,
+                title: "¡Bunz ganados!",
+                message: `Ganaste ${r2.bunz} Bunz por tu consumo de $${input.amount}.`,
                 type: "REWARD",
               });
             } catch {}
           }
-        } else {
-          const outcome = await callWithRetry("rewardBunz");
-          rewardQueued = outcome.ok;
-          if (outcome.ok && outcome.result) {
-            const result = outcome.result as { userId?: string; bunz: number };
-            if (result.userId) {
-              try {
-                await miniappClient.sendNotification({
-                  userId: result.userId,
-                  title: "¡Bunz ganados!",
-                  message: `Ganaste ${result.bunz} Bunz por tu consumo de $${input.amount}.`,
-                  type: "REWARD",
-                });
-              } catch {}
-            }
-          }
         }
-          bus.emit(EventTypes.BUNZ_REWARD, { customerId: orderRow.customerPhone, rewardPoints: calculatedReward });
-        return { success: true, rewardQueued };
       }
 
       bus.emit(EventTypes.ORDER_PAID, { orderId: input.orderId });
-      return { success: true, rewardQueued: true };
-      });
+      return { success: true, rewardQueued };
     }),
 
   linkCustomerToOrder: protectedProcedure

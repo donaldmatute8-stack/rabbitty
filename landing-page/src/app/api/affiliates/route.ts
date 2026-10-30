@@ -138,6 +138,7 @@ export async function GET() {
         logoUrl: '/logos/626cafe-logo.png',
         refCode: '626cafe',
         welcomeBunz: welcomeConfig['626cafe'] ?? 25,
+        membershipPlans: [],
       });
     }
 
