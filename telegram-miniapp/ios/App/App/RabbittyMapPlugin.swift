@@ -97,7 +97,6 @@ public class RabbittyMapPlugin: CAPPlugin, CAPBridgedPlugin, UIGestureRecognizer
 
     @objc private func handleMapTap(_ gesture: UITapGestureRecognizer) {
         guard let map = nativeMapView?.mapView else { return }
-        let point = gesture.location(in: map)
         for annot in map.annotations {
             if let annotView = map.view(for: annot) {
                 let annotPoint = gesture.location(in: annotView)
