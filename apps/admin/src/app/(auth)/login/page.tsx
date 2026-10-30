@@ -269,8 +269,8 @@ export default function LoginPage() {
     return (
       <div className="relative flex min-h-screen items-center justify-center bg-black text-white overflow-hidden p-4">
         {/* Blurry decorative background blobs */}
-        <div className="absolute top-[-10%] right-[-10%] h-[500px] w-[500px] rounded-full bg-pink-500/10 blur-[120px] pointer-events-none" />
-        <div className="absolute bottom-[-10%] left-[-10%] h-[500px] w-[500px] rounded-full bg-purple-500/10 blur-[120px] pointer-events-none" />
+        <div className="absolute top-[-10%] right-[-10%] h-125 w-125 rounded-full bg-pink-500/10 blur-[120px] pointer-events-none" />
+        <div className="absolute bottom-[-10%] left-[-10%] h-125 w-125 rounded-full bg-purple-500/10 blur-[120px] pointer-events-none" />
 
         <div className="relative z-10 w-full max-w-md rounded-3xl border border-white/10 bg-white/5 p-8 text-center shadow-2xl backdrop-blur-xl space-y-6">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.15)] animate-bounce-slow">
@@ -395,8 +395,8 @@ export default function LoginPage() {
   return (
     <div className="relative flex min-h-screen items-center justify-center bg-black text-white overflow-hidden p-4">
       {/* Blurry decorative background blobs */}
-      <div className="absolute top-[-10%] right-[-10%] h-[500px] w-[500px] rounded-full bg-pink-500/10 blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] left-[-10%] h-[500px] w-[500px] rounded-full bg-purple-500/10 blur-[120px] pointer-events-none" />
+      <div className="absolute top-[-10%] right-[-10%] h-125 w-125 rounded-full bg-pink-500/10 blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-[-10%] left-[-10%] h-125 w-125 rounded-full bg-purple-500/10 blur-[120px] pointer-events-none" />
 
       <div className="relative z-10 w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-8 rounded-3xl border border-white/10 bg-white/5 p-8 shadow-2xl backdrop-blur-xl">
         {/* LADO IZQUIERDO: QR LOGIN */}
@@ -409,7 +409,7 @@ export default function LoginPage() {
             Abre tu app de <strong className="text-white">Rabbitty</strong> en tu celular, ve a <strong className="text-white">Perfil ➔ Escanear</strong> y apunta tu cámara a este código.
           </p>
 
-          <div className="p-4 bg-white/5 border border-pink-500/30 rounded-2xl shadow-[0_0_30px_rgba(236,72,153,0.15)] relative min-w-[212px] min-h-[212px] flex flex-col items-center justify-center gap-3">
+          <div className="p-4 bg-white/5 border border-pink-500/30 rounded-2xl shadow-[0_0_30px_rgba(236,72,153,0.15)] relative min-w-53 min-h-53 flex flex-col items-center justify-center gap-3">
             {qrToken ? (
               <QRDiscovery
                 value={`https://app.rabbitty.me/scan?qrlogin_${qrToken}`}
@@ -419,14 +419,14 @@ export default function LoginPage() {
                 surfaceKey="admin-login"
               />
             ) : (
-              <div className="w-[180px] h-[180px] flex flex-col items-center justify-center text-center p-4 space-y-3 relative overflow-hidden">
+              <div className="w-45 h-45 flex flex-col items-center justify-center text-center p-4 space-y-3 relative overflow-hidden">
                 {/* Concentric Neon Radar Rings */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <div className="w-28 h-28 rounded-full border border-pink-500/20 animate-ping" />
                   <div className="w-20 h-20 rounded-full border border-purple-500/30 animate-pulse" />
                 </div>
 
-                <div className="relative z-10 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-pink-500/20 to-purple-500/20 border border-pink-500/30 text-pink-400 shadow-[0_0_20px_rgba(236,72,153,0.3)]">
+                <div className="relative z-10 flex h-12 w-12 items-center justify-center rounded-2xl bg-linear-to-tr from-pink-500/20 to-purple-500/20 border border-pink-500/30 text-pink-400 shadow-[0_0_20px_rgba(236,72,153,0.3)]">
                   <QrCode className="h-6 w-6 animate-pulse" />
                 </div>
 
@@ -558,7 +558,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={submitLoading || !inputVal.trim()}
-              className="flex h-12 w-full items-center justify-center rounded-2xl bg-gradient-to-r from-pink-500 to-pink-600 font-bold text-white transition-all hover:scale-[1.02] active:scale-95 shadow-[0_4px_14px_rgba(236,72,153,0.39)] cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
+              className="flex h-12 w-full items-center justify-center rounded-2xl bg-linear-to-r from-pink-500 to-pink-600 font-bold text-white transition-all hover:scale-[1.02] active:scale-95 shadow-[0_4px_14px_rgba(236,72,153,0.39)] cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
             >
               {submitLoading ? "Enviando..." : "Enviar código o enlace"}
             </button>
@@ -580,7 +580,7 @@ export default function LoginPage() {
                 type="button"
                 onClick={handlePasskeyLogin}
                 disabled={passkeyBusy}
-                className="w-full flex h-11 items-center justify-center gap-2.5 rounded-2xl border border-purple-500/25 bg-gradient-to-r from-purple-500/10 via-purple-500/5 to-transparent hover:border-purple-500/40 hover:bg-purple-500/15 text-purple-200 font-bold text-xs transition-all duration-200 cursor-pointer disabled:opacity-50 shadow-sm active:scale-[0.99]"
+                className="w-full flex h-11 items-center justify-center gap-2.5 rounded-2xl border border-purple-500/25 bg-linear-to-r from-purple-500/10 via-purple-500/5 to-transparent hover:border-purple-500/40 hover:bg-purple-500/15 text-purple-200 font-bold text-xs transition-all duration-200 cursor-pointer disabled:opacity-50 shadow-sm active:scale-[0.99]"
               >
                 <div className="w-6 h-6 rounded-lg bg-purple-500/20 flex items-center justify-center">
                   <ScanFace className="w-3.5 h-3.5 text-purple-300" />
@@ -590,7 +590,7 @@ export default function LoginPage() {
 
               <Link
                 href="/demo"
-                className="w-full flex h-10 items-center justify-center gap-2 rounded-xl text-zinc-400 hover:text-cyan-300 bg-white/[0.02] hover:bg-cyan-500/10 border border-white/5 hover:border-cyan-500/25 text-xs font-semibold transition-all duration-200"
+                className="w-full flex h-10 items-center justify-center gap-2 rounded-xl text-zinc-400 hover:text-cyan-300 bg-white/2 hover:bg-cyan-500/10 border border-white/5 hover:border-cyan-500/25 text-xs font-semibold transition-all duration-200"
               >
                 <Compass className="w-3.5 h-3.5 text-cyan-400/80" />
                 <span>Explorar Recorrido Virtual Interactivo (/demo)</span>

@@ -42,7 +42,8 @@ export async function POST(req: NextRequest) {
     const loginId = crypto.randomBytes(16).toString("hex");
     // Challenge en memoria (single-instance Vercel — sobrevive hasta el próximo cold start)
     challenges.set(loginId, { challenge, expiresAt: Date.now() + 3 * 60 * 1000 });
-    return NextResponse.json({ success: true, challenge, loginId, allowCredentialIds: passkeys.map(p => p.credId), rpId });
+    const toB64url = (b64s: string) => b64s.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    return NextResponse.json({ success: true, challenge, loginId, allowCredentialIds: passkeys.map(p => toB64url(p.credId)), rpId });
   }
 
   // ── VERIFY: verifica la firma contra la JWK almacenada y crea la sesión ──
@@ -61,11 +62,13 @@ export async function POST(req: NextRequest) {
 
       const authDataBuf = b64urlDecode(String(body.authenticatorData));
       const signature = b64urlDecode(String(body.signature));
-      const presentedCredId = String(body.credentialId);
+      const rawCredId = String(body.credentialId).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      const toStdB64 = (u: string) => { const std = u.replace(/-/g, '+').replace(/_/g, '/'); return std + '='.repeat((4 - (std.length % 4)) % 4); };
+      const presentedCredId = toStdB64(rawCredId);
 
       const db = getCoreDb();
       const passkeys = await loadPasskeys();
-      const match = passkeys.find(p => p.credId === presentedCredId);
+      const match = passkeys.find(p => toStdB64(p.credId.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')) === presentedCredId);
       if (!match) throw new Error("Passkey no registrada en este servidor");
 
       const ok = verifyPasskeySignature(match.publicKeyJwk, authDataBuf, clientDataJSON, signature);

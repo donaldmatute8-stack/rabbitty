@@ -61,64 +61,48 @@ export default function Verify2FAPage() {
   };
 
   const unlockWithPasskey = async () => {
+    const email = 'marco.munoz9@gmail.com';
     setPasskeyLoading(true);
     setError('');
     try {
       // 1. Options del server (trpc — passkeys del god admin)
-      const optRes = await fetch('/api/trpc/passkeys.generateAuthenticationOptions?batch=1', {
+      const optRes = await fetch('/api/auth/2fa/passkey', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ '0': { json: null } }),
+        body: JSON.stringify({ action: 'unlock_options', email }),
       });
       const optData = await optRes.json();
-      if (optData?.[0]?.error) throw new Error(optData[0].error.message);
-      const options = optData[0].result.data.json;
+      if (!optData?.success) throw new Error(optData?.error || 'Sin passkeys. Regístrala en Configuración → Seguridad.');
 
-      // 2. Face ID / Touch ID
-      const b64u = (s2: string) => s2.replace(/-/g, '+').replace(/_/g, '/');
-      const fromB64u = (s2: string) => Uint8Array.from(atob(b64u(s2)), (c) => c.charCodeAt(0));
-      const toB64 = (b: Uint8Array) => btoa(String.fromCharCode(...b));
-
-      const cred = await navigator.credentials.get({
+      const cred = (await navigator.credentials.get({
         publicKey: {
-          challenge: fromB64u(options.challenge),
+          challenge: Uint8Array.from(atob(optData.challenge.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0)),
           userVerification: 'required',
           timeout: 60000,
-          rpId: options.rpId,
+          rpId: window.location.hostname,
         },
-      });
+      })) as PublicKeyCredential | null;
       if (!cred) throw new Error('Sin credencial');
       const pk = cred as PublicKeyCredential;
       const resp = pk.response as unknown as AuthenticatorAssertionResponse;
 
-      // 3. Verificación server-side (trpc.passkeys — @simplewebauthn)
-      const verRes = await fetch('/api/trpc/passkeys.verifyAuthentication?batch=1', {
+      const b64url = (b: Uint8Array) => btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+      // 3. Verificación server-side (systemSettings — mismo almacén que el registro)
+      const verRes = await fetch('/api/auth/2fa/passkey', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ '0': { json: { credential: {
-          id: toB64(new Uint8Array(pk.rawId)),
-          rawId: toB64(new Uint8Array(pk.rawId)),
-          type: pk.type,
-          response: {
-            authenticatorData: toB64(new Uint8Array(resp.authenticatorData)),
-            clientDataJSON: toB64(new Uint8Array(resp.clientDataJSON)),
-            signature: toB64(new Uint8Array(resp.signature)),
-            userHandle: resp.userHandle ? toB64(new Uint8Array(resp.userHandle)) : undefined,
-          },
-          clientExtensionResults: {},
-        } } } }),
+        body: JSON.stringify({
+          action: 'unlock_verify',
+          email,
+          credentialId: b64url(new Uint8Array(pk.rawId)),
+          authenticatorData: b64url(new Uint8Array(resp.authenticatorData)),
+          clientDataJSON: b64url(new Uint8Array(resp.clientDataJSON)),
+          signature: b64url(new Uint8Array(resp.signature)),
+        }),
       });
       const verData = await verRes.json();
-      if (verData?.[0]?.error) throw new Error(verData[0].error.message);
-
-      // 4. Canjear el unlockCode por la cookie god2fa
-      const grantRes = await fetch('/api/auth/2fa/grant', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ verified: true }),
-      });
-      const grantData = await grantRes.json();
-      if (!grantData?.success) throw new Error(grantData?.error || 'No se pudo otorgar el acceso');
+      if (!verData?.success) throw new Error(verData?.error || 'Verificación fallida');
       window.location.href = '/';
     } catch (err: unknown) {
       const m = err instanceof Error ? err.message : 'Error';

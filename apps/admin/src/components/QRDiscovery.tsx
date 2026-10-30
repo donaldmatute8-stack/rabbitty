@@ -45,7 +45,7 @@ export default function QRDiscovery({
   logoSrc,
   className = '',
 }: QRDiscoveryProps) {
-  const LOGO = logoSrc || LOGOS[variant] || '/icon_ra.png';
+  const LOGO = logoSrc || LOGOS[variant] || '/Ra.png';
   const storageKey = surfaceKey ? `rabbitty_qrdiscovery_${surfaceKey}` : null;
   const [showingNeon, setShowingNeon] = useState(false);
   const [revealed, setRevealed] = useState(false);

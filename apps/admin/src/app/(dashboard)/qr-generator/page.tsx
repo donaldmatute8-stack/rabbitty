@@ -74,7 +74,7 @@ export default function QRGeneratorPage() {
 
                   <div className="flex flex-col items-center gap-4">
                     <div className="rounded-xl bg-white p-4 shadow-lg">
-                      <QRCodeSVG value={qrData.qrCode || ""} size={200} level="M" includeMargin={false} />
+                      <QRCodeSVG value={qrData.qrCode || ""} size={200} level="M" includeMargin={false} imageSettings={{ src: "/Ra.png", height: 40, width: 40, excavate: true }} />
                     </div>
                     <div className="w-full max-w-md rounded-lg bg-gray-50 p-4">
                       <p className="text-xs text-gray-500 mb-1">URL del QR:</p>

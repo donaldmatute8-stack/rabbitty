@@ -143,7 +143,8 @@ export async function POST(req: NextRequest) {
     const passkeys = await loadPasskeys();
     if (passkeys.length === 0) return NextResponse.json({ success: false, error: "Sin passkeys registradas" }, { status: 404 });
     const challenge = createWebauthnChallenge(`unlock:${email}`);
-    return NextResponse.json({ success: true, challenge, allowCredentialIds: passkeys.map(p => p.credId) });
+    const toB64url = (b64s: string) => b64s.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    return NextResponse.json({ success: true, challenge, allowCredentialIds: passkeys.map(p => toB64url(p.credId)) });
   }
 
   if (action === "unlock_verify") {
@@ -156,8 +157,10 @@ export async function POST(req: NextRequest) {
 
       const { verifyAuthenticationResponse } = await import("@simplewebauthn/server");
       const passkeys = await loadPasskeys();
-      const presentedCredId = String(body.credentialId);
-      const match = passkeys.find(p => p.credId === presentedCredId);
+      const rawCredId = String(body.credentialId).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      const toStdB64 = (u: string) => { const std = u.replace(/-/g, '+').replace(/_/g, '/'); return std + '='.repeat((4 - (std.length % 4)) % 4); };
+      const presentedCredId = toStdB64(rawCredId);
+      const match = passkeys.find(p => toStdB64(p.credId.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')) === presentedCredId);
       if (!match) throw new Error("Passkey no registrada");
 
       const authDataBuf = b64urlDecode(String(body.authenticatorData));
