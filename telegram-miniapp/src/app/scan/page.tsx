@@ -168,10 +168,12 @@ export default function ScanPage() {
                 localStorage.setItem('rabbitty_last_branch_id', urlBranchId);
                 localStorage.setItem('rabbitty_last_business_name', resolution.business.name || urlBusiness || '');
               } catch {}
-              alert(checkData?.checkIn === 'registered'
-                ? `🐰 ¡Check-in registrado en ${resolution.business.name}! Tus compras acumulan Bunz automáticamente.`
-                : `🐰 Ya te esperábamos en ${resolution.business.name}. ¡Buen provecho!`);
-              router.push(`/affiliate/${resolution.business.id}`);
+              // Presencia: el cajero te ve en su POS — sin redirigir
+              setPresenceSheet({
+                businessId: resolution.business.id,
+                businessName: resolution.business.name || urlBusiness || 'el negocio',
+                already: checkData?.checkIn === 'already',
+              });
               return;
             }
           }
