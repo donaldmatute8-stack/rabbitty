@@ -277,6 +277,7 @@ const marketingPillars: MenuPillar[] = [
     items: [
       { href: "/marketing/audiences", label: "Audiencias & Rabbitters", icon: UserRound },
       { href: "/marketing/automations/birthdays", label: "Cumpleaños Automáticos", icon: Cake },
+      { href: "/marketing/behavior", label: "Reglas de Comportamiento", icon: Brain, badge: "IA" },
     ],
   },
   {

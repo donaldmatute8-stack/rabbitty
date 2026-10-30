@@ -14,6 +14,7 @@ import { fastapiBridgeRouter } from "./fastapi-bridge";
 import { crmRouter } from "./crm";
 import { analyticsRouter } from "./analytics";
 import { dwellAnalyticsRouter } from "./dwellAnalytics";
+import { behaviorRulesRouter } from "./behaviorRules";
 import { waitlistRouter } from "./waitlist";
 import { suppliersRouter } from "./suppliers";
 import { expensesRouter } from "./expenses";
@@ -56,6 +57,7 @@ export const appRouter = router({
   crm: crmRouter,
   analytics: analyticsRouter,
   dwellAnalytics: dwellAnalyticsRouter,
+  behaviorRules: behaviorRulesRouter,
   waitlist: waitlistRouter,
   suppliers: suppliersRouter,
   expenses: expensesRouter,

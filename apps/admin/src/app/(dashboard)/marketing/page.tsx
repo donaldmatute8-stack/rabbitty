@@ -15,8 +15,7 @@ import {
   Film,
   ArrowUpRight,
   Zap,
-  TrendingUp,
-} from "lucide-react";
+  TrendingUp, Brain } from "lucide-react";
 
 const STUDIO_MODULES = [
   {
@@ -83,6 +82,13 @@ const STUDIO_MODULES = [
     icon: Printer,
     badge: "PDF",
     accent: "from-violet-500/20 to-purple-500/10 border-violet-500/30 text-violet-400",
+  },
+  {
+    href: "/marketing/behavior",
+    icon: Brain,
+    title: "Reglas de Comportamiento",
+    desc: "Detecta patrones de rabbitters (permanencia alta, churn, afinidad cruzada) y envía ofertas o Bunz con presupuesto",
+    accent: "from-purple-500/20 to-fuchsia-500/10 border-purple-500/30 text-purple-400",
   },
 ];
 

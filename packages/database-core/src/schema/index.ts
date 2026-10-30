@@ -671,6 +671,25 @@ export const presenceSessions = pgTable("presenceSessions", {
   ...timestamps,
 });
 
+
+// ── Behavior Rules (motor de reglas de comportamiento para afiliados) ─────────
+// El afiliado crea reglas sobre comportamientos de rabbitters (permanencia alta
+// con poco consumo, churn de recurrentes, afinidad cruzada) y envía acciones
+// (promo push o regalo de Bunz) con presupuesto — envío server-side, auditado.
+
+export const behaviorRules = pgTable("behaviorRules", {
+  id: id(),
+  businessId: text("businessId").notNull(),
+  name: text("name").notNull(),
+  triggerType: text("triggerType").notNull(),        // HIGH_DWELL_LOW_SPEND | CHURNED_REGULAR | CROSS_AFFINITY
+  triggerParams: jsonb("triggerParams").notNull(),   // params según tipo
+  action: jsonb("action").notNull(),                 // { type: 'PROMO'|'BUNZ', bunzAmount?, title, message }
+  isActive: boolean("isActive").default(true).notNull(),
+  budgetBunz: integer("budgetBunz").default(0).notNull(),   // para acciones BUNZ (0 = promo sin costo)
+  budgetSpent: integer("budgetSpent").default(0).notNull(),
+  ...timestamps,
+});
+
 // ── Membership Relations ──────────────────────────────────────────────────────
 
 export const membershipPlansRelations = relations(membershipPlans, ({ one, many }) => ({
