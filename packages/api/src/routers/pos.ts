@@ -511,12 +511,18 @@ export const posRouter = router({
       if (input.method === "CASH") {
         await assertOpenShiftForCash(ctx.restaurantDb, ctx.branchId);
       }
-      const [orderRow] = await ctx.restaurantDb.select().from(orders).where(and(eq(orders.id, input.orderId), eq(orders.branchId, ctx.branchId)));
-      if (!orderRow) {
-        throw new Error("Orden no encontrada");
-      }
+      // ── Seg. STRIX-0010: transacción + lock pesimista — la decisión de pago es
+      // atómica; doble click / concurrencia jamás duplica pagos ni recompensas. ──
+      return await ctx.restaurantDb.transaction(async (tx: any) => {
+        const [orderRow] = await tx.select().from(orders).where(and(eq(orders.id, input.orderId), eq(orders.branchId, ctx.branchId))).for("update");
+        if (!orderRow) {
+          throw new Error("Orden no encontrada");
+        }
+        if (orderRow.status === "COMPLETED" || orderRow.status === "PAID") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "La orden ya está pagada" });
+        }
 
-      // Server-side discount calculation (trust the server, not the client)
+        // Server-side discount calculation (trust the server, not the client)
       // orders.total is always the amount actually owed (net of discount).
       // Gross is recovered as total + stored discount to avoid double discounting.
       let finalAmount = r2(input.amount);
@@ -532,36 +538,36 @@ export const posRouter = router({
         calculatedDiscount = r2(gross - net);
         orderNetTotal = net;
         const t = calcTax(net);
-        await ctx.restaurantDb.update(orders)
+        await tx.update(orders)
           .set({ discount: calculatedDiscount, total: t.total, subtotal: t.subtotal, tax: t.tax })
           .where(eq(orders.id, input.orderId));
       }
 
-      const [payment] = await ctx.restaurantDb.insert(payments).values({
+      const [payment] = await tx.insert(payments).values({
         orderId: input.orderId,
         method: input.method,
         amount: finalAmount,
         reference: input.reference ?? null,
       }).returning();
       
-      const existingPayments = await ctx.restaurantDb.select().from(payments).where(eq(payments.orderId, input.orderId));
-      const totalPaid = existingPayments.reduce((sum, p) => sum + p.amount, 0);
+      const existingPayments = await tx.select().from(payments).where(eq(payments.orderId, input.orderId));
+      const totalPaid = existingPayments.reduce((sum: number, p: { amount: number }) => sum + p.amount, 0);
       
       if (input.method === "BUNZ") {
-        await ctx.restaurantDb.update(orders)
+        await tx.update(orders)
           .set({ bunzPaid: (orderRow.bunzPaid || 0) + finalAmount })
           .where(eq(orders.id, input.orderId));
       }
 
       const targetPayableAmount = Math.max(0, orderNetTotal);
       if (r2(totalPaid) >= targetPayableAmount) {
-        await ctx.restaurantDb.update(orders).set({ status: "COMPLETED" }).where(eq(orders.id, input.orderId));
+        await tx.update(orders).set({ status: "COMPLETED" }).where(eq(orders.id, input.orderId));
 
         // Liberar la mesa también en el pago de órdenes existentes (kiosko/self-tab):
         // cierra la sesión activa de la tabla para el próximo comensal.
-        const paidOrderRow = await ctx.restaurantDb.select({ tableId: orders.tableId }).from(orders).where(eq(orders.id, input.orderId)).limit(1);
+        const paidOrderRow = await tx.select({ tableId: orders.tableId }).from(orders).where(eq(orders.id, input.orderId)).limit(1);
         if (paidOrderRow[0]?.tableId) {
-          await ctx.restaurantDb.update(tableSessions).set({
+          await tx.update(tableSessions).set({
             status: "CLOSED",
             closedAt: new Date(),
           }).where(and(
@@ -571,12 +577,12 @@ export const posRouter = router({
         }
 
         // INVENTORY DEDUCTION LOGIC (recursive for sub-recipes)
-        const items = await ctx.restaurantDb.select().from(orderItems).where(eq(orderItems.orderId, input.orderId));
+        const items = await tx.select().from(orderItems).where(eq(orderItems.orderId, input.orderId));
 
         const deductRecipe = async (menuItemId: string, qty: number, path: Set<string>) => {
           if (path.has(menuItemId)) return;
           path.add(menuItemId);
-          const ingredients = await ctx.restaurantDb.select()
+          const ingredients = await tx.select()
             .from(dbSchema.menuItemIngredients)
             .where(eq(dbSchema.menuItemIngredients.menuItemId, menuItemId));
 
@@ -585,7 +591,7 @@ export const posRouter = router({
               const deductionAmount = ing.quantityRequired * qty;
 
               // Insert movement
-              await ctx.restaurantDb.insert(dbSchema.inventoryMovements).values({
+              await tx.insert(dbSchema.inventoryMovements).values({
                 itemId: ing.inventoryItemId,
                 branchId: ctx.branchId,
                 type: "SALE_DEDUCTION",
@@ -595,7 +601,7 @@ export const posRouter = router({
               });
 
               // Update stock
-              await ctx.restaurantDb.execute(sql`
+              await tx.execute(sql`
                 UPDATE inventory_items 
                 SET stock = stock - ${deductionAmount} 
                 WHERE id = ${ing.inventoryItemId}
@@ -611,14 +617,14 @@ export const posRouter = router({
           await deductRecipe(item.menuItemId, item.quantity, new Set());
         }
       } else {
-        await ctx.restaurantDb.update(orders).set({ status: "PARTIAL_PAID" }).where(eq(orders.id, input.orderId));
+        await tx.update(orders).set({ status: "PARTIAL_PAID" }).where(eq(orders.id, input.orderId));
       }
 
       const branchesTable = dbSchema.branches;
-      const [branch] = await ctx.restaurantDb.select().from(branchesTable).where(eq(branchesTable.id, ctx.branchId));
+      const [branch] = await tx.select().from(branchesTable).where(eq(branchesTable.id, ctx.branchId));
       if (!branch) throw new Error("Sucursal no encontrada");
       
-      const [restaurant] = await ctx.restaurantDb.select().from(restaurants).where(eq(restaurants.id, branch.restaurantId));
+      const [restaurant] = await tx.select().from(restaurants).where(eq(restaurants.id, branch.restaurantId));
       if (!restaurant) throw new Error("Restaurante no encontrado");
       
       // defaultRewardRate se almacena como porcentaje entero (20 = 20%).
@@ -640,7 +646,7 @@ export const posRouter = router({
       // Sync with miniapp & CRM
       if (orderRow.customerPhone) {
         // CRM Auto-segmentation
-        const [existingCustomer] = await ctx.restaurantDb.select().from(dbSchema.customers).where(
+        const [existingCustomer] = await tx.select().from(dbSchema.customers).where(
           and(
             eq(dbSchema.customers.restaurantId, restaurant.id),
             eq(dbSchema.customers.phone, orderRow.customerPhone)
@@ -658,7 +664,7 @@ export const posRouter = router({
           if (newVisits >= 5) newSegment = "VIP";
           else if (newVisits > 1) newSegment = "RECURRENT";
 
-          await ctx.restaurantDb.update(dbSchema.customers).set({
+          await tx.update(dbSchema.customers).set({
             totalVisits: newVisits,
             totalSpent: newSpent,
             lastVisitAt: new Date(),
@@ -666,7 +672,7 @@ export const posRouter = router({
             name: orderRow.customerName ?? existingCustomer.name
           }).where(eq(dbSchema.customers.id, existingCustomer.id));
         } else {
-          await ctx.restaurantDb.insert(dbSchema.customers).values({
+          await tx.insert(dbSchema.customers).values({
             restaurantId: restaurant.id,
             phone: orderRow.customerPhone,
             name: orderRow.customerName,
@@ -681,7 +687,7 @@ export const posRouter = router({
         const rewardPhone = String(orderRow.customerPhone); // narrowing estable dentro del closure
         let rewardQueued = true; // el servicio de lealtad entregó (o ya había entregado) la recompensa
 
-        const loyaltyBusinessId = (await resolveBusinessIdFromBranch(ctx.restaurantDb, ctx.branchId)) || ctx.branchId;
+        const loyaltyBusinessId = (await resolveBusinessIdFromBranch(tx, ctx.branchId)) || ctx.branchId;
         const callWithRetry = async (fnName: "chargeBunz" | "rewardBunz") => {
           // Idempotente por diseño (ledger key pos_rwd_${orderId}): un reintento jamás doble-otorga.
           const attempt = async () =>
@@ -734,12 +740,13 @@ export const posRouter = router({
             }
           }
         }
-        bus.emit(EventTypes.BUNZ_REWARD, { customerId: orderRow.customerPhone, rewardPoints: calculatedReward });
+          bus.emit(EventTypes.BUNZ_REWARD, { customerId: orderRow.customerPhone, rewardPoints: calculatedReward });
         return { success: true, rewardQueued };
       }
 
       bus.emit(EventTypes.ORDER_PAID, { orderId: input.orderId });
       return { success: true, rewardQueued: true };
+      });
     }),
 
   linkCustomerToOrder: protectedProcedure
@@ -826,7 +833,7 @@ export const posRouter = router({
     .mutation(async ({ ctx, input }) => {
       // Orden + items + PaymentIntent en una transacción; precios SIEMPRE del menú server-side
       return await ctx.restaurantDb.transaction(async (tx: any) => {
-        const prices = await tx.select({ id: menuItems.id, price: menuItems.price })
+        const prices = await ctx.restaurantDb.select({ id: menuItems.id, price: menuItems.price })
           .from(menuItems)
           .where(eq(menuItems.branchId, ctx.branchId));
         const priceMap = new Map(prices.map((p: any) => [p.id, Number(p.price)]));
@@ -842,7 +849,7 @@ export const posRouter = router({
         itemsTotal = r2(itemsTotal);
         const { total: calcTotal, subtotal: calcSubtotal, tax: calcTaxAmt } = calcTax(itemsTotal);
 
-        const [order] = await tx.insert(orders).values({
+        const [order] = await ctx.restaurantDb.insert(orders).values({
           branchId: ctx.branchId,
           tableId: input.tableId ?? null,
           orderType: input.orderType,
@@ -854,9 +861,10 @@ export const posRouter = router({
           total: calcTotal,
           status: "PENDING",
         }).returning();
+        if (!order) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "No se pudo crear la orden" });
 
         for (const [i, row] of itemRows.entries()) {
-          await tx.insert(orderItems).values({ ...row, sortOrder: i, orderId: order.id });
+          await ctx.restaurantDb.insert(orderItems).values({ ...row, sortOrder: i, orderId: order.id });
         }
 
         // 3. PaymentIntent atómico (hold de Bunz si hay payer)
