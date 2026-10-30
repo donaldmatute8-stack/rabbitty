@@ -198,9 +198,9 @@ export const membershipsRouter = router({
         ? (await ctx.coreDb.select({ id: ownedBusinesses.id }).from(ownedBusinesses)).map((b: { id: string }) => b.id)
         : mctx.businessIds;
       if (allowedIds.length === 0) throw new TRPCError({ code: "FORBIDDEN", message: "No administras ningún negocio" });
-      const chosen = input.businessId && allowedIds.includes(input.businessId)
+      const chosen: string = (input.businessId && allowedIds.includes(input.businessId))
         ? input.businessId
-        : allowedIds[0];
+        : (allowedIds[0] ?? "");
       const [biz] = await ctx.coreDb.select({ id: ownedBusinesses.id, name: ownedBusinesses.name })
         .from(ownedBusinesses).where(inArray(ownedBusinesses.id, [chosen])).limit(1);
       if (!biz) throw new TRPCError({ code: "FORBIDDEN", message: "No administras este negocio" });
