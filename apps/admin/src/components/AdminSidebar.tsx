@@ -287,6 +287,7 @@ const marketingPillars: MenuPillar[] = [
     items: [
       { href: "/marketing/qr", label: "Códigos QR & Mesas", icon: QrCode },
       { href: "https://www.rabbitty.me/impresos", label: "Print Center · Impresos", icon: Printer, badge: "PDF" },
+      { href: "https://www.rabbitty.me/impresos?line=membership", label: "Impresos de Membresías", icon: Ticket, badge: "Club" },
     ],
   },
   {

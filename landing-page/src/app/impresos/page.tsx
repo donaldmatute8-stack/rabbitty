@@ -6,13 +6,32 @@ import {
   Printer, Sparkles, Smartphone, ArrowRight, CheckCircle2, ShieldCheck, 
   Search, ChevronDown, Check, Building2,
   SlidersHorizontal, Image as ImageIcon,
-  Lock, QrCode, X, KeyRound, RefreshCw, LogOut
+  Lock, QrCode, X, KeyRound, RefreshCw, LogOut, Ticket, Crown, ExternalLink
 } from 'lucide-react';
 import { SimpleQRCode, NeonQRCode } from '@/components/SimpleQRCode';
 import QRDiscovery from '@/components/QRDiscovery';
 import RabbittyLoader from '@/components/RabbittyLoader';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
+
+interface BenefitRuleItem {
+  type: 'INCLUDED_PRODUCT' | 'DISCOUNT_PCT' | 'CREDIT_BALANCE' | 'EVENT_ACCESS' | 'BULK_PACK';
+  quotaPerCycle: number;
+  cycleResetType: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'FIXED';
+  discountPct?: number;
+  creditBalance?: number;
+}
+
+interface PublishedMembershipPlan {
+  planId: string;
+  name: string;
+  description?: string | null;
+  badgeColor?: string;
+  priceFiat: number;
+  currency: string;
+  billingInterval: 'MONTHLY' | 'QUARTERLY' | 'SEMIANNUAL' | 'ANNUAL' | 'ONE_TIME' | string;
+  benefitRules: BenefitRuleItem[];
+}
 
 interface BusinessItem {
   id: string;
@@ -23,6 +42,7 @@ interface BusinessItem {
   refCode: string;
   logoUrl?: string | null;
   welcomeBunz?: number;
+  membershipPlans?: PublishedMembershipPlan[];
 }
 
 // Plantillas de contenido curadas y protegidas por nicho de mercado
@@ -419,7 +439,11 @@ function ImpresosContent() {
   const [selectedTemplateKey, setSelectedTemplateKey] = useState<string>(() => {
     return detectNicheKey(initialNicheParam || initialName);
   });
+  const initialLine = searchParams?.get('line') === 'membership' ? 'membership' : 'rewards';
+  const [printLine, setPrintLine] = useState<'rewards' | 'membership'>(initialLine);
+  const [membershipMode, setMembershipMode] = useState<'discover' | 'acquire'>('discover');
   const [activeTab, setActiveTab] = useState<'all' | 'poster' | 'table' | 'cashier' | 'guide'>('all');
+  const [membershipTab, setMembershipTab] = useState<'all' | 'm_table' | 'm_counter' | 'm_flyer' | 'm_sticker'>('all');
 
   // Selector inteligente de negocios de la BD
   const [businesses, setBusinesses] = useState<BusinessItem[]>([]);
@@ -429,6 +453,86 @@ function ImpresosContent() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const currentTemplate = NICHE_TEMPLATES[selectedTemplateKey] || NICHE_TEMPLATES.coffee;
+
+  // ── Datos dinámicos para Rabbitty Membership (leídos de los planes publicados del negocio) ──
+  const selectedBusinessObj = businesses.find(
+    (b) => (selectedBusinessId && b.id === selectedBusinessId) || b.name.toLowerCase() === businessName.toLowerCase()
+  );
+  const publishedPlans: PublishedMembershipPlan[] = selectedBusinessObj?.membershipPlans || [];
+  const hasRealPublishedPlans = publishedPlans.length > 0;
+
+  // Planes efectivos para renderizar en los impresos (reales de la BD o vista previa adaptada al negocio)
+  const effectiveMembershipPlans: PublishedMembershipPlan[] = hasRealPublishedPlans
+    ? publishedPlans
+    : [
+        {
+          planId: 'preview-monthly',
+          name: 'Miembro Mensual',
+          description: `Tu rutina favorita en ${businessName} con beneficios diarios garantizados.`,
+          badgeColor: '#E91E63',
+          priceFiat: 299,
+          currency: 'MXN',
+          billingInterval: 'MONTHLY',
+          benefitRules: [
+            { type: 'INCLUDED_PRODUCT', quotaPerCycle: 1, cycleResetType: 'DAILY' },
+            { type: 'DISCOUNT_PCT', quotaPerCycle: 30, cycleResetType: 'MONTHLY', discountPct: 10 },
+          ],
+        },
+        {
+          planId: 'preview-quarterly',
+          name: 'Club Trimestral',
+          description: `Más ahorro y beneficios recurrentes para clientes frecuentes de ${businessName}.`,
+          badgeColor: '#A855F7',
+          priceFiat: 799,
+          currency: 'MXN',
+          billingInterval: 'QUARTERLY',
+          benefitRules: [
+            { type: 'INCLUDED_PRODUCT', quotaPerCycle: 1, cycleResetType: 'DAILY' },
+            { type: 'DISCOUNT_PCT', quotaPerCycle: 90, cycleResetType: 'MONTHLY', discountPct: 15 },
+          ],
+        },
+        {
+          planId: 'preview-annual',
+          name: 'Círculo Anual VIP',
+          description: `Acceso total, experiencias exclusivas y prioridad todo el año en ${businessName}.`,
+          badgeColor: '#F59E0B',
+          priceFiat: 2799,
+          currency: 'MXN',
+          billingInterval: 'ANNUAL',
+          benefitRules: [
+            { type: 'INCLUDED_PRODUCT', quotaPerCycle: 1, cycleResetType: 'DAILY' },
+            { type: 'DISCOUNT_PCT', quotaPerCycle: 365, cycleResetType: 'MONTHLY', discountPct: 20 },
+            { type: 'EVENT_ACCESS', quotaPerCycle: 4, cycleResetType: 'FIXED' },
+          ],
+        },
+      ];
+
+  const INTERVAL_LABELS: Record<string, string> = {
+    MONTHLY: '/ mes',
+    QUARTERLY: '/ trimestre',
+    SEMIANNUAL: '/ semestre',
+    ANNUAL: '/ año',
+    ONE_TIME: 'pago único',
+  };
+
+  const formatBenefitRule = (r: BenefitRuleItem): string => {
+    const cycleMap: Record<string, string> = {
+      DAILY: 'por día',
+      WEEKLY: 'por semana',
+      MONTHLY: 'por mes',
+      FIXED: 'en tu vigencia',
+    };
+    const cycle = cycleMap[r.cycleResetType] || 'por ciclo';
+    if (r.type === 'INCLUDED_PRODUCT') return `${r.quotaPerCycle} producto${r.quotaPerCycle > 1 ? 's' : ''} incluido${r.quotaPerCycle > 1 ? 's' : ''} ${cycle}`;
+    if (r.type === 'DISCOUNT_PCT') return `${r.discountPct ?? 15}% de descuento en consumos elegibles`;
+    if (r.type === 'CREDIT_BALANCE') return `$${r.creditBalance ?? r.quotaPerCycle} MXN en saldo promocional ${cycle}`;
+    if (r.type === 'EVENT_ACCESS') return `${r.quotaPerCycle} acceso${r.quotaPerCycle > 1 ? 's' : ''} a experiencias y eventos exclusivos`;
+    if (r.type === 'BULK_PACK') return `Bolsa de ${r.quotaPerCycle} consumos disponibles ${cycle}`;
+    return `Beneficio exclusivo de miembro (${r.quotaPerCycle} ${cycle})`;
+  };
+
+  // URL dinámica del QR de membresías (apunta al perfil vivo del negocio, nunca queda obsoleto)
+  const membershipQrUrl = `https://app.rabbitty.me/affiliate/${encodeURIComponent(selectedBusinessId || activeRef)}?tab=memberships&mode=${membershipMode}`;
 
   const generateNeonQrSession = async () => {
     setQrLoading(true);
@@ -1045,45 +1149,113 @@ function ImpresosContent() {
             </div>
           </div>
 
-          {/* LADO DERECHO: Tabs + Imprimir + Salir alineados a la derecha */}
-          <div className="flex items-center gap-2.5 shrink-0 ml-auto">
-            <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-xl p-1 text-xs font-medium">
-              <button 
+          {/* LADO DERECHO: Selector de Línea + Tabs + Imprimir + Salir alineados a la derecha */}
+          <div className="flex items-center gap-2.5 shrink-0 ml-auto flex-wrap justify-end">
+            {/* Conmutador de Categoría: Rewards vs Membership */}
+            <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-xl p-1 text-xs font-bold">
+              <button
                 type="button"
-                onClick={() => setActiveTab('all')}
-                className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${activeTab === 'all' ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-400 hover:text-white'}`}
+                onClick={() => setPrintLine('rewards')}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                  printLine === 'rewards'
+                    ? 'bg-pink-500/20 text-pink-300 border border-pink-500/40'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
               >
-                Todos
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Rewards & Bunz</span>
               </button>
-              <button 
+              <button
                 type="button"
-                onClick={() => setActiveTab('poster')}
-                className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${activeTab === 'poster' ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-400 hover:text-white'}`}
+                onClick={() => setPrintLine('membership')}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                  printLine === 'membership'
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
               >
-                A3 Cartel
-              </button>
-              <button 
-                type="button"
-                onClick={() => setActiveTab('table')}
-                className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${activeTab === 'table' ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-400 hover:text-white'}`}
-              >
-                A5 Mesas
-              </button>
-              <button 
-                type="button"
-                onClick={() => setActiveTab('cashier')}
-                className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${activeTab === 'cashier' ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-400 hover:text-white'}`}
-              >
-                A6 Caja
-              </button>
-              <button 
-                type="button"
-                onClick={() => setActiveTab('guide')}
-                className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${activeTab === 'guide' ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-400 hover:text-white'}`}
-              >
-                Hoja Afiliado
+                <Ticket className="w-3.5 h-3.5" />
+                <span>Memberships</span>
               </button>
             </div>
+
+            {printLine === 'rewards' ? (
+              <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-xl p-1 text-xs font-medium">
+                <button 
+                  type="button"
+                  onClick={() => setActiveTab('all')}
+                  className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${activeTab === 'all' ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-400 hover:text-white'}`}
+                >
+                  Todos
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setActiveTab('poster')}
+                  className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${activeTab === 'poster' ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-400 hover:text-white'}`}
+                >
+                  A3 Cartel
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setActiveTab('table')}
+                  className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${activeTab === 'table' ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-400 hover:text-white'}`}
+                >
+                  A5 Mesas
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setActiveTab('cashier')}
+                  className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${activeTab === 'cashier' ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-400 hover:text-white'}`}
+                >
+                  A6 Caja
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setActiveTab('guide')}
+                  className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${activeTab === 'guide' ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-400 hover:text-white'}`}
+                >
+                  Hoja Afiliado
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-xl p-1 text-xs font-medium">
+                <button
+                  type="button"
+                  onClick={() => setMembershipTab('all')}
+                  className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${membershipTab === 'all' ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-400 hover:text-white'}`}
+                >
+                  Todos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMembershipTab('m_table')}
+                  className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${membershipTab === 'm_table' ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-400 hover:text-white'}`}
+                >
+                  A5 Mesa
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMembershipTab('m_counter')}
+                  className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${membershipTab === 'm_counter' ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-400 hover:text-white'}`}
+                >
+                  A6 Mostrador
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMembershipTab('m_flyer')}
+                  className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${membershipTab === 'm_flyer' ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-400 hover:text-white'}`}
+                >
+                  A4 Flyer Planes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMembershipTab('m_sticker')}
+                  className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${membershipTab === 'm_sticker' ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-400 hover:text-white'}`}
+                >
+                  Sticker & Tarjeta
+                </button>
+              </div>
+            )}
 
             <button
               type="button"
@@ -1499,8 +1671,61 @@ function ImpresosContent() {
       {/* ÁREA DE CONTENIDO IMPRESO / RENDERIZADO */}
       <main className="max-w-7xl mx-auto p-6 md:p-12 space-y-16 print:p-0 print:space-y-0 print:m-0">
 
+        {/* BARRA CONTEXTUAL DE MEMBRESÍAS (No imprimible, cuando está activa la línea Membership) */}
+        {printLine === 'membership' && (
+          <div className="print:hidden rounded-2xl border border-amber-500/30 bg-linear-to-r from-amber-500/10 via-pink-500/10 to-zinc-900 p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Crown className="w-4 h-4 text-amber-400" />
+                <span className="text-xs font-black uppercase tracking-wider text-amber-300">
+                  Línea Rabbitty Membership · «Tu lugar especial en {businessName}»
+                </span>
+                <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${hasRealPublishedPlans ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300' : 'bg-amber-500/15 border-amber-500/30 text-amber-300'}`}>
+                  {hasRealPublishedPlans ? `${publishedPlans.length} planes publicados en vivo` : 'Modo vista previa (planes ilustrativos)'}
+                </span>
+              </div>
+              <p className="text-xs text-zinc-300">
+                Los planes, precios y beneficios se leen automáticamente desde <strong className="text-white">Affiliates Admin → Membresías</strong>. El QR conduce a la página dinámica de membresías de <strong className="text-white">{businessName}</strong> para que nunca quede obsoleto.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <div className="flex items-center bg-black/60 border border-zinc-800 rounded-xl p-1 text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setMembershipMode('discover')}
+                  className={`px-3 py-1.5 rounded-lg cursor-pointer transition-all ${
+                    membershipMode === 'discover' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  ✨ Promocionar planes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMembershipMode('acquire')}
+                  className={`px-3 py-1.5 rounded-lg cursor-pointer transition-all ${
+                    membershipMode === 'acquire' ? 'bg-pink-500/20 text-pink-300 border border-pink-500/30' : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  🎟️ Captar miembros
+                </button>
+              </div>
+
+              <a
+                href="https://admin.rabbitty.me/memberships"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs font-bold text-zinc-200 flex items-center gap-1.5 no-underline"
+              >
+                <span>Configurar planes en Admin</span>
+                <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
+              </a>
+            </div>
+          </div>
+        )}
+
         {/* PIEZA 1: CARTEL PRINCIPAL A3 */}
-        {(activeTab === 'all' || activeTab === 'poster') && (
+        {printLine === 'rewards' && (activeTab === 'all' || activeTab === 'poster') && (
           <section className="print:break-after-page flex flex-col items-center">
             <div className="print:hidden w-full flex items-center justify-between pb-3 mb-4 border-b border-zinc-800 text-xs text-zinc-400 font-mono">
               <span className="font-bold text-white uppercase tracking-wider">Pieza 1 · Cartel Principal para Entrada / Cristalera (Formato A3)</span>
@@ -1623,7 +1848,7 @@ function ImpresosContent() {
         )}
 
         {/* PIEZA 2: DISPLAYS DE MESA (A5) */}
-        {(activeTab === 'all' || activeTab === 'table') && (
+        {printLine === 'rewards' && (activeTab === 'all' || activeTab === 'table') && (
           <section className="print:break-after-page flex flex-col items-center">
             <div className="print:hidden w-full flex items-center justify-between pb-3 mb-4 border-b border-zinc-800 text-xs text-zinc-400 font-mono">
               <span className="font-bold text-white uppercase tracking-wider">Pieza 2 · Habladores de Mesa / Carpas Acrílicas (Formato A5 / A6)</span>
@@ -1737,7 +1962,7 @@ function ImpresosContent() {
         )}
 
         {/* PIEZA 3: SEÑAL DE CAJA (A6) */}
-        {(activeTab === 'all' || activeTab === 'cashier') && (
+        {printLine === 'rewards' && (activeTab === 'all' || activeTab === 'cashier') && (
           <section className="print:break-after-page flex flex-col items-center">
             <div className="print:hidden w-full flex items-center justify-between pb-3 mb-4 border-b border-zinc-800 text-xs text-zinc-400 font-mono">
               <span className="font-bold text-white uppercase tracking-wider">Pieza 3 · Señal de Mostrador / Caja Registradora (Formato A6)</span>
@@ -1779,7 +2004,7 @@ function ImpresosContent() {
         )}
 
         {/* PIEZA 4: HOJA COMERCIAL Y GUION PARA EL NEGOCIO (A4) */}
-        {(activeTab === 'all' || activeTab === 'guide') && (
+        {printLine === 'rewards' && (activeTab === 'all' || activeTab === 'guide') && (
           <section className="print:break-after-page flex flex-col items-center">
             <div className="print:hidden w-full flex items-center justify-between pb-3 mb-4 border-b border-zinc-800 text-xs text-zinc-400 font-mono">
               <span className="font-bold text-white uppercase tracking-wider">Pieza 4 · Hoja de Operación & Argumentario para el Dueño / Personal (Formato A4)</span>
@@ -1878,6 +2103,365 @@ function ImpresosContent() {
                 <span className="font-mono text-[11px]">Identidad de Marca Oficial Rabbitty © 2026</span>
               </div>
 
+            </div>
+          </section>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════════════════
+            LÍNEA 2: RABBITTY MEMBERSHIP — «TU LUGAR ESPECIAL EN ESTE NEGOCIO»
+           ═══════════════════════════════════════════════════════════════════════════ */}
+
+        {/* PIEZA M1: TENT CARD / DISPLAY DE MESA (A5) */}
+        {printLine === 'membership' && (membershipTab === 'all' || membershipTab === 'm_table') && (
+          <section className="print:break-after-page flex flex-col items-center">
+            <div className="print:hidden w-full flex items-center justify-between pb-3 mb-4 border-b border-zinc-800 text-xs text-zinc-400 font-mono">
+              <span className="font-bold text-white uppercase tracking-wider">Membership 1 · Tent Card / Display de Mesa (Formato A5 · Frente y Vuelta)</span>
+              <span>Medidas: 148mm × 210mm · Marca: Membresías de {businessName}</span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 print:grid-cols-2 print:gap-4 w-full max-w-4xl">
+              {/* Frente (Oscuro elegante con acento dorado/rosa) */}
+              <div className="bg-linear-to-b from-zinc-950 via-black to-zinc-950 text-white rounded-3xl p-8 border border-amber-500/30 shadow-2xl flex flex-col justify-between min-h-120 relative overflow-hidden print:border-black">
+                <div className="flex items-center justify-between gap-3 border-b border-zinc-800/80 pb-4">
+                  {renderAffiliateBadge('md', true)}
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-widest px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                    Club de Miembros
+                  </span>
+                </div>
+
+                <div className="my-5 space-y-3">
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-amber-400 block">
+                    Tu lugar especial en {businessName}
+                  </span>
+                  <h3 className="text-2xl md:text-3xl font-black tracking-tight text-white leading-tight">
+                    {membershipMode === 'acquire' ? (
+                      <>HAZTE MIEMBRO DE <span className="text-amber-400">{businessName.toUpperCase()}</span></>
+                    ) : (
+                      <>CONOCE NUESTRAS <span className="text-amber-400">MEMBRESÍAS</span></>
+                    )}
+                  </h3>
+                  <p className="text-xs text-zinc-300 leading-relaxed">
+                    Disfruta productos incluidos, beneficios recurrentes y experiencias exclusivas pensadas para nuestros clientes favoritos.
+                  </p>
+
+                  {/* Resumen de los beneficios principales del primer plan */}
+                  <div className="rounded-2xl bg-white/5 border border-white/10 p-3.5 space-y-1.5 mt-2">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-amber-300 font-bold block">
+                      Desde ${effectiveMembershipPlans[0]?.priceFiat.toLocaleString()} {effectiveMembershipPlans[0]?.currency} {INTERVAL_LABELS[effectiveMembershipPlans[0]?.billingInterval || 'MONTHLY']}
+                    </span>
+                    {(effectiveMembershipPlans[0]?.benefitRules || []).slice(0, 3).map((r, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs text-zinc-200">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <span>{formatBenefitRule(r)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-center justify-center pt-1">
+                  <SimpleQRCode value={membershipQrUrl} size={140} />
+                  <span className="text-[10px] font-mono font-black text-amber-300 mt-2 tracking-wider uppercase">
+                    Escanea y descubre tu membresía
+                  </span>
+                </div>
+
+                <div className="pt-3 mt-3 border-t border-zinc-800/80 flex items-center justify-between text-[9px] text-zinc-500 font-mono">
+                  <span>Membresías de {businessName}</span>
+                  <span>Powered by Rabbitty</span>
+                </div>
+              </div>
+
+              {/* Vuelta (Fondo Marfil / Blanco, explicativo de cómo funciona) */}
+              <div className="bg-white text-zinc-900 rounded-3xl p-8 border border-zinc-200 shadow-xl flex flex-col justify-between min-h-120 relative overflow-hidden print:border-black">
+                <div className="flex items-center justify-between gap-3 border-b border-zinc-200 pb-4">
+                  {renderAffiliateBadge('md', false)}
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-widest px-2.5 py-1 rounded-full bg-zinc-100 text-zinc-700 border border-zinc-300">
+                    ¿Cómo funciona?
+                  </span>
+                </div>
+
+                <div className="my-4 space-y-4">
+                  <h4 className="text-lg font-black tracking-tight text-black">
+                    Tus beneficios siempre contigo, sin tarjetas de plástico
+                  </h4>
+
+                  <div className="flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-full bg-black text-white font-black text-xs flex items-center justify-center shrink-0 mt-0.5">
+                      1
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-bold text-black">Elige tu plan ideal</h5>
+                      <p className="text-[11px] text-zinc-600">Escanea el código y consulta los planes y beneficios vigentes de {businessName}.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-full bg-black text-white font-black text-xs flex items-center justify-center shrink-0 mt-0.5">
+                      2
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-bold text-black">Activa tu Membership Pass digital</h5>
+                      <p className="text-[11px] text-zinc-600">Tu credencial vive en tu celular con el saldo de tus usos disponibles en tiempo real.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-full bg-black text-white font-black text-xs flex items-center justify-center shrink-0 mt-0.5">
+                      3
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-bold text-black">Muestra tu QR en cada visita</h5>
+                      <p className="text-[11px] text-zinc-600">Nuestro equipo lo escanea en segundos para aplicar tus bebidas, descuentos o accesos incluidos.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-center justify-center pt-1">
+                  <SimpleQRCode value={membershipQrUrl} size={115} color="#000000" bgColor="#FFFFFF" />
+                  <span className="text-[9px] font-mono font-bold text-zinc-600 mt-1.5 uppercase">
+                    Ver planes vigentes en vivo
+                  </span>
+                </div>
+
+                <div className="pt-3 mt-2 border-t border-zinc-200 flex items-center justify-between text-[9px] text-zinc-500 font-mono">
+                  <span>{businessName} · Membresías Oficiales</span>
+                  <span>Powered by Rabbitty</span>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* PIEZA M2: DISPLAY DE MOSTRADOR / CAJA (A6) */}
+        {printLine === 'membership' && (membershipTab === 'all' || membershipTab === 'm_counter') && (
+          <section className="print:break-after-page flex flex-col items-center">
+            <div className="print:hidden w-full flex items-center justify-between pb-3 mb-4 border-b border-zinc-800 text-xs text-zinc-400 font-mono">
+              <span className="font-bold text-white uppercase tracking-wider">Membership 2 · Display de Mostrador / Caja (Formato A6)</span>
+              <span>Medidas: 105mm × 148mm · Punto de pago o recepción</span>
+            </div>
+
+            <div className="w-full max-w-sm bg-linear-to-b from-zinc-950 to-black text-white border-2 border-amber-400/70 rounded-3xl p-6 shadow-2xl flex flex-col items-center text-center justify-between min-h-100">
+              <div className="w-full flex items-center justify-between pb-3 border-b border-zinc-800/80">
+                {renderAffiliateBadge('sm', true)}
+                <span className="text-[9px] font-mono uppercase tracking-widest text-amber-300 font-bold bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/30">
+                  Membership Club
+                </span>
+              </div>
+
+              <div className="my-3 space-y-1.5">
+                <span className="text-[10px] font-mono uppercase tracking-widest text-amber-400 font-bold">
+                  Tu lugar especial aquí
+                </span>
+                <h3 className="text-2xl font-black tracking-tight text-white">
+                  ¿YA ERES MIEMBRO?
+                </h3>
+                <p className="text-xs text-zinc-300 max-w-xs leading-relaxed">
+                  Únete al club de <strong className="text-white">{businessName}</strong> y disfruta productos incluidos, descuentos y beneficios exclusivos en cada visita.
+                </p>
+              </div>
+
+              <div className="my-2 flex flex-col items-center">
+                <SimpleQRCode value={membershipQrUrl} size={145} />
+                <span className="text-[10px] font-mono font-bold text-amber-300 mt-2 uppercase tracking-wider">
+                  {membershipMode === 'acquire' ? 'Escanea para unirte hoy' : 'Escanea y conoce los planes'}
+                </span>
+              </div>
+
+              <div className="w-full pt-3 border-t border-zinc-800 flex items-center justify-between text-[9px] text-zinc-500 font-mono">
+                <span className="truncate max-w-40">Membresías de {businessName}</span>
+                <span>Powered by Rabbitty</span>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* PIEZA M3: FLYER COMPARATIVO DE PLANES (A4) */}
+        {printLine === 'membership' && (membershipTab === 'all' || membershipTab === 'm_flyer') && (
+          <section className="print:break-after-page flex flex-col items-center">
+            <div className="print:hidden w-full flex items-center justify-between pb-3 mb-4 border-b border-zinc-800 text-xs text-zinc-400 font-mono">
+              <span className="font-bold text-white uppercase tracking-wider">Membership 3 · Flyer Comparativo de Planes de Membresía (Formato A4)</span>
+              <span>Medidas: 210mm × 297mm · Generado dinámicamente con tus planes</span>
+            </div>
+
+            <div className="w-full max-w-3xl bg-zinc-950 text-white rounded-3xl p-10 md:p-12 border border-zinc-800 shadow-2xl print:p-10 print:border-none flex flex-col justify-between">
+              {/* Cabecera */}
+              <div>
+                <div className="flex items-center justify-between pb-6 border-b border-zinc-800 gap-4">
+                  <div className="flex items-center gap-3">
+                    {renderAffiliateBadge('lg', true)}
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-amber-400 font-bold block">
+                      Programa Oficial de Membresías
+                    </span>
+                    <span className="text-xs text-zinc-400">
+                      Tu lugar especial en {businessName}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Título */}
+                <div className="mt-8 mb-6">
+                  <h2 className="text-3xl md:text-4xl font-black tracking-tight text-white">
+                    Elige tu Membresía en <span className="text-amber-400">{businessName}</span>
+                  </h2>
+                  <p className="text-sm text-zinc-400 mt-1.5 max-w-2xl">
+                    Convierte tus visitas habituales en beneficios garantizados, productos incluidos y experiencias exclusivas directo en tu celular.
+                  </p>
+                </div>
+
+                {/* Grid dinámico de planes */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-6">
+                  {effectiveMembershipPlans.slice(0, 3).map((plan, idx) => (
+                    <div
+                      key={plan.planId || idx}
+                      className={`rounded-2xl p-5 border flex flex-col justify-between ${
+                        idx === 1
+                          ? 'bg-linear-to-b from-amber-500/15 to-zinc-900/90 border-amber-400/50'
+                          : 'bg-zinc-900/80 border-zinc-800'
+                      }`}
+                    >
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400">
+                            Plan 0{idx + 1}
+                          </span>
+                          {idx === 1 && (
+                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-400 text-black">
+                              Destacado
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-black text-white">{plan.name}</h3>
+                          {plan.description && (
+                            <p className="text-[11px] text-zinc-400 mt-0.5 leading-snug">{plan.description}</p>
+                          )}
+                        </div>
+                        <div className="pt-2 border-t border-zinc-800">
+                          <span className="text-2xl font-black text-white">
+                            ${plan.priceFiat.toLocaleString()}
+                          </span>
+                          <span className="text-xs text-zinc-400 ml-1">
+                            {plan.currency} {INTERVAL_LABELS[plan.billingInterval] || plan.billingInterval}
+                          </span>
+                        </div>
+                        <ul className="space-y-2 pt-2">
+                          {(plan.benefitRules || []).map((rule, rIdx) => (
+                            <li key={rIdx} className="flex items-start gap-2 text-xs text-zinc-200 leading-snug">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                              <span>{formatBenefitRule(rule)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Bloque inferior QR + CTA */}
+              <div className="mt-6 bg-black/80 border border-zinc-800 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
+                <div className="space-y-1.5 text-center sm:text-left">
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-amber-400">
+                    Activación digital inmediata
+                  </span>
+                  <h4 className="text-lg font-black text-white">
+                    Escanea el código para consultar condiciones o adquirir tu membresía
+                  </h4>
+                  <p className="text-xs text-zinc-400 max-w-md">
+                    Tu Membership Pass se activa al instante en tu teléfono. Muéstralo en caja en cada visita para canjear tus beneficios.
+                  </p>
+                </div>
+                <div className="flex flex-col items-center shrink-0">
+                  <SimpleQRCode value={membershipQrUrl} size={125} />
+                  <span className="text-[9px] font-mono text-amber-300 mt-1.5 font-bold uppercase">
+                    Membresías en vivo
+                  </span>
+                </div>
+              </div>
+
+              {/* Pie discreto Powered by Rabbitty */}
+              <div className="mt-6 pt-4 border-t border-zinc-800/80 flex items-center justify-between text-[10px] text-zinc-500 font-mono">
+                <span>Membresías sujetas a disponibilidad y términos vigentes de {businessName}.</span>
+                <span>Powered by Rabbitty</span>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* PIEZA M4: STICKER DE PUERTA/VENTANA + TARJETA SIMBÓLICA DE MIEMBRO */}
+        {printLine === 'membership' && (membershipTab === 'all' || membershipTab === 'm_sticker') && (
+          <section className="print:break-after-page flex flex-col items-center">
+            <div className="print:hidden w-full flex items-center justify-between pb-3 mb-4 border-b border-zinc-800 text-xs text-zinc-400 font-mono">
+              <span className="font-bold text-white uppercase tracking-wider">Membership 4 · Sticker de Puerta/Ventana + Tarjeta Física Simbólica de Miembro</span>
+              <span>Señalización exterior + Credencial de cortesía / bienvenida</span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center w-full max-w-4xl">
+              {/* 4A. Sticker para Puerta o Ventana */}
+              <div className="bg-black text-white rounded-full aspect-square max-w-88 mx-auto p-8 border-4 border-amber-400/80 shadow-2xl flex flex-col items-center justify-between text-center">
+                <div className="pt-2">
+                  {renderAffiliateBadge('sm', true)}
+                </div>
+
+                <div className="space-y-1.5 px-2">
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-amber-400 font-bold block">
+                    Establecimiento Oficial
+                  </span>
+                  <h3 className="text-xl font-black tracking-tight text-white leading-tight">
+                    AQUÍ HAY BENEFICIOS PARA MIEMBROS
+                  </h3>
+                  <p className="text-[11px] text-zinc-400">
+                    Escanea y conoce tu lugar especial en <strong className="text-white">{businessName}</strong>
+                  </p>
+                </div>
+
+                <SimpleQRCode value={membershipQrUrl} size={105} />
+
+                <span className="text-[9px] font-mono text-zinc-500 pb-1">
+                  Powered by Rabbitty
+                </span>
+              </div>
+
+              {/* 4B. Tarjeta Física Simbólica de Membresía (Formato CR80) */}
+              <div className="space-y-4">
+                <div className="bg-linear-to-br from-zinc-900 via-black to-zinc-950 text-white rounded-3xl p-6 border border-amber-500/40 shadow-2xl aspect-[1.586/1] flex flex-col justify-between relative overflow-hidden">
+                  <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-amber-500/10 blur-2xl pointer-events-none" />
+
+                  <div className="flex items-center justify-between">
+                    {renderAffiliateBadge('sm', true)}
+                    <span className="text-[10px] font-mono font-black uppercase tracking-widest text-amber-300 flex items-center gap-1">
+                      <Crown className="w-3.5 h-3.5 text-amber-400" /> Member Pass
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-4 my-auto">
+                    <div className="space-y-1">
+                      <span className="text-[9px] font-mono uppercase tracking-widest text-zinc-400 block">
+                        Credencial de Acceso
+                      </span>
+                      <h4 className="text-lg font-black text-white tracking-tight">
+                        {effectiveMembershipPlans[0]?.name || `Miembro ${businessName}`}
+                      </h4>
+                      <p className="text-[11px] text-zinc-400">
+                        Escanea para abrir o activar tu membresía digital en segundos.
+                      </p>
+                    </div>
+                    <div className="shrink-0">
+                      <SimpleQRCode value={membershipQrUrl} size={92} />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[9px] font-mono text-zinc-500 pt-2 border-t border-zinc-800/80">
+                    <span>Tu lugar especial en {businessName}</span>
+                    <span>Powered by Rabbitty</span>
+                  </div>
+                </div>
+                <p className="print:hidden text-[11px] text-zinc-500 text-center font-mono">
+                  Tarjeta simbólica / invitación VIP (85.6mm × 54mm) para entregar a clientes frecuentes o en eventos.
+                </p>
+              </div>
             </div>
           </section>
         )}

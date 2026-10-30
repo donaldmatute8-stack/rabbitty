@@ -76,7 +76,7 @@ const STUDIO_MODULES = [
   },
   {
     title: "Print Center · Kit de Impresos",
-    description: "Descarga acrílicos, stickers y tent cards listos para imprenta con tu marca y bono activo.",
+    description: "Descarga acrílicos, stickers y tent cards de Cashback Bunz listos para imprenta.",
     href: "https://www.rabbitty.me/impresos",
     external: true,
     icon: Printer,
@@ -84,10 +84,20 @@ const STUDIO_MODULES = [
     accent: "from-violet-500/20 to-purple-500/10 border-violet-500/30 text-violet-400",
   },
   {
+    title: "Impresos de Membresías",
+    description: "Tent cards, displays de caja, flyers comparativos y tarjetas dinámicas con tus planes publicados.",
+    href: "https://www.rabbitty.me/impresos?line=membership",
+    external: true,
+    icon: Ticket,
+    badge: "Club",
+    accent: "from-amber-500/20 to-yellow-500/10 border-amber-500/30 text-amber-400",
+  },
+  {
     href: "/marketing/behavior",
     icon: Brain,
     title: "Reglas de Comportamiento",
-    desc: "Detecta patrones de rabbitters (permanencia alta, churn, afinidad cruzada) y envía ofertas o Bunz con presupuesto",
+    description: "Detecta patrones de rabbitters (permanencia alta, churn, afinidad cruzada) y envía ofertas o Bunz con presupuesto.",
+    badge: "IA",
     accent: "from-purple-500/20 to-fuchsia-500/10 border-purple-500/30 text-purple-400",
   },
 ];
@@ -333,17 +343,25 @@ export default function MarketingStudioOverviewPage() {
               ¿Quieres impulsar tus Membresías o tu Cashback Bunz?
             </h3>
             <p className="text-xs text-gray-400 mt-1 max-w-2xl">
-              Los planes, precios y derechos se configuran en <strong className="text-gray-200">Operación → Membresías</strong>, y desde aquí puedes lanzar una campaña para venderlos a tus clientes recurrentes.
+              Los planes, precios y derechos se configuran una sola vez en <strong className="text-gray-200">Operación → Membresías</strong>. Desde Marketing Studio puedes descargar tus materiales impresos dinámicos con QR vivo o lanzar una campaña digital.
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           <Link
             href="/memberships"
             className="px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-gray-200 no-underline transition-all"
           >
             Configurar Planes
           </Link>
+          <a
+            href={`https://www.rabbitty.me/impresos?line=membership${primaryBusinessId ? `&businessId=${primaryBusinessId}` : ""}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3.5 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/35 text-xs font-bold text-amber-300 no-underline transition-all"
+          >
+            🖨️ Impresos de Membresía
+          </a>
           <Link
             href="/marketing/campaigns"
             className="px-3.5 py-2 rounded-xl bg-pink-500/20 hover:bg-pink-500/30 border border-pink-500/40 text-xs font-bold text-pink-300 no-underline transition-all"

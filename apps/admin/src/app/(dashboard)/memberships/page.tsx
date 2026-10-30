@@ -84,6 +84,14 @@ export default function MembershipsPage() {
               {businesses.map((b) => <option key={b.id} value={b.id}>{(b as { isGod?: boolean }).isGod ? "👑 " : ""}{b.name}</option>)}
             </select>
           )}
+          <a
+            href={`https://www.rabbitty.me/impresos?line=membership${businessId ? `&businessId=${businessId}` : ""}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3.5 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/35 text-xs font-bold text-amber-300 no-underline transition-all flex items-center gap-1.5"
+          >
+            🖨️ Impresos del Club
+          </a>
           <Button onClick={() => setShowForm(true)} disabled={!enabled}><Plus className="w-4 h-4 mr-1" /> Nuevo plan</Button>
         </div>
       </header>

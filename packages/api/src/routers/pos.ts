@@ -112,9 +112,9 @@ export const posRouter = router({
     // Presencia REAL: sesiones abiertas cuyo último ping esté fresco (GPS pings + escaneos las refrescan)
     const presenceCutoff = new Date(Date.now() - 60 * 60 * 1000);
     const rows = await ctx.coreDb.execute(
-      sql`SELECT "userId", "startedAt" AS at FROM "presenceSessions"
+      sql`SELECT "userId", GREATEST("lastPingAt", "startedAt") AS at FROM "presenceSessions"
           WHERE "businessId" = ${bizId} AND "endedAt" IS NULL AND "lastPingAt" >= ${presenceCutoff}
-          ORDER BY "startedAt" DESC LIMIT 12`
+          ORDER BY "lastPingAt" DESC LIMIT 12`
     ).then((r: unknown) => ((r as { rows?: Array<{ payeeSubjectId: string; at: string }> }).rows || (r as unknown as Array<{ payeeSubjectId: string; at: string }>)).map((r: any) => ({ payeeSubjectId: `usr_${r.userId}`, at: r.at })));
     const out: Array<{ userId: string; name: string; username: string | null; at: string }> = [];
     for (const row of rows) {
@@ -174,6 +174,7 @@ export const posRouter = router({
         conditions.push(eq(coreUsers.scanCode, Number(cleanQ)));
       }
 
+      // Priorizar: scanCode exacto > telegramId > phone > uuid > username > nombre
       const [user] = await ctx.coreDb
         .select({
           id: coreUsers.id,

@@ -457,35 +457,52 @@ export default function PosPage() {
         toast.info(`🐰 ${c.name} llegó al local — check-in activo`);
       }
     }
-    // ── QR de mostrador: si alguien acaba de escanearlo (presencia nueva) → cerrar
-    // automáticamente el QR y mostrar al rabbitter para proceder al cobro ──
-    useEffect(() => {
-      if (!showBusinessQrModal) return;
-      const openAt = Date.now() - 15_000; // tolerancia: señal posterior a la apertura
-      const fresh = (activeCheckIns || []).find((c: any) => new Date(c.at).getTime() >= openAt);
-      if (fresh) {
-        setShowBusinessQrModal(false);
-        toast.info(`📸 ${fresh.name} escaneó tu QR — cliente en el local`);
-        utils.pos.lookupRabbitter.fetch({ query: fresh.userId })
-          .then((res) => { if (res) setSelectedRabbitter(res); })
-          .catch(() => {});
-      }
-    }, [showBusinessQrModal, activeCheckIns]);
+  }, [activeCheckIns]);
 
-    // ── Auto-vínculo: si hay EXACTAMENTE un rabbitter presente y no hay ninguno vinculado,
-    // preselecciónalo para el cobro (el banner permite cambiarlo si son varios). ──
-    if (!selectedRabbitter && (activeCheckIns?.length ?? 0) === 1) {
-      const only = activeCheckIns![0];
-      utils.pos.lookupRabbitter.fetch({ query: only.userId })
+  // ── QR de mostrador: si alguien acaba de escanearlo (ping fresco de presencia) →
+  // cerrar automáticamente el QR y vincular al rabbitter para proceder al cobro ──
+  const qrOpenedAtRef = useRef<number>(0);
+  useEffect(() => {
+    if (showBusinessQrModal) {
+      if (!qrOpenedAtRef.current) qrOpenedAtRef.current = Date.now();
+      return;
+    }
+    qrOpenedAtRef.current = 0;
+  }, [showBusinessQrModal]);
+
+  const selectedRabbitterRef = useRef<typeof selectedRabbitter>(null);
+  useEffect(() => { selectedRabbitterRef.current = selectedRabbitter; }, [selectedRabbitter]);
+
+  useEffect(() => {
+    if (!showBusinessQrModal || !qrOpenedAtRef.current) return;
+    const fresh = (activeCheckIns || []).find(
+      (c: any) => new Date(c.at).getTime() >= qrOpenedAtRef.current - 60_000
+    );
+    if (fresh) {
+      qrOpenedAtRef.current = 0;
+      setShowBusinessQrModal(false);
+      toast.info(`📸 ${fresh.name} escaneó tu QR — cliente en el local`);
+      utils.pos.lookupRabbitter.fetch({ query: fresh.userId })
         .then((res) => {
-          if (res && !selectedRabbitter) {
-            setSelectedRabbitter(res);
-            toast.success(`🐰 ${res.name} ya está en el local — vinculado automáticamente al cobro`);
-          }
+          if (res && !selectedRabbitterRef.current) setSelectedRabbitter(res);
         })
         .catch(() => {});
     }
-  }, [activeCheckIns, selectedRabbitter]);
+  }, [showBusinessQrModal, activeCheckIns]);
+
+  // ── Auto-vínculo: si hay EXACTAMENTE un rabbitter presente y no hay ninguno vinculado ──
+  useEffect(() => {
+    if (selectedRabbitterRef.current || (activeCheckIns?.length ?? 0) !== 1) return;
+    const only = activeCheckIns![0];
+    utils.pos.lookupRabbitter.fetch({ query: only.userId })
+      .then((res) => {
+        if (res && !selectedRabbitterRef.current) {
+          setSelectedRabbitter(res);
+          toast.success(`🐰 ${res.name} ya está en el local — vinculado automáticamente al cobro`);
+        }
+      })
+      .catch(() => {});
+  }, [activeCheckIns]);
   const handleMembershipRedeem = async (qrToken: string) => {
     try {
       const subId = qrToken.split(".")[0];
