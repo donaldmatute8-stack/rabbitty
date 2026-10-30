@@ -65,7 +65,21 @@ async function assertBusinessOwner(ctx: any, businessId: string) {
     .from(ownedBusinesses)
     .where(and(eq(ownedBusinesses.id, businessId), eq(ownedBusinesses.ownerId, ctx.userId)))
     .limit(1);
-  if (!biz) throw new TRPCError({ code: "FORBIDDEN", message: "No eres administrador de este negocio" });
+  if (biz) return;
+  // ── Sesión de staff/cajero del MISMO negocio (parámetro branch del ctx) ──
+  if (ctx.branchId) {
+    try {
+      const { resolveMerchantContext } = await import("../services/merchantContext");
+      const mctx = await resolveMerchantContext(ctx);
+      if (mctx.businessIds.includes(businessId)) return;
+    } catch { /* cae al error detallado */ }
+  }
+  // Error con diagnóstico: quién era la sesión vs qué negocio se pedía
+  const who = ctx.user?.email || ctx.userId || "sesión sin usuario";
+  throw new TRPCError({
+    code: "FORBIDDEN",
+    message: `No eres administrador de este negocio (sesión ${who} · negocio ${businessId.slice(0, 8)}…). Si es tu negocio, cierra sesión y entra de nuevo con el correo del owner.`,
+  });
 }
 
 /** Owner del negocio O staff (cajero/waiter/mesero) de una sucursal que le pertenece. */
