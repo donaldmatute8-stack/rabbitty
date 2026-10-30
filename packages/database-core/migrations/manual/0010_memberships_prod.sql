@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS "membership_plan_versions" (
 
 CREATE TABLE IF NOT EXISTS "membership_plans" (
     "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-    "businessId" uuid NOT NULL,
+    "businessId" text NOT NULL,
     "slug" text NOT NULL,
     "name" text NOT NULL,
     "description" text,
@@ -83,8 +83,8 @@ CREATE TABLE IF NOT EXISTS "membership_plans" (
 
 CREATE TABLE IF NOT EXISTS "membership_subscriptions" (
     "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-    "userId" uuid NOT NULL,
-    "businessId" uuid NOT NULL,
+    "userId" text NOT NULL,
+    "businessId" text NOT NULL,
     "planVersionId" uuid NOT NULL,
     "status" text DEFAULT 'ACTIVE' NOT NULL,
     "currentPeriodStart" timestamp NOT NULL,
@@ -130,27 +130,9 @@ BEGIN
             FOREIGN KEY ("planId") REFERENCES "membership_plans"("id") ON DELETE restrict ON UPDATE cascade;
     END IF;
     IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'membership_plans_businessId_ownedBusinesses_id_fk'
-    ) THEN
-        ALTER TABLE "membership_plans" ADD CONSTRAINT "membership_plans_businessId_ownedBusinesses_id_fk"
-            FOREIGN KEY ("businessId") REFERENCES "ownedBusinesses"("id") ON DELETE cascade ON UPDATE cascade;
-    END IF;
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'membership_subscriptions_businessId_ownedBusinesses_id_fk'
-    ) THEN
-        ALTER TABLE "membership_subscriptions" ADD CONSTRAINT "membership_subscriptions_businessId_ownedBusinesses_id_fk"
-            FOREIGN KEY ("businessId") REFERENCES "ownedBusinesses"("id") ON DELETE restrict ON UPDATE cascade;
-    END IF;
-    IF NOT EXISTS (
         SELECT 1 FROM pg_constraint WHERE conname = 'membership_subscriptions_planVersionId_membership_plan_versions_id_fk'
     ) THEN
         ALTER TABLE "membership_subscriptions" ADD CONSTRAINT "membership_subscriptions_planVersionId_membership_plan_versions_id_fk"
             FOREIGN KEY ("planVersionId") REFERENCES "membership_plan_versions"("id") ON DELETE restrict ON UPDATE cascade;
-    END IF;
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'membership_subscriptions_userId_users_id_fk'
-    ) THEN
-        ALTER TABLE "membership_subscriptions" ADD CONSTRAINT "membership_subscriptions_userId_users_id_fk"
-            FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE restrict ON UPDATE cascade;
     END IF;
 END $$;
