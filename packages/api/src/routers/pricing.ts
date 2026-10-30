@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { router, protectedProcedure, resolveBranchId } from "../trpc";
@@ -62,15 +63,16 @@ export const pricingRouter = router({
       const [updated] = await ctx.restaurantDb
         .update(dynamicPricingRules)
         .set({ ...data, updatedAt: new Date() })
-        .where(eq(dynamicPricingRules.id, id))
+        .where(and(eq(dynamicPricingRules.id, id), eq(dynamicPricingRules.branchId, ctx.branchId)))
         .returning();
+      if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "Regla no encontrada" });
       return updated;
     }),
 
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.restaurantDb.delete(dynamicPricingRules).where(eq(dynamicPricingRules.id, input.id));
+      await ctx.restaurantDb.delete(dynamicPricingRules).where(and(eq(dynamicPricingRules.id, input.id), eq(dynamicPricingRules.branchId, ctx.branchId)));
       return { success: true };
     }),
 

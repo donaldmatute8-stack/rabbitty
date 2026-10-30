@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { and, eq, sql } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
@@ -75,6 +76,11 @@ export const kdsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const [kdsItem] = await ctx.restaurantDb.select({ orderId: orderItems.orderId }).from(orderItems).where(eq(orderItems.id, input.orderItemId)).limit(1);
+      if (kdsItem) {
+        const [kdsOrder] = await ctx.restaurantDb.select({ branchId: orders.branchId }).from(orders).where(eq(orders.id, kdsItem.orderId)).limit(1);
+        if (!kdsOrder || kdsOrder.branchId !== ctx.branchId) throw new TRPCError({ code: "FORBIDDEN", message: "Item no pertenece a esta sucursal" });
+      }
       await ctx.restaurantDb.update(orderItems).set({
         status: input.status,
       }).where(eq(orderItems.id, input.orderItemId));

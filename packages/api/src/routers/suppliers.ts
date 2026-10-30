@@ -115,7 +115,8 @@ export const suppliersRouter = router({
       const [order] = await ctx.restaurantDb
         .select()
         .from(purchaseOrders)
-        .where(eq(purchaseOrders.id, input.id));
+        .where(and(eq(purchaseOrders.id, input.id), eq(purchaseOrders.branchId, ctx.branchId)))
+        .limit(1);
 
       if (!order || order.status !== "APPROVED") {
         throw new Error("La orden debe estar APPROVED para recibirla");
@@ -150,7 +151,7 @@ export const suppliersRouter = router({
       status: z.enum(["PENDING", "APPROVED", "RECEIVED", "CANCELLED"]),
     }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.restaurantDb.update(purchaseOrders).set({ status: input.status }).where(eq(purchaseOrders.id, input.id));
+      await ctx.restaurantDb.update(purchaseOrders).set({ status: input.status }).where(and(eq(purchaseOrders.id, input.id), eq(purchaseOrders.branchId, ctx.branchId)));
       return { success: true };
     }),
 });

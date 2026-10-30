@@ -34,7 +34,7 @@ export const loyaltyRouter = router({
       .orderBy(desc(campaigns.createdAt));
   }),
 
-  createCampaign: protectedProcedure
+  createCampaign: adminOnlyProcedure
     .input(z.object({
       name: z.string(),
       targetSegment: z.string(),

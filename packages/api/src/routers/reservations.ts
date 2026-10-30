@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { and, eq, desc } from "drizzle-orm";
 import { router, protectedProcedure, resolveBranchId } from "../trpc";
@@ -72,15 +73,16 @@ export const reservationsRouter = router({
       const [reservation] = await ctx.restaurantDb
         .update(reservations)
         .set({ status: input.status })
-        .where(eq(reservations.id, input.id))
+        .where(and(eq(reservations.id, input.id), eq(reservations.branchId, ctx.branchId)))
         .returning();
+      if (!reservation) throw new TRPCError({ code: "NOT_FOUND", message: "Reservación no encontrada" });
       return reservation;
     }),
 
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.restaurantDb.delete(reservations).where(eq(reservations.id, input.id));
+      await ctx.restaurantDb.delete(reservations).where(and(eq(reservations.id, input.id), eq(reservations.branchId, ctx.branchId)));
       return { success: true };
     }),
 });

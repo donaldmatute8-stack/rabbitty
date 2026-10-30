@@ -12,6 +12,7 @@ export const notificationsRouter = router({
       return await ctx.restaurantDb
         .select()
         .from(events)
+        .where(eq(events.branchId, ctx.branchId))
         .orderBy(desc(events.createdAt))
         .limit(limit)
         .offset(offset);

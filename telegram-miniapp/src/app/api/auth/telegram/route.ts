@@ -96,17 +96,14 @@ export async function POST(req: Request) {
         .limit(1);
 
       if (business) {
-        const bId = business.id;
-        // Ownership transfer is a privileged operation. A public start-param must
-        // never reassign an arbitrary business; only an ADMIN may transfer ownership.
+        // ── Seg. STRIX-0021: la transferencia de negocio JAMÁS por un start-param
+        // público (sin auditoría, sin 2FA, sin consentimiento del dueño). Va por el
+        // flujo God Admin con 2FA. ──
         if (business.ownerId !== user.id) {
-          if (user.role !== 'ADMIN') {
-            return NextResponse.json({ error: 'No autorizado para reclamar este negocio' }, { status: 403 });
-          }
-          await db.execute(
-            sql`UPDATE "ownedBusinesses" SET "ownerId" = ${user.id} WHERE id = ${bId}`
+          return NextResponse.json(
+            { error: 'La transferencia de negocio no está permitida por este canal. Contacta a soporte.' },
+            { status: 403 }
           );
-          console.log(`[Claim Business] Negocio ${bId} transferido por admin ${user.id}`);
         }
       } else {
         // 2. Reclamo de ticket térmico físico (QR del POS)

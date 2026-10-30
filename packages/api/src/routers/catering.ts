@@ -1,5 +1,6 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { router, protectedProcedure, resolveBranchId } from "../trpc";
 import { cateringEvents, branches } from "@rabbitty/database-restaurant";
 
@@ -75,15 +76,16 @@ export const cateringRouter = router({
       const [updated] = await ctx.restaurantDb
         .update(cateringEvents)
         .set(updateData)
-        .where(eq(cateringEvents.id, id))
+        .where(and(eq(cateringEvents.id, id), eq(cateringEvents.branchId, ctx.branchId)))
         .returning();
+      if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "Evento no encontrado" });
       return updated;
     }),
 
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.restaurantDb.delete(cateringEvents).where(eq(cateringEvents.id, input.id));
+      await ctx.restaurantDb.delete(cateringEvents).where(and(eq(cateringEvents.id, input.id), eq(cateringEvents.branchId, ctx.branchId)));
       return { success: true };
     }),
 });

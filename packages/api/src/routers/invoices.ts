@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, sql, desc, and } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
 import { invoices, orders, branches } from "@rabbitty/database-restaurant";
 
@@ -95,7 +95,8 @@ export const invoicesRouter = router({
       const [invoice] = await ctx.restaurantDb
         .select()
         .from(invoices)
-        .where(eq(invoices.id, input.id));
+        .where(and(eq(invoices.id, input.id), eq(invoices.branchId, ctx.branchId)))
+        .limit(1);
 
       if (!invoice) throw new Error("Factura no encontrada");
       if (invoice.status === "CANCELLED") throw new Error("Esta factura ya está cancelada");

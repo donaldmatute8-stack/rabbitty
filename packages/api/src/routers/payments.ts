@@ -14,8 +14,12 @@ export const paymentsRouter = router({
       reason: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const [payment] = await ctx.restaurantDb.select().from(payments).where(eq(payments.id, input.paymentId));
+      const [payment] = await ctx.restaurantDb.select().from(payments).where(eq(payments.id, input.paymentId)).limit(1);
       if (!payment) throw new Error("Pago no encontrado");
+      if (payment.orderId) {
+        const [pOrder] = await ctx.restaurantDb.select({ branchId: orders.branchId }).from(orders).where(eq(orders.id, payment.orderId)).limit(1);
+        if (!pOrder || pOrder.branchId !== ctx.branchId) throw new TRPCError({ code: "FORBIDDEN", message: "Pago no pertenece a esta sucursal" });
+      }
       if (payment.status === "REFUNDED") throw new Error("El pago ya fue reembolsado");
 
       const [refund] = await ctx.restaurantDb.insert(payments).values({
