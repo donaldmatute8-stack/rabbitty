@@ -236,10 +236,11 @@ export async function POST(req: NextRequest) {
         .set({ totalBunzEarned: sql`COALESCE(${users.totalBunzEarned}, 0) + ${bunzReward}` })
         .where(eq(users.id, lockedCustomer.id));
 
-      // Deduct from business vault balance (base rewards funded by merchant vault)
+      // ECONOMÍA RABBITTY: la recompensa MINTEA — el stock del comercio AUMENTA
+      // (3500 + reward = 3508 disponibles para aceptar redenciones).
       await tx.update(ownedBusinesses)
         .set({
-          bunzBalance: sql`GREATEST(0, COALESCE(${ownedBusinesses.bunzBalance}, 0) - ${baseBunz})`,
+          bunzBalance: sql`COALESCE(${ownedBusinesses.bunzBalance}, 0) + ${bunzReward}`,
           creditUsed: business.creditLimit > 0 ? sql`${ownedBusinesses.creditUsed} + ${bunzReward}` : ownedBusinesses.creditUsed,
         })
         .where(eq(ownedBusinesses.id, business.id));

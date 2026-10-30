@@ -113,9 +113,17 @@ export async function POST(request: Request) {
         txHash: `pos_${order_id}`,
       });
 
+      // ECONOMÍA: el gasto CONSUME el stock del comercio (bunz que pre-compró para aceptar redenciones)
+      if (business_id && business_id !== 'unknown') {
+        await tx.update(ownedBusinesses)
+          .set({ bunzBalance: sql`GREATEST(0, COALESCE("bunzBalance", 0) - ${bunzRequired})` })
+          .where(eq(ownedBusinesses.id, business_id));
+      }
+
       await recordLedgerTransaction(
         {
-          branchId: business_id || null,
+          // branchId tiene FK a branches — business_id NO es branch; payee atribuye al comercio
+          branchId: null,
           payerSubjectId: `usr_${user.id}`,
           payeeSubjectId: business_id || 'POS',
           amount: bunzRequired,

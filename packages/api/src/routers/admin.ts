@@ -871,31 +871,23 @@ export const adminRouter = router({
 
       const targetBiz = biz || firstBiz;
 
-      // ── Métricas desde el LEDGER (libro autoritativo) + fallback a transactions ──
+      // ── Métricas desde transactions (fuente semántica del comercio) ──
+      // Entregados = recompensas minteadas (+); Redimidos = gastos aceptados (−)
       let totalBunzMinted = 0;
       let totalBunzRedimido = 0;
       if (targetBiz?.id) {
         try {
-          const [ledgerAgg] = await ctx.coreDb
+          const [txAgg] = await ctx.coreDb
             .select({
-              delivered: sql<number>`COALESCE(SUM(${ledgerEntries2.amount}) FILTER (WHERE ${ledgerEntries2.type} = 'EARN'), 0)::int`,
-              redeemed: sql<number>`COALESCE(SUM(${ledgerEntries2.amount}) FILTER (WHERE ${ledgerEntries2.type} = 'SPEND'), 0)::int`,
+              delivered: sql<number>`COALESCE(SUM(${transactions.bunzMinted}) FILTER (WHERE ${transactions.status} = 'MINTED' OR ${transactions.status} = 'COMPLETED'), 0)::int`,
+              redeemed: sql<number>`COALESCE(-SUM(${transactions.bunzMinted}) FILTER (WHERE ${transactions.status} = 'CHARGED'), 0)::int`,
             })
-            .from(ledgerEntries2)
-            .where(sql`${ledgerEntries2.payerSubjectId} = ${targetBiz.id} OR ${ledgerEntries2.payeeSubjectId} = ${targetBiz.id}`);
-          totalBunzMinted = Number(ledgerAgg?.delivered ?? 0);
-          totalBunzRedimido = Number(ledgerAgg?.redeemed ?? 0);
-        } catch {
-          // Fallback al agregado de transactions
-          try {
-            const [txAgg] = await ctx.coreDb
-              .select({ total: sql<number>`COALESCE(SUM(${transactions.bunzMinted}), 0)::int` })
-              .from(transactions)
-              .where(eq(transactions.businessId, targetBiz.id));
-            totalBunzMinted = Number(txAgg?.total ?? 0);
-          } catch (aggErr) {
-            console.warn("[getAffiliateBunzInventory] Could not aggregate:", aggErr);
-          }
+            .from(transactions)
+            .where(eq(transactions.businessId, targetBiz.id));
+          totalBunzMinted = Number(txAgg?.delivered ?? 0);
+          totalBunzRedimido = Number(txAgg?.redeemed ?? 0);
+        } catch (aggErr) {
+          console.warn("[getAffiliateBunzInventory] Could not aggregate:", aggErr);
         }
       }
 

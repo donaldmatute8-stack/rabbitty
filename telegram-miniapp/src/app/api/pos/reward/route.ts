@@ -193,7 +193,6 @@ export async function POST(request: Request) {
       }
 
       // Atomic SQL transaction with pessimistic row lock and authoritative Ledger entry
-      let inventoryShort = false;
       await db.transaction(async (tx) => {
         const [lockedUser] = await tx
           .select()
@@ -210,32 +209,13 @@ export async function POST(request: Request) {
           return;
         }
 
-        // ── Débito de inventario ATÓMICO (junto a ledger y crédito) ──
+        // ── ECONOMÍA RABBITTY: la recompensa MINTEA bunz (única fuente de emisión) ──
+        // El stock del comercio AUMENTA: 3500 + 8 = 3508 disponibles para aceptar
+        // redenciones de quienes tengan bunz. El mint NO consume el paquete. ──
         if (effectiveBusinessId) {
-          const debited = await tx.update(ownedBusinesses)
-            .set({ bunzBalance: sql`"bunzBalance" - ${bunzToMint}` })
-            .where(and(
-              eq(ownedBusinesses.id, effectiveBusinessId),
-              gte(ownedBusinesses.bunzBalance, bunzToMint)
-            ))
-            .returning({ bunzBalance: ownedBusinesses.bunzBalance });
-          if (debited.length === 0) {
-            // Inventario insuficiente → vault WAITING (sin débito, sin crédito)
-            const [dupVault] = await tx.select().from(pendingVaults).where(eq(pendingVaults.orderId, order_id || '')).limit(1);
-            if (!dupVault && order_id) {
-              await tx.insert(pendingVaults).values({
-                id: crypto.randomUUID(),
-                phoneNumber: phone,
-                bunzAmount: bunzToMint,
-                orderId: order_id,
-                businessId: effectiveBusinessId,
-                status: 'WAITING_BUSINESS_RECHARGE',
-                expiresAt: expirationDate,
-              });
-            }
-            inventoryShort = true;
-            return;
-          }
+          await tx.update(ownedBusinesses)
+            .set({ bunzBalance: sql`COALESCE("bunzBalance", 0) + ${bunzToMint}` })
+            .where(eq(ownedBusinesses.id, effectiveBusinessId));
         }
 
         await tx.update(users)
@@ -270,15 +250,6 @@ export async function POST(request: Request) {
           tx
         );
       });
-
-      if (inventoryShort) {
-        return NextResponse.json({
-          success: true,
-          message: 'Reward queued pending business recharge',
-          bunz: bunzToMint,
-          status: 'WAITING_BUSINESS_RECHARGE',
-        });
-      }
 
       // Push notification al usuario que recibió los Bunz en POS
       await sendEcosystemNotification({

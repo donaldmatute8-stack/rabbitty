@@ -288,10 +288,10 @@ export async function POST(req: NextRequest) {
       // a0.1) Guard en-transacción de AMBAS claves de idempotencia (ticket + bot)
       const priorInTx = await findLedgerEntry(idempotencyKey, tx) ?? await findLedgerEntry(`claim_ticket_${orderId}`, tx);
       if (priorInTx) throw new Error('ALREADY_MINTED');
-      // a) Si el restaurante está vinculado a un ownedBusiness, deducir de su bóveda
+      // a) ECONOMÍA: el reclamo COMPLETA el mint — credita el stock del comercio
       if (businessId) {
         await tx.update(ownedBusinesses)
-          .set({ bunzBalance: sql`GREATEST(0, "bunzBalance" - ${bunzToMint})` })
+          .set({ bunzBalance: sql`COALESCE("bunzBalance", 0) + ${bunzToMint}` })
           .where(eq(ownedBusinesses.id, businessId));
       }
 

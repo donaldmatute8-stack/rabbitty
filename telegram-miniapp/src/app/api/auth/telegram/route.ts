@@ -166,10 +166,10 @@ export async function POST(req: Request) {
               return;
             }
 
-            // Débito de inventario del negocio (consistente con claim-ticket — floor a 0)
+            // ECONOMÍA: el reclamo completa el mint — credita el stock del comercio
             if (vault.businessId) {
               await tx.update(ownedBusinesses)
-                .set({ bunzBalance: sql`GREATEST(0, "bunzBalance" - ${bunzToAward})` })
+                .set({ bunzBalance: sql`COALESCE("bunzBalance", 0) + ${bunzToAward}` })
                 .where(eq(ownedBusinesses.id, vault.businessId));
             }
 
