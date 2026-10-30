@@ -276,6 +276,13 @@ export async function claimWelcomeBonusForUser(params: {
   if (!userId) return null;
 
   try {
+    // 0. Flag global: si el bono de bienvenida está desactivado, no emitir
+    const [activeFlag] = await db.query.systemSettings.findMany({
+      where: eq(systemSettings.key, 'welcome_bonus_active'),
+      limit: 1,
+    });
+    if (activeFlag && String(activeFlag.value).toLowerCase() === 'false') return null;
+
     // 1. Verificar idempotencia: que este usuario no haya recibido ya un bono de bienvenida
     const existingLedger = await db.query.ledgerEntries.findFirst({
       where: or(

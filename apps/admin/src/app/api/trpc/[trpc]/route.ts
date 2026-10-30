@@ -1,5 +1,6 @@
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "@rabbitty/api";
+import { TRPCError } from "@trpc/server";
 import { auth } from "@rabbitty/auth";
 import { getRestaurantDb, getCoreDb } from "@rabbitty/api/db";
 import { getEnv } from "@/env";
@@ -42,22 +43,16 @@ const handler = async (req: Request) => {
       }
 
       const headerBranchId = req.headers.get("x-branch-id");
-      let activeBranchId = (headerBranchId && headerBranchId !== "b1" ? headerBranchId : null) || staffBranchId;
+      const headerCandidate = headerBranchId && headerBranchId !== "b1" ? headerBranchId : null;
+      // ── Anti-IDOR: el header x-branch-id SOLO se acepta si pertenece al restaurante
+      // del usuario (owner o staff). Sin ownership ni staff → sin contexto, 403. ──
+      let activeBranchId: string | null = staffBranchId;
 
       // ── Vista Tenant (impersonación God): cookie firmada tiene prioridad absoluta
       // sobre staff-lock, header y owner-immunity. Solo God Admin con 2FA puede crearla. ──
       const impersonating = verifyImpersonationCookieValue(readGodImpCookie(req));
       if (impersonating) {
         activeBranchId = impersonating.branchId;
-      }
-
-      if (!impersonating && !activeBranchId) {
-        const [firstBranch] = await restaurantDb
-          .select({ id: branches.id })
-          .from(branches)
-          .where(eq(branches.isActive, true))
-          .limit(1);
-        activeBranchId = firstBranch?.id || env.BRANCH_ID;
       }
 
       const coreDb = getCoreDb();
@@ -74,8 +69,7 @@ const handler = async (req: Request) => {
           effectiveUserId = coreUser.id;
         }
       }
-      const isAdminOrManagerStaff = staffRole === "ADMIN" || staffRole === "MANAGER";
-      if (!impersonating && effectiveUserId && (!staffRole || isAdminOrManagerStaff)) {
+      if (!impersonating && effectiveUserId) {
         // ── Owner / Admin de negocio: SIEMPRE dentro de las branches activas de SU restaurante,
         // permitiendo alternar limpiamente entre sucursal de Producción y sucursal Sandbox ──
         const ownerBiz = await coreDb
@@ -106,8 +100,8 @@ const handler = async (req: Request) => {
           }
           if (validOwnHeaderId) {
             activeBranchId = validOwnHeaderId;
-          } else {
-            // Priorizar la sucursal de PRODUCCIÓN (que no sea sandbox/entrenamiento) por defecto
+          } else if (!staffBranchId) {
+            // Owner sin header válido → priorizar sucursal de PRODUCCIÓN (no sandbox)
             const ownBranches = await restaurantDb.select({ id: branches.id, name: branches.name }).from(branches).where(and(
               eq(branches.restaurantId, targetRestaurantId),
               eq(branches.isActive, true)
@@ -117,7 +111,13 @@ const handler = async (req: Request) => {
             ) || ownBranches[0];
             if (prodBranch?.id) activeBranchId = prodBranch.id;
           }
+          // Staff sin header → conserva su staffBranchId asignado
         }
+      }
+
+      // Sin owner, sin staff y sin impersonación → el usuario no tiene tenancy: rechazar
+      if (!impersonating && !activeBranchId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sin sucursal asignada para esta sesión" });
       }
 
       return {

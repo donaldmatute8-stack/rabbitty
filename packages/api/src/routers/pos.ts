@@ -292,6 +292,8 @@ export const posRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+        const [cartOrder] = await ctx.restaurantDb.select({ branchId: orders.branchId }).from(orders).where(eq(orders.id, input.orderId)).limit(1);
+        if (!cartOrder || cartOrder.branchId !== ctx.branchId) throw new Error("Orden no encontrada");
         const [menuItem] = await ctx.restaurantDb.select().from(menuItems).where(eq(menuItems.id, input.menuItemId));
         if (!menuItem) {
           throw new Error("Producto no encontrado");
@@ -321,6 +323,8 @@ export const posRouter = router({
     .mutation(async ({ ctx, input }) => {
       const [item] = await ctx.restaurantDb.select().from(orderItems).where(eq(orderItems.id, input.id));
       if (!item) throw new Error("Item no encontrado");
+      const [parentOrd] = await ctx.restaurantDb.select({ branchId: orders.branchId }).from(orders).where(eq(orders.id, item.orderId)).limit(1);
+      if (!parentOrd || parentOrd.branchId !== ctx.branchId) throw new Error("Item no encontrado");
       if (item.status !== "PENDING") {
         throw new Error("No puedes eliminar un artículo que ya está en cocina. Usa la función de Cancelación (Void).");
       }
@@ -338,6 +342,8 @@ export const posRouter = router({
   clearCart: protectedProcedure
     .input(z.object({ orderId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const [cartOrd] = await ctx.restaurantDb.select({ branchId: orders.branchId }).from(orders).where(eq(orders.id, input.orderId)).limit(1);
+      if (!cartOrd || cartOrd.branchId !== ctx.branchId) throw new Error("Orden no encontrada");
       // Only delete PENDING items
       await ctx.restaurantDb.delete(orderItems).where(and(
         eq(orderItems.orderId, input.orderId),
@@ -349,6 +355,15 @@ export const posRouter = router({
       await ctx.restaurantDb.update(orders).set({ subtotal, tax, total }).where(eq(orders.id, input.orderId));
       
       return { success: true };
+    }),
+
+  // Guard multi-tenant: la orden DEBE pertenecer a la branch del ctx (evita IDOR cross-tenant)
+  assertOrderInBranch: protectedProcedure
+    .input(z.object({ orderId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const [o] = await ctx.restaurantDb.select({ id: orders.id, branchId: orders.branchId }).from(orders).where(eq(orders.id, input.orderId)).limit(1);
+      if (!o || o.branchId !== ctx.branchId) throw new Error("Orden no encontrada");
+      return { ok: true };
     }),
 
   voidItem: protectedProcedure
@@ -382,6 +397,11 @@ export const posRouter = router({
         throw new Error("PIN de Manager inválido");
       }
 
+      const [targetItem] = await ctx.restaurantDb.select({ id: orderItems.id, orderId: orderItems.orderId }).from(orderItems).where(eq(orderItems.id, input.id)).limit(1);
+      if (!targetItem) throw new Error("Item no encontrado");
+      const [parentOrder] = await ctx.restaurantDb.select({ branchId: orders.branchId }).from(orders).where(eq(orders.id, targetItem.orderId)).limit(1);
+      if (!parentOrder || parentOrder.branchId !== ctx.branchId) throw new Error("Item no encontrado");
+
       const [item] = await ctx.restaurantDb.update(orderItems).set({
         status: "CANCELLED",
         voidReason: input.reason,
@@ -413,7 +433,7 @@ export const posRouter = router({
       if (input.method === "CASH") {
         await assertOpenShiftForCash(ctx.restaurantDb, ctx.branchId);
       }
-      const [orderRow] = await ctx.restaurantDb.select().from(orders).where(eq(orders.id, input.orderId));
+      const [orderRow] = await ctx.restaurantDb.select().from(orders).where(and(eq(orders.id, input.orderId), eq(orders.branchId, ctx.branchId)));
       if (!orderRow) {
         throw new Error("Orden no encontrada");
       }
@@ -1382,6 +1402,17 @@ export const posRouter = router({
         if (intent.orderId) {
           await ctx.restaurantDb.update(orders).set({ status: "EXPIRED" })
             .where(eq(orders.id, intent.orderId));
+        }
+
+        // Liberar el hold de Bunz reservado (sin esto el saldo queda bloqueado para siempre)
+        try {
+          const { releasePaymentIntentHold } = await import("../services/paymentCore");
+          await releasePaymentIntentHold(ctx.restaurantDb, {
+            paymentIntentId: intent.id,
+            reason: "INTENT_EXPIRED",
+          });
+        } catch (releaseErr) {
+          console.error("[pollPaymentIntent] Error liberando hold:", releaseErr);
         }
 
         return { status: "EXPIRED" };

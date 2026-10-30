@@ -65,7 +65,12 @@ export const GOD_2FA_COOKIE = "god2fa";
 const COOKIE_TTL_MS = 12 * 60 * 60 * 1000;
 
 function signingKey(): string {
-  return process.env.GOD_ADMIN_TOTP_SECRET || "dev-only-god2fa-signing-key";
+  const secret = process.env.GOD_ADMIN_TOTP_SECRET;
+  // Producción sin secret = HMAC forjable con la key de dev conocida → fail-fast
+  if (!secret && process.env.NODE_ENV === "production") {
+    throw new Error("GOD_ADMIN_TOTP_SECRET requerido en producción (god2fa)");
+  }
+  return secret || "dev-only-god2fa-signing-key";
 }
 
 export function issueGod2faCookieValue(): string {

@@ -131,6 +131,14 @@ export async function POST(req: Request) {
           const branchId = vault.businessId || null;
 
           await db.transaction(async (tx) => {
+            // Lock pesimista del vault: solo UN canal paga (bot o ticket, jamás ambos)
+            const [lockedVault] = await tx
+              .select()
+              .from(pendingVaults)
+              .where(eq(pendingVaults.id, vault.id))
+              .for('update');
+            if (!lockedVault || lockedVault.status !== 'PENDING') return;
+
             const [lockedUser] = await tx
               .select()
               .from(users)
@@ -139,8 +147,15 @@ export async function POST(req: Request) {
 
             if (!lockedUser) return;
 
-            const prior = await findLedgerEntry(idempotencyKey, tx);
-            if (prior) return;
+            // Guard en-tx de AMBAS claves (el ticket usa pos_rwd_, el bot claim_ticket_)
+            const prior = (await findLedgerEntry(idempotencyKey, tx)) ?? (await findLedgerEntry(`pos_rwd_${claimId}`, tx));
+            if (prior) {
+              await tx
+                .update(pendingVaults)
+                .set({ status: 'CLAIMED' })
+                .where(and(eq(pendingVaults.id, vault.id), eq(pendingVaults.status, 'PENDING')));
+              return;
+            }
 
             await tx
               .update(users)

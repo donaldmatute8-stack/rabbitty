@@ -21,6 +21,10 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     }
 
+    if (session.expiresAt < new Date()) {
+      return NextResponse.json({ success: true, authenticated: false, expired: true });
+    }
+
     if (session.userId && session.user) {
       return NextResponse.json({ 
         success: true, 
@@ -32,10 +36,6 @@ export async function GET(req: Request) {
           tonWalletAddress: session.user.tonWalletAddress
         }
       });
-    }
-
-    if (session.expiresAt < new Date()) {
-      return NextResponse.json({ success: true, authenticated: false, expired: true });
     }
 
     return NextResponse.json({ success: true, authenticated: false });

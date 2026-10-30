@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { restaurantDb } from "@/db/restaurant";
-import { users, ownedBusinesses, transactions, affiliateCampaigns, campaignRedemptions } from "@/db/schema";
+import { users, ownedBusinesses, transactions, affiliateCampaigns, campaignRedemptions, pendingVaults } from "@/db/schema";
 import { orders, restaurants, branches } from "@rabbitty/database-restaurant/schema";
 import { eq, and, desc, gt, sql } from "drizzle-orm";
 import { getAuthenticatedUser } from "@/lib/serverAuth";
@@ -80,6 +80,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: false,
         error: "Este ticket ya fue acreditado previamente al Rabbitter de la compra.",
+        alreadyClaimed: true,
+      }, { status: 400 });
+    }
+
+    // a2) Si existe una bóveda para esta orden ya reclamada por otro canal (bot) → doble pago bloqueado
+    const [existingVault] = await db.select().from(pendingVaults)
+      .where(eq(pendingVaults.orderId, orderId))
+      .orderBy(desc(pendingVaults.createdAt))
+      .limit(1);
+    if (existingVault && existingVault.status !== 'PENDING') {
+      return NextResponse.json({
+        success: false,
+        error: "Este ticket ya fue acreditado previamente (vía QR del bot).",
         alreadyClaimed: true,
       }, { status: 400 });
     }
@@ -259,7 +272,22 @@ export async function POST(req: NextRequest) {
     }
 
     // 6. Transacción atómica en coreDb: Deducción de inventario de Bóveda y acreditación a usuario
+    try {
     await db.transaction(async (tx) => {
+      // a0) Si hay bóveda para esta orden: lock pesimista + unicidad del pago (canal bot o ticket, UNO solo)
+      if (existingVault) {
+        const [lockedVault] = await tx.select().from(pendingVaults)
+          .where(eq(pendingVaults.id, existingVault.id))
+          .for('update');
+        if (!lockedVault || lockedVault.status !== 'PENDING') {
+          throw new Error('VAULT_ALREADY_CLAIMED');
+        }
+        // Si la bóveda existe, el monto autorizado es el de la bóveda (fuente única)
+        bunzToMint = lockedVault.bunzAmount;
+      }
+      // a0.1) Guard en-transacción de AMBAS claves de idempotencia (ticket + bot)
+      const priorInTx = await findLedgerEntry(idempotencyKey, tx) ?? await findLedgerEntry(`claim_ticket_${orderId}`, tx);
+      if (priorInTx) throw new Error('ALREADY_MINTED');
       // a) Si el restaurante está vinculado a un ownedBusiness, deducir de su bóveda
       if (businessId) {
         await tx.update(ownedBusinesses)
@@ -314,7 +342,25 @@ export async function POST(req: NextRequest) {
         },
         tx
       );
+
+      // a1) Marcar la bóveda CLAIMED (bloquea el doble pago por el canal del bot)
+      if (existingVault) {
+        await tx.update(pendingVaults).set({ status: 'CLAIMED' })
+          .where(and(eq(pendingVaults.id, existingVault.id), eq(pendingVaults.status, 'PENDING')));
+      }
     });
+
+    } catch (txErr: unknown) {
+      const msg = txErr instanceof Error ? txErr.message : '';
+      if (msg === 'VAULT_ALREADY_CLAIMED' || msg === 'ALREADY_MINTED') {
+        return NextResponse.json({
+          success: false,
+          error: "Este ticket ya fue acreditado previamente.",
+          alreadyClaimed: true,
+        }, { status: 400 });
+      }
+      throw txErr;
+    }
 
     // 7. Marcar la orden en restaurantDb con los Bunz acreditados y el customerId
     await restaurantDb.update(orders).set({

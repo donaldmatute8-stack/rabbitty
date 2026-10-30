@@ -28,8 +28,8 @@ export async function POST(req: NextRequest) {
     const rawInput = (body?.input || body?.email || '').trim();
     const code = body?.code?.trim();
 
-    const isTesterDemo = rawInput.toLowerCase() === 'tester' || rawInput.toLowerCase() === 'tester@rabbitty.me';
-    const isAcceptedDemoCode = code === '123456' || code === 'demo12' || code === 'demo123' || (code?.length === 6 && isTesterDemo);
+    const isTesterDemo = process.env.NODE_ENV !== 'production' && (rawInput.toLowerCase() === 'tester' || rawInput.toLowerCase() === 'tester@rabbitty.me');
+    const isAcceptedDemoCode = isTesterDemo && (code === '123456' || code === 'demo12' || code === 'demo123' || (code?.length === 6));
 
     if (!rawInput || !code) {
       return NextResponse.json({ error: 'Identificador y código son obligatorios' }, { status: 400 });

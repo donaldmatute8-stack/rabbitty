@@ -100,6 +100,10 @@ export default function ScanPage() {
       (async () => {
         try {
           const headers = await PlatformBridge.getAuthHeaders();
+          if (!headers?.Authorization) {
+            alert('Inicia sesión en Rabbitty y vuelve a escanear el ticket para reclamar tus Bunz.');
+            return;
+          }
           const claimRes = await fetch('/api/pos/claim-ticket', {
             method: 'POST',
             headers: { ...headers, 'Content-Type': 'application/json' },

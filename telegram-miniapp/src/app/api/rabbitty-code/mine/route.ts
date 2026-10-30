@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { users } from "@/db/schema";
+import { users, ownedBusinesses } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { getAuthenticatedUser } from "@/lib/serverAuth";
 
@@ -23,9 +23,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: true, code: me.scanCode });
     }
 
-    const used = new Set(
-      (await db.select({ c: users.scanCode }).from(users)).map((r) => r.c).filter(Boolean) as number[]
-    );
+    const [userRows, bizRows] = await Promise.all([
+      db.select({ c: users.scanCode }).from(users),
+      db.select({ c: ownedBusinesses.scanCode }).from(ownedBusinesses),
+    ]);
+    const used = new Set([...userRows, ...bizRows].map((r) => r.c).filter(Boolean) as number[]);
     let code = 100000 + Math.floor(Math.random() * 431441);
     for (let tries = 0; tries < 50 && (used.has(code) || degenerate(code)); tries++) {
       code = 100000 + Math.floor(Math.random() * 431441);

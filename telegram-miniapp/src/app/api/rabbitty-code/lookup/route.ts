@@ -131,7 +131,7 @@ export async function POST(req: NextRequest) {
         const branchId = params.get("branchId") || params.get("branch");
         if (branchId && !params.get("tableId") && !params.get("claimToken")) {
           const [branchRow] = await db.execute(
-            sql`SELECT b."restaurantId", r."businessId" FROM branches b JOIN restaurants r ON r.id = b."restaurantId" WHERE b.id = ${branchId} LIMIT 1`
+            sql`SELECT b."restaurantId", r."businessId" FROM branches b JOIN restaurants r ON r.id = b."restaurantId" WHERE b.id = ${branchId} AND b."isActive" = true LIMIT 1`
           ).then((r: unknown) => ((r as { rows?: Array<{ businessId: string }> }).rows || (r as unknown as Array<{ businessId: string }>)) as Array<{ businessId: string }>);
           const businessId = branchRow?.businessId;
           if (businessId) {

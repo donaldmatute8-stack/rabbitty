@@ -315,6 +315,13 @@ export default function FeedPage() {
             router.push(`/affiliate/${affiliateId}`);
           }
         }
+        // QR Login del business dashboard por bot (antes era dead-end)
+        if (startParam && startParam.startsWith('qrlogin_')) {
+          const qrToken = startParam.split('qrlogin_')[1]?.split('&')[0];
+          if (qrToken) {
+            router.push(`/scan?qrlogin_${qrToken}`);
+          }
+        }
 
         // --- SEAMLESS TELEGRAM AUTH ---
         if (app?.initData) {

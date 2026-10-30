@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     let telegramId: string | null = null;
 
     const isEmail = rawInput.includes('@');
-    const isTesterDemo = rawInput.toLowerCase() === 'tester' || rawInput.toLowerCase() === 'tester@rabbitty.me';
+    const isTesterDemo = process.env.NODE_ENV !== 'production' && (rawInput.toLowerCase() === 'tester' || rawInput.toLowerCase() === 'tester@rabbitty.me');
 
     if (isTesterDemo) {
       email = 'tester@rabbitty.me';

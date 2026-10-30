@@ -59,12 +59,10 @@ export async function POST(request: Request) {
       );
     const spentToday = Math.abs(todaySpent[0]?.total ?? 0);
     
-    // We allow the transaction if it comes from POS (to honor offline transactions),
-    // but if it exceeds daily cap, we might log a flag. For now, we allow it.
+    // Cap diario real: bloquea el gasto vivo que lo exceda (offline sync queda exenta
+    // para no bloquear la conciliación del restaurante)
     if (spentToday + bunzRequired > DAILY_SPEND_CAP && !body.is_offline_sync) {
-       // If it's strictly a live transaction and exceeds cap, we can block it.
-       // But if it's an offline sync, we must accept it.
-       // Assuming pos always sends it. We will just allow it to honor the restaurant.
+      return NextResponse.json({ error: `Límite diario de gasto excedido (cap ${DAILY_SPEND_CAP} Bunz). Intenta mañana.` }, { status: 402 });
     }
 
     // Stable idempotency key: prefer a client-supplied key, then the POS order id.

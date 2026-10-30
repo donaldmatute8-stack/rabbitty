@@ -381,9 +381,10 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
       addText(`Escanea tu ticket en la mini app de\nTelegram o Rabbitty para recibir tu cashback.\n\n`);
       try {
         // Create QR Code (Direct app.rabbitty.me URL opens native Capacitor webview / miniapp immediately)
-        const claimParam = (data as any).claimToken ? `claimToken=${(data as any).claimToken}` : `claim=${data.orderNumber || "0000"}`;
-        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`https://app.rabbitty.me/scan?${claimParam}`)}`;
-        const qrBytes = await rasterizeImage(qrUrl, 200);
+        const claimParam = (data as any).claimToken ? `claimToken=${(data as any).claimToken}` : null;
+        // Sin claimToken válido NO se imprime QR de reclamo (un claim=orderNumber es inutilizable)
+        const qrUrl = claimParam ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`https://app.rabbitty.me/scan?${claimParam}`)}` : null;
+        const qrBytes = qrUrl ? await rasterizeImage(qrUrl, 200) : null;
         if (qrBytes) {
           chunks.push(qrBytes);
         }

@@ -293,7 +293,7 @@ export function TicketTemplate({
             {/* Real QR Code for Validation / Bunz Claim */}
             <div className="flex flex-col items-center justify-center pt-1">
               <div className="bg-white p-2 rounded-xl shadow-md inline-block">
-                <QRCodeSVG value={`https://app.rabbitty.me/scan?claimToken=${data.claimToken || data.orderNumber || "0000"}`} size={160} level="H" includeMargin={false} imageSettings={{ src: "/Ra.png", height: 32, width: 32, excavate: true }} />
+                <QRCodeSVG value={data.claimToken ? `https://app.rabbitty.me/scan?claimToken=${data.claimToken}` : `https://rabbitty.me/download`} size={160} level="H" includeMargin={false} imageSettings={{ src: "/Ra.png", height: 32, width: 32, excavate: true }} />
               </div>
               <p className="text-[8px] tracking-widest text-gray-400 uppercase mt-1 font-mono">
                 RBBTY-VERIF-{data.orderNumber || "0001"}
