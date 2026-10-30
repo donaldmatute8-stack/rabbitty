@@ -264,7 +264,8 @@ export async function POST(request: Request) {
 
         await recordLedgerTransaction(
           {
-            branchId: businessId !== 'unknown' ? businessId : null,
+            // branchId tiene FK a branches — aquí no hay branch confiable (businessId NO es branch)
+            branchId: null,
             payerSubjectId: businessId !== 'unknown' ? businessId : 'POS',
             payeeSubjectId: `usr_${existingUser.id}`,
             amount: bunzToMint,

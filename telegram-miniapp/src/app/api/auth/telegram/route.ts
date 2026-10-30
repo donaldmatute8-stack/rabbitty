@@ -139,7 +139,8 @@ export async function POST(req: Request) {
             }
           }
           const bunzToAward = vault.bunzAmount;
-          const branchId = vault.businessId || null;
+          // branchId tiene FK a branches — vault.businessId es un negocio, no una branch
+          const branchId: string | null = null;
 
           await db.transaction(async (tx) => {
             // Lock pesimista del vault: solo UN canal paga (bot o ticket, jamás ambos)
