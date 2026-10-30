@@ -109,13 +109,15 @@ export const posRouter = router({
   getActiveCheckIns: protectedProcedure.query(async ({ ctx }) => {
     const bizId = await resolveBusinessIdFromBranch(ctx.restaurantDb, ctx.branchId);
     if (!bizId) return [];
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    // Presencia REAL: cada escaneo del QR del negocio escribe un CHECKIN_SCAN —
+    // ventana de 60 min (el rabbitter re-escanea y su presencia se refresca).
+    const ninetyMinAgo = new Date(Date.now() - 60 * 60 * 1000);
     const rows = await ctx.coreDb.execute(
-      sql`SELECT "payeeSubjectId", MAX("createdAt") AS at FROM "ledger_entries"
-          WHERE "payerSubjectId" = ${bizId} AND "idempotencyKey" LIKE 'checkin_%' AND type = 'EARN'
-            AND "createdAt" >= ${twoHoursAgo}
-          GROUP BY "payeeSubjectId" ORDER BY at DESC LIMIT 12`
-    ).then((r: unknown) => ((r as { rows?: Array<{ payeeSubjectId: string; at: string }> }).rows || (r as unknown as Array<{ payeeSubjectId: string; at: string }>)));
+      sql`SELECT "userId", MAX("createdAt") AS at FROM "business_interactions"
+          WHERE "businessId" = ${bizId} AND action = 'CHECKIN_SCAN' AND "userId" IS NOT NULL
+            AND "createdAt" >= ${ninetyMinAgo}
+          GROUP BY "userId" ORDER BY at DESC LIMIT 12`
+    ).then((r: unknown) => ((r as { rows?: Array<{ payeeSubjectId: string; at: string }> }).rows || (r as unknown as Array<{ payeeSubjectId: string; at: string }>)).map((r: any) => ({ payeeSubjectId: `usr_${r.userId}`, at: r.at })));
     const out: Array<{ userId: string; name: string; username: string | null; at: string }> = [];
     for (const row of rows) {
       const userId = (row.payeeSubjectId || "").replace(/^usr_/, "");

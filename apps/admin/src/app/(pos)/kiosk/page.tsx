@@ -98,6 +98,7 @@ export default function KioskPage() {
   const kioskIntentMutation = trpc.pos.createStripeChargeIntent.useMutation();
   const kioskIntentCancel = trpc.payments.cancelPaymentIntent.useMutation();
   const { data: categories } = trpc.pos.getCategories.useQuery(undefined, { retry: false });
+  const { data: kioskCheckIns } = trpc.pos.getActiveCheckIns.useQuery(undefined, { refetchInterval: 30000, retry: false });
   const { data: menuItems } = trpc.pos.getMenuItems.useQuery({}, { retry: false });
 
   const filteredItems = useMemo(() => {
@@ -135,6 +136,23 @@ export default function KioskPage() {
         <div className="absolute inset-0 bg-cover bg-center opacity-40 transition-transform duration-[10s] group-hover:scale-110" style={{ backgroundImage: `url(${BG_VIDEO_PLACEHOLDER})` }} />
         <div className="absolute inset-0 bg-linear-to-t from-black via-black/60 to-transparent" />
         
+        {/* ── Presencia: clientes con check-in activo en el local ── */}
+        {(kioskCheckIns?.length ?? 0) > 0 && (
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-1.5 pointer-events-none">
+            <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-black/60 backdrop-blur-md border border-emerald-500/30">
+              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-[12px] font-bold text-emerald-200">
+                🐰 {kioskCheckIns![0].name} está en el local — pide tu teléfono o escanea el QR para vincular tus Bunz
+              </span>
+            </div>
+            {(kioskCheckIns!.length > 1) && (
+              <span className="text-[10px] text-emerald-300/70 font-bold">
+                +{kioskCheckIns!.length - 1} cliente(s) más con check-in activo
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Discreet Staff Exit Button (Protected) */}
         <div className="absolute top-6 left-6 z-30">
           <button

@@ -59,6 +59,13 @@ export async function POST(req: NextRequest) {
         .where(eq(users.id, caller.id));
     }
 
+    // ── Señal de presencia SIEMPRE (aunque el check-in diario sea 'already'): el POS
+    // y el Kiosko pollan estas interacciones — sin esto un re-escaneo no actualizaría nada. ──
+    try {
+      await db.execute(sql`INSERT INTO "business_interactions" (id, "userId", "businessId", action, channel, metadata)
+        VALUES (${`ck_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`}, ${caller.id}, ${biz.id}, 'CHECKIN_SCAN', null, ${JSON.stringify({ kind: inserted.length > 0 ? 'registered' : 'repeat', at: new Date().toISOString() })}::jsonb)`);
+    } catch { /* best-effort */ }
+
     return NextResponse.json({ success: true, checkIn: inserted.length > 0 ? 'registered' : 'already', businessName: biz.name });
   } catch (error) {
     console.error('[CHECKIN ERROR]', error);

@@ -65,7 +65,7 @@ export default function ScanPage() {
   const [showManualInput, setShowManualInput] = useState(false);
   const [activeTab, setActiveTab] = useState<'scan' | 'my-code'>(initialTab);
   const [qrConfirm, setQrConfirm] = useState<{ qrToken: string; origin: string } | null>(null);
-  const [presenceSheet, setPresenceSheet] = useState<{ businessId: string; businessName: string; already: boolean } | null>(null);
+  const [presenceSheet, setPresenceSheet] = useState<{ businessId: string; businessName: string; already: boolean; logoUrl?: string | null } | null>(null);
   const [scanLoader, setScanLoader] = useState<string | null>(null);
   const [scanLoaderCode, setScanLoaderCode] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
@@ -170,10 +170,16 @@ export default function ScanPage() {
                 localStorage.setItem('rabbitty_last_business_name', resolution.business.name || urlBusiness || '');
               } catch {}
               // Presencia: el cajero te ve en su POS — sin redirigir
+              let dLogo: string | null = null;
+              try {
+                const bRes = await fetch(`/api/business/${resolution.business.id}`, { headers });
+                dLogo = (await bRes.json())?.business?.logoUrl || null;
+              } catch { /* sin logo */ }
               setPresenceSheet({
                 businessId: resolution.business.id,
                 businessName: resolution.business.name || urlBusiness || 'el negocio',
                 already: checkData?.checkIn === 'already',
+                logoUrl: dLogo,
               });
               return;
             }
@@ -342,10 +348,17 @@ export default function ScanPage() {
               });
               const d2 = await res2.json().catch(() => ({}));
               PlatformBridge.hapticFeedback('success');
+              let logoUrl: string | null = null;
+              try {
+                const bRes = await fetch(`/api/business/${bizId}`, { headers });
+                const bData = await bRes.json();
+                logoUrl = bData?.business?.logoUrl || bData?.business?.gallery?.[0] || null;
+              } catch { /* sin logo */ }
               setPresenceSheet({
                 businessId: bizId,
                 businessName: bizName,
                 already: d2?.checkIn === 'already',
+                logoUrl,
               });
               return;
             }
@@ -604,10 +617,16 @@ export default function ScanPage() {
           animate={{ scale: 1, opacity: 1 }}
           className="flex flex-col items-center"
         >
-          <div className="w-20 h-20 rounded-full flex items-center justify-center text-4xl mb-4"
-            style={{ background: 'linear-gradient(135deg, #FF2E93 0%, #E91E63 100%)', boxShadow: '0 0 60px rgba(233,30,99,0.5)' }}>
-            🐰
-          </div>
+          {presenceSheet.logoUrl ? (
+            <img src={presenceSheet.logoUrl} alt={presenceSheet.businessName}
+              className="w-20 h-20 rounded-2xl object-cover mb-4 border-2 border-pink-500/50"
+              style={{ boxShadow: '0 0 40px rgba(233,30,99,0.4)' }} />
+          ) : (
+            <div className="w-20 h-20 rounded-full flex items-center justify-center text-4xl mb-4"
+              style={{ background: 'linear-gradient(135deg, #FF2E93 0%, #E91E63 100%)', boxShadow: '0 0 60px rgba(233,30,99,0.5)' }}>
+              🐰
+            </div>
+          )}
           <h2 className="text-white text-xl font-black">
             {presenceSheet.already ? 'Ya estás activo aquí' : '¡Estás activo!'}
           </h2>
