@@ -13,6 +13,7 @@ import {
   users,
 } from "@rabbitty/database-core/schema";
 import { branches, restaurants } from "@rabbitty/database-restaurant/schema";
+import { isGodAdminIdentity } from "../services/god2fa";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -56,6 +57,8 @@ function buildQrToken(subscriptionId: string, secret: string): string {
 }
 
 async function assertBusinessOwner(ctx: any, businessId: string) {
+  // God Admin (identidad verificada con 2FA) tiene poder sobre todos los negocios
+  if (isGodAdminIdentity(ctx.user?.email, ctx.user?.name)) return;
   const [biz] = await ctx.coreDb
     .select({ id: ownedBusinesses.id })
     .from(ownedBusinesses)
@@ -66,6 +69,7 @@ async function assertBusinessOwner(ctx: any, businessId: string) {
 
 /** Owner del negocio O staff (cajero/waiter/mesero) de una sucursal que le pertenece. */
 async function assertCanRedeem(ctx: any, businessId: string) {
+  if (isGodAdminIdentity(ctx.user?.email, ctx.user?.name)) return;
   const [biz] = await ctx.coreDb
     .select({ id: ownedBusinesses.id })
     .from(ownedBusinesses)
@@ -141,8 +145,16 @@ function buildEntitlementRows(
 export const membershipsRouter = router({
   /** Negocios que administra el usuario autenticado. */
   myBusinesses: protectedProcedure.query(async ({ ctx }) => {
+    const isGod = isGodAdminIdentity(ctx.user?.email, ctx.user?.name);
+    if (isGod) {
+      // God Admin: todos los negocios (gestión directa sin impersonación)
+      return await ctx.coreDb
+        .select({ id: ownedBusinesses.id, name: ownedBusinesses.name, isGod: sql<boolean>`true` })
+        .from(ownedBusinesses)
+        .orderBy(ownedBusinesses.name);
+    }
     return await ctx.coreDb
-      .select({ id: ownedBusinesses.id, name: ownedBusinesses.name })
+      .select({ id: ownedBusinesses.id, name: ownedBusinesses.name, isGod: sql<boolean>`false` })
       .from(ownedBusinesses)
       .where(eq(ownedBusinesses.ownerId, ctx.userId));
   }),

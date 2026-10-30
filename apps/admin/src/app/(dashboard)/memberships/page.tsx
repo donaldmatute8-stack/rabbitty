@@ -78,9 +78,9 @@ export default function MembershipsPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {businesses && businesses.length > 1 && (
+          {businesses && businesses.length > 0 && (businesses.length > 1 || (businesses[0] as { isGod?: boolean }).isGod) && (
             <select className={cn(inputCls, "w-auto")} value={businessId} onChange={(e) => setSelected(e.target.value)}>
-              {businesses.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+              {businesses.map((b) => <option key={b.id} value={b.id}>{(b as { isGod?: boolean }).isGod ? "👑 " : ""}{b.name}</option>)}
             </select>
           )}
           <Button onClick={() => setShowForm(true)} disabled={!enabled}><Plus className="w-4 h-4 mr-1" /> Nuevo plan</Button>
@@ -99,7 +99,12 @@ export default function MembershipsPage() {
         ))}
       </nav>
 
-      {!enabled && <p className="text-sm text-white/50">No se encontró un negocio asociado a tu cuenta.</p>}
+      {!enabled && (
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-white/60 max-w-lg">
+          <p className="font-bold text-white mb-1">Sin negocios asociados</p>
+          <p>Tu cuenta no administra ningún negocio. Usa la <b>Vista Tenant</b> (impersonación desde God Shell) para gestionar las membresías de un afiliado.</p>
+        </div>
+      )}
 
       {enabled && tab === "plans" && (
         <div className="grid gap-4 md:grid-cols-2">
