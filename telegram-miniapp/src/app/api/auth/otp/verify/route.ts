@@ -5,6 +5,7 @@ import { and, eq, gt, or, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 import { rateLimit, retryAfterSec, checkOnly, registerHit, resetLimit, getClientIp, hashOtp } from '@/lib/otp';
 import { resolveUniqueUsername } from '@/lib/username';
+import { validateTelegramInitData, parseTelegramUser } from '@/lib/telegramAuth';
 import { claimWelcomeBonusForUser } from '@/lib/welcomeBonusConfig';
 
 const VERIFY_IP_LIMIT = 30;
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest) {
   try {
     const ipKey = `otp_verify_ip:${getClientIp(req)}`;
 
-    const ipCheck = rateLimit(ipKey, VERIFY_IP_LIMIT, VERIFY_IP_WINDOW_MS);
+    const ipCheck = await rateLimit(ipKey, VERIFY_IP_LIMIT, VERIFY_IP_WINDOW_MS);
     if (!ipCheck.ok) {
       return NextResponse.json(
         { error: `Demasiados intentos. Espera ${ipCheck.retryAfterSec} segundos.` },
@@ -68,8 +69,8 @@ export async function POST(req: NextRequest) {
     }
 
     const failKey = `otp_verify_fail:${email}`;
-    if (!checkOnly(failKey, MAX_FAILED_ATTEMPTS)) {
-      const wait = retryAfterSec(failKey);
+    if (!(await checkOnly(failKey, MAX_FAILED_ATTEMPTS))) {
+      const wait = await retryAfterSec(failKey);
       return NextResponse.json(
         { error: `Demasiados intentos fallidos. Solicita un nuevo código en ${wait} segundos.` },
         { status: 429, headers: { 'Retry-After': String(wait) } }
@@ -100,12 +101,35 @@ export async function POST(req: NextRequest) {
       ).returning();
 
       if (!deleted.length) {
-        registerHit(failKey, MAX_FAILED_ATTEMPTS, LOCKOUT_WINDOW_MS);
+        await registerHit(failKey, MAX_FAILED_ATTEMPTS, LOCKOUT_WINDOW_MS);
         return NextResponse.json({ error: 'Código incorrecto o ha expirado. Por favor solicita uno nuevo.' }, { status: 400 });
       }
     }
 
-    resetLimit(failKey);
+    await resetLimit(failKey);
+
+    // ── Dedupe de identidad: si el login ocurre dentro de Telegram, la identidad
+    // del bot TIENE prioridad — evita usuarios duplicados (uno por Telegram, otro por OTP) ──
+    let telegramIdentityId: string | null = null;
+    const initData = typeof body?.initData === 'string' ? body.initData : null;
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    if (initData && botToken && validateTelegramInitData(initData, botToken)) {
+      const tgUser = parseTelegramUser(initData);
+      if (tgUser?.id) {
+        const [tgRow] = await db.select({ id: users.id, phoneNumber: users.phoneNumber, email: users.email })
+          .from(users).where(eq(users.telegramId, String(tgUser.id))).limit(1);
+        if (tgRow) {
+          telegramIdentityId = tgRow.id;
+          // Vincular el teléfono/email del OTP a la identidad de Telegram si estaba suelto
+          const patch: Record<string, string | null> = {};
+          if (phone && !tgRow.phoneNumber) patch.phoneNumber = phone;
+          if (email && !tgRow.email) patch.email = email;
+          if (Object.keys(patch).length) {
+            await db.update(users).set(patch).where(eq(users.id, tgRow.id));
+          }
+        }
+      }
+    }
 
     // Buscar usuario por email o teléfono
     let user = await db.query.users.findFirst({
@@ -120,16 +144,35 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Identidad Telegram ya resuelta → GANA sobre la del OTP (una sola cuenta por humano)
+    if (telegramIdentityId && user && user.id !== telegramIdentityId) {
+      // La cuenta OTP creada por navegador queda desactivada como identidad duplicada:
+      // conservamos su saldo moviéndolo a la identidad de Telegram si la OTP estaba vacía.
+      const [otpRow] = await db.select({ earned: users.totalBunzEarned, spent: users.totalBunzSpent, tgId: users.telegramId, email: users.email, phone: users.phoneNumber })
+        .from(users).where(eq(users.id, user.id)).limit(1);
+      const otpHasUse = (otpRow.earned ?? 0) > 0 || (otpRow.spent ?? 0) > 0 || otpRow.tgId;
+      if (!otpHasUse) {
+        await db.delete(users).where(eq(users.id, user.id));
+      }
+      user = await db.query.users.findFirst({ where: eq(users.id, telegramIdentityId) });
+    }
+
     const isNewUser = !user;
 
     let resolvedUser = user;
     if (!resolvedUser) {
       const usernameBase = isEmail ? email.split('@')[0] : `user_${rawInput.replace(/\D/g, '').slice(-6)}`;
       const username = await resolveUniqueUsername(usernameBase);
+      const tgIdFromInitData = (() => {
+        if (!initData || !botToken || !validateTelegramInitData(initData, botToken)) return null;
+        const tg = parseTelegramUser(initData);
+        return tg?.id ? String(tg.id) : null;
+      })();
       [resolvedUser] = await db.insert(users).values({
         email,
         phoneNumber: phone,
         username,
+        telegramId: tgIdFromInitData,
         totalBunzEarned: 0,
         totalBunzSpent: 0,
         role: 'USER',

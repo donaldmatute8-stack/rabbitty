@@ -44,7 +44,7 @@ export async function recordLedgerTransaction(params: RecordTransactionParams, t
       branchId: params.branchId || undefined,
       payerSubjectId: params.payerSubjectId,
       payeeSubjectId: params.payeeSubjectId,
-      amount: params.amount,
+      amount: Math.round(params.amount),
       currency: "BUNZ",
       type: params.type,
       referenceId: params.referenceId || undefined,

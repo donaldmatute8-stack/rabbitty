@@ -100,7 +100,8 @@ export const adminRouter = router({
       z.object({
         id: z.string(),
         name: z.string().optional(),
-        slug: z.string().optional(),
+        // Slug ASCII estricto: a-z0-9 con guiones — evita QRs/startapp rotos
+        slug: z.string().regex(/^[a-z0-9](?:[a-z0-9-]{1,58}[a-z0-9])?$/, "Slug inválido (usa minúsculas, números y guiones)").optional(),
         currency: z.string().optional(),
         taxRate: z.number().optional(),
         timezone: z.string().optional(),

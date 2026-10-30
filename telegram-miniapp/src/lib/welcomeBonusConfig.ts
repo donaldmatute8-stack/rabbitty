@@ -427,76 +427,114 @@ export async function claimWelcomeBonusForUser(params: {
       return null; // Sin colateral y sin subsidio configurado: no se mintea nada
     }
 
-    // 5. Ejecutar asientos contables
-    // 5a. ASIENTOS DEL LEDGER PRIMERO: la UNIQUE de idempotencyKey es el candado
-    //     atómico del claim. Si ya se otorgó (o corre en paralelo), falla aquí y
-    //     abortamos ANTES de tocar saldos de negocio/usuario (nunca quemar colateral).
-    if (affiliateShare > 0) {
-      await db.insert(ledgerEntries).values({
-        payerSubjectId: targetBusiness.id,
-        payeeSubjectId: `usr_${userId}`,
-        amount: affiliateShare,
-        type: 'EARN',
-        idempotencyKey: `welcome_aff_${userId}`,
-      });
-    }
+    // 5. Asientos contables — UNA transacción con locks pesimistas (sin lost-updates)
+    //    Re-verifica claves de idempotencia Y cap mensual DENTRO de la tx (anti-TOCTOU).
+    await db.transaction(async (tx) => {
+      // Locks determinísticos (orden estable: user → business) para evitar deadlocks
+      const [lockedUser] = await tx.select().from(users).where(eq(users.id, userId)).for('update');
+      if (!lockedUser) throw new Error('WELCOME_USER_NOT_FOUND');
+      const [lockedBiz] = await tx.select().from(ownedBusinesses).where(eq(ownedBusinesses.id, targetBusiness.id)).for('update');
 
-    if (treasuryShare > 0) {
-      await db.insert(ledgerEntries).values({
-        payerSubjectId: 'sys_rabbitty_treasury',
-        payeeSubjectId: `usr_${userId}`,
-        amount: treasuryShare,
-        type: 'EARN',
-        idempotencyKey: `welcome_trs_${userId}`,
-      });
-    }
+      // Re-verificar idempotencia en-tx (carrera de claims paralelos)
+      const priorKeys = await tx.select({ k: ledgerEntries.idempotencyKey }).from(ledgerEntries)
+        .where(or(
+          eq(ledgerEntries.idempotencyKey, `welcome_aff_${userId}`),
+          eq(ledgerEntries.idempotencyKey, `welcome_trs_${userId}`),
+        ));
+      if (priorKeys.length > 0) throw new Error('WELCOME_ALREADY_MINTED');
 
-    // 5b. Descontar tramo del paquete del afiliado (creditUsed dentro del límite,
-    //     bunzBalance solo si tiene saldo)
-    const bunzDebit = Math.min(affiliateShare, targetBusiness.bunzBalance || 0);
-    const creditDebit = affiliateShare - bunzDebit;
-    await db
-      .update(ownedBusinesses)
-      .set({
-        creditUsed: (targetBusiness.creditUsed || 0) + creditDebit,
-        bunzBalance: (targetBusiness.bunzBalance || 0) - bunzDebit,
-        updatedAt: new Date(),
-      })
-      .where(eq(ownedBusinesses.id, targetBusiness.id));
+      // Re-verificar cap mensual del afiliado en-tx (anti-TOCTOU: claims paralelos del mismo negocio)
+      const monthStart = new Date();
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
+      const [usageRow] = await tx
+        .select({ total: sql<number>`COALESCE(SUM(${ledgerEntries.amount}), 0)` })
+        .from(ledgerEntries)
+        .where(and(
+          eq(ledgerEntries.payerSubjectId, targetBusiness.id),
+          eq(ledgerEntries.type, 'EARN'),
+          sql`${ledgerEntries.idempotencyKey} LIKE 'welcome_aff_%'`,
+          sql`${ledgerEntries.createdAt} >= ${monthStart}`,
+        ));
+      const usedInTx = Number(usageRow?.total ?? 0);
+      const liveMonthlyCap = Math.max(0, capConfig.overrides[targetBusiness.id] ?? capConfig.default ?? DEFAULT_MONTHLY_CAP_PER_AFFILIATE);
+      const liveRemaining = Math.max(0, liveMonthlyCap - usedInTx);
+      if (liveRemaining <= 0 && treasuryShare <= 0) throw new Error('WELCOME_CAP_EXHAUSTED');
+      // Si el cap se agotó en la carrera, el tramo del afiliado pasa completo a Tesorería
+      let finalAffiliateShare = affiliateShare;
+      let finalTreasuryShare = treasuryShare;
+      if (liveRemaining <= 0) {
+        finalAffiliateShare = 0;
+        finalTreasuryShare = totalBunz;
+      } else if (affiliateShare > liveRemaining) {
+        finalTreasuryShare += affiliateShare - liveRemaining;
+        finalAffiliateShare = liveRemaining;
+      }
 
-    // 5c. Deuda en Negativo en Tesorería por el tramo de Rabbitty
-    if (treasuryShare > 0) {
-      await db.insert(treasury).values({
-        concept: `Subsidio Bono Bienvenida QR (${targetBusiness.name})`,
-        amount: -treasuryShare, // En negativo: deuda de tesorería pendiente de liquidar manualmente
-        type: 'welcome_split_debt',
-        referenceId: targetBusiness.id,
-        notes: JSON.stringify({
-          userId,
-          businessName: targetBusiness.name,
-          niche: targetBusiness.category,
-          totalBunz,
-          affiliateShare,
-          treasuryShare,
-          monthlyCap,
-          affiliateUsedBeforeThisClaim: usedThisMonth,
-          capExhausted: remainingMonthlyCap <= 0,
-        }),
-      });
-    }
+      // 5a. Asientos del ledger (la UNIQUE es el candado atómico del claim)
+      if (finalAffiliateShare > 0) {
+        await tx.insert(ledgerEntries).values({
+          payerSubjectId: targetBusiness.id,
+          payeeSubjectId: `usr_${userId}`,
+          amount: finalAffiliateShare,
+          type: 'EARN',
+          idempotencyKey: `welcome_aff_${userId}`,
+        });
+      }
+      if (finalTreasuryShare > 0) {
+        await tx.insert(ledgerEntries).values({
+          payerSubjectId: 'sys_rabbitty_treasury',
+          payeeSubjectId: `usr_${userId}`,
+          amount: finalTreasuryShare,
+          type: 'EARN',
+          idempotencyKey: `welcome_trs_${userId}`,
+        });
+      }
 
-    // 5d. Registrar en transactions y actualizar balance del usuario
-    const userRow = await db.query.users.findFirst({ where: eq(users.id, userId) });
-    if (userRow) {
-      await db
+      // 5b. Descontar tramo del paquete del afiliado
+      const liveBiz = lockedBiz ?? targetBusiness;
+      const bunzDebit = Math.min(finalAffiliateShare, liveBiz.bunzBalance || 0);
+      const creditDebit = finalAffiliateShare - bunzDebit;
+      await tx
+        .update(ownedBusinesses)
+        .set({
+          creditUsed: (liveBiz.creditUsed || 0) + creditDebit,
+          bunzBalance: (liveBiz.bunzBalance || 0) - bunzDebit,
+          updatedAt: new Date(),
+        })
+        .where(eq(ownedBusinesses.id, targetBusiness.id));
+
+      // 5c. Deuda en Tesorería por el tramo de Rabbitty
+      if (finalTreasuryShare > 0) {
+        await tx.insert(treasury).values({
+          concept: `Subsidio Bono Bienvenida QR (${targetBusiness.name})`,
+          amount: -finalTreasuryShare,
+          type: 'welcome_split_debt',
+          referenceId: targetBusiness.id,
+          notes: JSON.stringify({
+            userId,
+            businessName: targetBusiness.name,
+            niche: targetBusiness.category,
+            totalBunz,
+            affiliateShare: finalAffiliateShare,
+            treasuryShare: finalTreasuryShare,
+            monthlyCap,
+            affiliateUsedBeforeThisClaim: usedThisMonth,
+            capExhausted: liveRemaining <= 0,
+          }),
+        });
+      }
+
+      // 5d. Balance del usuario (dentro de la misma tx)
+      await tx
         .update(users)
         .set({
-          totalBunzEarned: (userRow.totalBunzEarned || 0) + totalBunz,
+          totalBunzEarned: (lockedUser.totalBunzEarned || 0) + totalBunz,
           hasEarnedFirstBunz: true,
           updatedAt: new Date(),
         })
         .where(eq(users.id, userId));
-    }
+    });
 
     await db.insert(transactions).values({
       userId,

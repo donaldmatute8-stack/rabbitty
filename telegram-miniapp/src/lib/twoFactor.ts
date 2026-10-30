@@ -200,9 +200,9 @@ export async function sendChallenge(
   method: 'email' | 'phone',
   purpose: 'enroll' | 'action',
 ): Promise<{ ok: true; channel: 'email' | 'sms' | 'telegram'; hint: string } | { ok: false; status: number; error: string }> {
-  const cooldown = rateLimit(`2fa_send:${user.id}:${method}`, 1, 45_000);
+  const cooldown = await rateLimit(`2fa_send:${user.id}:${method}`, 1, 45_000);
   if (!cooldown.ok) return { ok: false, status: 429, error: `Espera ${cooldown.retryAfterSec} s para pedir otro código.` };
-  const daily = rateLimit(`2fa_send_day:${user.id}`, 20, 60 * 60 * 1000);
+  const daily = await rateLimit(`2fa_send_day:${user.id}`, 20, 60 * 60 * 1000);
   if (!daily.ok) return { ok: false, status: 429, error: 'Demasiados códigos solicitados. Intenta más tarde.' };
 
   const code = crypto.randomInt(100000, 1000000).toString();
@@ -266,7 +266,7 @@ export async function verifySecondFactor(
   method: TwoFactorMethod,
   code: string,
 ): Promise<boolean> {
-  const limit = rateLimit(`2fa_verify:${user.id}`, VERIFY_LIMIT, VERIFY_WINDOW_MS);
+  const limit = await rateLimit(`2fa_verify:${user.id}`, VERIFY_LIMIT, VERIFY_WINDOW_MS);
   if (!limit.ok) return false;
   const clean = String(code ?? '').replace(/\s/g, '');
   if (method === 'totp') {

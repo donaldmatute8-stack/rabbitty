@@ -127,6 +127,17 @@ export async function POST(req: Request) {
         // A ticket only represents the funds in an existing vault. Without a matching
         // PENDING vault there is nothing to award (no implicit free-mint fallback).
         if (vault) {
+          // Posesión: el vault pertenece al teléfono del comprador (POS lo capturó)
+          if (vault.phoneNumber) {
+            const vaultDigits = vault.phoneNumber.replace(/\D/g, '').slice(-10);
+            const userDigits = (user.phoneNumber || '').replace(/\D/g, '').slice(-10);
+            if (vaultDigits && userDigits && vaultDigits !== userDigits) {
+              return NextResponse.json({ error: 'Este ticket pertenece a otro teléfono. Pide el reclamo en la app con el QR del ticket.' }, { status: 403 });
+            }
+            if (vaultDigits && !userDigits) {
+              return NextResponse.json({ error: 'Vincula tu teléfono en tu perfil (mismo del pedido) para reclamar este ticket.' }, { status: 403 });
+            }
+          }
           const bunzToAward = vault.bunzAmount;
           const branchId = vault.businessId || null;
 

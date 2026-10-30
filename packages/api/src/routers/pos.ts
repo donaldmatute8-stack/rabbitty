@@ -875,7 +875,10 @@ export const posRouter = router({
     .input(z.object({ customerId: z.string() }))
     .query(async ({ ctx, input }) => {
       const [user] = await ctx.coreDb.select().from(coreUsers).where(eq(coreUsers.id, input.customerId));
-      const balance = user ? (user.totalBunzEarned - user.totalBunzSpent) : 0;
+      // Balance efectivo: earned - spent - deuda pendiente (pendingDebtBunz)
+      const balance = user
+        ? Math.max(0, (user.totalBunzEarned ?? 0) - (user.totalBunzSpent ?? 0) - (user.pendingDebtBunz ?? 0))
+        : 0;
       return { customerId: input.customerId, balance };
     }),
 

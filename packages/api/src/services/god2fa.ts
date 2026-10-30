@@ -90,17 +90,45 @@ export function verifyGod2faCookieValue(value: string | undefined | null): boole
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-// ── Rate limit simple de intentos 2FA (en memoria, por IP) ──
-const attempts = new Map<string, { count: number; resetAt: number }>();
-export function check2faRateLimit(key: string): boolean {
+// ── Rate limit de intentos 2FA — Redis compartido (REDIS_URL) con fallback en memoria ──
+let _redis: import("ioredis").default | null = null;
+function getRedis() {
+  if (_redis !== null) return _redis;
+  const url = process.env.REDIS_URL;
+  if (!url) { _redis = null; return null; }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const Redis = require("ioredis");
+    const client = new Redis(url, { maxRetriesPerRequest: 1, connectTimeout: 2000, enableOfflineQueue: false, lazyConnect: false });
+    client.on("error", (e: unknown) => console.error("[god2fa] Redis error:", e));
+    _redis = client;
+  } catch {
+    _redis = null;
+  }
+  return _redis;
+}
+const memoryAttempts = new Map<string, { count: number; resetAt: number }>();
+
+export async function check2faRateLimit(key: string): Promise<boolean> {
+  const redis = getRedis();
+  if (redis) {
+    try {
+      const rk = `god2fa:${key}`;
+      const count = await redis.incr(rk);
+      if (count === 1) await redis.expire(rk, 5 * 60);
+      return count <= 8; // 8 intentos / 5 min, compartido entre réplicas
+    } catch (err) {
+      console.error("[god2fa] Redis rate limit error, fallback memoria:", err);
+    }
+  }
   const now = Date.now();
-  const entry = attempts.get(key);
+  const entry = memoryAttempts.get(key);
   if (!entry || now > entry.resetAt) {
-    attempts.set(key, { count: 1, resetAt: now + 5 * 60 * 1000 });
+    memoryAttempts.set(key, { count: 1, resetAt: now + 5 * 60 * 1000 });
     return true;
   }
   entry.count += 1;
-  return entry.count <= 8; // 8 intentos / 5 min
+  return entry.count <= 8;
 }
 
 // ── Passkeys (WebAuthn) — verificación server-side mínima (ES256 + CBOR) ──

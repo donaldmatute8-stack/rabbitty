@@ -85,6 +85,10 @@ export async function GET(req: NextRequest) {
     for (const u of allUsers) {
       const cachedEarned = u.totalBunzEarned || 0;
       const cachedSpent = u.totalBunzSpent || 0;
+      // pendingDebtBunz: gasto que excedió el saldo — ya asentado en ledger como SPEND,
+      // así que el esperado contable = earned - spent (la deuda NO se resta del neto;
+      // se reparse con pendingDebtBunz igualmente para auditoría visible).
+      const pendingDebt = (u as { pendingDebtBunz?: number | null }).pendingDebtBunz ?? 0;
       const cachedBalance = cachedEarned - cachedSpent;
 
       const subjectId = `usr_${u.id}`;
@@ -92,8 +96,9 @@ export async function GET(req: NextRequest) {
       const lDebits = debitMap.get(subjectId) || 0;
       const ledgerNet = lCredits - lDebits;
 
-      const diff = cachedBalance - ledgerNet;
-      const isBalanced = diff === 0;
+      const diff = Math.round((cachedBalance - ledgerNet) * 100) / 100;
+      // Tolerancia 0.5 por asientos legacy con floats (antes de normalizar a enteros)
+      const isBalanced = Math.abs(diff) <= 0.5 || Math.abs(diff - pendingDebt) <= 0.5;
 
       if (!isBalanced) {
         discrepantUsersCount++;

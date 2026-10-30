@@ -175,6 +175,24 @@ export async function GET(req: Request) {
   }
 }
 
+
+/** Slug ASCII único (validado server-side): minúsculas, a-z0-9 y guiones. */
+const RESERVED_SLUGS = new Set(['api','admin','app','mail','smtp','ftp','www','impresos','scan','download','privacy','terms','affiliate','kiosk-confirm','pay','qr','login','register','settings','profile','wallet','support','help','docs','blog','status','rabbitty']);
+function slugifyName(name: string): string {
+  return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50) || 'negocio';
+}
+async function buildUniqueSlug(name: string): Promise<string> {
+  const base = slugifyName(name);
+  let candidate = RESERVED_SLUGS.has(base) ? `${base}-mx` : base;
+  for (let n = 2; n <= 50; n++) {
+    const [taken] = await db.select({ id: ownedBusinesses.id }).from(ownedBusinesses).where(eq(ownedBusinesses.slug, candidate)).limit(1);
+    if (!taken) return candidate;
+    candidate = `${base}-${n}`;
+  }
+  return `${base}-${Date.now().toString(36)}`;
+}
+
 export async function POST(req: Request) {
   try {
     const caller = await getAuthenticatedUser(req);
@@ -227,9 +245,11 @@ export async function POST(req: Request) {
       ...(contractSignature ? { contractSignature } : {}),
     };
 
+    const slug = await buildUniqueSlug(name);
     const [business] = await db.insert(ownedBusinesses).values({
       ownerId: owner.id,
       name,
+      slug,
       description,
       category,
       address,

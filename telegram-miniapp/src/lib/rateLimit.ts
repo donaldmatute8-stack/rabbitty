@@ -79,3 +79,31 @@ export async function checkRateLimit(
     retryAfterSeconds: Math.max(1, Math.ceil((entry.resetAt - now) / 1000)),
   };
 }
+
+/** Lee el contador SIN incrementarlo (para checks de lockout). */
+export async function peekRateLimit(key: string): Promise<{ count: number; retryAfterSeconds: number }> {
+  const redis = getRedis();
+  if (redis) {
+    try {
+      const redisKey = `rl:${key}`;
+      const results = await redis.pipeline().get(redisKey).ttl(redisKey).exec();
+      const count = Number(results?.[0]?.[1] ?? 0);
+      const ttl = Number(results?.[1]?.[1] ?? -1);
+      return { count, retryAfterSeconds: ttl > 0 ? ttl : 0 };
+    } catch (err) {
+      console.error('[RateLimit] Redis peek error:', err);
+    }
+  }
+  const e = memoryStore.get(key);
+  if (!e || e.resetAt < Date.now()) return { count: 0, retryAfterSeconds: 0 };
+  return { count: e.count, retryAfterSeconds: Math.max(1, Math.ceil((e.resetAt - Date.now()) / 1000)) };
+}
+
+/** Reinicia un contador (tras éxito). */
+export async function clearRateLimit(key: string): Promise<void> {
+  const redis = getRedis();
+  if (redis) {
+    try { await redis.del(`rl:${key}`); } catch { /* noop */ }
+  }
+  memoryStore.delete(key);
+}

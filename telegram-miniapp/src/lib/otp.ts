@@ -1,66 +1,52 @@
 import { NextRequest } from 'next/server';
 import crypto from 'crypto';
+import { checkRateLimit, peekRateLimit, clearRateLimit } from '@/lib/rateLimit';
 
-type Bucket = { count: number; resetAt: number };
+/**
+ * Rate limiting compartido entre instancias vía Redis (REDIS_URL).
+ * Sin Redis o si falla, el helper cae a memoria local por instancia.
+ */
 
-const buckets = new Map<string, Bucket>();
-
-function cleanup() {
-  const now = Date.now();
-  for (const [key, bucket] of buckets) {
-    if (bucket.resetAt < now) buckets.delete(key);
-  }
+export async function rateLimit(key: string, limit: number, windowMs: number): Promise<{ ok: boolean; retryAfterSec: number }> {
+  const res = await checkRateLimit(key, limit, Math.ceil(windowMs / 1000));
+  return { ok: res.allowed, retryAfterSec: res.retryAfterSeconds };
 }
 
-export function rateLimit(key: string, limit: number, windowMs: number): { ok: boolean; retryAfterSec: number } {
-  if (buckets.size > 10000) {
-    cleanup();
-  }
-
-  const now = Date.now();
-  const bucket = buckets.get(key);
-
-  if (!bucket || bucket.resetAt < now) {
-    buckets.set(key, { count: 1, resetAt: now + windowMs });
-    return { ok: true, retryAfterSec: 0 };
-  }
-
-  bucket.count += 1;
-  if (bucket.count > limit) {
-    const retryAfterSec = Math.max(1, Math.ceil((bucket.resetAt - now) / 1000));
-    return { ok: false, retryAfterSec };
-  }
-
-  return { ok: true, retryAfterSec: 0 };
+/** Check de lockout SIN incrementar (para "¿demasiados intentos?"). */
+export async function checkOnly(key: string, limit: number): Promise<boolean> {
+  const { count } = await peekRateLimit(key);
+  return count < limit;
 }
 
-export function retryAfterSec(key: string): number {
-  const bucket = buckets.get(key);
-  if (!bucket || bucket.resetAt < Date.now()) return 0;
-  return Math.max(1, Math.ceil((bucket.resetAt - Date.now()) / 1000));
+export async function retryAfterSec(key: string): Promise<number> {
+  const { retryAfterSeconds } = await peekRateLimit(key);
+  return retryAfterSeconds;
 }
 
-export function checkOnly(key: string, limit: number): boolean {
-  const bucket = buckets.get(key);
-  if (!bucket || bucket.resetAt < Date.now()) return true;
-  return bucket.count < limit;
+export async function registerHit(key: string, limit: number, windowMs: number): Promise<void> {
+  await rateLimit(key, limit, windowMs);
 }
 
-export function registerHit(key: string, limit: number, windowMs: number): void {
-  rateLimit(key, limit + 1, windowMs);
+export async function resetLimit(key: string): Promise<void> {
+  await clearRateLimit(key);
 }
 
-export function resetLimit(key: string): void {
-  buckets.delete(key);
+/** Hash determinista con pepper (OTP_PEPPER o TELEGRAM_BOT_TOKEN) — 2 args: identifier + code. */
+export function hashOtp(identifier: string, code: string): string {
+  const pepper = process.env.OTP_PEPPER || process.env.TELEGRAM_BOT_TOKEN || 'rabbitty';
+  return crypto.createHmac('sha256', pepper).update(`${identifier}:${code}`).digest('hex');
 }
 
 export function getClientIp(req: NextRequest): string {
-  return req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-}
-
-export function hashOtp(email: string, code: string): string {
-  return crypto
-    .createHash('sha256')
-    .update(`${email}:${code}:${process.env.OTP_PEPPER || process.env.TELEGRAM_BOT_TOKEN || 'rabbitty'}`)
-    .digest('hex');
+  // Railway/Vercel ponen la IP real en x-forwarded-for; confiar en el PRIMER proxy de la plataforma.
+  const xff = req.headers.get('x-forwarded-for');
+  if (xff) {
+    const parts = xff.split(',').map((p) => p.trim()).filter(Boolean);
+    // El primer valor puede ser spoofeado por el cliente; en plataformas con proxy
+    // conocido Railway añade la IP real al final. Prefiere x-real-ip si existe.
+    const realIp = req.headers.get('x-real-ip');
+    if (realIp) return realIp.trim();
+    return parts[parts.length - 1] || 'unknown';
+  }
+  return req.headers.get('x-real-ip') || 'unknown';
 }

@@ -22,7 +22,9 @@ function DownloadContent() {
   const IOS_APP_URL = process.env.NEXT_PUBLIC_IOS_APP_URL || '/support';
   const IS_TESTFLIGHT = IOS_APP_URL.includes('testflight.apple.com');
   const ANDROID_APK_URL = process.env.NEXT_PUBLIC_ANDROID_APP_URL || 'https://rabbitty.me/rabbitty-app.apk';
-  const TELEGRAM_MINIAPP_URL = `https://t.me/Rabbittyme_bot/app?startapp=promo_${ref}`;
+  // Telegram exige A-Za-z0-9_- en startapp — sanitiza el ref (slug o id)
+  const telegramRef = ref.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 60) || 'rabbitty';
+  const TELEGRAM_MINIAPP_URL = `https://t.me/Rabbittyme_bot/app?startapp=promo_${telegramRef}`;
 
   // Feature Flags para mantener el cableado listo pero oculto según la directiva
   const SHOW_TELEGRAM = false;

@@ -148,13 +148,41 @@ export default function ScanPage() {
         }
       })();
     } else if (urlBranchId && !urlClaimToken) {
-      // 🐰 Check-in de mostrador (QR Neón sin mesa)
-      try {
-        localStorage.setItem('rabbitty_last_branch_id', urlBranchId);
-        localStorage.setItem('rabbitty_last_business_name', urlBusiness);
-      } catch {}
-      alert(`🐰 ¡Estás en ${urlBusiness}! Check-in registrado. Tus compras acumulan Bunz automáticamente.`);
-      router.push('/profile/wallet');
+      // 🐰 Check-in de mostrador (QR Neón sin mesa) — registro REAL en server
+      (async () => {
+        try {
+          const headers = await PlatformBridge.getAuthHeaders();
+          if (headers?.Authorization) {
+            // Resolver branchId → businessId con el resolver unificado
+            const { resolveScannedPayload } = await import('@/lib/scannerResolver');
+            const resolution = await resolveScannedPayload(`https://rabbitty.me/scan?branchId=${encodeURIComponent(urlBranchId)}`);
+            if (resolution.type === 'business' && resolution.business) {
+              const checkRes = await fetch('/api/business/checkin', {
+                method: 'POST',
+                headers: { ...headers, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ businessId: resolution.business.id }),
+              });
+              const checkData = await checkRes.json();
+              try {
+                localStorage.setItem('rabbitty_last_branch_id', urlBranchId);
+                localStorage.setItem('rabbitty_last_business_name', resolution.business.name || urlBusiness || '');
+              } catch {}
+              alert(checkData?.checkIn === 'registered'
+                ? `🐰 ¡Check-in registrado en ${resolution.business.name}! Tus compras acumulan Bunz automáticamente.`
+                : `🐰 Ya te esperábamos en ${resolution.business.name}. ¡Buen provecho!`);
+              router.push(`/affiliate/${resolution.business.id}`);
+              return;
+            }
+          }
+        } catch { /* cae al flujo conservador */ }
+        // Sin sesión o branch no resuelta → comportamiento conservador anterior
+        try {
+          localStorage.setItem('rabbitty_last_branch_id', urlBranchId);
+          localStorage.setItem('rabbitty_last_business_name', urlBusiness || '');
+        } catch {}
+        alert(`🐰 ¡Estás en ${urlBusiness || 'este negocio'}! Inicia sesión para acumular Bunz con tus compras.`);
+        router.push('/profile/wallet');
+      })();
     }
   }, [isDark, searchParams, router]);
 
@@ -293,6 +321,21 @@ export default function ScanPage() {
     // 4. Negocio afiliado / check-in
     if (res.type === 'business' && res.business) {
       await stopScanning();
+      // Check-in REAL en el server (1 por negocio por día, ledger + contador de visitas)
+      if (res.business.checkIn) {
+        (async () => {
+          try {
+            const headers = await PlatformBridge.getAuthHeaders();
+            if (headers?.Authorization) {
+              await fetch('/api/business/checkin', {
+                method: 'POST',
+                headers: { ...headers, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ businessId: res.business!.id }),
+              });
+            }
+          } catch { /* no bloquea la navegación */ }
+        })();
+      }
       router.push(`/affiliate/${res.business.id}`);
       return;
     }

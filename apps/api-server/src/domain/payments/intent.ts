@@ -8,7 +8,9 @@ import {
   ledgerEntries,
   distributionRules,
   distributionAllocations,
-  settlementOperations
+  settlementOperations,
+  branches,
+  restaurants
 } from "@rabbitty/database-restaurant";
 import { users } from "@rabbitty/database-core";
 import { LedgerService } from "../ledger/ledger";
@@ -338,7 +340,20 @@ export class PaymentIntentService {
 
       // 6. Issue Authoritative Cashback / Reward to customer on settlement
       if (payerSubjectId && payerSubjectId !== "SYSTEM") {
-        const rewardAmount = Math.round(intent.amountMxn * 0.20); // 20% standard cashback
+        // Tasa real del negocio (branch → restaurant.defaultRewardRate); 20 solo como fallback
+        let cashbackRate = 20;
+        try {
+          const [br] = await tx.select({ restaurantId: branches.restaurantId })
+            .from(branches).where(eq(branches.id, intent.merchantId)).limit(1);
+          if (br?.restaurantId) {
+            const [rest] = await tx.select({ defaultRewardRate: restaurants.defaultRewardRate })
+              .from(restaurants).where(eq(restaurants.id, br.restaurantId)).limit(1);
+            if (rest?.defaultRewardRate) cashbackRate = rest.defaultRewardRate;
+          }
+        } catch (rateErr) {
+          console.error("[intent.settle] Error resolviendo rewardRate, fallback 20%:", rateErr);
+        }
+        const rewardAmount = Math.round(intent.amountMxn * (cashbackRate / 100));
         if (rewardAmount > 0) {
           await tx
             .update(users)

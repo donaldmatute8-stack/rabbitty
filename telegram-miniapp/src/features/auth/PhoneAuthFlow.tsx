@@ -321,12 +321,18 @@ export default function PhoneAuthFlow({ mode, onBack }: PhoneAuthFlowProps) {
     const recipient = targetDisplay || getCanonicalRecipient();
 
     try {
+      // initData → dedupe de identidad (la cuenta de Telegram gana sobre la de OTP)
+      const tgInitData = typeof window !== 'undefined'
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ? (window as any).Telegram?.WebApp?.initData || ''
+        : '';
       const res = await fetch('/api/auth/otp/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           input: recipient,
           code,
+          initData: tgInitData || undefined,
         }),
       });
       const data = await res.json();

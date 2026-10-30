@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
   }
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
-  if (!check2faRateLimit(`2fa:${ip}:${email}`)) {
+  if (!(await check2faRateLimit(`2fa:${ip}:${email}`))) {
     return NextResponse.json({ success: false, error: "Demasiados intentos. Espera 5 minutos." }, { status: 429 });
   }
 

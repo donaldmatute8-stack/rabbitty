@@ -12,7 +12,7 @@ const IP_SEND_WINDOW_MS = 15 * 60 * 1000;
 
 export async function POST(req: NextRequest) {
   try {
-    const ipCheck = rateLimit(`otp_send_ip:${getClientIp(req)}`, IP_SEND_LIMIT, IP_SEND_WINDOW_MS);
+    const ipCheck = await rateLimit(`otp_send_ip:${getClientIp(req)}`, IP_SEND_LIMIT, IP_SEND_WINDOW_MS);
     if (!ipCheck.ok) {
       return NextResponse.json(
         { error: `Demasiadas solicitudes. Intenta de nuevo en ${ipCheck.retryAfterSec} segundos.` },
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
       if (matchedUser?.telegramId) telegramId = matchedUser.telegramId;
     }
 
-    const emailCheck = rateLimit(`otp_send_target:${rawInput}`, 1, EMAIL_RESEND_COOLDOWN_MS);
+    const emailCheck = await rateLimit(`otp_send_target:${rawInput}`, 1, EMAIL_RESEND_COOLDOWN_MS);
     if (!emailCheck.ok) {
       return NextResponse.json(
         { error: `Ya se envió un código. Solicita uno nuevo en ${emailCheck.retryAfterSec} segundos.` },

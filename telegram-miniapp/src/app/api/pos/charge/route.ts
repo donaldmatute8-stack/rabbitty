@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Usuario no encontrado en la red Rabbitty' }, { status: 404 });
     }
 
-    const bunzRequired = Math.ceil(amount_usd);
+    const bunzRequired = Math.round(amount_usd);
     const preAvailable = Math.max(0, (user.totalBunzEarned ?? 0) - (user.totalBunzSpent ?? 0));
 
     if (preAvailable < bunzRequired && !order_id) {
