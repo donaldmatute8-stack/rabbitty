@@ -49,11 +49,36 @@ export function calcTax(itemsTotal: number): { total: number; subtotal: number; 
 }
 
 
+/**
+ * Resuelve el id del NEGOCIO (ownedBusinesses.id) desde la branch del contexto.
+ * La miniapp /api/pos/reward espera un businessId de negocio (su inventario Bunz
+ * vive en ownedBusinesses) — un branchId jamás matcheará.
+ */
+async function resolveBusinessIdFromBranch(restaurantDb: any, branchId: string): Promise<string | null> {
+  try {
+    const [br] = await restaurantDb
+      .select({ restaurantId: dbSchema.branches.restaurantId })
+      .from(dbSchema.branches)
+      .where(eq(dbSchema.branches.id, branchId))
+      .limit(1);
+    if (!br?.restaurantId) return null;
+    const [rest] = await restaurantDb
+      .select({ businessId: dbSchema.restaurants.businessId })
+      .from(dbSchema.restaurants)
+      .where(eq(dbSchema.restaurants.id, br.restaurantId))
+      .limit(1);
+    return rest?.businessId || null;
+  } catch {
+    return null;
+  }
+}
+
 export const posRouter = router({
   /**
    * Búsqueda e identificación inmediata de Rabbitter antes de cobrar:
    * Por QR personal (UUID / telegramId / username) o por teléfono.
    */
+
   lookupRabbitter: protectedProcedure
     .input(z.object({ query: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
@@ -603,12 +628,13 @@ export const posRouter = router({
         const rewardPhone = String(orderRow.customerPhone); // narrowing estable dentro del closure
         let rewardQueued = true; // el servicio de lealtad entregó (o ya había entregado) la recompensa
 
+        const loyaltyBusinessId = (await resolveBusinessIdFromBranch(ctx.restaurantDb, ctx.branchId)) || ctx.branchId;
         const callWithRetry = async (fnName: "chargeBunz" | "rewardBunz") => {
           // Idempotente por diseño (ledger key pos_rwd_${orderId}): un reintento jamás doble-otorga.
           const attempt = async () =>
             fnName === "chargeBunz"
-              ? miniappClient.chargeBunz(rewardPhone, input.amount, input.orderId, ctx.branchId)
-              : miniappClient.rewardBunz(rewardPhone, input.amount, input.orderId, ctx.branchId);
+              ? miniappClient.chargeBunz(rewardPhone, input.amount, input.orderId, loyaltyBusinessId)
+              : miniappClient.rewardBunz(rewardPhone, input.amount, input.orderId, loyaltyBusinessId);
 
           try {
             return { ok: true as const, result: await attempt() };
@@ -697,11 +723,12 @@ export const posRouter = router({
         if (isSettled && !alreadyRewarded) {
           const { miniappClient } = await import("../services/miniapp-client");
           try {
+            const linkBizId = (await resolveBusinessIdFromBranch(ctx.restaurantDb, ctx.branchId)) || ctx.branchId;
             const res = await miniappClient.rewardBunz(
               input.customerId,
               Number(order.total || 0),
               order.id,
-              ctx.branchId
+              linkBizId
             );
             if (res?.success) {
               awardedBunz = res.bunz || 0;
@@ -1245,13 +1272,14 @@ export const posRouter = router({
             // intentos fallan, awardedBunz queda en 0 y el ticket imprime el
             // QR de claim para que el cliente recupere sus Bunz por su boleto.
             const attemptReward = async (): Promise<{ success: boolean; bunz?: number } | null> => {
+              const directBizId = (await resolveBusinessIdFromBranch(ctx.restaurantDb, ctx.branchId)) || ctx.branchId;
               try {
-                return await miniappClient.rewardBunz(targetRecipient, finalAmount, order.id, ctx.branchId);
+              return await miniappClient.rewardBunz(targetRecipient, finalAmount, order.id, directBizId);
               } catch (firstErr) {
                 console.error("[POS_REWARD_FAIL] orderId=" + order.id + " intento 1:", firstErr);
                 try {
                   await new Promise((r) => setTimeout(r, 800));
-                  return await miniappClient.rewardBunz(targetRecipient, finalAmount, order.id, ctx.branchId);
+                  return await miniappClient.rewardBunz(targetRecipient, finalAmount, order.id, directBizId);
                 } catch (secondErr) {
                   console.error("[POS_REWARD_FAIL] orderId=" + order.id + " intento 2 definitivo:", secondErr);
                   return null;

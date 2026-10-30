@@ -28,10 +28,24 @@ export async function POST(request: Request) {
     let rewardRate = 0.20;
     let baseBunzPos = 0;
     let boostCampaignId: string | null = null;
+    // Compatibilidad: el caller pudo mandar un branchId (POS legacy) → resolver al negocio real
+    let effectiveBusinessId: string | null = null;
     if (business_id) {
+      effectiveBusinessId = business_id;
+      const [bizCheck] = await db.select({ id: ownedBusinesses.id }).from(ownedBusinesses)
+        .where(eq(ownedBusinesses.id, business_id)).limit(1);
+      if (!bizCheck) {
+        try {
+          const resolved = await db.execute(
+            sql`SELECT r."businessId" FROM branches b JOIN restaurants r ON r.id = b."restaurantId" WHERE b.id = ${business_id} LIMIT 1`
+          ).then((r: unknown) => (((r as { rows?: Array<{ businessId: string }> }).rows || (r as unknown as Array<{ businessId: string }>))[0]?.businessId));
+          if (resolved) effectiveBusinessId = resolved as string;
+        } catch { /* mantener el id original */ }
+      }
+      const candidateBizId: string = effectiveBusinessId ?? business_id;
       const [business] = await db.select({ rewardPercentage: ownedBusinesses.rewardPercentage })
         .from(ownedBusinesses)
-        .where(eq(ownedBusinesses.id, business_id))
+        .where(eq(ownedBusinesses.id, candidateBizId))
         .limit(1);
       if (business) {
         rewardRate = (business.rewardPercentage ?? 20) / 100;
@@ -43,7 +57,7 @@ export async function POST(request: Request) {
           .from(affiliateCampaigns)
           .where(
             and(
-              eq(affiliateCampaigns.businessId, business_id),
+              eq(affiliateCampaigns.businessId, effectiveBusinessId ?? business_id),
               eq(affiliateCampaigns.campaignType, "FLASH_OFFER"),
               eq(affiliateCampaigns.status, "ACTIVE"),
               gt(affiliateCampaigns.expiresAt, now)
@@ -74,7 +88,7 @@ export async function POST(request: Request) {
     // ── CONSUMO ATOMICO DE PRESUPUESTO DEL FLASH BOOST ──
     // La bonificación extra se paga del presupuesto de la campaña (budgetBunz),
     // respeta el tope por usuario (maxRewardPerUser) y registra la redención.
-    if (business_id && boostCampaignId && bunzToMint > baseBunzPos) {
+    if (effectiveBusinessId && boostCampaignId && bunzToMint > baseBunzPos) {
       let cappedBonus = 0;
       await db.transaction(async (btx) => {
         const [lockedCampaign] = await btx
@@ -117,7 +131,7 @@ export async function POST(request: Request) {
               await btx.insert(campaignRedemptions).values({
                 campaignId: lockedCampaign.id,
                 userId: existingUserId,
-                businessId: business_id,
+                businessId: effectiveBusinessId,
                 transactionId: order_id || null,
                 bunzAwarded: cappedBonus,
                 fiatSpent: amount_usd,
@@ -148,13 +162,13 @@ export async function POST(request: Request) {
 
     // 2. Fetch Business Inventory (atomic update)
     let hasEnoughInventory = true;
-    const businessId = business_id || "unknown";
-    if (business_id) {
+    const businessId = effectiveBusinessId || business_id || "unknown";
+    if (effectiveBusinessId) {
       const result = await db.update(ownedBusinesses)
         .set({ bunzBalance: sql`"bunzBalance" - ${bunzToMint}` })
         .where(
           and(
-            eq(ownedBusinesses.id, business_id),
+            eq(ownedBusinesses.id, effectiveBusinessId),
             gte(ownedBusinesses.bunzBalance, bunzToMint)
           )
         )

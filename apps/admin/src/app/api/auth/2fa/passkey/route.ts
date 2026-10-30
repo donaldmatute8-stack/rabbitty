@@ -13,13 +13,13 @@ import {
   popWebauthnChallenge,
   b64urlDecode,
   b64urlEncode,
+  verifyPasskeySignature,
   type StoredPasskey,
 } from "@rabbitty/api/services/god2fa";
 import {
   generateRegistrationOptions,
   verifyRegistrationResponse,
   generateAuthenticationOptions,
-  verifyAuthenticationResponse,
 } from "@simplewebauthn/server";
 
 export const runtime = "nodejs";
@@ -160,7 +160,6 @@ export async function POST(req: NextRequest) {
       if (!popWebauthnChallenge(`unlock:${email}`, clientData.challenge)) throw new Error("Challenge inválido");
       if (!clientData.origin.endsWith(rpId)) throw new Error("Origen no permitido");
 
-      const { verifyAuthenticationResponse } = await import("@simplewebauthn/server");
       const passkeys = await loadPasskeys();
       const rawCredId = String(body.credentialId).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
       const toStdB64 = (u: string) => { const std = u.replace(/-/g, '+').replace(/_/g, '/'); return std + '='.repeat((4 - (std.length % 4)) % 4); };
@@ -171,45 +170,24 @@ export async function POST(req: NextRequest) {
       const authDataBuf = b64urlDecode(String(body.authenticatorData));
       const signature = b64urlDecode(String(body.signature));
 
-      // Reconstruir la publicKey desde el JWK almacenado
-      const jwk = match.publicKeyJwk;
-      const { createPublicKey } = await import("crypto");
-      const keyObj = createPublicKey({ key: jwk as any, format: "jwk" });
-      const spkiDer = keyObj.export({ type: "spki", format: "der" });
-      const coseKey = {
-        1: 2, 3: -7,
-        "-1": Buffer.from([1]), // P-256
-        "-2": Buffer.from(jwk.x, "base64url"),
-        "-3": Buffer.from(jwk.y, "base64url"),
-      };
-      const coseBuf = encodeCoseKey(coseKey);
+      // ── Verificación manual ES256 (misma que passkey-login — sin reconstrucción COSE) ──
+      // 1. rpIdHash: los primeros 32 bytes del authenticatorData = sha256(rpId)
+      const expectedRpHash = crypto.createHash("sha256").update(rpId).digest();
+      if (!authDataBuf.subarray(0, 32).equals(expectedRpHash)) throw new Error("rpIdHash inválido");
+      // 2. Flags: byte 32 — UP (0x01) y UV (0x04) obligatorios
+      const flags = authDataBuf[32];
+      if (!(flags & 0x01)) throw new Error("Authenticator no presente (UP)");
+      if (!(flags & 0x04)) throw new Error("User verification requerida (UV)");
+      // 3. Firma ES256 sobre authData || sha256(clientDataJSON) contra el JWK almacenado
+      const ok = verifyPasskeySignature(match.publicKeyJwk, authDataBuf, clientDataJSON, signature);
+      if (!ok) throw new Error("Verificación fallida");
 
-      const verification = await verifyAuthenticationResponse({
-        response: {
-          id: presentedCredId,
-          rawId: presentedCredId,
-          response: {
-            authenticatorData: b64urlEncode(authDataBuf),
-            clientDataJSON: b64urlEncode(clientDataJSON),
-            signature: b64urlEncode(signature),
-          },
-          type: "public-key",
-          clientExtensionResults: {},
-        },
-        expectedChallenge: clientData.challenge,
-        expectedOrigin: origin,
-        expectedRPID: rpId,
-        credential: {
-          id: new TextEncoder().encode(presentedCredId),
-          publicKey: coseBuf,
-          counter: match.signCount,
-        } as any,
-        requireUserVerification: true,
-      });
-
-      if (!verification.verified) throw new Error("Verificación fallida");
-
-      match.signCount = verification.authenticationInfo.newCounter;
+      // 4. Counter anti-replay (monotónico cuando el authenticator lo soporta)
+      const counter = authDataBuf.readUInt32BE(33);
+      if (counter !== 0 || match.signCount !== 0) {
+        if (counter <= match.signCount) throw new Error("Contador de passkey no incrementó (posible replay)");
+      }
+      match.signCount = Math.max(match.signCount, counter);
       await savePasskeys(passkeys);
 
       const res = NextResponse.json({ success: true });
