@@ -169,9 +169,6 @@ export default function SettingsPage() {
   const verifyAndEnableTotp = trpc.totp.verifyAndEnable.useMutation({ onSuccess: () => { utils.settings.getSecuritySettings.invalidate(); toast.success("2FA activada"); }, onError: (e: any) => toast.error(e.message) });
   const disableTotp = trpc.totp.disable.useMutation({ onSuccess: () => { utils.settings.getSecuritySettings.invalidate(); toast.success("2FA desactivada"); }, onError: (e: any) => toast.error(e.message) });
   const toggleLoginReq = trpc.totp.toggleLoginRequirement.useMutation({ onSuccess: () => { utils.settings.getSecuritySettings.invalidate(); toast.success("Requisito de 2FA actualizado"); }, onError: (e: any) => toast.error(e.message) });
-  const passkeysQuery = trpc.passkeys.list.useQuery();
-  const generatePasskeyOptions = trpc.passkeys.generateRegistrationOptions.useMutation();
-  const verifyPasskeyRegistration = trpc.passkeys.verifyRegistration.useMutation({ onSuccess: () => { utils.passkeys.list.invalidate(); toast.success("Passkey registrada"); }, onError: (e: any) => toast.error(e.message) });
   const deletePasskey = trpc.passkeys.delete.useMutation({ onSuccess: () => { utils.passkeys.list.invalidate(); toast.success("Passkey eliminada"); }, onError: (e: any) => toast.error(e.message) });
   const trustedSessionsQuery = trpc.trustedSessions.list.useQuery();
   const revokeSession = trpc.trustedSessions.revoke.useMutation({ onSuccess: () => { utils.trustedSessions.list.invalidate(); toast.success("Sesión revocada"); }, onError: (e: any) => toast.error(e.message) });
@@ -315,10 +312,7 @@ export default function SettingsPage() {
   const [totpSecretData, setTotpSecretData] = useState<{ secret: string; qrCodeDataUrl: string; otpauth: string } | null>(null);
   const [totpCode, setTotpCode] = useState("");
   const [totpDisableCode, setTotpDisableCode] = useState("");
-  const [registeringPasskey, setRegisteringPasskey] = useState(false);
   const [emailVerifCode, setEmailVerifCode] = useState("");
-  const [deletingPasskeyId, setDeletingPasskeyId] = useState<string | null>(null);
-  const [deletePasskeyCode, setDeletePasskeyCode] = useState("");
   const [togglingRequireOff, setTogglingRequireOff] = useState(false);
   const [toggleReqCode, setToggleReqCode] = useState("");
   const [revokingAll, setRevokingAll] = useState(false);
@@ -385,28 +379,6 @@ export default function SettingsPage() {
     if (!r) return; 
     update.mutate({ id: r.id, ...form }); 
     setEditing(null); 
-  };
-
-  const handleRegisterPasskey = async () => {
-    setRegisteringPasskey(true);
-    try {
-      const options = await generatePasskeyOptions.mutateAsync();
-      // challenge base64url → Uint8Array (el browser EXIGE ArrayBuffer)
-      const challengeBytes = Uint8Array.from(atob(options.challenge.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
-      const userIdBytes = Uint8Array.from(atob((options.user?.id || '').replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
-      const credential = await navigator.credentials.create({
-        publicKey: {
-          ...(options as any),
-          challenge: challengeBytes,
-          user: { ...(options as any).user, id: userIdBytes },
-        },
-      });
-      if (!credential) { toast.error("Registro cancelado"); return; }
-      const response = (credential as any).response;
-      const transports = response.getTransports?.() ?? [];
-      const credentialData = { id: credential.id, rawId: toBase64(new Uint8Array((credential as any).rawId)), response: { clientDataJSON: toBase64(new Uint8Array(response.clientDataJSON)), attestationObject: toBase64(new Uint8Array(response.attestationObject)), transports }, type: credential.type, clientExtensionResults: (credential as any).clientExtensionResults ?? {}, authenticatorAttachment: (credential as any).authenticatorAttachment ?? null };
-      await verifyPasskeyRegistration.mutateAsync({ credential: credentialData, deviceName: `Passkey (${navigator.platform ?? "dispositivo"})` });
-    } catch (e: any) { toast.error(e?.message ?? "Error al registrar passkey"); } finally { setRegisteringPasskey(false); }
   };
 
   const handleSetupTotp = async () => {
@@ -986,42 +958,6 @@ export default function SettingsPage() {
                   <Button onClick={handleSetupTotp} disabled={generateTotp.isPending}><QrCode className="h-4 w-4" />Configurar 2FA</Button>
                 </div>
               )}
-            </Card>
-
-            {/* PASSKEYS */}
-            <Card className="p-6 border border-white/5 bg-white/5 backdrop-blur-md">
-              <div className="mb-5 flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-500/10 border border-violet-500/20 text-violet-400 shrink-0"><Fingerprint className="h-5 w-5" /></div>
-                <h3 className="font-bold text-white text-base">Passkeys (Biométricos)</h3>
-              </div>
-              <div className="space-y-4">
-                <p className="text-sm text-gray-400">Usa huella digital, rostro o PIN de tu dispositivo para iniciar sesión de forma rápida y segura.</p>
-                {passkeysQuery.data && passkeysQuery.data.length > 0 && (
-                  <div className="space-y-2">
-                    {passkeysQuery.data.map((pk) => (
-                      <div key={pk.id} className="flex items-center justify-between bg-white/5 rounded-xl px-4 py-3 border border-white/5">
-                        <div className="flex items-center gap-3">
-                          <Fingerprint className="h-4 w-4 text-violet-400" />
-                          <span className="text-sm text-white font-medium">{pk.deviceName}</span>
-                          <span className="text-xs text-gray-500">{pk.createdAt ? new Date(pk.createdAt).toLocaleDateString() : ""}</span>
-                        </div>
-                        {deletingPasskeyId === pk.id && security?.totpEnabled ? (
-                          <div className="flex gap-2 items-center">
-                            <Input value={deletePasskeyCode} onChange={(e) => setDeletePasskeyCode(e.target.value)} placeholder="Código 2FA" maxLength={6} className="w-24 text-center" />
-                            <button onClick={() => { deletePasskey.mutate({ id: pk.id, verificationCode: deletePasskeyCode }); setDeletePasskeyCode(""); setDeletingPasskeyId(null); }} className="text-green-400 hover:text-green-300 cursor-pointer"><Check className="h-4 w-4" /></button>
-                            <button onClick={() => { setDeletingPasskeyId(null); setDeletePasskeyCode(""); }} className="text-gray-400 hover:text-gray-300 cursor-pointer"><X className="h-4 w-4" /></button>
-                          </div>
-                        ) : (
-                          <button onClick={() => { if (security?.totpEnabled) { setDeletingPasskeyId(pk.id); } else { deletePasskey.mutate({ id: pk.id }); } }} className="text-red-400 hover:text-red-300 transition-colors cursor-pointer"><Trash2 className="h-4 w-4" /></button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <Button onClick={handleRegisterPasskey} disabled={registeringPasskey || generatePasskeyOptions.isPending}>
-                  <Plus className="h-4 w-4" />{registeringPasskey ? "Registrando..." : "Registrar Passkey"}
-                </Button>
-              </div>
             </Card>
 
             {/* MOBILE SCANNER PAIRING (OMNICANAL) */}
