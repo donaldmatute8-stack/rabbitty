@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
       const db = getCoreDb();
       const passkeys = await loadPasskeys();
       const match = passkeys.find(p => toStdB64(p.credId.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')) === presentedCredId);
-      if (!match) throw new Error("Passkey no registrada en este servidor");
+      if (!match) throw new Error("Esta passkey ya no existe en el servidor (fuiste borrada o re-registrada). Elimínala del llavero o registra una nueva en Configuración → Seguridad.");
 
       const ok = verifyPasskeySignature(match.publicKeyJwk, authDataBuf, clientDataJSON, signature);
       if (!ok) throw new Error("Firma inválida");

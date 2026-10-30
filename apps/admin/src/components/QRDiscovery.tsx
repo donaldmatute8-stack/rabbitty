@@ -27,8 +27,8 @@ interface QRDiscoveryProps {
 }
 
 const LOGOS: Record<QRDiscoveryVariant, string> = {
-  admin: '/icon_ra.png',
-  affiliate: '/icon_ra.png',
+  admin: '/Ra.png',
+  affiliate: '/Ra.png',
   rabbitter: '/Rabbitty_vector.png',
 };
 

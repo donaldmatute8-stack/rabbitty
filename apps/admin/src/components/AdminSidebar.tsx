@@ -54,7 +54,6 @@ import {
   FlaskConical,
   Compass,
   BookOpen,
-  Bug,
   MessageSquarePlus,
 } from "lucide-react";
 import { useSidebar } from "./DashboardClientWrapper";
@@ -491,23 +490,7 @@ export function AdminSidebar() {
 
       {/* Footer & Logout */}
       <div className="border-t border-white/5 p-3 space-y-1.5 bg-black/40">
-        {/* Support & Feedback Section */}
-        <button
-          onClick={() => openFeedback("BUG")}
-          className={cn(
-            "group flex w-full items-center rounded-xl py-2 text-xs font-semibold text-amber-400/90 hover:text-amber-300 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20 transition-all duration-200 cursor-pointer relative",
-            isCollapsed ? "justify-center px-0" : "px-3"
-          )}
-        >
-          <Bug className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110 text-amber-400" />
-          {!isCollapsed && <span className="ml-3 truncate">Report a bug</span>}
-          {isCollapsed && (
-            <span className="absolute left-16 scale-0 group-hover:scale-100 rounded-xl bg-neutral-900 border border-amber-500/30 px-3 py-2 text-xs font-bold text-amber-300 shadow-xl backdrop-blur-md transition-all duration-200 pointer-events-none z-50 whitespace-nowrap">
-              Report a bug
-            </span>
-          )}
-        </button>
-
+        {/* Support & Feedback Section (Unificado) */}
         <button
           onClick={() => openFeedback("FEEDBACK")}
           className={cn(
@@ -516,10 +499,10 @@ export function AdminSidebar() {
           )}
         >
           <MessageSquarePlus className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110 text-purple-400" />
-          {!isCollapsed && <span className="ml-3 truncate">Leave Feedback</span>}
+          {!isCollapsed && <span className="ml-3 truncate">Report a bug / Feedback</span>}
           {isCollapsed && (
             <span className="absolute left-16 scale-0 group-hover:scale-100 rounded-xl bg-neutral-900 border border-purple-500/30 px-3 py-2 text-xs font-bold text-purple-200 shadow-xl backdrop-blur-md transition-all duration-200 pointer-events-none z-50 whitespace-nowrap">
-              Leave Feedback
+              Report a bug / Feedback
             </span>
           )}
         </button>
