@@ -300,7 +300,14 @@ const ROLE_BADGES: Record<string, { label: string; color: string }> = {
 
 export default function AcademyPage() {
   const [selected, setSelected] = useState<string | null>(null);
-  const [roleFilter, setRoleFilter] = useState<GuideRole>("all");
+  const [roleFilter, setRoleFilter] = useState<GuideRole>(() => {
+    // Deep-link desde Marketing Studio: /academy?role=marketing|pos|admin|phygital
+    if (typeof window !== "undefined") {
+      const q = new URLSearchParams(window.location.search).get("role");
+      if (q && ["all", "admin", "pos", "marketing", "phygital"].includes(q)) return q as GuideRole;
+    }
+    return "all";
+  });
 
   const filtered = roleFilter === "all" ? guides : guides.filter((g) => g.role === roleFilter);
   const guide = filtered.find((g) => g.id === selected);

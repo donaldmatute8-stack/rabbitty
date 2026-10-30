@@ -288,6 +288,15 @@ const marketingPillars: MenuPillar[] = [
       { href: "https://www.rabbitty.me/impresos", label: "Print Center · Impresos", icon: Printer, badge: "PDF" },
     ],
   },
+  {
+    id: "mkt_resources",
+    title: "📚 Guías & Recursos",
+    icon: BookOpen,
+    items: [
+      { href: "/academy?role=marketing", label: "Guías de Marketing Studio", icon: BookOpen },
+      { href: "/academy?role=phygital", label: "Guías · Atmósfera & Vibe", icon: Compass },
+    ],
+  },
 ];
 
 export function AdminSidebar() {

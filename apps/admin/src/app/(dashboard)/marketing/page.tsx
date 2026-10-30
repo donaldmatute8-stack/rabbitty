@@ -222,6 +222,100 @@ export default function MarketingStudioOverviewPage() {
         </div>
       </div>
 
+
+      {/* ── Contenido vivo: Campañas activas (mini-lista) ── */}
+      <section className="rounded-2xl border border-white/10 bg-zinc-950/60 p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-black uppercase tracking-wider text-gray-400">📣 Campañas en vivo</h2>
+          <Link href="/marketing/campaigns" className="text-xs font-bold text-pink-300 hover:text-pink-200 no-underline">Ver todas →</Link>
+        </div>
+        {(() => {
+          const live = [
+            ...(affiliateCampaigns || []).map((c: any) => ({ kind: "AFILIADO", name: c.headline || c.title || c.message || "Campaña", status: c.status, meta: c.rewardPercentage ? `${c.rewardPercentage}% cashback` : "", id: c.id })),
+            ...(campaigns || []).slice(0, 4).map((c: any) => ({ kind: "SUCURSAL", name: c.name, status: c.status, meta: c.targetSegment ? `Segmento ${c.targetSegment}` : "", id: c.id })),
+          ];
+          if (live.length === 0) return <p className="text-sm text-gray-500">Sin campañas todavía — crea la primera desde el botón de arriba.</p>;
+          return (
+            <div className="space-y-2">
+              {live.slice(0, 6).map((c, i) => (
+                <div key={`${c.kind}-${c.id ?? i}`} className="flex items-center justify-between gap-3 rounded-xl bg-white/5 border border-white/5 px-3.5 py-2.5">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-white truncate">{c.name}</p>
+                    <p className="text-[11px] text-gray-500">{c.kind}{c.meta ? ` · ${c.meta}` : ""}</p>
+                  </div>
+                  <span className={`text-[10px] font-black px-2 py-1 rounded-full border shrink-0 ${
+                    c.status === "ACTIVE" ? "bg-green-500/10 text-green-300 border-green-500/20" :
+                    c.status === "PENDING_APPROVAL" || c.status === "DRAFT" ? "bg-yellow-500/10 text-yellow-300 border-yellow-500/20" :
+                    c.status === "PAUSED" ? "bg-orange-500/10 text-orange-300 border-orange-500/20" :
+                    "bg-white/5 text-gray-400 border-white/10"}`}>
+                    {String(c.status || "—").replace("_", " ")}
+                  </span>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+      </section>
+
+      {/* ── Contenido vivo: Audiencias & Segmentos ── */}
+      <section className="rounded-2xl border border-white/10 bg-zinc-950/60 p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-black uppercase tracking-wider text-gray-400">🎯 Audiencias & Segmentos</h2>
+          <Link href="/marketing/audiences" className="text-xs font-bold text-pink-300 hover:text-pink-200 no-underline">Gestionar →</Link>
+        </div>
+        {(() => {
+          const segs = [
+            { label: "VIP", n: audience?.vip ?? 0, color: "from-amber-400 to-yellow-500" },
+            { label: "Recurrentes", n: audience?.recurrent ?? 0, color: "from-pink-500 to-rose-500" },
+            { label: "Nuevos", n: audience?.new ?? 0, color: "from-sky-400 to-blue-500" },
+            { label: "En riesgo", n: audience?.churnRisk ?? 0, color: "from-orange-400 to-red-500" },
+          ];
+          const total = Math.max(1, audience?.total ?? 0);
+          return (
+            <div className="space-y-3">
+              {segs.map((sg) => (
+                <div key={sg.label}>
+                  <div className="flex items-center justify-between text-[12px] mb-1">
+                    <span className="text-gray-300 font-bold">{sg.label}</span>
+                    <span className="text-gray-500">{sg.n} · {Math.round((sg.n / total) * 100)}%</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-white/5 overflow-hidden">
+                    <div className={`h-full rounded-full bg-linear-to-r ${sg.color}`} style={{ width: `${Math.round((sg.n / total) * 100)}%` }} />
+                  </div>
+                </div>
+              ))}
+              <p className="text-[11px] text-gray-500 pt-1">
+                {(audience?.marketingConsents ?? 0)} de {audience?.total ?? 0} con consentimiento de marketing (push/campañas).
+              </p>
+            </div>
+          );
+        })()}
+      </section>
+
+      {/* ── Guías de Marketing Studio (fuente única: Academy, filtrada por rol) ── */}
+      <section className="rounded-2xl border border-white/10 bg-zinc-950/60 p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-black uppercase tracking-wider text-gray-400">📚 Guías de Marketing Studio</h2>
+          <Link href="/academy?role=marketing" className="text-xs font-bold text-pink-300 hover:text-pink-200 no-underline">Academy →</Link>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {[
+            { label: "🎟️ Memberships", href: "/academy?role=marketing" },
+            { label: "📣 Campañas", href: "/academy?role=marketing" },
+            { label: "🎂 Cumpleaños", href: "/academy?role=marketing" },
+            { label: "🤝 Referidos", href: "/academy?role=marketing" },
+            { label: "🎵 Mood & Atmósfera", href: "/academy?role=phygital" },
+            { label: "🧭 PoA & Passport", href: "/academy?role=phygital" },
+          ].map((g) => (
+            <Link key={g.label} href={g.href}
+              className="px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-gray-300 no-underline transition-all">
+              {g.label}
+            </Link>
+          ))}
+        </div>
+        <p className="text-[11px] text-gray-500 mt-3">Fuente única en Academy — filtradas por tu espacio de trabajo, sin duplicados.</p>
+      </section>
+
       {/* Puente con Operaciones: Promoción de Membresías y Lealtad */}
       <div className="rounded-2xl border border-white/10 bg-linear-to-r from-zinc-900/90 to-black/90 p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-start gap-4">
