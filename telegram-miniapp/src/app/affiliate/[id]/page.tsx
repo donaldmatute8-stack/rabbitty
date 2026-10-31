@@ -26,6 +26,8 @@ import { PlatformBridge } from '@/lib/platform';
 import { MoodCheckInSheet } from '@/components/mood/MoodCheckInSheet';
 import { DigitalMenuCatalog, CatalogCategory } from '@/components/affiliate/DigitalMenuCatalog';
 import { TableContextSheet } from '@/components/affiliate/TableContextSheet';
+import { TableBillSheet } from '@/components/affiliate/TableBillSheet';
+import { Receipt } from 'lucide-react';
 import { OrderCartSheet, CartItem } from '@/components/affiliate/OrderCartSheet';
 import { CatalogItem, CatalogModifier } from '@/components/affiliate/ProductDetailModal';
 
@@ -108,6 +110,8 @@ function AffiliateProfileContent() {
   const [tableNumber, setTableNumber] = useState<number | null>(initialTableNum);
   const [tableId, setTableId] = useState<string | null>(null);
   const [showTableSheet, setShowTableSheet] = useState(false);
+  // Fase C: hoja de cuenta del comensal (consumo en la mesa reclamada)
+  const [showBillSheet, setShowBillSheet] = useState(false);
 
   // Cart & Ordering
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -265,9 +269,12 @@ function AffiliateProfileContent() {
       orderType,
     };
 
+    // Fase C: headers de auth → la orden queda con customerId y se acumula
+    // en el Tab abierto de la mesa que reclame (ya no una orden anónima nueva).
+    const authHeaders = await PlatformBridge.getAuthHeaders().catch(() => null);
     const res = await fetch('/api/pos/checkout', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...(authHeaders || {}), 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
 
@@ -785,7 +792,52 @@ function AffiliateProfileContent() {
         </div>
       )}
 
+      {/* Persistent Bottom Bar — Mi Cuenta (Fase C): el comensal ve su cuenta y paga */}
+      {totalCartCount === 0 && tableNumber != null && (
+        <div
+          className={`fixed left-0 right-0 px-4 z-40 pointer-events-none transition-all duration-300 ease-out ${
+            isNavVisible
+              ? 'bottom-[calc(max(var(--safe-bottom,0px),env(safe-area-inset-bottom,0px))+76px)]'
+              : 'bottom-[calc(max(var(--safe-bottom,0px),env(safe-area-inset-bottom,0px))+14px)]'
+          }`}
+        >
+          <div className="max-w-md mx-auto pointer-events-auto">
+            <motion.button
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => {
+                PlatformBridge.hapticFeedback('medium');
+                setShowBillSheet(true);
+              }}
+              className="w-full bg-[#0F2B29] text-white py-3.5 px-5 rounded-2xl font-black text-sm shadow-[0_8px_25px_rgba(0,0,0,0.45)] border border-emerald-500/40 flex items-center justify-between transition-all"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs shadow">
+                  <Receipt size={14} />
+                </div>
+                <div className="text-left">
+                  <span className="block font-black text-sm leading-tight text-emerald-400">Mi Cuenta · Mesa #{tableNumber}</span>
+                  <span className="text-[10px] text-white/70 font-medium">Ver consumo · pedir cuenta · pagar</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 bg-black/20 py-1.5 px-3 rounded-xl border border-white/10">
+                <span className="text-xs font-black text-emerald-400">Abrir</span>
+                <ChevronRight size={16} className="text-emerald-400" />
+              </div>
+            </motion.button>
+          </div>
+        </div>
+      )}
+
       {/* Sheets & Modals */}
+      <TableBillSheet
+        isOpen={showBillSheet}
+        onClose={() => setShowBillSheet(false)}
+        tableId={tableId}
+        tableNumber={tableNumber}
+        businessName={affiliate?.name || 'el comercio'}
+      />
       <TableContextSheet
         isOpen={showTableSheet}
         onClose={() => setShowTableSheet(false)}
@@ -795,6 +847,39 @@ function AffiliateProfileContent() {
           setTableNumber(num);
           setTableId(id);
           showToast(`Ubicado en Mesa #${num}`, 'success');
+          // Fase C: reclamar la mesa en el sistema (POS ve al comensal; el
+          // siguiente pedido entra al Tab de esta mesa). Best-effort:
+          // si ya está tomada por otro, avisamos pero el flujo sigue local.
+          (async () => {
+            try {
+              const headers = await PlatformBridge.getAuthHeaders();
+              if (!headers?.Authorization && !headers?.['X-Init-Data']) return;
+              let userLat: number | undefined;
+              let userLng: number | undefined;
+              try {
+                const loc = await PlatformBridge.getLocation();
+                if (loc?.success && loc.lat != null && loc.lng != null) {
+                  userLat = loc.lat;
+                  userLng = loc.lng;
+                }
+              } catch { /* sin GPS: el geofence solo aplica con GPS */ }
+              const res = await fetch('/api/pos/claim-table', {
+                method: 'POST',
+                headers: { ...headers, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tableId: id, branchId: affiliate?.id, userLat, userLng }),
+              });
+              const data = await res.json().catch(() => null);
+              if (res.ok && data?.success) {
+                if (data.hasActiveOrder) {
+                  showToast(`🐰 Conectado a Mesa #${num} — ya tienes cuenta abierta de $${Number(data.orderTotal || 0).toFixed(2)}`, 'success');
+                }
+              } else if (data?.code === 'TABLE_ALREADY_CLAIMED') {
+                showToast(data?.error || 'Esta mesa ya está vinculada a otro Rabbitter', 'error');
+              } else if (data?.code === 'GEOFENCE_EXCEEDED') {
+                showToast('Para vincularte a la mesa debes estar en el local', 'error');
+              }
+            } catch { /* silencioso: reclamo best-effort */ }
+          })();
         }}
         businessName={affiliate.name}
       />

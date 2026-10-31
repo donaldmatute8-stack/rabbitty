@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server';
 import { restaurantDb } from '@/db/restaurant';
-import { orders, orderItems, tables, payments, branches, restaurants } from '@rabbitty/database-restaurant/schema';
-import { eq, sql } from 'drizzle-orm';
+import { orders, orderItems, tables, tableSessions, payments, branches, restaurants } from '@rabbitty/database-restaurant/schema';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { users, ownedBusinesses } from '@/db/schema';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 import { recordLedgerTransaction, findLedgerEntry } from '@/lib/ledgerHelper';
+
+// IVA canónico idéntico al POS (packages/api/src/routers/pos.ts calcTax):
+// los precios del menú incluyen IVA 16% — el desglose se deriva, nunca se suma.
+const TAX_RATE = 0.16;
+const r2 = (n: number) => Math.round(n * 100) / 100;
 
 export async function POST(req: Request) {
   try {
@@ -17,6 +22,10 @@ export async function POST(req: Request) {
     if (!existingOrderId && (!tableId || !items || items.length === 0)) {
       return NextResponse.json({ success: false, error: 'Datos inválidos' }, { status: 400 });
     }
+
+    // Autenticación best-effort: el comensal de la app envía headers; los
+    // códigos QR externos (sin sesión) siguen funcionando como anónimos.
+    const caller = await getAuthenticatedUser(req).catch(() => null);
 
     let targetOrderId = existingOrderId;
     let totalToPay = splitPaymentAmount;
@@ -33,19 +42,113 @@ export async function POST(req: Request) {
         notes?: string | null;
       }
       const typedItems = items as OrderItemInput[];
-      const itemsTotal = typedItems.reduce((sum: number, item: OrderItemInput) => sum + (item.price * item.quantity), 0);
-      const grandTotal = itemsTotal + totalTip;
+      const grandTotal = typedItems.reduce((sum: number, item: OrderItemInput) => sum + (item.price * item.quantity), 0);
 
+      // ── Fase C: ACUMULAR en el Tab abierto del PROPIO Rabbitter ──
+      // Si reclamo la mesa (table_session OPEN con mi customerId) y hay una
+      // comanda PENDING en ella, los nuevos platillos se SUMAN a ESA orden
+      // (un solo tab por mesa) — sin crear órdenes separadas.
+      let accumulatedOrderId: string | null = null;
+      if (caller && tableId) {
+        try {
+          const [ownSession] = await restaurantDb
+            .select()
+            .from(tableSessions)
+            .where(and(eq(tableSessions.tableId, tableId), eq(tableSessions.status, 'OPEN')))
+            .limit(1);
+          if (ownSession && ownSession.customerId === caller.id) {
+            const [pendingOrder] = await restaurantDb
+              .select()
+              .from(orders)
+              .where(and(eq(orders.tableId, tableId), eq(orders.status, 'PENDING')))
+              .orderBy(desc(orders.createdAt))
+              .limit(1);
+            if (pendingOrder) accumulatedOrderId = pendingOrder.id;
+          }
+        } catch (tabErr) {
+          console.warn('[POS_CHECKOUT] detección de tab falló, se crea orden nueva:', tabErr);
+        }
+      }
+
+      if (accumulatedOrderId) {
+        const orderItemsData = typedItems.map((i) => ({
+          orderId: accumulatedOrderId,
+          menuItemId: i.id,
+          quantity: i.quantity,
+          unitPrice: i.price,
+          totalPrice: r2(i.price * i.quantity),
+          notes: i.notes || null,
+        }));
+        await restaurantDb.insert(orderItems).values(orderItemsData);
+
+        // Recalcular totales desde order_items (fuente de verdad)
+        const allItems = await restaurantDb.select().from(orderItems).where(eq(orderItems.orderId, accumulatedOrderId!));
+        const itemsSum = r2(allItems.reduce((s: number, it: any) => s + Number(it.totalPrice || 0), 0));
+        const newTotal = r2(itemsSum);
+        await restaurantDb
+          .update(orders)
+          .set({
+            subtotal: r2(newTotal / (1 + TAX_RATE)),
+            tax: r2(newTotal - newTotal / (1 + TAX_RATE)),
+            total: newTotal,
+            updatedAt: new Date(),
+          })
+          .where(eq(orders.id, accumulatedOrderId!));
+
+        targetOrderId = accumulatedOrderId;
+        totalToPay = newTotal;
+
+        // Notificar al staff: la mesa siguió pidiendo
+        try {
+          const { sendEcosystemNotification } = await import('@/lib/push/notify');
+          let customerName = 'Cliente en Mesa';
+          if (caller?.id) {
+            const u = await db.query.users.findFirst({ where: eq(users.id, caller.id) });
+            if (u) customerName = `${u.firstName || 'Cliente'} ${u.lastName || ''}`.trim();
+          }
+          const [tbl] = await restaurantDb.select({ number: tables.number }).from(tables).where(eq(tables.id, tableId));
+          const [orderRow] = await restaurantDb.select({
+            branchId: orders.branchId,
+          }).from(orders).where(eq(orders.id, accumulatedOrderId!));
+          if (orderRow?.branchId) {
+            const [brRow] = await restaurantDb.select({ restaurantId: branches.restaurantId }).from(branches).where(eq(branches.id, orderRow.branchId));
+            if (brRow) {
+              const [rest] = await restaurantDb.select({ businessId: restaurants.businessId }).from(restaurants).where(eq(restaurants.id, brRow.restaurantId));
+              if (rest?.businessId) {
+                const biz = await db.query.ownedBusinesses.findFirst({ where: eq(ownedBusinesses.id, rest.businessId) });
+                if (biz?.ownerId) {
+                  await sendEcosystemNotification({
+                    userId: biz.ownerId,
+                    title: `🍽️ Mesa #${tbl?.number ?? '?'} agregó platillos`,
+                    message: `${customerName} añadió ${typedItems.length} platillo(s) a su comanda (total $${grandTotal} MXN).`,
+                    type: 'SYSTEM',
+                    route: '/business-dashboard',
+                    threadId: 'table_orders',
+                  });
+                }
+              }
+            }
+          }
+        } catch (notifErr) {
+          console.warn('Could not send tab addition notification:', notifErr);
+        }
+      } else {
       // 1. Guardar la orden en la BD con estado PENDING
       const [newOrder] = await restaurantDb.insert(orders).values({
         branchId: table.branchId,
         tableId,
-        subtotal: itemsTotal,
+        subtotal: r2(grandTotal / (1 + TAX_RATE)),
+        tax: r2(grandTotal - grandTotal / (1 + TAX_RATE)),
         tip: totalTip,
-        total: grandTotal,
+        total: r2(grandTotal + totalTip),
         status: paymentMethod === 'BUNZ' ? 'PAID' : 'PENDING',
         orderType: 'DINE_IN'
       }).returning();
+
+      // Fase C: identificar al comensal en la orden (para POS/cuenta/cashback)
+      if (caller) {
+        await restaurantDb.update(orders).set({ customerId: caller.id }).where(eq(orders.id, newOrder.id));
+      }
 
       // 2. Guardar los items
       const orderItemsData = typedItems.map((i: OrderItemInput) => ({
@@ -92,8 +195,9 @@ export async function POST(req: Request) {
         console.warn('Could not send table order notification:', notifErr);
       }
 
-      targetOrderId = newOrder.id;
-      totalToPay = grandTotal;
+        targetOrderId = newOrder.id;
+        totalToPay = grandTotal + totalTip;
+      }
     } else {
       // Split payment logic
       const [existingOrder] = await restaurantDb.select().from(orders).where(eq(orders.id, existingOrderId));
