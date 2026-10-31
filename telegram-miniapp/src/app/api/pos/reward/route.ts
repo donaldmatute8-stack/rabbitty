@@ -60,7 +60,9 @@ export async function POST(request: Request) {
               eq(affiliateCampaigns.businessId, effectiveBusinessId ?? business_id),
               eq(affiliateCampaigns.campaignType, "FLASH_OFFER"),
               eq(affiliateCampaigns.status, "ACTIVE"),
-              gt(affiliateCampaigns.expiresAt, now)
+              gt(affiliateCampaigns.expiresAt, now),
+              // Piso económico: sin ofertas flash por debajo del 10%
+              gte(affiliateCampaigns.rewardPercentage, 10),
             )
           )
           .orderBy(desc(affiliateCampaigns.rewardPercentage))

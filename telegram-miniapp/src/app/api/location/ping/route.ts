@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { ownedBusinesses, transactions, notifications, affiliateCampaigns } from "@/db/schema";
-import { and, eq, inArray, sql, gt } from "drizzle-orm";
+import { and, eq, inArray, sql, gt, gte } from "drizzle-orm";
 import { getAuthenticatedUser } from "@/lib/serverAuth";
 import { isApnsConfigured, sendPushToUser } from "@/lib/push/apns";
 import { restaurantDb } from "@/db/restaurant";
@@ -108,7 +108,9 @@ export async function POST(req: NextRequest) {
             inArray(affiliateCampaigns.businessId, nearBusinessIds),
             eq(affiliateCampaigns.campaignType, "FLASH_OFFER"),
             eq(affiliateCampaigns.status, "ACTIVE"),
-            gt(affiliateCampaigns.expiresAt, now)
+            gt(affiliateCampaigns.expiresAt, now),
+            // Piso económico: las ofertas flash no pueden quedar por debajo del 10%
+            gte(affiliateCampaigns.rewardPercentage, 10),
           )
         );
       for (const cmp of campaigns) {
@@ -170,8 +172,10 @@ export async function POST(req: NextRequest) {
       if (caller && dist <= 250 && (!accuracy || accuracy <= 200)) {
         const visitCount = visitCountMap.get(b.id) ?? 0;
 
-        // Si el comercio tiene un Flash Boost activo, priorizar la oferta de proximidad especial
-        if (activeBoost && activeBoost.rewardPercentage > b.rewardPercentage) {
+        // FLASH_OFFER también funciona como RECORDATORIO: si el % es igual o
+        // mayor a la tasa base (mínimo 10% en la creación de campañas), se
+        // promociona igual — push de recordatorio + badge en el feed.
+        if (activeBoost && activeBoost.rewardPercentage >= b.rewardPercentage) {
           match.loyaltyOffer = {
             type: "FLASH_BOOST",
             title: `⚡ ¡Flash Boost en ${b.name}!`,

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { users, ownedBusinesses, transactions, levels, affiliateCampaigns, campaignRedemptions } from "@/db/schema";
-import { eq, and, or, sql, desc, gt } from "drizzle-orm";
+import { eq, and, or, sql, desc, gt, gte } from "drizzle-orm";
 import { processReferralAndNotifications } from '@/lib/referralLogic';
 import { awardHops, evaluateHatTricks } from '@/lib/gamificationLogic';
 import { sendToOracle } from '@/lib/oracle-client';
@@ -106,7 +106,9 @@ export async function POST(req: NextRequest) {
           eq(affiliateCampaigns.businessId, business.id),
           eq(affiliateCampaigns.campaignType, "FLASH_OFFER"),
           eq(affiliateCampaigns.status, "ACTIVE"),
-          gt(affiliateCampaigns.expiresAt, now)
+          gt(affiliateCampaigns.expiresAt, now),
+          // Piso económico: sin ofertas flash por debajo del 10%
+          gte(affiliateCampaigns.rewardPercentage, 10),
         )
       )
       .orderBy(desc(affiliateCampaigns.rewardPercentage))

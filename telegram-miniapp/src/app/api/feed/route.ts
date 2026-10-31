@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/db';
 
 import { ownedBusinesses, affiliateCampaigns } from '@/db/schema';
-import { desc, eq, inArray, and, gt } from 'drizzle-orm';
+import { desc, eq, inArray, and, gt, gte } from 'drizzle-orm';
 
 const parseSafeJson = <T>(str: string | null | undefined, fallback: T): T => {
   if (!str) return fallback;
@@ -31,7 +31,9 @@ export async function GET() {
             inArray(affiliateCampaigns.businessId, businessIds),
             eq(affiliateCampaigns.campaignType, 'FLASH_OFFER'),
             eq(affiliateCampaigns.status, 'ACTIVE'),
-            gt(affiliateCampaigns.expiresAt, now)
+            gt(affiliateCampaigns.expiresAt, now),
+            // Piso económico: sin ofertas flash por debajo del 10%
+            gte(affiliateCampaigns.rewardPercentage, 10),
           )
         );
       for (const ac of activeCampaigns) {

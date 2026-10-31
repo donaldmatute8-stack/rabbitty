@@ -12,7 +12,9 @@ const createCampaignSchema = z.object({
   message: z.string().min(10).max(500),
   campaignType: z.enum(["WINBACK_INACTIVE", "OFF_PEAK_BOOST", "VIP_LOYALTY", "FLASH_OFFER"]),
   targetSegment: z.enum(["INACTIVE_25D", "VIP_5_VISITS", "ALL_CUSTOMERS"]),
-  rewardPercentage: z.number().int().min(5).max(50),
+  // Mínimo 10%: el cashback de cualquier campaña (incluida FLASH_OFFER modo
+  // recordatorio) no puede quedar por debajo del piso económico de Bunz.
+  rewardPercentage: z.number().int().min(10).max(50),
   maxRewardPerUser: z.number().int().min(5).max(200).default(50),
   budgetBunz: z.number().int().min(50).max(5000),
   validityHours: z.number().int().min(1).max(168).default(48), // 1 hour to 7 days

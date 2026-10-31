@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { restaurantDb } from "@/db/restaurant";
 import { users, ownedBusinesses, transactions, affiliateCampaigns, campaignRedemptions, pendingVaults } from "@/db/schema";
 import { orders, restaurants, branches } from "@rabbitty/database-restaurant/schema";
-import { eq, and, desc, gt, sql } from "drizzle-orm";
+import { eq, and, desc, gt, sql, gte } from "drizzle-orm";;
 import { getAuthenticatedUser } from "@/lib/serverAuth";
 import { recordLedgerTransaction, findLedgerEntry } from "@/lib/ledgerHelper";
 import { sendEcosystemNotification } from "@/lib/push/notify";
@@ -227,7 +227,9 @@ export async function POST(req: NextRequest) {
             eq(affiliateCampaigns.businessId, businessId),
             eq(affiliateCampaigns.campaignType, "FLASH_OFFER"),
             eq(affiliateCampaigns.status, "ACTIVE"),
-            gt(affiliateCampaigns.expiresAt, now)
+            gt(affiliateCampaigns.expiresAt, now),
+            // Piso económico: sin ofertas flash por debajo del 10%
+            gte(affiliateCampaigns.rewardPercentage, 10),
           )
         )
         .orderBy(desc(affiliateCampaigns.rewardPercentage))
