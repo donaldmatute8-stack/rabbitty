@@ -885,7 +885,7 @@ export const posRouter = router({
     .mutation(async ({ ctx, input }) => {
       // Orden + items + PaymentIntent en una transacción; precios SIEMPRE del menú server-side
       return await ctx.restaurantDb.transaction(async (tx: any) => {
-        const prices = await ctx.restaurantDb.select({ id: menuItems.id, price: menuItems.price })
+        const prices = await tx.select({ id: menuItems.id, price: menuItems.price })
           .from(menuItems)
           .where(eq(menuItems.branchId, ctx.branchId));
         const priceMap = new Map(prices.map((p: any) => [p.id, Number(p.price)]));
@@ -901,7 +901,9 @@ export const posRouter = router({
         itemsTotal = r2(itemsTotal);
         const { total: calcTotal, subtotal: calcSubtotal, tax: calcTaxAmt } = calcTax(itemsTotal);
 
-        const [order] = await ctx.restaurantDb.insert(orders).values({
+        // Todo dentro de la MISMA transacción: si el intent falla, no queda
+        // orden huérfana (antes orders/orderItems se escribían fuera de tx).
+        const [order] = await tx.insert(orders).values({
           branchId: ctx.branchId,
           tableId: input.tableId ?? null,
           orderType: input.orderType,
@@ -916,7 +918,7 @@ export const posRouter = router({
         if (!order) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "No se pudo crear la orden" });
 
         for (const [i, row] of itemRows.entries()) {
-          await ctx.restaurantDb.insert(orderItems).values({ ...row, sortOrder: i, orderId: order.id });
+          await tx.insert(orderItems).values({ ...row, sortOrder: i, orderId: order.id });
         }
 
         // 3. PaymentIntent atómico (hold de Bunz si hay payer)
@@ -931,8 +933,8 @@ export const posRouter = router({
           provider: "STRIPE",
         } as never);
 
-        // 4. URL de pago (app admin /pay)
-        const base = process.env.RABBITTY_ADMIN_URL || process.env.ADMIN_APP_URL || "https://admin.rabbitty.me";
+        // 4. URL de pago (app admin /pay) — env primero, fallback admin.rabbitty.me
+        const base = process.env.NEXT_PUBLIC_APP_URL || process.env.RABBITTY_ADMIN_URL || process.env.ADMIN_APP_URL || "https://admin.rabbitty.me";
         const payUrl = `${base}/pay/${order.id}`;
 
         return { orderId: order.id, intentId: (intent as any).intentId, payUrl, total: calcTotal, bunzApplied: (intent as any).bunzApplied ?? 0, netFiatCents: (intent as any).netFiatCents, expiresAt: (intent as any).expiresAt };

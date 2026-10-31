@@ -11,6 +11,8 @@ import {
   menuItemIngredients,
   inventoryMovements,
   inventoryItems,
+  branches,
+  restaurants,
 } from "@rabbitty/database-restaurant/schema";
 import { users } from "@rabbitty/database-core/schema";
 import crypto from "crypto";
@@ -268,7 +270,7 @@ export async function confirmPaymentIntentSettled(
     expectedMerchantId?: string;
   }
 ): Promise<{ success: boolean; orderId: string; status: string; recoveryHold?: boolean }> {
-  return await db.transaction(async (tx: Db) => {
+  const result = await db.transaction(async (tx: Db) => {
     // 1. Lock del Payment Intent
     const [intent] = await tx
       .select()
@@ -453,6 +455,74 @@ export async function confirmPaymentIntentSettled(
       recoveryHold: isRecoveryHold,
     };
   });
+
+  // ── Cashback Bunz automático (Rabbitty Pay / Stripe) ──
+  // Idéntico al mint de la vía efectivo/terminal (payOrder): idempotente por
+  // ledger key pos_rwd_${orderId} server-side, 1 reintento, y NO-FATAL (si el
+  // mint falla, el pago queda liquidado y el cliente reclama con su ticket).
+  if (result?.success) {
+    try {
+      const [intentRow] = await db
+        .select({ payerSubjectId: paymentIntents.payerSubjectId, merchantId: paymentIntents.merchantId })
+        .from(paymentIntents)
+        .where(eq(paymentIntents.id, params.paymentIntentId))
+        .limit(1);
+      const [paidOrder] = await db
+        .select({ status: orders.status, total: orders.total, bunzReward: orders.bunzReward })
+        .from(orders)
+        .where(eq(orders.id, result.orderId))
+        .limit(1);
+
+      const payerId = intentRow?.payerSubjectId;
+      const orderIsPaid = paidOrder?.status === "COMPLETED" || paidOrder?.status === "PAID";
+      const alreadyRewarded = Number((paidOrder as any)?.bunzReward || 0) > 0;
+
+      if (payerId && paidOrder && orderIsPaid && !alreadyRewarded) {
+        // businessId del comercio (branches → restaurants.businessId), con fallback al branchId
+        let businessId: string = intentRow.merchantId;
+        const [branch] = await db
+          .select({ restaurantId: branches.restaurantId })
+          .from(branches)
+          .where(eq(branches.id, intentRow.merchantId))
+          .limit(1);
+        if (branch?.restaurantId) {
+          const [rest] = await db
+            .select({ businessId: restaurants.businessId })
+            .from(restaurants)
+            .where(eq(restaurants.id, branch.restaurantId))
+            .limit(1);
+          if (rest?.businessId) businessId = rest.businessId;
+        }
+
+        const attemptReward = async (): Promise<{ success: boolean; bunz?: number } | null> => {
+          const { miniappClient } = await import("./miniapp-client");
+          try {
+            return await miniappClient.rewardBunz(payerId, Number(paidOrder.total || 0), result.orderId, businessId);
+          } catch (firstErr) {
+            console.error("[STRIPE_CASHBACK_FAIL] orderId=" + result.orderId + " intento 1:", firstErr);
+            await new Promise((r) => setTimeout(r, 800));
+            return await miniappClient.rewardBunz(payerId, Number(paidOrder.total || 0), result.orderId, businessId);
+          }
+        };
+        let res: Awaited<ReturnType<typeof attemptReward>> = null;
+        try {
+          res = await attemptReward();
+        } catch (secondErr) {
+          console.error("[STRIPE_CASHBACK_FAIL] orderId=" + result.orderId + " intento 2 definitivo:", secondErr);
+        }
+        if (res?.success) {
+          await db
+            .update(orders)
+            .set({ bunzReward: res.bunz ?? 0 })
+            .where(eq(orders.id, result.orderId));
+        }
+      }
+    } catch (err) {
+      console.error("[STRIPE_CASHBACK_FAIL] orderId=" + result.orderId, err);
+    }
+  }
+
+  return result;
 }
 
 /**

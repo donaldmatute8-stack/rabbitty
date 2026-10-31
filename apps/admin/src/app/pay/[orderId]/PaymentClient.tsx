@@ -18,16 +18,21 @@ const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 function StripeCheckoutForm({
   clientSecret,
   orderId,
+  intentId,
   onSuccess,
 }: {
   clientSecret: string;
   orderId: string;
+  intentId: string | null;
   onSuccess: () => void;
 }) {
   const stripe = useStripe();
   const elements = useElements();
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // Reconciliación server-side: liquidación inmediata de la orden sin esperar
+  // al webhook de Stripe (idempotente — es el mismo motor del webhook).
+  const verifyMutation = trpc.payments.verifyStripePaymentIntent.useMutation();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,6 +54,20 @@ function StripeCheckoutForm({
       setSubmitting(false);
     } else if (paymentIntent && paymentIntent.status === "succeeded") {
       toast.success("¡Pago recibido con éxito!");
+      // Pide al servidor reconciliar contra Stripe y liquidar la orden YA
+      // (si el webhook llega después, es idempotente y no duplica nada).
+      try {
+        if (intentId) {
+          const r = await verifyMutation.mutateAsync({ intentId });
+          if (!r?.settled) {
+            toast.info("Pago confirmado en Stripe — liquidando…");
+          }
+        } else {
+          toast.info("Pago confirmado en Stripe — liquidando…");
+        }
+      } catch {
+        toast.info("Pago confirmado en Stripe — liquidando…");
+      }
       onSuccess();
     }
   };
@@ -220,6 +239,7 @@ export function PaymentClient({ order }: { order: any }) {
               <StripeCheckoutForm
                 clientSecret={clientSecret}
                 orderId={order.id}
+                intentId={intentId}
                 onSuccess={() => setPaymentSuccess(true)}
               />
             </Elements>

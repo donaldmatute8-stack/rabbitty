@@ -521,6 +521,35 @@ export default function PosPage() {
     }
   };
 
+  // ── Fase B: cobrar un Tab abierto ya existente SIN duplicar la orden ──
+  // Reutiliza payments.createPaymentIntent({ orderId }) (motor central) y abre
+  // el modal de Rabbitty Pay apuntando a /pay/[orderId] de ESA cuenta abierta.
+  // El polling de stripePayModal detecta SUCCEEDED y liquida: la sesión de mesa
+  // se cierra sola vía confirmPaymentIntentSettled.
+  const tabChargeMutation = trpc.payments.createPaymentIntent.useMutation();
+  const chargeOpenTab = async (tab: { orderId: string; total: number; status?: string }) => {
+    if (!tab?.orderId) return;
+    try {
+      const intent = await tabChargeMutation.mutateAsync({
+        orderId: tab.orderId,
+        provider: "STRIPE",
+      });
+      stripeIntentId.current = intent.intentId;
+      setStripePaid(false);
+      const base = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+      setStripePayModal({
+        payUrl: `${base}/pay/${tab.orderId}`,
+        amount: Math.round(intent.netFiatCents || 0) / 100 || tab.total,
+        orderId: tab.orderId,
+        expiresAt: intent.expiresAt ? new Date(intent.expiresAt) : new Date(Date.now() + 15 * 60 * 1000),
+        bunzApplied: 0,
+      });
+      toast.success("💳 Cobro digital creado sobre la cuenta abierta — sin duplicar orden");
+    } catch (err: any) {
+      toast.error(String(err?.message || "").slice(0, 140) || "No se pudo crear el cobro del tab");
+    }
+  };
+
   const handleMembershipRedeem = async (qrToken: string) => {
     try {
       const subId = qrToken.split(".")[0];
@@ -766,24 +795,22 @@ export default function PosPage() {
     return () => clearInterval(interval);
   }, [qrPaymentModal, API_SERVER_URL]);
 
-  // Polling del intento de Stripe: cuando el webhook liquida (SUCCEEDED), finaliza
+  // Polling del intento de Stripe: cuando el webhook o la reconciliación
+  // server-side liquida (SUCCEEDED), finaliza
   useEffect(() => {
     if (!stripePayModal || stripePaid) return;
+    const pollIntentId = stripeIntentId.current;
     let cancelled = false;
     const timer = setInterval(async () => {
       try {
-        const token = getPosAuthToken();
-        const url = `${API_SERVER_URL}/payments.getPaymentIntent?input=${encodeURIComponent(JSON.stringify({ intentId: stripeIntentId.current }))}`;
-        const res = await fetch(url, { headers: { "Authorization": token ? `Bearer ${token}` : "" } });
-        if (!res.ok) return;
-        const data = await res.json();
-        const intent = data?.result?.data;
+        if (!pollIntentId) return;
+        // Via cliente tRPC (autenticación y URL correctas en cualquier entorno),
+        // nunca un fetch hardcodeado a producción desde localhost.
+        const intent = await utils.payments.getPaymentIntent.fetch({ intentId: pollIntentId });
         if (intent?.status === "SUCCEEDED" && !cancelled) {
           cancelled = true;
           clearInterval(timer);
           setStripePaid(true);
-          const ord = await fetch(`${API_SERVER_URL}/pos.getOrders?input=${encodeURIComponent(JSON.stringify({}))}`, { headers: { "Authorization": `Bearer ${token}` } }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-          void ord;
           const realOrderNumber = (stripePayModal.orderId || stripeIntentId.current || "").slice(-4).toUpperCase();
           if (stripePayModal.bunzApplied > 0) {
             toast.success(`🐰 ¡Pago Stripe verificado! +${stripePayModal.bunzApplied} Bunz al Rabbitter.`);
@@ -963,6 +990,11 @@ export default function PosPage() {
     if (method === "EFECTIVO" || method === "VENTA DIRECTA" || method === "DIVIDIDA") {
       setCashReceived("");
     }
+    // Flujo tarjeta: default según el estado REAL de Stripe (evita mostrar la
+    // UI de Rabbitty Pay y terminar cobrando por terminal externa).
+    if (method === "TARJETA") {
+      setCardFlowChoice(stripeStatus.data?.chargesEnabled ? "stripe" : "external");
+    }
   };
 
   const confirmCheckout = async (customCashGiven?: number) => {
@@ -1102,6 +1134,12 @@ export default function PosPage() {
         return;
       }
       if (mappedMethod === "BUNZ") return; // If createIntent fails, stop
+      // Pago digital: si la creación del cobro Stripe falla, JAMÁS emitir un
+      // ticket "pagado" — la orden queda intacta y el mesero reintenta.
+      if (mappedMethod === "CREDIT_CARD" || method.includes("STRIPE")) {
+        toast.error(`💳 No se pudo crear el cobro digital: ${msg.slice(0, 140) || "error desconocido"}. El carrito queda intacto.`);
+        return;
+      }
       // Allow ticket generation even if backend offline (graceful degradation)
     }
 
@@ -2874,47 +2912,7 @@ export default function PosPage() {
               </div>
             </div>
 
-            {/* ── Modal Rabbitty Pay (Stripe Connect) — QR para el teléfono del comensal ── */}
-            {stripePayModal && (
-              <div className="flex flex-col items-center justify-center p-6 space-y-6">
-                {stripePaid ? (
-                  <CheckCircle2 className="w-16 h-16 text-emerald-500" />
-                ) : (
-                  <>
-                    <div className="text-center">
-                      <h2 className="text-2xl font-black text-white">💳 Cobro Rabbitty Pay</h2>
-                      <p className="text-gray-400 mt-1 text-sm">
-                        Muestra este código al comensal: paga <span className="font-bold text-white">${stripePayModal.amount.toFixed(2)} MXN</span> con Apple Pay o tarjeta desde su teléfono.
-                      </p>
-                    </div>
-                    <div className="bg-white p-4 rounded-2xl shadow-[0_0_40px_rgba(6,182,212,0.35)] border-4 border-cyan-500 relative">
-                      <QRDiscovery
-                  value={stripePayModal.payUrl}
-                  variant="rabbitter"
-                  size={250}
-                  revealMode="immediate"
-                  surfaceKey="pos-stripe"
-                />
-                    </div>
-                    <div className="flex flex-col items-center gap-1 text-center">
-                      <p className="text-xs text-gray-400">La comanda se liquida automáticamente en el POS al confirmar el pago.</p>
-                      {stripePayModal.bunzApplied > 0 && <p className="text-[11px] font-bold text-pink-300">🎁 +{stripePayModal.bunzApplied} Bunz al Rabbitter identificado</p>}
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (stripeIntentId.current) {
-                            await cancelStripeIntent.mutateAsync({ intentId: stripeIntentId.current }).catch(() => {});
-                          }
-                          setStripePayModal(null);
-                          toast.info("Cobro Stripe cancelado; cualquier hold de Bunz fue liberado.");
-                        }}
-                        className="text-[11px] font-bold text-gray-500 hover:text-red-400 mt-1 cursor-pointer"
-                      >Cancelar cobro</button>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
+            {/* ── (El modal de Rabbitty Pay/Stripe vive ahora en su propio Dialog, fuera de este) ── */}
             <div className="flex gap-4 w-full">
               <Button 
                 variant="secondary" 
@@ -2925,6 +2923,65 @@ export default function PosPage() {
                 Cancelar
               </Button>
             </div>
+          </div>
+        )}
+      </Dialog>
+
+      {/* ── Modal Rabbitty Pay (Stripe Connect) — QR/URL hacia /pay/[orderId] ──
+          Dialog INDEPENDIENTE: antes estaba anidado dentro del Dialog de Bunz
+          y como qrPaymentModal es null en cobros Stripe, nunca se montaba. */}
+      <Dialog
+        open={!!stripePayModal}
+        onClose={() => {
+          if (stripeIntentId.current && !stripePaid) {
+            void cancelStripeIntent.mutateAsync({ intentId: stripeIntentId.current }).catch(() => {});
+            toast.info("Cobro Stripe cancelado; cualquier hold de Bunz fue liberado.");
+          }
+          setStripePayModal(null);
+        }}
+        title="Cobro Digital — Rabbitty Pay"
+      >
+        {stripePayModal && (
+          <div className="flex flex-col items-center justify-center p-6 space-y-6">
+            {stripePaid ? (
+              <div className="flex flex-col items-center justify-center">
+                <CheckCircle2 className="w-16 h-16 text-emerald-500" />
+                <span className="text-emerald-500 font-bold mt-2">¡Pago liquidado!</span>
+              </div>
+            ) : (
+              <>
+                <div className="text-center">
+                  <h2 className="text-2xl font-black text-white">💳 Cobro Rabbitty Pay</h2>
+                  <p className="text-gray-400 mt-1 text-sm">
+                    Muestra este código al comensal: paga <span className="font-bold text-white">${stripePayModal.amount.toFixed(2)} MXN</span> con Apple Pay o tarjeta desde su teléfono.
+                  </p>
+                </div>
+                <div className="bg-white p-4 rounded-2xl shadow-[0_0_40px_rgba(6,182,212,0.35)] border-4 border-cyan-500 relative">
+                  <QRDiscovery
+                    value={stripePayModal.payUrl}
+                    variant="rabbitter"
+                    size={250}
+                    revealMode="immediate"
+                    surfaceKey="pos-stripe"
+                  />
+                </div>
+                <div className="flex flex-col items-center gap-1 text-center">
+                  <p className="text-xs text-gray-400">La comanda se liquida automáticamente en el POS al confirmar el pago.</p>
+                  {stripePayModal.bunzApplied > 0 && <p className="text-[11px] font-bold text-pink-300">🎁 +{stripePayModal.bunzApplied} Bunz al Rabbitter identificado</p>}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (stripeIntentId.current) {
+                        await cancelStripeIntent.mutateAsync({ intentId: stripeIntentId.current }).catch(() => {});
+                      }
+                      setStripePayModal(null);
+                      toast.info("Cobro Stripe cancelado; cualquier hold de Bunz fue liberado.");
+                    }}
+                    className="text-[11px] font-bold text-gray-500 hover:text-red-400 mt-1 cursor-pointer"
+                  >Cancelar cobro</button>
+                </div>
+              </>
+            )}
           </div>
         )}
       </Dialog>
@@ -3173,21 +3230,32 @@ export default function PosPage() {
                         💵 Solicitó efectivo
                       </span>
                     ) : (
-                      <Button
-                        onClick={async () => {
-                          await sendBillMutation.mutateAsync({
-                            orderId: tab.orderId,
-                            customerId: tab.customer?.id || undefined,
-                            phone: tab.customer?.phone || undefined,
-                            customerName: tab.customer?.name || undefined,
-                          });
-                        }}
-                        disabled={sendBillMutation.isPending}
-                        className="py-1.5 px-3 text-xs font-bold bg-pink-500/20 hover:bg-pink-500/30 text-pink-300 border border-pink-500/40"
-                      >
-                        <Send className="h-3 w-3 mr-1 text-pink-400" />
-                        Enviar Cuenta
-                      </Button>
+                      <>
+                        <Button
+                          onClick={() => void chargeOpenTab(tab)}
+                          disabled={tabChargeMutation.isPending}
+                          className="py-1.5 px-3 text-xs font-bold bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40"
+                          title="Crea el cobro digital sobre esta cuenta abierta SIN duplicar la orden: el comensal paga en su móvil y esta pestaña se liquida sola"
+                        >
+                          <QrCode className="h-3 w-3 mr-1 text-cyan-400" />
+                          Cobrar
+                        </Button>
+                        <Button
+                          onClick={async () => {
+                            await sendBillMutation.mutateAsync({
+                              orderId: tab.orderId,
+                              customerId: tab.customer?.id || undefined,
+                              phone: tab.customer?.phone || undefined,
+                              customerName: tab.customer?.name || undefined,
+                            });
+                          }}
+                          disabled={sendBillMutation.isPending}
+                          className="py-1.5 px-3 text-xs font-bold bg-pink-500/20 hover:bg-pink-500/30 text-pink-300 border border-pink-500/40"
+                        >
+                          <Send className="h-3 w-3 mr-1 text-pink-400" />
+                          Enviar Cuenta
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>

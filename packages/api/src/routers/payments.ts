@@ -298,6 +298,88 @@ export const paymentsRouter = router({
       });
     }),
 
+  // ==========================================
+  // Rabbitty Pay: reconciliación server-side de Stripe
+  // ==========================================
+  // Consulta a Stripe el estado real del PaymentIntent y — solo si succeeded,
+  // monto/moneda/metadata coinciden EXACTAMENTE — liquida con el mismo
+  // motor idempotente del webhook (confirmPaymentIntentSettled, FOR UPDATE).
+  // Cobertura para sandbox/pruebas sin webhook o si el webhook demora:
+  // el cliente llama esto tras confirmar; nunca duplica (intento SUCCEEDED → early return).
+  verifyStripePaymentIntent: publicLimitedProcedure
+    .input(z.object({ intentId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const { paymentIntents } = await import("@rabbitty/database-restaurant/schema");
+      const [intent] = await ctx.restaurantDb
+        .select()
+        .from(paymentIntents)
+        .where(eq(paymentIntents.id, input.intentId))
+        .limit(1);
+
+      if (!intent) throw new Error("Intento de pago no encontrado.");
+
+      // Mismo scoping que getPaymentIntent / createStripePaymentSecret
+      if (ctx.userId && intent.payerSubjectId && intent.payerSubjectId !== ctx.userId && !ctx.staffRole) {
+        throw new Error("Acceso denegado: este intento de pago pertenece a otra sesión.");
+      }
+
+      if (intent.status === "SUCCEEDED") {
+        return { success: true, status: "SUCCEEDED", orderId: intent.orderId, settled: true };
+      }
+      if (intent.provider !== "STRIPE" || !intent.externalIntentId) {
+        return { success: false, status: intent.status, orderId: intent.orderId, settled: false };
+      }
+
+      const { getStripeClient } = await import("../services/stripeConnect");
+      let pi;
+      try {
+        pi = await getStripeClient().paymentIntents.retrieve(intent.externalIntentId, {
+          expand: ["latest_charge"],
+        });
+      } catch (err: any) {
+        // Sin acceso a Stripe (key/permiso) → respondemos sin liquidar; el webhook sigue siendo backstop.
+        console.error("[verifyStripePaymentIntent] retrieve falló:", err?.message || err);
+        return { success: false, status: intent.status, orderId: intent.orderId, settled: false, reason: "STRIPE_RETRIEVE_FAILED" };
+      }
+
+      if (pi.status !== "succeeded") {
+        return { success: false, status: intent.status, providerStatus: String(pi.status), orderId: intent.orderId, settled: false };
+      }
+
+      // Validaciones estrictas ANTES de liquidar
+      if (pi.amount !== intent.netFiatCents) {
+        console.error("[verifyStripePaymentIntent] monto NO coincide:", pi.amount, "vs", intent.netFiatCents);
+        return { success: false, status: intent.status, orderId: intent.orderId, settled: false, reason: "AMOUNT_MISMATCH" };
+      }
+      if (String(pi.currency || "").toUpperCase() !== String(intent.currency || "MXN")) {
+        console.error("[verifyStripePaymentIntent] moneda NO coincide:", pi.currency, "vs", intent.currency);
+        return { success: false, status: intent.status, orderId: intent.orderId, settled: false, reason: "CURRENCY_MISMATCH" };
+      }
+      const metaIntentId = (pi.metadata as Record<string, string> | undefined)?.rabbittyIntentId;
+      if (metaIntentId && metaIntentId !== intent.id) {
+        console.error("[verifyStripePaymentIntent] metadata.rabbittyIntentId no coincide:", metaIntentId, "vs", intent.id);
+        return { success: false, status: intent.status, orderId: intent.orderId, settled: false, reason: "INTENT_MISMATCH" };
+      }
+      const metaBranch = (pi.metadata as Record<string, string> | undefined)?.branchId;
+      if (metaBranch && metaBranch !== intent.merchantId) {
+        console.error("[verifyStripePaymentIntent] metadata.branchId no coincide:", metaBranch, "vs", intent.merchantId);
+        return { success: false, status: intent.status, orderId: intent.orderId, settled: false, reason: "BRANCH_MISMATCH" };
+      }
+
+      const latestChargeId: string | undefined =
+        typeof (pi as any).latest_charge === "string" ? (pi as any).latest_charge : ((pi as any).latest_charge?.id);
+      const { confirmPaymentIntentSettled } = await import("../services/paymentCore");
+      const result = await confirmPaymentIntentSettled(ctx.restaurantDb, {
+        paymentIntentId: intent.id,
+        externalTransactionId: latestChargeId,
+        verifiedMethod: "STRIPE_CARD",
+        expectedAmountCents: intent.netFiatCents,
+        expectedCurrency: intent.currency,
+        expectedMerchantId: intent.merchantId,
+      });
+      return { success: result.success, status: result.status, orderId: result.orderId, settled: result.success };
+    }),
+
   getStripeAccountStatus: protectedProcedure
     .input(z.object({
       branchId: z.string().optional(),
