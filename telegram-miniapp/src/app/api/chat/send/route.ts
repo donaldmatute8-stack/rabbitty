@@ -130,14 +130,14 @@ export async function POST(req: Request) {
       });
     }
 
-    const senderName = (await resolveTelegramRecipient(senderId)).displayName;
-    const recipient = await resolveTelegramRecipient(otherId);
+    const [senderResolved, recipient, otherBusiness] = await Promise.all([
+      resolveTelegramRecipient(senderId),
+      resolveTelegramRecipient(otherId),
+      db.query.ownedBusinesses.findFirst({ where: eq(ownedBusinesses.id, otherId) }).catch(() => undefined),
+    ]);
+    const senderName = senderResolved.displayName;
 
     let autoReply: typeof messages.$inferSelect | null = null;
-
-    const otherBusiness = await db.query.ownedBusinesses
-      .findFirst({ where: eq(ownedBusinesses.id, otherId) })
-      .catch(() => undefined);
 
     if (otherBusiness && !access.isBusinessInbox && !isBusinessOpen(otherBusiness)) {
       const recentAutoReply = await db.query.messages
@@ -174,7 +174,8 @@ export async function POST(req: Request) {
       }
     }
 
-    await notifyChatRecipient({
+    // Notificar en segundo plano sin bloquear la respuesta de envío al usuario
+    void notifyChatRecipient({
       recipientUserId: recipient.userId,
       recipientTelegramId: recipient.telegramId,
       senderName,
@@ -182,7 +183,7 @@ export async function POST(req: Request) {
       targetId: senderId,
       conversationId: conversation.id,
       businessId: otherId,
-    });
+    }).catch((err) => console.warn('[ChatSend] notifyChatRecipient error:', err));
 
     return NextResponse.json({ success: true, message: userMessage, autoReply, suggestions: [] });
   } catch (error) {

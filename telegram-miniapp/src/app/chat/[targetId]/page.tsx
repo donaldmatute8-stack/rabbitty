@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import Image from 'next/image';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useParams, useRouter } from 'next/navigation';
@@ -232,6 +232,255 @@ function CheckTicks({ read }: { read: boolean }) {
       <path d="M1 6L4 9L10 2" stroke={read ? '#4FC3F7' : 'rgba(255,255,255,0.75)'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
       {read && <path d="M6 6L9 9L15 2" stroke="#4FC3F7" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />}
     </svg>
+  );
+}
+
+function formatVoiceDuration(sec: number): string {
+  const s = Math.max(0, Math.round(sec));
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return `${m}:${String(rem).padStart(2, '0')}`;
+}
+
+function VoiceNoteBubble({
+  msgId,
+  src,
+  durationMs,
+  isMe,
+  createdAt,
+  read,
+  showTicks,
+}: {
+  msgId: string;
+  src: string | null;
+  durationMs: number;
+  isMe: boolean;
+  createdAt: string;
+  read: boolean;
+  showTicks: boolean;
+}) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [loadedSec, setLoadedSec] = useState<number | null>(null);
+  const [hasPlayed, setHasPlayed] = useState(false);
+
+  const totalSec = loadedSec ?? Math.max(1, Math.round((durationMs || 1000) / 1000));
+
+  // Generar 30 barras determinísticas estilo Telegram a partir del ID del mensaje
+  const bars = useMemo(() => {
+    let hash = 2166136261;
+    const seed = msgId || 'voice';
+    for (let i = 0; i < seed.length; i++) {
+      hash ^= seed.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    const arr: number[] = [];
+    for (let i = 0; i < 30; i++) {
+      hash ^= i + 1;
+      hash = Math.imul(hash, 16777619);
+      const norm = (Math.abs(hash) % 100) / 100;
+      // Curva suave con picos tipo voz humana (entre 4px y 20px)
+      const envelope = Math.sin((i / 29) * Math.PI) * 0.55 + 0.45;
+      arr.push(Math.max(3, Math.round((4 + norm * 16) * envelope)));
+    }
+    return arr;
+  }, [msgId]);
+
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    const onTime = () => {
+      const dur = el.duration && Number.isFinite(el.duration) ? el.duration : totalSec;
+      setCurrentTime(el.currentTime);
+      setProgress(dur > 0 ? Math.min(1, el.currentTime / dur) : 0);
+    };
+    const onLoaded = () => {
+      if (el.duration && Number.isFinite(el.duration) && el.duration > 0) {
+        setLoadedSec(Math.max(1, Math.round(el.duration)));
+      }
+    };
+    const onEnded = () => {
+      setPlaying(false);
+      setProgress(0);
+      setCurrentTime(0);
+    };
+    const onPause = () => setPlaying(false);
+    const onPlay = () => {
+      setPlaying(true);
+      setHasPlayed(true);
+    };
+
+    el.addEventListener('timeupdate', onTime);
+    el.addEventListener('loadedmetadata', onLoaded);
+    el.addEventListener('ended', onEnded);
+    el.addEventListener('pause', onPause);
+    el.addEventListener('play', onPlay);
+    return () => {
+      el.removeEventListener('timeupdate', onTime);
+      el.removeEventListener('loadedmetadata', onLoaded);
+      el.removeEventListener('ended', onEnded);
+      el.removeEventListener('pause', onPause);
+      el.removeEventListener('play', onPlay);
+    };
+  }, [src, totalSec]);
+
+  const togglePlay = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    PlatformBridge.hapticFeedback('light');
+    const el = audioRef.current;
+    if (!el || !src) return;
+    if (playing) {
+      el.pause();
+    } else {
+      // Pausar cualquier otro audio activo en la página
+      document.querySelectorAll('audio').forEach((other) => {
+        if (other !== el) {
+          try { other.pause(); } catch {}
+        }
+      });
+      el.play().catch(() => {
+        setPlaying(false);
+      });
+    }
+  };
+
+  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    const el = audioRef.current;
+    if (!el || !src) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const dur = el.duration && Number.isFinite(el.duration) ? el.duration : totalSec;
+    if (dur > 0) {
+      el.currentTime = ratio * dur;
+      setProgress(ratio);
+      setCurrentTime(ratio * dur);
+    }
+  };
+
+  const displaySec = playing || currentTime > 0 ? currentTime : totalSec;
+  const timeStr = new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 11,
+        minWidth: 215,
+        maxWidth: 265,
+        padding: '3px 2px 1px 0',
+        userSelect: 'none',
+      }}
+    >
+      {src && <audio ref={audioRef} src={src} preload="metadata" style={{ display: 'none' }} />}
+
+      {/* Botón circular Play / Pause estilo Telegram */}
+      <button
+        type="button"
+        onClick={togglePlay}
+        disabled={!src}
+        aria-label={playing ? 'Pausar nota de voz' : 'Reproducir nota de voz'}
+        style={{
+          width: 42,
+          height: 42,
+          borderRadius: '50%',
+          border: 'none',
+          background: isMe ? '#FFFFFF' : 'linear-gradient(135deg, #FF2E93 0%, #E11D74 100%)',
+          color: isMe ? '#E11D74' : '#FFFFFF',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: src ? 'pointer' : 'default',
+          flexShrink: 0,
+          boxShadow: isMe ? '0 2px 8px rgba(0,0,0,0.16)' : '0 2px 10px rgba(233,30,99,0.35)',
+          opacity: src ? 1 : 0.6,
+          padding: 0,
+        }}
+      >
+        {playing ? (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <rect x="6" y="5" width="4" height="14" rx="1.5" />
+            <rect x="14" y="5" width="4" height="14" rx="1.5" />
+          </svg>
+        ) : (
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" style={{ transform: 'translateX(1.5px)' }}>
+            <path d="M6 4.5C6 3.67 6.94 3.19 7.62 3.67L19.14 11.17C19.74 11.56 19.74 12.44 19.14 12.83L7.62 20.33C6.94 20.81 6 20.33 6 19.5V4.5Z" />
+          </svg>
+        )}
+      </button>
+
+      {/* Columna derecha: Waveform + fila inferior de duración y hora */}
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
+        {/* Barras de onda interactivas */}
+        <div
+          onClick={handleSeek}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2.5,
+            height: 22,
+            cursor: src ? 'pointer' : 'default',
+          }}
+        >
+          {bars.map((h, idx) => {
+            const barRatio = idx / bars.length;
+            const isActive = playing || progress > 0 ? barRatio <= progress : false;
+            const activeColor = isMe ? '#FFFFFF' : '#FF2E93';
+            const inactiveColor = isMe ? 'rgba(255,255,255,0.48)' : 'rgba(255,255,255,0.28)';
+            return (
+              <span
+                key={idx}
+                style={{
+                  width: 2.5,
+                  height: h,
+                  borderRadius: 999,
+                  background: isActive ? activeColor : inactiveColor,
+                  transition: 'background 0.12s ease',
+                  flexShrink: 0,
+                }}
+              />
+            );
+          })}
+        </div>
+
+        {/* Fila inferior estilo Telegram: "0:05 •" a la izquierda y "05:12 PM ✓✓" a la derecha */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: 11,
+            lineHeight: 1,
+            color: isMe ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.5)',
+            fontWeight: 600,
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            <span>{formatVoiceDuration(displaySec)}</span>
+            {!hasPlayed && (
+              <span
+                style={{
+                  width: 5,
+                  height: 5,
+                  borderRadius: '50%',
+                  background: isMe ? '#FFFFFF' : '#FF2E93',
+                  display: 'inline-block',
+                }}
+              />
+            )}
+          </span>
+
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontWeight: 500, opacity: 0.92 }}>
+            {timeStr}
+            {showTicks && <CheckTicks read={read} />}
+          </span>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -957,6 +1206,8 @@ export default function ChatRoomPage() {
     if (!conversationId || sending) return;
     tempCounterRef.current += 1;
     const tempId = `temp-${tempCounterRef.current}`;
+    // Registrar de inmediato en el mapa local para reproducción instantánea sin parpadeo
+    setVoiceSrcMap((prev) => ({ ...prev, [tempId]: voiceDataUrl }));
     const meta = { kind: 'VOICE', voiceDataUrl, durationMs } as unknown as MessageMetadata;
     const optimistic: Message = {
       id: tempId,
@@ -982,6 +1233,10 @@ export default function ChatRoomPage() {
       })
       .then((data) => {
         if (data?.success && data.message) {
+          const realId = (data.message as Message).id;
+          if (realId) {
+            setVoiceSrcMap((prev) => ({ ...prev, [realId]: prev[tempId] || voiceDataUrl }));
+          }
           setMessages((prev) => prev.map((m) => (m.id === tempId ? (data.message as Message) : m)));
         } else {
           setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, content: '🎤 Nota de voz (no enviada)' } : m)));
@@ -1297,7 +1552,7 @@ export default function ChatRoomPage() {
     </div>
   );
 
-  const renderContent = (msg: Message) => {
+  const renderContent = (msg: Message, isMe = false) => {
     const meta: MessageMetadata | null =
       msg.metadata && typeof msg.metadata === 'object' ? msg.metadata : null;
 
@@ -1307,25 +1562,19 @@ export default function ChatRoomPage() {
         const src =
           (typeof m.voiceUrl === 'string' && m.voiceUrl) ||
           (msg.id && voiceSrcMap[msg.id]) ||
+          (typeof m.voiceDataUrl === 'string' && m.voiceDataUrl) ||
           null;
         const dur = typeof m.durationMs === 'number' ? m.durationMs : 0;
-        if (!src) {
-          return <span style={{ fontSize: 13, fontWeight: 700, opacity: 0.85 }}>🎤 Nota de voz</span>;
-        }
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, opacity: 0.85 }}>🎤 Nota de voz{dur ? ` · ${Math.max(1, Math.round(dur / 1000))}s` : ''}</span>
-            <audio
-              controls
-              preload="metadata"
-              src={src}
-              style={{ width: 220, maxWidth: '100%', height: 36 }}
-              onError={(e) => {
-                const el = e.currentTarget;
-                el.style.display = 'none';
-              }}
-            />
-          </div>
+          <VoiceNoteBubble
+            msgId={msg.id}
+            src={src}
+            durationMs={dur}
+            isMe={isMe}
+            createdAt={msg.createdAt}
+            read={Boolean(msg.readAt)}
+            showTicks={isMe && !isBot}
+          />
         );
       }
     }
@@ -2140,27 +2389,29 @@ export default function ChatRoomPage() {
                     return null;
                   })()}
                   <div style={{ fontSize: '16px', lineHeight: '1.34', wordBreak: 'break-word' }}>
-                    {renderContent(msg)}
-                    <span
-                      style={{
-                        float: 'right',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '3px',
-                        fontSize: '11px',
-                        lineHeight: 1,
-                        marginLeft: '9px',
-                        marginTop: '6px',
-                        marginBottom: '-1px',
-                        color: isMe ? 'rgba(255,255,255,0.78)' : 'rgba(255,255,255,0.42)',
-                        whiteSpace: 'nowrap',
-                        fontWeight: 500,
-                        userSelect: 'none',
-                      }}
-                    >
-                      {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      {isMe && !isBot && <CheckTicks read={Boolean(msg.readAt)} />}
-                    </span>
+                    {renderContent(msg, isMe)}
+                    {!(msg.type === 'VOICE' || (msg.metadata && typeof msg.metadata === 'object' && (msg.metadata as Record<string, unknown>).kind === 'VOICE')) && (
+                      <span
+                        style={{
+                          float: 'right',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          fontSize: '11px',
+                          lineHeight: 1,
+                          marginLeft: '9px',
+                          marginTop: '6px',
+                          marginBottom: '-1px',
+                          color: isMe ? 'rgba(255,255,255,0.78)' : 'rgba(255,255,255,0.42)',
+                          whiteSpace: 'nowrap',
+                          fontWeight: 500,
+                          userSelect: 'none',
+                        }}
+                      >
+                        {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {isMe && !isBot && <CheckTicks read={Boolean(msg.readAt)} />}
+                      </span>
+                    )}
                   </div>
                   {msgReactions[msg.id] && (
                     <div style={{ position: 'absolute', bottom: -12, [isMe ? 'left' : 'right']: 8, background: 'rgba(28, 28, 34, 0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 999, padding: '2px 7px', fontSize: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.35)', lineHeight: 1.2 } as React.CSSProperties}>

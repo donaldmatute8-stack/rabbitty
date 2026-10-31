@@ -27,9 +27,9 @@ export default function AdminPage() {
   useEffect(() => {
     setCurrentDateStr(new Date().toLocaleDateString("es-MX", { weekday: "long", year: "numeric", month: "long", day: "numeric" }));
   }, []);
-  const { data: orders } = trpc.pos.getOrders.useQuery({}, { retry: false });
-  const { data: tables } = trpc.pos.getTables.useQuery(undefined, { retry: false });
-  const { data: crossStore } = trpc.admin.getCrossStoreKpis.useQuery(undefined, { retry: false });
+  const { data: tables } = trpc.pos.getTables.useQuery(undefined, { refetchInterval: 15000, retry: false });
+  const { data: activeTabsData } = trpc.pos.getActiveTabs.useQuery(undefined, { refetchInterval: 10000, retry: false });
+  const { data: crossStore } = trpc.admin.getCrossStoreKpis.useQuery(undefined, { refetchInterval: 30000, retry: false });
   const { data: pinStatus } = trpc.staff.getAdminPinStatus.useQuery(undefined, { retry: false });
 
   const utils = trpc.useUtils();
@@ -78,11 +78,23 @@ export default function AdminPage() {
     }
   };
 
-  const openOrders = orders?.filter((o) => o.status === "PENDING" || o.status === "OPEN") ?? [];
-  const paidOrders = orders?.filter((o) => o.status === "PAID" || o.status === "COMPLETED") ?? [];
-  const totalRevenue = paidOrders.reduce((sum, o) => sum + o.total, 0);
+  // ── Feed del dashboard (server-side: 1 roundtrip, sin N+1) ──
+  // Órdenes activas (máx 50 más recientes) + ventas/pagadas de HOY calculadas
+  // en SQL con día America/Mexico_City. Ya no se polla getOrders completo.
+  const { data: feed } = trpc.pos.getDashboardFeed.useQuery(undefined, { refetchInterval: 10000, retry: false });
+  const openOrders = feed?.openOrders ?? [];
+  const paidOrdersToday = feed?.paidToday.count ?? 0;
+  const totalRevenue = feed?.paidToday.total ?? 0;
 
-  const { data: bunzInventory } = trpc.admin.getAffiliateBunzInventory.useQuery(undefined, { retry: false });
+  // Mesas realmente ocupadas (tienen comanda activa o sesión abierta en getActiveTabs / openOrders)
+  const occupiedTableIds = new Set<string>([
+    ...openOrders.map((o) => o.tableId).filter((id): id is string => Boolean(id)),
+    ...(activeTabsData?.activeTabs ?? []).map((t) => t.tableId).filter((id): id is string => Boolean(id)),
+  ]);
+  const activePhysicalTables = tables?.filter((t) => t.isActive !== false) ?? [];
+  const occupiedTablesCount = activePhysicalTables.filter((t) => occupiedTableIds.has(t.id)).length;
+
+  const { data: bunzInventory } = trpc.admin.getAffiliateBunzInventory.useQuery(undefined, { refetchInterval: 30000, retry: false });
   const { data: dwell } = trpc.dwellAnalytics.getDwellStats.useQuery(undefined, { refetchInterval: 60000, retry: false });
 
   const stats = [
@@ -106,7 +118,7 @@ export default function AdminPage() {
     },
     {
       label: "Mesas ocupadas",
-      value: `${tables?.filter(t => t.isActive).length ?? 0}/${tables?.length ?? 0}`,
+      value: `${occupiedTablesCount}/${activePhysicalTables.length}`,
       icon: UtensilsCrossed,
       colorClass: "text-blue-400",
       bgClass: "bg-blue-500/10 border-blue-500/20",
@@ -115,7 +127,7 @@ export default function AdminPage() {
     },
     {
       label: "Órdenes pagadas",
-      value: paidOrders.length,
+      value: paidOrdersToday,
       icon: TrendingUp,
       colorClass: "text-pink-400",
       bgClass: "bg-pink-500/10 border-pink-500/20",
@@ -314,32 +326,51 @@ export default function AdminPage() {
             ) : (
               <div className="space-y-3 flex-1 overflow-y-auto max-h-87.5 pr-1">
                 {openOrders.map((order) => {
-                  const title = order.tableId ? `Mesa #${order.id.slice(0, 6)}` : "Para Llevar";
-                  const isPending = order.status === "PENDING" || order.status === "OPEN";
+                  const title = order.tableNumber != null
+                    ? `Mesa ${order.tableNumber}${order.tableLocation ? ` (${order.tableLocation})` : ""}`
+                    : order.orderType === "DELIVERY"
+                    ? "A Domicilio"
+                    : order.orderType === "TO_GO"
+                    ? "Para Llevar"
+                    : "Mostrador";
+                  const isPending = ["PENDING", "OPEN", "IN_PROGRESS", "READY", "CASH_PAYMENT_REQUESTED"].includes(order.status);
                   return (
                     <div
                       key={order.id}
                       className="flex items-center justify-between rounded-xl px-4 py-3.5 bg-white/5 border border-white/5 hover:border-white/10 hover:bg-white/10 transition-all duration-300"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                        <div className={cn(
+                          "h-2 w-2 rounded-full animate-pulse",
+                          order.status === "CASH_PAYMENT_REQUESTED" ? "bg-emerald-400" : "bg-amber-500"
+                        )} />
                         <div>
-                          <span className="font-bold text-sm text-gray-200">
-                            {title}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-sm text-gray-200">
+                              {title}
+                            </span>
+                            {order.customerName && (
+                              <span className="text-[10px] font-black text-pink-300 bg-pink-500/15 border border-pink-500/30 px-2 py-0.5 rounded-full">
+                                🐰 {order.customerName}
+                              </span>
+                            )}
+                          </div>
                           <p className="text-[10px] text-gray-500 font-semibold mt-0.5">
                             Iniciada: {new Date(order.createdAt ?? new Date()).toLocaleTimeString("es-MX", {
                               timeZone: "America/Mexico_City",
                               hour: "2-digit",
                               minute: "2-digit",
                             })}
+                            {order.itemsCount > 0 ? ` • ${order.itemsCount} art.` : ""}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="text-right">
                           <span className="font-extrabold text-sm text-amber-500">${order.total.toFixed(2)}</span>
-                          <p className="text-[9px] uppercase tracking-wider text-gray-500 font-bold mt-0.5">{order.status}</p>
+                          <p className="text-[9px] uppercase tracking-wider text-gray-500 font-bold mt-0.5">
+                            {order.status === "CASH_PAYMENT_REQUESTED" ? "PIDE CUENTA" : order.status}
+                          </p>
                         </div>
                         {isPending && (
                           <button
@@ -364,10 +395,20 @@ export default function AdminPage() {
         {/* Table Map Widget */}
         <motion.div variants={itemVariants}>
           <div className="rounded-3xl border border-white/5 bg-white/5 p-6 backdrop-blur-md shadow-xl h-full flex flex-col">
-            <h3 className="text-lg font-bold text-white mb-5 flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-blue-500" />
-              Estado de Mesas
-            </h3>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-blue-500" />
+                Estado de Mesas
+              </h3>
+              <div className="flex items-center gap-3 text-[10px] font-bold text-gray-400">
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-emerald-400" /> Libre ({activePhysicalTables.length - occupiedTablesCount})
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-amber-400" /> Ocupada ({occupiedTablesCount})
+                </span>
+              </div>
+            </div>
             {!tables ? (
               <div className="grid grid-cols-4 gap-3">
                 {Array.from({ length: 8 }).map((_, i) => (
@@ -383,16 +424,54 @@ export default function AdminPage() {
                 <p className="text-xs text-gray-600 mt-1">Configura el diseño de tu salón desde el POS.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-4 gap-3">
-                {tables.map((table) => (
-                  <div
-                    key={table.id}
-                    className="rounded-2xl p-4 text-center text-sm font-bold border border-white/5 bg-white/5 text-gray-300 hover:border-pink-500/50 hover:bg-pink-500/5 hover:text-pink-400 transition-all duration-300 cursor-default shadow-sm hover:shadow-[0_0_15px_rgba(236,72,153,0.1)]"
-                  >
-                    <span className="block text-lg font-black">{table.number}</span>
-                    <span className="text-[9px] uppercase tracking-wider text-gray-500 block mt-0.5">Mesa</span>
-                  </div>
-                ))}
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                {tables.map((table) => {
+                  const activeTab = activeTabsData?.activeTabs.find((t) => t.tableId === table.id);
+                  const activeOrder = openOrders.find((o) => o.tableId === table.id);
+                  const isOccupied = Boolean(activeTab || activeOrder);
+                  const isCashRequested = activeTab?.cashRequested || activeOrder?.status === "CASH_PAYMENT_REQUESTED";
+                  const tabTotal = activeTab?.total ?? activeOrder?.total ?? 0;
+                  const customerName = activeTab?.customer?.name || activeOrder?.customerName;
+
+                  return (
+                    <Link
+                      href="/pos"
+                      key={table.id}
+                      className={cn(
+                        "rounded-2xl p-3.5 text-center text-sm font-bold border transition-all duration-300 flex flex-col items-center justify-center relative",
+                        isCashRequested
+                          ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-200 shadow-[0_0_20px_rgba(16,185,129,0.2)]"
+                          : isOccupied
+                          ? "border-amber-500/40 bg-amber-500/10 text-amber-200 shadow-[0_0_15px_rgba(245,158,11,0.12)]"
+                          : "border-white/5 bg-white/5 text-gray-300 hover:border-cyan-500/40 hover:bg-cyan-500/5 hover:text-cyan-300"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "absolute top-2 right-2 h-2 w-2 rounded-full",
+                          isCashRequested
+                            ? "bg-emerald-400 animate-ping"
+                            : isOccupied
+                            ? "bg-amber-400 animate-pulse"
+                            : "bg-emerald-500/60"
+                        )}
+                      />
+                      <span className="block text-lg font-black leading-none">{table.number}</span>
+                      <span className="text-[9px] uppercase tracking-wider text-gray-400 block mt-1 truncate max-w-full">
+                        {(table as any).location || "Mesa"}
+                      </span>
+                      {isOccupied ? (
+                        <span className="mt-1.5 text-[10px] font-black text-amber-300 bg-black/40 px-2 py-0.5 rounded-full border border-amber-500/30 truncate max-w-full">
+                          ${tabTotal.toFixed(0)} {customerName ? `• ${customerName.split(" ")[0]}` : ""}
+                        </span>
+                      ) : (
+                        <span className="mt-1.5 text-[9px] font-bold text-emerald-400/80">
+                          Libre • 👤 {table.capacity}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
               </div>
             )}
           </div>

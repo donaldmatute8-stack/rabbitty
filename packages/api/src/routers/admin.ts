@@ -1136,16 +1136,33 @@ export const adminRouter = router({
     const restaurantId = branchRow?.restaurantId ?? "";
     const [rest] = restaurantId
       ? await ctx.restaurantDb
-          .select({ name: restaurants.name, phone: restaurants.phone, logoUrl: restaurants.logoUrl })
+          .select({
+            name: restaurants.name,
+            phone: restaurants.phone,
+            logoUrl: restaurants.logoUrl,
+            businessId: restaurants.businessId,
+            defaultRewardRate: restaurants.defaultRewardRate,
+            printerType: restaurants.printerType,
+          })
           .from(restaurants)
           .where(eq(restaurants.id, restaurantId))
           .limit(1)
       : [];
-    const [biz] = await ctx.coreDb
-      .select({ name: ownedBusinesses.name, category: ownedBusinesses.category, rewardPercentage: ownedBusinesses.rewardPercentage, slug: ownedBusinesses.slug, logoUrl: ownedBusinesses.logoUrl, description: ownedBusinesses.description, verificationData: ownedBusinesses.verificationData })
-      .from(ownedBusinesses)
-      .where(eq(ownedBusinesses.id, sql`SELECT "businessId" FROM restaurants WHERE id = ${restaurantId}`))
-      .limit(1);
+    const [biz] = rest?.businessId
+      ? await ctx.coreDb
+          .select({
+            name: ownedBusinesses.name,
+            category: ownedBusinesses.category,
+            rewardPercentage: ownedBusinesses.rewardPercentage,
+            slug: ownedBusinesses.slug,
+            logoUrl: ownedBusinesses.logoUrl,
+            description: ownedBusinesses.description,
+            verificationData: ownedBusinesses.verificationData,
+          })
+          .from(ownedBusinesses)
+          .where(eq(ownedBusinesses.id, rest.businessId))
+          .limit(1)
+      : [];
 
     const catRows = await ctx.restaurantDb
       .select({ catCount: sql<number>`COUNT(*)::int` })
@@ -1159,27 +1176,93 @@ export const adminRouter = router({
     const liveItems = items.filter((i) => i.isActive);
     const itemsWithPhoto = liveItems.filter((i) => (i.imageUrl || "").trim().length > 0);
 
+    // Datos operativos de la sucursal para auto-evaluar los 7 pasos del OnboardingWizard
+    const [staffRows, tablesRows, shiftsCountRows, ordersCountRows] = await Promise.all([
+      ctx.restaurantDb
+        .select({ id: staff.id, role: staff.role, pinCode: staff.pinCode })
+        .from(staff)
+        .where(eq(staff.branchId, branchId)),
+      ctx.restaurantDb
+        .select({ count: sql<number>`COUNT(*)::int` })
+        .from(tables)
+        .where(eq(tables.branchId, branchId)),
+      ctx.restaurantDb
+        // La tabla real es "cash_shifts" (drizzle: pgTable("cash_shifts")) —
+        // "cashShifts" no existe y el catch convertía el error en 0 turnos.
+        .execute(sql`SELECT COUNT(*)::int AS count FROM "cash_shifts" WHERE "branchId" = ${branchId}`)
+        .then((r: any) => Number((r?.rows ?? r)?.[0]?.count ?? 0))
+        .catch(() => 0),
+      ctx.restaurantDb
+        .select({ count: sql<number>`COUNT(*)::int` })
+        .from(orders)
+        .where(eq(orders.branchId, branchId)),
+    ]);
+
+    const staffCount = staffRows.length;
+    const hasAdminPin = staffRows.some(
+      (s) => ["ADMIN", "MANAGER", "admin", "manager"].includes(s.role) && Boolean(s.pinCode)
+    );
+    const tablesCount = Number(tablesRows[0]?.count ?? 0);
+    const ordersCount = Number(ordersCountRows[0]?.count ?? 0);
+
     const has = (v?: string | null) => Boolean((v || "").trim());
-    const pct = Math.round(Number(biz?.rewardPercentage ?? 10));
+    const rawRestRate = Number(rest?.defaultRewardRate ?? 0);
+    const restPct = rawRestRate > 0 && rawRestRate < 1 ? Math.round(rawRestRate * 100) : Math.round(rawRestRate);
+    const pct = Math.round(Number(biz?.rewardPercentage ?? (restPct || 10)));
 
     type Item = { id: string; label: string; done: boolean; href: string; level: "min" | "top"; cta: string };
     const all: Item[] = [
       { id: "name", label: "Nombre del negocio", done: has(rest?.name || biz?.name), href: "/settings", level: "min", cta: "Completar nombre" },
       { id: "phone", label: "Teléfono de contacto", done: has(rest?.phone), href: "/settings", level: "min", cta: "Agregar teléfono" },
-      { id: "address", label: "Dirección física", done: has(branchRow?.address), href: "/settings", level: "min", cta: "Agregar dirección" },
-      { id: "reward", label: `% de recompensa configurado`, done: pct > 0, href: "/settings", level: "min", cta: "Configurar %" },
+      { id: "address", label: "Dirección física", done: has(branchRow?.address) && !String(branchRow?.address).toLowerCase().startsWith("provisionado por"), href: "/settings", level: "min", cta: "Agregar dirección" },
+      { id: "reward", label: `% de recompensa configurado (${pct}%)`, done: pct > 0, href: "/loyalty", level: "min", cta: "Configurar %" },
       { id: "category", label: "Categoría / nicho de mercado", done: has(biz?.category), href: "/settings", level: "min", cta: "Elegir nicho" },
-      { id: "categories", label: "Categorías de menú creadas", done: catCount > 0, href: "/menu", level: "min", cta: "Crear categorías" },
-      { id: "items3", label: "Al menos 3 platillos/productos", done: liveItems.length >= 3, href: "/menu", level: "min", cta: "Cargar menú" },
+      { id: "categories", label: `Categorías de menú creadas (${catCount})`, done: catCount > 0, href: "/menu", level: "min", cta: "Crear categorías" },
+      { id: "items3", label: `Al menos 3 platillos/productos (${liveItems.length})`, done: liveItems.length >= 3, href: "/menu", level: "min", cta: "Cargar menú" },
       { id: "description", label: "Descripción del negocio", done: has(biz?.description), href: "/settings", level: "top", cta: "Escribir descripción" },
       { id: "logo", label: "Logo del negocio", done: has(rest?.logoUrl || biz?.logoUrl), href: "/settings", level: "top", cta: "Subir logo" },
       { id: "photos", label: `Fotos en platillos (${itemsWithPhoto.length}/${liveItems.length || 0}${liveItems.length ? `, mínimo 3` : ""})`, done: liveItems.length > 0 && itemsWithPhoto.length >= Math.min(3, liveItems.length) && itemsWithPhoto.length / liveItems.length >= 0.7, href: "/menu", level: "top", cta: "Subir fotos" },
       { id: "hours", label: "Horario y días de atención", done: Boolean(biz?.verificationData && JSON.stringify(biz.verificationData).includes("activeDays")), href: "/settings", level: "top", cta: "Configurar horario" },
-      { id: "website", label: "Sitio web propio o Landing Rabbitty", done: false, href: "https://www.rabbitty.me", level: "top", cta: "Reclamar landing" },
+      { id: "website", label: "Sitio web propio o Landing Rabbitty", done: has(biz?.slug), href: "https://www.rabbitty.me", level: "top", cta: "Reclamar landing" },
     ];
 
+    // Estado real en base de datos para los 7 pasos operativos del OnboardingWizard
+    const wizardSteps: Record<string, { done: boolean; detail: string }> = {
+      menu: {
+        done: catCount > 0 && liveItems.length >= 3,
+        detail: `${catCount} categorías · ${liveItems.length} platillos activos`,
+      },
+      staff: {
+        done: staffCount > 0,
+        detail: staffCount > 0 ? `${staffCount} colaborador(es) registrado(s)` : "Sin personal registrado",
+      },
+      "tv-qr": {
+        done: tablesCount > 0 && liveItems.length > 0,
+        detail: tablesCount > 0 ? `${tablesCount} mesas listas con QR y menú TV` : "Configura mesas para activar QRs",
+      },
+      loyalty: {
+        done: pct > 0,
+        detail: `Cashback activo al ${pct}% en Bunz`,
+      },
+      "cash-cut": {
+        done: hasAdminPin && shiftsCountRows > 0,
+        detail: hasAdminPin
+          ? shiftsCountRows > 0
+            ? `PIN configurado · ${shiftsCountRows} turno(s) operado(s)`
+            : "PIN listo · falta abrir primer turno en POS"
+          : "Falta configurar PIN de Administrador",
+      },
+      sync: {
+        done: ordersCount > 0 || Boolean(rest?.printerType),
+        detail: ordersCount > 0 ? `${ordersCount} orden(es) sincronizada(s) con POS/KDS` : "Listo para recibir tu primera comanda",
+      },
+      academy: {
+        done: false,
+        detail: "Guías interactivas para tu equipo",
+      },
+    };
+
     const minItems = all.filter((i) => i.level === "min");
-    const topItems = all.filter((i) => i.level === "top");
     const minDone = minItems.filter((i) => i.done).length;
     const topDone = all.filter((i) => i.done).length;
     const percent = Math.round((topDone / all.length) * 100);
@@ -1193,6 +1276,7 @@ export const adminRouter = router({
       min: { done: minDone, total: minItems.length, items: minItems },
       top: { done: topDone, total: all.length, items: all },
       faltantes: all.filter((i) => !i.done),
+      wizardSteps,
     };
   }),
 

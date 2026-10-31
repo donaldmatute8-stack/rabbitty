@@ -1,12 +1,89 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { users, ownedBusinesses } from '@/db/schema';
-import { or, ilike } from 'drizzle-orm';
+import { or, ilike, desc, ne, sql } from 'drizzle-orm';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 
 // Helper to normalize phone numbers (remove spaces, symbols, keep digits)
 function cleanPhone(raw: string): string {
   return raw.replace(/[^0-9]/g, '');
+}
+
+function mapUserToCandidate(u: typeof users.$inferSelect) {
+  const fullName = `${u.firstName || 'Rabbitter'} ${u.lastName || ''}`.trim();
+  const seed = u.username || u.firstName || u.id;
+  const bg = u.role === 'AFFILIATE' ? 'FF8A00' : 'E91E63';
+  const avatar = `https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(seed)}&backgroundColor=${bg}`;
+
+  return {
+    id: u.id,
+    name: fullName,
+    username: u.username,
+    telegramId: u.telegramId,
+    phoneNumber: u.phoneNumber,
+    role: u.role,
+    avatar,
+    isRegistered: true,
+    isBusiness: false,
+  };
+}
+
+/**
+ * GET /api/contacts?q=...&onlyUsers=1
+ * Buscador dinámico en tiempo real de Rabbitters activos por @username, nombre o ID (UUID / telegramId).
+ * Si `q` viene vacío, devuelve los Rabbitters activos más recientes para sugerencias inmediatas.
+ */
+export async function GET(req: Request) {
+  try {
+    const caller = await getAuthenticatedUser(req);
+    if (!caller) {
+      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const rawQ = (searchParams.get('q') || '').trim();
+    const cleanQ = rawQ.replace(/^@/, '');
+
+    if (!cleanQ) {
+      const activeUsers = await db.query.users.findMany({
+        where: ne(users.id, caller.id),
+        orderBy: [desc(users.updatedAt), desc(users.createdAt)],
+        limit: 8,
+      });
+      return NextResponse.json({
+        success: true,
+        results: activeUsers.map(mapUserToCandidate),
+      });
+    }
+
+    const cleanDigits = cleanPhone(cleanQ);
+    const searchConditions = [
+      ilike(users.username, `%${cleanQ}%`),
+      ilike(users.firstName, `%${cleanQ}%`),
+      ilike(users.lastName, `%${cleanQ}%`),
+      sql`CAST(${users.id} AS TEXT) ILIKE ${`%${cleanQ}%`}`,
+      ilike(users.telegramId, `%${cleanQ}%`),
+    ];
+
+    if (cleanDigits.length >= 3) {
+      searchConditions.push(ilike(users.phoneNumber, `%${cleanDigits}%`));
+    }
+
+    const foundUsers = await db.query.users.findMany({
+      where: or(...searchConditions),
+      orderBy: [desc(users.updatedAt), desc(users.createdAt)],
+      limit: 12,
+    });
+
+    const userResults = foundUsers
+      .filter((u) => u.id !== caller.id)
+      .map(mapUserToCandidate);
+
+    return NextResponse.json({ success: true, results: userResults });
+  } catch (error) {
+    console.error('Contacts GET search error:', error);
+    return NextResponse.json({ error: 'Error al buscar usuarios' }, { status: 500 });
+  }
 }
 
 export async function POST(req: Request) {

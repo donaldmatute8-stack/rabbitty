@@ -152,6 +152,10 @@ export const godRouter = router({
           name: input.name,
           businessId: biz.id,
           slug,
+          // Espejar el % del negocio desde el día 0: el POS cobra con
+          // restaurants.defaultRewardRate (lookupRabbitter/payOrder leen de aquí).
+          // Sin esto, cada tenant nace con business % ≠ restaurant %.
+          defaultRewardRate: input.rewardPercentage,
         })
         .returning({ id: restaurants.id });
       if (!rest) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "No se pudo crear el restaurante" });

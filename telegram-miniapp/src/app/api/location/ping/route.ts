@@ -319,9 +319,8 @@ export async function POST(req: NextRequest) {
         .filter((x): x is { b: typeof businesses[0]; d: number } => !!x && x.d <= 40)
         .sort((a, b) => a.d - b.d)[0];
       if (closest) {
-        const isStationary = stationary === true || (typeof prevLat === "number" && typeof prevLng === "number" && Math.abs(getDistanceMeters(prevLat, prevLng, lat, lng)) < 25);
+        const isStationary = stationary === true || closest.d <= 30 || (typeof prevLat === "number" && typeof prevLng === "number" && Math.abs(getDistanceMeters(prevLat, prevLng, lat, lng)) < 25);
         try {
-          const now = new Date();
           // ¿Sesión abierta de este usuario en este negocio?
           const [openHere] = await db.execute(
             sql`SELECT id FROM "presenceSessions" WHERE "userId" = ${caller.id} AND "businessId" = ${closest.b.id} AND "endedAt" IS NULL LIMIT 1`

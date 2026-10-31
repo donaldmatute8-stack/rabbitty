@@ -92,11 +92,11 @@ export function TicketTemplate({
       )}
 
       {/* ── TOP HEADER / BRANDING ── */}
-      <div className="text-center space-y-2 border-b border-dashed border-gray-700 pb-4">
+      <div className="text-center space-y-1.5 border-b border-dashed border-gray-700 pb-3">
         {/* Business Logo or Avatar - Replaces default Rabbitty icon when provided */}
         {data.logoUrl ? (
-          <div className="flex flex-col items-center justify-center my-2">
-            <div className="relative h-16 w-16 rounded-2xl overflow-hidden border border-white/15 bg-white/10 p-1.5 shadow-xl flex items-center justify-center">
+          <div className="flex flex-col items-center justify-center my-1.5">
+            <div className="relative h-14 w-14 rounded-2xl overflow-hidden border border-white/15 bg-white/10 p-1.5 shadow-xl flex items-center justify-center">
               <img
                 src={data.logoUrl}
                 alt={data.restaurantName || "Logo del Negocio"}
@@ -105,8 +105,8 @@ export function TicketTemplate({
             </div>
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center my-1.5">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/10 text-cyan-400 font-black text-2xl border border-cyan-500/20 shadow-lg">
+          <div className="flex flex-col items-center justify-center my-1">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-500/10 text-cyan-400 font-black text-xl border border-cyan-500/20 shadow-lg">
               🐰
             </div>
             <span className="text-[9px] font-black uppercase tracking-widest text-pink-400 mt-1">
@@ -120,7 +120,7 @@ export function TicketTemplate({
           {data.restaurantName || "Mi Restaurante"}
         </h2>
 
-        {/* Legal Details */}
+        {/* Legal Details (hide internal provisioning placeholder addresses) */}
         <div className={`space-y-0.5 text-[11px] ${isThermalPaper ? "text-gray-800" : "text-gray-400"}`}>
           {data.legalName && (
             <p className="font-semibold">{data.legalName}</p>
@@ -131,8 +131,8 @@ export function TicketTemplate({
           {data.taxRegime && (
             <p className="text-[10px] leading-tight opacity-90">Régimen: {data.taxRegime}</p>
           )}
-          {data.address && (
-            <p className="text-[10px] leading-tight pt-1 flex items-start justify-center gap-1">
+          {data.address && !data.address.toLowerCase().startsWith("provisionado por") && (
+            <p className="text-[10px] leading-tight pt-0.5 flex items-start justify-center gap-1">
               <span>{data.address}</span>
             </p>
           )}

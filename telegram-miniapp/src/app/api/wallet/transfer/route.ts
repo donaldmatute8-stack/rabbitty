@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { users, notifications } from "@/db/schema";
-import { eq, or, sql } from "drizzle-orm";
+import { eq, ilike, or, sql } from "drizzle-orm";
 import { getAuthenticatedUser } from "@/lib/serverAuth";
 import { requireSecondFactor } from "@/lib/twoFactor";
 import { recordLedgerTransaction, findLedgerEntry } from "@/lib/ledgerHelper";
@@ -58,17 +58,31 @@ export async function POST(req: NextRequest) {
     const twoFactorBlock = await requireSecondFactor(caller.id, twoFactor);
     if (twoFactorBlock) return twoFactorBlock;
 
-    // Look up recipient by @username, uuid id, telegramId or TON wallet address.
+    // Look up recipient by @username (case-insensitive), uuid id, short id prefix,
+    // telegramId or TON wallet address.
     const conditions = [
-      eq(users.username, cleanRecipient),
+      ilike(users.username, cleanRecipient),
       eq(users.telegramId, cleanRecipient),
       eq(users.tonWalletAddress, cleanRecipient),
     ];
     if (UUID_RE.test(cleanRecipient)) {
       conditions.push(eq(users.id, cleanRecipient));
+    } else if (/^[0-9a-f]{6,12}$/i.test(cleanRecipient)) {
+      conditions.push(sql`CAST(${users.id} AS TEXT) ILIKE ${`${cleanRecipient}%`}`);
     }
 
-    const targetUser = await db.query.users.findFirst({ where: or(...conditions) });
+    // Un prefijo corto (y un @username case-insensitive) puede coincidir con
+    // VARIOS usuarios: las transferencias son irreversibles, así que exigimos
+    // exactamente un match; si hay más, pedimos el ID completo.
+    const matches = await db.query.users.findMany({ where: or(...conditions) });
+
+    if (matches.length > 1) {
+      return NextResponse.json(
+        { error: "El identificador coincide con varios usuarios. Especifica el ID completo." },
+        { status: 409 }
+      );
+    }
+    const targetUser = matches[0];
 
     if (!targetUser) {
       return NextResponse.json({ error: "Usuario destinatario no encontrado" }, { status: 404 });

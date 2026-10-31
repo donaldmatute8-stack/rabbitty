@@ -330,6 +330,50 @@ export const posRouter = router({
     };
   }),
 
+  // ── Feed del dashboard (1 roundtrip, sin N+1) ──
+  // Órdenes activas (todas, limit 50 más recientes) + "ventas hoy" y count de
+  // pagadas de hoy (día America/Mexico_City calculado en SQL — nunca en JS).
+  getDashboardFeed: protectedProcedure.query(async ({ ctx }) => {
+    const openRows = await ctx.restaurantDb.execute(sql`
+      SELECT o.id, o."tableId", o.status, o."orderType", o."customerName", o.total, o."createdAt",
+             t.number AS "tableNumber", t."location" AS "tableLocation",
+             COALESCE((SELECT SUM(oi.quantity)::int FROM "order_items" oi WHERE oi."orderId" = o.id), 0) AS "itemsCount"
+      FROM "orders" o
+      LEFT JOIN "tables" t ON t.id = o."tableId"
+      WHERE o."branchId" = ${ctx.branchId}
+        AND o.status IN ('PENDING', 'OPEN', 'IN_PROGRESS', 'READY', 'CASH_PAYMENT_REQUESTED')
+      ORDER BY o."createdAt" DESC
+      LIMIT 50`);
+    const [paid] = await ctx.restaurantDb.execute(sql`
+      SELECT COUNT(*)::int AS count, COALESCE(SUM(total), 0) AS total
+      FROM "orders"
+      WHERE "branchId" = ${ctx.branchId}
+        AND status IN ('PAID', 'COMPLETED')
+        AND ((((("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE 'America/Mexico_City'))::date)
+             = ((now() AT TIME ZONE 'America/Mexico_City')::date))`)
+      .then((r: any) => (r?.rows ?? r) as Array<{ count: number; total: string | number }>);
+    return {
+      // 50 órdenes activas más recientes (más de 50 activas simultáneas es
+      // prácticamente imposible; si ocurriera, se muestran las 50 nuevas).
+      openOrders: (openRows as unknown as { rows?: any[] }).rows?.map((r: any) => ({
+        id: r.id as string,
+        tableId: (r.tableId ?? null) as string | null,
+        tableNumber: (r.tableNumber ?? null) as number | null,
+        tableLocation: (r.tableLocation ?? null) as string | null,
+        status: r.status as string,
+        orderType: r.orderType as string | null,
+        customerName: (r.customerName ?? null) as string | null,
+        total: Number(r.total ?? 0),
+        createdAt: r.createdAt as string,
+        itemsCount: Number(r.itemsCount ?? 0),
+      })),
+      paidToday: {
+        count: Number(paid?.count ?? 0),
+        total: Number(paid?.total ?? 0),
+      },
+    };
+  }),
+
   getOrders: protectedProcedure
     .input(z.object({ tableId: z.string().optional(), status: z.string().optional() }))
     .query(async ({ ctx, input }) => {

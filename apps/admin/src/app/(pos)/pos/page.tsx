@@ -482,9 +482,6 @@ export default function PosPage() {
 
   const selectedRabbitterRef = useRef<typeof selectedRabbitter>(null);
   useEffect(() => { selectedRabbitterRef.current = selectedRabbitter; }, [selectedRabbitter]);
-  // Descarte manual del auto-vínculo: userId → "at" del ping cuando se le quitó.
-  // Si su presencia se refresca (re-escaneo / nuevo ping), el auto-vínculo vuelve a permitirlo.
-  const autoLinkDismissedRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     if (!showBusinessQrModal || !qrOpenedAtRef.current) return;
@@ -510,25 +507,20 @@ export default function PosPage() {
     }
   }, [showBusinessQrModal, activeCheckIns, utils.pos.lookupRabbitter]);
 
-  // ── Auto-vínculo: si hay EXACTAMENTE un rabbitter presente y no hay ninguno vinculado ──
-  useEffect(() => {
-    if (selectedRabbitterRef.current || (activeCheckIns?.length ?? 0) !== 1) return;
-    const only = activeCheckIns![0];
-    const atStr = String(only.at);
-    // Si el usuario lo desvinculó manualmente y su presencia NO ha cambiado
-    // (mismo ping de cuando lo quitó), no re-vincular: así puede atender a
-    // otro cliente o corregir un escaneo cancelado.
-    if (autoLinkDismissedRef.current.get(only.userId) === atStr) return;
-    autoLinkDismissedRef.current.delete(only.userId); // presencia refrescada → permitir de nuevo
-    utils.pos.lookupRabbitter.fetch({ query: only.userId })
-      .then((res) => {
-        if (res && !selectedRabbitterRef.current) {
-          setSelectedRabbitter(res);
-          toast.success(`🐰 ${res.name} ya está en el local — vinculado automáticamente al cobro`);
-        }
-      })
-      .catch(() => {});
-  }, [activeCheckIns]);
+  // ── Selector manual de clientes con check-in: el comercio ELIGE de la lista
+  // de rabbitters presentes — nunca se vincula automáticamente ──
+  const handlePickCheckIn = async (userId: string) => {
+    try {
+      const res = await utils.pos.lookupRabbitter.fetch({ query: userId });
+      if (res) {
+        setSelectedRabbitter(res);
+        toast.success(`🐰 ${res.name} vinculado — ${res.currentRewardRate}% Cashback`);
+      }
+    } catch {
+      toast.error("No se pudo vincular al cliente");
+    }
+  };
+
   const handleMembershipRedeem = async (qrToken: string) => {
     try {
       const subId = qrToken.split(".")[0];
@@ -1650,16 +1642,7 @@ export default function PosPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      // Recordar el descarte para que el auto-vínculo no lo
-                      // regrese mientras su presencia siga igual.
-                      const cur = selectedRabbitterRef.current;
-                      if (cur?.id) {
-                        const row = (activeCheckIns || []).find((c: any) => c.userId === cur.id);
-                        if (row) autoLinkDismissedRef.current.set(cur.id, String(row.at));
-                      }
-                      setSelectedRabbitter(null);
-                    }}
+                    onClick={() => setSelectedRabbitter(null)}
                     title="Desvincular cliente"
                     className="flex h-6 w-6 items-center justify-center rounded-md bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-300 transition-all cursor-pointer shrink-0"
                   >
@@ -1691,6 +1674,26 @@ export default function PosPage() {
                     >
                       <QrCode className="h-3 w-3 text-pink-400" /> QR Neón
                     </button>
+                    {(activeCheckIns?.length ?? 0) > 0 && (
+                      <select
+                        defaultValue=""
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            void handlePickCheckIn(e.target.value);
+                            e.currentTarget.value = "";
+                          }
+                        }}
+                        className="max-w-27.5 px-1.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 border border-emerald-500/40 text-[10px] font-black transition-all cursor-pointer truncate"
+                        title="Clientes con check-in activo — elige quién se vincula a esta orden"
+                      >
+                        <option value="" className="text-gray-900">🐰 En local ({activeCheckIns!.length})</option>
+                        {activeCheckIns!.map((c: any) => (
+                          <option key={c.userId} value={c.userId} className="text-gray-900">
+                            {c.name} · hace {Math.max(0, Math.round((c.ageSeconds ?? 9999) / 60))}m
+                          </option>
+                        ))}
+                      </select>
+                    )}
                     <button
                       type="button"
                       onClick={() => {
@@ -2666,122 +2669,155 @@ export default function PosPage() {
           setReceiptModal(false);
           setCart([]);
         }}
-        title="Ticket de Venta Generado"
-        className="max-h-[92dvh] flex flex-col p-4 sm:p-6"
+        title="Comprobante de Venta"
+        className="max-w-lg w-full max-h-[92dvh] flex flex-col p-4 sm:p-5"
       >
-        <div className="flex flex-col max-h-[82dvh]">
-          {/* Header del Modal con botón directo de Nueva Orden */}
-          <div className="flex items-center justify-between pb-3 border-b border-white/10 shrink-0">
-            <div className="flex items-center gap-2.5">
-              <div className="inline-flex items-center justify-center h-9 w-9 rounded-full bg-emerald-500/20 text-emerald-400">
+        <div className="flex flex-col gap-3 max-h-[82dvh]">
+          {/* Banner de Cobro Exitoso con resumen financiero rápido */}
+          <div className="flex items-center justify-between p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 shrink-0">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex items-center justify-center h-10 w-10 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0 shadow-[0_0_20px_rgba(16,185,129,0.25)]">
                 <CheckCircle2 className="h-5 w-5" />
               </div>
-              <div>
-                <h2 className="text-lg font-black text-white leading-tight">¡Cobro Exitoso!</h2>
-                <p className="text-gray-400 text-xs">El ticket ha sido emitido.</p>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-black text-white leading-tight">¡Cobro Exitoso!</h2>
+                  {paidTicketData?.orderNumber && (
+                    <span className="text-[10px] font-mono font-black px-2 py-0.5 rounded-md bg-white/10 text-gray-200 border border-white/10">
+                      #{paidTicketData.orderNumber}
+                    </span>
+                  )}
+                </div>
+                <p className="text-emerald-300/90 text-xs font-bold mt-0.5">
+                  Total pagado: ${paidTicketData?.total.toFixed(2) || "0.00"} {paidTicketData?.currency || "MXN"}
+                  {paidTicketData?.paymentMethod ? ` • ${paidTicketData.paymentMethod}` : ""}
+                </p>
               </div>
             </div>
             <button
+              type="button"
               onClick={() => {
                 setReceiptModal(false);
                 setCart([]);
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-gray-950 text-xs font-black transition-all cursor-pointer shadow-md active:scale-95"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-gray-950 text-xs font-black transition-all cursor-pointer shadow-lg shadow-cyan-500/20 active:scale-95 shrink-0"
             >
               <span>Nueva Orden</span>
               <Check className="h-4 w-4" />
             </button>
           </div>
 
-          {/* Scaled ticket preview con scroll acotado */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar py-3 my-2 flex justify-center max-h-[42vh] sm:max-h-[46vh] bg-black/40 rounded-xl border border-white/5">
-            <div className="transform scale-[0.8] sm:scale-[0.85] origin-top flex justify-center w-full">
+          {/* Vista previa completa del ticket (sin recortes ni escalado desalineado) */}
+          <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar p-3 flex justify-center bg-gray-950/80 rounded-2xl border border-white/10 shadow-inner min-h-65 max-h-[48vh]">
+            <div className="w-full flex justify-center items-start">
               {paidTicketData && (
                 <TicketTemplate data={paidTicketData} />
               )}
             </div>
           </div>
 
-          {/* Acciones Post-Cobro: Asignar Rabbitter / QR de reclamo / Imprimir / WhatsApp */}
-          <div className="flex flex-col gap-2 pt-2 border-t border-white/5 shrink-0">
+          {/* Acciones Post-Cobro: Recompensa Rabbitter + Impresión + WhatsApp */}
+          <div className="flex flex-col gap-2.5 pt-1 shrink-0">
+            {/* Bloque de Recompensa / Claim QR limpio y alineado */}
             {paidTicketData && !paidTicketData.awardedBunz && (
-              <Button
-                onClick={() => setRabbitterModalOpen(true)}
-                className="w-full py-2 text-xs font-black bg-pink-500/20 hover:bg-pink-500/30 text-pink-300 border border-pink-500/40 cursor-pointer"
-                title="Asigna al Rabbitter que consumió para acreditarle su cashback Bunz (idempotente)"
-              >
-                🐰 Asignar Rabbitter & Recompensar esta venta
-              </Button>
-            )}
-            {paidTicketData?.claimToken && (
-              <div className="flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/10">
-                <span className="text-[10px] text-gray-400 leading-snug pr-2">El comensal también puede reclamar escaneando el QR impreso de su ticket (48 h, un solo uso).</span>
-                <QRDiscovery
-                    value={`https://app.rabbitty.me/scan?claimToken=${paidTicketData.claimToken}`}
-                    variant="rabbitter"
-                    size={96}
-                    revealMode="immediate"
-                    surfaceKey="pos-ticket"
-                  />
+              <div className="flex items-center justify-between gap-3 p-2.5 rounded-2xl bg-pink-500/10 border border-pink-500/25">
+                <div className="flex-1 min-w-0 space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm">🐰</span>
+                    <span className="text-xs font-black text-pink-200">
+                      +{paidTicketData.estimatedBunz ?? 0} Bunz disponibles
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-gray-400 leading-snug">
+                    El cliente puede escanear el QR o puedes asignarlo manualmente a su cuenta.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setRabbitterModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pink-500/25 hover:bg-pink-500/35 text-pink-200 border border-pink-500/40 text-[11px] font-black transition-all cursor-pointer active:scale-95"
+                  >
+                    <Sparkles className="h-3.5 w-3.5 text-pink-300" />
+                    <span>Asignar Rabbitter a esta venta</span>
+                  </button>
+                </div>
+                {paidTicketData.claimToken && (
+                  <div className="shrink-0 bg-white p-2 rounded-2xl shadow-lg border border-white/20 flex flex-col items-center">
+                    <QRCodeSVG
+                      value={`https://app.rabbitty.me/scan?claimToken=${paidTicketData.claimToken}`}
+                      size={76}
+                      level="H"
+                      includeMargin={false}
+                      imageSettings={{
+                        src: "/Ra.png",
+                        height: 18,
+                        width: 18,
+                        excavate: true,
+                      }}
+                    />
+                    <span className="text-[8px] font-mono font-bold text-gray-700 uppercase tracking-wider mt-1">
+                      48h • 1 uso
+                    </span>
+                  </div>
+                )}
               </div>
             )}
-            <Button
-              id="pos-print-receipt"
-              variant="secondary"
-              onClick={handlePrintReceipt}
-              disabled={printingKey !== null}
-              aria-busy={printingKey === "receipt"}
-              className="w-full font-bold py-2 text-sm bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/30 disabled:opacity-70 disabled:cursor-wait"
-            >
-              {printingKey === "receipt" ? (
-                <span className="inline-flex items-center justify-center gap-2">
-                  <span className="h-4 w-4 rounded-full border-2 border-cyan-300/30 border-t-cyan-300 animate-spin" />
-                  Imprimiendo...
-                </span>
-              ) : (
-                "Imprimir ticket"
-              )}
-            </Button>
-            <div className="flex items-center gap-2">
-              <Input
-                placeholder="WhatsApp (10 dígitos)"
-                type="tel"
-                value={waPhone}
-                onChange={(e) => setWaPhone(e.target.value.replace(/\D/g, ''))}
-                className="flex-1 text-center py-2 text-sm"
-              />
+
+            {/* Fila combinada: Imprimir Ticket + Enviar por WhatsApp */}
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
               <Button
-                onClick={() => {
-                  if (paidTicketData && ticketContext?.restaurant && waPhone.length >= 10) {
-                    const itemsSummary = paidTicketData.items.map(i => `${i.quantity}x ${i.name} - $${i.totalPrice.toFixed(2)}`).join('\n');
-                    const message = `¡Hola! Aquí está tu ticket de compra en *${ticketContext.restaurant.name}*\n\n` +
-                      `📅 Fecha: ${paidTicketData.date || ""}\n` +
-                      `🔖 Folio: #${paidTicketData.orderNumber}\n\n` +
-                      `*Artículos:*\n${itemsSummary}\n\n` +
-                      `*Total:* $${paidTicketData.total.toFixed(2)} ${paidTicketData.currency}\n\n` +
-                      `¡Gracias por tu preferencia! 🐰`;
-                    // encodeURIComponent codifica #, $, emojis y saltos de línea (un # sin codificar truncaba el mensaje)
-                    window.open(`https://wa.me/52${waPhone}?text=${encodeURIComponent(message)}`, "_blank");
-                  } else {
-                    toast.error("Ingresa un número válido a 10 dígitos");
-                  }
-                }}
-                className="bg-green-500 hover:bg-green-400 text-white font-bold text-xs px-4 py-2 shrink-0 flex items-center gap-1.5"
+                id="pos-print-receipt"
+                variant="secondary"
+                onClick={handlePrintReceipt}
+                disabled={printingKey !== null}
+                aria-busy={printingKey === "receipt"}
+                className="sm:col-span-5 font-black py-2.5 text-xs bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 rounded-xl flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-wait cursor-pointer"
               >
-                <MessageCircle className="h-4 w-4" /> Enviar
+                {printingKey === "receipt" ? (
+                  <>
+                    <span className="h-3.5 w-3.5 rounded-full border-2 border-cyan-300/30 border-t-cyan-300 animate-spin" />
+                    <span>Imprimiendo...</span>
+                  </>
+                ) : (
+                  <>
+                    <Printer className="h-4 w-4" />
+                    <span>Imprimir Ticket</span>
+                  </>
+                )}
               </Button>
+
+              <div className="sm:col-span-7 flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-xl p-1 pl-3 focus-within:border-emerald-500/50 transition-colors">
+                <span className="text-xs font-bold text-gray-500 select-none">+52</span>
+                <input
+                  placeholder="WhatsApp (10 dígitos)"
+                  type="tel"
+                  maxLength={10}
+                  value={waPhone}
+                  onChange={(e) => setWaPhone(e.target.value.replace(/\D/g, ""))}
+                  className="flex-1 min-w-0 bg-transparent text-xs font-bold text-white placeholder-gray-500 outline-none py-1.5"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (paidTicketData && ticketContext?.restaurant && waPhone.length >= 10) {
+                      const itemsSummary = paidTicketData.items.map(i => `${i.quantity}x ${i.name} - $${i.totalPrice.toFixed(2)}`).join("\n");
+                      const message = `¡Hola! Aquí está tu ticket de compra en *${ticketContext.restaurant.name}*\n\n` +
+                        `📅 Fecha: ${paidTicketData.date || ""}\n` +
+                        `🔖 Folio: #${paidTicketData.orderNumber}\n\n` +
+                        `*Artículos:*\n${itemsSummary}\n\n` +
+                        `*Total:* $${paidTicketData.total.toFixed(2)} ${paidTicketData.currency}\n\n` +
+                        `¡Gracias por tu preferencia! 🐰`;
+                      window.open(`https://wa.me/52${waPhone}?text=${encodeURIComponent(message)}`, "_blank");
+                    } else {
+                      toast.error("Ingresa un número válido a 10 dígitos");
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-black text-xs shrink-0 flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-sm"
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />
+                  <span>Enviar</span>
+                </button>
+              </div>
             </div>
-            
-            <Button
-              variant="secondary"
-              className="w-full font-bold py-2.5 text-sm bg-white/10 hover:bg-white/15 text-white border border-white/10"
-              onClick={() => {
-                setReceiptModal(false);
-                setCart([]);
-              }}
-            >
-              Nueva Orden (Cerrar Pantalla)
-            </Button>
           </div>
         </div>
       </Dialog>

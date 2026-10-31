@@ -18,6 +18,15 @@ interface Transaction {
   icon: string;
 }
 
+interface RabbitterSuggestion {
+  id: string;
+  name: string;
+  username?: string | null;
+  telegramId?: string | null;
+  avatar: string;
+  role?: string | null;
+}
+
 export default function WalletPage() {
   const { balance, refreshBalance } = useWallet();
   const { user } = useAuth();
@@ -31,20 +40,15 @@ export default function WalletPage() {
   const [sendAmount, setSendAmount] = useState('');
   const [sendStep, setSendStep] = useState(1);
   const [sendRecipient, setSendRecipient] = useState('');
+  const [selectedRabbitter, setSelectedRabbitter] = useState<RabbitterSuggestion | null>(null);
+  const [recipientSuggestions, setRecipientSuggestions] = useState<RabbitterSuggestion[]>([]);
+  const [searchingRecipients, setSearchingRecipients] = useState(false);
   const [sendNote, setSendNote] = useState('');
   const [sending, setSending] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState('');
 
   // Resolvable P2P handle: @username (preferred, human) or uuid id (always exists).
   const payHandle = user?.username ? `@${user.username}` : (user?.id || '');
-  const [myScanCode, setMyScanCode] = useState<string>('');
-  useEffect(() => {
-    if (!user) return;
-    fetch('/api/rabbitty-code/mine')
-      .then((r) => r.json())
-      .then((d) => { if (d?.success && d.code) setMyScanCode(String(d.code)); })
-      .catch(() => {});
-  }, [user]);
   const payPayload = payHandle ? `rabbitty://pay?to=${encodeURIComponent(payHandle)}` : '';
 
   const newIdempotencyKey = () =>
@@ -55,10 +59,38 @@ export default function WalletPage() {
   const openSend = (preset?: string) => {
     PlatformBridge.hapticFeedback('light');
     setIdempotencyKey(newIdempotencyKey());
+    setSelectedRabbitter(null);
     if (preset) setSendRecipient(preset.replace(/^rabbitty:\/\/pay\?to=/, ''));
     setSendStep(preset ? 2 : 1);
     setShowSend(true);
   };
+
+  // Búsqueda dinámica en tiempo real de Rabbitters activos al abrir "Enviar" o escribir
+  useEffect(() => {
+    if (!showSend || sendStep !== 1) return;
+    let active = true;
+    const timer = setTimeout(async () => {
+      if (active) setSearchingRecipients(true);
+      try {
+        const headers = await PlatformBridge.getAuthHeaders();
+        const q = sendRecipient.trim();
+        const res = await fetch(`/api/contacts?q=${encodeURIComponent(q)}&onlyUsers=1`, { headers });
+        const data = await res.json();
+        if (active && data?.success && Array.isArray(data.results)) {
+          setRecipientSuggestions(data.results);
+        }
+      } catch {
+        // ignore
+      } finally {
+        if (active) setSearchingRecipients(false);
+      }
+    }, 180);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [showSend, sendStep, sendRecipient]);
 
   useEffect(() => {
     let active = true;
@@ -244,7 +276,7 @@ export default function WalletPage() {
           </div>
 
           {/* Rabbitter Identifier Pill */}
-          <div className="relative z-1 bg-white/[0.06] border border-white/10 rounded-2xl p-4 flex items-center justify-between">
+          <div className="relative z-1 bg-white/6 border border-white/10 rounded-2xl p-4 flex items-center justify-between">
             <div className="overflow-hidden pr-3">
               <p className="text-white/40 text-[9px] font-extrabold tracking-widest uppercase mb-1">Tu Identificador Bunz</p>
               <p className="text-white font-mono font-bold text-sm tracking-wide truncate">
@@ -418,19 +450,106 @@ export default function WalletPage() {
             <div className="flex flex-col gap-3 mb-5">
               <div className="self-start max-w-[85%] bg-white/5 border border-white/10 rounded-2xl rounded-bl-md px-4 py-2.5 text-[14px] font-semibold">
                 {sendStep === 1 && '👋 ¿A quién quieres enviarle Bunz?'}
-                {sendStep === 2 && `💸 ¿Cuántos Bunz le envías a ${sendRecipient || '...'}?`}
+                {sendStep === 2 && `💸 ¿Cuántos Bunz le envías a ${selectedRabbitter ? selectedRabbitter.name : (sendRecipient || '...')}?`}
                 {sendStep === 3 && '📝 ¿Quieres agregar un mensaje? (opcional)'}
               </div>
 
               {sendStep === 1 && (
-                <input
-                  value={sendRecipient}
-                  onChange={(e) => setSendRecipient(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && sendRecipient.trim()) { PlatformBridge.hapticFeedback('light'); setSendStep(2); } }}
-                  placeholder="@usuario o ID"
-                  autoFocus
-                  className="self-end w-[70%] p-3 rounded-2xl rounded-br-md bg-[#E91E63] border border-[#E91E63] text-white placeholder-white/50 text-sm font-semibold focus:outline-none"
-                />
+                <div className="flex flex-col gap-2.5 w-full">
+                  <input
+                    value={sendRecipient}
+                    onChange={(e) => {
+                      setSendRecipient(e.target.value);
+                      setSelectedRabbitter(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && sendRecipient.trim()) {
+                        PlatformBridge.hapticFeedback('light');
+                        setSendStep(2);
+                      }
+                    }}
+                    placeholder="@usuario, nombre o ID"
+                    autoFocus
+                    className="self-end w-[78%] p-3 rounded-2xl rounded-br-md bg-[#E91E63] border border-[#E91E63] text-white placeholder-white/60 text-sm font-semibold focus:outline-none shadow-[0_4px_16px_rgba(233,30,99,0.28)]"
+                  />
+
+                  {/* Lista dinámica de Rabbitters activos / sugerencias en tiempo real */}
+                  <div className="w-full rounded-2xl bg-white/4 border border-white/10 overflow-hidden mt-0.5">
+                    <div className="flex items-center justify-between px-3.5 py-2 border-b border-white/6">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-white/50 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        {sendRecipient.trim() ? 'Coincidencias en tiempo real' : 'Rabbitters activos'}
+                      </span>
+                      {searchingRecipients && (
+                        <span className="text-[10px] font-semibold text-[#E91E63]">Buscando…</span>
+                      )}
+                    </div>
+
+                    {recipientSuggestions.length === 0 && !searchingRecipients ? (
+                      <p className="text-center text-white/40 text-xs py-3.5 px-3 m-0">
+                        No encontramos coincidencias exactas. Puedes continuar usando el @usuario o ID escrito.
+                      </p>
+                    ) : (
+                      <div className="max-h-48 overflow-y-auto divide-y divide-white/5">
+                        {recipientSuggestions.map((item) => {
+                          const handle = item.username ? `@${item.username}` : item.id;
+                          const shortId = item.id.slice(0, 8).toUpperCase();
+                          const isChosen =
+                            selectedRabbitter?.id === item.id ||
+                            sendRecipient.trim().replace(/^@/, '').toLowerCase() === (item.username || '').toLowerCase() ||
+                            sendRecipient.trim() === item.id;
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => {
+                                PlatformBridge.hapticFeedback('light');
+                                setSelectedRabbitter(item);
+                                setSendRecipient(handle);
+                                setSendStep(2);
+                              }}
+                              className="w-full flex items-center justify-between gap-2.5 px-3.5 py-2.5 bg-transparent hover:bg-white/6 active:bg-white/10 border-0 cursor-pointer text-left transition-colors"
+                              style={{
+                                background: isChosen ? 'rgba(233, 30, 99, 0.14)' : undefined,
+                              }}
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={item.avatar}
+                                  alt={item.name}
+                                  className="w-9 h-9 rounded-full object-cover bg-white/10 border border-white/15 shrink-0"
+                                />
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[13px] font-extrabold text-white truncate">
+                                      {item.name}
+                                    </span>
+                                    {item.role === 'AFFILIATE' && (
+                                      <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                        Afiliado
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1.5 text-[11px] text-white/55 font-mono truncate">
+                                    <span className="text-[#FF4D9E] font-semibold">
+                                      {item.username ? `@${item.username}` : 'Sin @usuario'}
+                                    </span>
+                                    <span>·</span>
+                                    <span>ID: {shortId}</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <span className="shrink-0 text-[11px] font-extrabold text-[#E91E63] bg-[#E91E63]/15 border border-[#E91E63]/30 px-2.5 py-1 rounded-full">
+                                Elegir →
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
 
               {sendStep === 2 && (
@@ -481,7 +600,7 @@ export default function WalletPage() {
                   <div className="w-full bg-white/5 border border-white/10 rounded-2xl p-3.5 text-left">
                     <p className="text-[11px] font-extrabold text-white/40 uppercase tracking-wider m-0 mb-1">Resumen</p>
                     <p className="text-[15px] font-extrabold m-0 text-white">
-                      {sendAmount || '0'} BUNZ → {sendRecipient || '—'}
+                      {sendAmount || '0'} BUNZ → {selectedRabbitter ? `${selectedRabbitter.name} (${sendRecipient})` : (sendRecipient || '—')}
                     </p>
                     {sendNote.trim() && <p className="text-[12px] text-white/60 m-0 mt-1">“{sendNote.trim()}”</p>}
                   </div>

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { CheckCircle, Circle, ChevronDown, ChevronUp, Sparkles, ArrowRight, Utensils, Users, Monitor, Gift, RefreshCw, Trophy } from "lucide-react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
+import { trpc } from "../lib/trpc-client";
 
 interface Step {
   id: string;
@@ -90,21 +91,27 @@ const STEPS: Step[] = [
 ];
 
 export function OnboardingWizard() {
-  const [completed, setCompleted] = useState<Record<string, boolean>>({});
+  const [manualCompleted, setManualCompleted] = useState<Record<string, boolean>>({});
   const [isExpanded, setIsExpanded] = useState(true);
+  const { data: readiness } = trpc.admin.getReadiness.useQuery(undefined, {
+    refetchInterval: 30000,
+    retry: false,
+  });
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem("rabbitty_onboarding_completed");
-      if (saved) setCompleted(JSON.parse(saved));
+      if (saved) setManualCompleted(JSON.parse(saved));
     } catch (e) {
       console.error(e);
     }
   }, []);
 
   const toggleStep = (id: string) => {
-    const next = { ...completed, [id]: !completed[id] };
-    setCompleted(next);
+    const autoDone = Boolean(readiness?.wizardSteps?.[id]?.done);
+    const current = manualCompleted[id] ?? autoDone;
+    const next = { ...manualCompleted, [id]: !current };
+    setManualCompleted(next);
     try {
       localStorage.setItem("rabbitty_onboarding_completed", JSON.stringify(next));
     } catch (e) {
@@ -112,7 +119,12 @@ export function OnboardingWizard() {
     }
   };
 
-  const completedCount = Object.values(completed).filter(Boolean).length;
+  const isStepDone = (id: string) => {
+    if (Boolean(readiness?.wizardSteps?.[id]?.done)) return true;
+    return Boolean(manualCompleted[id]);
+  };
+
+  const completedCount = STEPS.filter((s) => isStepDone(s.id)).length;
   const progressPercent = Math.round((completedCount / STEPS.length) * 100);
 
   return (
@@ -180,7 +192,8 @@ export function OnboardingWizard() {
           >
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {STEPS.map((step) => {
-                const isDone = !!completed[step.id];
+                const autoInfo = readiness?.wizardSteps?.[step.id];
+                const isDone = isStepDone(step.id);
                 const Icon = step.icon;
 
                 return (
@@ -196,7 +209,7 @@ export function OnboardingWizard() {
                       <div className="flex items-center justify-between mb-3">
                         <button
                           onClick={() => toggleStep(step.id)}
-                          className="flex items-center gap-2 text-left group"
+                          className="flex items-center gap-2 text-left group cursor-pointer"
                         >
                           {isDone ? (
                             <CheckCircle className="h-5 w-5 text-emerald-400 shrink-0" />
@@ -204,13 +217,15 @@ export function OnboardingWizard() {
                             <Circle className="h-5 w-5 text-gray-500 group-hover:text-pink-400 shrink-0 transition-colors" />
                           )}
                           <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                            step.priority === "Alta"
+                            isDone
+                              ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                              : step.priority === "Alta"
                               ? "bg-pink-500/10 text-pink-400 border border-pink-500/20"
                               : step.priority === "Media"
                               ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
                               : "bg-purple-500/10 text-purple-400 border border-purple-500/20"
                           }`}>
-                            Prioridad {step.priority}
+                            {isDone ? "Completado" : `Prioridad ${step.priority}`}
                           </span>
                         </button>
 
@@ -219,12 +234,17 @@ export function OnboardingWizard() {
                         </div>
                       </div>
 
-                      <h3 className={`font-bold text-sm mb-1 ${isDone ? "line-through text-gray-400" : "text-white"}`}>
+                      <h3 className={`font-bold text-sm mb-1 ${isDone ? "text-emerald-200" : "text-white"}`}>
                         {step.title}
                       </h3>
-                      <p className="text-xs text-gray-400 leading-relaxed mb-4">
+                      <p className="text-xs text-gray-400 leading-relaxed mb-2">
                         {step.description}
                       </p>
+                      {autoInfo?.detail && (
+                        <p className={`text-[11px] font-bold mb-3 ${isDone ? "text-emerald-400" : "text-amber-300/90"}`}>
+                          • {autoInfo.detail}
+                        </p>
+                      )}
                     </div>
 
                     <Link

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { users, ownedBusinesses, ledgerEntries } from '@/db/schema';
-import { and, eq, gte, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 
 export const runtime = 'nodejs';
@@ -24,22 +24,22 @@ export async function POST(req: NextRequest) {
       .from(ownedBusinesses).where(eq(ownedBusinesses.id, businessId)).limit(1);
     if (!biz) return NextResponse.json({ success: false, error: 'Negocio no encontrado' }, { status: 404 });
 
-    // Anti-abuso: 1 check-in por negocio por día (ledger como fuente)
-    const dayStart = new Date();
-    dayStart.setHours(0, 0, 0, 0);
+    // Anti-abuso: 1 check-in por negocio por día (ledger como fuente).
+    // El día se calcula en America/Mexico_City (no en el TZ del server,
+    // que es UTC en Vercel — sin esto el "día" cambiaba a las 6pm CDMX).
+    const cdmxDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mexico_City' }).format(new Date());
     const [todayRow] = await db.select({ n: sql<number>`COUNT(*)` })
       .from(ledgerEntries)
       .where(and(
         eq(ledgerEntries.payeeSubjectId, `usr_${caller.id}`),
         eq(ledgerEntries.payerSubjectId, biz.id),
         eq(ledgerEntries.type, 'EARN'),
-        eq(ledgerEntries.idempotencyKey, `checkin_${biz.id}_${caller.id}_${dayStart.toISOString().slice(0, 10)}`),
-        gte(ledgerEntries.createdAt, dayStart),
+        eq(ledgerEntries.idempotencyKey, `checkin_${biz.id}_${caller.id}_${cdmxDate}`),
       ));
     const alreadyToday = Number(todayRow?.n ?? 0) > 0;
 
     // Registro atómico: ledger con clave única diaria + contador de visitas
-    const idempotencyKey = `checkin_${biz.id}_${caller.id}_${dayStart.toISOString().slice(0, 10)}`;
+    const idempotencyKey = `checkin_${biz.id}_${caller.id}_${cdmxDate}`;
     const inserted = await db.insert(ledgerEntries).values({
       payerSubjectId: biz.id,
       payeeSubjectId: `usr_${caller.id}`,
@@ -80,7 +80,9 @@ export async function POST(req: NextRequest) {
     try {
       await db.execute(sql`INSERT INTO "business_interactions" (id, "userId", "businessId", action, channel, metadata)
         VALUES (${`ck_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`}, ${caller.id}, ${biz.id}, 'CHECKIN_SCAN', null, ${JSON.stringify({ kind: inserted.length > 0 ? 'registered' : 'repeat', at: new Date().toISOString() })}::jsonb)`);
-    } catch { /* best-effort */ }
+    } catch (err) {
+      console.error('[checkin] interacción best-effort falló:', err instanceof Error ? err.message : err);
+    }
 
     return NextResponse.json({ success: true, checkIn: inserted.length > 0 ? 'registered' : 'already', businessName: biz.name });
   } catch (error) {
