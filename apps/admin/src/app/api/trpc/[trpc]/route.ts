@@ -119,8 +119,15 @@ const handler = async (req: Request) => {
         }
       }
 
-      // Sin owner, sin staff y sin impersonación → el usuario no tiene tenancy: rechazar
-      if (!impersonating && !activeBranchId) {
+      // Sin owner, sin staff y sin impersonación → sin tenancy.
+      // Excepción: endpoints de pago (Rabbitty Pay) — el COMENSAL escanea el QR
+      // y paga /pay/[orderId] SIN sesión del comercio. Esos endpoints son
+      // publicLimitedProcedure con su propio scoping (payerSubjectId/UUID).
+      const reqPath = (() => {
+        try { return new URL(req.url).pathname.replace(/^\/api\/trpc\//, ""); } catch { return ""; }
+      })();
+      const isPublicPaymentPath = reqPath.startsWith("payments.");
+      if (!impersonating && !activeBranchId && !isPublicPaymentPath) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sin sucursal asignada para esta sesión" });
       }
 

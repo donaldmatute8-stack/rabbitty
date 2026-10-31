@@ -2,7 +2,7 @@ import { z } from "zod";
 import { and, eq, inArray, gte, lt, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure, publicLimitedProcedure, resolveBranchId } from "../trpc";
-import { orders, payments, tables, tableSessions, orderItems } from "@rabbitty/database-restaurant/schema";
+import { orders, payments, tables, tableSessions, orderItems, menuItems } from "@rabbitty/database-restaurant/schema";
 import { bus, EventTypes } from "@rabbitty/events";
 import { assertOpenShiftForCash, findStaffByPin, CASHIER_ROLES } from "../services/cashShift";
 
@@ -195,13 +195,21 @@ export const paymentsRouter = router({
       if (order.status === "PAID" || order.status === "VOID") throw new Error("Orden ya pagada o cancelada");
 
       const items = await ctx.restaurantDb.select().from(orderItems).where(eq(orderItems.orderId, input.orderId));
+      // Nombre del producto para el ticket del comensal (evita mostrar UUIDs)
+      const itemNames = new Map<string, string>();
+      for (const it of items) {
+        if (itemNames.has(it.menuItemId)) continue;
+        const [mi] = await ctx.restaurantDb.select({ name: menuItems.name }).from(menuItems).where(eq(menuItems.id, it.menuItemId)).limit(1);
+        if (mi?.name) itemNames.set(it.menuItemId, mi.name);
+      }
+      const itemsWithName = items.map((it) => ({ ...it, name: itemNames.get(it.menuItemId) ?? it.menuItemId }));
       const table = order.tableId
         ? await ctx.restaurantDb.select().from(tables).where(eq(tables.id, order.tableId))
         : null;
 
       return {
         order,
-        items,
+        items: itemsWithName,
         tableNumber: table?.[0]?.number ?? null,
       };
     }),

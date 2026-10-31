@@ -54,7 +54,7 @@ export default function PayPage({ params }: { params: Promise<{ orderId: string 
             {data.items.map((item: any) => (
               <div key={item.id} className="flex justify-between text-sm">
                 <span className="text-gray-300">
-                  {item.quantity}x {item.menuItemId?.slice(0, 8)}
+                  {item.quantity}x {(item as any).name || item.menuItemId?.slice(0, 8)}
                 </span>
                 <span className="text-white font-bold">${item.totalPrice?.toFixed(2)}</span>
               </div>

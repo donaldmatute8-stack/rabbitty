@@ -113,20 +113,22 @@ export default function QRDiscovery({
                 <span className="text-xs text-neutral-500 font-bold">Código no disponible.<br />Actualiza la pantalla.</span>
               </div>
             ) : (
-              <div className="bg-white rounded-2xl p-2.5 shadow-[0_8px_30px_rgba(0,0,0,0.25)]">
+              <div className="bg-white rounded-2xl p-2.5 shadow-[0_8px_30px_rgba(0,0,0,0.25)] relative">
                 <QRCodeSVG
                   value={value}
                   size={qrSize}
                   level="H"
                   includeMargin={false}
-                  imageSettings={{
-                    src: LOGO,
-                    x: undefined,
-                    y: undefined,
-                    height: Math.round(qrSize * 0.2),
-                    width: Math.round(qrSize * 0.2),
-                    excavate: true,
-                  }}
+                />
+                {/* Logo Ra centrado como overlay HTML: el imageSettings del SVG
+                    falla en silencio en algunos navegadores (no se dibuja y no
+                    hay error). Level H tolera el 20% central excavado. */}
+                <img
+                  src={LOGO}
+                  alt="Ra"
+                  className="absolute inset-0 m-auto p-1.5 bg-white rounded-xl shadow-sm"
+                  style={{ width: Math.round(qrSize * 0.2), height: Math.round(qrSize * 0.2) }}
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                 />
               </div>
             )}
