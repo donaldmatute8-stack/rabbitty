@@ -26,6 +26,10 @@ const handler = async (req: Request) => {
     endpoint: "/api/trpc",
     req,
     router: appRouter,
+    // Sin esto, un 500 no deja stack en los logs del contenedor (tRPC lo traga).
+    onError: ({ error, path }) => {
+      console.error(`[tRPC] ${req.method} ${path}:`, error instanceof Error ? (error.stack || error.message) : error);
+    },
     createContext: async () => {
       const restaurantDb = getRestaurantDb();
       let staffRole: "WAITER" | "CASHIER" | "KITCHEN" | "MANAGER" | "ADMIN" | null = null;

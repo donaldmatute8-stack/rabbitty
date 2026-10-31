@@ -86,7 +86,7 @@ export const posRouter = router({
   getPlannedVisits: protectedProcedure.query(async ({ ctx }) => {
     const bizId = await resolveBusinessIdFromBranch(ctx.restaurantDb, ctx.branchId);
     if (!bizId) return [];
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const oneDayAgo = sql`(now() AT TIME ZONE 'UTC') - interval '24 hours'`;
     const rows = await ctx.coreDb.execute(
       sql`SELECT "userId", MAX("createdAt") AS at FROM "business_interactions"
           WHERE "businessId" = ${bizId} AND action = 'PLAN_VISIT' AND "userId" IS NOT NULL
@@ -110,12 +110,14 @@ export const posRouter = router({
     const bizId = await resolveBusinessIdFromBranch(ctx.restaurantDb, ctx.branchId);
     if (!bizId) return [];
     // Presencia REAL: sesiones abiertas cuyo último ping esté fresco (GPS pings + escaneos las refrescan)
-    const presenceCutoff = new Date(Date.now() - 60 * 60 * 1000);
+    // Cutoff en SQL: el driver postgres.js no serializa objetos Date como
+    // parámetros de sql`` (falla con ERR_INVALID_ARG_TYPE) — y así la
+    // comparación usa timestamps naive UTC aunque cambie el TZ del servidor.
     const rows = await ctx.coreDb.execute(
       sql`SELECT "userId", GREATEST("lastPingAt", "startedAt") AS at,
                  EXTRACT(EPOCH FROM (now() - GREATEST("lastPingAt", "startedAt")))::int AS "ageSeconds"
           FROM "presenceSessions"
-          WHERE "businessId" = ${bizId} AND "endedAt" IS NULL AND "lastPingAt" >= ${presenceCutoff}
+          WHERE "businessId" = ${bizId} AND "endedAt" IS NULL AND "lastPingAt" >= (now() AT TIME ZONE 'UTC') - interval '1 hour'
           ORDER BY "lastPingAt" DESC LIMIT 12`
     ).then((r: unknown) => ((r as { rows?: Array<{ payeeSubjectId: string; at: string; ageSeconds: number }> }).rows || (r as unknown as Array<{ payeeSubjectId: string; at: string; ageSeconds: number }>)).map((r: any) => ({ payeeSubjectId: `usr_${r.userId}`, at: r.at, ageSeconds: Number(r.ageSeconds ?? 9999) })));
     const out: Array<{ userId: string; name: string; username: string | null; at: string; ageSeconds: number }> = [];
