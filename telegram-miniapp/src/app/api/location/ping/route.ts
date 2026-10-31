@@ -206,6 +206,8 @@ export async function POST(req: NextRequest) {
                   businessId: b.id,
                   businessName: b.name,
                   rewardPercentage: activeBoost.rewardPercentage,
+                  // Tap → abrir el perfil del comercio in-app (mismo destino del feed)
+                  route: `/affiliate/${b.id}`,
                 },
               }).catch((err) => {
                 console.warn("[LOCATION_PING] Push send error:", err);
@@ -248,6 +250,8 @@ export async function POST(req: NextRequest) {
                   type: "PROXIMITY_LOYALTY",
                   businessId: b.id,
                   businessName: b.name,
+                  // Tap → abrir el perfil del comercio in-app (mismo destino del feed)
+                  route: `/affiliate/${b.id}`,
                 },
               }).catch((err) => {
                 console.warn("[LOCATION_PING] Push send error:", err);
