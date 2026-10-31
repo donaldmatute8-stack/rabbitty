@@ -6,7 +6,7 @@ import * as dbSchema from "@rabbitty/database-restaurant";
 import { ledgerEntries as ledgerEntries2, branches as dbSchemaBranches, restaurants as dbSchemaRestaurants } from "@rabbitty/database-restaurant/schema";
 import { bus, EventTypes } from "@rabbitty/events";
 import { restaurants, branches, orders, tables, staff, ledgerEntries, menuCategories, menuItems } from "@rabbitty/database-restaurant/schema";
-import { referrals, users, levels, ownedBusinesses, transactions, treasury, systemSettings, auditEntries } from "@rabbitty/database-core";
+import { referrals, users, levels, ownedBusinesses, transactions, treasury, systemSettings, auditEntries, webSessions } from "@rabbitty/database-core";
 import { customers } from "@rabbitty/database-restaurant/schema";
 import { miniappClient } from "../services/miniapp-client";
 import * as cheerio from "cheerio";
@@ -1129,7 +1129,12 @@ export const adminRouter = router({
   getReadiness: protectedProcedure.query(async ({ ctx }) => {
     const branchId = await resolveBranchId(ctx, ctx.branchId);
     const [branchRow] = await ctx.restaurantDb
-      .select({ restaurantId: branches.restaurantId, address: branches.address, name: branches.name })
+      .select({
+        restaurantId: branches.restaurantId,
+        address: branches.address,
+        phone: branches.phone,
+        name: branches.name,
+      })
       .from(branches)
       .where(eq(branches.id, branchId))
       .limit(1);
@@ -1151,18 +1156,74 @@ export const adminRouter = router({
     const [biz] = rest?.businessId
       ? await ctx.coreDb
           .select({
+            id: ownedBusinesses.id,
+            ownerId: ownedBusinesses.ownerId,
             name: ownedBusinesses.name,
             category: ownedBusinesses.category,
+            address: ownedBusinesses.address,
             rewardPercentage: ownedBusinesses.rewardPercentage,
             slug: ownedBusinesses.slug,
             logoUrl: ownedBusinesses.logoUrl,
             description: ownedBusinesses.description,
             verificationData: ownedBusinesses.verificationData,
+            activeDays: ownedBusinesses.activeDays,
+            startTime: ownedBusinesses.startTime,
+            endTime: ownedBusinesses.endTime,
           })
           .from(ownedBusinesses)
           .where(eq(ownedBusinesses.id, rest.businessId))
           .limit(1)
       : [];
+
+    const ownerUserId = biz?.ownerId || ctx.userId || null;
+    const [ownerUser] = ownerUserId
+      ? await ctx.coreDb
+          .select({
+            phoneNumber: users.phoneNumber,
+            supportWhatsApp: users.supportWhatsApp,
+          })
+          .from(users)
+          .where(eq(users.id, ownerUserId))
+          .limit(1)
+      : [];
+
+    // Verificar si ya se ha vinculado un celular como scanner (auditEntries + sesión activa en webSessions)
+    let scannerPaired = false;
+    if (ownerUserId || biz?.id) {
+      try {
+        const [pairedAudit] = await ctx.coreDb
+          .select({ id: auditEntries.id, userId: auditEntries.userId })
+          .from(auditEntries)
+          .where(
+            and(
+              eq(auditEntries.action, "MOBILE_SCANNER_PAIRED"),
+              biz?.id ? eq(auditEntries.resourceId, biz.id) : eq(auditEntries.userId, String(ownerUserId))
+            )
+          )
+          .orderBy(desc(auditEntries.createdAt))
+          .limit(1);
+        if (pairedAudit) {
+          const targetSessionUserId = pairedAudit.userId || ownerUserId;
+          if (targetSessionUserId) {
+            const [activeSession] = await ctx.coreDb
+              .select({ id: webSessions.id })
+              .from(webSessions)
+              .where(
+                and(
+                  eq(webSessions.userId, targetSessionUserId),
+                  gte(webSessions.expiresAt, new Date())
+                )
+              )
+              .limit(1);
+            scannerPaired = Boolean(activeSession);
+          } else {
+            scannerPaired = true;
+          }
+        }
+      } catch {
+        scannerPaired = false;
+      }
+    }
 
     const catRows = await ctx.restaurantDb
       .select({ catCount: sql<number>`COUNT(*)::int` })
@@ -1206,6 +1267,12 @@ export const adminRouter = router({
     const ordersCount = Number(ordersCountRows[0]?.count ?? 0);
 
     const has = (v?: string | null) => Boolean((v || "").trim());
+    const isRealAddress = (v?: string | null) =>
+      has(v) && !String(v).toLowerCase().startsWith("provisionado por");
+    const hasValidHours = Boolean(
+      (has(biz?.activeDays) && biz?.activeDays !== "[]" && has(biz?.startTime) && has(biz?.endTime)) ||
+        (biz?.verificationData && JSON.stringify(biz.verificationData).includes("activeDays"))
+    );
     const rawRestRate = Number(rest?.defaultRewardRate ?? 0);
     const restPct = rawRestRate > 0 && rawRestRate < 1 ? Math.round(rawRestRate * 100) : Math.round(rawRestRate);
     const pct = Math.round(Number(biz?.rewardPercentage ?? (restPct || 10)));
@@ -1213,8 +1280,8 @@ export const adminRouter = router({
     type Item = { id: string; label: string; done: boolean; href: string; level: "min" | "top"; cta: string };
     const all: Item[] = [
       { id: "name", label: "Nombre del negocio", done: has(rest?.name || biz?.name), href: "/settings", level: "min", cta: "Completar nombre" },
-      { id: "phone", label: "Teléfono de contacto", done: has(rest?.phone), href: "/settings", level: "min", cta: "Agregar teléfono" },
-      { id: "address", label: "Dirección física", done: has(branchRow?.address) && !String(branchRow?.address).toLowerCase().startsWith("provisionado por"), href: "/settings", level: "min", cta: "Agregar dirección" },
+      { id: "phone", label: "Teléfono de contacto", done: has(rest?.phone || branchRow?.phone || ownerUser?.phoneNumber || ownerUser?.supportWhatsApp), href: "/settings", level: "min", cta: "Agregar teléfono" },
+      { id: "address", label: "Dirección física", done: isRealAddress(branchRow?.address) || isRealAddress(biz?.address), href: "/settings", level: "min", cta: "Agregar dirección" },
       { id: "reward", label: `% de recompensa configurado (${pct}%)`, done: pct > 0, href: "/loyalty", level: "min", cta: "Configurar %" },
       { id: "category", label: "Categoría / nicho de mercado", done: has(biz?.category), href: "/settings", level: "min", cta: "Elegir nicho" },
       { id: "categories", label: `Categorías de menú creadas (${catCount})`, done: catCount > 0, href: "/menu", level: "min", cta: "Crear categorías" },
@@ -1222,7 +1289,7 @@ export const adminRouter = router({
       { id: "description", label: "Descripción del negocio", done: has(biz?.description), href: "/settings", level: "top", cta: "Escribir descripción" },
       { id: "logo", label: "Logo del negocio", done: has(rest?.logoUrl || biz?.logoUrl), href: "/settings", level: "top", cta: "Subir logo" },
       { id: "photos", label: `Fotos en platillos (${itemsWithPhoto.length}/${liveItems.length || 0}${liveItems.length ? `, mínimo 3` : ""})`, done: liveItems.length > 0 && itemsWithPhoto.length >= Math.min(3, liveItems.length) && itemsWithPhoto.length / liveItems.length >= 0.7, href: "/menu", level: "top", cta: "Subir fotos" },
-      { id: "hours", label: "Horario y días de atención", done: Boolean(biz?.verificationData && JSON.stringify(biz.verificationData).includes("activeDays")), href: "/settings", level: "top", cta: "Configurar horario" },
+      { id: "hours", label: "Horario y días de atención", done: hasValidHours, href: "/settings", level: "top", cta: "Configurar horario" },
       { id: "website", label: "Sitio web propio o Landing Rabbitty", done: has(biz?.slug), href: "https://www.rabbitty.me", level: "top", cta: "Reclamar landing" },
     ];
 
@@ -1265,13 +1332,16 @@ export const adminRouter = router({
     const minItems = all.filter((i) => i.level === "min");
     const minDone = minItems.filter((i) => i.done).length;
     const topDone = all.filter((i) => i.done).length;
-    const percent = Math.round((topDone / all.length) * 100);
+    const wizardValues = Object.values(wizardSteps);
+    const wizardDone = wizardValues.filter((w) => w.done).length;
+    const percent = Math.round(((topDone + wizardDone) / (all.length + wizardValues.length)) * 100);
     const minComplete = minDone === minItems.length;
 
     return {
       businessName: rest?.name || biz?.name || branchRow?.name || "Mi Negocio",
       slug: biz?.slug ?? null,
       percent,
+      scannerPaired,
       minComplete,
       min: { done: minDone, total: minItems.length, items: minItems },
       top: { done: topDone, total: all.length, items: all },

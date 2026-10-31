@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { users, ownedBusinesses, webSessions } from "@/db/schema";
+import { users, ownedBusinesses, webSessions, auditEntries } from "@/db/schema";
 import { eq, gt, and } from "drizzle-orm";
 import crypto from "crypto";
 
@@ -59,6 +59,14 @@ export async function POST(req: NextRequest) {
       userId: user.id,
       expiresAt: thirtyDaysFromNow,
     });
+
+    await db.insert(auditEntries).values({
+      userId: user.id,
+      action: "MOBILE_SCANNER_PAIRED",
+      resource: "scanner",
+      resourceId: business?.id || user.id,
+      details: JSON.stringify({ businessName: business?.name || null }),
+    }).catch(() => {});
 
     return NextResponse.json({
       success: true,

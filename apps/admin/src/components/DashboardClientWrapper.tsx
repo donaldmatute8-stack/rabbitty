@@ -122,6 +122,23 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: readinessData, refetch: refetchReadiness } = trpc.admin.getReadiness.useQuery(undefined, {
+    retry: false,
+    staleTime: 30 * 1000,
+  });
+  const [localScannerPaired, setLocalScannerPaired] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`rabbitty_scanner_paired_${branchId}`);
+      setLocalScannerPaired(saved === "1");
+    } catch {
+      setLocalScannerPaired(false);
+    }
+  }, [branchId]);
+
+  const isScannerPaired = Boolean(readinessData?.scannerPaired) || localScannerPaired;
+
   const {
     data: conversations,
     isLoading: conversationsLoading,
@@ -254,10 +271,6 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
         <div className="relative flex h-screen w-full overflow-hidden bg-black text-(--text-primary)">
           {/* ── Chip: Vista Tenant activa (impersonación God) ── */}
           <ImpersonationChip />
-          {/* ── ReadinessBar: perfil del negocio (afiliados) ── */}
-          <div className="fixed top-2 left-1/2 -translate-x-1/2 z-40 w-72 hidden lg:block print:hidden">
-            <ReadinessBar />
-          </div>
           {/* Neon Glow Accents */}
           <div className="absolute top-[-10%] right-[-10%] h-125 w-125 rounded-full bg-pink-500/10 blur-[120px] pointer-events-none" />
           <div className="absolute bottom-[-10%] left-[-10%] h-125 w-125 rounded-full bg-purple-500/10 blur-[120px] pointer-events-none" />
@@ -335,14 +348,17 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                     <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-pink-500"></span>
                   </span>
                 </button>
-                <button
-                  onClick={() => setPairModalOpen(true)}
-                  className="flex items-center gap-1.5 sm:gap-2 rounded-xl bg-pink-500/10 px-2.5 sm:px-3 py-2 text-xs font-bold text-pink-400 hover:bg-pink-500/20 active:scale-95 transition-all border border-pink-500/20 cursor-pointer"
-                  title="Vincular teléfono móvil como terminal de escaneo"
-                >
-                  <Smartphone className="h-4 w-4 shrink-0 text-pink-400" />
-                  <span className="hidden lg:inline whitespace-nowrap">Vincular Celular</span>
-                </button>
+                <ReadinessBar />
+                {!isScannerPaired && (
+                  <button
+                    onClick={() => setPairModalOpen(true)}
+                    className="flex items-center gap-1.5 sm:gap-2 rounded-xl bg-pink-500/10 px-2.5 sm:px-3 py-2 text-xs font-bold text-pink-400 hover:bg-pink-500/20 active:scale-95 transition-all border border-pink-500/20 cursor-pointer"
+                    title="Vincular teléfono móvil como terminal de escaneo"
+                  >
+                    <Smartphone className="h-4 w-4 shrink-0 text-pink-400" />
+                    <span className="hidden lg:inline whitespace-nowrap">Vincular</span>
+                  </button>
+                )}
                 <Link
                   href="/pos"
                   target={isNativeApp ? undefined : "_blank"}
@@ -702,6 +718,13 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
             <ScannerPairModal
               isOpen={pairModalOpen}
               onClose={() => setPairModalOpen(false)}
+              onLinked={() => {
+                setLocalScannerPaired(true);
+                try {
+                  localStorage.setItem(`rabbitty_scanner_paired_${branchId}`, "1");
+                } catch {}
+                refetchReadiness();
+              }}
             />
           </div>
         </div>

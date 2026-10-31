@@ -7,9 +7,10 @@ import QRDiscovery from "@/components/QRDiscovery";
 interface ScannerPairModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onLinked?: () => void;
 }
 
-export function ScannerPairModal({ isOpen, onClose }: ScannerPairModalProps) {
+export function ScannerPairModal({ isOpen, onClose, onLinked }: ScannerPairModalProps) {
   const [loading, setLoading] = useState(false);
   const [pairingUrl, setPairingUrl] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -60,6 +61,7 @@ export function ScannerPairModal({ isOpen, onClose }: ScannerPairModalProps) {
         const data = await res.json();
         if (data.status === "linked") {
           setLinked(true);
+          onLinked?.();
         }
       } catch {
         /* red intermitente: reintenta en el siguiente tick */

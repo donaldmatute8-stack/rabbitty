@@ -126,9 +126,16 @@ export default function QRDiscovery({
                 <img
                   src={LOGO}
                   alt="Ra"
-                  className="absolute inset-0 m-auto p-1.5 bg-white rounded-xl shadow-sm"
-                  style={{ width: Math.round(qrSize * 0.2), height: Math.round(qrSize * 0.2) }}
-                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                  className="absolute inset-0 m-auto p-1 bg-white rounded-xl shadow-md object-contain"
+                  style={{ width: Math.round(qrSize * 0.22), height: Math.round(qrSize * 0.22) }}
+                  onError={(e) => {
+                    const img = e.currentTarget as HTMLImageElement;
+                    if (!img.src.endsWith('/Ra.png')) {
+                      img.src = '/Ra.png';
+                    } else {
+                      img.style.display = 'none';
+                    }
+                  }}
                 />
               </div>
             )}

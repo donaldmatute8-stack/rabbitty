@@ -5,6 +5,7 @@ import { CheckCircle, Circle, ChevronDown, ChevronUp, Sparkles, ArrowRight, Uten
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { trpc } from "../lib/trpc-client";
+import { computeUnifiedReadiness } from "./ReadinessBar";
 
 interface Step {
   id: string;
@@ -114,6 +115,7 @@ export function OnboardingWizard() {
     setManualCompleted(next);
     try {
       localStorage.setItem("rabbitty_onboarding_completed", JSON.stringify(next));
+      window.dispatchEvent(new Event("rabbitty-readiness-sync"));
     } catch (e) {
       console.error(e);
     }
@@ -124,8 +126,10 @@ export function OnboardingWizard() {
     return Boolean(manualCompleted[id]);
   };
 
-  const completedCount = STEPS.filter((s) => isStepDone(s.id)).length;
-  const progressPercent = Math.round((completedCount / STEPS.length) * 100);
+  const unified = computeUnifiedReadiness(readiness, manualCompleted);
+  const progressPercent = readiness
+    ? unified.percent
+    : Math.round((STEPS.filter((s) => isStepDone(s.id)).length / STEPS.length) * 100);
 
   return (
     <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-linear-to-br from-gray-900/80 via-black to-gray-900/90 p-6 shadow-2xl backdrop-blur-xl">

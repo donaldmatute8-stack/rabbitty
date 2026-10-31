@@ -1251,7 +1251,7 @@ export default function PosPage() {
             )}
           </div>
 
-          {/* Orders Cluster: Tabs + En Espera */}
+          {/* Orders Cluster: Tabs (Las ventas en espera y pausa viven junto al carrito activo) */}
           <div className="flex items-center rounded-xl bg-white/5 border border-white/10 p-0.5">
             <button
               onClick={() => setActiveTabsModal(true)}
@@ -1263,48 +1263,6 @@ export default function PosPage() {
               <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-purple-500/30 text-purple-200">
                 {activeTabsData?.totalActiveCount ?? 0}
               </span>
-            </button>
-            <button
-              onClick={() => setPausedCartsModal(true)}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer active:scale-95",
-                pausedCarts.length > 0 ? "text-amber-300 bg-amber-500/20 animate-pulse" : "text-gray-400 hover:bg-white/10"
-              )}
-              title="Ventas pausadas en espera"
-            >
-              <Pause className="h-3.5 w-3.5 text-amber-400" />
-              <span>Espera</span>
-              {pausedCarts.length > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-500/40 text-amber-100">
-                  {pausedCarts.length}
-                </span>
-              )}
-            </button>
-          </div>
-
-          {/* Loyalty & Scan Tools (Direct Access) */}
-          <div className="flex items-center rounded-xl bg-white/5 border border-white/10 p-0.5">
-            <button
-              onClick={() => setShowBusinessQrModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-pink-500/15 hover:bg-pink-500/25 text-pink-300 text-xs font-black transition-all cursor-pointer active:scale-95 shadow-sm"
-              title="Mostrar QR Neón del negocio en pantalla para que el cliente lo escanee"
-            >
-              <QrCode className="h-3.5 w-3.5 text-pink-400 animate-pulse" />
-              <span>QR Neón</span>
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setRabbitterModalOpen(true);
-                setIsScanningRabbitter(true);
-              }}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-gray-300 hover:text-white text-xs font-bold transition-all cursor-pointer active:scale-95"
-              title="Escanear Rabbitter con la cámara"
-            >
-              <Camera className="h-3.5 w-3.5 text-cyan-400" />
-              <span className="hidden lg:inline">Escanear</span>
             </button>
           </div>
 
@@ -1543,47 +1501,64 @@ export default function PosPage() {
                     {cart.reduce((s, i) => s + i.quantity, 0)} uds
                   </span>
                 )}
-                {/* Botón Pausar Transacción (Poner en Espera con Folio X tipo Óptima) */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (cart.length === 0) return;
-                    const nextNum = pausedCarts.length + 1;
-                    const folio = `ESP-${nextNum}`;
-                    const parkedEntry = {
-                      id: crypto.randomUUID(),
-                      folio,
-                      createdAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                      cart: [...cart],
-                      orderType,
-                      selectedTableId,
-                      selectedRabbitter,
-                      total: total,
-                      itemsCount: cart.reduce((s, i) => s + i.quantity, 0),
-                    };
-                    setPausedCarts((prev) => [parkedEntry, ...prev]);
-                    setCart([]);
-                    setSelectedRabbitter(null);
-                    toast.success(`⏸️ Transacción pausada como ${folio}. Pantalla libre para el siguiente cliente.`);
-                  }}
-                  disabled={cart.length === 0}
-                  title="Pausar venta actual y asignar folio de espera (para atender a otro cliente)"
-                  className="flex items-center gap-1 h-8 px-2.5 rounded-xl bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 border border-amber-500/30 transition-all active:scale-95 disabled:opacity-30 disabled:pointer-events-none cursor-pointer text-[11px] font-bold"
-                >
-                  <Pause className="h-3 w-3" />
-                  <span className="hidden xl:inline">Pausar</span>
-                </button>
+                {/* Botón unificado de Pausar / En Espera (consolida el botón que antes se duplicaba en el header) */}
+                {(cart.length > 0 || pausedCarts.length > 0) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (cart.length > 0 && pausedCarts.length === 0) {
+                        const nextNum = pausedCarts.length + 1;
+                        const folio = `ESP-${nextNum}`;
+                        const parkedEntry = {
+                          id: crypto.randomUUID(),
+                          folio,
+                          createdAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                          cart: [...cart],
+                          orderType,
+                          selectedTableId,
+                          selectedRabbitter,
+                          total: total,
+                          itemsCount: cart.reduce((s, i) => s + i.quantity, 0),
+                        };
+                        setPausedCarts((prev) => [parkedEntry, ...prev]);
+                        setCart([]);
+                        setSelectedRabbitter(null);
+                        toast.success(`⏸️ Transacción pausada como ${folio}. Pantalla libre para el siguiente cliente.`);
+                        return;
+                      }
+                      setPausedCartsModal(true);
+                    }}
+                    title={
+                      cart.length > 0 && pausedCarts.length === 0
+                        ? "Pausar venta actual y asignar folio de espera"
+                        : "Ver ventas pausadas en espera o pausar la orden actual"
+                    }
+                    className={cn(
+                      "flex items-center gap-1.5 h-8 px-2.5 rounded-xl border transition-all active:scale-95 cursor-pointer text-[11px] font-bold",
+                      pausedCarts.length > 0
+                        ? "bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border-amber-500/40"
+                        : "bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 border-amber-500/30"
+                    )}
+                  >
+                    <Pause className="h-3 w-3 text-amber-400" />
+                    <span>{cart.length > 0 && pausedCarts.length === 0 ? "Pausar" : "Espera"}</span>
+                    {pausedCarts.length > 0 && (
+                      <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-500/40 text-amber-100">
+                        {pausedCarts.length}
+                      </span>
+                    )}
+                  </button>
+                )}
 
-                <button 
-                  onClick={() => {
-                    if (cart.length > 0) setConfirmClearCart(true);
-                  }} 
-                  disabled={cart.length === 0}
-                  title="Vaciar orden actual"
-                  className="flex h-8 w-8 items-center justify-center rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white border border-red-500/20 transition-all active:scale-95 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                {cart.length > 0 && (
+                  <button
+                    onClick={() => setConfirmClearCart(true)}
+                    title="Vaciar orden actual"
+                    className="flex h-8 w-8 items-center justify-center rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white border border-red-500/20 transition-all active:scale-95 cursor-pointer"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
             </div>
 
@@ -3376,9 +3351,39 @@ export default function PosPage() {
         className="max-w-xl w-full"
       >
         <div className="space-y-4 p-1">
-          <p className="text-xs text-gray-400">
-            Rescata una comanda previa para continuar cobrándola o modificarla sin haber perdido los platillos.
-          </p>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-gray-400">
+              Rescata una comanda previa para continuar cobrándola o modificarla sin haber perdido los platillos.
+            </p>
+            {cart.length > 0 && (
+              <Button
+                type="button"
+                onClick={() => {
+                  const nextNum = pausedCarts.length + 1;
+                  const folio = `ESP-${nextNum}`;
+                  const parkedEntry = {
+                    id: crypto.randomUUID(),
+                    folio,
+                    createdAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                    cart: [...cart],
+                    orderType,
+                    selectedTableId,
+                    selectedRabbitter,
+                    total: total,
+                    itemsCount: cart.reduce((s, i) => s + i.quantity, 0),
+                  };
+                  setPausedCarts((prev) => [parkedEntry, ...prev]);
+                  setCart([]);
+                  setSelectedRabbitter(null);
+                  toast.success(`⏸️ Transacción pausada como ${folio}. Pantalla libre para el siguiente cliente.`);
+                }}
+                className="shrink-0 py-1.5 px-3 text-xs font-black bg-amber-500 hover:bg-amber-400 text-gray-950 shadow-md active:scale-95 cursor-pointer"
+              >
+                <Pause className="h-3 w-3 mr-1" />
+                Pausar Orden Actual (${total.toFixed(2)})
+              </Button>
+            )}
+          </div>
 
           <div className="max-h-80 overflow-y-auto custom-scrollbar space-y-2">
             {pausedCarts.length > 0 ? (
