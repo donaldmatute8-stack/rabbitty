@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
       // Cerrar sesiones en otros negocios (se movió)
       await db.execute(sql`UPDATE "presenceSessions" SET "endedAt" = now(), "updatedAt" = now() WHERE "userId" = ${caller.id} AND "endedAt" IS NULL`);
       await db.execute(sql`INSERT INTO "presenceSessions" ("id", "userId", "businessId", "source", "startedAt", "lastPingAt")
-        VALUES (gen_random_uuid()::text, ${caller.id}, ${biz.id}, 'gps', now(), now())`);
+        VALUES (gen_random_uuid(), ${caller.id}, ${biz.id}, 'gps', now(), now())`);
     }
 
     // Señal para el feed del POS/Kiosko

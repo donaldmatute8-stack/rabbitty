@@ -66,10 +66,14 @@ export async function POST(req: NextRequest) {
         await db.execute(sql`UPDATE "presenceSessions" SET "lastPingAt" = now(), "updatedAt" = now() WHERE id = ${openS.id}`);
       } else {
         await db.execute(sql`UPDATE "presenceSessions" SET "endedAt" = now(), "updatedAt" = now() WHERE "userId" = ${caller.id} AND "endedAt" IS NULL`);
+        // gen_random_uuid() SIN ::text: la columna id es uuid y castear a text
+        // rompe el INSERT (42804) — ese error tragado dejaba al POS ciego.
         await db.execute(sql`INSERT INTO "presenceSessions" ("id", "userId", "businessId", "source", "startedAt", "lastPingAt")
-          VALUES (gen_random_uuid()::text, ${caller.id}, ${biz.id}, 'scan', now(), now())`);
+          VALUES (gen_random_uuid(), ${caller.id}, ${biz.id}, 'scan', now(), now())`);
       }
-    } catch { /* best-effort */ }
+    } catch (err) {
+      console.error('[checkin] presencia best-effort falló:', err instanceof Error ? err.message : err);
+    }
 
         // ── Señal de presencia SIEMPRE (aunque el check-in diario sea 'already'): el POS
     // y el Kiosko pollan estas interacciones — sin esto un re-escaneo no actualizaría nada. ──
