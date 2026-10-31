@@ -482,6 +482,9 @@ export default function PosPage() {
 
   const selectedRabbitterRef = useRef<typeof selectedRabbitter>(null);
   useEffect(() => { selectedRabbitterRef.current = selectedRabbitter; }, [selectedRabbitter]);
+  // Descarte manual del auto-vínculo: userId → "at" del ping cuando se le quitó.
+  // Si su presencia se refresca (re-escaneo / nuevo ping), el auto-vínculo vuelve a permitirlo.
+  const autoLinkDismissedRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     if (!showBusinessQrModal || !qrOpenedAtRef.current) return;
@@ -511,6 +514,12 @@ export default function PosPage() {
   useEffect(() => {
     if (selectedRabbitterRef.current || (activeCheckIns?.length ?? 0) !== 1) return;
     const only = activeCheckIns![0];
+    const atStr = String(only.at);
+    // Si el usuario lo desvinculó manualmente y su presencia NO ha cambiado
+    // (mismo ping de cuando lo quitó), no re-vincular: así puede atender a
+    // otro cliente o corregir un escaneo cancelado.
+    if (autoLinkDismissedRef.current.get(only.userId) === atStr) return;
+    autoLinkDismissedRef.current.delete(only.userId); // presencia refrescada → permitir de nuevo
     utils.pos.lookupRabbitter.fetch({ query: only.userId })
       .then((res) => {
         if (res && !selectedRabbitterRef.current) {
@@ -1641,7 +1650,16 @@ export default function PosPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setSelectedRabbitter(null)}
+                    onClick={() => {
+                      // Recordar el descarte para que el auto-vínculo no lo
+                      // regrese mientras su presencia siga igual.
+                      const cur = selectedRabbitterRef.current;
+                      if (cur?.id) {
+                        const row = (activeCheckIns || []).find((c: any) => c.userId === cur.id);
+                        if (row) autoLinkDismissedRef.current.set(cur.id, String(row.at));
+                      }
+                      setSelectedRabbitter(null);
+                    }}
                     title="Desvincular cliente"
                     className="flex h-6 w-6 items-center justify-center rounded-md bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-300 transition-all cursor-pointer shrink-0"
                   >
