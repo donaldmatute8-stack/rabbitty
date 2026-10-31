@@ -1,7 +1,20 @@
 import { test, expect, Route } from "@playwright/test";
 import { mockTables, mockCategories, mockMenuItems, mockOrdersWithItems } from "./mocks";
 
-function mockProcedure(proc: string, input: any) {
+interface MockInput {
+  categoryId?: string;
+  tableId?: string;
+  orderType?: string;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  orderId?: string;
+  menuItemId?: string;
+  quantity?: number;
+  modifiers?: unknown;
+  notes?: string | null;
+}
+
+function mockProcedure(proc: string, input?: MockInput) {
   switch (proc) {
     case "pos.getTables":
       return { result: { data: mockTables } };
@@ -78,7 +91,7 @@ async function handleTrpc(route: Route) {
   if (!proceduresStr) {
     return route.fulfill({ status: 404 });
   }
-  let body: Record<string, any> = {};
+  let body: Record<string, { json?: MockInput }> = {};
   try {
     const postData = route.request().postDataJSON();
     if (postData) {

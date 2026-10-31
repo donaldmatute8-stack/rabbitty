@@ -3,6 +3,9 @@ import { and, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { merchantPaymentAccounts, paymentIntents, orders } from "@rabbitty/database-restaurant/schema";
 
+// STRIPE_SUPPRESS_NOTICES se configura como variable de entorno en Railway y
+// Vercel (silencia solo el aviso de versión de la API, no errores de Stripe).
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
 

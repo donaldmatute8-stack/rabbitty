@@ -364,7 +364,7 @@ export function AdminSidebar() {
   // Auto-expand pillar if current pathname is inside it
   useEffect(() => {
     setOpenPillars((prev) => {
-      let newState = { ...prev };
+      const newState = { ...prev };
       let changed = false;
       for (const pillar of [...menuPillars, ...marketingPillars]) {
         if (pillar.items.some((i) => pathname.startsWith(i.href))) {

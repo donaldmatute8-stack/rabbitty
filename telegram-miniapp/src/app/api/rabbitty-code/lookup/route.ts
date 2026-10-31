@@ -127,13 +127,23 @@ export async function POST(req: NextRequest) {
         const urlObj = rawText.startsWith("http") ? new URL(rawText) : null;
         const params = urlObj ? urlObj.searchParams : new URLSearchParams(rawText.split("?")[1] || "");
 
-        // 1.1 branchId (QR de mostrador / check-in sin mesa) → negocio dueño
+        // 1.1 branchId / businessId (QR de mostrador / check-in sin mesa) → negocio dueño
+        // Nota: si hay branchId, el negocio SIEMPRE se resuelve desde el branch
+        // (fuente verificada en DB); un businessId en la URL solo se respeta si
+        // no hay branchId — evita fabricar presencia en un negocio arbitrario.
         const branchId = params.get("branchId") || params.get("branch");
-        if (branchId && !params.get("tableId") && !params.get("claimToken")) {
-          const [branchRow] = await db.execute(
-            sql`SELECT b."restaurantId", r."businessId" FROM branches b JOIN restaurants r ON r.id = b."restaurantId" WHERE b.id = ${branchId} AND b."isActive" = true LIMIT 1`
-          ).then((r: unknown) => ((r as { rows?: Array<{ businessId: string }> }).rows || (r as unknown as Array<{ businessId: string }>)) as Array<{ businessId: string }>);
-          const businessId = branchRow?.businessId;
+        const directBizId = params.get("businessId");
+        if ((branchId || directBizId) && !params.get("tableId") && !params.get("claimToken")) {
+          let businessId: string | undefined;
+          if (branchId) {
+            const [branchRow] = await db.execute(
+              sql`SELECT b."restaurantId", r."businessId" FROM branches b JOIN restaurants r ON r.id = b."restaurantId" WHERE b.id = ${branchId} AND b."isActive" = true LIMIT 1`
+            ).then((r: unknown) => ((r as { rows?: Array<{ businessId: string }> }).rows || (r as unknown as Array<{ businessId: string }>)) as Array<{ businessId: string }>);
+            businessId = branchRow?.businessId;
+          } else if (directBizId) {
+            // Sin branch verificable: solo negocios existentes (se valida abajo).
+            businessId = directBizId;
+          }
           if (businessId) {
             const [biz] = await db.select({ id: ownedBusinesses.id, name: ownedBusinesses.name }).from(ownedBusinesses).where(eq(ownedBusinesses.id, businessId)).limit(1);
             if (biz) {

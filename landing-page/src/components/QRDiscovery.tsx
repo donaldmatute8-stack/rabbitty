@@ -58,19 +58,28 @@ export default function QRDiscovery({
       } catch {}
     }
     if (!skip && prefersReducedMotion()) skip = true;
-    if (skip) {
-      setRevealed(true);
-      return;
-    }
-    setShowingNeon(true);
-    const t = setTimeout(() => {
-      setShowingNeon(false);
-      setRevealed(true);
-      if (storageKey) {
-        try { localStorage.setItem(storageKey, 'seen'); } catch {}
+    // Defer state updates out of the synchronous effect body (setState directly
+    // inside an effect is flagged by react-hooks/set-state-in-effect and can
+    // trigger cascading renders).
+    let t2: ReturnType<typeof setTimeout> | undefined;
+    const kick = setTimeout(() => {
+      if (skip) {
+        setRevealed(true);
+        return;
       }
-    }, 700);
-    return () => clearTimeout(t);
+      setShowingNeon(true);
+      t2 = setTimeout(() => {
+        setShowingNeon(false);
+        setRevealed(true);
+        if (storageKey) {
+          try { localStorage.setItem(storageKey, 'seen'); } catch {}
+        }
+      }, 700);
+    }, 0);
+    return () => {
+      clearTimeout(kick);
+      if (t2) clearTimeout(t2);
+    };
   }, [revealMode, storageKey, value]);
 
   const invalid = !value || !value.trim();

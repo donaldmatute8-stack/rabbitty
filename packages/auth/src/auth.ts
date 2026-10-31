@@ -16,7 +16,19 @@ if (process.env.NODE_ENV === "production") {
 }
 
 // DB-backed admin user store (for email/magic link authentication)
-const NEON_URL = process.env.CORE_DATABASE_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL;
+function stripSslMode(raw?: string): string | undefined {
+  if (!raw) return raw;
+  try {
+    const url = new URL(raw);
+    if (!url.searchParams.has("sslmode")) return raw;
+    url.searchParams.delete("sslmode");
+    return url.toString();
+  } catch {
+    return raw;
+  }
+}
+
+const NEON_URL = stripSslMode(process.env.CORE_DATABASE_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL);
 
 async function getPool() {
   if (!NEON_URL) {
@@ -26,7 +38,13 @@ async function getPool() {
   }
   const { default: pg } = await import("pg");
   const { Pool } = pg;
-  return new Pool({ connectionString: NEON_URL, max: 3 });
+  return new Pool({
+    connectionString: NEON_URL,
+    max: 3,
+    ssl: NEON_URL.includes("neon.tech") || process.env.NODE_ENV === "production"
+      ? { rejectUnauthorized: false }
+      : false,
+  });
 }
 
 // Ensure admin_auth_users table exists
@@ -520,7 +538,7 @@ const authResult = NextAuth({
       async authorize(credentials) {
         if (!credentials?.token || !credentials?.sid) return null;
 
-        const coreDbUrl = process.env.CORE_DATABASE_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL;
+        const coreDbUrl = stripSslMode(process.env.CORE_DATABASE_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL);
         if (!coreDbUrl) {
           console.error("[magic-link] CORE_DATABASE_URL or DATABASE_URL is not set.");
           return null;
@@ -529,7 +547,12 @@ const authResult = NextAuth({
         try {
           const { default: pg } = await import("pg");
           const { Pool } = pg;
-          const pool = new Pool({ connectionString: coreDbUrl });
+          const pool = new Pool({
+            connectionString: coreDbUrl,
+            ssl: coreDbUrl.includes("neon.tech") || process.env.NODE_ENV === "production"
+              ? { rejectUnauthorized: false }
+              : false,
+          });
           const jwtToken = createHash("sha256").update(credentials.token as string).digest("hex");
 
           const result = await pool.query(

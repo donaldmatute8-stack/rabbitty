@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
+// STRIPE_SUPPRESS_NOTICES se configura como variable de entorno en Railway y
+// Vercel (silencia solo el aviso de versión de la API, no errores de Stripe).
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/db';
 import {

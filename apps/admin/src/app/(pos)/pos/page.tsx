@@ -322,7 +322,7 @@ export default function PosPage() {
         const onScanSuccess = async (decodedText: string) => {
           if (!active) return;
 
-          let cleanedRaw = decodedText.trim();
+          const cleanedRaw = decodedText.trim();
           // ── QR de Membresía: <subscriptionId>.<window>.<hmac24> → canje directo ──
           const memToken = cleanedRaw.match(/^([0-9a-fA-F-]{36})\.(\d+)\.([0-9a-f]{24})$/);
           if (memToken) {
@@ -442,7 +442,7 @@ export default function PosPage() {
   // ── Canje de Membresía por escáner (token <subId>.<window>.<hmac>) ──
   const redeemMembership = trpc.memberships.redeemAtPOS.useMutation();
   const { data: activeCheckIns, refetch: refetchCheckIns } = trpc.pos.getActiveCheckIns.useQuery(undefined, {
-    refetchInterval: 30000,
+    refetchInterval: showBusinessQrModal ? 2000 : 12000,
     retry: false,
   });
   const { data: plannedVisits } = trpc.pos.getPlannedVisits.useQuery(undefined, {
@@ -462,33 +462,50 @@ export default function PosPage() {
   // ── QR de mostrador: si alguien acaba de escanearlo (ping fresco de presencia) →
   // cerrar automáticamente el QR y vincular al rabbitter para proceder al cobro ──
   const qrOpenedAtRef = useRef<number>(0);
+  const qrSnapshotRef = useRef<Map<string, string>>(new Map());
   useEffect(() => {
     if (showBusinessQrModal) {
-      if (!qrOpenedAtRef.current) qrOpenedAtRef.current = Date.now();
+      if (!qrOpenedAtRef.current) {
+        qrOpenedAtRef.current = Date.now();
+        const snap = new Map<string, string>();
+        for (const c of activeCheckIns || []) {
+          snap.set(c.userId, String(c.at));
+        }
+        qrSnapshotRef.current = snap;
+        refetchCheckIns();
+      }
       return;
     }
     qrOpenedAtRef.current = 0;
-  }, [showBusinessQrModal]);
+    qrSnapshotRef.current.clear();
+  }, [showBusinessQrModal, activeCheckIns, refetchCheckIns]);
 
   const selectedRabbitterRef = useRef<typeof selectedRabbitter>(null);
   useEffect(() => { selectedRabbitterRef.current = selectedRabbitter; }, [selectedRabbitter]);
 
   useEffect(() => {
     if (!showBusinessQrModal || !qrOpenedAtRef.current) return;
-    const fresh = (activeCheckIns || []).find(
-      (c: any) => new Date(c.at).getTime() >= qrOpenedAtRef.current - 60_000
-    );
+    const fresh = (activeCheckIns || []).find((c: any) => {
+      const prevAt = qrSnapshotRef.current.get(c.userId);
+      const changedSinceOpen = prevAt !== String(c.at);
+      const isRecentOnServer = typeof c.ageSeconds === "number" ? c.ageSeconds <= 20 : false;
+      // Un check-in solo cuenta como "escaneó el QR" si es NUEVO respecto al
+      // snapshot AND recién creado en el server (ageSeconds evita falsos
+      // positivos con datos de hasta 12s viejos al abrir el modal).
+      return changedSinceOpen && isRecentOnServer;
+    });
     if (fresh) {
       qrOpenedAtRef.current = 0;
+      qrSnapshotRef.current.clear();
       setShowBusinessQrModal(false);
-      toast.info(`📸 ${fresh.name} escaneó tu QR — cliente en el local`);
+      toast.info(`📸 ${fresh.name} escaneó tu QR — cliente vinculado`);
       utils.pos.lookupRabbitter.fetch({ query: fresh.userId })
         .then((res) => {
-          if (res && !selectedRabbitterRef.current) setSelectedRabbitter(res);
+          if (res) setSelectedRabbitter(res);
         })
         .catch(() => {});
     }
-  }, [showBusinessQrModal, activeCheckIns]);
+  }, [showBusinessQrModal, activeCheckIns, utils.pos.lookupRabbitter]);
 
   // ── Auto-vínculo: si hay EXACTAMENTE un rabbitter presente y no hay ninguno vinculado ──
   useEffect(() => {
@@ -1441,32 +1458,32 @@ export default function PosPage() {
         {/* Right: Cart / Ticket Panel (Optimized 2-Column Visual Blocks) */}
         <aside className="w-80 md:w-96 lg:w-115 2xl:w-125 shrink-0 bg-gray-950/90 backdrop-blur-3xl border-l border-white/10 flex flex-col z-20 shadow-[-20px_0_50px_rgba(0,0,0,0.5)]">
           {/* Cart Header with Table Selector & Order Type */}
-          <div className="flex flex-col border-b border-white/10 p-3.5 lg:p-4 bg-black/40 gap-2.5 lg:gap-3">
+          <div className="flex flex-col border-b border-white/10 p-2.5 lg:p-3 bg-black/40 gap-1.5">
             <div className="flex items-center justify-between">
               {/* Table Selector Button */}
               <button
                 type="button"
                 onClick={() => setTableModal(true)}
-                className="flex items-center gap-2.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 px-3.5 py-2 transition-all cursor-pointer group"
+                className="flex items-center gap-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-1.5 transition-all cursor-pointer group"
                 title="Cambiar mesa o servicio"
               >
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
                   {orderType === "COUNTER" ? (
-                    <Store className="h-4 w-4 text-amber-400" />
+                    <Store className="h-3.5 w-3.5 text-amber-400" />
                   ) : orderType === "DINE_IN" ? (
-                    <Table2 className="h-4 w-4 text-cyan-400" />
+                    <Table2 className="h-3.5 w-3.5 text-cyan-400" />
                   ) : orderType === "TAKEAWAY" ? (
-                    <ShoppingBag className="h-4 w-4 text-purple-400" />
+                    <ShoppingBag className="h-3.5 w-3.5 text-purple-400" />
                   ) : (
-                    <Bike className="h-4 w-4 text-emerald-400" />
+                    <Bike className="h-3.5 w-3.5 text-emerald-400" />
                   )}
                 </div>
                 <div className="text-left">
-                  <div className="text-[10px] font-black uppercase tracking-wider text-gray-400 flex items-center gap-1">
+                  <div className="text-[9px] font-black uppercase tracking-wider text-gray-400 flex items-center gap-1 leading-none">
                     {orderType === "DINE_IN" ? "Mesa Asignada" : "Servicio"}
-                    <ChevronDown className="h-3 w-3 text-cyan-400 group-hover:translate-y-0.5 transition-transform" />
+                    <ChevronDown className="h-2.5 w-2.5 text-cyan-400 group-hover:translate-y-0.5 transition-transform" />
                   </div>
-                  <div className="text-sm font-black text-white">
+                  <div className="text-xs font-black text-white mt-0.5 leading-tight">
                     {orderType === "COUNTER"
                       ? "Venta Mostrador"
                       : orderType === "DINE_IN"
@@ -1483,7 +1500,7 @@ export default function PosPage() {
 
               <div className="flex items-center gap-1.5">
                 {cart.length > 0 && (
-                  <span className="hidden sm:inline-flex px-2 py-1 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-[11px] font-black text-cyan-300">
+                  <span className="hidden sm:inline-flex px-2 py-0.5 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-[10px] font-black text-cyan-300">
                     {cart.reduce((s, i) => s + i.quantity, 0)} uds
                   </span>
                 )}
@@ -1512,9 +1529,9 @@ export default function PosPage() {
                   }}
                   disabled={cart.length === 0}
                   title="Pausar venta actual y asignar folio de espera (para atender a otro cliente)"
-                  className="flex items-center gap-1 h-9 px-2.5 rounded-xl bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 border border-amber-500/30 transition-all active:scale-95 disabled:opacity-30 disabled:pointer-events-none cursor-pointer text-xs font-bold"
+                  className="flex items-center gap-1 h-8 px-2.5 rounded-xl bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 border border-amber-500/30 transition-all active:scale-95 disabled:opacity-30 disabled:pointer-events-none cursor-pointer text-[11px] font-bold"
                 >
-                  <Pause className="h-3.5 w-3.5" />
+                  <Pause className="h-3 w-3" />
                   <span className="hidden xl:inline">Pausar</span>
                 </button>
 
@@ -1524,15 +1541,15 @@ export default function PosPage() {
                   }} 
                   disabled={cart.length === 0}
                   title="Vaciar orden actual"
-                  className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white border border-red-500/20 transition-all active:scale-95 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                  className="flex h-8 w-8 items-center justify-center rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white border border-red-500/20 transition-all active:scale-95 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
             </div>
 
-            {/* Order Type Segmented Control (4 Options) */}
-            <div className="grid grid-cols-4 gap-1 p-1 rounded-xl bg-black/60 border border-white/5">
+            {/* Order Type Segmented Control (4 Options - Compact) */}
+            <div className="grid grid-cols-4 gap-1 p-0.5 rounded-lg bg-black/60 border border-white/5">
               <button
                 type="button"
                 onClick={() => {
@@ -1540,9 +1557,9 @@ export default function PosPage() {
                   setSelectedTableId(null);
                 }}
                 className={cn(
-                  "flex items-center justify-center gap-1 min-h-9 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer",
+                  "flex items-center justify-center gap-1 h-7 rounded-md text-[11px] font-black transition-all cursor-pointer",
                   orderType === "COUNTER"
-                    ? "bg-amber-500 text-gray-950 shadow-md"
+                    ? "bg-amber-500 text-gray-950 shadow-sm"
                     : "text-gray-400 hover:text-white hover:bg-white/5"
                 )}
               >
@@ -1558,9 +1575,9 @@ export default function PosPage() {
                   }
                 }}
                 className={cn(
-                  "flex items-center justify-center gap-1 min-h-9 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer",
+                  "flex items-center justify-center gap-1 h-7 rounded-md text-[11px] font-black transition-all cursor-pointer",
                   orderType === "DINE_IN"
-                    ? "bg-cyan-500 text-gray-950 shadow-md"
+                    ? "bg-cyan-500 text-gray-950 shadow-sm"
                     : "text-gray-400 hover:text-white hover:bg-white/5"
                 )}
               >
@@ -1574,9 +1591,9 @@ export default function PosPage() {
                   setSelectedTableId(null);
                 }}
                 className={cn(
-                  "flex items-center justify-center gap-1 min-h-9 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer",
+                  "flex items-center justify-center gap-1 h-7 rounded-md text-[11px] font-black transition-all cursor-pointer",
                   orderType === "TAKEAWAY"
-                    ? "bg-purple-500 text-white shadow-md"
+                    ? "bg-purple-500 text-white shadow-sm"
                     : "text-gray-400 hover:text-white hover:bg-white/5"
                 )}
               >
@@ -1590,9 +1607,9 @@ export default function PosPage() {
                   setSelectedTableId(null);
                 }}
                 className={cn(
-                  "flex items-center justify-center gap-1 min-h-9 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer",
+                  "flex items-center justify-center gap-1 h-7 rounded-md text-[11px] font-black transition-all cursor-pointer",
                   orderType === "DELIVERY"
-                    ? "bg-emerald-500 text-gray-950 shadow-md"
+                    ? "bg-emerald-500 text-gray-950 shadow-sm"
                     : "text-gray-400 hover:text-white hover:bg-white/5"
                 )}
               >
@@ -1601,11 +1618,11 @@ export default function PosPage() {
             </div>
 
             {/* ── Rabbitter Vinculado (Identificación Previa al Cobro) ── */}
-            <div className="mt-2 pt-2 border-t border-white/5">
+            <div>
               {selectedRabbitter ? (
-                <div className="flex items-center justify-between rounded-xl bg-pink-500/10 border border-pink-500/25 p-2 gap-2 shadow-[0_0_15px_rgba(236,72,153,0.1)]">
+                <div className="flex items-center justify-between rounded-xl bg-pink-500/10 border border-pink-500/25 px-2.5 py-1.5 gap-2 shadow-[0_0_15px_rgba(236,72,153,0.1)]">
                   <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-pink-500/20 text-pink-300 font-bold text-xs border border-pink-500/30">
+                    <div className="flex h-6.5 w-6.5 shrink-0 items-center justify-center rounded-lg bg-pink-500/20 text-pink-300 font-bold text-xs border border-pink-500/30">
                       🐰
                     </div>
                     <div className="min-w-0 flex-1">
@@ -1615,7 +1632,7 @@ export default function PosPage() {
                           {selectedRabbitter.level}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                      <div className="flex items-center gap-2 text-[10px] text-gray-400 leading-tight">
                         <span>{selectedRabbitter.phoneNumber || selectedRabbitter.telegramId || "Cuenta Verificada"}</span>
                         <span>•</span>
                         <span className="text-emerald-400 font-bold">{selectedRabbitter.currentRewardRate}% Cashback</span>
@@ -1632,14 +1649,10 @@ export default function PosPage() {
                   </button>
                 </div>
               ) : (
-                <div className="w-full flex items-center justify-between rounded-xl bg-white/5 border border-white/10 p-1.5 gap-2">
-                  <div className="flex items-center gap-1.5 pl-1 min-w-0">
-                    <span className="text-sm shrink-0">🐰</span>
-                    <div className="text-left truncate">
-                      <div className="text-[11px] font-black text-gray-200 truncate">Recompensa Rabbitter</div>
-                      <div className="text-[9px] text-gray-400">Cashback Bunz</div>
-                    </div>
-                  </div>
+                <div className="flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-xl bg-pink-500/10 border border-pink-500/25">
+                  <span className="text-[11px] font-black text-pink-200 flex items-center gap-1.5 truncate">
+                    <span>🐰</span> ¿Cliente Rabbitter?
+                  </span>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
                       type="button"
@@ -1647,16 +1660,26 @@ export default function PosPage() {
                         setRabbitterModalOpen(true);
                         setIsScanningRabbitter(true);
                       }}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-pink-500/20 hover:bg-pink-500/30 text-pink-300 border border-pink-500/30 text-[10px] font-black transition-all cursor-pointer active:scale-95 shadow-sm"
-                      title="Escanear QR de cliente Rabbitter con cámara"
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-pink-500/25 hover:bg-pink-500/35 text-pink-200 border border-pink-500/40 text-[10px] font-black transition-all cursor-pointer active:scale-95"
+                      title="Escanear QR del cliente con la cámara"
                     >
-                      <Camera className="h-3 w-3" />
-                      <span>Escanear</span>
+                      <Camera className="h-3 w-3" /> Escanear
                     </button>
                     <button
                       type="button"
-                      onClick={() => setRabbitterModalOpen(true)}
-                      className="p-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white border border-white/10 transition-all cursor-pointer"
+                      onClick={() => setShowBusinessQrModal(true)}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15 text-white border border-white/15 text-[10px] font-black transition-all cursor-pointer active:scale-95"
+                      title="Mostrar QR del negocio en pantalla"
+                    >
+                      <QrCode className="h-3 w-3 text-pink-400" /> QR Neón
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRabbitterModalOpen(true);
+                        setIsScanningRabbitter(false);
+                      }}
+                      className="flex items-center justify-center p-1 rounded-lg bg-white/10 hover:bg-white/15 text-pink-200 hover:text-white border border-white/15 transition-all cursor-pointer active:scale-95"
                       title="Buscar cliente por teléfono o usuario"
                     >
                       <Search className="h-3 w-3" />
@@ -1928,36 +1951,6 @@ export default function PosPage() {
                       {c.name} <span className="text-emerald-300">+ vincular</span>
                     </button>
                   ))}
-                </div>
-              </div>
-            )}
-
-            {/* Loyalty Quick Actions right before payment */}
-            {!selectedRabbitter && total > 0 && (
-              <div className="flex items-center justify-between px-2.5 py-1 rounded-xl bg-pink-500/10 border border-pink-500/20 mb-2">
-                <span className="text-[10px] font-black text-pink-300 flex items-center gap-1">
-                  <span>🐰</span> ¿Cliente Rabbitter?
-                </span>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRabbitterModalOpen(true);
-                      setIsScanningRabbitter(true);
-                    }}
-                    className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-pink-500/20 hover:bg-pink-500/30 text-pink-300 text-[10px] font-bold transition-all cursor-pointer active:scale-95"
-                  >
-                    <Camera className="h-3 w-3" />
-                    <span>Escanear</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowBusinessQrModal(true)}
-                    className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white/10 hover:bg-white/15 text-white text-[10px] font-bold transition-all cursor-pointer active:scale-95"
-                  >
-                    <QrCode className="h-3 w-3 text-pink-400" />
-                    <span>QR Neón</span>
-                  </button>
                 </div>
               </div>
             )}
@@ -2901,7 +2894,7 @@ export default function PosPage() {
           {/* Opción de Escaneo con Cámara en Vivo */}
           {isScanningRabbitter ? (
             <div className="space-y-3 flex flex-col items-center">
-              <div id="rabbitter-cam-reader" className="w-full max-w-[280px] h-[280px] rounded-2xl overflow-hidden border-2 border-pink-500/60 shadow-[0_0_30px_rgba(236,72,153,0.3)] bg-black" />
+              <div id="rabbitter-cam-reader" className="w-full max-w-70 h-70 rounded-2xl overflow-hidden border-2 border-pink-500/60 shadow-[0_0_30px_rgba(236,72,153,0.3)] bg-black" />
               <Button
                 type="button"
                 variant="secondary"
@@ -3028,7 +3021,7 @@ export default function PosPage() {
           <div className="relative p-6 rounded-[2.5rem] bg-gray-950 border-2 border-pink-500/60 shadow-[0_0_60px_rgba(236,72,153,0.4)] flex flex-col items-center">
             <div className="p-4 bg-white rounded-3xl shadow-2xl flex items-center justify-center">
               <QRCodeSVG
-                value={`https://rabbitty.me/scan?branchId=${ticketContext?.branch?.id || "default"}&business=${encodeURIComponent(ticketContext?.restaurant?.name || "Rabbitty")}`}
+                value={`https://rabbitty.me/scan?branchId=${ticketContext?.branch?.id || "default"}&businessId=${encodeURIComponent(ticketContext?.restaurant?.businessId || "")}&business=${encodeURIComponent(ticketContext?.restaurant?.name || "Rabbitty")}`}
                 size={220}
                 level="H"
                 includeMargin={false}
@@ -3511,7 +3504,7 @@ export default function PosPage() {
             <div className="inline-flex p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 mb-1">
               <Lock className="h-5 w-5" />
             </div>
-            <p className="text-xs text-gray-400 max-w-[240px] leading-relaxed">
+            <p className="text-xs text-gray-400 max-w-60 leading-relaxed">
               {!adminPinStatus?.hasAdminPin
                 ? "Esta sucursal aún no tiene PIN maestro. Teclea 4 dígitos para definir tu PIN de Administrador y salir."
                 : "Ingresa el PIN de 4 dígitos de Administrador o Gerente para acceder al Dashboard."}
@@ -3537,7 +3530,7 @@ export default function PosPage() {
           </div>
 
           {/* Teclado Táctil 3x4 Especial para iPad */}
-          <div className="grid grid-cols-3 gap-2 w-full max-w-[240px]">
+          <div className="grid grid-cols-3 gap-2 w-full max-w-60">
             {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((num) => (
               <button
                 key={num}

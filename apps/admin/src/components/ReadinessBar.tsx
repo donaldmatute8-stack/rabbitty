@@ -30,8 +30,8 @@ export default function ReadinessBar() {
   useEffect(() => {
     if (!data) return;
     const key = "rabbitty_readiness_last_level";
-    let minComplete = data.minComplete;
-    let topComplete = data.percent >= 100;
+    const minComplete = data.minComplete;
+    const topComplete = data.percent >= 100;
     try {
       const stored = localStorage.getItem(key) || "";
       if (topComplete && lastLevel.current !== "top" && stored !== "top") {

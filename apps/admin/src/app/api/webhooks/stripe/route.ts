@@ -29,7 +29,7 @@ async function notifyMembershipUser(
 ) {
   try {
     await coreDb.execute(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       (await import("drizzle-orm")).sql`INSERT INTO "notifications" ("id", "userId", "title", "message", "type", "route") VALUES (gen_random_uuid()::text, ${userId}, ${title}, ${message}, 'REWARD', ${route})`
     );
   } catch (e) {

@@ -50,7 +50,7 @@ export default function KdsPage() {
   }, [orders, play]);
 
   const handleStatus = useCallback(
-    (orderId: string, item: any, status: "PENDING" | "IN_PROGRESS" | "READY" | "SERVED") => {
+    (orderId: string, item: { id: string }, status: "PENDING" | "IN_PROGRESS" | "READY" | "SERVED") => {
       updateItemStatus.mutate({ orderItemId: item.id, status });
     },
     [updateItemStatus]

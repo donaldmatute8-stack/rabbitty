@@ -747,16 +747,16 @@ function AffiliateProfileContent() {
         )}
       </div>
 
-      {/* Persistent Bottom Bar (Cart / Scan) with dynamic push-down on scroll */}
-      <div
-        className={`fixed left-0 right-0 px-4 z-40 pointer-events-none transition-all duration-300 ease-out ${
-          isNavVisible
-            ? 'bottom-[calc(max(var(--safe-bottom,0px),env(safe-area-inset-bottom,0px))+76px)]'
-            : 'bottom-[calc(max(var(--safe-bottom,0px),env(safe-area-inset-bottom,0px))+14px)]'
-        }`}
-      >
-        <div className="max-w-md mx-auto pointer-events-auto">
-          {totalCartCount > 0 ? (
+      {/* Persistent Bottom Bar (Cart) with dynamic push-down on scroll */}
+      {totalCartCount > 0 && (
+        <div
+          className={`fixed left-0 right-0 px-4 z-40 pointer-events-none transition-all duration-300 ease-out ${
+            isNavVisible
+              ? 'bottom-[calc(max(var(--safe-bottom,0px),env(safe-area-inset-bottom,0px))+76px)]'
+              : 'bottom-[calc(max(var(--safe-bottom,0px),env(safe-area-inset-bottom,0px))+14px)]'
+          }`}
+        >
+          <div className="max-w-md mx-auto pointer-events-auto">
             <motion.button
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -781,21 +781,9 @@ function AffiliateProfileContent() {
                 <ChevronRight size={16} />
               </div>
             </motion.button>
-          ) : (
-            <motion.button
-              whileTap={{ scale: 0.98 }}
-              onClick={() => {
-                PlatformBridge.hapticFeedback('medium');
-                router.push('/scan');
-              }}
-              className="w-full bg-linear-to-r from-[#E91E63] to-[#FF4081] text-white py-3 px-4 rounded-full font-black text-xs sm:text-sm shadow-[0_6px_20px_rgba(233,30,99,0.4)] border border-white/20 flex items-center justify-center gap-2 transition-all active:brightness-95"
-            >
-              <Tag size={16} className="shrink-0" />
-              <span className="truncate">Escanear en caja y ganar +{affiliate.rewardPercentage}% Bunz</span>
-            </motion.button>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Sheets & Modals */}
       <TableContextSheet

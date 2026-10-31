@@ -1,6 +1,6 @@
 'use client';
 
-import { Toaster as Sonner } from 'sonner';
+import { Toaster as Sonner, toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 interface ToastProps {
@@ -41,31 +41,25 @@ export function Toaster({ position = 'top-center', className }: ToastProps) {
 
 // Toast helpers
 export function toastSuccess(message: string, description?: string) {
-  const { toast } = require('sonner');
   toast.success(message, { description });
 }
 
 export function toastError(message: string, description?: string) {
-  const { toast } = require('sonner');
   toast.error(message, { description });
 }
 
 export function toastWarning(message: string, description?: string) {
-  const { toast } = require('sonner');
   toast.warning(message, { description });
 }
 
 export function toastInfo(message: string, description?: string) {
-  const { toast } = require('sonner');
   toast.info(message, { description });
 }
 
 export function toastLoading(message: string) {
-  const { toast } = require('sonner');
   return toast.loading(message);
 }
 
 export function toastPromise(promise: Promise<unknown>, messages: { loading: string; success: string; error: string }) {
-  const { toast } = require('sonner');
   return toast.promise(promise, messages);
 }

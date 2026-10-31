@@ -112,11 +112,13 @@ export const posRouter = router({
     // Presencia REAL: sesiones abiertas cuyo último ping esté fresco (GPS pings + escaneos las refrescan)
     const presenceCutoff = new Date(Date.now() - 60 * 60 * 1000);
     const rows = await ctx.coreDb.execute(
-      sql`SELECT "userId", GREATEST("lastPingAt", "startedAt") AS at FROM "presenceSessions"
+      sql`SELECT "userId", GREATEST("lastPingAt", "startedAt") AS at,
+                 EXTRACT(EPOCH FROM (now() - GREATEST("lastPingAt", "startedAt")))::int AS "ageSeconds"
+          FROM "presenceSessions"
           WHERE "businessId" = ${bizId} AND "endedAt" IS NULL AND "lastPingAt" >= ${presenceCutoff}
           ORDER BY "lastPingAt" DESC LIMIT 12`
-    ).then((r: unknown) => ((r as { rows?: Array<{ payeeSubjectId: string; at: string }> }).rows || (r as unknown as Array<{ payeeSubjectId: string; at: string }>)).map((r: any) => ({ payeeSubjectId: `usr_${r.userId}`, at: r.at })));
-    const out: Array<{ userId: string; name: string; username: string | null; at: string }> = [];
+    ).then((r: unknown) => ((r as { rows?: Array<{ payeeSubjectId: string; at: string; ageSeconds: number }> }).rows || (r as unknown as Array<{ payeeSubjectId: string; at: string; ageSeconds: number }>)).map((r: any) => ({ payeeSubjectId: `usr_${r.userId}`, at: r.at, ageSeconds: Number(r.ageSeconds ?? 9999) })));
+    const out: Array<{ userId: string; name: string; username: string | null; at: string; ageSeconds: number }> = [];
     for (const row of rows) {
       const userId = (row.payeeSubjectId || "").replace(/^usr_/, "");
       if (!userId) continue;
@@ -127,6 +129,7 @@ export const posRouter = router({
         name: [u?.firstName, u?.lastName].filter(Boolean).join(" ") || u?.username || "Rabbitter",
         username: u?.username ?? null,
         at: row.at,
+        ageSeconds: row.ageSeconds,
       });
     }
     return out;

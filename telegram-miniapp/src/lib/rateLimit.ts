@@ -20,11 +20,18 @@ function getRedis(): Redis | null {
   const client = new Redis(url, {
     maxRetriesPerRequest: 1,
     connectTimeout: 2000,
-    enableOfflineQueue: false,
+    enableOfflineQueue: true,
     lazyConnect: false,
   });
   // Evita "Unhandled error event" si Redis no responde; el fallback en memoria cubre el caso.
-  client.on('error', (err) => console.error('[RateLimit] Redis error:', err.message));
+  let lastErrorLoggedAt = 0;
+  client.on('error', (err) => {
+    const now = Date.now();
+    if (now - lastErrorLoggedAt > 60_000) {
+      lastErrorLoggedAt = now;
+      console.warn('[RateLimit] Redis warning:', err.message);
+    }
+  });
 
   globalForRedis.__rabbittyRedis = client;
   return client;

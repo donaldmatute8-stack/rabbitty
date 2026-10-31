@@ -19,7 +19,10 @@ export async function GET(req: NextRequest) {
     });
     const data = await res.json();
     return NextResponse.json(data);
-  } catch (e: any) {
-    return NextResponse.json({ success: false, error: e.message }, { status: 500 });
+  } catch (e) {
+    return NextResponse.json(
+      { success: false, error: e instanceof Error ? e.message : String(e) },
+      { status: 500 }
+    );
   }
 }

@@ -1,21 +1,28 @@
 "use client";
 
 import { trpc } from "../lib/trpc-client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CheckCircle2, X } from "lucide-react";
 
 export function CompletedOrders() {
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  // Compute the cutoff outside render (effects are allowed to be impure),
+  // refreshed every minute so completed orders age out correctly.
+  const [oneHourAgo, setOneHourAgo] = useState<Date | null>(null);
+  useEffect(() => {
+    const update = () => setOneHourAgo(new Date(Date.now() - 60 * 60 * 1000));
+    update();
+    const id = setInterval(update, 60_000);
+    return () => clearInterval(id);
+  }, []);
   const { data: orders } = trpc.kds.getOrders.useQuery(undefined, {
     refetchInterval: 30_000,
   });
 
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-
    const completed = (orders ?? []).filter((order) => {
      if (dismissedIds.has(order.id)) return false;
      const createdAt = order.createdAt ? new Date(order.createdAt) : new Date();
-     if (createdAt < oneHourAgo) return false;
+     if (oneHourAgo && createdAt < oneHourAgo) return false;
      return order.items.length > 0 && order.items.every((item) => item.status === "SERVED");
    });
 

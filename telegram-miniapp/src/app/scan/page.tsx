@@ -335,36 +335,39 @@ export default function ScanPage() {
       // El cajero te ve en su POS ("clientes en el local") y te vincula al cobro —
       // no redirigimos: la presencia es el resultado.
       if (res.business.checkIn) {
-        (async () => {
-          try {
-            const headers = await PlatformBridge.getAuthHeaders();
-            if (headers?.Authorization) {
-              const bizId = res.business!.id;
-              const bizName = res.business!.name || 'el negocio';
-              const res2 = await fetch('/api/business/checkin', {
-                method: 'POST',
-                headers: { ...headers, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ businessId: bizId }),
-              });
-              const d2 = await res2.json().catch(() => ({}));
-              PlatformBridge.hapticFeedback('success');
-              let logoUrl: string | null = null;
-              try {
-                const bRes = await fetch(`/api/business/${bizId}`, { headers });
-                const bData = await bRes.json();
-                logoUrl = bData?.business?.logoUrl || bData?.business?.gallery?.[0] || null;
-              } catch { /* sin logo */ }
-              setPresenceSheet({
-                businessId: bizId,
-                businessName: bizName,
-                already: d2?.checkIn === 'already',
-                logoUrl,
-              });
-              return;
-            }
-          } catch { /* cae a navegación */ }
-        })();
-        // Sin sesión: navegación al perfil como antes (el flujo conservador)
+        try {
+          const headers = await PlatformBridge.getAuthHeaders();
+          if (headers?.Authorization) {
+            const bizId = res.business.id;
+            const bizName = res.business.name || 'el negocio';
+            const res2 = await fetch('/api/business/checkin', {
+              method: 'POST',
+              headers: { ...headers, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ businessId: bizId }),
+            });
+            const d2 = await res2.json().catch(() => ({}));
+            PlatformBridge.hapticFeedback('success');
+            let logoUrl: string | null = null;
+            try {
+              const bRes = await fetch(`/api/business/${bizId}`, { headers });
+              const bData = await bRes.json();
+              logoUrl = bData?.business?.logoUrl || bData?.business?.gallery?.[0] || null;
+            } catch { /* sin logo */ }
+            setScanLoader(null);
+            setScanLoaderCode(null);
+            setPresenceSheet({
+              businessId: bizId,
+              businessName: bizName,
+              already: d2?.checkIn === 'already',
+              logoUrl,
+            });
+            return;
+          }
+        } catch { /* cae a navegación */ }
+        // Sin sesión o si falló el check-in: limpiar loader y navegar al perfil
+        setScanLoader(null);
+        setScanLoaderCode(null);
+        router.push(`/affiliate/${res.business.id}`);
         return;
       }
       router.push(`/affiliate/${res.business.id}`);
@@ -606,8 +609,6 @@ export default function ScanPage() {
     return () => clearInterval(interval);
   }, [activeTab, hasCamera, showManualInput, result, router, stopScanning, handleDispatchPayload, showToast]);
 
-  // ── Loader: verificación animada Rabbitty tras escaneo ──
-  if (scanLoader) {
   // ── Hoja de presencia: estás activo en el negocio (el cajero te ve en su POS) ──
   if (presenceSheet) {
     return (
@@ -654,6 +655,8 @@ export default function ScanPage() {
     );
   }
 
+  // ── Loader: verificación animada Rabbitty tras escaneo ──
+  if (scanLoader) {
     return (
       <div className="min-h-dvh flex items-center justify-center bg-black">
         <RabbittyLoader message={scanLoader} codeData={scanLoaderCode ?? undefined} />

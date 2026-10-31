@@ -101,6 +101,29 @@ export default function KioskPage() {
   const { data: kioskCheckIns } = trpc.pos.getActiveCheckIns.useQuery(undefined, { refetchInterval: 30000, retry: false });
   const { data: menuItems } = trpc.pos.getMenuItems.useQuery({}, { retry: false });
 
+  // Poll the payment intent while on the QR payment screen (hoisted so the
+  // hook isn't called conditionally).
+  useEffect(() => {
+    if (view !== "qr_payment" || !intent) return;
+    const poll = setInterval(async () => {
+      try {
+        const inputStr = encodeURIComponent(JSON.stringify({ "0": { intentId: intent.intentId } }));
+        const res = await fetch(`/api/trpc/payments.getPaymentIntent?batch=1&input=${inputStr}`);
+        const data = await res.json();
+        const st = data?.[0]?.result?.data?.json?.status;
+        if (st === "SUCCEEDED") {
+          clearInterval(poll);
+          setView("success");
+        } else if (st === "CANCELED" || st === "FAILED") {
+          clearInterval(poll);
+          setPayError("El pago fue cancelado. Vuelve a intentar.");
+          setView("checkout");
+        }
+      } catch { /* reintenta */ }
+    }, 2500);
+    return () => clearInterval(poll);
+  }, [view, intent]);
+
   const filteredItems = useMemo(() => {
     if (!menuItems) return [];
     if (!activeCategory && categories && categories.length > 0) {
@@ -250,28 +273,6 @@ export default function KioskPage() {
 
   // 3. QR PAYMENT SCREEN
   if (view === "qr_payment") {
-    // ── Polling del intent real (Rabbitty Pay) ──
-    useEffect(() => {
-      if (!intent) return;
-      const poll = setInterval(async () => {
-        try {
-          const inputStr = encodeURIComponent(JSON.stringify({ "0": { intentId: intent.intentId } }));
-          const res = await fetch(`/api/trpc/payments.getPaymentIntent?batch=1&input=${inputStr}`);
-          const data = await res.json();
-          const st = data?.[0]?.result?.data?.json?.status;
-          if (st === "SUCCEEDED") {
-            clearInterval(poll);
-            setView("success");
-          } else if (st === "CANCELED" || st === "FAILED") {
-            clearInterval(poll);
-            setPayError("El pago fue cancelado. Vuelve a intentar.");
-            setView("checkout");
-          }
-        } catch { /* reintenta */ }
-      }, 2500);
-      return () => clearInterval(poll);
-    }, [intent]);
-
     return (
       <div className="flex h-dvh w-full flex-col items-center justify-center bg-gray-950 text-white select-none relative overflow-hidden">
         <div className="absolute inset-0 bg-linear-to-tr from-purple-900/30 to-black" />

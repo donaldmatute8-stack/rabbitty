@@ -17,10 +17,13 @@ interface ModifierModalProps {
 export function ModifierModal({ open, onClose, menuItemId, menuItemName, menuItemPrice, onConfirm }: ModifierModalProps) {
   const { data: modifiers, isLoading } = trpc.pos.getModifiers.useQuery({ itemId: menuItemId }, { enabled: open });
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-
-  useEffect(() => {
+  // Reset selection whenever the modal opens (state adjusted during render,
+  // the React-recommended pattern instead of setState inside an effect).
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (open) setSelectedIds([]);
-  }, [open]);
+  }
 
   const handleToggle = (modId: string, maxSelect: number) => {
     if (maxSelect <= 1) {

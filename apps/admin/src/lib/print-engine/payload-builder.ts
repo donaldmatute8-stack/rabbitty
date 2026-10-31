@@ -98,7 +98,7 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
 
   // Select PC437 code page (Standard for thermal printers) to ensure accents print correctly
   const setCodePage = new Uint8Array([0x1b, 0x74, 0x00]);
-  let chunks: Uint8Array[] = [init, setCodePage, alignCenter];
+  const chunks: Uint8Array[] = [init, setCodePage, alignCenter];
 
   const addText = (text: string) => chunks.push(encodeText(text));
   const divider = "-".repeat(width) + "\n";

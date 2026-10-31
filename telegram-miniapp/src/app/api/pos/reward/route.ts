@@ -164,7 +164,7 @@ export async function POST(request: Request) {
     //    y crédito — nunca más débito huérfano). El vault path NO debita: el claim
     //    (claim-ticket / bot) debita al momento de acreditar al usuario.
     const businessId = effectiveBusinessId || business_id || "unknown";
-    let hasEnoughInventory = true; // se re-evalúa dentro de la tx
+    const hasEnoughInventory = true; // se re-evalúa dentro de la tx
 
     const expirationDate = new Date();
     expirationDate.setMonth(expirationDate.getMonth() + 3);

@@ -11,7 +11,7 @@ interface QrCustomerLoginProps {
 }
 
 export function QrCustomerLogin({ orderId, onCustomerIdentified }: QrCustomerLoginProps) {
-  const [step, setStep] = useState<"idle" | "generating" | "display" | "scanning" | "success" | "error">("idle");
+  const [step, setStep] = useState<"idle" | "generating" | "scanning" | "success" | "error">("idle");
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [pollError, setPollError] = useState<string | null>(null);
@@ -24,7 +24,7 @@ export function QrCustomerLogin({ orderId, onCustomerIdentified }: QrCustomerLog
       if (data.success) {
         setQrToken(data.qrToken);
         setSessionId(data.sessionId);
-        setStep("display");
+        setStep("scanning");
       } else {
         setStep("error");
         toast.error("Error al generar QR");
@@ -36,9 +36,7 @@ export function QrCustomerLogin({ orderId, onCustomerIdentified }: QrCustomerLog
   }, []);
 
   useEffect(() => {
-    if (step !== "display" || !sessionId) return;
-    setStep("scanning");
-
+    if (!sessionId) return;
     const interval = setInterval(async () => {
       try {
         const res = await fetch(`/api/qr-login/poll?sessionId=${sessionId}`);
@@ -59,7 +57,7 @@ export function QrCustomerLogin({ orderId, onCustomerIdentified }: QrCustomerLog
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [sessionId, step, onCustomerIdentified]);
+  }, [sessionId, onCustomerIdentified]);
 
   const qrUrl = qrToken
     ? `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrToken)}`
@@ -90,7 +88,7 @@ export function QrCustomerLogin({ orderId, onCustomerIdentified }: QrCustomerLog
         </div>
       )}
 
-      {(step === "display" || step === "scanning") && qrUrl && (
+      {step === "scanning" && qrUrl && (
         <>
           <div className="rounded-xl bg-white p-4 shadow-lg">
             <img src={qrUrl} alt="QR Login" className="mx-auto h-48 w-48" />
