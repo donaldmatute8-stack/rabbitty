@@ -388,6 +388,14 @@ export const paymentsRouter = router({
       return { success: result.success, status: result.status, orderId: result.orderId, settled: result.success };
     }),
 
+  // Fase D: publishable key pública para Stripe Elements in-app (miniapp).
+  // Dato público por diseño; evita hardcodearla en otra app.
+  getPublishableKey: publicLimitedProcedure
+    .query(async () => {
+      const pk = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "";
+      return { publishableKey: pk, ready: Boolean(pk), mode: process.env.STRIPE_SECRET_KEY?.startsWith("sk_test") ? "test" : "live" };
+    }),
+
   getStripeAccountStatus: protectedProcedure
     .input(z.object({
       branchId: z.string().optional(),

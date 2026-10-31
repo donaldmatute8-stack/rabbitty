@@ -16,6 +16,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { resolveScannedPayload } from '@/lib/scannerResolver';
 
 import { PlatformBridge } from '@/lib/platform';
+import { InAppPaySheet } from '@/components/affiliate/InAppPaySheet';
 import { useToast } from '@/contexts/ToastContext';
 
 interface PaymentIntentData {
@@ -66,6 +67,8 @@ export default function ScanPage() {
   const [activeTab, setActiveTab] = useState<'scan' | 'my-code'>(initialTab);
   const [qrConfirm, setQrConfirm] = useState<{ qrToken: string; origin: string } | null>(null);
   const [presenceSheet, setPresenceSheet] = useState<{ businessId: string; businessName: string; already: boolean; logoUrl?: string | null } | null>(null);
+  // Fase D: pago in-app — escanes que apuntan a /pay/[orderId] (QR digital de mostrador / cuenta enviada por el POS)
+  const [inAppPayOrderId, setInAppPayOrderId] = useState<string | null>(null);
   const [scanLoader, setScanLoader] = useState<string | null>(null);
   const [scanLoaderCode, setScanLoaderCode] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
@@ -390,6 +393,16 @@ export default function ScanPage() {
       setScanLoader(null);
       setScanLoaderCode(null);
       setQrConfirm({ qrToken: res.qrLogin.qrToken, origin: 'www.rabbitty.me' });
+      return;
+    }
+
+    // 6.5. Fase D: link de pago del comensal (admin /pay/[orderId]) → pagar IN-APP
+    // sin salir de la app (QR digital de mostrador, cuenta enviada por el POS).
+    if (/^https?:\/\/[^/]+\/pay\//i.test(res.url || '')) {
+      await stopScanning();
+      setScanLoader(null);
+      setScanLoaderCode(null);
+      setInAppPayOrderId((res.url || '').split('/pay/')[1].split(/[?&#]/)[0]);
       return;
     }
 
@@ -1017,6 +1030,19 @@ export default function ScanPage() {
         )}
 
       </div>
+      {/* Fase D: pago in-app cuando el escaneo apunta a /pay/[orderId] */}
+      {inAppPayOrderId && (
+        <InAppPaySheet
+          isOpen={!!inAppPayOrderId}
+          onClose={() => {
+            setInAppPayOrderId(null);
+            startScanningRef.current();
+          }}
+          orderId={inAppPayOrderId}
+          total={0}
+          businessName="Tu cuenta en el local"
+        />
+      )}
       <BottomNav isDark={isDark} />
     </div>
   );

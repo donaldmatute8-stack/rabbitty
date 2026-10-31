@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Receipt, X, Wallet, Banknote, CheckCircle2 } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
 import { toast } from '@rabbitty/ui';
+import { InAppPaySheet } from './InAppPaySheet';
 
 interface TableBillSheetProps {
   isOpen: boolean;
@@ -12,7 +13,7 @@ interface TableBillSheetProps {
   tableId: string | null;
   tableNumber: number | null;
   businessName: string;
-  /** Base del web checkout del comensal (Fase C) — pago fuera de la app por ahora */
+  /** Base del web checkout del comensal (fallback web si el pago in-app no está disponible) */
   payBase?: string;
 }
 
@@ -42,6 +43,8 @@ export function TableBillSheet({
   } | null>(null);
   const [requestingCash, setRequestingCash] = useState(false);
   const [cashRequested, setCashRequested] = useState(false);
+  // Fase D: pago in-app (sin salir de la app)
+  const [inAppPay, setInAppPay] = useState(false);
 
   const loadBill = useCallback(async () => {
     if (!tableId) return;
@@ -104,7 +107,8 @@ export function TableBillSheet({
   const handlePayDigital = () => {
     if (!bill?.orderId) return;
     PlatformBridge.hapticFeedback('medium');
-    window.open(`${payBase}/pay/${bill.orderId}`, '_blank');
+    // Fase D: pago IN-APP con Stripe Elements (no abre navegador)
+    setInAppPay(true);
   };
 
   const total = Number(bill?.total ?? 0);
@@ -222,6 +226,18 @@ export function TableBillSheet({
           )}
         </motion.div>
       </div>
+      {/* Fase D: pago in-app encima del sheet de cuenta */}
+      <InAppPaySheet
+        isOpen={inAppPay}
+        onClose={() => {
+          setInAppPay(false);
+          void loadBill(); // refresca el estado de la cuenta al regresar
+        }}
+        orderId={bill?.orderId || null}
+        total={Number(bill?.total ?? 0)}
+        businessName={businessName}
+        onPaid={() => { setCashRequested(false); void loadBill(); }}
+      />
     </AnimatePresence>
   );
 }

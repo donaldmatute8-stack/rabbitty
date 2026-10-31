@@ -88,10 +88,28 @@ export async function createOrGetPaymentIntent(
   db: Db,
   input: CreatePaymentIntentInput
 ): Promise<PaymentIntentResult> {
+  // Si el intento vigente de la orden está CANCELLED/EXPIRED, no se reutiliza:
+  // se crea uno NUEVO con attempt:(N+1) — antes se devolvía el intento muerto
+  // y el checkout colgaba sin poder pagar.
+  const liveAttempt = await db
+    .select({ id: paymentIntents.id, status: paymentIntents.status })
+    .from(paymentIntents)
+    .where(and(eq(paymentIntents.orderId, input.orderId), eq(paymentIntents.status, "PENDING_PAYMENT")))
+    .limit(1);
+
+  // Cuenta de intentos previos → nuevo attempt number monótono
+  const [prev] = await db
+    .select({ n: sql<number>`COUNT(*)::int` })
+    .from(paymentIntents)
+    .where(eq(paymentIntents.orderId, input.orderId));
+
+  const effectiveAttempt =
+    liveAttempt.length === 0 ? Math.max(1, Number(prev?.n ?? 0)) + 1 : Math.max(1, Number(prev?.n ?? 0));
+
   const idempotencyKey = buildPaymentIdempotencyKey({
     branchId: input.branchId,
     orderId: input.orderId,
-    attemptNumber: input.attemptNumber,
+    attemptNumber: effectiveAttempt,
   });
 
   // 1. Revisar si ya existe un intento para esta misma clave (Idempotencia en DB)
@@ -101,6 +119,9 @@ export async function createOrGetPaymentIntent(
     .where(eq(paymentIntents.idempotencyKey, idempotencyKey))
     .limit(1);
 
+  // Si el intento existente ya liquidó, devolver la referencia;
+  // si está en otra fase (PROCESANDO), también devolverla tal cual —
+  // el settle/cancel la cambia de estado bajo lock.
   if (existing) {
     const [reserve] = await db
       .select()

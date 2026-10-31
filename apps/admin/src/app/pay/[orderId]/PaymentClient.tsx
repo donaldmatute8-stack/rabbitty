@@ -78,9 +78,12 @@ function StripeCheckoutForm({
         <PaymentElement
           options={{
             layout: "tabs",
+            // Apple/Google Pay requieren verificar el dominio en Stripe —
+            // sin verificación el botón aparece pero CONGELA al tocarlo.
+            // Re-activar ('auto') cuando se verifique admin.rabbitty.me.
             wallets: {
-              applePay: "auto",
-              googlePay: "auto",
+              applePay: "never",
+              googlePay: "never",
             },
           }}
         />

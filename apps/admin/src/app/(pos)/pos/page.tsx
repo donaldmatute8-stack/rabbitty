@@ -3,21 +3,16 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { Button, Dialog, Input, toast, cn, useWakeLock } from "@rabbitty/ui";
-import { Clock, Wifi, Search, User, Users, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, Table2, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, FileText, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, Unlock, ClipboardCheck, Camera, History, RotateCcw } from "lucide-react";
+import { Clock, Search, Users, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, Table2, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, ClipboardCheck, Camera, History } from "lucide-react";
 import Link from "next/link";
-import Image from "next/image";
 import { QRCodeSVG } from "qrcode.react";
 import QRDiscovery from "@/components/QRDiscovery";
 import { startNeonDecoder } from "@/lib/neonDecoder";
 import { TicketTemplate, TicketData } from "../../../components/TicketTemplate";
 import { CashShiftModal, CashShiftBadge } from "../../../components/CashShiftModal";
 import { 
-  printEngine,
-  generateEscPosTicketPayload
+  printEngine
 } from "../../../lib/print-engine";
-
-// Placeholder for missing images
-const PLACEHOLDER_IMG = "https://images.unsplash.com/photo-1544148103-0773bf10d330?q=80&w=1000&auto=format&fit=crop";
 
 function PosClock() {
   const [time, setTime] = useState("");
@@ -38,10 +33,49 @@ function PosClock() {
   );
 }
 
+function PosQrCountdown({ expiresAt }: { expiresAt: Date }) {
+  const [remaining, setRemaining] = useState(() => Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000)));
+
+  useEffect(() => {
+    const tick = () => {
+      setRemaining(Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000)));
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [expiresAt]);
+
+  const pct = Math.max(0, Math.min(100, (remaining / (5 * 60)) * 100));
+
+  return (
+    <div className="text-center w-full max-w-sm">
+      <p className="text-sm text-gray-400">
+        Tiempo restante: <span className="text-white font-mono font-bold">{remaining}</span>s
+      </p>
+      <div className="w-full h-1 bg-white/10 rounded-full mt-2 overflow-hidden">
+        <div 
+          className="h-full bg-purple-500 rounded-full transition-all duration-1000 ease-linear" 
+          style={{ width: `${pct}%` }} 
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function PosPage() {
   const [activeCategory, setActiveCategory] = useState<string | null>("ALL");
   const [search, setSearch] = useState("");
-  const [cart, setCart] = useState<any[]>([]);
+  const [cart, setCart] = useState<any[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const savedCart = localStorage.getItem("rabbitty_active_cart");
+      if (savedCart) {
+        const parsed = JSON.parse(savedCart);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return [];
+  });
   const [voidingItem, setVoidingItem] = useState<any | null>(null);
   const [orderZoomModal, setOrderZoomModal] = useState(false);
   const [voidReason, setVoidReason] = useState("");
@@ -50,8 +84,23 @@ export default function PosPage() {
   const [clearCartPin, setClearCartPin] = useState("");
   const [pendingDiscardFolio, setPendingDiscardFolio] = useState<string | null>(null);
   const [tableModal, setTableModal] = useState(false);
-  const [orderType, setOrderType] = useState<"COUNTER" | "DINE_IN" | "TAKEAWAY" | "DELIVERY">("COUNTER");
-  const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+  const [orderType, setOrderType] = useState<"COUNTER" | "DINE_IN" | "TAKEAWAY" | "DELIVERY">(() => {
+    if (typeof window === "undefined") return "COUNTER";
+    try {
+      const saved = localStorage.getItem("rabbitty_active_order_type");
+      if (saved && ["COUNTER", "DINE_IN", "TAKEAWAY", "DELIVERY"].includes(saved)) {
+        return saved as any;
+      }
+    } catch {}
+    return "COUNTER";
+  });
+  const [selectedTableId, setSelectedTableId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      return localStorage.getItem("rabbitty_active_table_id") || null;
+    } catch {}
+    return null;
+  });
   const [receiptModal, setReceiptModal] = useState(false);
   // Método elegido pendiente de confirmación (el cobro NO se ejecuta hasta confirmar)
   const [pendingMethod, setPendingMethod] = useState<string | null>(null);
@@ -60,7 +109,6 @@ export default function PosPage() {
   const [paidTicketData, setPaidTicketData] = useState<TicketData | null>(null);
   const [btConnected, setBtConnected] = useState(false);
   const [btDeviceName, setBtDeviceName] = useState<string | null>(null);
-  const [queueCount, setQueueCount] = useState(0);
   const [waPhone, setWaPhone] = useState("");
   const [qrPaymentModal, setQrPaymentModal] = useState<{ intentId: string; amount: number; bunz: number; expiresAt: Date; orderId?: string } | null>(null);
   const stripeStatus = trpc.payments.getStripeAccountStatus.useQuery({});
@@ -100,7 +148,17 @@ export default function PosPage() {
     selectedRabbitter: any | null;
     total: number;
     itemsCount: number;
-  }[]>([]);
+  }[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const savedPaused = localStorage.getItem("rabbitty_paused_carts");
+      if (savedPaused) {
+        const parsed = JSON.parse(savedPaused);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return [];
+  });
   const [adminPinModal, setAdminPinModal] = useState(false);
   const [exitPin, setExitPin] = useState("");
 
@@ -124,16 +182,11 @@ export default function PosPage() {
   const [showBusinessQrModal, setShowBusinessQrModal] = useState(false);
   const utils = trpc.useUtils();
 
-  // Subscribe to PrintEngine state (connections, auto-reconnects, queue changes)
+  // Subscribe to PrintEngine state (connections, auto-reconnects)
   useEffect(() => {
     const unsubState = printEngine.onStateChange((state) => {
       setBtConnected(state.connected);
       setBtDeviceName(state.device?.name || null);
-      setQueueCount(state.queueCount);
-    });
-
-    const unsubQueue = printEngine.onQueueChange((q) => {
-      setQueueCount(q.length);
     });
 
     // Auto-reconnect to last printer on mount
@@ -141,7 +194,6 @@ export default function PosPage() {
 
     return () => {
       unsubState();
-      unsubQueue();
     };
   }, []);
 
@@ -203,46 +255,10 @@ export default function PosPage() {
     },
   });
   const { data: ticketContext } = trpc.printing.getTicketData.useQuery(undefined, { retry: false });
-  const { data: cashStatus, refetch: refetchCashStatus } = trpc.cashDrops.getStatus.useQuery({}, { refetchInterval: 30000 });
+  const { data: cashStatus } = trpc.cashDrops.getStatus.useQuery({}, { refetchInterval: 30000 });
   const { data: sandboxStatus } = trpc.sandbox.getSandboxStatus.useQuery(undefined, { retry: false });
   const { data: branches } = trpc.admin.getBranches.useQuery(undefined, { retry: false });
   const { data: userProfile } = trpc.admin.getProfile.useQuery(undefined, { retry: false });
-  const isEmployeeRole = userProfile?.role === "CASHIER" || userProfile?.role === "WAITER";
-
-  // Cargar carrito activo y carritos pausados desde almacenamiento local (persistencia tipo Óptima POS)
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const savedCart = localStorage.getItem("rabbitty_active_cart");
-      if (savedCart) {
-        const parsed = JSON.parse(savedCart);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setCart(parsed);
-        }
-      }
-      const savedPaused = localStorage.getItem("rabbitty_paused_carts");
-      if (savedPaused) {
-        const parsed = JSON.parse(savedPaused);
-        if (Array.isArray(parsed)) {
-          setPausedCarts(parsed);
-        }
-      }
-      const savedOrderType = localStorage.getItem("rabbitty_active_order_type");
-      if (savedOrderType && ["COUNTER", "DINE_IN", "TAKEAWAY", "DELIVERY"].includes(savedOrderType)) {
-        setOrderType(savedOrderType as any);
-      }
-      const savedTable = localStorage.getItem("rabbitty_active_table_id");
-      if (savedTable) {
-        setSelectedTableId(savedTable);
-      }
-      const savedRabbitter = localStorage.getItem("rabbitty_active_rabbitter");
-      if (savedRabbitter) {
-        setSelectedRabbitter(JSON.parse(savedRabbitter));
-      }
-    } catch (e) {
-      console.warn("[POS_RESTORE_ERROR]", e);
-    }
-  }, []);
 
   // Guardar en tiempo real ante cualquier cambio (si se apaga la tablet o sale, no se pierde)
   useEffect(() => {
@@ -253,48 +269,55 @@ export default function PosPage() {
       } else {
         localStorage.removeItem("rabbitty_active_cart");
       }
-    } catch {}
-  }, [cart]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
       localStorage.setItem("rabbitty_paused_carts", JSON.stringify(pausedCarts));
-    } catch {}
-  }, [pausedCarts]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
       localStorage.setItem("rabbitty_active_order_type", orderType);
-    } catch {}
-  }, [orderType]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
       if (selectedTableId) {
         localStorage.setItem("rabbitty_active_table_id", selectedTableId);
       } else {
         localStorage.removeItem("rabbitty_active_table_id");
       }
-    } catch {}
-  }, [selectedTableId]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
       if (selectedRabbitter) {
         localStorage.setItem("rabbitty_active_rabbitter", JSON.stringify(selectedRabbitter));
       } else {
         localStorage.removeItem("rabbitty_active_rabbitter");
       }
     } catch {}
-  }, [selectedRabbitter]);
+  }, [cart, pausedCarts, orderType, selectedTableId, selectedRabbitter]);
 
   // ── Controlador reactivo de la cámara para escanear Rabbitter ──
   const scannerInstanceRef = useRef<any>(null);
   const neonDecoderStopRef = useRef<(() => void) | null>(null);
+
+  const handleMembershipRedeem = async (qrToken: string) => {
+    try {
+      const subId = qrToken.split(".")[0];
+      const ctxBiz = await utils.memberships.myBusinessForContext.fetch();
+      if (!ctxBiz?.businessId) {
+        toast.error("Este POS no tiene un negocio de membresías vinculado");
+        return;
+      }
+      const res = await redeemMembership.mutateAsync({
+        businessId: ctxBiz.businessId,
+        qrToken,
+        branchId: ticketContext?.branch?.id || "pos",
+        quantity: 1,
+        idempotencyKey: `pos_scan_${subId}_${Math.floor(Date.now() / 1000 / 30)}`,
+      });
+      if (res?.duplicate) {
+        const dupMember = res.memberName ? ` de ${res.memberName}` : "";
+        toast.info(`🐰 Membresía ya canjeada hace un momento${dupMember} (duplicado ignorado)`);
+        return;
+      }
+      if (res?.success) {
+        const member = res.memberName ? ` de ${res.memberName}` : "";
+        toast.success(`🎟️ Canje OK${member} — quedan ${res.remaining} usos este ciclo`);
+      } else {
+        toast.error("No se pudo canjear la membresía");
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Membresía inválida o no vigente");
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -537,11 +560,13 @@ export default function PosPage() {
       stripeIntentId.current = intent.intentId;
       setStripePaid(false);
       const base = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+      const defaultExpires = new Date();
+      defaultExpires.setMinutes(defaultExpires.getMinutes() + 15);
       setStripePayModal({
         payUrl: `${base}/pay/${tab.orderId}`,
         amount: Math.round(intent.netFiatCents || 0) / 100 || tab.total,
         orderId: tab.orderId,
-        expiresAt: intent.expiresAt ? new Date(intent.expiresAt) : new Date(Date.now() + 15 * 60 * 1000),
+        expiresAt: intent.expiresAt ? new Date(intent.expiresAt) : defaultExpires,
         bunzApplied: 0,
       });
       toast.success("💳 Cobro digital creado sobre la cuenta abierta — sin duplicar orden");
@@ -550,39 +575,6 @@ export default function PosPage() {
     }
   };
 
-  const handleMembershipRedeem = async (qrToken: string) => {
-    try {
-      const subId = qrToken.split(".")[0];
-      const ctxBiz = await utils.memberships.myBusinessForContext.fetch();
-      if (!ctxBiz?.businessId) {
-        toast.error("Este POS no tiene un negocio de membresías vinculado");
-        return;
-      }
-      const res = await redeemMembership.mutateAsync({
-        businessId: ctxBiz.businessId,
-        qrToken,
-        branchId: ticketContext?.branch?.id || "pos",
-        quantity: 1,
-        idempotencyKey: `pos_scan_${subId}_${Math.floor(Date.now() / 1000 / 30)}`,
-      });
-      if (res?.duplicate) {
-        const dupMember = res.memberName ? ` de ${res.memberName}` : "";
-        toast.info(`🐰 Membresía ya canjeada hace un momento${dupMember} (duplicado ignorado)`);
-        return;
-      }
-      if (res?.success) {
-        const member = res.memberName ? ` de ${res.memberName}` : "";
-        toast.success(`🎟️ Canje OK${member} — quedan ${res.remaining} usos este ciclo`);
-      } else {
-        toast.error("No se pudo canjear la membresía");
-      }
-    } catch (err: any) {
-      toast.error(err?.message || "Membresía inválida o no vigente");
-    }
-  };
-
-  const [cashDropAmount, setCashDropAmount] = useState("");
-  const [cashDropNotes, setCashDropNotes] = useState("");
   const [corteModalOpen, setCorteModalOpen] = useState(false);
   const [corteInitialMode, setCorteInitialMode] = useState<"open" | "partial" | undefined>(undefined);
 
@@ -651,7 +643,7 @@ export default function PosPage() {
           setAdminPinModal(false);
           setExitPin("");
           toast.success("🐰 PIN de Administrador definido. Saliendo al Dashboard...");
-          window.location.href = "/";
+          window.location.assign("/");
         } catch {
           setExitPin("");
         }
@@ -662,7 +654,7 @@ export default function PosPage() {
           setAdminPinModal(false);
           setExitPin("");
           toast.success("PIN autorizado. Accediendo al Dashboard...");
-          window.location.href = "/";
+          window.location.assign("/");
         } catch {
           setExitPin("");
         }
@@ -772,10 +764,7 @@ export default function PosPage() {
 
   // Poll the API server for payment resolution
   useEffect(() => {
-    if (!qrPaymentModal) {
-      setPollData(null);
-      return;
-    }
+    if (!qrPaymentModal) return;
     const interval = setInterval(async () => {
       try {
         const inputStr = encodeURIComponent(JSON.stringify({ "0": { intentId: qrPaymentModal.intentId } }));
@@ -792,7 +781,10 @@ export default function PosPage() {
         console.error("Polling error", err);
       }
     }, 2000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      setPollData(null);
+    };
   }, [qrPaymentModal, API_SERVER_URL]);
 
   // Polling del intento de Stripe: cuando el webhook o la reconciliación
@@ -2875,17 +2867,7 @@ export default function PosPage() {
                 />
             </div>
 
-            <div className="text-center w-full max-w-sm">
-              <p className="text-sm text-gray-400">
-                Tiempo restante: <span className="text-white">{Math.max(0, Math.floor((qrPaymentModal.expiresAt.getTime() - Date.now()) / 1000))}</span>s
-              </p>
-              <div className="w-full h-1 bg-white/10 rounded-full mt-2 overflow-hidden">
-                <div 
-                  className="h-full bg-purple-500 rounded-full transition-all duration-1000 ease-linear" 
-                  style={{ width: `${Math.max(0, (qrPaymentModal.expiresAt.getTime() - Date.now()) / (5 * 60 * 1000) * 100)}%` }} 
-                />
-              </div>
-            </div>
+            <PosQrCountdown expiresAt={qrPaymentModal.expiresAt} />
 
             {/* ── (El modal de Rabbitty Pay/Stripe vive ahora en su propio Dialog, fuera de este) ── */}
             <div className="flex gap-4 w-full">
@@ -2934,6 +2916,7 @@ export default function PosPage() {
                 <div className="bg-white p-4 rounded-2xl shadow-[0_0_40px_rgba(6,182,212,0.35)] border-4 border-cyan-500 relative">
                   <QRDiscovery
                     value={stripePayModal.payUrl}
+                    logoSrc="/Ra.png"
                     variant="rabbitter"
                     size={250}
                     revealMode="immediate"
@@ -3158,80 +3141,89 @@ export default function PosPage() {
             <Button
               variant="secondary"
               onClick={() => refetchActiveTabs()}
-              className="py-1 px-2.5 text-xs font-bold"
+              className="py-1 px-3 text-xs font-bold rounded-xl border border-white/10 hover:border-white/20 transition-all cursor-pointer"
             >
               Refrescar
             </Button>
           </div>
 
-          <div className="max-h-80 overflow-y-auto custom-scrollbar space-y-2">
+          <div className="max-h-96 overflow-y-auto custom-scrollbar space-y-2.5">
             {activeTabsData && activeTabsData.activeTabs.length > 0 ? (
               activeTabsData.activeTabs.map((tab) => (
                 <div
                   key={tab.orderId}
-                  className="flex items-center justify-between rounded-xl bg-white/5 border border-white/10 p-3 hover:bg-white/10 transition-all"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl bg-linear-to-r from-white/7 to-white/3 border border-white/10 p-3.5 hover:border-purple-500/30 hover:from-white/9 transition-all"
                 >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-black text-white text-sm">
-                        {tab.tableNumber ? `Mesa ${tab.tableNumber}` : tab.orderType}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-[11px] font-bold text-gray-400 bg-white/5 border border-white/10 px-2 py-0.5 rounded-lg">
+                        #{tab.orderId.slice(-4).toUpperCase()}
+                      </span>
+                      <span className="font-black text-white text-sm tracking-tight">
+                        {tab.tableNumber ? `Mesa ${tab.tableNumber}` : tab.orderType === "TO_GO" ? "Para Llevar" : tab.orderType}
                       </span>
                       {tab.tableLocation && (
-                        <span className="text-[10px] text-gray-400 bg-white/5 px-1.5 py-0.5 rounded">
+                        <span className="text-[10px] font-bold text-gray-300 bg-purple-500/20 border border-purple-500/30 px-2 py-0.5 rounded-full">
                           {tab.tableLocation}
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-gray-400 flex items-center gap-2">
+                    <div className="text-xs text-gray-300 flex items-center gap-2">
                       {tab.customer ? (
-                        <span className="text-pink-300 font-bold flex items-center gap-1">
-                          🐰 {tab.customer.name} {tab.customer.phone ? `(${tab.customer.phone})` : ""}
+                        <span className="text-pink-300 font-bold flex items-center gap-1.5 bg-pink-500/10 px-2 py-0.5 rounded-lg border border-pink-500/20">
+                          <span>🐰</span> {tab.customer.name} {tab.customer.phone ? <span className="text-gray-400 font-normal">({tab.customer.phone})</span> : ""}
                         </span>
                       ) : (
-                        <span className="text-gray-500 italic">Sin vincular</span>
+                        <span className="text-gray-500 italic text-[11px]">Sin vincular</span>
                       )}
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    <span className="font-black text-cyan-400 text-sm">
-                      ${tab.total.toFixed(2)}
-                    </span>
-                    {tab.status === "CASH_PAYMENT_REQUESTED" ? (
-                      <span
-                        className="flex items-center gap-1.5 py-1.5 px-3 rounded-xl bg-amber-500/15 text-amber-300 border border-amber-500/40 text-xs font-bold"
-                        title="El comensal solicitó pagar en efectivo: cobra en gaveta con tu PIN, no envíes link de pago digital."
-                      >
-                        💵 Solicitó efectivo
+                  <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/5">
+                    <div className="text-left sm:text-right">
+                      <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Total</div>
+                      <span className="font-mono font-black text-cyan-400 text-base">
+                        ${tab.total.toFixed(2)}
                       </span>
-                    ) : (
-                      <>
-                        <Button
-                          onClick={() => void chargeOpenTab(tab)}
-                          disabled={tabChargeMutation.isPending}
-                          className="py-1.5 px-3 text-xs font-bold bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40"
-                          title="Crea el cobro digital sobre esta cuenta abierta SIN duplicar la orden: el comensal paga en su móvil y esta pestaña se liquida sola"
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {tab.status === "CASH_PAYMENT_REQUESTED" ? (
+                        <span
+                          className="flex items-center gap-1.5 py-1.5 px-3 rounded-xl bg-amber-500/15 text-amber-300 border border-amber-500/40 text-xs font-bold"
+                          title="El comensal solicitó pagar en efectivo: cobra en gaveta con tu PIN, no envíes link de pago digital."
                         >
-                          <QrCode className="h-3 w-3 mr-1 text-cyan-400" />
-                          Cobrar
-                        </Button>
-                        <Button
-                          onClick={async () => {
-                            await sendBillMutation.mutateAsync({
-                              orderId: tab.orderId,
-                              customerId: tab.customer?.id || undefined,
-                              phone: tab.customer?.phone || undefined,
-                              customerName: tab.customer?.name || undefined,
-                            });
-                          }}
-                          disabled={sendBillMutation.isPending}
-                          className="py-1.5 px-3 text-xs font-bold bg-pink-500/20 hover:bg-pink-500/30 text-pink-300 border border-pink-500/40"
-                        >
-                          <Send className="h-3 w-3 mr-1 text-pink-400" />
-                          Enviar Cuenta
-                        </Button>
-                      </>
-                    )}
+                          💵 Solicitó efectivo
+                        </span>
+                      ) : (
+                        <>
+                          <Button
+                            onClick={() => void chargeOpenTab(tab)}
+                            disabled={tabChargeMutation.isPending}
+                            className="py-1.5 px-3.5 text-xs font-black bg-cyan-500 hover:bg-cyan-400 text-gray-950 shadow-md shadow-cyan-500/20 rounded-xl transition-all cursor-pointer active:scale-95"
+                            title="Crea el cobro digital sobre esta cuenta abierta SIN duplicar la orden: el comensal paga en su móvil y esta pestaña se liquida sola"
+                          >
+                            <QrCode className="h-3.5 w-3.5 mr-1 text-gray-950" />
+                            Cobrar
+                          </Button>
+                          <Button
+                            onClick={async () => {
+                              await sendBillMutation.mutateAsync({
+                                orderId: tab.orderId,
+                                customerId: tab.customer?.id || undefined,
+                                phone: tab.customer?.phone || undefined,
+                                customerName: tab.customer?.name || undefined,
+                              });
+                            }}
+                            disabled={sendBillMutation.isPending}
+                            className="py-1.5 px-3 text-xs font-bold bg-pink-500/15 hover:bg-pink-500/25 text-pink-300 border border-pink-500/30 rounded-xl transition-all cursor-pointer active:scale-95"
+                          >
+                            <Send className="h-3 w-3 mr-1 text-pink-400" />
+                            Enviar Cuenta
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))
@@ -3243,7 +3235,7 @@ export default function PosPage() {
           </div>
 
           <div className="flex justify-end pt-2 border-t border-white/5">
-            <Button variant="secondary" onClick={() => setActiveTabsModal(false)}>
+            <Button variant="secondary" onClick={() => setActiveTabsModal(false)} className="rounded-xl px-4 text-xs font-bold">
               Cerrar
             </Button>
           </div>
@@ -3529,29 +3521,35 @@ export default function PosPage() {
                 return (
                   <div
                     key={ord.id}
-                    className="flex items-center justify-between rounded-xl bg-white/5 border border-white/10 p-3.5 hover:bg-white/10 transition-all"
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl bg-linear-to-r from-white/7 to-white/3 border border-white/10 p-3.5 hover:border-pink-500/30 hover:from-white/9 transition-all"
                   >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-black text-pink-400 font-mono text-sm">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono font-black text-xs text-pink-300 bg-pink-500/15 border border-pink-500/30 px-2.5 py-1 rounded-lg tracking-wider shadow-sm">
                           {orderFolio}
                         </span>
-                        <span className="text-[10px] text-gray-400 bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
-                          {ord.orderType || "VENTA"}
+                        <span className="text-[10px] font-bold text-gray-300 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full">
+                          {ord.orderType === "TO_GO" ? "Para Llevar" : ord.orderType || "VENTA"}
                         </span>
-                        <span className="text-[11px] text-gray-400">
+                        <span className="text-[11px] font-medium text-gray-400">
                           {orderDate.toLocaleTimeString("es-MX", { timeZone: rest?.timezone || "America/Mexico_City", hour: "2-digit", minute: "2-digit" })}
                         </span>
                       </div>
-                      <div className="text-xs text-gray-300">
-                        {itemsCount} artículo(s) · <strong className="text-emerald-400 font-black">${Number(ord.total).toFixed(2)} MXN</strong>
+                      <div className="text-xs text-gray-300 flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-gray-400">{itemsCount} producto(s)</span>
+                        <span>·</span>
+                        <span className="font-mono font-black text-emerald-400 text-sm">
+                          ${Number(ord.total).toFixed(2)} {rest?.currency || "MXN"}
+                        </span>
                         {ord.customerName && (
-                          <span className="text-pink-300 ml-2 font-bold">· 🐰 {ord.customerName}</span>
+                          <span className="text-pink-300 font-bold bg-pink-500/10 border border-pink-500/20 px-2 py-0.5 rounded-lg flex items-center gap-1">
+                            🐰 {ord.customerName}
+                          </span>
                         )}
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-end gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/5">
                       <Button
                         onClick={() => {
                           const ticket = reconstructTicket();
@@ -3559,7 +3557,7 @@ export default function PosPage() {
                           setReceiptModal(true);
                           setRecentOrdersModal(false);
                         }}
-                        className="py-1.5 px-3 text-xs font-bold bg-white/10 hover:bg-white/20 text-white border border-white/15"
+                        className="py-1.5 px-3 text-xs font-bold bg-white/10 hover:bg-white/15 text-white border border-white/15 rounded-xl transition-all active:scale-95 cursor-pointer"
                       >
                         Ver Detalle
                       </Button>
@@ -3576,7 +3574,7 @@ export default function PosPage() {
                           })
                         }
                         disabled={printingKey !== null}
-                        className="py-1.5 px-3 text-xs font-black bg-cyan-500 hover:bg-cyan-400 text-gray-950 shadow-md active:scale-95 cursor-pointer flex items-center gap-1.5 disabled:opacity-70 disabled:cursor-wait"
+                        className="py-1.5 px-3.5 text-xs font-black bg-cyan-500 hover:bg-cyan-400 text-gray-950 shadow-md shadow-cyan-500/20 rounded-xl active:scale-95 cursor-pointer flex items-center gap-1.5 disabled:opacity-70 disabled:cursor-wait transition-all"
                       >
                         {printingKey === `reprint-${ord.id}` ? (
                           <>

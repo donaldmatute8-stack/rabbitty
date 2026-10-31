@@ -141,7 +141,13 @@ export default function InteractiveMap({
   const [mapReady, setMapReady] = useState(false);
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
-  const [selected, setSelected] = useState<MapBusiness | null>(null);
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const affiliateParam = searchParams?.get('affiliate');
+
+  const [selected, setSelected] = useState<MapBusiness | null>(() => {
+    if (!affiliateParam || !businesses || businesses.length === 0) return null;
+    return businesses.find(b => b.id === affiliateParam) || null;
+  });
   const [activeCategory, setActiveCategory] = useState<string>('Todos');
   const [activeMode, setActiveMode] = useState<string>('Todos');
   
@@ -155,6 +161,15 @@ export default function InteractiveMap({
   const [nativeMapActive, setNativeMapActive] = useState(false);
 
   const router = useRouter();
+
+  // Centrar el mapa al cargar si viene un afiliado específico en la URL
+  useEffect(() => {
+    if (!affiliateParam || businesses.length === 0) return;
+    const target = businesses.find(b => b.id === affiliateParam);
+    if (target && target.lat && target.lng && mapInst.current) {
+      mapInst.current.flyTo([Number(target.lat), Number(target.lng)], 16.5, { duration: 1.2 });
+    }
+  }, [affiliateParam, businesses]);
 
   // 1. Lifecycle para montaje/desmontaje de MapKit nativo en iOS
   useEffect(() => {
@@ -927,7 +942,16 @@ export default function InteractiveMap({
               </div>
 
               {/* Navigation CTA button */}
-              <div className="w-10 h-10 rounded-2xl bg-[#E91E63] text-white flex items-center justify-center shrink-0 shadow-lg shadow-pink-500/30 hover:scale-105 transition-transform">
+              <div 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  PlatformBridge.hapticFeedback('medium');
+                  const query = encodeURIComponent(`${selected.name || ''} ${selected.address || ''}`);
+                  window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
+                }}
+                title="Abrir en Google Maps"
+                className="w-10 h-10 rounded-2xl bg-[#E91E63] text-white flex items-center justify-center shrink-0 shadow-lg shadow-pink-500/30 hover:scale-105 active:scale-95 transition-transform cursor-pointer"
+              >
                 <Navigation size={18} className="rotate-45" />
               </div>
             </div>

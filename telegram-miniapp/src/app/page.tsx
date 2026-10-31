@@ -574,9 +574,9 @@ export default function FeedPage() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.96 }}
             transition={{ type: 'spring', damping: 24, stiffness: 280 }}
-            className="fixed left-4 right-4 z-[115] mx-auto max-w-md overflow-hidden rounded-[26px] border p-4 shadow-[0_20px_50px_rgba(0,0,0,0.65)]"
+            className="fixed left-4 right-4 z-[140] mx-auto max-w-md overflow-hidden rounded-[26px] border p-4 shadow-[0_20px_50px_rgba(0,0,0,0.65)]"
             style={{
-              bottom: 'calc(max(var(--safe-bottom, 0px), env(safe-area-inset-bottom, 0px)) + 88px)',
+              bottom: 'calc(max(var(--safe-bottom, 0px), env(safe-area-inset-bottom, 0px)) + 104px)',
               background: isDark
                 ? 'linear-gradient(145deg, rgba(24, 18, 32, 0.96) 0%, rgba(15, 13, 21, 0.98) 100%)'
                 : 'linear-gradient(145deg, rgba(255, 255, 255, 0.96) 0%, rgba(250, 245, 255, 0.98) 100%)',

@@ -122,6 +122,8 @@ function AffiliateProfileContent() {
   const [showInAppBrowser, setShowInAppBrowser] = useState(false);
   const [showMessageSelector, setShowMessageSelector] = useState(false);
   const [showMoodCheckIn, setShowMoodCheckIn] = useState(false);
+  const [checkingInPresence, setCheckingInPresence] = useState(false);
+  const [hasPresenceCheckedIn, setHasPresenceCheckedIn] = useState(false);
 
   // Header scroll & Bottom Nav visibility synchronization
   const [isScrolled, setIsScrolled] = useState(false);
@@ -410,7 +412,7 @@ function AffiliateProfileContent() {
         <div className="absolute inset-0 bg-linear-to-t from-[#0D0D15] via-transparent to-black/50" />
 
         {/* Floating Bunz Reward Badge */}
-        <div className="absolute bottom-10 right-5">
+        <div className="absolute bottom-10 right-5 flex items-center gap-2">
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -423,18 +425,63 @@ function AffiliateProfileContent() {
           </motion.div>
         </div>
 
-        {/* Table indicator badge if seated */}
-        {tableNumber && (
-          <div className="absolute bottom-10 left-5">
+        {/* Floating Check-in & Table indicator badges */}
+        <div className="absolute bottom-10 left-5 flex items-center gap-2">
+          {/* Botón Estoy Aquí / Check-in */}
+          <motion.button
+            initial={{ scale: 0.85, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', delay: 0.1 }}
+            type="button"
+            disabled={checkingInPresence || hasPresenceCheckedIn}
+            onClick={async () => {
+              if (checkingInPresence || hasPresenceCheckedIn) return;
+              setCheckingInPresence(true);
+              PlatformBridge.hapticFeedback('medium');
+              try {
+                const headers = await PlatformBridge.getAuthHeaders();
+                const res = await fetch('/api/location/confirm-presence', {
+                  method: 'POST',
+                  headers: { ...headers, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ businessId: affiliate.id }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (res.ok && data?.success !== false) {
+                  setHasPresenceCheckedIn(true);
+                  PlatformBridge.hapticFeedback('success');
+                  showToast(`📍 ¡Check-in en ${affiliate.name} confirmado! El comercio te ve en caja.`, 'success');
+                } else {
+                  PlatformBridge.hapticFeedback('error');
+                  showToast(data?.error || 'No se pudo registrar el check-in', 'error');
+                }
+              } catch {
+                PlatformBridge.hapticFeedback('error');
+                showToast('Error de conexión al registrar check-in', 'error');
+              } finally {
+                setCheckingInPresence(false);
+              }
+            }}
+            className={`px-3.5 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-black shadow-lg border backdrop-blur-md transition-all active:scale-95 cursor-pointer ${
+              hasPresenceCheckedIn
+                ? 'bg-emerald-500/90 text-white border-emerald-400/40 shadow-emerald-500/30'
+                : 'bg-black/60 hover:bg-black/80 text-white border-pink-500/40 hover:border-pink-500 shadow-pink-500/20'
+            }`}
+          >
+            <span className={`inline-block w-2 h-2 rounded-full ${hasPresenceCheckedIn ? 'bg-white' : 'bg-[#E91E63] animate-ping'}`} />
+            <span>{hasPresenceCheckedIn ? '✓ Estoy Aquí' : checkingInPresence ? 'Confirmando...' : 'Estoy Aquí'}</span>
+          </motion.button>
+
+          {/* Table indicator badge if seated */}
+          {tableNumber && (
             <button
               onClick={() => setShowTableSheet(true)}
-              className="bg-emerald-500/90 backdrop-blur-md text-white px-3.5 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-black shadow-lg border border-white/20 active:scale-95 transition-transform"
+              className="bg-purple-500/90 backdrop-blur-md text-white px-3.5 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-black shadow-lg border border-white/20 active:scale-95 transition-transform"
             >
               <Utensils size={14} />
               <span>Mesa #{tableNumber}</span>
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Content Container (Card Overlap) */}
@@ -459,7 +506,11 @@ function AffiliateProfileContent() {
         <div className="flex items-center justify-around py-2 px-1 bg-white/[0.03] border border-white/8 rounded-2xl backdrop-blur-md">
           <motion.button
             whileTap={{ scale: 0.92 }}
-            onClick={() => setShowMapSelector(true)}
+            onClick={() => {
+              PlatformBridge.hapticFeedback('medium');
+              // 1era opción por defecto: abrir automáticamente el mapa Freehands con el afiliado
+              router.push(`/?tab=Freehands&affiliate=${affiliate.id}`);
+            }}
             className="flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-colors hover:bg-white/5 active:opacity-80 border-none bg-transparent cursor-pointer"
           >
             <div className="w-9 h-9 rounded-full bg-[#E91E63]/12 text-[#E91E63] border border-[#E91E63]/25 flex items-center justify-center">
