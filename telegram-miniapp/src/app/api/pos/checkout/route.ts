@@ -18,22 +18,34 @@ export async function POST(req: Request) {
     const { tableId, items, paymentMethod, tip = 0, existingOrderId, splitPaymentAmount } = body;
 
     // Si pasaron existingOrderId, es un Split Bill.
-    // Si no, es una orden nueva.
-    if (!existingOrderId && (!tableId || !items || items.length === 0)) {
-      return NextResponse.json({ success: false, error: 'Datos inválidos' }, { status: 400 });
-    }
-
+    // Si no, es una orden nueva. La mesa es opcional si hay usuario
+    // autenticado: puede pedir "producto solo" y el POS le asigna mesa.
     // Autenticación best-effort: el comensal de la app envía headers; los
     // códigos QR externos (sin sesión) siguen funcionando como anónimos.
     const caller = await getAuthenticatedUser(req).catch(() => null);
+    if (!existingOrderId && (!items || items.length === 0)) {
+      return NextResponse.json({ success: false, error: 'Datos inválidos' }, { status: 400 });
+    }
+    if (!existingOrderId && !tableId && !caller) {
+      return NextResponse.json({ success: false, error: 'Datos inválidos' }, { status: 400 });
+    }
 
     let targetOrderId = existingOrderId;
     let totalToPay = splitPaymentAmount;
     const totalTip = Number(tip) || 0;
 
     if (!existingOrderId) {
-      const [table] = await restaurantDb.select().from(tables).where(eq(tables.id, tableId));
-      if (!table) return NextResponse.json({ success: false, error: 'Mesa no válida' }, { status: 404 });
+      // Mesa opcional: si no hay tableId, la order se crea "sin mesa"
+      // (branchId viene del perfil afiliado; el POS la vincula después).
+      let table: typeof tables.$inferSelect | undefined | null = null;
+      if (tableId) {
+        [table] = await restaurantDb.select().from(tables).where(eq(tables.id, tableId));
+        if (!table) return NextResponse.json({ success: false, error: 'Mesa no válida' }, { status: 404 });
+      }
+      const orderBranchId = table?.branchId || body.branchId || null;
+      if (!orderBranchId) {
+        return NextResponse.json({ success: false, error: 'Mesa no válida' }, { status: 404 });
+      }
 
       interface OrderItemInput {
         id: string;
@@ -135,14 +147,14 @@ export async function POST(req: Request) {
       } else {
       // 1. Guardar la orden en la BD con estado PENDING
       const [newOrder] = await restaurantDb.insert(orders).values({
-        branchId: table.branchId,
-        tableId,
+        branchId: orderBranchId,
+        tableId: tableId || null,
         subtotal: r2(grandTotal / (1 + TAX_RATE)),
         tax: r2(grandTotal - grandTotal / (1 + TAX_RATE)),
         tip: totalTip,
         total: r2(grandTotal + totalTip),
         status: paymentMethod === 'BUNZ' ? 'PAID' : 'PENDING',
-        orderType: 'DINE_IN'
+        orderType: tableId ? 'DINE_IN' : 'TAKEAWAY'
       }).returning();
 
       // Fase C: identificar al comensal en la orden (para POS/cuenta/cashback)
@@ -174,7 +186,8 @@ export async function POST(req: Request) {
         }
         
         // Buscar el dueño o branch para emitir la alerta
-        const [branch] = await restaurantDb.select().from(branches).where(eq(branches.id, table.branchId));
+        const branchRowId = table?.branchId || orderBranchId;
+        const [branch] = branchRowId ? await restaurantDb.select().from(branches).where(eq(branches.id, branchRowId)) : [];
         if (branch) {
           const [rest] = await restaurantDb.select().from(restaurants).where(eq(restaurants.id, branch.restaurantId));
           if (rest && rest.businessId) {
@@ -182,7 +195,7 @@ export async function POST(req: Request) {
             if (biz?.ownerId) {
               await sendEcosystemNotification({
                 userId: biz.ownerId,
-                title: `🍽️ Nueva Comanda - Mesa #${table.number}`,
+                title: table ? `🍽️ Nueva Comanda - Mesa #${table.number}` : '🛍️ Nueva Comanda — Para Llevar',
                 message: `${customerName} ordenó ${typedItems.length} platillo(s) ($${grandTotal} MXN).`,
                 type: 'SYSTEM',
                 route: '/business-dashboard',
@@ -222,7 +235,7 @@ export async function POST(req: Request) {
       const starsAmount = Math.ceil(totalToPay); 
       
       const payload = {
-        title: `Pago Mesa ${tableId.slice(0,4)}`,
+        title: `Pago ${tableId ? `Mesa ${tableId.slice(0, 4)}` : 'Pedido'}`,
         description: `Pago de consumo en restaurante ${totalTip > 0 ? '(con propina)' : ''}`,
         payload: `order_${targetOrderId}_amount_${totalToPay}_tip_${totalTip}`, // Webhook can parse this
         provider_token: "",

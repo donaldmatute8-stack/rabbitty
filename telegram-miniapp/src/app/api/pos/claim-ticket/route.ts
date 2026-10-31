@@ -61,6 +61,41 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "La orden aún no ha sido cobrada y confirmada en caja." }, { status: 400 });
     }
 
+    // Vista del ticket digital: si el ticket ya fue acreditado (p. ej. pago
+    // Rabbitty Pay con cashback automático), el escaneo debe MOSTRAR el ticket
+    // en pantalla (compartir/imprimir), no solo marcarlo como ya reclamado.
+    async function buildTicketView() {
+      const ticket: {
+        orderId: string;
+        orderNumber: string;
+        total: number;
+        createdAt: string | null;
+        bunzAwarded: number;
+        restaurantName: string | null;
+      } = {
+        orderId: order.id,
+        orderNumber: order.id.slice(-4).toUpperCase(),
+        total: Number(order.total || 0),
+        createdAt: order.createdAt ? new Date(order.createdAt).toISOString() : null,
+        bunzAwarded: Number(order.bunzReward || 0),
+        restaurantName: null,
+      };
+      const [br] = await restaurantDb
+        .select({ restaurantId: branches.restaurantId })
+        .from(branches)
+        .where(eq(branches.id, order.branchId))
+        .limit(1);
+      if (br) {
+        const [rest] = await restaurantDb
+          .select({ name: restaurants.name })
+          .from(restaurants)
+          .where(eq(restaurants.id, br.restaurantId))
+          .limit(1);
+        ticket.restaurantName = rest?.name ?? null;
+      }
+      return ticket;
+    }
+
     // 3. Validar firma criptográfica HMAC
     const secret = process.env.RABBITTY_API_SECRET;
     if (!secret) {
@@ -81,6 +116,7 @@ export async function POST(req: NextRequest) {
         success: false,
         error: "Este ticket ya fue acreditado previamente al Rabbitter de la compra.",
         alreadyClaimed: true,
+        ticket: await buildTicketView(),
       }, { status: 400 });
     }
 
@@ -94,6 +130,7 @@ export async function POST(req: NextRequest) {
         success: false,
         error: "Este ticket ya fue acreditado previamente (vía QR del bot).",
         alreadyClaimed: true,
+        ticket: await buildTicketView(),
       }, { status: 400 });
     }
 
@@ -105,6 +142,7 @@ export async function POST(req: NextRequest) {
         success: false,
         error: "La recompensa de este ticket ya fue procesada.",
         alreadyClaimed: true,
+        ticket: await buildTicketView(),
       }, { status: 400 });
     }
 
@@ -356,6 +394,7 @@ export async function POST(req: NextRequest) {
           success: false,
           error: "Este ticket ya fue acreditado previamente.",
           alreadyClaimed: true,
+          ticket: await buildTicketView(),
         }, { status: 400 });
       }
       throw txErr;

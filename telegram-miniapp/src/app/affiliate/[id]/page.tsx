@@ -260,7 +260,11 @@ function AffiliateProfileContent() {
     PlatformBridge.hapticFeedback('heavy');
 
     const payload = {
-      tableId: tableId || (tables.length > 0 ? tables[0].id : null),
+      // Sin mesa elegida el pedido puede salir "producto solo" — el POS la
+      // vincula a mesa después si procede. branchId permite crear la orden
+      // cuando no hay mesa (el id del perfil afiliado ES la branch).
+      tableId: tableId || null,
+      branchId: affiliate?.id || null,
       items: cart.map(item => ({
         id: item.menuItemId,
         price: item.price,
@@ -411,76 +415,77 @@ function AffiliateProfileContent() {
         />
         <div className="absolute inset-0 bg-linear-to-t from-[#0D0D15] via-transparent to-black/50" />
 
-        {/* Floating Bunz Reward Badge */}
-        <div className="absolute bottom-10 right-5 flex items-center gap-2">
+        {/* Floating Top Badges (Bunz Reward + Check-in + Mesa) */}
+        <div className="absolute bottom-6 left-5 right-5 flex items-center justify-between gap-2 pointer-events-auto">
+          {/* Left Badges: Check-in & Table */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Botón Estoy Aquí / Check-in */}
+            <motion.button
+              initial={{ scale: 0.85, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', delay: 0.1 }}
+              type="button"
+              disabled={checkingInPresence || hasPresenceCheckedIn}
+              onClick={async () => {
+                if (checkingInPresence || hasPresenceCheckedIn) return;
+                setCheckingInPresence(true);
+                PlatformBridge.hapticFeedback('medium');
+                try {
+                  const headers = await PlatformBridge.getAuthHeaders();
+                  const res = await fetch('/api/location/confirm-presence', {
+                    method: 'POST',
+                    headers: { ...headers, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ businessId: affiliate.id }),
+                  });
+                  const data = await res.json().catch(() => ({}));
+                  if (res.ok && data?.success !== false) {
+                    setHasPresenceCheckedIn(true);
+                    PlatformBridge.hapticFeedback('success');
+                    showToast(`📍 ¡Check-in en ${affiliate.name} confirmado! El comercio te ve en caja.`, 'success');
+                  } else {
+                    PlatformBridge.hapticFeedback('error');
+                    showToast(data?.error || 'No se pudo registrar el check-in', 'error');
+                  }
+                } catch {
+                  PlatformBridge.hapticFeedback('error');
+                  showToast('Error de conexión al registrar check-in', 'error');
+                } finally {
+                  setCheckingInPresence(false);
+                }
+              }}
+              className={`h-9 px-3.5 rounded-full flex items-center gap-2 text-xs font-black shadow-lg border backdrop-blur-xl transition-all active:scale-95 cursor-pointer ${
+                hasPresenceCheckedIn
+                  ? 'bg-emerald-500/90 text-white border-emerald-400/40 shadow-[0_4px_16px_rgba(16,185,129,0.35)]'
+                  : 'bg-black/65 hover:bg-black/85 text-white border-white/20 hover:border-pink-500/60 shadow-[0_4px_16px_rgba(0,0,0,0.5)]'
+              }`}
+            >
+              <span className={`inline-block w-2 h-2 rounded-full ${hasPresenceCheckedIn ? 'bg-white' : 'bg-[#E91E63] animate-ping'}`} />
+              <span>{hasPresenceCheckedIn ? '✓ Estoy Aquí' : checkingInPresence ? 'Activando...' : 'Estoy Aquí'}</span>
+            </motion.button>
+
+            {/* Table indicator badge if seated */}
+            {tableNumber && (
+              <button
+                onClick={() => setShowTableSheet(true)}
+                className="h-9 px-3.5 bg-gradient-to-r from-purple-600/90 to-indigo-600/90 backdrop-blur-xl text-white rounded-full flex items-center gap-1.5 text-xs font-black shadow-[0_4px_16px_rgba(147,51,234,0.35)] border border-purple-400/40 active:scale-95 transition-transform cursor-pointer"
+              >
+                <Utensils size={13} className="text-purple-200" />
+                <span>Mesa #{tableNumber}</span>
+              </button>
+            )}
+          </div>
+
+          {/* Right Badge: Bunz Reward */}
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ type: 'spring', delay: 0.15 }}
-            className="bg-linear-to-r from-[#E91E63] to-[#AD1457] text-white px-4 py-2 rounded-full flex items-center gap-2 shadow-xl shadow-[#E91E63]/30 border-2 border-white/20"
+            className="h-9 bg-linear-to-r from-[#E91E63] to-[#AD1457] text-white px-3.5 rounded-full flex items-center gap-1.5 shadow-[0_4px_16px_rgba(233,30,99,0.35)] border border-white/25 shrink-0"
           >
-            <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
-            <span className="font-black text-lg">+{affiliate.rewardPercentage}%</span>
-            <span className="font-bold text-xs opacity-90">BUNZ</span>
+            <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+            <span className="font-black text-sm">+{affiliate.rewardPercentage}%</span>
+            <span className="font-bold text-[10px] opacity-90 tracking-wide">BUNZ</span>
           </motion.div>
-        </div>
-
-        {/* Floating Check-in & Table indicator badges */}
-        <div className="absolute bottom-10 left-5 flex items-center gap-2">
-          {/* Botón Estoy Aquí / Check-in */}
-          <motion.button
-            initial={{ scale: 0.85, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ type: 'spring', delay: 0.1 }}
-            type="button"
-            disabled={checkingInPresence || hasPresenceCheckedIn}
-            onClick={async () => {
-              if (checkingInPresence || hasPresenceCheckedIn) return;
-              setCheckingInPresence(true);
-              PlatformBridge.hapticFeedback('medium');
-              try {
-                const headers = await PlatformBridge.getAuthHeaders();
-                const res = await fetch('/api/location/confirm-presence', {
-                  method: 'POST',
-                  headers: { ...headers, 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ businessId: affiliate.id }),
-                });
-                const data = await res.json().catch(() => ({}));
-                if (res.ok && data?.success !== false) {
-                  setHasPresenceCheckedIn(true);
-                  PlatformBridge.hapticFeedback('success');
-                  showToast(`📍 ¡Check-in en ${affiliate.name} confirmado! El comercio te ve en caja.`, 'success');
-                } else {
-                  PlatformBridge.hapticFeedback('error');
-                  showToast(data?.error || 'No se pudo registrar el check-in', 'error');
-                }
-              } catch {
-                PlatformBridge.hapticFeedback('error');
-                showToast('Error de conexión al registrar check-in', 'error');
-              } finally {
-                setCheckingInPresence(false);
-              }
-            }}
-            className={`px-3.5 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-black shadow-lg border backdrop-blur-md transition-all active:scale-95 cursor-pointer ${
-              hasPresenceCheckedIn
-                ? 'bg-emerald-500/90 text-white border-emerald-400/40 shadow-emerald-500/30'
-                : 'bg-black/60 hover:bg-black/80 text-white border-pink-500/40 hover:border-pink-500 shadow-pink-500/20'
-            }`}
-          >
-            <span className={`inline-block w-2 h-2 rounded-full ${hasPresenceCheckedIn ? 'bg-white' : 'bg-[#E91E63] animate-ping'}`} />
-            <span>{hasPresenceCheckedIn ? '✓ Estoy Aquí' : checkingInPresence ? 'Confirmando...' : 'Estoy Aquí'}</span>
-          </motion.button>
-
-          {/* Table indicator badge if seated */}
-          {tableNumber && (
-            <button
-              onClick={() => setShowTableSheet(true)}
-              className="bg-purple-500/90 backdrop-blur-md text-white px-3.5 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-black shadow-lg border border-white/20 active:scale-95 transition-transform"
-            >
-              <Utensils size={14} />
-              <span>Mesa #{tableNumber}</span>
-            </button>
-          )}
         </div>
       </div>
 
@@ -597,22 +602,6 @@ function AffiliateProfileContent() {
         {/* Tab 1: Menú y Catálogo Estructurado */}
         {activeTab === 'menu' && (
           <div className="space-y-6">
-            {/* Table context banner if seated */}
-            {tableNumber && (
-              <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/25 rounded-2xl flex items-center justify-between text-xs text-emerald-400">
-                <div className="flex items-center gap-2 font-bold">
-                  <Utensils size={16} />
-                  <span>Estás ordenando en la Mesa #{tableNumber}</span>
-                </div>
-                <button
-                  onClick={() => setShowTableSheet(true)}
-                  className="text-[11px] underline font-extrabold text-emerald-300"
-                >
-                  Cambiar
-                </button>
-              </div>
-            )}
-
             <DigitalMenuCatalog
               categories={categories}
               currency="MXN"

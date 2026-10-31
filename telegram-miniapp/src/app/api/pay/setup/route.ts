@@ -9,15 +9,20 @@ export const runtime = 'nodejs';
 
 const ADMIN_TRPC = process.env.NEXT_PUBLIC_ADMIN_API_URL || 'https://admin.rabbitty.me/api/trpc';
 
-// tRPC HTTP batch: input via URL, respuesta [{ result: { data } }] o [{ error }]
+// tRPC HTTP batch MUTATION: input en el CUERPO ({"0": {...}}), URL solo batch=1.
+// Respuesta [{ result: { data } }] o [{ error: { json: { message } } }]
 async function callAdmin(procedure: string, input: unknown): Promise<any> {
-  const inputStr = encodeURIComponent(JSON.stringify({ '0': input }));
-  const url = `${ADMIN_TRPC}/${procedure}?batch=1&input=${inputStr}`;
-  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  const url = `${ADMIN_TRPC}/${procedure}?batch=1`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ '0': input }),
+  });
   const json = await res.json().catch(() => null);
   const first = Array.isArray(json) ? json[0] : json;
-  if (!first || first.error) {
-    throw new Error(first?.error?.message || `Error llamando a ${procedure} (${res.status})`);
+  const errMsg = first?.error?.message ?? first?.error?.json?.message;
+  if (!first || first.error || errMsg) {
+    throw new Error(errMsg || `Error llamando a ${procedure} (${res.status})`);
   }
   return first.result?.data;
 }

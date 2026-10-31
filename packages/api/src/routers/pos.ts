@@ -1595,7 +1595,30 @@ export const posRouter = router({
       ))
       .orderBy(desc(orders.createdAt));
 
-    // 4. Si hay órdenes con customerId, buscar datos de usuario en coreDb
+    // 4. Productos de las órdenes pendientes — la comanda del Rabbitter
+    // (pedida desde la app) debe verse completa en el POS con lo que pidió.
+    const orderIds = pendingOrders.map((o) => o.id);
+    const itemsByOrder = new Map<string, { name: string; quantity: number; unitPrice: number; notes: string | null }[]>();
+    if (orderIds.length > 0) {
+      const itemRows = await ctx.restaurantDb
+        .select({
+          orderId: orderItems.orderId,
+          name: menuItems.name,
+          quantity: orderItems.quantity,
+          unitPrice: orderItems.unitPrice,
+          notes: orderItems.notes,
+        })
+        .from(orderItems)
+        .leftJoin(menuItems, eq(orderItems.menuItemId, menuItems.id))
+        .where(and(inArray(orderItems.orderId, orderIds), sql`${orderItems.voidedAt} IS NULL`));
+      for (const row of itemRows) {
+        const list = itemsByOrder.get(row.orderId) ?? [];
+        list.push({ name: row.name ?? "Producto", quantity: row.quantity, unitPrice: Number(row.unitPrice), notes: row.notes });
+        itemsByOrder.set(row.orderId, list);
+      }
+    }
+
+    // 5. Si hay órdenes con customerId, buscar datos de usuario en coreDb
     const customerIds = Array.from(new Set(
       pendingOrders
         .map((o) => o.customerId)
@@ -1626,7 +1649,7 @@ export const posRouter = router({
       }
     }
 
-    // 5. Ensamblar lista de Tabs activos vinculando mesa, orden y cliente
+    // 6. Ensamblar lista de Tabs activos vinculando mesa, orden y cliente
     const activeTabs = pendingOrders.map((ord) => {
       const table = allTables.find((t) => t.id === ord.tableId);
       const session = openSessions.find((s) => s.tableId === ord.tableId);
@@ -1643,6 +1666,7 @@ export const posRouter = router({
         cashRequested: ord.status === "CASH_PAYMENT_REQUESTED",
         total: Number(ord.total || 0),
         createdAt: ord.createdAt,
+        items: itemsByOrder.get(ord.id) ?? [],
         customer: user
           ? {
               id: user.id,
@@ -1727,6 +1751,8 @@ export const posRouter = router({
       const targetUserId = input.customerId || order.customerId;
 
       // 4. Si el cliente tiene cuenta de usuario (UUID), enviar Push Notification
+      // CON route: al tocarla abre la página de pago in-app (/pay/[orderId])
+      // donde puede pagar con tarjeta, Apple Pay (web) o pedir cuenta en caja.
       if (targetUserId) {
         try {
           await miniappClient.sendNotification({
@@ -1734,6 +1760,7 @@ export const posRouter = router({
             title: `🧾 Cuenta lista en ${businessName} (${totalFormatted})`,
             message: `Tu cuenta de ${totalFormatted} está lista. Toca aquí para ver el detalle y pagar con Apple Pay, Tarjeta o Bunz.`,
             type: "AFFILIATE",
+            route: `/pay/${order.id}`,
           });
           pushSent = true;
         } catch (pushErr) {

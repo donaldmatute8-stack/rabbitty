@@ -48,13 +48,6 @@ function InAppPaymentForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const verifyMutation = React.useMemo(() => {
-    // Se declara aquí para tener acceso al trpc del provider local —pero la
-    // verificación es proxy puro (/api/pay/verify), así que fetch directo.
-    return null;
-  }, []);
-  void verifyMutation;
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!stripe || !elements) return;
@@ -161,6 +154,9 @@ export function InAppPaySheet({
   const [loadingSetup, setLoadingSetup] = useState(false);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [publishableKey, setPublishableKey] = useState<string | null>(null);
+  // Id REAL del payment intent (payment_intents.id) — NO es el orderId.
+  // verifyStripePaymentIntent busca por este id en la tabla.
+  const [intentId, setIntentId] = useState<string | null>(null);
   const [amountTotal, setAmountTotal] = useState<number>(total);
   const [setupError, setSetupError] = useState<string | null>(null);
   // Total base leído del server cuando el caller no lo conoce (total = 0)
@@ -171,6 +167,7 @@ export function InAppPaySheet({
       setStep('tip');
       setClientSecret(null);
       setPublishableKey(null);
+      setIntentId(null);
       setSetupError(null);
       setAmountTotal(total);
       setAmountTotalExtra(null);
@@ -179,14 +176,22 @@ export function InAppPaySheet({
 
   // Si no llega el total por props (p. ej. escaneo del QR digital), lo leemos
   // del proxy GET /api/pay/setup?orderId=… — la pantalla de propina necesita
-  // el total base real ANTES de continuar.
+  // el total base real ANTES de continuar. Con headers de auth: sin ellos la
+  // API responde 401 y baseTotal queda 0 (propina y total falsos en 0).
   useEffect(() => {
     if (!isOpen || !orderId || total > 0) return;
     let alive = true;
-    fetch(`/api/pay/setup?orderId=${encodeURIComponent(orderId)}`, { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((d) => { if (alive && d?.success) setAmountTotalExtra(Number(d.total ?? 0)); })
-      .catch(() => {});
+    (async () => {
+      try {
+        const headers = await PlatformBridge.getAuthHeaders();
+        const r = await fetch(`/api/pay/setup?orderId=${encodeURIComponent(orderId)}`, {
+          cache: 'no-store',
+          headers: headers || {},
+        });
+        const d = await r.json().catch(() => null);
+        if (alive && d?.success) setAmountTotalExtra(Number(d.total ?? 0));
+      } catch { /* total informativo: si falla, seguimos con 0 y el server manda el real */ }
+    })();
     return () => { alive = false; };
   }, [isOpen, orderId, total]);
 
@@ -205,6 +210,7 @@ export function InAppPaySheet({
       if (!data?.success) throw new Error(data?.error || 'No se pudo iniciar el pago');
       setClientSecret(data.clientSecret);
       setPublishableKey(data.publishableKey || null);
+      setIntentId(data.intentId || null);
       setAmountTotal(Number(data.amountTotal ?? total + (total * tipPercent) / 100));
       setStep('pay');
     } catch (err: any) {
@@ -303,7 +309,7 @@ export function InAppPaySheet({
               stripePromise ? (
                 <Elements stripe={stripePromise} options={{ clientSecret, appearance: APPEARANCE }}>
                   <InAppPaymentForm
-                    intentId={orderId || ''}
+                    intentId={intentId || ''}
                     amountHint={amountTotal}
                     onDone={() => { setStep('done'); onPaid?.(amountTotal); }}
                   />

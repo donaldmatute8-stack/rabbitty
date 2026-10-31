@@ -206,10 +206,12 @@ export const miniappClient = {
 
   async sendNotification(data: {
     userId: string; title: string; message: string; type?: string;
+    /** Ruta in-app que el comensal abre al tocar la notificación (p. ej. /pay/[orderId]) */
+    route?: string;
   }): Promise<NotificationResult> {
     return fetchApi("/api/notifications", {
       method: "POST",
-      body: JSON.stringify(data),
+      body: JSON.stringify({ ...data, ...(data.route ? { route: data.route } : {}) }),
     });
   },
 

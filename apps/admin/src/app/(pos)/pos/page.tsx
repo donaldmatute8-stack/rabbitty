@@ -117,6 +117,7 @@ export default function PosPage() {
   const linkPostCheckout = trpc.pos.linkCustomerToOrder.useMutation();
   const stripeChargeMutation = trpc.pos.createStripeChargeIntent.useMutation();
   const cancelStripeIntent = trpc.payments.cancelPaymentIntent.useMutation();
+  const requestCashPaymentMut = trpc.payments.requestCashPayment.useMutation();
   const stripeIntentId = useRef<string | null>(null);
   const [stripePayModal, setStripePayModal] = useState<{ payUrl: string; amount: number; orderId: string; expiresAt: Date; bunzApplied: number } | null>(null);
   const [stripePaid, setStripePaid] = useState(false);
@@ -1576,9 +1577,9 @@ export default function PosPage() {
                 type="button"
                 onClick={() => {
                   setOrderType("DINE_IN");
-                  if (!selectedTableId && tables && tables.length > 0) {
-                    setSelectedTableId(tables[0].id);
-                  }
+                  // Elegir MESA exige elegir CUÁL mesa: abrimos el picker de
+                  // mesas (mostrador / mesa N / llevar) en vez de auto-pick.
+                  setTableModal(true);
                 }}
                 className={cn(
                   "flex items-center justify-center gap-1 h-7 rounded-md text-[11px] font-black transition-all cursor-pointer",
@@ -2810,6 +2811,9 @@ export default function PosPage() {
                         `🔖 Folio: #${paidTicketData.orderNumber}\n\n` +
                         `*Artículos:*\n${itemsSummary}\n\n` +
                         `*Total:* $${paidTicketData.total.toFixed(2)} ${paidTicketData.currency}\n\n` +
+                        (paidTicketData.claimToken
+                          ? `🧾 Ticket digital (ábrelo para verlo, reclamar tus Bunz o compartirlo):\nhttps://app.rabbitty.me/scan?claimToken=${paidTicketData.claimToken}\n\n`
+                          : "") +
                         `¡Gracias por tu preferencia! 🐰`;
                       window.open(`https://wa.me/52${waPhone}?text=${encodeURIComponent(message)}`, "_blank");
                     } else {
@@ -2937,6 +2941,27 @@ export default function PosPage() {
                     }}
                     className="text-[11px] font-bold text-gray-500 hover:text-red-400 mt-1 cursor-pointer"
                   >Cancelar cobro</button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (stripeIntentId.current) {
+                        await cancelStripeIntent.mutateAsync({ intentId: stripeIntentId.current, reason: "SWITCH_TO_CASH" }).catch(() => {});
+                      }
+                      if (!stripePayModal) return;
+                      try {
+                        await requestCashPaymentMut.mutateAsync({
+                          orderId: stripePayModal.orderId,
+                          notes: "Cambio de método: cobro digital → efectivo en caja",
+                        });
+                        toast.success("💵 Cuenta marcada para pago en efectivo — cobra en caja con tu PIN");
+                      } catch (e: any) {
+                        toast.error(String(e?.message || "").slice(0, 140) || "No se pudo marcar el cobro en efectivo");
+                      }
+                      setStripePayModal(null);
+                    }}
+                    disabled={requestCashPaymentMut.isPending}
+                    className="text-[11px] font-bold text-gray-300 hover:text-amber-400 mt-1 cursor-pointer disabled:opacity-50"
+                  >💵 Cambiar a cobro en efectivo</button>
                 </div>
               </>
             )}
@@ -3177,6 +3202,21 @@ export default function PosPage() {
                         <span className="text-gray-500 italic text-[11px]">Sin vincular</span>
                       )}
                     </div>
+                    {/* Comanda: productos pedidos desde la app por el Rabbitter */}
+                    {tab.items && tab.items.length > 0 && (
+                      <div className="flex flex-wrap gap-1 pt-0.5">
+                        {tab.items.map((it, idx) => (
+                          <span
+                            key={idx}
+                            title={it.notes || undefined}
+                            className="text-[10px] text-gray-200 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-md"
+                          >
+                            <span className="font-black text-cyan-300">{it.quantity}×</span> {it.name}
+                            {it.notes && <span className="text-amber-300"> · {it.notes}</span>}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/5">

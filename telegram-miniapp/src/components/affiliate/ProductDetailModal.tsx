@@ -192,23 +192,23 @@ export function ProductDetailModal({
           </div>
 
           {/* Bottom Action Footer */}
-          <div className="p-5 border-t border-white/10 bg-[#161622] flex items-center gap-4">
+          <div className="p-4 sm:p-5 border-t border-white/10 bg-[#161622] flex items-center gap-3">
             {/* Quantity Stepper */}
-            <div className="flex items-center bg-white/10 rounded-2xl p-1 border border-white/10 shrink-0">
+            <div className="flex items-center bg-white/10 rounded-2xl p-1 border border-white/10 shrink-0 h-12">
               <button
                 type="button"
                 onClick={() => setQuantity(q => Math.max(1, q - 1))}
                 disabled={quantity <= 1}
-                className="w-9 h-9 rounded-xl flex items-center justify-center text-white/80 hover:text-white disabled:opacity-30 active:scale-90 transition-transform"
+                className="w-10 h-10 rounded-xl flex items-center justify-center text-white/80 hover:text-white disabled:opacity-30 active:scale-90 transition-transform cursor-pointer"
                 aria-label="Restar uno"
               >
                 <Minus size={16} />
               </button>
-              <span className="w-8 text-center text-sm font-black text-white">{quantity}</span>
+              <span className="w-8 text-center text-sm font-black text-white font-mono">{quantity}</span>
               <button
                 type="button"
                 onClick={() => setQuantity(q => q + 1)}
-                className="w-9 h-9 rounded-xl flex items-center justify-center text-white/80 hover:text-white active:scale-90 transition-transform"
+                className="w-10 h-10 rounded-xl flex items-center justify-center text-white/80 hover:text-white active:scale-90 transition-transform cursor-pointer"
                 aria-label="Sumar uno"
               >
                 <Plus size={16} />
@@ -224,10 +224,10 @@ export function ProductDetailModal({
                 }
                 onClose();
               }}
-              className="flex-1 bg-linear-to-r from-[#E91E63] to-[#FF4081] text-white py-3.5 px-4 rounded-2xl font-black text-sm tracking-wide shadow-lg shadow-[#E91E63]/30 active:scale-98 transition-transform flex items-center justify-between"
+              className="flex-1 h-12 bg-linear-to-r from-[#E91E63] to-[#FF4081] text-white px-4 rounded-2xl font-black text-sm tracking-wide shadow-lg shadow-[#E91E63]/30 active:scale-98 transition-all flex items-center justify-between cursor-pointer"
             >
-              <span>{onAddToCart ? 'Agregar al pedido' : 'Listo'}</span>
-              <span className="font-extrabold text-base">
+              <span className="truncate">{onAddToCart ? 'Agregar al pedido' : 'Listo'}</span>
+              <span className="font-extrabold text-sm sm:text-base font-mono shrink-0 ml-2">
                 ${totalPrice.toFixed(0)} {currency}
               </span>
             </button>

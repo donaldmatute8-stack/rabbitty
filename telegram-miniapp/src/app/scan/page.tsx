@@ -71,6 +71,13 @@ export default function ScanPage() {
   const [inAppPayOrderId, setInAppPayOrderId] = useState<string | null>(null);
   const [scanLoader, setScanLoader] = useState<string | null>(null);
   const [scanLoaderCode, setScanLoaderCode] = useState<string | null>(null);
+
+  // Ticket digital ya acreditado → se muestra en pantalla (compartir/imprimir)
+  // en vez de un error de "ya reclamado".
+  const [claimedTicket, setClaimedTicket] = useState<{
+    orderId: string; orderNumber: string; total: number;
+    createdAt: string | null; bunzAwarded: number; restaurantName: string | null;
+  } | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isTransitioningRef = useRef(false);
   const startScanningRef = useRef<() => void>(() => {});
@@ -118,6 +125,9 @@ export default function ScanPage() {
           if (claimData.success) {
             alert(`🐰 ¡Felicidades! Se han acreditado +${claimData.bunzAwarded} Bunz a tu cuenta por el ticket #${claimData.orderNumber}.`);
             router.push('/profile/wallet');
+          } else if (claimData?.alreadyClaimed && claimData?.ticket) {
+            // Ticket ya acreditado → mostrarlo en pantalla para compartir/imprimir
+            setClaimedTicket(claimData.ticket);
           } else {
             alert(claimData.error || 'No se pudo reclamar este ticket.');
           }
@@ -293,6 +303,12 @@ export default function ScanPage() {
           return;
         } else {
           setScanLoader(null);
+          if (claimData?.alreadyClaimed && claimData?.ticket) {
+            // Ticket ya acreditado (p. ej. pago Rabbitty Pay con cashback
+            // automático) → mostrar el ticket digital para compartir/imprimir.
+            setClaimedTicket(claimData.ticket);
+            return;
+          }
           alert(claimData.error || 'No se pudo reclamar este ticket.');
           startScanningRef.current();
           return;
@@ -1042,6 +1058,83 @@ export default function ScanPage() {
           total={0}
           businessName="Tu cuenta en el local"
         />
+      )}
+      {/* Ticket digital ya acreditado: en vez de error "ya reclamado",
+          mostramos el ticket en pantalla para decidir imprimirlo o compartirlo. */}
+      {claimedTicket && (
+        <div className="fixed inset-0 z-999 flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-md">
+          <div className="absolute inset-0" onClick={() => { setClaimedTicket(null); startScanningRef.current(); }} />
+          <motion.div
+            initial={{ y: '100%', opacity: 0.8 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: '100%', opacity: 0 }}
+            transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+            className="relative w-full max-w-md bg-[#14141E] border border-white/10 rounded-t-4xl sm:rounded-4xl p-6 text-white z-10"
+          >
+            <div className="text-center space-y-1 pb-4 border-b border-white/10">
+              <p className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">✨ Ticket ya acreditado</p>
+              <h3 className="text-lg font-black tracking-tight">{claimedTicket.restaurantName || 'Rabbitty'}</h3>
+              <p className="text-[11px] text-white/40">Este ticket ya se pagó y acreditó — compártelo o guárdalo desde aquí.</p>
+            </div>
+
+            <div className="py-4 space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-400">Folio</span>
+                <span className="font-mono font-black">#{claimedTicket.orderNumber}</span>
+              </div>
+              {claimedTicket.createdAt && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-400">Fecha</span>
+                  <span className="font-bold">{new Date(claimedTicket.createdAt).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-400">Total</span>
+                <span className="font-mono font-black text-cyan-400">${claimedTicket.total.toFixed(2)} MXN</span>
+              </div>
+              {claimedTicket.bunzAwarded > 0 && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-400">Bunz acreditados</span>
+                  <span className="font-black text-pink-400">+{claimedTicket.bunzAwarded} 🐰</span>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2 pb-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  const text = `🧾 Ticket digital — ${claimedTicket.restaurantName || 'Rabbitty'}\n🔖 Folio: #${claimedTicket.orderNumber}\n💳 Total: $${claimedTicket.total.toFixed(2)} MXN${claimedTicket.bunzAwarded > 0 ? `\n🐰 +${claimedTicket.bunzAwarded} Bunz acreditados` : ''}\n\nRabbitteado en Rabbitty ✨`;
+                  try {
+                    if (typeof navigator !== 'undefined' && navigator.share) {
+                      await navigator.share({ title: 'Ticket digital Rabbitty', text });
+                    } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                      await navigator.clipboard.writeText(text);
+                      showToast('Ticket copiado al portapapeles', 'success');
+                    }
+                  } catch { /* el usuario cerró el share nativo */ }
+                }}
+                className="w-full bg-linear-to-r from-[#FF2E93] to-[#E91E63] text-white font-black text-sm py-3.5 rounded-2xl flex items-center justify-center active:scale-[0.98] transition-transform"
+              >
+                📤 Compartir ticket
+              </button>
+              <button
+                type="button"
+                onClick={() => { setClaimedTicket(null); router.push('/profile/wallet'); }}
+                className="w-full bg-white/5 border border-white/10 text-white/80 font-bold text-xs py-3 rounded-2xl hover:bg-white/10 active:scale-[0.98] transition-transform"
+              >
+                Ver mi cartera y movimientos
+              </button>
+              <button
+                type="button"
+                onClick={() => { setClaimedTicket(null); startScanningRef.current(); }}
+                className="w-full text-[11px] font-bold text-gray-500 hover:text-gray-300 py-1"
+              >
+                Seguir escaneando
+              </button>
+            </div>
+          </motion.div>
+        </div>
       )}
       <BottomNav isDark={isDark} />
     </div>
