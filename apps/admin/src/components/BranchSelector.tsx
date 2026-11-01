@@ -27,9 +27,12 @@ export function BranchSelector() {
         onChange={(e) => handleChange(e.target.value)}
         className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-white focus:border-pink-500 focus:outline-none appearance-none cursor-pointer"
       >
-        {branches.map((b) => (
-          <option key={b.id} value={b.id} className="bg-gray-900">{b.name}</option>
-        ))}
+        {branches.map((b) => {
+          const displayName = b.name.replace(/^sucursal\s+(única\s+)?/i, "").trim() || b.name;
+          return (
+            <option key={b.id} value={b.id} className="bg-gray-900">{displayName}</option>
+          );
+        })}
       </select>
     </div>
   );

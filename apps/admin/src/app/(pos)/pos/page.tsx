@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { Button, Dialog, Input, toast, cn, useWakeLock } from "@rabbitty/ui";
-import { Clock, Search, Users, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, Table2, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, ClipboardCheck, Camera, History } from "lucide-react";
+import { Clock, Search, Users, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, Table2, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, ClipboardCheck, Camera, History, RotateCw } from "lucide-react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import QRDiscovery from "@/components/QRDiscovery";
@@ -104,6 +104,9 @@ export default function PosPage() {
   const [receiptModal, setReceiptModal] = useState(false);
   // Método elegido pendiente de confirmación (el cobro NO se ejecuta hasta confirmar)
   const [pendingMethod, setPendingMethod] = useState<string | null>(null);
+  // ── GAP 1: beneficios de membresía seleccionables al cobrar ──
+  const posBizCtx = trpc.memberships.myBusinessForContext.useQuery(undefined, { staleTime: 5 * 60_000 });
+  const [selectedBenefitIds, setSelectedBenefitIds] = useState<string[]>([]);
   const [cashReceived, setCashReceived] = useState<string>("");
   const [isCharging, setIsCharging] = useState(false);
   const [paidTicketData, setPaidTicketData] = useState<TicketData | null>(null);
@@ -301,6 +304,9 @@ export default function PosPage() {
         businessId: ctxBiz.businessId,
         qrToken,
         branchId: ticketContext?.branch?.id || "pos",
+        // Ligazón al ticket: si acabamos de liquidar una orden en esta caja,
+        // el uso del beneficio queda auditable contra ese orderId.
+        orderId: lastPaidOrderId || undefined,
         quantity: 1,
         idempotencyKey: `pos_scan_${subId}_${Math.floor(Date.now() / 1000 / 30)}`,
       });
@@ -1096,6 +1102,8 @@ export default function PosPage() {
             quantity: i.quantity,
             price: i.price,
           })),
+          // GAP 1: beneficios de membresía seleccionados en el modal de cobro
+          entitlementIds: selectedBenefitIds.length > 0 ? selectedBenefitIds : undefined,
         });
 
         if (checkoutResult.orderNumber) {
@@ -1122,6 +1130,7 @@ export default function PosPage() {
           checkoutResult.orderId || undefined
         );
         setLastPaidOrderId(checkoutResult.orderId ?? null);
+        setSelectedBenefitIds([]); // beneficios ya consumidos y ligados al ticket
         return;
       }
     } catch (err: any) {
@@ -2455,6 +2464,17 @@ export default function PosPage() {
                 </div>
               )}
 
+              {/* ── GAP 1: Beneficios de membresía aplicables ── */}
+              {isCash && selectedRabbitter?.id && posBizCtx.data?.businessId && (
+                <BenefitsPanel
+                  businessId={posBizCtx.data.businessId}
+                  customerId={selectedRabbitter.id}
+                  cart={cart}
+                  selected={selectedBenefitIds}
+                  onToggle={(id) => setSelectedBenefitIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])}
+                />
+              )}
+
               {isCash ? (
                 <>
                   {/* Entrada Dinero Recibido */}
@@ -3167,119 +3187,134 @@ export default function PosPage() {
         open={activeTabsModal}
         onClose={() => setActiveTabsModal(false)}
         title="Rabbitty Tabs & Comandas Activas"
-        className="max-w-xl w-full"
+        className="max-w-2xl w-full"
       >
         <div className="space-y-4 p-1">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between pb-2 border-b border-white/5">
             <p className="text-xs text-gray-400">
               Mesas y comandas abiertas en tiempo real con identificación de clientes.
             </p>
             <Button
               variant="secondary"
               onClick={() => refetchActiveTabs()}
-              className="py-1 px-3 text-xs font-bold rounded-xl border border-white/10 hover:border-white/20 transition-all cursor-pointer"
+              className="py-1 px-3 text-xs font-bold rounded-xl border border-white/10 hover:border-white/20 transition-all cursor-pointer flex items-center gap-1.5"
             >
+              <RotateCw className="h-3 w-3 text-gray-400" />
               Refrescar
             </Button>
           </div>
 
-          <div className="max-h-96 overflow-y-auto custom-scrollbar space-y-2.5">
+          <div className="max-h-[28rem] overflow-y-auto custom-scrollbar space-y-3 pr-1">
             {activeTabsData && activeTabsData.activeTabs.length > 0 ? (
               activeTabsData.activeTabs.map((tab) => (
                 <div
                   key={tab.orderId}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl bg-linear-to-r from-white/7 to-white/3 border border-white/10 p-3.5 hover:border-purple-500/30 hover:from-white/9 transition-all"
+                  className="rounded-2xl bg-white/[0.04] border border-white/10 p-4 hover:border-cyan-500/30 hover:bg-white/[0.06] transition-all space-y-3"
                 >
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-[11px] font-bold text-gray-400 bg-white/5 border border-white/10 px-2 py-0.5 rounded-lg">
-                        #{tab.orderId.slice(-4).toUpperCase()}
-                      </span>
-                      <span className="font-black text-white text-sm tracking-tight">
-                        {tab.tableNumber ? `Mesa ${tab.tableNumber}` : tab.orderType === "TO_GO" ? "Para Llevar" : tab.orderType}
-                      </span>
-                      {tab.tableLocation && (
-                        <span className="text-[10px] font-bold text-gray-300 bg-purple-500/20 border border-purple-500/30 px-2 py-0.5 rounded-full">
-                          {tab.tableLocation}
+                  {/* Top row: Mesa/Origen, ID, y Acciones Principales con Total */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-black text-white text-base tracking-tight">
+                          {tab.tableNumber ? `Mesa #${tab.tableNumber}` : tab.orderType === "TO_GO" ? "Para Llevar" : tab.orderType}
                         </span>
-                      )}
-                    </div>
-                    <div className="text-xs text-gray-300 flex items-center gap-2">
-                      {tab.customer ? (
-                        <span className="text-pink-300 font-bold flex items-center gap-1.5 bg-pink-500/10 px-2 py-0.5 rounded-lg border border-pink-500/20">
-                          <span>🐰</span> {tab.customer.name} {tab.customer.phone ? <span className="text-gray-400 font-normal">({tab.customer.phone})</span> : ""}
+                        <span className="font-mono text-[11px] font-bold text-gray-400 bg-white/5 border border-white/10 px-2 py-0.5 rounded-lg">
+                          #{tab.orderId.slice(-4).toUpperCase()}
                         </span>
-                      ) : (
-                        <span className="text-gray-500 italic text-[11px]">Sin vincular</span>
-                      )}
-                    </div>
-                    {/* Comanda: productos pedidos desde la app por el Rabbitter */}
-                    {tab.items && tab.items.length > 0 && (
-                      <div className="flex flex-wrap gap-1 pt-0.5">
-                        {tab.items.map((it, idx) => (
-                          <span
-                            key={idx}
-                            title={it.notes || undefined}
-                            className="text-[10px] text-gray-200 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-md"
-                          >
-                            <span className="font-black text-cyan-300">{it.quantity}×</span> {it.name}
-                            {it.notes && <span className="text-amber-300"> · {it.notes}</span>}
+                        {tab.tableLocation && (
+                          <span className="text-[10px] font-bold text-purple-300 bg-purple-500/20 border border-purple-500/30 px-2.5 py-0.5 rounded-full">
+                            {tab.tableLocation}
                           </span>
-                        ))}
+                        )}
                       </div>
-                    )}
-                  </div>
 
-                  <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/5">
-                    <div className="text-left sm:text-right">
-                      <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Total</div>
-                      <span className="font-mono font-black text-cyan-400 text-base">
-                        ${tab.total.toFixed(2)}
-                      </span>
+                      {/* Cliente Rabbitter */}
+                      <div className="text-xs text-gray-300 flex items-center gap-2 pt-0.5">
+                        {tab.customer ? (
+                          <div className="inline-flex items-center gap-2 text-pink-300 font-bold bg-pink-500/10 px-2.5 py-1 rounded-xl border border-pink-500/20 text-xs">
+                            <span className="text-sm">🐰</span>
+                            <span>{tab.customer.name}</span>
+                            {tab.customer.phone && (
+                              <span className="text-gray-400 font-medium text-[11px] border-l border-pink-500/20 pl-2">
+                                {tab.customer.phone}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-gray-500 italic text-[11px]">Sin cliente vinculado</span>
+                        )}
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      {tab.status === "CASH_PAYMENT_REQUESTED" ? (
-                        <span
-                          className="flex items-center gap-1.5 py-1.5 px-3 rounded-xl bg-amber-500/15 text-amber-300 border border-amber-500/40 text-xs font-bold"
-                          title="El comensal solicitó pagar en efectivo: cobra en gaveta con tu PIN, no envíes link de pago digital."
-                        >
-                          💵 Solicitó efectivo
+                    {/* Total y botones de acción */}
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Total</div>
+                        <span className="font-mono font-black text-cyan-400 text-lg leading-tight block">
+                          ${tab.total.toFixed(2)}
                         </span>
-                      ) : (
-                        <>
-                          <Button
-                            onClick={() => void chargeOpenTab(tab)}
-                            disabled={tabChargeMutation.isPending}
-                            className="py-1.5 px-3.5 text-xs font-black bg-cyan-500 hover:bg-cyan-400 text-gray-950 shadow-md shadow-cyan-500/20 rounded-xl transition-all cursor-pointer active:scale-95"
-                            title="Crea el cobro digital sobre esta cuenta abierta SIN duplicar la orden: el comensal paga en su móvil y esta pestaña se liquida sola"
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {tab.status === "CASH_PAYMENT_REQUESTED" ? (
+                          <span
+                            className="flex items-center gap-1.5 py-2 px-3 rounded-xl bg-amber-500/15 text-amber-300 border border-amber-500/40 text-xs font-bold"
+                            title="El comensal solicitó pagar en efectivo: cobra en gaveta con tu PIN"
                           >
-                            <QrCode className="h-3.5 w-3.5 mr-1 text-gray-950" />
-                            Cobrar
-                          </Button>
-                          <Button
-                            onClick={async () => {
-                              await sendBillMutation.mutateAsync({
-                                orderId: tab.orderId,
-                                customerId: tab.customer?.id || undefined,
-                                phone: tab.customer?.phone || undefined,
-                                customerName: tab.customer?.name || undefined,
-                              });
-                            }}
-                            disabled={sendBillMutation.isPending}
-                            className="py-1.5 px-3 text-xs font-bold bg-pink-500/15 hover:bg-pink-500/25 text-pink-300 border border-pink-500/30 rounded-xl transition-all cursor-pointer active:scale-95"
-                          >
-                            <Send className="h-3 w-3 mr-1 text-pink-400" />
-                            Enviar Cuenta
-                          </Button>
-                        </>
-                      )}
+                            💵 Solicitó efectivo
+                          </span>
+                        ) : (
+                          <>
+                            <Button
+                              onClick={() => void chargeOpenTab(tab)}
+                              disabled={tabChargeMutation.isPending}
+                              className="py-2 px-4 text-xs font-black bg-cyan-400 hover:bg-cyan-300 text-gray-950 shadow-md shadow-cyan-500/20 rounded-xl transition-all cursor-pointer active:scale-95 flex items-center gap-1.5"
+                              title="Cobra digitalmente esta orden"
+                            >
+                              <QrCode className="h-4 w-4 text-gray-950" />
+                              Cobrar
+                            </Button>
+                            <Button
+                              onClick={async () => {
+                                await sendBillMutation.mutateAsync({
+                                  orderId: tab.orderId,
+                                  customerId: tab.customer?.id || undefined,
+                                  phone: tab.customer?.phone || undefined,
+                                  customerName: tab.customer?.name || undefined,
+                                });
+                              }}
+                              disabled={sendBillMutation.isPending}
+                              className="py-2 px-3.5 text-xs font-bold bg-pink-500/15 hover:bg-pink-500/25 text-pink-300 border border-pink-500/30 rounded-xl transition-all cursor-pointer active:scale-95 flex items-center gap-1.5"
+                            >
+                              <Send className="h-3.5 w-3.5 text-pink-400" />
+                              Enviar Cuenta
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
+
+                  {/* Comanda: items ordenados desde la app */}
+                  {tab.items && tab.items.length > 0 && (
+                    <div className="pt-2 border-t border-white/5 flex flex-wrap gap-1.5">
+                      {tab.items.map((it, idx) => (
+                        <span
+                          key={idx}
+                          title={it.notes || undefined}
+                          className="inline-flex items-center gap-1 text-[11px] text-gray-200 bg-white/5 border border-white/10 px-2 py-1 rounded-lg"
+                        >
+                          <span className="font-black text-cyan-400">{it.quantity}×</span>
+                          <span>{it.name}</span>
+                          {it.notes && <span className="text-amber-300 font-medium">({it.notes})</span>}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))
             ) : (
-              <div className="text-center py-8 text-gray-500 text-xs">
+              <div className="text-center py-12 text-gray-500 text-xs">
                 No hay comandas activas pendientes en esta sucursal.
               </div>
             )}
@@ -3764,6 +3799,98 @@ export default function PosPage() {
           </div>
         </div>
       </Dialog>
+    </div>
+  );
+}
+
+/**
+ * ── BenefitsPanel (GAP 1) ── Beneficios de membresía del cliente vinculado,
+ * aplicables al cobro directo. El server re-verifica propiedad/cuota — aquí
+ * solo se muestra lo elegible con el carrito actual.
+ */
+type BenefitRow = {
+  entitlementId: string;
+  benefitType: string;
+  targetRefId: string | null;
+  remaining: number | null;
+  discountPct: number | null;
+  creditBalance: number | null;
+  planName: string;
+  membershipOrigin: string | null;
+};
+
+function BenefitsPanel({
+  businessId,
+  customerId,
+  cart,
+  selected,
+  onToggle,
+}: {
+  businessId: string;
+  customerId: string;
+  cart: Array<{ menuItemId: string; price: number; quantity: number } & { name?: string }>;
+  selected: string[];
+  onToggle: (id: string) => void;
+}) {
+  const benefits = trpc.memberships.getMembershipBenefits.useQuery(
+    { businessId, customerId },
+    { enabled: Boolean(businessId && customerId) }
+  );
+
+  const rows = (benefits.data ?? []).filter((b) => {
+    if (b.benefitType === "INCLUDED_PRODUCT") {
+      // Solo es aplicable si el platillo incluido está en el carrito actual
+      return b.targetRefId && cart.some((i) => i.menuItemId === b.targetRefId);
+    }
+    return b.benefitType === "DISCOUNT_PCT" || b.benefitType === "CREDIT_BALANCE";
+  });
+
+  if (rows.length === 0) return null;
+
+  const label = (b: BenefitRow): string => {
+    if (b.benefitType === "INCLUDED_PRODUCT") {
+      const it = cart.find((i) => i.menuItemId === b.targetRefId);
+      return `1× ${it?.name || "Producto"} GRATIS`;
+    }
+    if (b.benefitType === "DISCOUNT_PCT") return `${b.discountPct}% de descuento`;
+    if (b.benefitType === "CREDIT_BALANCE") return `Saldo $${(b.creditBalance ?? 0).toFixed(2)} como pago`;
+    return b.benefitType;
+  };
+
+  return (
+    <div className="rounded-2xl bg-amber-500/10 border border-amber-500/30 p-3 space-y-2">
+      <p className="text-[10px] font-black uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
+        🎟️ Beneficios de membresía — toca para aplicar a esta venta
+      </p>
+      {rows.map((b: BenefitRow) => {
+        const isSel = selected.includes(b.entitlementId);
+        const exhausted = b.benefitType !== "CREDIT_BALANCE" && (b.remaining ?? 0) <= 0;
+        const dup = selected.filter((id) => id === b.entitlementId).length > 1;
+        void dup;
+        return (
+          <button
+            key={b.entitlementId}
+            type="button"
+            onClick={() => { if (!exhausted) onToggle(b.entitlementId); }}
+            className={`w-full flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-[11px] font-bold border transition-all cursor-pointer ${
+              isSel
+                ? "bg-amber-500/25 border-amber-400 text-white"
+                : exhausted
+                ? "bg-white/5 border-white/10 text-gray-500 cursor-not-allowed"
+                : "bg-white/5 border-white/10 text-gray-200 hover:bg-white/10"
+            }`}
+          >
+            <span className="text-left">
+              <span className="block">{isSel ? "☑" : "☐"} {label(b)}</span>
+              <span className="text-[9px] text-gray-400 font-normal">
+                {b.planName} · {b.membershipOrigin === "COURTESY" ? "Cortesía" : "Membresía"}
+                {b.benefitType !== "CREDIT_BALANCE" && ` · quedan ${b.remaining ?? "?"} este ciclo`}
+              </span>
+            </span>
+          </button>
+        );
+      })}
+      <p className="text-[9px] text-gray-400 leading-snug">El total se ajusta automáticamente al liquidar. Los usos quedan ligados al ticket.</p>
     </div>
   );
 }

@@ -152,7 +152,6 @@ export default function ReadinessBar() {
           <Target className={`h-4 w-4 shrink-0 ${color}`} />
         )}
         <span className="hidden xl:inline whitespace-nowrap">Readiness</span>
-        <span className="font-black tracking-tight">{unified.percent}%</span>
         {open ? (
           <ChevronUp className="h-3.5 w-3.5 opacity-75 shrink-0" />
         ) : (

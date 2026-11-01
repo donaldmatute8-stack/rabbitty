@@ -366,7 +366,7 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                   className="flex items-center gap-1.5 sm:gap-2 rounded-xl bg-cyan-500/10 px-2.5 sm:px-3 py-2 text-xs font-bold text-cyan-400 hover:bg-cyan-500/20 active:scale-95 transition-all border border-cyan-500/20"
                 >
                   <TerminalSquare className="h-4 w-4 shrink-0" />
-                  <span className="hidden sm:inline whitespace-nowrap">Caja POS</span>
+                  <span className="hidden sm:inline whitespace-nowrap">POS</span>
                 </Link>
                 <Link
                   href="/kiosk"

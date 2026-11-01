@@ -135,7 +135,8 @@ async function resolveBusinessForBranch(ctx: any): Promise<string | null> {
   return null;
 }
 
-function buildEntitlementRows(
+/** Exportado: el webhook de Stripe usa el mismo builder al activar suscripciones. */
+export function buildEntitlementRows(
   subscriptionId: string,
   rules: z.infer<typeof benefitRuleSchema>[],
   start: Date,
@@ -188,6 +189,8 @@ export const membershipsRouter = router({
       durationMonths: z.union([z.literal(3), z.literal(6), z.literal(12), z.literal(0)]), // 0 = indefinida (revocable)
       giftNote: z.string().max(300).optional(),
       label: z.string().max(60).optional(), // etiqueta visible opcional (ej. "Cortesía Familiar")
+      // GAP 10: origen extendido — INVITATION no consume el tope de cortesías
+      origin: z.enum(["COURTESY", "INVITATION"]).default("COURTESY"),
     }))
     .mutation(async ({ ctx, input }) => {
       // ── Negocio desde el selector del panel, validado contra el contexto merchant:
@@ -213,45 +216,50 @@ export const membershipsRouter = router({
       const entitlementHardEnd = periodEnd ?? (() => { const d = new Date(now); d.setFullYear(d.getFullYear() + 99); return d; })();
 
       const sub = await ctx.coreDb.transaction(async (tx: any) => {
-        // Cap server-side ATÓMICO: contar cortesías activas DENTRO de la tx
-        const [countRow] = await tx
-          .select({ count: sql<number>`count(*)::int` })
-          .from(membershipSubscriptions)
-          .where(and(
-            eq(membershipSubscriptions.businessId, biz.id),
-            eq(membershipSubscriptions.membershipOrigin, "COURTESY"),
-            eq(membershipSubscriptions.status, "ACTIVE"),
-          ));
-        const cap = await getCourtesyCap(ctx.coreDb, biz.id);
-        if ((countRow?.count ?? 0) >= cap) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: `Tope de cortesías activas alcanzado (${cap}). Revoca una para liberar cupo.` });
+        // Cap server-side ATÓMICO: contar cortesías activas DENTRO de la tx.
+        // GAP 10: INVITATION es un regalo personal del administrador sin tope —
+        // el tope controla la cortesía (beneficio de cortesía del negocio).
+        const isInvitation = input.origin === "INVITATION";
+        if (!isInvitation) {
+          const [countRow] = await tx
+            .select({ count: sql<number>`count(*)::int` })
+            .from(membershipSubscriptions)
+            .where(and(
+              eq(membershipSubscriptions.businessId, biz.id),
+              eq(membershipSubscriptions.membershipOrigin, "COURTESY"),
+              eq(membershipSubscriptions.status, "ACTIVE"),
+            ));
+          const cap = await getCourtesyCap(ctx.coreDb, biz.id);
+          if ((countRow?.count ?? 0) >= cap) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: `Tope de cortesías activas alcanzado (${cap}). Revoca una para liberar cupo.` });
+          }
         }
 
         const [target] = await tx.select({ id: users.id }).from(users).where(eq(users.id, input.targetUserId)).limit(1);
         if (!target) throw new TRPCError({ code: "BAD_REQUEST", message: "Destinatario no encontrado" });
 
-        // Unicidad: el destinatario no puede tener 2 cortesías activas del mismo negocio
+        // Unicidad: el destinatario no puede tener 2 beneficios-gift activos del mismo negocio
         const [dup] = await tx.select({ id: membershipSubscriptions.id })
           .from(membershipSubscriptions)
           .where(and(
             eq(membershipSubscriptions.userId, input.targetUserId),
             eq(membershipSubscriptions.businessId, biz.id),
-            eq(membershipSubscriptions.membershipOrigin, "COURTESY"),
+            eq(membershipSubscriptions.membershipOrigin, isInvitation ? "INVITATION" : "COURTESY"),
             eq(membershipSubscriptions.status, "ACTIVE"),
           ))
           .limit(1);
-        if (dup) throw new TRPCError({ code: "CONFLICT", message: "Ese usuario ya tiene una cortesía activa de este negocio" });
+        if (dup) throw new TRPCError({ code: "CONFLICT", message: "Ese usuario ya tiene una de estas activa de este negocio" });
 
         const [created] = await tx.insert(membershipSubscriptions).values({
           userId: input.targetUserId,
           businessId: biz.id,
-          planVersionId: null,                       // cortesía = suscripción individual, sin plan
+          planVersionId: null,                       // cortesía/invitación = suscripción individual, sin plan
           status: "ACTIVE",
           currentPeriodStart: now,
           currentPeriodEnd: periodEnd,               // null = indefinida real (revocable)
           noExpiration: indefinite,
           paymentProvider: null,                     // sin pago — el origen lo dice
-          membershipOrigin: "COURTESY",
+          membershipOrigin: isInvitation ? "INVITATION" : "COURTESY",
           issuedByUserId: ctx.userId,
           giftNote: input.giftNote || null,
           qrPassSecret: randomBytes(32).toString("hex"),
@@ -305,7 +313,9 @@ export const membershipsRouter = router({
         if (biz?.ownerId !== ctx.userId && !isGodAdminIdentity(ctx.user?.email, ctx.user?.name)) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Solo el dueño puede revocar" });
         }
-        if (sub.membershipOrigin !== "COURTESY") throw new TRPCError({ code: "BAD_REQUEST", message: "Solo se revocan cortesías" });
+        if (sub.membershipOrigin !== "COURTESY" && sub.membershipOrigin !== "INVITATION") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Solo se revocan cortesías/invitaciones aquí — usa Revocar en Miembros para planes pagados" });
+        }
         if (sub.status !== "ACTIVE") throw new TRPCError({ code: "BAD_REQUEST", message: "Ya no está activa" });
 
         await tx.update(membershipSubscriptions).set({
@@ -377,7 +387,122 @@ export const membershipsRouter = router({
           entitlements: ents.map((e: any) => ({ id: e.id, type: e.benefitType, quota: e.quotaPerCycle, used: e.currentUsageInCycle, cycleEnd: e.cycleEndDate })),
         });
       }
-      return out;
+      // GAP 11: el tope real lo configura God vía systemSettings — se expone en la respuesta
+      const cap = await getCourtesyCap(ctx.coreDb, input.businessId);
+      return { courtesies: out, courtesyCap: cap, activeCount: out.filter((c) => c.status === "ACTIVE").length };
+    }),
+
+  /** ── GAP 7: revocación de membresías PAGADAS (owner/god) ── ── */
+  revokePaidMembership: protectedProcedure
+    .input(z.object({ subscriptionId: z.string(), reason: z.string().max(300).optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const result = await ctx.coreDb.transaction(async (tx: any) => {
+        const [sub] = await tx.select().from(membershipSubscriptions)
+          .where(eq(membershipSubscriptions.id, input.subscriptionId))
+          .for("update");
+        if (!sub) throw new TRPCError({ code: "NOT_FOUND", message: "Membresía no encontrada" });
+        const [biz] = await tx.select({ ownerId: ownedBusinesses.ownerId, name: ownedBusinesses.name })
+          .from(ownedBusinesses).where(eq(ownedBusinesses.id, sub.businessId)).limit(1);
+        if (biz?.ownerId !== ctx.userId && !isGodAdminIdentity(ctx.user?.email, ctx.user?.name)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Solo el dueño puede revocar" });
+        }
+        if (sub.membershipOrigin === "COURTESY" || sub.membershipOrigin === "INVITATION") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Usa el flujo de cortesías para esos orígenes" });
+        }
+        if (sub.status === "REVOKED" || sub.status === "CANCELLED") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Ya está revocada/cancelada" });
+        }
+
+        await tx.update(membershipSubscriptions).set({
+          status: "REVOKED",
+          revokedAt: new Date(),
+          revokedByUserId: ctx.userId,
+          revocationReason: input.reason || null,
+          updatedAt: new Date(),
+        }).where(eq(membershipSubscriptions.id, sub.id));
+
+        await tx.insert((await import("@rabbitty/database-core/schema")).auditEntries).values({
+          userId: ctx.userId,
+          action: "MEMBERSHIP_REVOKED",
+          resource: "membership_subscriptions",
+          resourceId: sub.id,
+          details: input.reason || "Sin motivo especificado",
+        }).catch(() => {});
+
+        return { userId: sub.userId, businessName: biz?.name || "el negocio" };
+      });
+
+      try {
+        await miniappClient.sendNotification({
+          userId: result.userId,
+          title: `Tu membresía de ${result.businessName} fue cancelada`,
+          message: input.reason?.trim() ? `Motivo: ${input.reason}` : "Ya no está activa. Contacta al comercio si crees que es un error.",
+          type: "SYSTEM",
+          route: "/memberships",
+        } as any);
+      } catch { /* best-effort */ }
+
+      return { success: true };
+    }),
+
+  /** ── GAP 8: renovación manual de membresías de caja (CASH_POS/PROMO) ──
+   *  Extiende el periodo del plan vendido y notifica al miembro. */
+  renewPaidMembership: protectedProcedure
+    .input(z.object({ subscriptionId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const result = await ctx.coreDb.transaction(async (tx: any) => {
+        const [sub] = await tx.select().from(membershipSubscriptions)
+          .where(eq(membershipSubscriptions.id, input.subscriptionId))
+          .for("update");
+        if (!sub) throw new TRPCError({ code: "NOT_FOUND", message: "Membresía no encontrada" });
+        const [biz] = await tx.select({ ownerId: ownedBusinesses.ownerId, name: ownedBusinesses.name })
+          .from(ownedBusinesses).where(eq(ownedBusinesses.id, sub.businessId)).limit(1);
+        if (biz?.ownerId !== ctx.userId && !isGodAdminIdentity(ctx.user?.email, ctx.user?.name)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Solo el dueño puede renovar" });
+        }
+        if (!sub.planVersionId) throw new TRPCError({ code: "BAD_REQUEST", message: "Las cortesías no se renuevan — otorga una nueva si aplica" });
+        const [version] = await tx.select().from(membershipPlanVersions)
+          .where(eq(membershipPlanVersions.id, sub.planVersionId)).limit(1);
+        if (!version) throw new TRPCError({ code: "NOT_FOUND", message: "Versión del plan no encontrada" });
+
+        // Nuevo periodo: desde el que tenga vigencia (o hoy si expiró) + intervalo del plan
+        const base = sub.currentPeriodEnd && new Date(sub.currentPeriodEnd) > new Date()
+          ? new Date(sub.currentPeriodEnd)
+          : new Date();
+        const newEnd = addInterval(base, version.billingInterval as z.infer<typeof intervalSchema>);
+
+        await tx.update(membershipSubscriptions).set({
+          status: "ACTIVE",
+          currentPeriodStart: sub.currentPeriodEnd && new Date(sub.currentPeriodEnd) > sub.createdAt
+            ? sub.currentPeriodEnd
+            : new Date(),
+          currentPeriodEnd: newEnd,
+          cancelAtPeriodEnd: false,
+          updatedAt: new Date(),
+        }).where(eq(membershipSubscriptions.id, sub.id));
+
+        await tx.insert((await import("@rabbitty/database-core/schema")).auditEntries).values({
+          userId: ctx.userId,
+          action: "MEMBERSHIP_RENEWED",
+          resource: "membership_subscriptions",
+          resourceId: sub.id,
+          details: `Renovada hasta ${newEnd.toISOString().slice(0, 10)}`,
+        }).catch(() => {});
+
+        return { userId: sub.userId, businessName: biz?.name || "el negocio", newEnd };
+      });
+
+      try {
+        await miniappClient.sendNotification({
+          userId: result.userId,
+          title: `🎟️ Tu membresía de ${result.businessName} fue renovada`,
+          message: `Vigente hasta ${result.newEnd.toLocaleDateString()} — sigue mostrando tu QR dorado en caja.`,
+          type: "REWARD",
+          route: "/memberships",
+        } as any);
+      } catch { /* best-effort */ }
+
+      return { success: true, newPeriodEnd: result.newEnd };
     }),
 
 
@@ -703,13 +828,59 @@ export const membershipsRouter = router({
     return { businessId: await resolveBusinessForBranch(ctx) };
   }),
 
+  /**
+   * GAP 1: beneficios activos de un Rabbitter en un negocio — el POS consulta
+   * esto al vincular al cliente en el cobro para aplicar INCLUDED_PRODUCT /
+   * DISCOUNT_PCT / CREDIT_BALANCE a la cuenta (consumo atómico aparte, en
+   * directCheckout).
+   */
+  getMembershipBenefits: protectedProcedure
+    .input(z.object({ businessId: z.string().uuid(), customerId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const subs = await ctx.coreDb
+        .select({
+          sub: membershipSubscriptions,
+          entitlement: membershipEntitlements,
+          plan: membershipPlans,
+          version: membershipPlanVersions,
+        })
+        .from(membershipSubscriptions)
+        .leftJoin(membershipPlanVersions, eq(membershipPlanVersions.id, membershipSubscriptions.planVersionId))
+        .leftJoin(membershipPlans, eq(membershipPlans.id, membershipPlanVersions.planId))
+        .innerJoin(membershipEntitlements, eq(membershipEntitlements.subscriptionId, membershipSubscriptions.id))
+        .where(and(
+          eq(membershipSubscriptions.userId, input.customerId),
+          eq(membershipSubscriptions.businessId, input.businessId),
+          eq(membershipSubscriptions.status, "ACTIVE"),
+        ));
+
+      return subs.map((s) => ({
+        entitlementId: s.entitlement.id,
+        subscriptionId: s.sub.id,
+        planName: s.plan?.name ?? "Cortesía 🎁",
+        membershipOrigin: s.sub.membershipOrigin,
+        benefitType: s.entitlement.benefitType,
+        targetRefId: s.entitlement.targetRefId,
+        quotaPerCycle: s.entitlement.quotaPerCycle,
+        remaining: s.entitlement.quotaPerCycle != null
+          ? Math.max(0, s.entitlement.quotaPerCycle - s.entitlement.currentUsageInCycle)
+          : null,
+        cycleResetType: s.entitlement.cycleResetType,
+        discountPct: s.entitlement.discountPct != null ? Number(s.entitlement.discountPct) : null,
+        creditBalance: s.entitlement.creditBalance != null ? Number(s.entitlement.creditBalance) : null,
+      }));
+    }),
+
   /** Membresías del usuario con estado de derechos del ciclo actual. */
   getMyMemberships: protectedProcedure.query(async ({ ctx }) => {
     const subs = await ctx.coreDb
       .select({ sub: membershipSubscriptions, version: membershipPlanVersions, plan: membershipPlans })
       .from(membershipSubscriptions)
-      .innerJoin(membershipPlanVersions, eq(membershipPlanVersions.id, membershipSubscriptions.planVersionId))
-      .innerJoin(membershipPlans, eq(membershipPlans.id, membershipPlanVersions.planId))
+      // leftJoins: las cortesías no tienen plan/version (planVersionId null) —
+      // antes quedaban invisibles aquí. La miniapp usa su route REST, pero el
+      // tRPC debe reflejar la misma realidad.
+      .leftJoin(membershipPlanVersions, eq(membershipPlanVersions.id, membershipSubscriptions.planVersionId))
+      .leftJoin(membershipPlans, eq(membershipPlans.id, membershipPlanVersions.planId))
       .where(eq(membershipSubscriptions.userId, ctx.userId))
       .orderBy(desc(membershipSubscriptions.createdAt));
 
@@ -720,7 +891,7 @@ export const membershipsRouter = router({
         .from(membershipEntitlements)
         .where(eq(membershipEntitlements.subscriptionId, s.sub.id));
       const { qrPassSecret: _omit, ...safeSub } = s.sub;
-      out.push({ subscription: safeSub, plan: s.plan, version: s.version, entitlements });
+      out.push({ subscription: safeSub, plan: s.plan ?? null, version: s.version ?? null, entitlements });
     }
     return out;
   }),
@@ -871,8 +1042,9 @@ return await ctx.coreDb.transaction(async (tx: any) => {
         const [member] = await tx.select({ firstName: users.firstName, lastName: users.lastName, username: users.username })
           .from(users).where(eq(users.id, sub.userId)).limit(1);
 
-        // Bidireccional: avisa al dueño cuando canjean su cortesía
-        if (sub.membershipOrigin === "COURTESY") {
+        // Bidireccional: avisa al dueño cuando canjean su cortesía.
+        // GAP 11: sin granter (borrado) NO se auto-notifica el mismo usuario — silencio.
+        if (sub.membershipOrigin === "COURTESY" && sub.issuedByUserId && sub.issuedByUserId !== ctx.userId) {
           const memberName2 = [member?.firstName, member?.lastName].filter(Boolean).join(" ") || member?.username || "alguien";
           const benefitLabels: Record<string, string> = {
             INCLUDED_PRODUCT: "producto incluido", DISCOUNT_PCT: "descuento",
@@ -881,7 +1053,7 @@ return await ctx.coreDb.transaction(async (tx: any) => {
           try {
             const { miniappClient: mac2 } = await import("../services/miniapp-client");
             await mac2.sendNotification({
-              userId: sub.issuedByUserId || sub.userId,
+              userId: sub.issuedByUserId,
               title: "🎁 Canje de cortesía",
               message: `${memberName2} canjeó su ${benefitLabels[updated.benefitType] || "beneficio"} — le quedan ${updated.quotaPerCycle - updated.currentUsageInCycle} de este ciclo.`,
               type: "AFFILIATE",
@@ -915,13 +1087,19 @@ return await ctx.coreDb.transaction(async (tx: any) => {
           cancelAtPeriodEnd: membershipSubscriptions.cancelAtPeriodEnd,
           paymentProvider: membershipSubscriptions.paymentProvider,
           planName: membershipPlans.name,
+          // Cortesías visibles también: planVersionId es null para cortesías
+          membershipOrigin: membershipSubscriptions.membershipOrigin,
+          giftNote: membershipSubscriptions.giftNote,
         })
         .from(membershipSubscriptions)
-        .innerJoin(membershipPlanVersions, eq(membershipPlanVersions.id, membershipSubscriptions.planVersionId))
-        .innerJoin(membershipPlans, eq(membershipPlans.id, membershipPlanVersions.planId))
+        .leftJoin(membershipPlanVersions, eq(membershipPlanVersions.id, membershipSubscriptions.planVersionId))
+        .leftJoin(membershipPlans, eq(membershipPlans.id, membershipPlanVersions.planId))
         .where(eq(membershipSubscriptions.businessId, input.businessId))
         .orderBy(desc(membershipSubscriptions.createdAt));
-      return rows;
+      return rows.map((r) => ({
+        ...r,
+        planName: r.planName ?? "🎁 Cortesía",
+      }));
     }),
 
   /** Usuario: cancela al final del periodo (conserva beneficios hasta entonces). */

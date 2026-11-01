@@ -13,6 +13,7 @@ import {
   membershipPlans,
   membershipPlanVersions,
   membershipSubscriptions,
+  membershipEntitlements,
 } from "@rabbitty/database-core/schema";
 import { eq } from "drizzle-orm";
 
@@ -181,7 +182,7 @@ export async function POST(req: Request) {
             .where(eq(membershipSubscriptions.paymentProviderSubId, String(session.subscription)))
             .limit(1);
           if (!dup) {
-            await coreDb.insert(membershipSubscriptions).values({
+            const [newSub] = await coreDb.insert(membershipSubscriptions).values({
               userId: meta.userId,
               businessId: meta.businessId,
               planVersionId: meta.planVersionId,
@@ -192,7 +193,41 @@ export async function POST(req: Request) {
               membershipOrigin: "PURCHASED",
               paymentProviderSubId: String(session.subscription),
               qrPassSecret: (await import("crypto")).randomBytes(32).toString("hex"),
-            });
+            }).returning();
+            // Entitlements: sin estas filas el pase no tiene beneficios que
+            // canjear — mismas reglas que crea `subscribe` en caja.
+            try {
+              const [versionRow] = await coreDb.select({ version: membershipPlanVersions })
+                .from(membershipPlanVersions)
+                .where(eq(membershipPlanVersions.id, meta.planVersionId))
+                .limit(1);
+              const rules = (versionRow?.version?.benefitRules ?? []) as Array<{
+                type: string; targetRefId?: string | null; quotaPerCycle?: number | null;
+                cycleResetType?: string | null; discountPct?: number | null; creditBalance?: number | null;
+              }>;
+              // Réplica de addCycle (memberships.ts) al webhook no puede importar routers
+              const addCycleWeb = (from: Date, reset: string | null | undefined, hardEnd: Date): Date => {
+                if (reset === "MONTHLY") { const d = new Date(from); d.setUTCMonth(d.getUTCMonth() + 1); return d > hardEnd ? hardEnd : d; }
+                if (reset === "WEEKLY") { const d = new Date(from); d.setUTCDate(d.getUTCDate() + 7); return d > hardEnd ? hardEnd : d; }
+                if (reset === "DAILY") { const d = new Date(from); d.setUTCDate(d.getUTCDate() + 1); return d > hardEnd ? hardEnd : d; }
+                return hardEnd; // FIXED / indefinido
+              };
+              const rows = rules.map((r) => ({
+                subscriptionId: newSub.id,
+                benefitType: r.type,
+                targetRefId: r.targetRefId ?? null,
+                quotaPerCycle: r.quotaPerCycle ?? 1,
+                cycleResetType: r.cycleResetType ?? "FIXED",
+                currentUsageInCycle: 0,
+                cycleStartDate: periodStart,
+                cycleEndDate: addCycleWeb(periodStart, r.cycleResetType, periodEnd),
+                discountPct: r.discountPct ?? null,
+                creditBalance: r.creditBalance ?? null,
+              }));
+              if (rows.length > 0) await coreDb.insert(membershipEntitlements).values(rows);
+            } catch (entErr) {
+              console.error("[Stripe Webhook] crear entitlements falló:", entErr);
+            }
             console.log(`[Stripe Webhook] Membresía activada: user=${meta.userId} plan=${meta.planVersionId}`);
             await notifyMembershipUser(coreDb, meta.userId, "🎟️ ¡Membresía activada!", "Tu pago fue confirmado y tu membresía ya está activa. Muéstrala en caja con su QR dorado.", "/memberships");
             // Bidireccional: avisa al DUEÑO del negocio la venta

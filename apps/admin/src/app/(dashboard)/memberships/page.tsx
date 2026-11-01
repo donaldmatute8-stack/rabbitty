@@ -4,7 +4,7 @@ import RabbitterScannerModal from "@/components/RabbitterScannerModal";
 import { useState, useEffect } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { Button, cn, toast } from "@rabbitty/ui";
-import { Ticket, Plus, Users, ScanLine, X, Trash2, Send, Gift } from "lucide-react";
+import { Ticket, Plus, Users, ScanLine, X, Trash2, Send, Gift, Edit3 } from "lucide-react";
 
 type Interval = "MONTHLY" | "QUARTERLY" | "SEMIANNUAL" | "ANNUAL" | "ONE_TIME";
 type BenefitType = "INCLUDED_PRODUCT" | "DISCOUNT_PCT" | "CREDIT_BALANCE" | "EVENT_ACCESS" | "BULK_PACK";
@@ -15,6 +15,8 @@ interface RuleDraft {
   quotaPerCycle: string;   // string: permite borrar/teclear libre — se valida al submit
   cycleResetType: Reset;
   discountPct?: number;
+  creditBalance?: number;
+  targetRefId?: string | null;
 }
 
 const INTERVAL_LABEL: Record<Interval, string> = {
@@ -42,6 +44,23 @@ export default function MembershipsPage() {
   const businessId = selected || businesses?.[0]?.id || "";
   const [tab, setTab] = useState<"plans" | "members" | "courtesy" | "scanner">("plans");
   const [showForm, setShowForm] = useState(false);
+  const [editPlan, setEditPlan] = useState<null | {
+    planId: string; name: string; description: string | null; price: number; interval: Interval; rules: RuleDraft[];
+  }>(null);
+
+  // GAP 7/8: revocación de pagadas + renovación de caja
+  const revokePaid = trpc.memberships.revokePaidMembership.useMutation({
+    onSuccess: () => { toast.info("Membresía revocada — su QR dejó de funcionar"); utils.memberships.listMembers.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const renewPaid = trpc.memberships.renewPaidMembership.useMutation({
+    onSuccess: (d) => {
+      toast.success(`Renovada hasta ${d.newPeriodEnd ? new Date(d.newPeriodEnd).toLocaleDateString() : ""}`);
+      utils.memberships.listMembers.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const [memberActionId, setMemberActionId] = useState<string | null>(null);
 
   const enabled = !!businessId;
   const { data: plans } = trpc.memberships.listPlansAdmin.useQuery({ businessId }, { enabled });
@@ -144,11 +163,35 @@ export default function MembershipsPage() {
                 </ul>
                 <div className="flex items-center justify-between pt-2">
                   <span className="text-xs text-white/50">{activeMembers} miembros activos</span>
-                  {latest && !published && (
-                    <Button size="sm" onClick={() => publish.mutate({ versionId: latest.id })} disabled={publish.isPending}>
-                      <Send className="w-3 h-3 mr-1" /> Publicar
-                    </Button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {/* GAP 5: edición → nueva versión */}
+                    {plan.currentVersionId && latest && (
+                      <Button size="sm" variant="secondary"
+                        onClick={() => setEditPlan({
+                          planId: plan.id,
+                          name: plan.name,
+                          description: plan.description ?? null,
+                          price: Number(latest.priceFiat ?? 0),
+                          interval: latest.billingInterval as Interval,
+                          rules: ((latest.benefitRules as RuleDraft[]) ?? []).map((r) => ({
+                            type: r.type,
+                            quotaPerCycle: String(r.quotaPerCycle ?? 1),
+                            cycleResetType: (r.cycleResetType ?? "MONTHLY") as Reset,
+                            discountPct: r.discountPct ?? undefined,
+                            creditBalance: (r as { creditBalance?: number }).creditBalance ?? undefined,
+                            targetRefId: r.targetRefId ?? null,
+                          })),
+                        })}
+                      >
+                        <Edit3 className="w-3 h-3 mr-1" /> Editar
+                      </Button>
+                    )}
+                    {latest && !published && (
+                      <Button size="sm" onClick={() => publish.mutate({ versionId: latest.id })} disabled={publish.isPending}>
+                        <Send className="w-3 h-3 mr-1" /> Publicar
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -192,16 +235,51 @@ export default function MembershipsPage() {
         <div className="rounded-2xl border border-white/10 overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-white/5 text-white/50 text-xs">
-              <tr><th className="text-left p-3">Plan</th><th className="text-left p-3">Estado</th><th className="text-left p-3">Vence</th><th className="text-left p-3">Pago</th></tr>
+              <tr><th className="text-left p-3">Plan</th><th className="text-left p-3">Estado</th><th className="text-left p-3">Vence</th><th className="text-left p-3">Pago</th><th className="text-right p-3">Acciones</th></tr>
             </thead>
             <tbody>
-              {members?.length === 0 && <tr><td colSpan={4} className="p-4 text-white/50">Sin miembros todavía.</td></tr>}
+              {members?.length === 0 && <tr><td colSpan={5} className="p-4 text-white/50">Sin miembros todavía.</td></tr>}
               {members?.map((m) => (
                 <tr key={m.id} className="border-t border-white/5 text-white/80">
-                  <td className="p-3">{m.planName}</td>
+                  <td className="p-3">
+                    {m.planName}
+                    {m.membershipOrigin === "COURTESY" && <span className="ml-1.5 text-[9px] font-black px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-300">CORTESÍA</span>}
+                    {m.membershipOrigin === "INVITATION" && <span className="ml-1.5 text-[9px] font-black px-1.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300">INVITACIÓN</span>}
+                    {m.giftNote && <span className="block text-[10px] italic text-white/40">"{m.giftNote}"</span>}
+                  </td>
                   <td className="p-3">{m.status}{m.cancelAtPeriodEnd ? " (cancela)" : ""}</td>
                   <td className="p-3">{m.currentPeriodEnd ? new Date(m.currentPeriodEnd).toLocaleDateString() : 'Indefinida'}</td>
-                  <td className="p-3">{m.paymentProvider}</td>
+                  <td className="p-3">{m.paymentProvider ?? "—"}</td>
+                  <td className="p-3 text-right">
+                    {m.status === "ACTIVE" && m.membershipOrigin !== "COURTESY" && m.membershipOrigin !== "INVITATION" && (
+                      memberActionId === m.id ? (
+                        <div className="inline-flex items-center gap-1.5">
+                          <input id={`revoke-reason-${m.id}`} className="px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-xs text-white !w-36" placeholder="Motivo (opcional)" />
+                          <button
+                            onClick={() => {
+                              const el = document.getElementById(`revoke-reason-${m.id}`) as HTMLInputElement | null;
+                              revokePaid.mutate({ subscriptionId: m.id, reason: el?.value || undefined });
+                              setMemberActionId(null);
+                            }}
+                            className="text-xs font-bold text-red-300 hover:text-red-200">Confirmar</button>
+                          <button onClick={() => setMemberActionId(null)} className="text-xs text-white/40">✕</button>
+                        </div>
+                      ) : (
+                        <div className="inline-flex items-center gap-2">
+                          {/* GAP 8: renovación (extiende el periodo, notifica al miembro) */}
+                          <button onClick={() => { if (!confirm("¿Renovar un periodo más (se cobra en caja)?")) return; renewPaid.mutate({ subscriptionId: m.id }); }}
+                            className="px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold hover:bg-emerald-500/20 cursor-pointer">
+                            Renovar
+                          </button>
+                          {/* GAP 7: revocación de pagadas */}
+                          <button onClick={() => setMemberActionId(m.id)}
+                            className="px-2 py-1 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-[10px] font-bold hover:bg-red-500/20 cursor-pointer">
+                            Revocar
+                          </button>
+                        </div>
+                      )
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -215,38 +293,77 @@ export default function MembershipsPage() {
 
       {enabled && tab === "scanner" && <RedeemPanel businessId={businessId} />}
 
-      {showForm && (
+      {(showForm || editPlan) && (
         <PlanForm
           businessId={businessId}
-          onClose={() => setShowForm(false)}
-          onCreated={() => { setShowForm(false); utils.memberships.listPlansAdmin.invalidate(); }}
+          editPlan={editPlan}
+          onClose={() => { setShowForm(false); setEditPlan(null); }}
+          onDone={() => { setShowForm(false); setEditPlan(null); utils.memberships.listPlansAdmin.invalidate(); }}
         />
       )}
     </div>
   );
 }
 
-function PlanForm({ businessId, onClose, onCreated }: { businessId: string; onClose: () => void; onCreated: () => void }) {
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [price, setPrice] = useState("299");
-  const [interval, setInterval_] = useState<Interval>("MONTHLY");
-  const [rules, setRules] = useState<RuleDraft[]>([{ type: "INCLUDED_PRODUCT", quotaPerCycle: "1", cycleResetType: "DAILY" }]);
+function PlanForm({ businessId, editPlan, onClose, onDone }: {
+  businessId: string;
+  /** GAP 5: si viene, el form edita ese plan (crea versión N+1). */
+  editPlan?: {
+    planId: string; name: string; description: string | null;
+    price: number; interval: Interval; rules: RuleDraft[];
+  } | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const isEdit = !!editPlan;
+  const [name, setName] = useState(editPlan?.name ?? "");
+  const [description, setDescription] = useState(editPlan?.description ?? "");
+  const [price, setPrice] = useState(editPlan ? String(editPlan.price) : "299");
+  const [interval, setInterval_] = useState<Interval>(editPlan?.interval ?? "MONTHLY");
+  const [rules, setRules] = useState<RuleDraft[]>(editPlan?.rules ?? [{ type: "INCLUDED_PRODUCT", quotaPerCycle: "1", cycleResetType: "DAILY" }]);
 
   const create = trpc.memberships.createPlan.useMutation({
-    onSuccess: () => { toast.success("Plan creado como borrador"); onCreated(); },
+    onSuccess: () => { toast.success("Plan creado como borrador"); onDone(); },
+    onError: (e) => toast.error(e.message),
+  });
+  // GAP 5: edición como nueva versión inmutable — luego se publica manualmente
+  const update = trpc.memberships.updatePlan.useMutation({
+    onSuccess: (v) => {
+      toast.success(`Nueva versión v${v.versionNumber} creada — publícala para hacerla vigente`);
+      onDone();
+    },
     onError: (e) => toast.error(e.message),
   });
 
   const updateRule = (i: number, patch: Partial<RuleDraft>) => setRules(rules.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
 
+  // GAP 6: catálogo para el picker de platillo incluido
+  const { data: menuItems } = trpc.pos.getMenuItems.useQuery({});
+
+  const submitRules = () => rules.map((r) => ({
+    type: r.type,
+    quotaPerCycle: Math.max(1, parseInt(r.quotaPerCycle || "0", 10) || 1),
+    cycleResetType: r.cycleResetType,
+    ...(r.type === "INCLUDED_PRODUCT" ? { targetRefId: r.targetRefId ?? undefined } : {}),
+    ...(r.type === "DISCOUNT_PCT" ? { discountPct: r.discountPct ?? 10 } : {}),
+    ...(r.type === "CREDIT_BALANCE" ? { creditBalance: r.creditBalance ?? 100 } : {}),
+  } as {
+    type: BenefitType; quotaPerCycle: number; cycleResetType: Reset;
+    targetRefId?: string; discountPct?: number; creditBalance?: number;
+  }));
+
   return (
     <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
       <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-white/10 bg-zinc-950 p-6 space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-white">Nuevo plan</h2>
+          <h2 className="text-lg font-bold text-white">{isEdit ? `Editar plan — nueva versión` : "Nuevo plan"}</h2>
           <button onClick={onClose}><X className="w-5 h-5 text-white/60" /></button>
         </div>
+        {isEdit && (
+          <p className="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2">
+            El versionado es inmutable: guardar crea una <b>versión nueva</b> del plan (los miembros actuales conservan la suya hasta renovar). Aparecerá como "Borrador" — publícala para hacerla vigente.
+          </p>
+        )}
         <input className={inputCls} placeholder="Nombre (ej. Plan Mensual)" value={name} onChange={(e) => setName(e.target.value)} />
         <input className={inputCls} placeholder="Descripción" value={description} onChange={(e) => setDescription(e.target.value)} />
         <div className="grid grid-cols-2 gap-3">
@@ -266,42 +383,86 @@ function PlanForm({ businessId, onClose, onCreated }: { businessId: string; onCl
         <div className="space-y-2">
           <p className="text-xs text-white/50">Beneficios</p>
           {rules.map((r, i) => (
-            <div key={i} className="grid grid-cols-[1fr_70px_1fr_auto] gap-2 items-center">
-              <select className={inputCls} value={r.type} onChange={(e) => updateRule(i, { type: e.target.value as BenefitType })}>
-                {(Object.keys(BENEFIT_LABEL) as BenefitType[]).map((k) => <option key={k} value={k}>{BENEFIT_LABEL[k]}</option>)}
-              </select>
-              <input
-                className={inputCls}
-                type="text"
-                inputMode="numeric"
-                placeholder="Cantidad"
-                value={r.quotaPerCycle}
-                onChange={(e) => updateRule(i, { quotaPerCycle: e.target.value.replace(/\D/g, "").slice(0, 4) })}
-              />
-              <select className={inputCls} value={r.cycleResetType} onChange={(e) => updateRule(i, { cycleResetType: e.target.value as Reset })}>
-                {(Object.keys(RESET_LABEL) as Reset[]).map((k) => <option key={k} value={k}>{RESET_LABEL[k]}</option>)}
-              </select>
-              <button onClick={() => setRules(rules.filter((_, idx) => idx !== i))} disabled={rules.length === 1}><Trash2 className="w-4 h-4 text-white/40" /></button>
+            <div key={i} className="rounded-xl border border-white/10 bg-white/5 p-2.5 space-y-2">
+              <div className="grid grid-cols-[1fr_70px_1fr_auto] gap-2 items-center">
+                <select className={inputCls} value={r.type} onChange={(e) => updateRule(i, { type: e.target.value as BenefitType, targetRefId: null, discountPct: undefined, creditBalance: undefined })}>
+                  {(Object.keys(BENEFIT_LABEL) as BenefitType[]).map((k) => <option key={k} value={k}>{BENEFIT_LABEL[k]}</option>)}
+                </select>
+                <input
+                  className={inputCls}
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="Cant."
+                  value={r.quotaPerCycle}
+                  onChange={(e) => updateRule(i, { quotaPerCycle: e.target.value.replace(/\D/g, "").slice(0, 4) })}
+                />
+                <select className={inputCls} value={r.cycleResetType} onChange={(e) => updateRule(i, { cycleResetType: e.target.value as Reset })}>
+                  {(Object.keys(RESET_LABEL) as Reset[]).map((k) => <option key={k} value={k}>{RESET_LABEL[k]}</option>)}
+                </select>
+                <button onClick={() => setRules(rules.filter((_, idx) => idx !== i))} disabled={rules.length === 1}><Trash2 className="w-4 h-4 text-white/40" /></button>
+              </div>
+              {/* GAP 6: campos específicos por tipo de beneficio */}
+              {r.type === "INCLUDED_PRODUCT" && (
+                <select
+                  className={inputCls + " !text-xs"}
+                  value={r.targetRefId ?? ""}
+                  onChange={(e) => updateRule(i, { targetRefId: e.target.value || null })}
+                >
+                  <option value="">Elige el platillo incluido del menú…</option>
+                  {(menuItems ?? []).map((mi: { id: string; name: string }) => (
+                    <option key={mi.id} value={mi.id}>{mi.name}</option>
+                  ))}
+                </select>
+              )}
+              {r.type === "DISCOUNT_PCT" && (
+                <div className="flex items-center gap-2">
+                  <input
+                    className={inputCls + " !text-xs"}
+                    type="number" min={1} max={50}
+                    placeholder="% de descuento"
+                    value={r.discountPct ?? ""}
+                    onChange={(e) => updateRule(i, { discountPct: Number(e.target.value.replace(/\D/g, "").slice(0, 2) || 0) || 0 })}
+                  />
+                  <span className="text-[11px] text-white/40">% sobre la cuenta del miembro</span>
+                </div>
+              )}
+              {r.type === "CREDIT_BALANCE" && (
+                <div className="flex items-center gap-2">
+                  <input
+                    className={inputCls + " !text-xs"}
+                    type="number" min={20} max={5000}
+                    placeholder="Saldo del ciclo"
+                    value={r.creditBalance ?? ""}
+                    onChange={(e) => updateRule(i, { creditBalance: Number(e.target.value.replace(/\D/g, "").slice(0, 4) || 0) || 0 })}
+                  />
+                  <span className="text-[11px] text-white/40">MXN que el miembro paga con su pase por ciclo</span>
+                </div>
+              )}
+              {r.type === "INCLUDED_PRODUCT" && !r.targetRefId && (
+                <p className="text-[10px] text-amber-300/80">⚠️ Elige el platillo — sin él el beneficio no es aplicable en el POS.</p>
+              )}
             </div>
           ))}
           <button className="text-xs text-pink-400" onClick={() => setRules([...rules, { type: "INCLUDED_PRODUCT", quotaPerCycle: "1", cycleResetType: "MONTHLY" }])}>+ Añadir beneficio</button>
         </div>
 
-        <Button
+      <Button
           className="w-full"
-          disabled={create.isPending || name.trim().length < 2}
-          onClick={() => create.mutate({
-            businessId,
-            name: name.trim(),
-            description: description.trim() || undefined,
-            priceFiat: Number(price) || 0,
-            currency: "MXN",
-            billingInterval: interval,
-            benefitRules: rules.map((r) => ({ ...r, quotaPerCycle: Math.max(1, parseInt(r.quotaPerCycle || "0", 10) || 1) })),
-            branchesAllowed: [],
-          })}
+          disabled={(isEdit ? update.isPending : create.isPending) || name.trim().length < 2}
+          onClick={() => isEdit
+            ? update.mutate({ planId: editPlan!.planId, name: name.trim(), description: description.trim() || undefined, priceFiat: Number(price) || 0, billingInterval: interval, benefitRules: submitRules(), branchesAllowed: [] })
+            : create.mutate({
+                businessId,
+                name: name.trim(),
+                description: description.trim() || undefined,
+                priceFiat: Number(price) || 0,
+                currency: "MXN",
+                billingInterval: interval,
+                benefitRules: submitRules(),
+                branchesAllowed: [],
+              })}
         >
-          Crear plan
+          {isEdit ? "Guardar como nueva versión" : "Crear plan"}
         </Button>
       </div>
     </div>
@@ -313,11 +474,12 @@ function RedeemPanel({ businessId }: { businessId: string }) {
   const [subId, setSubId] = useState("");
   const [entitlementId, setEntitlementId] = useState("");
   const [branchId, setBranchId] = useState("main");
+  const [showScanner, setShowScanner] = useState(false);
 
   const redeem = trpc.memberships.redeemAtPOS.useMutation({
     onSuccess: (r) => {
       toast.success(r.duplicate ? "Canje ya registrado" : `Canje exitoso${"remaining" in r ? ` · quedan ${r.remaining}` : ""}`);
-      setToken("");
+      setToken(""); setEntitlementId("");
     },
     onError: (e) => toast.error(e.message),
   });
@@ -325,16 +487,35 @@ function RedeemPanel({ businessId }: { businessId: string }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 p-5 space-y-3 max-w-xl">
       <p className="text-xs text-white/50">
-        Pega el token del QR del Membership Pass del cliente y el ID del beneficio a canjear.
-        El escaneo con cámara se añadirá junto al POS.
+        Pega o <b className="text-white">escanea</b> el QR del Membership Pass del cliente. El ID del beneficio es
+        opcional: si lo dejas vacío, se canjea el primero con usos disponibles del ciclo.
       </p>
-      <input className={inputCls} placeholder="Token QR" value={token} onChange={(e) => { setToken(e.target.value.trim()); setSubId(e.target.value.split(".")[0] ?? ""); }} />
+      <div className="flex gap-2">
+        <input className={inputCls} placeholder="Token QR" value={token} onChange={(e) => { setToken(e.target.value.trim()); setSubId(e.target.value.split(".")[0] ?? ""); }} />
+        <button onClick={() => setShowScanner(true)} title="Escanear el QR del pase"
+          className="shrink-0 px-3 py-2 rounded-xl bg-pink-500/20 border border-pink-500/40 text-pink-200 hover:bg-pink-500/30 cursor-pointer">
+          <ScanLine className="w-4 h-4" />
+        </button>
+      </div>
+      {showScanner && (
+        <RabbitterScannerModal
+          onDecoded={(decoded: string) => {
+            // El pase es <subId>.<ventana>.<hmac> — el escáner lo entrega crudo
+            const t = decoded.trim();
+            setToken(t);
+            setSubId(t.split(".")[0] ?? "");
+            setShowScanner(false);
+            toast.success("QR del pase leído");
+          }}
+          onClose={() => setShowScanner(false)}
+        />
+      )}
       {subId && <p className="text-[11px] text-white/40">Membresía: {subId}</p>}
-      <input className={inputCls} placeholder="ID del beneficio (entitlementId)" value={entitlementId} onChange={(e) => setEntitlementId(e.target.value.trim())} />
+      <input className={inputCls} placeholder="ID del beneficio (opcional — vacío = primero disponible)" value={entitlementId} onChange={(e) => setEntitlementId(e.target.value.trim())} />
       <input className={inputCls} placeholder="Sucursal" value={branchId} onChange={(e) => setBranchId(e.target.value)} />
       <Button
-        disabled={redeem.isPending || token.length < 10 || !entitlementId}
-        onClick={() => redeem.mutate({ businessId, qrToken: token, branchId, entitlementId, quantity: 1, idempotencyKey: crypto.randomUUID() })}
+        disabled={redeem.isPending || token.length < 10}
+        onClick={() => redeem.mutate({ businessId, qrToken: token, branchId, ...(entitlementId ? { entitlementId } : {}), quantity: 1, idempotencyKey: crypto.randomUUID() })}
       >
         Canjear
       </Button>
@@ -344,7 +525,11 @@ function RedeemPanel({ businessId }: { businessId: string }) {
 
 function CourtesyPanel({ businessId }: { businessId: string }) {
   const utils = trpc.useUtils();
-  const { data: courtesies, refetch } = trpc.memberships.listCourtesies.useQuery({ businessId }, { refetchInterval: 30000 });
+  // GAP 11: el tope lo configura God (systemSettings) — llega en la respuesta
+  const { data: capData, refetch } = trpc.memberships.listCourtesies.useQuery({ businessId }, { refetchInterval: 30000 });
+  const courtesies = capData?.courtesies ?? [];
+  const activeCount = capData?.activeCount ?? 0;
+  const courtesyCap = capData?.courtesyCap ?? 10;
   const [wizardOpen, setWizardOpen] = useState(false);
   const [targetQuery, setTargetQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -374,6 +559,7 @@ function CourtesyPanel({ businessId }: { businessId: string }) {
     } catch { toast.error("No se pudo resolver el código escaneado"); }
   };
   const [duration, setDuration] = useState<0 | 3 | 6 | 12>(12);
+  const [grantOrigin, setGrantOrigin] = useState<"COURTESY" | "INVITATION">("COURTESY");
   const [giftNote, setGiftNote] = useState("");
   const [rules, setRules] = useState<RuleDraft[]>([{ type: "INCLUDED_PRODUCT", quotaPerCycle: "1", cycleResetType: "MONTHLY" }]);
 
@@ -395,13 +581,11 @@ function CourtesyPanel({ businessId }: { businessId: string }) {
   });
   const [revokingId, setRevokingId] = useState<string | null>(null);
 
-  const activeCount = (courtesies || []).filter((c) => c.status === "ACTIVE").length;
-
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <p className="text-sm text-white/60">
-          Membresías individuales sin pago, <b className="text-white">personalizables</b> y revocables. Tope: <b className="text-white">{activeCount}/10 activas</b> (configurable por God).
+          Membresías individuales sin pago, <b className="text-white">personalizables</b> y revocables. Tope: <b className="text-white">{activeCount}/{courtesyCap} cortesías activas</b> (configurable por God) · las <b className="text-cyan-300">Invitaciones</b> no consumen tope.
         </p>
         <Button onClick={() => setWizardOpen((v) => !v)}>
           <Gift className="w-4 h-4 mr-1" /> {wizardOpen ? "Cerrar" : "Otorgar cortesía"}
@@ -461,7 +645,16 @@ function CourtesyPanel({ businessId }: { businessId: string }) {
           ))}
           <button className="text-xs text-pink-400" onClick={() => setRules([...rules, { type: "INCLUDED_PRODUCT", quotaPerCycle: "1", cycleResetType: "MONTHLY" }])}>+ Añadir beneficio</button>
 
-          <p className="text-sm font-bold text-white pt-1">3 · Duración y nota</p>
+          <p className="text-sm font-bold text-white pt-1">3 · Tipo, duración y nota</p>
+          {/* GAP 10: origen — Invitación no consume el tope */}
+          <div className="flex gap-2">
+            {(["COURTESY", "INVITATION"] as const).map((o) => (
+              <button key={o} onClick={() => setGrantOrigin(o)}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold border ${grantOrigin === o ? "bg-pink-500/20 border-pink-500/50 text-white" : "border-white/10 text-white/50"}`}>
+                {o === "COURTESY" ? "🎁 Cortesía (cuenta al tope)" : "✉️ Invitación (sin tope)"}
+              </button>
+            ))}
+          </div>
           <div className="flex gap-2 flex-wrap">
             {([3, 6, 12, 0] as const).map((d) => (
               <button key={d} onClick={() => setDuration(d)}
@@ -473,7 +666,7 @@ function CourtesyPanel({ businessId }: { businessId: string }) {
           <input className={inputCls} placeholder="Nota de regalo (opcional) — ej. 'Para mi hermana ☕'" value={giftNote} onChange={(e) => setGiftNote(e.target.value)} maxLength={300} />
 
           <Button className="w-full" disabled={!targetUserId || grant.isPending}
-            onClick={() => targetUserId && grant.mutate({ businessId, targetUserId, benefitRules: rules.map((r) => ({ ...r, quotaPerCycle: Math.max(1, parseInt(r.quotaPerCycle || "0", 10) || 1) })), durationMonths: duration, giftNote: giftNote.trim() || undefined })}>
+            onClick={() => targetUserId && grant.mutate({ businessId, targetUserId, origin: grantOrigin, benefitRules: rules.map((r) => ({ type: r.type, quotaPerCycle: Math.max(1, parseInt(r.quotaPerCycle || "0", 10) || 1), cycleResetType: r.cycleResetType, ...(r.type === "INCLUDED_PRODUCT" ? { targetRefId: r.targetRefId ?? undefined } : {}), ...(r.type === "DISCOUNT_PCT" ? { discountPct: r.discountPct ?? undefined } : {}), ...(r.type === "CREDIT_BALANCE" ? { creditBalance: r.creditBalance ?? undefined } : {}) })), durationMonths: duration, giftNote: giftNote.trim() || undefined })}>
             {grant.isPending ? "Otorgando…" : `🎁 Otorgar a ${targetName || "…"}`}
           </Button>
         </div>

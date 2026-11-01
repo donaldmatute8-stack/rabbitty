@@ -8,6 +8,7 @@ import { checkRateLimit } from '@/lib/rateLimit';
 export const runtime = 'nodejs';
 
 const ADMIN_TRPC = process.env.NEXT_PUBLIC_ADMIN_API_URL || 'https://admin.rabbitty.me/api/trpc';
+const r2 = (n: number) => Math.round(n * 100) / 100;
 
 // tRPC HTTP batch — MUTATIONS: input en el CUERPO {"0": {...}} (URL solo batch=1).
 // Para QUERIES: input en la URL y método GET (tRPC no acepta queries por POST).
@@ -76,7 +77,10 @@ export async function POST(req: Request) {
 
     const body = await req.json().catch(() => ({}));
     const orderId = String(body?.orderId || '');
+    // Propina: default 0% — en México no se puede pedir propina, solo sugerirla.
+    // Puede llegar como % (chips) o como MONTO Manuel (entrada libre del comensal).
     const tipPercent = [0, 10, 15, 20].includes(Number(body?.tipPercent)) ? Number(body.tipPercent) : 0;
+    const manualTip = Number(body?.tipAmount);
     if (!orderId) {
       return NextResponse.json({ success: false, error: 'orderId requerido' }, { status: 400 });
     }
@@ -88,8 +92,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Esta cuenta ya fue pagada' }, { status: 409 });
     }
 
-    // Propina: % del total base (sin propina previa)
-    const tipAmount = Math.round(Number(order.total || 0) * tipPercent) / 100;
+    // Propina: monto manual MXN si vino; si no, % del total base (sin propina previa)
+    const tipAmount = Math.max(0, Math.min(5000,
+      Number.isFinite(manualTip) && manualTip > 0
+        ? r2(manualTip)
+        : r2(Number(order.total || 0) * tipPercent) / 100
+    ));
 
     // 1. PaymentIntent (motor central del admin; idempotente por attempt:1)
     const intent = await callAdmin('payments.createPaymentIntent', {

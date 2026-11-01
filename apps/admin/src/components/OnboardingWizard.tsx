@@ -143,10 +143,7 @@ export function OnboardingWizard() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-black text-white">Preparación del Negocio (Business Readiness)</h2>
-              <span className="rounded-full bg-pink-500/10 border border-pink-500/20 px-2.5 py-0.5 text-xs font-bold text-pink-400">
-                {progressPercent}% Listo
-              </span>
+              <h2 className="text-xl font-black text-white">Preparación del Negocio</h2>
             </div>
             <p className="text-xs text-gray-400 mt-0.5 font-medium">
               Indicador inteligente de 7 pasos para asegurar que tu local esté 100% listo para operar y auditar ventas
