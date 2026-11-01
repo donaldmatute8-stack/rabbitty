@@ -15,7 +15,9 @@ jobs:
     steps:
       - name: Trigger Order Expiration + FX Refresh
         run: |
-          APP_URL="${{ secrets.MEMBERSHIPS_APP_URL || 'https://admin.rabbitty.me' }}"
+          # El endpoint vive en rabbitty-admin (Railway), NO en la miniapp de Vercel.
+          # Usa un secret propio para no heredar MEMBERSHIPS_APP_URL (app.rabbitty.me).
+          APP_URL="${{ secrets.ADMIN_APP_URL || 'https://admin.rabbitty.me' }}"
           CRON_SECRET="${{ secrets.CRON_SECRET }}"
 
           echo "Triggering expire-orders + FX refresh against $APP_URL..."
