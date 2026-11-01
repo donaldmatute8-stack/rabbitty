@@ -290,6 +290,8 @@ export const cashShiftsRouter = router({
         managerPin: pin,
         countedCash: money,
         notes: z.string().max(300).optional(),
+        // Opcional (política del comercio): pagar propinas de tarjeta desde la gaveta.
+        tipPayout: money.optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -307,8 +309,22 @@ export const cashShiftsRouter = router({
       return await ctx.restaurantDb.transaction(async (tx: any) => {
         await lockShift(tx, shift.id);
         const totals = await computeShiftTotals(tx, shift);
+
+        // ── Pago opcional de propinas de tarjeta desde caja ──
+        // Solo se puede pagar hasta el monto de propinas EN TARJETA del turno
+        // (las de efectivo ya están físicamente en la gaveta).
+        const requestedPayout = round2(input.tipPayout ?? 0);
+        if (requestedPayout > totals.tips.card + 0.009) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Solo hay $${totals.tips.card.toFixed(2)} de propinas en tarjeta para pagar desde caja.`,
+          });
+        }
+        const tipPayout = requestedPayout;
+        // La gaveta pierde ese efectivo → el esperado comparable lo descuenta.
+        const comparableExpected = round2(totals.expectedCash - tipPayout);
         const counted = round2(input.countedCash);
-        const difference = round2(counted - totals.expectedCash);
+        const difference = round2(counted - comparableExpected);
         if (Math.abs(difference) >= 0.01 && !input.notes?.trim()) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Hay descuadre: escribe una nota justificativa." });
         }
@@ -329,13 +345,23 @@ export const cashShiftsRouter = router({
         if (updated.length === 0) {
           throw new TRPCError({ code: "CONFLICT", message: "El turno ya fue cerrado." });
         }
+        if (tipPayout > 0) {
+          await tx.insert(cashShiftEvents).values({
+            shiftId: shift.id,
+            branchId,
+            type: "TIP_PAYOUT",
+            staffId: actor.id,
+            amount: tipPayout,
+            notes: `Propinas pagadas de caja (${totals.tips.count} cuenta(s) con propina)`,
+          });
+        }
         await tx.insert(cashShiftEvents).values({
           shiftId: shift.id,
           branchId,
           type: "CLOSE",
           staffId: actor.id,
           authorizedById: mgr.id,
-          expectedAmount: totals.expectedCash,
+          expectedAmount: comparableExpected,
           countedAmount: counted,
           difference,
           notes: input.notes,
@@ -348,6 +374,8 @@ export const cashShiftsRouter = router({
           openedAt: shift.openedAt,
           closedAt,
           ...totals,
+          tipPayout,
+          comparableExpected,
           countedCash: counted,
           difference,
           notes: input.notes ?? null,

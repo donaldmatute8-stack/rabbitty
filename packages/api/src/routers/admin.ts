@@ -127,6 +127,8 @@ export const adminRouter = router({
         staleOrderHours: z.number().int().min(1).max(72).optional(),
         showUsdTicket: z.boolean().optional(),
         analyticsProEnabled: z.boolean().optional(),
+        // Política de propinas: permite pagar propinas de tarjeta desde caja al cerrar turno
+        tipPayoutEnabled: z.boolean().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {

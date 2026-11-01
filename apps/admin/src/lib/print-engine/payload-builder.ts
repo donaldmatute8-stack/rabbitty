@@ -327,6 +327,10 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
   
   addText(`SUBTOTAL: ${sub.padStart(10)}\n`);
   addText(`IVA:      ${tax.padStart(10)}\n`);
+  // Propina separada de la cuenta (si el cobro digital la incluyó)
+  if (typeof data.tip === "number" && data.tip > 0) {
+    addText(`PROPINA:  $${data.tip.toFixed(2).padStart(9)}\n`);
+  }
   chunks.push(boldOn);
   addText(`TOTAL:    ${tot.padStart(10)}\n`);
   chunks.push(boldOff);

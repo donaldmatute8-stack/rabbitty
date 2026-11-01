@@ -15,12 +15,15 @@ export default function PaySheetShell({
   onClose,
   children,
   footer,
+  overlay,
 }: {
   title: string;
   subtitle?: string;
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  /** Capa superpuesta (se renderiza sobre todo, fuera del scroll) */
+  overlay?: ReactNode;
 }) {
   return (
     <motion.div
@@ -51,6 +54,9 @@ export default function PaySheetShell({
       <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-4 flex flex-col">{children}</div>
 
       {footer && <div className="px-5 pb-[calc(var(--safe-bottom,0px)+16px)] pt-2">{footer}</div>}
+
+      {/* Overlay (propina, diálogos): fuera del scroll, cubre el sheet */}
+      {overlay}
     </motion.div>
   );
 }

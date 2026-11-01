@@ -39,6 +39,8 @@ export const restaurants = pgTable("restaurants", {
   showUsdTicket: boolean("showUsdTicket").default(false).notNull(),
   // ── Plan "Analíticas Pro" (vendible): conversión checkout, tips, clientela ──
   analyticsProEnabled: boolean("analyticsProEnabled").default(false).notNull(),
+  // ── Propinas: se pagan con el ticket y se reparten en caja (opcional) ──
+  tipPayoutEnabled: boolean("tipPayoutEnabled").default(false).notNull(),
   printerType: text("printerType"),
   printerConfig: jsonb("printerConfig"),
   legalName: text("legalName"),
@@ -195,6 +197,8 @@ export const payments = pgTable("payments", {
   orderId: fkId("orderId").references(() => orders.id),
   method: text("method").notNull(),
   amount: real("amount").notNull(),
+  /** Propina embebida en este pago (para separar cuenta vs propina en admin). */
+  tipAmount: real("tipAmount").default(0).notNull(),
   reference: text("reference"),
   status: text("status").default("COMPLETED").notNull(),
   verificationMethod: text("verificationMethod").default("CASHIER_CONFIRMED").notNull(),
@@ -516,6 +520,8 @@ export const paymentIntents = pgTable("payment_intents", {
   // Compatibilidad legacy (reflejo de centavos a unidades)
   amountMxn: real("amountMxn").notNull(),
   bunzAmount: real("bunzAmount").notNull(),
+  /** Propina MXN incluida en el cobro (persistida para administración/caja). */
+  tipMxn: real("tipMxn").default(0).notNull(),
   currency: text("currency").default("MXN").notNull(),
   provider: text("provider").default("STRIPE").notNull(), // 'STRIPE' | 'CASH' | 'BUNZ_ONLY'
   externalIntentId: text("externalIntentId"), // ej: pi_xxx de Stripe

@@ -370,7 +370,39 @@ export const analyticsRouter = router({
       };
     }),
 
-  /** 💡 Propinas: cuántas mesas dan, cuánto promedian y qué % del total. */
+  /** Propinas del período (cuenta vs propina separadas — visible para admin, sin gate de plan). */
+  getTipsSummary: protectedProcedure
+    .input(z.object({ branchId: z.string(), days: z.number().optional(), from: z.string().optional(), to: z.string().optional() }))
+    .query(async ({ ctx, input }) => {
+      const r2 = (n: number) => Math.round(n * 100) / 100;
+      const branchId = await resolveBranchId(ctx, input.branchId);
+      const { startDate, endDate } = effectiveDateRange(input);
+      const rows = await ctx.restaurantDb
+        .select({ method: payments.method, amount: payments.amount, tipAmount: payments.tipAmount, createdAt: payments.createdAt })
+        .from(payments)
+        .innerJoin(orders, eq(payments.orderId, orders.id))
+        .where(and(
+          eq(orders.branchId, branchId),
+          eq(payments.status, "COMPLETED"),
+          gte(payments.createdAt, startDate),
+          ...(endDate ? [lte(payments.createdAt, endDate)] : [])
+        ));
+      const tipRows = rows.filter((r) => Number(r.tipAmount || 0) > 0);
+      const totalTip = r2(tipRows.reduce((s, r) => s + Number(r.tipAmount || 0), 0));
+      const cashTip = r2(tipRows.filter((r) => r.method === "CASH").reduce((s, r) => s + Number(r.tipAmount || 0), 0));
+      const cardTip = r2(totalTip - cashTip);
+      const totalSales = r2(rows.reduce((s, r) => s + Number(r.amount || 0), 0));
+      return {
+        totalTip,
+        cashTip,
+        cardTip,
+        tippedPayments: tipRows.length,
+        totalPayments: rows.length,
+        tipSharePct: totalSales > 0 ? Math.round((totalTip / totalSales) * 1000) / 10 : 0,
+      };
+    }),
+
+  /** 💡 Propinas (plan Pro): cuántas mesas dan, cuánto promedian y qué % del total. */
   getTipsAnalyticsPro: protectedProcedure
     .input(z.object({ branchId: z.string(), days: z.number().optional() }))
     .query(async ({ ctx, input }) => {

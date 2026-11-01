@@ -78,9 +78,12 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const orderId = String(body?.orderId || '');
     // Propina: default 0% — en México no se puede pedir propina, solo sugerirla.
-    // Puede llegar como % (chips) o como MONTO Manuel (entrada libre del comensal).
+    // Puede llegar como % (pills) o como MONTO manual (tap en el número).
     const tipPercent = [0, 10, 15, 20].includes(Number(body?.tipPercent)) ? Number(body.tipPercent) : 0;
     const manualTip = Number(body?.tipAmount);
+    // Cambiar la propina requiere reemplazar el intent vigente (idempotencia por
+    // attempt reutilizaría el monto anterior): el cliente manda el id a cancelar.
+    const replaceIntentId = typeof body?.replaceIntentId === 'string' ? body.replaceIntentId : null;
     if (!orderId) {
       return NextResponse.json({ success: false, error: 'orderId requerido' }, { status: 400 });
     }
@@ -99,17 +102,28 @@ export async function POST(req: Request) {
         : r2(Number(order.total || 0) * tipPercent) / 100
     ));
 
-    // 1. PaymentIntent (motor central del admin; idempotente por attempt:1)
+    // 1. Si vamos a cambiar la propina, cancelar el intent vigente (libera holds
+    //    de Bunz) para que el motor cree uno nuevo con el monto correcto.
+    if (replaceIntentId) {
+      await callAdmin('payments.cancelPaymentIntent', {
+        intentId: replaceIntentId,
+        reason: 'TIP_UPDATED',
+      }).catch((err: unknown) => {
+        console.warn('[PAY_SETUP] cancel previo falló (se continúa):', err);
+      });
+    }
+
+    // 2. PaymentIntent (motor central del admin; idempotente por attempt)
     const intent = await callAdmin('payments.createPaymentIntent', {
       orderId,
       tipAmount,
       provider: 'STRIPE',
     });
 
-    // 2. Clave pública para Elements (endpoint público nuevo del admin)
-        const pk = await callAdmin('payments.getPublishableKey', {}, { query: true });
+    // 3. Clave pública para Elements (endpoint público nuevo del admin)
+    const pk = await callAdmin('payments.getPublishableKey', {}, { query: true });
 
-    // 3. clientSecret de Stripe Connect
+    // 4. clientSecret de Stripe Connect
     const secret = await callAdmin('payments.createStripePaymentSecret', { intentId: intent.intentId });
 
     return NextResponse.json({
@@ -117,7 +131,9 @@ export async function POST(req: Request) {
       intentId: intent.intentId,
       clientSecret: secret.clientSecret,
       publishableKey: pk?.publishableKey,
-      amountTotal: Math.round((Number(intent.netFiatCents || 0) + tipAmount * 100)) / 100,
+      // netFiatCents YA incluye la propina (orderNet + tip) — no sumarla otra vez.
+      amountTotal: Math.round(Number(intent.netFiatCents || 0)) / 100,
+      amountBase: Math.round(Number(intent.netFiatCents || 0) - tipAmount * 100) / 100,
       tipAmount,
     });
   } catch (err: any) {

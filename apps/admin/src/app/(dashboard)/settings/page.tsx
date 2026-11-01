@@ -648,6 +648,18 @@ export default function SettingsPage() {
                     />
                     Mostrar valor USD en el POS y en los tickets (impreso y digital)
                   </label>
+                  <label className="flex items-center gap-2.5 text-sm text-gray-300 font-semibold cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={(r as any)?.tipPayoutEnabled ?? false}
+                      onChange={(e) => {
+                        setForm((f) => ({ ...f }));
+                        update.mutate({ id: r!.id, tipPayoutEnabled: e.target.checked });
+                      }}
+                      className="h-5 w-5 rounded border-white/10 bg-white/5 text-pink-500 cursor-pointer"
+                    />
+                    Permitir pagar propinas de tarjeta desde caja al cerrar turno (opcional en el cierre)
+                  </label>
                   {/* Plan Analíticas Pro (vendible — on/off aquí) */}
                   <div
                     className="flex items-center justify-between gap-3 rounded-xl p-3 cursor-pointer transition-colors hover:bg-white/5"

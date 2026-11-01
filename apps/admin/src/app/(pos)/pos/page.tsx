@@ -3596,6 +3596,7 @@ export default function PosPage() {
                   subtotal: ord.subtotal || ord.total,
                   tax: ord.tax || 0,
                   total: ord.total,
+                  tip: Number(ord.tip || 0),
                   currency: rest?.currency || "MXN",
                   paymentMethod: ord.bunzPaid && ord.bunzPaid > 0 ? "BUNZ" : "EFECTIVO",
                   usdAmount: (rest as any)?.showUsdTicket && Number((rest as any)?.usdRate > 0)

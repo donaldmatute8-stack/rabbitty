@@ -55,6 +55,8 @@ export default function ReportsPage() {
   const { data: salesTrends, isLoading: loadingSales } = trpc.analytics.getSalesTrends.useQuery({ branchId, ...dateFilter });
   const { data: topProducts, isLoading: loadingTop } = trpc.analytics.getTopProducts.useQuery({ branchId, limit: 5 });
   const { data: paymentMethods, isLoading: loadingPayments } = trpc.analytics.getPaymentMethods.useQuery({ branchId, ...dateFilter });
+  // Propinas (cuenta vs propina separadas — sin gate de plan)
+  const { data: tipsSummary } = trpc.analytics.getTipsSummary.useQuery({ branchId, ...dateFilter });
 
   // ── Analíticas Pro (plan vendible — gated server-side) ──
   const { data: checkoutPro } = trpc.analytics.getCheckoutConversionPro.useQuery({ branchId, days: daysRange });
@@ -415,8 +417,37 @@ export default function ReportsPage() {
           </Card>
         </motion.div>
 
-        {/* ── ANALÍTICAS PRO (plan vendible — gated server-side) ── */}
+        {/* Propinas del período (cuenta vs propina — visible para admin) */}
         <motion.div variants={itemVariants}>
+          <Card className="p-5 border border-(--border-subtle) bg-(--bg-subtle)">
+            <h3 className="text-sm font-black text-(--text-primary) uppercase tracking-wider flex items-center gap-2 mb-3">
+              💸 Propinas del período
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div>
+                <p className="text-lg font-black text-(--text-primary)">${Number(tipsSummary?.totalTip ?? 0).toFixed(2)}</p>
+                <p className="text-[10px] text-(--text-muted) uppercase tracking-wider font-bold">Total propinas</p>
+              </div>
+              <div>
+                <p className="text-lg font-black text-cyan-400">${Number(tipsSummary?.cardTip ?? 0).toFixed(2)}</p>
+                <p className="text-[10px] text-(--text-muted) uppercase tracking-wider font-bold">En tarjeta</p>
+              </div>
+              <div>
+                <p className="text-lg font-black text-emerald-400">${Number(tipsSummary?.cashTip ?? 0).toFixed(2)}</p>
+                <p className="text-[10px] text-(--text-muted) uppercase tracking-wider font-bold">En efectivo</p>
+              </div>
+              <div>
+                <p className="text-lg font-black text-(--text-primary)">{Number(tipsSummary?.tipSharePct ?? 0)}%</p>
+                <p className="text-[10px] text-(--text-muted) uppercase tracking-wider font-bold">Sobre ventas</p>
+              </div>
+            </div>
+            <p className="text-[10px] text-(--text-muted) mt-3">
+              {tipsSummary?.tippedPayments ?? 0} de {tipsSummary?.totalPayments ?? 0} cobros con propina. Separa cuenta (venta) de propina (equipo).
+            </p>
+          </Card>
+        </motion.div>
+
+        {/* ── ANALÍTICAS PRO (plan vendible — gated server-side) ── */}        <motion.div variants={itemVariants}>
           <Card className="p-6 border border-(--border-subtle) bg-(--bg-subtle)">
             <div className="flex items-center justify-between flex-wrap gap-2 mb-5">
               <h3 className="text-xl font-bold text-(--text-primary) flex items-center gap-2 mb-0">

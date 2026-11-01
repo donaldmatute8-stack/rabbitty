@@ -232,6 +232,7 @@ export async function createOrGetPaymentIntent(
         netFiatCents: netFiatCents,
         platformFeeCents: platformFeeCents,
         amountMxn: centsToMxn(orderGrossCents),
+        tipMxn: Math.max(0, Number(input.tipMxn || 0)),
         currency: "MXN",
         provider: provider,
         status: "PENDING_PAYMENT",
@@ -386,14 +387,24 @@ export async function confirmPaymentIntentSettled(
 
     // 4. Insertar registro de pago fiat si hubo importe con tarjeta/efectivo
     if (intent.netFiatCents > 0) {
+      const intentTipMxn = Math.max(0, Number((intent as { tipMxn?: number | null }).tipMxn || 0));
       await tx.insert(payments).values({
         orderId: intent.orderId!,
         method: params.verifiedMethod === "CASH" ? "CASH" : "CREDIT_CARD",
         amount: centsToMxn(intent.netFiatCents),
+        // Propina separada para administración/caja (cuenta vs propina)
+        tipAmount: intentTipMxn,
         reference: params.externalTransactionId ?? intent.idempotencyKey,
         status: "COMPLETED",
         verificationMethod: params.verifiedMethod === "CASH" ? "CASHIER_CONFIRMED" : "STRIPE_WEBHOOK",
       });
+      // Persistir la propina en la orden (idempotente: el settle corre una sola vez)
+      if (intentTipMxn > 0) {
+        await tx
+          .update(orders)
+          .set({ tip: sql`COALESCE(${orders.tip}, 0) + ${intentTipMxn}` })
+          .where(eq(orders.id, intent.orderId!));
+      }
     }
 
     // 5. Insertar registro de pago con Bunz ÚNICAMENTE si la reserva fue capturada válidamente

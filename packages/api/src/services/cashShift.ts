@@ -120,7 +120,7 @@ export async function assertOpenShiftForCash(db: Db, branchId: string) {
 export async function computeShiftTotals(db: Db, shift: { id: string; branchId: string; openingFloat: number; openedAt: Date; closedAt: Date | null }) {
   const until = shift.closedAt ?? new Date();
   const pays = await db
-    .select({ method: payments.method, amount: payments.amount })
+    .select({ method: payments.method, amount: payments.amount, tipAmount: payments.tipAmount })
     .from(payments)
     .innerJoin(orders, eq(payments.orderId, orders.id))
     .where(
@@ -135,6 +135,12 @@ export async function computeShiftTotals(db: Db, shift: { id: string; branchId: 
   const cashSales = sum("CASH");
   const cardSales = round2(sum("CREDIT_CARD") + sum("DEBIT_CARD"));
   const bunzSales = sum("BUNZ");
+
+  // ── Propinas del turno (separadas de la cuenta: cuenta vs propina en admin) ──
+  const tipsTotal = round2(pays.reduce((s: number, p: any) => s + Number(p.tipAmount || 0), 0));
+  const tipsCash = round2(pays.filter((p: any) => p.method === "CASH").reduce((s: number, p: any) => s + Number(p.tipAmount || 0), 0));
+  const tipsCard = round2(tipsTotal - tipsCash);
+  const tipsCount = pays.filter((p: any) => Number(p.tipAmount || 0) > 0).length;
 
   const drops = await db
     .select({ category: cashDrops.category, amount: cashDrops.amount })
@@ -162,6 +168,8 @@ export async function computeShiftTotals(db: Db, shift: { id: string; branchId: 
     totalDrops,
     adjustments,
     expectedCash,
+    // Propinas del turno (visibles para admin/cajero; pagables opcionalmente)
+    tips: { total: tipsTotal, cash: tipsCash, card: tipsCard, count: tipsCount },
   };
 }
 

@@ -88,6 +88,9 @@ export function CashShiftModal({
   const [amount, setAmount] = useState("");
   const [notes, setNotes] = useState("");
   const [closeFund, setCloseFund] = useState("");
+  // Propinas: pagar las de tarjeta desde la gaveta (opcional, decisión del cajero/admin)
+  const [payTips, setPayTips] = useState(false);
+  const [tipPayout, setTipPayout] = useState("");
   const [withdrawCategory, setWithdrawCategory] = useState<"EXPENSE" | "SAFE">("SAFE");
   const [needManager, setNeedManager] = useState(false);
   const [showManualCount, setShowManualCount] = useState(false);
@@ -555,7 +558,7 @@ export function CashShiftModal({
             className="space-y-3"
             onSubmit={(e) => {
               e.preventDefault();
-              closeMut.mutate({ pin, managerPin, countedCash: num, notes: notes || undefined });
+              closeMut.mutate({ pin, managerPin, countedCash: num, notes: notes || undefined, tipPayout: payTips ? Number(tipPayout || 0) : undefined });
             }}
           >
             {/* Paso 1: Cuadre de Tarjeta Bancaria */}
@@ -603,6 +606,48 @@ export function CashShiftModal({
             </div>
 
             <NoteField id="cash-close-notes" value={notes} onChange={setNotes} label="Nota / Justificación (si hay diferencia)" />
+
+            {/* Propinas del turno + pago opcional desde gaveta */}
+            <div className="p-3.5 rounded-xl bg-pink-500/10 border border-pink-500/25 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-pink-300 flex items-center gap-1.5">
+                  💸 Propinas del turno
+                </span>
+                <span className="text-xs font-black text-pink-200">{fmt(currentTotals?.tips?.total ?? 0)}</span>
+              </div>
+              <p className="text-[11px] text-gray-300 leading-relaxed">
+                Tarjeta <strong className="text-white">{fmt(currentTotals?.tips?.card ?? 0)}</strong> · Efectivo <strong className="text-white">{fmt(currentTotals?.tips?.cash ?? 0)}</strong>
+                {(currentTotals?.tips?.count ?? 0) > 0 ? ` · ${currentTotals?.tips?.count} cuenta(s) con propina` : ""}
+              </p>
+              {(currentTotals?.tips?.card ?? 0) > 0 && (
+                <>
+                  <label className="flex items-center gap-2 text-[11px] text-gray-300 font-semibold cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={payTips}
+                      onChange={(e) => {
+                        setPayTips(e.target.checked);
+                        setTipPayout(e.target.checked ? String(currentTotals?.tips?.card ?? 0) : "");
+                      }}
+                      className="h-4 w-4 rounded border-white/10 bg-white/5 text-pink-500 cursor-pointer"
+                    />
+                    Pagar propinas de tarjeta desde la gaveta (opcional)
+                  </label>
+                  {payTips && (
+                    <MoneyField
+                      id="cash-close-tip-payout"
+                      label="Monto a pagar de propinas ($)"
+                      value={tipPayout}
+                      onChange={setTipPayout}
+                    />
+                  )}
+                  {payTips && Number(tipPayout || 0) > Number(currentTotals?.tips?.card ?? 0) + 0.009 && (
+                    <p className="text-[10px] text-amber-300 font-bold">Máximo pagable: {fmt(currentTotals?.tips?.card ?? 0)} (propinas en tarjeta).</p>
+                  )}
+                </>
+              )}
+            </div>
+
             
             <div className="grid grid-cols-2 gap-2">
               <PinField id="cash-close-pin" label="PIN del cajero" value={pin} onChange={setPin} />
@@ -626,6 +671,12 @@ export function CashShiftModal({
               <div className="flex justify-between"><span className="text-gray-400">Retiros</span><span className="font-bold text-amber-400">-{fmt(result.withdrawals)}</span></div>
               <div className="flex justify-between border-t border-white/10 pt-1.5"><span className="text-gray-400">Esperado</span><span className="font-black">{fmt(result.expectedCash)}</span></div>
               <div className="flex justify-between"><span className="text-gray-400">Contado</span><span className="font-black">{fmt(result.countedCash)}</span></div>
+              {Number(result.tipPayout || 0) > 0 && (
+                <div className="flex justify-between text-pink-200">
+                  <span>Propinas pagadas de caja</span>
+                  <span className="font-black">{fmt(result.tipPayout)} <span className="text-gray-400 font-normal">(esperado comparable {fmt(result.comparableExpected ?? result.expectedCash)})</span></span>
+                </div>
+              )}
               <div className={cn("flex justify-between font-black", Math.abs(result.difference) < 0.01 ? "text-emerald-400" : result.difference > 0 ? "text-cyan-300" : "text-red-400")}>
                 <span>{Math.abs(result.difference) < 0.01 ? "Cuadrado" : result.difference > 0 ? "Sobrante" : "Faltante"}</span>
                 <span>{fmt(Math.abs(result.difference))}</span>
