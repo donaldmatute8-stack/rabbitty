@@ -648,6 +648,29 @@ export default function SettingsPage() {
                     />
                     Mostrar valor USD en el POS y en los tickets (impreso y digital)
                   </label>
+                  {/* Plan Analíticas Pro (vendible — on/off aquí) */}
+                  <div
+                    className="flex items-center justify-between gap-3 rounded-xl p-3 cursor-pointer transition-colors hover:bg-white/5"
+                    style={{ background: (r as any)?.analyticsProEnabled ? "rgba(16,185,129,0.08)" : "rgba(255,255,255,0.03)", border: (r as any)?.analyticsProEnabled ? "1px solid rgba(16,185,129,0.4)" : "1px solid rgba(255,255,255,0.1)" }}
+                    onClick={() => update.mutate({ id: r!.id, analyticsProEnabled: !(r as any)?.analyticsProEnabled })}
+                    role="button"
+                    aria-pressed={(r as any)?.analyticsProEnabled ? "true" : "false"}
+                  >
+                    <div>
+                      <p className="text-xs font-black text-white m-0">
+                        📊 Plan Analíticas Pro
+                        <span className={`ml-2 text-[9px] font-black px-1.5 py-0.5 rounded-full ${(r as any)?.analyticsProEnabled ? "bg-emerald-500/15 text-emerald-300" : "bg-gray-500/15 text-gray-400"}`}>
+                          {(r as any)?.analyticsProEnabled ? "ACTIVO" : "INACTIVO (upgrade pagado)"}
+                        </span>
+                      </p>
+                      <p className="text-[11px] text-gray-400 m-0 mt-0.5">
+                        Conversión de checkout y abandono, analítica de propinas, tendencia semanal por método y crecimiento de tu clientela.
+                      </p>
+                    </div>
+                    <span className={`w-5 h-5 rounded-full shrink-0 flex items-center justify-center text-[11px] font-black ${(r as any)?.analyticsProEnabled ? "bg-emerald-500 text-gray-950" : "bg-white/10 text-gray-500"}`}>
+                      {(r as any)?.analyticsProEnabled ? "✔" : "+"}
+                    </span>
+                  </div>
                 </div>
                 {/* ── Expiración de tabs huérfanas ── */}
                 <Input label="Horas antes de expirar tabs sin pagar (1–72)" type="number" value={form.staleOrderHours} onChange={(e) => setForm((f) => ({ ...f, staleOrderHours: Number(e.target.value) }))} />
@@ -667,6 +690,11 @@ export default function SettingsPage() {
                   </span>
                 </div>
                 <div className="flex justify-between items-center py-0.5"><span className="text-gray-400 font-medium">Expira tabs sin pagar</span><span className="font-bold text-white">{r?.staleOrderHours ?? 12}h</span></div>
+                <div className="flex justify-between items-center py-0.5"><span className="text-gray-400 font-medium">Plan Analíticas</span>
+                  <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${(r as any)?.analyticsProEnabled ? "bg-emerald-500/15 text-emerald-300" : "bg-gray-500/15 text-gray-400"}`}>
+                    {(r as any)?.analyticsProEnabled ? "PRO ACTIVO" : "Básico (gratis)"}
+                  </span>
+                </div>
               </div>
             )}
           </Card>

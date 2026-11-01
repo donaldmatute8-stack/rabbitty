@@ -15,7 +15,7 @@ jobs:
     steps:
       - name: Trigger Reconciliation Worker
         run: |
-          APP_URL="${{ secrets.APP_URL || 'https://rabbitty.me' }}"
+          APP_URL="${{ secrets.MEMBERSHIPS_APP_URL || 'https://app.rabbitty.me' }}"
           CRON_SECRET="${{ secrets.CRON_SECRET }}"
           
           echo "Executing reconciliation health check against $APP_URL..."

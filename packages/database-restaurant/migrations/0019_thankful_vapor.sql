@@ -1,0 +1,1 @@
+ALTER TABLE "restaurants" ADD COLUMN "analyticsProEnabled" boolean DEFAULT false NOT NULL;

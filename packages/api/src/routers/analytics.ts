@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure, resolveBranchId } from "../trpc";
-import { and, eq, gte, lte, inArray } from "drizzle-orm";
-import { orders, orderItems, menuItems, payments, branches, customers } from "@rabbitty/database-restaurant/schema";
+import { and, desc, eq, gte, lte, inArray, sql } from "drizzle-orm";
+import { orders, orderItems, menuItems, payments, branches, customers, restaurants, paymentIntents } from "@rabbitty/database-restaurant/schema";
 
 // ─── ZONA HORARIA DEL NEGOCIO ──────────────────────────────────────────────
 // Los reportes financieros y por hora se agrupan por el día/hora LOCAL del
@@ -56,6 +56,29 @@ function effectiveDateRange(
   d.setDate(d.getDate() - days);
   return { startDate: d, endDate: null, perDayInit: true };
 }
+
+/**
+ * ── Plan "Analíticas Pro" (vendible, apagado por defecto) ──
+ * Cuando el comercio lo activa (Ajustes → Facturación), los procs *_Pro
+ * regresan datos; si no, regresan { gated: true } con la tasa de teaser.
+ */
+async function isAnalyticsProEnabled(restaurantDb: any, restaurantId: string): Promise<boolean> {
+  try {
+    const [row] = await restaurantDb
+      .select({ pro: restaurants.analyticsProEnabled })
+      .from(restaurants)
+      .where(eq(restaurants.id, restaurantId))
+      .limit(1);
+    return Boolean(row?.pro);
+  } catch {
+    return false; // sin la columna o error: apagado (safe-by-default)
+  }
+}
+
+const PRO_GATED = {
+  gated: true as const,
+  teaser: "Métrica disponible en el plan Analíticas Pro — actívala en Ajustes → Facturación.",
+};
 
 export const analyticsRouter = router({
   getSalesTrends: protectedProcedure
@@ -306,5 +329,138 @@ export const analyticsRouter = router({
           cfdiStatus: order.cfdiStatus,
         };
       });
+    }),
+
+  // ═══════════ ANALÍTICAS PRO (plan vendible — apagado por defecto) ═══════════
+
+  /** 💡 Conversión de cobro digital y checkouts abandonados (dinerito perdido). */
+  getCheckoutConversionPro: protectedProcedure
+    .input(z.object({ branchId: z.string(), days: z.number().optional() }))
+    .query(async ({ ctx, input }) => {
+      const branchId = await resolveBranchId(ctx, input.branchId);
+      const [branch] = await ctx.restaurantDb.select({ restaurantId: branches.restaurantId }).from(branches).where(eq(branches.id, branchId));
+      if (!branch || !(await isAnalyticsProEnabled(ctx.restaurantDb, branch.restaurantId))) {
+        return PRO_GATED;
+      }
+      const { startDate } = effectiveDateRange(input);
+      const intents = await ctx.restaurantDb
+        .select({ status: paymentIntents.status, count: sql<number>`COUNT(*)` })
+        .from(paymentIntents)
+        .where(and(gte(paymentIntents.createdAt, startDate), eq(paymentIntents.merchantId, branchId)))
+        .groupBy(paymentIntents.status);
+      const byStatus = intents.reduce<Record<string, number>>((acc, r) => { acc[r.status] = Number(r.count); return acc; }, {});
+      const total = Object.values(byStatus).reduce((s, n) => s + n, 0);
+      const settled = (byStatus["SUCCEEDED"] ?? 0) + (byStatus["PROCESSING"] ?? 0);
+      const abandonedRows = await ctx.restaurantDb
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(paymentIntents)
+        .where(and(
+          inArray(paymentIntents.status, ["PENDING_PAYMENT", "REQUIRES_ACTION"]),
+          sql`${paymentIntents.createdAt} < NOW() - INTERVAL '2 hours'`,
+          eq(paymentIntents.merchantId, branchId)
+        ));
+      return {
+        gated: false as const,
+        total,
+        byStatus,
+        settled,
+        failed: (byStatus["EXPIRED"] ?? 0) + (byStatus["CANCELLED"] ?? 0) + (byStatus["FAILED"] ?? 0),
+        conversion: total > 0 ? Math.round((settled / total) * 1000) / 10 : 0,
+        abandoned: Number(abandonedRows[0]?.count || 0),
+      };
+    }),
+
+  /** 💡 Propinas: cuántas mesas dan, cuánto promedian y qué % del total. */
+  getTipsAnalyticsPro: protectedProcedure
+    .input(z.object({ branchId: z.string(), days: z.number().optional() }))
+    .query(async ({ ctx, input }) => {
+      const branchId = await resolveBranchId(ctx, input.branchId);
+      const [branch] = await ctx.restaurantDb.select({ restaurantId: branches.restaurantId }).from(branches).where(eq(branches.id, branchId));
+      if (!branch || !(await isAnalyticsProEnabled(ctx.restaurantDb, branch.restaurantId))) {
+        return PRO_GATED;
+      }
+      const { startDate } = effectiveDateRange(input);
+      const [stats] = await ctx.restaurantDb
+        .select({
+          paidOrders: sql<number>`COUNT(*)`,
+          withTip: sql<number>`COUNT(*) FILTER (WHERE ${orders.tip} > 0)`,
+          totalTip: sql<number>`COALESCE(SUM(${orders.tip}), 0)`,
+          avgTipPct: sql<number>`COALESCE(AVG(CASE WHEN ${orders.tip} > 0 AND ${orders.subtotal} > 0 THEN (${orders.tip} / ${orders.subtotal}) * 100 END), 0)`,
+        })
+        .from(orders)
+        .where(and(inArray(orders.status, ["COMPLETED", "PAID"]), gte(orders.createdAt, startDate)));
+      return {
+        gated: false as const,
+        paidOrders: Number(stats?.paidOrders || 0),
+        ordersWithTip: Number(stats?.withTip || 0),
+        totalTip: Number(stats?.totalTip || 0),
+        avgTipPct: Math.round(Number(stats?.avgTipPct || 0) * 10) / 10,
+      };
+    }),
+
+  /** 💡 Tendencia semanal por método de pago (12 semanas). */
+  getWeeklyMethodTrendPro: protectedProcedure
+    .input(z.object({ branchId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const branchId = await resolveBranchId(ctx, input.branchId);
+      const [branch] = await ctx.restaurantDb.select({ restaurantId: branches.restaurantId }).from(branches).where(eq(branches.id, branchId));
+      if (!branch || !(await isAnalyticsProEnabled(ctx.restaurantDb, branch.restaurantId))) {
+        return PRO_GATED;
+      }
+      const rows = await ctx.restaurantDb
+        .select({
+          week: sql<string>`to_char(date_trunc('week', ${payments.createdAt}), 'DD Mon')`,
+          method: payments.method,
+          wk: sql<string>`date_trunc('week', ${payments.createdAt})::text`,
+          total: sql<number>`COALESCE(SUM(${payments.amount}), 0)`,
+        })
+        .from(payments)
+        .innerJoin(orders, eq(payments.orderId, orders.id))
+        .where(and(eq(orders.branchId, branchId), eq(payments.status, "COMPLETED"), gte(payments.createdAt, sql`NOW() - (INTERVAL '1 day' * 84)`)))
+        .groupBy(sql`date_trunc('week', ${payments.createdAt})`, payments.method)
+        .orderBy(sql`date_trunc('week', ${payments.createdAt})`);
+      return {
+        gated: false as const,
+        weekly: rows.map((r) => ({ week: r.week, wk: r.wk, method: r.method, total: Number(r.total) })),
+      };
+    }),
+
+  /** 💡 Crecimiento de TU clientela: nuevos vs recurrentes por mes. */
+  getCustomerGrowthPro: protectedProcedure
+    .input(z.object({ branchId: z.string(), months: z.number().int().min(3).max(24).default(12) }))
+    .query(async ({ ctx, input }) => {
+      const branchId = await resolveBranchId(ctx, input.branchId);
+      const [branch] = await ctx.restaurantDb.select({ restaurantId: branches.restaurantId }).from(branches).where(eq(branches.id, branchId));
+      if (!branch || !(await isAnalyticsProEnabled(ctx.restaurantDb, branch.restaurantId))) {
+        return PRO_GATED;
+      }
+      const newRows = await ctx.restaurantDb
+        .select({
+          month: sql<string>`to_char(date_trunc('month', ${customers.createdAt}), 'Mon YY')`,
+          mo: sql<string>`date_trunc('month', ${customers.createdAt})::text`,
+          count: sql<number>`COUNT(*)`,
+        })
+        .from(customers)
+        .where(and(eq(customers.restaurantId, branch.restaurantId), gte(customers.createdAt, sql`NOW() - (INTERVAL '1 month' * ${input.months})`)))
+        .groupBy(sql`date_trunc('month', ${customers.createdAt})`)
+        .orderBy(sql`date_trunc('month', ${customers.createdAt})`);
+      const [repeat] = await ctx.restaurantDb
+        .select({
+          total: sql<number>`COUNT(*)`,
+          recurring: sql<number>`COUNT(*) FILTER (WHERE ${customers.totalVisits} > 1)`,
+        })
+        .from(customers)
+        .where(eq(customers.restaurantId, branch.restaurantId));
+      return {
+        gated: false as const,
+        newByMonth: newRows.map((r) => ({ month: r.month, new: Number(r.count) })),
+        base: {
+          totalCustomers: Number(repeat?.total || 0),
+          recurring: Number(repeat?.recurring || 0),
+          recurringPct: Number(repeat?.total || 0) > 0
+            ? Math.round((Number(repeat?.recurring || 0) / Number(repeat?.total || 1)) * 100)
+            : 0,
+        },
+      };
     }),
 });

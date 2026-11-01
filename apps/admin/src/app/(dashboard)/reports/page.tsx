@@ -5,8 +5,19 @@ import Link from "next/link";
 import { trpc } from "../../../lib/trpc-client";
 import { Card, cn, Button } from "@rabbitty/ui";
 import { motion } from "framer-motion";
-import { Download, TrendingUp, CreditCard, Activity, UtensilsCrossed } from "lucide-react";
+import { Download, TrendingUp, CreditCard, Activity, UtensilsCrossed, Zap } from "lucide-react";
 import { useBranch } from "../../../components/DashboardClientWrapper";
+
+/** Teaser del gate: lo que ve el afiliado sin el plan. */
+function ProTeaser({ text, hint }: { text: string; hint?: string }) {
+  return (
+    <div className="flex-1 flex flex-col justify-center gap-2">
+      <span className="text-2xl">🔒</span>
+      <p className="text-[11px] text-(--text-muted) leading-snug m-0">{text}</p>
+      {hint && <p className="text-[9px] text-amber-400 font-bold leading-snug m-0">{hint}</p>}
+    </div>
+  );
+}
 import {
   AreaChart,
   Area,
@@ -44,6 +55,12 @@ export default function ReportsPage() {
   const { data: salesTrends, isLoading: loadingSales } = trpc.analytics.getSalesTrends.useQuery({ branchId, ...dateFilter });
   const { data: topProducts, isLoading: loadingTop } = trpc.analytics.getTopProducts.useQuery({ branchId, limit: 5 });
   const { data: paymentMethods, isLoading: loadingPayments } = trpc.analytics.getPaymentMethods.useQuery({ branchId, ...dateFilter });
+
+  // ── Analíticas Pro (plan vendible — gated server-side) ──
+  const { data: checkoutPro } = trpc.analytics.getCheckoutConversionPro.useQuery({ branchId, days: daysRange });
+  const { data: tipsPro } = trpc.analytics.getTipsAnalyticsPro.useQuery({ branchId, days: daysRange });
+  const { data: trendPro } = trpc.analytics.getWeeklyMethodTrendPro.useQuery({ branchId });
+  const { data: growthPro } = trpc.analytics.getCustomerGrowthPro.useQuery({ branchId });
   
   const { data: reconciliationData, refetch: refetchReconciliation, isFetching: isReconciling } = trpc.payments.getFinancialReconciliation.useQuery(
     { branchId: branchId !== "default" ? branchId : undefined },
@@ -394,6 +411,98 @@ export default function ReportsPage() {
                   <span className="text-sm text-(--text-muted)">${Number(entry.amount).toFixed(2)}</span>
                 </div>
               ))}
+            </div>
+          </Card>
+        </motion.div>
+
+        {/* ── ANALÍTICAS PRO (plan vendible — gated server-side) ── */}
+        <motion.div variants={itemVariants}>
+          <Card className="p-6 border border-(--border-subtle) bg-(--bg-subtle)">
+            <div className="flex items-center justify-between flex-wrap gap-2 mb-5">
+              <h3 className="text-xl font-bold text-(--text-primary) flex items-center gap-2 mb-0">
+                <Zap className="text-amber-500" /> Analíticas Pro
+              </h3>
+              <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase tracking-wider ${checkoutPro?.gated === false ? "bg-emerald-500/15 text-emerald-400" : "bg-amber-500/15 text-amber-400"}`}>
+                {checkoutPro?.gated === false ? "PRO ACTIVO" : "PREVIEW — activa el plan en Ajustes → Facturación"}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              {/* 1. Conversión checkout */}
+              <div className="rounded-2xl p-4 border border-(--border-subtle) bg-(--bg-elevated) h-full flex flex-col">
+                <p className="text-[11px] font-black uppercase tracking-wider text-(--text-muted) mb-2">💳 Checkout digital</p>
+                {checkoutPro?.gated ? (
+                  <ProTeaser text="Cuántas cuentas se pagan y cuántas se abandonan en tu QR/link."
+                    hint={checkoutPro.teaser} />
+                ) : (
+                  <div className="space-y-1.5 text-sm">
+                    <p className="text-3xl font-black text-(--text-primary)">{checkoutPro?.conversion}%</p>
+                    <p className="text-[11px] text-(--text-muted)">conversión · {checkoutPro?.total} intentos</p>
+                    <p className="text-[11px]">
+                      <span className="text-emerald-400 font-bold">✔ {checkoutPro?.settled} pagados</span>
+                      <span className="text-amber-400 font-bold ml-2">⚠ {checkoutPro?.abandoned} abandonados</span>
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Propinas */}
+              <div className="rounded-2xl p-4 border border-(--border-subtle) bg-(--bg-elevated) h-full flex flex-col">
+                <p className="text-[11px] font-black uppercase tracking-wider text-(--text-muted) mb-2">🫰 Propinas</p>
+                {tipsPro?.gated ? (
+                  <ProTeaser text="Cuánto deja tu clientela de propina y en qué mesas." hint={tipsPro.teaser} />
+                ) : (
+                  <div className="space-y-1.5 text-sm">
+                    <p className="text-3xl font-black text-(--text-primary)">${(tipsPro?.totalTip || 0).toFixed(0)}</p>
+                    <p className="text-[11px] text-(--text-muted)">{tipsPro?.ordersWithTip} cuentas con propina</p>
+                    <p className="text-[11px] text-(--text-muted)">Promedio: <span className="font-black text-(--text-primary)">{tipsPro?.avgTipPct}%</span></p>
+                  </div>
+                )}
+              </div>
+
+              {/* 3. Tendencia semanal por método */}
+              <div className="rounded-2xl p-4 border border-(--border-subtle) bg-(--bg-elevated) h-full flex flex-col">
+                <p className="text-[11px] font-black uppercase tracking-wider text-(--text-muted) mb-2">📈 Método por semana</p>
+                {trendPro?.gated ? (
+                  <ProTeaser text="Cómo evoluciona cada método de pago semana a semana." hint={trendPro.teaser} />
+                ) : (
+                  <div className="flex-1 min-h-40">
+                    <ResponsiveContainer width="100%" height={160}>
+                      <BarChart data={Object.values((trendPro?.weekly ?? []).reduce<Record<string, { week: string } & Record<string, number>>>((acc, r) => {
+                        acc[r.wk] = acc[r.wk] || { week: r.week };
+                        acc[r.wk][r.method] = (acc[r.wk][r.method] || 0) + r.total;
+                        return acc;
+                      }, {}))}>
+                        <XAxis dataKey="week" tick={{ fill: "currentColor", fontSize: 9, opacity: 0.6 }} axisLine={false} tickLine={false} />
+                        <YAxis hide />
+                        <Tooltip content={<CustomTooltip />} />
+                        {(trendPro?.weekly ?? []).length > 0 &&
+                          Array.from(new Set((trendPro?.weekly ?? []).map((r: any) => r.method))).map((m: any, i: number) => (
+                            <Bar key={m as string} dataKey={m as string} fill={COLORS[i % COLORS.length]} radius={[3, 3, 0, 0]} />
+                          ))}
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+
+              {/* 4. Crecimiento de clientela */}
+              <div className="rounded-2xl p-4 border border-(--border-subtle) bg-(--bg-elevated) h-full flex flex-col">
+                <p className="text-[11px] font-black uppercase tracking-wider text-(--text-muted) mb-2">🐰 Tu clientela</p>
+                {growthPro?.gated ? (
+                  <ProTeaser text="Nuevos vs recurrentes cada mes: tu base de comensales creciendo." hint={growthPro.teaser} />
+                ) : (
+                  <div className="space-y-1.5 text-sm">
+                    <p className="text-3xl font-black text-(--text-primary)">{growthPro?.base.totalCustomers.toLocaleString()}</p>
+                    <p className="text-[11px] text-(--text-muted)">comensales registrados</p>
+                    <p className="text-[11px]">
+                      <span className="text-emerald-400 font-bold">{growthPro?.base.recurringPct}% recurrentes</span>
+                      <span className="text-(--text-muted) ml-2">({growthPro?.base.recurring})</span>
+                    </p>
+                    <p className="text-[10px] text-(--text-muted)">Nuevos este mes: <span className="font-black text-(--text-primary)">{growthPro?.newByMonth.at(-1)?.new ?? 0}</span></p>
+                  </div>
+                )}
+              </div>
             </div>
           </Card>
         </motion.div>

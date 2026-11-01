@@ -126,6 +126,7 @@ export const adminRouter = router({
         usdRate: z.number().min(1).max(100).optional().nullable(),
         staleOrderHours: z.number().int().min(1).max(72).optional(),
         showUsdTicket: z.boolean().optional(),
+        analyticsProEnabled: z.boolean().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {

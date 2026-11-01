@@ -37,6 +37,8 @@ export const restaurants = pgTable("restaurants", {
   staleOrderHours: integer("staleOrderHours").default(12).notNull(),
   // ── USD en POS/ticket: SOLO si el admin lo activa ──
   showUsdTicket: boolean("showUsdTicket").default(false).notNull(),
+  // ── Plan "Analíticas Pro" (vendible): conversión checkout, tips, clientela ──
+  analyticsProEnabled: boolean("analyticsProEnabled").default(false).notNull(),
   printerType: text("printerType"),
   printerConfig: jsonb("printerConfig"),
   legalName: text("legalName"),

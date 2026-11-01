@@ -1,6 +1,6 @@
 import { z } from "zod";
 import crypto from "crypto";
-import { eq, sql, desc, gte } from "drizzle-orm";
+import { and, eq, sql, desc, gte, inArray, lt } from "drizzle-orm";
 import { router, godAdminProcedure } from "../trpc";
 import {
   users,
@@ -17,7 +17,11 @@ import {
   menuItems,
   tables as tablesTable,
   orders,
+  payments,
+  paymentIntents,
 } from "@rabbitty/database-restaurant/schema";
+// Campañas viven en coreDb
+import { affiliateCampaigns, campaignRedemptions } from "@rabbitty/database-core/schema";
 import { TRPCError } from "@trpc/server";
 
 /**
@@ -294,6 +298,389 @@ export const godRouter = router({
       recentLedger,
     };
   }),
+
+  // ── Aprovisionamiento del plan "Analíticas Pro" por restaurante (God) ──
+  listAnalyticsTenants: godAdminProcedure.query(async ({ ctx }) => {
+    const rows = await ctx.restaurantDb
+      .select({
+        id: restaurants.id,
+        name: restaurants.name,
+        currency: restaurants.currency,
+        analyticsProEnabled: restaurants.analyticsProEnabled,
+        showUsdTicket: restaurants.showUsdTicket,
+        createdAt: restaurants.createdAt,
+      })
+      .from(restaurants)
+      .orderBy(desc(restaurants.createdAt));
+
+    // Branches por restaurante (para mostrar tamaño de flota)
+    const branchCounts = await ctx.restaurantDb
+      .select({ restaurantId: branches.restaurantId, count: sql<number>`COUNT(*)` })
+      .from(branches)
+      .groupBy(branches.restaurantId);
+    const bcMap = new Map(branchCounts.map((r) => [r.restaurantId, Number(r.count)]));
+
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      currency: r.currency,
+      branchCount: bcMap.get(r.id) ?? 0,
+      analyticsProEnabled: Boolean(r.analyticsProEnabled),
+      showUsdTicket: Boolean(r.showUsdTicket),
+      createdAt: r.createdAt,
+    }));
+  }),
+
+  /** Conceder/quitar el plan Analíticas Pro de un restaurante (sin importar facturación aún). */
+  setAnalyticsPro: godAdminProcedure
+    .input(z.object({ restaurantId: z.string(), enabled: z.boolean(), note: z.string().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.restaurantDb
+        .update(restaurants)
+        .set({ analyticsProEnabled: input.enabled })
+        .where(eq(restaurants.id, input.restaurantId));
+      console.log(`[GOD_PROVISION] Analíticas Pro ${input.enabled ? "ACTIVADO" : "DESACTIVADO"} para ${input.restaurantId}${input.note ? ` — ${input.note}` : ""}`);
+      return { success: true, restaurantId: input.restaurantId, enabled: input.enabled };
+    }),
+
+  // ── MÉTRICAS DE PAGO: ¿cómo pagan los clientes? (métodos, mix, funnel, tips) ──
+  getPaymentMetrics: godAdminProcedure
+    .input(z.object({ days: z.number().int().min(7).max(365).default(30) }))
+    .query(async ({ ctx, input }) => {
+      const window = sql`NOW() - (INTERVAL '1 day' * ${input.days})`;
+
+      // Mix por método de pago (orders pagadas → payments COMPLETED)
+      const byMethod = await ctx.restaurantDb
+        .select({
+          method: payments.method,
+          count: sql<number>`COUNT(*)`,
+          total: sql<number>`COALESCE(SUM(${payments.amount}), 0)`,
+          avg: sql<number>`COALESCE(AVG(${payments.amount}), 0)`,
+        })
+        .from(payments)
+        .where(and(eq(payments.status, "COMPLETED"), gte(payments.createdAt, window)))
+        .groupBy(payments.method)
+        .orderBy(desc(sql`COALESCE(SUM(${payments.amount}), 0)`));
+
+      const totalAmount = Number(byMethod.reduce((s: number, r: { total: unknown }) => s + Number(r.total), 0));
+      const totalCount = byMethod.reduce((s: number, r: { count: unknown }) => s + Number(r.count), 0);
+
+      // Verificación de pago (humano vs webhook)
+      const byVerification = await ctx.restaurantDb
+        .select({
+          verification: payments.verificationMethod,
+          count: sql<number>`COUNT(*)`,
+        })
+        .from(payments)
+        .where(and(eq(payments.status, "COMPLETED"), gte(payments.createdAt, window)))
+        .groupBy(payments.verificationMethod);
+
+      // Intents: funnel de conversión del cobro digital
+      const intentFunnel = await ctx.restaurantDb
+        .select({ status: paymentIntents.status, count: sql<number>`COUNT(*)` })
+        .from(paymentIntents)
+        .where(gte(paymentIntents.createdAt, window))
+        .groupBy(paymentIntents.status)
+        .orderBy(desc(sql`COUNT(*)`));
+      const intentsByStatus = intentFunnel.reduce<Record<string, number>>((acc, r) => {
+        acc[r.status] = Number(r.count);
+        return acc;
+      }, {});
+      const intentsTotal = intentFunnel.reduce((s, r) => s + Number(r.count), 0);
+
+      // Abandoned checkout: intents vivos pero ya expirados (nunca pagaron)
+      const abandoned = await ctx.restaurantDb
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(paymentIntents)
+        .where(and(
+          inArray(paymentIntents.status, ["PENDING_PAYMENT", "REQUIRES_ACTION"]),
+          lt(paymentIntents.createdAt, sql`NOW() - INTERVAL '2 hours'`)
+        ));
+
+      // Propinas
+      const [tipStats] = await ctx.restaurantDb
+        .select({
+          ordersWithTip: sql<number>`COUNT(*) FILTER (WHERE ${orders.tip} > 0)`,
+          totalTip: sql<number>`COALESCE(SUM(${orders.tip}), 0)`,
+        })
+        .from(orders)
+        .where(and(inArray(orders.status, ["COMPLETED", "PAID"]), gte(orders.createdAt, window)));
+
+      // Mix por semana (últimas 12 semanas) para trend
+      const weekly = await ctx.restaurantDb
+        .select({
+          week: sql<string>`to_char(date_trunc('week', ${payments.createdAt}), 'DD Mon')`,
+          method: payments.method,
+          total: sql<number>`COALESCE(SUM(${payments.amount}), 0)`,
+        })
+        .from(payments)
+        .where(and(eq(payments.status, "COMPLETED"), gte(payments.createdAt, sql`NOW() - (INTERVAL '1 day' * 84)`)))
+        .groupBy(sql`date_trunc('week', ${payments.createdAt})`, payments.method)
+        .orderBy(sql`date_trunc('week', ${payments.createdAt})`);
+
+      return {
+        windowDays: input.days,
+        byMethod: byMethod.map((r) => ({
+          method: r.method,
+          count: Number(r.count),
+          total: Number(r.total),
+          avg: Number(r.avg),
+          share: totalAmount > 0 ? Math.round((Number(r.total) / totalAmount) * 1000) / 10 : 0,
+        })),
+        totalCount,
+        totalAmount,
+        byVerification: byVerification.map((r) => ({ verification: r.verification, count: Number(r.count) })),
+        intents: {
+          total: intentsTotal,
+          byStatus: intentsByStatus,
+          ...(() => {
+            const s = intentsByStatus;
+            const settled = (s["SUCCEEDED"] ?? 0) + (s["PROCESSING"] ?? 0);
+            const failed = (s["EXPIRED"] ?? 0) + (s["CANCELLED"] ?? 0) + (s["FAILED"] ?? 0);
+            const conversion = intentsTotal > 0 ? Math.round((settled / intentsTotal) * 1000) / 10 : 0;
+            return { settled, failed, conversion, abandoned: Number(abandoned[0]?.count || 0) };
+          })(),
+        },
+        tips: {
+          ordersWithTip: Number(tipStats?.ordersWithTip || 0),
+          totalTip: Number(tipStats?.totalTip || 0),
+        },
+        weekly: weekly.map((r) => ({ week: r.week, method: r.method, total: Number(r.total) })),
+      };
+    }),
+
+  // ── SEGURIDAD DE CUENTAS: una cuenta por número, dedupe identidad ──
+  getAccountSecurity: godAdminProcedure.query(async ({ ctx }) => {
+    const [totals] = await ctx.coreDb
+      .select({
+        totalUsers: sql<number>`COUNT(*)`,
+        withPhone: sql<number>`COUNT(*) FILTER (WHERE ${users.phoneNumber} IS NOT NULL)`,
+        withTelegram: sql<number>`COUNT(*) FILTER (WHERE ${users.telegramId} IS NOT NULL)`,
+        withEmail: sql<number>`COUNT(*) FILTER (WHERE ${users.email} IS NOT NULL)`,
+        withUsername: sql<number>`COUNT(*) FILTER (WHERE ${users.username} IS NOT NULL)`,
+        noIdentity: sql<number>`COUNT(*) FILTER (WHERE ${users.phoneNumber} IS NULL AND ${users.telegramId} IS NULL AND ${users.email} IS NULL)`,
+        last7: sql<number>`COUNT(*) FILTER (WHERE ${users.createdAt} >= NOW() - INTERVAL '7 days')`,
+        last30: sql<number>`COUNT(*) FILTER (WHERE ${users.createdAt} >= NOW() - INTERVAL '30 days')`,
+        affiliates: sql<number>`COUNT(*) FILTER (WHERE ${users.role} = 'AFFILIATE')`,
+      })
+      .from(users);
+
+    // Cuentas huérfanas/OTP-only: sin identidad real ni username (no pueden ser reclamadas)
+    const orphanAccounts = await ctx.coreDb
+      .select({
+        id: users.id,
+        username: users.username,
+        createdAt: users.createdAt,
+      })
+      .from(users)
+      .where(and(
+        sql`${users.phoneNumber} IS NULL OR BTRIM(${users.phoneNumber}) = ''`,
+        sql`${users.telegramId} IS NULL`,
+        sql`${users.email} IS NULL OR BTRIM(${users.email}) = ''`
+      ))
+      .orderBy(desc(users.createdAt))
+      .limit(20);
+
+    // Normalización de identidad: números duplicados tras limpiar (+52, espacios, guiones)
+    const dupPhones = await ctx.coreDb.execute(sql`
+      SELECT regexp_replace(COALESCE("phoneNumber",''), '[^0-9]', '', 'g') AS digits, COUNT(*) AS n
+      FROM "users"
+      WHERE "phoneNumber" IS NOT NULL AND BTRIM(regexp_replace(COALESCE("phoneNumber",''), '[^0-9]', '', 'g')) <> ''
+      GROUP BY digits HAVING COUNT(*) > 1
+      ORDER BY n DESC LIMIT 10`);
+
+    // Uniqueness real a nivel DB (índices únicos existen o no)
+    const uniqueIndexes = await ctx.coreDb.execute(sql`
+      SELECT indexname FROM pg_indexes
+      WHERE tablename = 'users' AND indexdef ILIKE '%UNIQUE%'
+
+      ORDER BY indexname`).then((r: unknown) => ((r as { rows?: unknown[] }).rows ?? r) as Array<{ indexname: string }>);
+
+    // ── Investigación de MULTI-CUENTA: vinculación de identidades ──
+    // a) Gmail normalizado: Google ignora puntos y todo lo que va tras '+' en
+    //    el inbox → marco.del.toro+3@gmail.com ES marcodeltoro@gmail.com
+    const gmailClusters = await ctx.coreDb.execute(sql`
+      SELECT
+        regexp_replace(split_part(regexp_replace(LOWER("email"), '\\.gmail', 'gmail'), '@', 1), '\\.', '', 'g') AS inbox,
+        (regexp_match(LOWER("email"), '\\+([^@]+)@'))[1] AS alias_tag,
+        COUNT(*) AS n,
+        string_agg(COALESCE("username", LEFT(id, 8)), ', ') AS accounts
+      FROM "users"
+      WHERE "email" ILIKE '%@gmail.com' OR "email" ILIKE '%@googlemail.com'
+      GROUP BY 1, 2
+      HAVING COUNT(*) > 1
+      ORDER BY n DESC LIMIT 10`);
+    // b) Misma IP confiable usada por distintas cuentas (mismo hogar/dispositivo)
+    const ipSharing = await ctx.coreDb.execute(sql`
+      SELECT t."ipAddress" AS ip, COUNT(DISTINCT t."userId") AS n,
+             string_agg(DISTINCT COALESCE(u."username", LEFT(u.id, 8)), ', ') AS accounts
+      FROM "trustedSessions" t LEFT JOIN "users" u ON u.id = t."userId"
+      WHERE t."ipAddress" IS NOT NULL AND BTRIM(t."ipAddress") <> ''
+      GROUP BY t."ipAddress"
+      HAVING COUNT(DISTINCT t."userId") > 1
+      ORDER BY n DESC LIMIT 10`);
+    // c) Mismo dispositivo (deviceName + userAgent) con varias cuentas
+    const deviceSharing = await ctx.coreDb.execute(sql`
+      SELECT COALESCE(t."deviceName", '?') AS device, LEFT(COALESCE(t."userAgent", '?'), 60) AS agent,
+             COUNT(DISTINCT t."userId") AS n,
+             string_agg(DISTINCT COALESCE(u."username", LEFT(u.id, 8)), ', ') AS accounts
+      FROM "trustedSessions" t LEFT JOIN "users" u ON u.id = t."userId"
+      GROUP BY device, agent
+      HAVING COUNT(DISTINCT t."userId") > 1
+      ORDER BY n DESC LIMIT 10`);
+    // d) Push token físico re-registrado bajo otra cuenta: MISMO teléfono
+    const tokenHistory = await ctx.coreDb.execute(sql`
+      SELECT LEFT(p.token, 24) AS token_prefix, COUNT(DISTINCT u.id) AS n,
+             string_agg(DISTINCT COALESCE(u."username", LEFT(u.id, 8)), ', ') AS accounts
+      FROM "pushDevices" p LEFT JOIN "users" u ON u.id = p."userId"
+      WHERE p.token IS NOT NULL
+      GROUP BY p.token HAVING COUNT(DISTINCT u.id) > 1 LIMIT 5`);
+    // e) Reciben en la MISMA wallet TON (hard signal de misma persona)
+    const walletClusters = await ctx.coreDb.execute(sql`
+      SELECT l."payeeSubjectId" AS subject, COUNT(*) AS n
+      FROM "ledgerEntries" l
+      WHERE l."type" = 'TRANSFER'
+      GROUP BY subject
+      HAVING COUNT(*) >= 10 LIMIT 5`);
+
+    const unwrap = (r: unknown) => ((r as { rows?: unknown[] }).rows ?? r) as Array<Record<string, unknown>>;
+
+    return {
+      totals: {
+        totalUsers: Number(totals?.totalUsers || 0),
+        withPhone: Number(totals?.withPhone || 0),
+        withTelegram: Number(totals?.withTelegram || 0),
+        withEmail: Number(totals?.withEmail || 0),
+        withUsername: Number(totals?.withUsername || 0),
+        noIdentity: Number(totals?.noIdentity || 0),
+        newLast7: Number(totals?.last7 || 0),
+        newLast30: Number(totals?.last30 || 0),
+        affiliates: Number(totals?.affiliates || 0),
+      },
+      // Una cuenta por número: garantizado por UNIQUE de phoneNumber en DB
+      oneAccountPerPhone: {
+        enforced: uniqueIndexes.some((i) => i.indexname.includes("phoneNumber")),
+        indexes: uniqueIndexes.map((i) => i.indexname),
+        duplicatePhonesAfterNormalize: unwrap(dupPhones),
+      },
+      orphanAccounts: orphanAccounts.map((u) => ({
+        id: u.id,
+        username: u.username,
+        createdAt: u.createdAt,
+      })),
+      identityLinkSignals: {
+        gmailClusters: unwrap(gmailClusters),
+        ipSharing: unwrap(ipSharing),
+        deviceSharing: unwrap(deviceSharing),
+        tokenHistory: unwrap(tokenHistory),
+        walletClusters: unwrap(walletClusters),
+      },
+    };
+  }),
+
+  // ── NEGOCIO / VC: crecimiento, GMV, retención, campañas (upsell) ──
+  getGrowthMetrics: godAdminProcedure
+    .input(z.object({ months: z.number().int().min(3).max(24).default(12) }))
+    .query(async ({ ctx, input }) => {
+      // GMV de órdenes completadas por mes
+      const gmvByMonth = await ctx.restaurantDb
+        .select({
+          month: sql<string>`to_char(date_trunc('month', ${orders.createdAt}), 'Mon YYYY')`,
+          gmv: sql<number>`COALESCE(SUM(${orders.total}), 0)`,
+          orderCount: sql<number>`COUNT(*)`,
+        })
+        .from(orders)
+        .where(and(inArray(orders.status, ["COMPLETED", "PAID"]), gte(orders.createdAt, sql`NOW() - (INTERVAL '1 month' * ${input.months})`)))
+        .groupBy(sql`date_trunc('month', ${orders.createdAt})`)
+        .orderBy(sql`date_trunc('month', ${orders.createdAt})`);
+
+      // Nuevos usuarios por mes (coreDb)
+      const newUsersByMonth = await ctx.coreDb
+        .select({
+          month: sql<string>`to_char(date_trunc('month', ${users.createdAt}), 'Mon YYYY')`,
+          count: sql<number>`COUNT(*)`,
+        })
+        .from(users)
+        .where(gte(users.createdAt, sql`NOW() - (INTERVAL '1 month' * ${input.months})`))
+        .groupBy(sql`date_trunc('month', ${users.createdAt})`)
+        .orderBy(sql`date_trunc('month', ${users.createdAt})`);
+
+      // MAU aproximado: usuarios con actividad en ledger en el mes
+      const mauByMonth = await ctx.restaurantDb
+        .select({
+          month: sql<string>`to_char(date_trunc('month', ${ledgerEntries.createdAt}), 'Mon YYYY')`,
+          activeUsers: sql<number>`COUNT(DISTINCT ${ledgerEntries.payeeSubjectId})`,
+        })
+        .from(ledgerEntries)
+        .where(and(eq(ledgerEntries.type, "EARN"), gte(ledgerEntries.createdAt, sql`NOW() - (INTERVAL '1 month' * ${input.months})`)))
+        .groupBy(sql`date_trunc('month', ${ledgerEntries.createdAt})`)
+        .orderBy(sql`date_trunc('month', ${ledgerEntries.createdAt})`);
+
+      // Top comercios por GMV (upsell: mayor GMV sin campaña = pitch de campaña)
+      const topBusinesses = (await ctx.restaurantDb.execute(sql`
+        SELECT r.name AS restaurant, COUNT(o.id) AS orders, COALESCE(SUM(o.total), 0) AS gmv
+        FROM "orders" o
+        JOIN "branches" b ON b.id = o."branchId"
+        JOIN "restaurants" r ON r.id = b."restaurantId"
+        WHERE o.status IN ('COMPLETED', 'PAID')
+          AND o."createdAt" >= NOW() - (INTERVAL '1 day' * 90)
+        GROUP BY r.name
+        ORDER BY gmv DESC
+        LIMIT 10`).then((x: unknown) => ((x as { rows?: unknown[] }).rows ?? x))) as Array<{ restaurant: string; orders: number; gmv: number }>;
+
+      // Campañas: ROI y señales de upsell
+      const campaignRows = await ctx.coreDb
+        .select({
+          id: affiliateCampaigns.id,
+          businessId: affiliateCampaigns.businessId,
+          type: affiliateCampaigns.campaignType,
+          status: affiliateCampaigns.status,
+          rewardPercentage: affiliateCampaigns.rewardPercentage,
+          budget: affiliateCampaigns.budgetBunz,
+          spent: affiliateCampaigns.budgetSpent,
+          redemptions: affiliateCampaigns.redemptionCount,
+          fiatSpent: sql<number>`COALESCE((SELECT SUM(${campaignRedemptions.fiatSpent}) FROM ${campaignRedemptions} WHERE ${campaignRedemptions.campaignId} = ${affiliateCampaigns.id}), 0)`,
+        })
+        .from(affiliateCampaigns)
+        .orderBy(desc(affiliateCampaigns.createdAt))
+        .limit(30);
+
+      const campaigns = campaignRows.map((c) => ({
+        ...c,
+        budget: Number(c.budget),
+        spent: Number(c.spent),
+        utilization: c.budget > 0 ? Math.round((Number(c.spent) / Number(c.budget)) * 100) : 0,
+        fiatSpent: Number(c.fiatSpent || 0),
+        // Señales de venta:
+        upsell:
+          c.status === "ACTIVE" && c.budget > 0 && (Number(c.spent) / Number(c.budget)) >= 0.8
+            ? "BUDGET_AGOTANDOSE" // su campaña funciona: vender presupuesto mayor
+            : !["CANCELLED", "EXPIRED"].includes(c.status) && c.redemptions === 0
+            ? "SIN_REDENCIONES" // no funciona: vender optimización de campaña
+            : null,
+      }));
+
+      // Liabilidad de Bunz: minteados vs quemados
+      const [liability] = await ctx.restaurantDb
+        .select({
+          minted: sql<number>`COALESCE(SUM(${ledgerEntries.amount}) FILTER (WHERE ${ledgerEntries.type} IN ('EARN','MINT')), 0)`,
+          spentBunz: sql<number>`COALESCE(SUM(${ledgerEntries.amount}) FILTER (WHERE ${ledgerEntries.type} = 'SPEND'), 0)`,
+        })
+        .from(ledgerEntries);
+
+      return {
+        gmvByMonth: gmvByMonth.map((r) => ({ month: r.month, gmv: Number(r.gmv), orders: Number(r.orderCount) })),
+        newUsersByMonth: newUsersByMonth.map((r) => ({ month: r.month, count: Number(r.count) })),
+        mauByMonth: mauByMonth.map((r) => ({ month: r.month, activeUsers: Number(r.activeUsers) })),
+        topBusinesses: topBusinesses.map((r) => ({ restaurant: r.restaurant, orders: Number(r.orders), gmv: Number(r.gmv) })),
+        campaigns,
+        bunzLiability: {
+          minted: Number(liability?.minted || 0),
+          spent: Number(liability?.spentBunz || 0),
+          outstanding: Number(liability?.minted || 0) - Number(liability?.spentBunz || 0),
+        },
+      };
+    }),
 
   // ── Economía: reconciliación cached balance vs ledger inmutable ──
   getLedgerReconciliation: godAdminProcedure

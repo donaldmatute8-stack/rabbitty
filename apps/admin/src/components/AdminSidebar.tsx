@@ -48,6 +48,7 @@ import {
   Scale,
   Rocket,
   Gamepad2,
+  BarChart3,
   ShieldCheck,
   Activity,
   Brain,
@@ -148,6 +149,7 @@ const godPillars: MenuPillar[] = [
     icon: TrendingUp,
     items: [
       { href: "/god/ecosistema", label: "Métricas Investor", icon: Activity },
+      { href: "/god/insights", label: "Pagos & Seguridad & Crecimiento", icon: BarChart3 },
       { href: "/god/escalado", label: "Estado de Escalado", icon: Rocket },
       { href: "/god/gamificacion", label: "Gamificación Global", icon: Gamepad2 },
     ],

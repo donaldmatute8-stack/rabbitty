@@ -98,13 +98,21 @@ export async function createOrGetPaymentIntent(
     .limit(1);
 
   // Cuenta de intentos previos → nuevo attempt number monótono
-  const [prev] = await db
-    .select({ n: sql<number>`COUNT(*)::int` })
-    .from(paymentIntents)
-    .where(eq(paymentIntents.orderId, input.orderId));
+  let prevCount = 0;
+  try {
+    const prevRows = (await db
+      .select({ n: sql<number>`COUNT(*)::int` })
+      .from(paymentIntents)
+      .where(eq(paymentIntents.orderId, input.orderId))
+      .limit(1)) as unknown;
+    const first = Array.isArray(prevRows) ? prevRows[0] : prevRows;
+    prevCount = Number((first as { n?: number | string } | undefined)?.n ?? 0);
+  } catch (countErr) {
+    console.warn("[PAYMENT] conteo de intents previos falló, uso attempt 1:", countErr);
+  }
 
   const effectiveAttempt =
-    liveAttempt.length === 0 ? Math.max(1, Number(prev?.n ?? 0)) + 1 : Math.max(1, Number(prev?.n ?? 0));
+    liveAttempt.length === 0 ? Math.max(1, prevCount) + 1 : Math.max(1, prevCount);
 
   const idempotencyKey = buildPaymentIdempotencyKey({
     branchId: input.branchId,
