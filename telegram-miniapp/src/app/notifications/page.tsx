@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bell, CheckCircle2, AlertCircle, Gift, Coins, Flame, Home, MessageCircle, Store, Users, ArrowLeftRight, Settings } from 'lucide-react';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
+import PullToRefresh from '@/components/ui/PullToRefresh';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { PlatformBridge } from '@/lib/platform';
+import { readSettings, subscribeSettings } from '@/lib/userSettings';
 
 interface Notification {
   id: string;
@@ -34,6 +36,37 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const { user, loading: authLoading } = useAuth();
   const [fetching, setFetching] = useState(true);
+  // Ajuste de campana (única fuente: /settings) + shortcut en el header
+  const [inAppBell, setInAppBell] = useState(true);
+
+  useEffect(() => {
+    setInAppBell(readSettings().inAppBell);
+    return subscribeSettings((s) => setInAppBell(s.inAppBell));
+  }, []);
+
+  const fetchNotifications = useCallback(async (): Promise<void> => {
+    if (!user?.id) return;
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch(`/api/notifications`, { headers });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.notifications)) {
+        setNotifications(data.notifications.map((n: ApiNotification) => ({
+          id: n.id,
+          title: n.title,
+          message: n.message,
+          type: n.type,
+          route: n.route ?? null,
+          isRead: n.isRead ?? n.is_read ?? false,
+          createdAt: n.createdAt ?? n.created_at ?? new Date().toISOString(),
+        })));
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setFetching(false);
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     let alive = true;
@@ -54,6 +87,7 @@ export default function NotificationsPage() {
             title: n.title,
             message: n.message,
             type: n.type,
+            route: n.route ?? null,
             isRead: n.isRead ?? n.is_read ?? false,
             createdAt: n.createdAt ?? n.created_at ?? new Date().toISOString(),
           })));
@@ -111,6 +145,35 @@ export default function NotificationsPage() {
 
   return (
     <ProfileSubpageLayout title="Notificaciones">
+      <PullToRefresh onRefresh={() => fetchNotifications()}>
+      {/* Atajo a Configuración → notificaciones (misma página única) */}
+      <div className="flex justify-end px-1 mb-2">
+        <button
+          type="button"
+          onClick={() => { PlatformBridge.hapticFeedback('light'); router.push('/settings?section=notifications'); }}
+          className="flex items-center gap-1.5 text-[11px] font-bold text-(--text-muted) hover:text-[#E91E63] cursor-pointer transition-colors border-none bg-transparent active:scale-95"
+          aria-label="Configuración de notificaciones"
+        >
+          <Settings size={14} /> Ajustes de notificaciones
+        </button>
+      </div>
+
+      {!inAppBell ? (
+        <div className="bg-(--bg-elevated) p-8 rounded-3xl text-center border border-(--border-subtle) mt-4">
+          <div className="w-16 h-16 bg-[#FFF0F5]/10 rounded-[20px] flex items-center justify-center mx-auto mb-4 text-(--text-muted)">
+            <Bell size={28} />
+          </div>
+          <h3 className="text-[18px] font-black text-(--text-primary) m-0 mb-2 tracking-[-0.5px]">Notificaciones desactivadas</h3>
+          <p className="text-[13px] text-(--text-muted) m-0 leading-normal">Enciéndelas de nuevo en Ajustes de notificaciones.</p>
+          <button
+            type="button"
+            onClick={() => router.push('/settings?section=notifications')}
+            className="mt-4 px-4 py-2 rounded-xl bg-pink-500 text-white text-xs font-black active:scale-95 transition-transform cursor-pointer border-none"
+          >
+            Ir a Ajustes
+          </button>
+        </div>
+      ) : (
       <div className="flex flex-col gap-3">
         {loading ? (
           <div className="flex justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div></div>
@@ -153,6 +216,8 @@ export default function NotificationsPage() {
           ))
         )}
       </div>
+      )}
+      </PullToRefresh>
     </ProfileSubpageLayout>
   );
 }

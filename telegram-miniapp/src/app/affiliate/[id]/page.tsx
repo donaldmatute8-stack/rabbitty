@@ -416,7 +416,7 @@ function AffiliateProfileContent() {
         <div className="absolute inset-0 bg-linear-to-t from-[#0D0D15] via-transparent to-black/50" />
 
         {/* Floating Top Badges (Bunz Reward + Check-in + Mesa) */}
-        <div className="absolute bottom-6 left-5 right-5 flex items-center justify-between gap-2 pointer-events-auto">
+        <div className="absolute bottom-10 left-5 right-5 z-20 flex items-center justify-between gap-2 pointer-events-auto">
           {/* Left Badges: Check-in & Table */}
           <div className="flex items-center gap-2 flex-wrap">
             {/* Botón Estoy Aquí / Check-in */}

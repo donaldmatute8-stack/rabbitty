@@ -245,6 +245,7 @@ function formatVoiceDuration(sec: number): string {
 function VoiceNoteBubble({
   msgId,
   src,
+  rawSrc,
   durationMs,
   isMe,
   createdAt,
@@ -253,6 +254,7 @@ function VoiceNoteBubble({
 }: {
   msgId: string;
   src: string | null;
+  rawSrc?: string | null;
   durationMs: number;
   isMe: boolean;
   createdAt: string;
@@ -260,6 +262,7 @@ function VoiceNoteBubble({
   showTicks: boolean;
 }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const { showToast } = useToast();
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
@@ -340,8 +343,22 @@ function VoiceNoteBubble({
           try { other.pause(); } catch {}
         }
       });
-      el.play().catch(() => {
-        setPlaying(false);
+      el.play().catch((playErr) => {
+        // Diagnóstico visible: iOS WKWebView rechaza ciertos codecs (webm/opus
+        // grabados en Android/web) — probamos el data-URL crudo y avisamos si nada.
+        const el: HTMLAudioElement | null = audioRef.current;
+        if (!el) { setPlaying(false); return; }
+        const rawUrl = el.getAttribute('data-raw-src') || '';
+        if (rawUrl && el.src !== rawUrl) {
+          el.src = rawUrl;
+          el.play().catch(() => {
+            setPlaying(false);
+            showToast(`No se pudo reproducir la nota de voz (${String((playErr as Error)?.message || 'formato no soportado en este dispositivo')})`, 'error');
+          });
+        } else {
+          setPlaying(false);
+          showToast(`No se pudo reproducir la nota de voz (${String((playErr as Error)?.message || 'formato no soportado')})`, 'error');
+        }
       });
     }
   };
@@ -375,7 +392,7 @@ function VoiceNoteBubble({
         userSelect: 'none',
       }}
     >
-      {src && <audio ref={audioRef} src={src} preload="metadata" style={{ display: 'none' }} />}
+      {src && <audio ref={audioRef} src={src} data-raw-src={rawSrc || ''} preload="metadata" style={{ display: 'none' }} />}
 
       {/* Botón circular Play / Pause estilo Telegram */}
       <button
@@ -511,9 +528,30 @@ export default function ChatRoomPage() {
   const [targetBio, setTargetBio] = useState<string | null>(null);
   const [targetCategory, setTargetCategory] = useState<string | null>(null);
   const [targetBusinessId, setTargetBusinessId] = useState<string | null>(null);
+  // ¿El usuario actual es el DUEÑO del negocio? (el GET de campaigns exige
+  // ownership server-side → 200 = dueño, 403 = no). Gating del botón Flash Boost.
+  const [targetBusinessIsOwner, setTargetBusinessIsOwner] = useState<boolean | null>(null);
   const [targetMuted, setTargetMuted] = useState(false);
   const [targetBlocked, setTargetBlocked] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  // Ownership del negocio destino: el GET de campaigns exige ownership
+  // server-side (200 = dueño, 403 = no) — usado para mostrar "⚡ Dar un
+  // Flash Boost" SOLO a su dueño; un Rabbitter no debe verlo.
+  useEffect(() => {
+    setTargetBusinessIsOwner(null);
+    if (!targetBusinessId || !user?.id) return;
+    let alive = true;
+    (async () => {
+      try {
+        const h = await PlatformBridge.getAuthHeaders();
+        const res = await fetch(`/api/business/campaigns?businessId=${targetBusinessId}`, { headers: h || {} });
+        if (alive) setTargetBusinessIsOwner(res.ok);
+      } catch {
+        if (alive) setTargetBusinessIsOwner(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, [targetBusinessId]);
   const [showTyping, setShowTyping] = useState(false);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
@@ -1569,6 +1607,9 @@ export default function ChatRoomPage() {
           <VoiceNoteBubble
             msgId={msg.id}
             src={src}
+            rawSrc={(typeof m.voiceUrl === 'string' && m.voiceUrl) ||
+              (typeof m.voiceDataUrl === 'string' && m.voiceDataUrl) ||
+              null}
             durationMs={dur}
             isMe={isMe}
             createdAt={msg.createdAt}
@@ -2114,7 +2155,9 @@ export default function ChatRoomPage() {
                 </button>
               )}
 
-              {/* Affiliate Action: Darle un Boost Directo */}
+              {/* Affiliate Action: Darle un Boost Directo — SOLO si el usuario
+                  es el DUEÑO del negocio (probe GET /business/campaigns) */}
+              {targetBusinessIsOwner && (
               <button
                 type="button"
                 onClick={async () => {
@@ -2167,6 +2210,7 @@ export default function ChatRoomPage() {
                 </div>
                 <span style={{ fontSize: 13, fontWeight: 800, color: '#E91E63' }}>Activar ›</span>
               </button>
+              )}
             </div>
           ) : null}
         </div>

@@ -11,8 +11,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    const { token, platform } = await req.json();
-    if (!token || typeof token !== "string") {
+    const { token, platform, rearm } = await req.json();
+    if (!token) {
+      // Re-encendido desde settings sin token en mano: el re-registro real
+      // viene de AuthProvider (initPushNotifications → POST con token).
+      if (rearm) return NextResponse.json({ success: true, registered: true, persisted: false });
       return NextResponse.json({ error: "Token requerido" }, { status: 400 });
     }
 
@@ -61,21 +64,28 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    const { token } = await req.json();
-    if (!token || typeof token !== "string") {
-      return NextResponse.json({ error: "Token requerido" }, { status: 400 });
-    }
+    // Sin token (p. ej. toggle de settings) → desactivar TODAS las pantallas del usuario.
+    let body: { token?: string } = {};
+    try { body = await req.json().catch(() => ({})) as { token?: string }; } catch { /* body vacío */ }
+    const target = body?.token?.trim();
 
     try {
-      await db
-        .update(pushDevices)
-        .set({ isActive: false, updatedAt: new Date() })
-        .where(
-          and(
-            eq(pushDevices.token, token.trim().slice(0, 4096)),
-            eq(pushDevices.userId, caller.id)
-          )
-        );
+      if (target) {
+        await db
+          .update(pushDevices)
+          .set({ isActive: false, updatedAt: new Date() })
+          .where(
+            and(
+              eq(pushDevices.token, target.slice(0, 4096)),
+              eq(pushDevices.userId, caller.id)
+            )
+          );
+      } else {
+        await db
+          .update(pushDevices)
+          .set({ isActive: false, updatedAt: new Date() })
+          .where(eq(pushDevices.userId, caller.id));
+      }
     } catch (dbError) {
       console.warn("[PUSH_TOKEN_DELETE] skipped:", dbError instanceof Error ? dbError.message : dbError);
       return NextResponse.json({ success: true, persisted: false });

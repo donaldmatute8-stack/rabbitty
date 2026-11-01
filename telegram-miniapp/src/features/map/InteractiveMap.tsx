@@ -354,11 +354,45 @@ export default function InteractiveMap({
       return;
     }
 
+    const isIosDevice = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+    // ── 1. NATIVO: plugin de reconocimiento de voz (iOS/Android en Capacitor) ──
+    // Con este plugin el micrófono del mapa SÍ escucha voz en la app nativa
+    // (requiere `npx cap sync` + rebuild nativo; en falla cae a Web Speech).
+    if (PlatformBridge.isNative()) {
+      try {
+        const SpeechRecognitionLib = await import('@capacitor-community/speech-recognition');
+        const SpeechRecognitionPlugin = (SpeechRecognitionLib as Record<string, unknown>).SpeechRecognition ?? SpeechRecognitionLib;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const plugin = SpeechRecognitionPlugin as any;
+        const perm = await plugin.checkPermissions();
+        if (perm?.speechRecognition !== 'granted') {
+          const req = await plugin.requestPermissions();
+          if (req?.speechRecognition !== 'granted') {
+            copilotInputRef.current?.focus();
+            setCopilotReply('Activa el micrófono en Ajustes de iOS o escribe aquí ✍️');
+            setTimeout(() => setCopilotReply(null), 3500);
+            return;
+          }
+        }
+        setIsListening(true);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { matches } = (await plugin.start({ language: 'es-MX', maxResults: 1, prompt: '¿A dónde vamos?' })) as any;
+        setIsListening(false);
+        const text = matches?.[0];
+        if (text) handleVoiceCommand(text);
+        return;
+      } catch (speechErr) {
+        setIsListening(false);
+        console.warn('[SpeechRec] plugin nativo no disponible, cae a Web Speech:', speechErr);
+        // continúa al fallback Web Speech / escritura
+      }
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const SpeechRec = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
 
     // En iOS WKWebView / Capacitor o navegadores móviles sin soporte seguro de SpeechRecognition
-    const isIosDevice = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent);
     if (!SpeechRec || (isIosDevice && (PlatformBridge.isNative() || PlatformBridge.isTelegram()))) {
       copilotInputRef.current?.focus();
       setCopilotReply('Escribe tu búsqueda a Bunzy aquí ✍️');

@@ -341,6 +341,41 @@ export default function OperationsManualPage() {
                 3. El cliente gana cashback instantáneo o paga con su saldo Bunz acumulado.
               </p>
             </Card>
+
+            <Card className="p-5 border border-white/5 bg-white/5 backdrop-blur-md space-y-2.5 md:col-span-2 print:border print:border-gray-300 print:bg-white">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
+                  <ArrowRight className="h-4 w-4 rotate-90" /> Tabs y Comandas en Curso (Mesa / Rabbitty Pay)
+                </span>
+                <Badge variant="secondary" className="border-cyan-500/30 text-cyan-300">Ruta: /pos → Tabs</Badge>
+              </div>
+              <p className="text-xs text-gray-400 print:text-gray-600 leading-relaxed">
+                Una <strong className="text-white print:text-black">Tab</strong> es una comanda abierta acumulable: el comensal pide desde su app (o tú desde el POS) y todo se suma a la MISMA cuenta — sin órdenes duplicadas.
+              </p>
+              <ul className="text-xs text-gray-400 space-y-1 pl-4 list-disc">
+                <li><strong className="text-white print:text-black">Pausar no la borra:</strong> puedes atender personas 2-3-4 y, cuando la persona 1 regresa, su tab sigue aquí con todo lo que pidió.</li>
+                <li><strong className="text-white print:text-black">Cobro digital:</strong> el botón <strong>Cobrar</strong> crea el QR de Rabbitty Pay SIN duplicar la orden; si prefieres cobrar en caja, usa "Cambiar a cobro en efectivo" dentro del QR.</li>
+                <li><strong className="text-white print:text-red-400">Si nunca se ejecuta, expira sola:</strong> después de las horas configuradas (default 12h, hasta 72h en Ajustes → Facturación) la tab se marca <strong>EXPIRADA</strong> y desaparece: <strong className="text-white print:text-black">no se contabiliza como venta</strong> ni bloquea la mesa, y queda auditada en el sistema.</li>
+              </ul>
+            </Card>
+
+            <Card className="p-5 border border-white/5 bg-white/5 backdrop-blur-md space-y-2.5 md:col-span-2 print:border print:border-gray-300 print:bg-white">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                  <Banknote className="h-4 w-4" /> Cobros en Dólares (turistas) y valor USD
+                </span>
+                <Badge variant="secondary" className="border-emerald-500/30 text-emerald-300">Ruta: /settings → Facturación</Badge>
+              </div>
+              <p className="text-xs text-gray-400 print:text-gray-600 leading-relaxed">
+                El tipo de cambio <strong className="text-white print:text-black">USD → MXN</strong> se configura en Ajustes → Facturación & Impuestos:
+              </p>
+              <ul className="text-xs text-gray-400 space-y-1 pl-4 list-disc">
+                <li><strong className="text-emerald-400">🌐 Automático (recomendado):</strong> el sistema consulta el valor del dólar del día a una API gratuita y lo mantiene actualizado solo — no tienes que hacer nada.</li>
+                <li><strong className="text-amber-400">✍️ Manual:</strong> fija tú la tasa (útil si tu casa cambiaria maneja otra cotización).</li>
+                <li><strong>¿Para qué sirve?</strong> Solo para <strong className="text-white print:text-black">valuar los cobros que recibas en dólares</strong> de turistas. <strong>La recompensa Bunz se calcula en pesitos</strong> (MXN en México, la moneda del país) — la tasa NO cambia el cashback de tus clientes.</li>
+                <li><strong className="text-white print:text-black">USD en el POS y ticket (opcional):</strong> activa el checkbox para ver el total con su equivalente en dólar en pequeño (bajo el total) y en los tickets impresos y digitales. Apagado por defecto.</li>
+              </ul>
+            </Card>
           </div>
         </div>
       )}

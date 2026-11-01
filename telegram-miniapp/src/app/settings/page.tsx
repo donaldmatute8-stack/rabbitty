@@ -1,0 +1,204 @@
+'use client';
+
+/**
+ * ── /settings ── Ajustes estilo X (Twitter): filas con switches de notificaciones
+ * (push nativo / campana in-app / email). ÚNICA pantalla de settings — se entra
+ * desde el panel de notificaciones (⚙️) o desde el menú lateral; ambas llegan
+ * a ESTA página (sin código duplicado), con deep-link ?section=notifications.
+ */
+
+import { useEffect, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { motion } from 'framer-motion';
+import { ArrowLeft, Bell, BellRing, Smartphone, Mail, ShieldCheck, HelpCircle, ChevronRight } from 'lucide-react';
+import BottomNav from '@/components/BottomNav';
+import { PlatformBridge } from '@/lib/platform';
+import { useAuth } from '@/features/auth/AuthProvider';
+import { readSettings, saveSettings, subscribeSettings, type UserSettings } from '@/lib/userSettings';
+
+function Switch({ on, onChange }: { on: boolean; onChange: () => void }) {
+  return (
+    <motion.button
+      type="button"
+      whileTap={{ scale: 0.9 }}
+      onClick={onChange}
+      aria-pressed={on ? 'true' : 'false'}
+      className="relative cursor-pointer border-none shrink-0 transition-colors"
+      style={{
+        width: 48,
+        height: 28,
+        borderRadius: 999,
+        background: on ? '#E91E63' : 'var(--bg-pressed)',
+        border: on ? 'none' : '1px solid var(--border-subtle)',
+        transition: 'background 180ms ease',
+      }}
+    >
+      <motion.span
+        animate={{ x: on ? 21 : 0 }}
+        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+        className="absolute top-1/2 -translate-y-1/2 left-[2px] w-[22px] h-[22px] rounded-full bg-white shadow-md"
+      />
+    </motion.button>
+  );
+}
+
+const SETTINGS_COPY = {
+  nativePush: {
+    label: 'Notificaciones push',
+    desc: 'Alertas del sistema en tu teléfono: mensajes, cercanía y pagos.',
+    icon: Smartphone,
+  },
+  inAppBell: {
+    label: 'Notificaciones en la app',
+    desc: 'Campana dentro de Rabbitty: historia de tus alerts y recompensas.',
+    icon: BellRing,
+  },
+  email: {
+    label: 'Email',
+    desc: 'Resúmenes y alertas a tu correo (disponible próximamente).',
+    icon: Mail,
+  },
+} as const;
+
+export default function SettingsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const section = searchParams.get('section');
+  const { user, loading: authLoading } = useAuth();
+  const [settings, setSettings] = useState<UserSettings>({ nativePush: true, inAppBell: true, email: false });
+  const [highlight, setHighlight] = useState(false);
+  const notiSectionRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setSettings(readSettings());
+    return subscribeSettings(setSettings);
+  }, []);
+
+  useEffect(() => {
+    if (section === 'notifications') {
+      setHighlight(true);
+      const t = setTimeout(() => {
+        notiSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 350);
+      const t2 = setTimeout(() => setHighlight(false), 2600);
+      return () => { clearTimeout(t); clearTimeout(t2); };
+    }
+  }, [section]);
+
+  const toggle = async (key: keyof UserSettings) => {
+    PlatformBridge.hapticFeedback('light');
+    const next = { ...settings, [key]: !settings[key] };
+    setSettings(next);
+    saveSettings(next);
+    // Server-side: al apagar el push nativo desactivamos los tokens del
+    // dispositivo (el motor deja de enviar); al encender, AuthProvider
+    // re-registra el token (POST /api/notifications/push-token) → isActive.
+    if (user?.id) {
+      try {
+        const headers = await PlatformBridge.getAuthHeaders();
+        await fetch('/api/notifications/push-token', {
+          method: key === 'nativePush' && !next.nativePush ? 'DELETE' : 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: key === 'nativePush' && !next.nativePush ? JSON.stringify({}) : JSON.stringify({ rearm: true }),
+        });
+      } catch { /* best-effort */ }
+    }
+  };
+
+  return (
+    <div className="page-wrap pb-28 min-h-screen" style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+      <div style={{ height: 'var(--safe-top, 0px)' }} />
+      <div className="flex items-center gap-3 px-5 py-3 sticky top-0 z-20" style={{ background: 'var(--bg-primary)', borderBottom: '1px solid var(--border-subtle)' }}>
+        <button
+          type="button"
+          onClick={() => { PlatformBridge.hapticFeedback('light'); router.back(); }}
+          aria-label="Volver"
+          className="w-9 h-9 rounded-full flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
+          style={{ background: 'var(--bg-pressed)' }}
+        >
+          <ArrowLeft size={18} />
+        </button>
+        <h1 className="text-lg font-black tracking-tight m-0">Configuración</h1>
+      </div>
+
+      {!authLoading && user?.id ? (
+        <div className="px-4 py-4 space-y-6">
+          {/* ── Notificaciones (push y email) ── */}
+          <div
+            ref={notiSectionRef}
+            className="rounded-2xl p-4"
+            style={{
+              background: 'var(--bg-elevated)',
+              border: highlight ? '1px solid #E91E63' : '1px solid var(--border-subtle)',
+              boxShadow: highlight ? '0 0 0 4px rgba(233,30,99,0.15)' : '0 2px 10px rgba(0,0,0,0.03)',
+              transition: 'box-shadow 400ms ease, border-color 400ms ease',
+            }}
+          >
+            <div className="flex items-center gap-2 mb-3 px-1">
+              <Bell size={15} className="text-[#E91E63]" />
+              <span className="text-[10px] font-black uppercase tracking-[1.5px]" style={{ color: 'var(--text-muted)' }}>
+                Notificaciones · push & email
+              </span>
+            </div>
+            <div className="flex flex-col gap-1">
+              {(Object.keys(SETTINGS_COPY) as Array<keyof typeof SETTINGS_COPY>).map((key) => {
+                const row = SETTINGS_COPY[key];
+                const Icon = row.icon;
+                const on = settings[key] as boolean;
+                return (
+                  <div
+                    key={key}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => { if (key !== 'email') void toggle(key); }}
+                    onKeyDown={(e) => { if (key !== 'email' && (e.key === 'Enter' || e.key === ' ')) void toggle(key); }}
+                    className="flex items-start gap-3 px-3 py-3 rounded-xl cursor-pointer transition-colors hover:bg-(--bg-pressed)"
+                  >
+                    <div className="w-9 h-9 rounded-xl shrink-0 flex items-center justify-center" style={{ background: 'var(--bg-pressed)' }}>
+                      <Icon size={17} className={on ? 'text-[#E91E63]' : 'text-(--text-muted)'} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold m-0 leading-tight">{row.label}</p>
+                      <p className="text-[11px] m-0 mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                        {row.desc}
+                      </p>
+                    </div>
+                    <Switch on={key === 'email' ? false : on} onChange={() => { if (key !== 'email') void toggle(key); }} />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ── Accesos rápidos ── */}
+          <div className="rounded-2xl p-2" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+            <LinkRow icon={ShieldCheck} label="Seguridad y Privacidad" href="/security" />
+            <LinkRow icon={HelpCircle} label="Ayuda y Soporte" href="/support" />
+          </div>
+        </div>
+      ) : (
+        <p className="text-center text-xs py-10" style={{ color: 'var(--text-muted)' }}>Inicia sesión para ver tus ajustes.</p>
+      )}
+
+      <BottomNav isDark={!user} />
+    </div>
+  );
+}
+
+function LinkRow({ icon: Icon, label, href }: { icon: typeof ShieldCheck; label: string; href: string }) {
+  const router = useRouter();
+  return (
+    <button
+      type="button"
+      onClick={() => { PlatformBridge.hapticFeedback('light'); router.push(href); }}
+      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer border-none transition-colors hover:bg-(--bg-pressed)"
+      style={{ background: 'transparent', color: 'var(--text-primary)' }}
+    >
+      <div className="w-9 h-9 rounded-xl shrink-0 flex items-center justify-center" style={{ background: 'var(--bg-pressed)' }}>
+        <Icon size={17} className="text-(--text-muted)" />
+      </div>
+      <span className="text-sm font-bold flex-1 text-left">{label}</span>
+      <ChevronRight size={16} style={{ color: 'var(--text-muted)' }} />
+    </button>
+  );
+}

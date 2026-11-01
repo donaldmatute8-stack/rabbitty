@@ -17,6 +17,7 @@ import {
   Bell, 
   ShieldCheck, 
   HelpCircle,
+  Settings,
   MessageSquarePlus
 } from 'lucide-react';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -42,6 +43,7 @@ const GENERAL_ITEMS = [
 const SETTINGS_ITEMS = [
   { icon: Store, label: 'Portal Comercio', href: '/business', isBusiness: true },
   { icon: Bell, label: 'Notificaciones', href: '/notifications' },
+  { icon: Settings, label: 'Configuración', href: '/settings' },
   { icon: ShieldCheck, label: 'Seguridad y Privacidad', href: '/security' },
   { icon: HelpCircle, label: 'Ayuda y Soporte', href: '/support' },
 ];

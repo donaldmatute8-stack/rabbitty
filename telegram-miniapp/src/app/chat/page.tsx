@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence, Reorder, useMotionValue, animate } from 'framer-motion';
 import useSWR from 'swr';
 import { BusinessCardSkeleton } from '@/components/ui/Skeleton';
+import PullToRefresh from '@/components/ui/PullToRefresh';
 import { PlatformBridge } from '@/lib/platform';
 import { useConvPrefs, setPref, setOrder, type ConvPref } from '@/lib/convPrefs';
 import {
@@ -134,7 +135,7 @@ export default function ChatInboxPage() {
   const { prefs, order } = useConvPrefs();
   const { showToast } = useToast();
 
-  const { data, isLoading } = useSWR<{ conversations: Conversation[] }>(
+  const { data, isLoading, mutate: mutateConversations } = useSWR<{ conversations: Conversation[] }>(
     user?.id ? `/api/chat` : null,
     fetcher,
     { refreshInterval: 5000 }
@@ -879,6 +880,7 @@ export default function ChatInboxPage() {
           </AnimatePresence>
 
           {community === 'chats' ? (
+            <PullToRefresh onRefresh={async () => { await mutateConversations(); }}>
             <div className={`flex flex-col gap-3 pb-28 ${dockPosition === 'top' ? 'pt-16' : ''}`}>
               {/* Telegram Search Bar (Screenshot 1 top bar) */}
               <div
@@ -984,6 +986,7 @@ export default function ChatInboxPage() {
                 </div>
               )}
             </div>
+            </PullToRefresh>
           ) : (() => {
             if (community === 'support') {
               return (

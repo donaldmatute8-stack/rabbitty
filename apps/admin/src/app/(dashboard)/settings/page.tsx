@@ -159,6 +159,14 @@ export default function SettingsPage() {
     onSuccess: () => { utils.admin.getRestaurants.invalidate(); toast.success("Configuración actualizada"); },
     onError: (e: any) => toast.error(e.message),
   });
+  // Tipo de cambio USD/MXN (auto/API o manual) — lectura + force refresh
+  const refreshFxRateMutation = trpc.admin.refreshFxRate.useMutation({
+    onSuccess: (data: any) => {
+      utils.admin.getRestaurants.invalidate();
+      toast.success(`Tasa actualizada: 1 USD ≈ ${Number(data.rate).toFixed(2)} MXN (${data.source === "live-api" ? "en vivo" : data.source})`);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   const profileQuery = trpc.settings.getProfile.useQuery();
   const securityQuery = trpc.settings.getSecuritySettings.useQuery();
@@ -286,7 +294,7 @@ export default function SettingsPage() {
   const [editing, setEditing] = useState<string | null>(null);
   const [adminPinInput, setAdminPinInput] = useState("");
   const [pairModalOpen, setPairModalOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", taxRate: 0, defaultRewardRate: 20, acceptsBunz: true, happyHourStart: "", happyHourEnd: "", happyHourRewardRate: 40, cashDropEnabled: false, cashDropThreshold: 3000 });
+  const [form, setForm] = useState({ name: "", taxRate: 0, defaultRewardRate: 20, acceptsBunz: true, happyHourStart: "", happyHourEnd: "", happyHourRewardRate: 40, cashDropEnabled: false, cashDropThreshold: 3000, usdRateMode: "AUTO" as "AUTO" | "MANUAL", usdRate: 18, staleOrderHours: 12 });
   const [email, setEmail] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -347,7 +355,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (r) {
-      setForm(prev => ({ ...prev, name: r.name, taxRate: r.taxRate, defaultRewardRate: normalizePercent(r.defaultRewardRate, 20), acceptsBunz: r.acceptsBunz ?? true, happyHourStart: r.happyHourStart ?? "", happyHourEnd: r.happyHourEnd ?? "", happyHourRewardRate: normalizePercent(r.happyHourRewardRate, 40) }));
+      setForm(prev => ({ ...prev, name: r.name, taxRate: r.taxRate, defaultRewardRate: normalizePercent(r.defaultRewardRate, 20), acceptsBunz: r.acceptsBunz ?? true, happyHourStart: r.happyHourStart ?? "", happyHourEnd: r.happyHourEnd ?? "", happyHourRewardRate: normalizePercent(r.happyHourRewardRate, 40), usdRateMode: (r.usdRateMode ?? "AUTO") as "AUTO" | "MANUAL", usdRate: Number(r.usdRate ?? 18), staleOrderHours: r.staleOrderHours ?? 12 }));
     }
   }, [r]);
 
@@ -367,7 +375,7 @@ export default function SettingsPage() {
       return;
     }
     if (!r) return;
-    setForm({ name: r.name, taxRate: r.taxRate, defaultRewardRate: normalizePercent(r.defaultRewardRate, 20), acceptsBunz: r.acceptsBunz ?? true, happyHourStart: r.happyHourStart ?? "", happyHourEnd: r.happyHourEnd ?? "", happyHourRewardRate: normalizePercent(r.happyHourRewardRate, 40), cashDropEnabled: form.cashDropEnabled, cashDropThreshold: form.cashDropThreshold });
+    setForm({ name: r.name, taxRate: r.taxRate, defaultRewardRate: normalizePercent(r.defaultRewardRate, 20), acceptsBunz: r.acceptsBunz ?? true, happyHourStart: r.happyHourStart ?? "", happyHourEnd: r.happyHourEnd ?? "", happyHourRewardRate: normalizePercent(r.happyHourRewardRate, 40), cashDropEnabled: form.cashDropEnabled, cashDropThreshold: form.cashDropThreshold, usdRateMode: (r.usdRateMode ?? "AUTO") as "AUTO" | "MANUAL", usdRate: Number(r.usdRate ?? 18), staleOrderHours: r.staleOrderHours ?? 12 });
     setEditing(section);
   };
 
@@ -595,12 +603,70 @@ export default function SettingsPage() {
               )}
             </div>
             {editing === "billing" ? (
-              <Input label="Tasa de IVA (%)" type="number" value={form.taxRate * 100} onChange={(e) => setForm((f) => ({ ...f, taxRate: Number(e.target.value) / 100 }))} />
+              <div className="space-y-4">
+                <Input label="Tasa de IVA (%)" type="number" value={form.taxRate * 100} onChange={(e) => setForm((f) => ({ ...f, taxRate: Number(e.target.value) / 100 }))} />
+                {/* ── Tipo de cambio USD/MXN ── */}
+                <div className="rounded-xl p-3 bg-white/5 border border-white/10 space-y-3">
+                  <p className="text-xs font-black uppercase tracking-wider text-gray-400">Tipo de cambio USD → MXN</p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, usdRateMode: "AUTO" }))}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border transition-all ${form.usdRateMode === "AUTO" ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300" : "bg-white/5 border-white/10 text-gray-400"}`}
+                    >🌐 Automático (API)</button>
+                    <button
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, usdRateMode: "MANUAL" }))}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border transition-all ${form.usdRateMode === "MANUAL" ? "bg-amber-500/15 border-amber-500/40 text-amber-300" : "bg-white/5 border-white/10 text-gray-400"}`}
+                    >✍️ Manual</button>
+                  </div>
+                  {form.usdRateMode === "AUTO" ? (
+                    <div className="flex items-center justify-between gap-3 rounded-lg bg-emerald-500/10 border border-emerald-500/25 px-3 py-2">
+                      <div className="text-xs text-emerald-300 font-bold">1 USD ≈ {(r?.usdRate ?? 18).toFixed(2)} MXN</div>
+                      <button
+                        type="button"
+                        onClick={() => refreshFxRateMutation.mutate({ restaurantId: r?.id })}
+                        disabled={refreshFxRateMutation.isPending}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-[11px] font-black cursor-pointer disabled:opacity-50"
+                      >{refreshFxRateMutation.isPending ? "Actualizando…" : "Actualizar ahora"}</button>
+                    </div>
+                  ) : (
+                    <Input label="Tasa fija (MXN por 1 USD)" type="number" step="0.01" value={form.usdRate} onChange={(e) => setForm((f) => ({ ...f, usdRate: Number(e.target.value) }))} />
+                  )}
+                  <p className="text-[11px] text-gray-500 leading-snug">
+                    💱 La tasa USD <strong className="text-gray-400">no cambia la recompensa</strong> (1 Bunz = 1 peso local: se calcula en MXN porque estamos en México; en cada país se usa su moneda). Sirve para <strong className="text-gray-400">valuar los cobros que recibas en dólares de turistas</strong>.
+                  </p>
+                  <label className="flex items-center gap-2.5 text-sm text-gray-300 font-semibold cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={(r as any)?.showUsdTicket ?? false}
+                      onChange={(e) => {
+                        setForm((f) => ({ ...f }));
+                        update.mutate({ id: r!.id, showUsdTicket: e.target.checked });
+                      }}
+                      className="h-5 w-5 rounded border-white/10 bg-white/5 text-pink-500 cursor-pointer"
+                    />
+                    Mostrar valor USD en el POS y en los tickets (impreso y digital)
+                  </label>
+                </div>
+                {/* ── Expiración de tabs huérfanas ── */}
+                <Input label="Horas antes de expirar tabs sin pagar (1–72)" type="number" value={form.staleOrderHours} onChange={(e) => setForm((f) => ({ ...f, staleOrderHours: Number(e.target.value) }))} />
+              </div>
             ) : (
               <div className="space-y-4 text-sm">
                 <div className="flex justify-between items-center py-0.5"><span className="text-gray-400 font-medium">Moneda</span><span className="font-bold text-white uppercase">{r?.currency}</span></div>
                 <div className="flex justify-between items-center py-0.5"><span className="text-gray-400 font-medium">Tasa de IVA</span><span className="font-bold text-white">{(r?.taxRate ?? 0) * 100}%</span></div>
                 <div className="flex justify-between items-center py-0.5"><span className="text-gray-400 font-medium">Zona Horaria</span><span className="font-mono text-gray-300 bg-white/5 px-2 py-0.5 rounded border border-white/5 text-xs">{r?.timezone}</span></div>
+                <div className="flex justify-between items-center py-0.5">
+                  <span className="text-gray-400 font-medium">Tipo de cambio USD</span>
+                  <span className="flex items-center gap-2">
+                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full border ${form.usdRateMode === "MANUAL" ? "text-amber-300 border-amber-500/40 bg-amber-500/10" : "text-emerald-300 border-emerald-500/40 bg-emerald-500/10"}`}>
+                      {form.usdRateMode}
+                    </span>
+                    <span className="font-bold text-white">{(r?.usdRate ?? 18).toFixed(2)} MXN</span>
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-0.5"><span className="text-gray-400 font-medium">Expira tabs sin pagar</span><span className="font-bold text-white">{r?.staleOrderHours ?? 12}h</span></div>
               </div>
             )}
           </Card>

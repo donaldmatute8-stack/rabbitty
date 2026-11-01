@@ -121,6 +121,11 @@ export const adminRouter = router({
         phone: z.string().optional().nullable(),
         address: z.string().optional().nullable(),
         ticketFooter: z.string().optional().nullable(),
+        // Tipo de cambio USD/MXN (admin) y expiración de tabs huérfanas
+        usdRateMode: z.enum(["AUTO", "MANUAL"]).optional(),
+        usdRate: z.number().min(1).max(100).optional().nullable(),
+        staleOrderHours: z.number().int().min(1).max(72).optional(),
+        showUsdTicket: z.boolean().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -210,6 +215,55 @@ export const adminRouter = router({
 
       return { success: true };
 
+    }),
+
+  /**
+   * Tipo de cambio USD/MXN del restaurante (o el del staff logueado).
+   * AUTO: api gratuita (open.er-api.com) con caché 24h · MANUAL: fija.
+   */
+  getFxRate: adminOnlyProcedure
+    .input(z.object({ restaurantId: z.string().optional() }))
+    .query(async ({ ctx, input }) => {
+      let restaurantId = input.restaurantId ?? null;
+      if (!restaurantId && ctx.staffRole && ctx.staffBranchId) {
+        const [branch] = await ctx.restaurantDb
+          .select({ restaurantId: branches.restaurantId })
+          .from(branches)
+          .where(eq(branches.id, ctx.staffBranchId));
+        restaurantId = branch?.restaurantId ?? null;
+      }
+      if (!restaurantId) throw new TRPCError({ code: "BAD_REQUEST", message: "restaurantId requerido" });
+      const [row] = await ctx.restaurantDb
+        .select({
+          id: restaurants.id,
+          usdRateMode: restaurants.usdRateMode,
+          usdRate: restaurants.usdRate,
+          usdRateUpdatedAt: restaurants.usdRateUpdatedAt,
+        })
+        .from(restaurants)
+        .where(eq(restaurants.id, restaurantId))
+        .limit(1);
+      const { getUsdMxnRate } = await import("../services/fx");
+      const info = await getUsdMxnRate(row ?? {});
+      return { ...info, restaurantId: row?.id ?? restaurantId };
+    }),
+
+  /** Force refresh ahora mismo (persiste en restaurants.usdRate). */
+  refreshFxRate: adminOnlyProcedure
+    .input(z.object({ restaurantId: z.string().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      let restaurantId = input.restaurantId ?? null;
+      if (!restaurantId && ctx.staffRole && ctx.staffBranchId) {
+        const [branch] = await ctx.restaurantDb
+          .select({ restaurantId: branches.restaurantId })
+          .from(branches)
+          .where(eq(branches.id, ctx.staffBranchId));
+        restaurantId = branch?.restaurantId ?? null;
+      }
+      if (!restaurantId) throw new TRPCError({ code: "BAD_REQUEST", message: "restaurantId requerido" });
+      const { resolveUsdRate } = await import("../services/fx");
+      const resolved = await resolveUsdRate(ctx.restaurantDb, restaurantId);
+      return { success: resolved.info.source === "live-api", ...resolved.info, rate: resolved.rate };
     }),
 
   verifyBusiness: godAdminProcedure

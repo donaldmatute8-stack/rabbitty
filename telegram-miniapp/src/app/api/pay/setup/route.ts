@@ -9,15 +9,15 @@ export const runtime = 'nodejs';
 
 const ADMIN_TRPC = process.env.NEXT_PUBLIC_ADMIN_API_URL || 'https://admin.rabbitty.me/api/trpc';
 
-// tRPC HTTP batch MUTATION: input en el CUERPO ({"0": {...}}), URL solo batch=1.
+// tRPC HTTP batch — MUTATIONS: input en el CUERPO {"0": {...}} (URL solo batch=1).
+// Para QUERIES: input en la URL y método GET (tRPC no acepta queries por POST).
 // Respuesta [{ result: { data } }] o [{ error: { json: { message } } }]
-async function callAdmin(procedure: string, input: unknown): Promise<any> {
-  const url = `${ADMIN_TRPC}/${procedure}?batch=1`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ '0': input }),
-  });
+async function callAdmin(procedure: string, input: unknown, opts?: { query?: boolean }): Promise<any> {
+  const batchInput = encodeURIComponent(JSON.stringify({ '0': input ?? {} }));
+  const url = `${ADMIN_TRPC}/${procedure}?batch=1${opts?.query ? `&input=${batchInput}` : ''}`;
+  const res = await fetch(url, opts?.query
+    ? { method: 'GET' }
+    : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ '0': input }) });
   const json = await res.json().catch(() => null);
   const first = Array.isArray(json) ? json[0] : json;
   const errMsg = first?.error?.message ?? first?.error?.json?.message;
@@ -99,7 +99,7 @@ export async function POST(req: Request) {
     });
 
     // 2. Clave pública para Elements (endpoint público nuevo del admin)
-    const pk = await callAdmin('payments.getPublishableKey', {}).catch(() => null);
+        const pk = await callAdmin('payments.getPublishableKey', {}, { query: true });
 
     // 3. clientSecret de Stripe Connect
     const secret = await callAdmin('payments.createStripePaymentSecret', { intentId: intent.intentId });

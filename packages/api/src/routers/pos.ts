@@ -5,10 +5,91 @@ import { router, protectedProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
-import { tables as tablesTable, tableSessions, branches, menuCategories, menuItems, orders, orderItems, payments, menuItemModifiers, restaurants, events as posEvents } from "@rabbitty/database-restaurant/schema";
+import { tables as tablesTable, tableSessions, branches, menuCategories, menuItems, orders, orderItems, payments, menuItemModifiers, restaurants, events as posEvents, paymentIntents, bunzReserves } from "@rabbitty/database-restaurant/schema";
 import { users as coreUsers } from "@rabbitty/database-core/schema";
 import { miniappClient } from "../services/miniapp-client";
 import { assertOpenShiftForCash } from "../services/cashShift";
+
+/**
+ * ── Tabs huérfanas: expiración de órdenes nunca ejecutadas ──
+ * Órdenes PENDING / CASH_PAYMENT_REQUESTED más viejas que staleOrderHours
+ * (horas configurables por el admin en restaurants.staleOrderHours, default 12)
+ * se marcan EXPIRED + voidReason STALE_TAB: quedan fuera de tabs/dashboard y de
+ * la contabilidad, pero auditables en DB. Cutoff en SQL (nunca Date en params).
+ */
+async function expireStaleOrders(restaurantDb: any, branchId: string): Promise<void> {
+  try {
+    const staleRes: any = await restaurantDb.execute(sql`
+      SELECT o.id AS "orderId" FROM "orders" o
+      JOIN "branches" b ON b.id = o."branchId" AND b.id = ${branchId}
+      JOIN "restaurants" r ON r.id = b."restaurantId"
+      WHERE o."branchId" = ${branchId}
+        AND o.status IN ('PENDING', 'CASH_PAYMENT_REQUESTED')
+        AND o."createdAt" < (now() AT TIME ZONE 'UTC') - (COALESCE(r."staleOrderHours", 12) * interval '1 hour')
+    `);
+    // postgres.js devuelve array directo (sin .rows)
+    const staleRows = staleRes?.rows ?? staleRes;
+    const ids: string[] = Array.isArray(staleRows)
+      ? staleRows.map((x: { orderId?: string }) => x.orderId).filter((v): v is string => Boolean(v))
+      : [];
+    if (ids.length === 0) return;
+
+    await restaurantDb.execute(sql`
+      UPDATE "orders"
+      SET status = 'EXPIRED', "voidReason" = 'STALE_TAB', "updatedAt" = now()
+      WHERE id = ANY(${ids})`);
+
+    // Cancelar intents vivos y liberar holds de Bunz ligados a esas órdenes
+    const liveIntents = await restaurantDb
+      .select()
+      .from(paymentIntents)
+      .where(and(inArray(paymentIntents.orderId, ids), eq(paymentIntents.status, "PENDING_PAYMENT")));
+    for (const intent of liveIntents) {
+      if (Number(intent.bunzAmount || 0) > 0) {
+        const { releasePaymentIntentHold } = await import("../services/paymentCore");
+        await releasePaymentIntentHold(restaurantDb, {
+          paymentIntentId: intent.id,
+          reason: "STALE_TAB",
+        }).catch((err: unknown) => console.warn("[POS] release hold falló:", err));
+      } else {
+        await restaurantDb
+          .update(paymentIntents)
+          .set({ status: "CANCELLED", updatedAt: new Date() })
+          .where(eq(paymentIntents.id, intent.id));
+      }
+      // Doble seguridad: marcar holds residuales como liberados
+      await restaurantDb
+        .update(bunzReserves)
+        .set({ status: "RELEASED", releasedAt: new Date(), failureReason: "STALE_TAB" })
+        .where(and(eq(bunzReserves.paymentIntentId, intent.id), eq(bunzReserves.status, "RESERVED")));
+    }
+  } catch (expErr) {
+    console.warn("[POS] sweep de tabs expiradas falló:", expErr);
+  }
+}
+
+/**
+ * USD: convierte monto MXN → USD con la tasa configurable por el admin
+ * (restaurants.usdRateMode/usdRate; AUTO = API gratuita con caché).
+ * Los mints de Bunz esperan amount_usd — no MXN.
+ */
+async function toUsdAmount(restaurantDb: any, branchId: string, mxn: number): Promise<number> {
+  try {
+    const [brRow] = await restaurantDb
+      .select({ restaurantId: branches.restaurantId })
+      .from(branches)
+      .where(eq(branches.id, branchId))
+      .limit(1);
+    if (brRow?.restaurantId) {
+      const { resolveUsdRate, mxnToUsd } = await import("../services/fx");
+      const { rate } = await resolveUsdRate(restaurantDb, brRow.restaurantId);
+      if (rate > 0) return mxnToUsd(mxn, rate);
+    }
+  } catch {
+    console.warn("[USD] tasa no disponible, uso fallback 18 MXN/USD");
+  }
+  return Math.round((mxn / 18) * 100) / 100;
+}
 
 /**
  * Genera un claimToken criptográfico para el ticket de compra.
@@ -334,6 +415,13 @@ export const posRouter = router({
   // Órdenes activas (todas, limit 50 más recientes) + "ventas hoy" y count de
   // pagadas de hoy (día America/Mexico_City calculado en SQL — nunca en JS).
   getDashboardFeed: protectedProcedure.query(async ({ ctx }) => {
+    // ── Auto-limpieza de tabs huérfanas ──
+    // Órdenes PENDING/CASH_PAYMENT_REQUESTED más viejas que `staleOrderHours`
+    // (config del restaurante, default 12h) se marcan EXPIRED: nunca fueron
+    // ejecutadas ni pagadas → no se contabilizan ni bloquean el tablero,
+    // pero quedan auditables (voidReason = STALE_TAB).
+    await expireStaleOrders(ctx.restaurantDb, ctx.branchId);
+
     const openRows = await ctx.restaurantDb.execute(sql`
       SELECT o.id, o."tableId", o.status, o."orderType", o."customerName", o.total, o."createdAt",
              t.number AS "tableNumber", t."location" AS "tableLocation",
@@ -740,6 +828,9 @@ export const posRouter = router({
       // ── Post-commit: lealtad FUERA del lock (STRIX riesgo-bajo) ──
       if (!(result as any)?.success) return result;
       const lp = (result as any).loyaltyParams as { rewardPhone: string; loyaltyBusinessId: string; customerName: string };
+      // RECOMPENSA = moneda del PAÍS (México = MXN): 1 Bunz = 1 unidad local.
+      // La tasa USD del admin NO altera la recompensa — solo valúa cobros
+      // recibidos en dólares (turistas) y el display opcional en ticket.
       const callWithRetry = async (fnName: "chargeBunz" | "rewardBunz") => {
         const attempt = async () =>
           fnName === "chargeBunz"
@@ -1388,6 +1479,8 @@ export const posRouter = router({
             // QR de claim para que el cliente recupere sus Bunz por su boleto.
             const attemptReward = async (): Promise<{ success: boolean; bunz?: number } | null> => {
               const directBizId = (await resolveBusinessIdFromBranch(ctx.restaurantDb, ctx.branchId)) || ctx.branchId;
+              // Recompensa en la moneda del país (MXN) — la tasa USD es solo
+              // para valuación de cobros en dólares, no altera el mint.
               try {
               return await miniappClient.rewardBunz(targetRecipient, finalAmount, order.id, directBizId);
               } catch (firstErr) {
@@ -1572,6 +1665,9 @@ export const posRouter = router({
    * Obtiene todas las mesas ocupadas con órdenes abiertas y clientes identificados.
    */
   getActiveTabs: protectedProcedure.query(async ({ ctx }) => {
+    // Auto-limpieza: tabs huérfanas (nunca pagadas ni ejecutadas) fuera del feed
+    await expireStaleOrders(ctx.restaurantDb, ctx.branchId);
+
     // 1. Obtener todas las mesas de la sucursal
     const allTables = await ctx.restaurantDb
       .select()

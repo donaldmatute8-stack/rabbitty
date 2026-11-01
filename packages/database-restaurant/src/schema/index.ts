@@ -29,6 +29,14 @@ export const restaurants = pgTable("restaurants", {
   happyHourStart: text("happyHourStart"), // e.g. "14:00"
   happyHourEnd: text("happyHourEnd"), // e.g. "18:00"
   happyHourRewardRate: integer("happyHourRewardRate"), // e.g. 40 for 2X if default is 20
+  // ── Tipo de cambio USD/MXN (elegido por el admin; manual o auto-API) ──
+  usdRateMode: text("usdRateMode").default("AUTO").notNull(), // 'AUTO' | 'MANUAL'
+  usdRate: real("usdRate"), // MXN por USD; AUTO = cache de la API, MANUAL = fija
+  usdRateUpdatedAt: timestamp("usdRateUpdatedAt"),
+  // ── Tabs/comandas huérfanas: horas hasta expirar órdenes sin ejecutar ──
+  staleOrderHours: integer("staleOrderHours").default(12).notNull(),
+  // ── USD en POS/ticket: SOLO si el admin lo activa ──
+  showUsdTicket: boolean("showUsdTicket").default(false).notNull(),
   printerType: text("printerType"),
   printerConfig: jsonb("printerConfig"),
   legalName: text("legalName"),

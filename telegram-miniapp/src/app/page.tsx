@@ -115,6 +115,9 @@ export default function FeedPage() {
   const [offers, setOffers] = useState<Offer[]>([]);
   const [loading, setLoading] = useState(() => posts.length === 0);
   const [refreshKey, setRefreshKey] = useState(0);
+  // Visual del pull-to-refresh / refresh del Ra-menu (compartido)
+  const [pullDist, setPullDist] = useState(0);
+  const [refreshingFeed, setRefreshingFeed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [purchasing, setPurchasing] = useState(false);
   const { showToast } = useToast();
@@ -195,7 +198,7 @@ export default function FeedPage() {
     }
   }, []);
 
-  // ── Proximidad: ping silencioso al iniciar y cada 3 min con permiso concedido ──
+  // ── Proximidad: ping silencioso al iniciar, en cada RESUMEN de la app y cada 3 min con permiso concedido ──
   useEffect(() => {
     let stopped = false;
     const ping = async () => {
@@ -228,7 +231,14 @@ export default function FeedPage() {
     };
     const t0 = setTimeout(ping, 4000);
     const iv = setInterval(ping, 3 * 60 * 1000);
-    return () => { stopped = true; clearTimeout(t0); clearInterval(iv); };
+    // Reanudar: al volver a primer plano (abrir la app tras estar en segundo
+    // plano) evaluamos proximidad inmediatamente — no invasivo (sin GPS en
+    // background nativo), pero sin esperar los 3 min del intervalo.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && !stopped) void ping();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { stopped = true; clearTimeout(t0); clearInterval(iv); document.removeEventListener('visibilitychange', onVisible); };
   }, [handlePingPresence]);
 
   const requestLocation = async () => {
@@ -475,7 +485,10 @@ export default function FeedPage() {
     };
   }, [activeTab, refreshKey]);
 
-  // Refresh disparado por el botón "Ra" del menú inferior: sube al inicio y recarga
+  // Refresh compartido: Ra-menu (botón inferior) y pull-to-refresh del home
+  // ejecutan EXACTAMENTE esto — sube al tope (aunque estés más abajo), dispara
+  // re-fetch (refreshKey) y muestra el loader del jalar (conejo + barras).
+  const refreshBarTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleRefresh = useCallback(() => {
     const se = (document.scrollingElement || document.documentElement) as HTMLElement;
     const prevBehavior = se.style.scrollBehavior;
@@ -489,7 +502,10 @@ export default function FeedPage() {
       window.scrollTo(0, 0);
     });
     PlatformBridge.hapticFeedback('light');
+    if (refreshBarTimer.current) clearTimeout(refreshBarTimer.current);
+    setRefreshingFeed(true);
     setRefreshKey((k) => k + 1);
+    refreshBarTimer.current = setTimeout(() => setRefreshingFeed(false), 700);
   }, []);
 
   useEffect(() => {
@@ -497,7 +513,7 @@ export default function FeedPage() {
     return () => window.removeEventListener('rabbitty:refresh-feed', handleRefresh);
   }, [handleRefresh]);
 
-  // Pull-to-refresh (deslizar hacia abajo en el inicio) -> muestra el loader del conejo
+  // Pull-to-refresh (deslizar hacia abajo en el inicio) — MISMA función que el Ra-menu
   useEffect(() => {
     let startY = 0;
     let armed = false;
@@ -507,12 +523,21 @@ export default function FeedPage() {
     };
     const onMove = (e: TouchEvent) => {
       if (!armed || e.touches.length !== 1) return;
-      if (e.touches[0].clientY - startY > 90) {
+      const dy = e.touches[0].clientY - startY;
+      if (dy <= 0) {
+        setPullDist(0);
+        return;
+      }
+      if (window.scrollY > 2) { armed = false; setPullDist(0); return; }
+      const dist = Math.min(110, dy / (1 + dy / 300));
+      setPullDist(dist);
+      if (dy > 90) {
         armed = false;
+        setPullDist(0);
         handleRefresh();
       }
     };
-    const onEnd = () => { armed = false; };
+    const onEnd = () => { armed = false; setPullDist(0); };
     window.addEventListener('touchstart', onStart, { passive: true });
     window.addEventListener('touchmove', onMove, { passive: true });
     window.addEventListener('touchend', onEnd, { passive: true });
@@ -567,6 +592,44 @@ export default function FeedPage() {
       }}
     >
       <LocationNudge />
+      {/* Indicador pull-to-refresh (conejo + barras, identidad RabbittyLoader) */}
+      <div
+        style={{
+          height: refreshingFeed || pullDist > 4 ? (refreshingFeed ? 64 : Math.max(0, pullDist * 0.6)) : 0,
+          opacity: refreshingFeed || pullDist > 4 ? 1 : 0,
+          overflow: 'hidden',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          position: 'relative',
+          zIndex: 50,
+          transition: refreshingFeed ? 'height 180ms ease' : 'height 60ms linear, opacity 120ms ease',
+        }}
+        aria-hidden={!refreshingFeed && pullDist <= 4}
+      >
+        <div className="flex items-center gap-2.5">
+          <motion.span
+            animate={{ rotate: [0, -12, 12, 0] }}
+            transition={{ repeat: Infinity, duration: 1.1, ease: 'easeInOut' }}
+            className="text-lg"
+          >
+            🐰
+          </motion.span>
+          <div className="flex items-center gap-[3px] h-4">
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <motion.div
+                key={i}
+                className="w-[3px] rounded-full bg-linear-to-t from-purple-600 via-pink-500 to-cyan-300"
+                animate={{ height: [6, 14, 6] }}
+                transition={{ repeat: Infinity, duration: 0.8, delay: i * 0.09, ease: 'easeInOut' }}
+              />
+            ))}
+          </div>
+          <span className="text-[10px] font-black text-white/70 uppercase tracking-[1.5px]">
+            {refreshingFeed ? 'Actualizando…' : 'Suelta para actualizar'}
+          </span>
+        </div>
+      </div>
       <AnimatePresence>
         {presenceConfirm && (
           <motion.div
@@ -1127,29 +1190,30 @@ export default function FeedPage() {
             </motion.div>
           )}
 
-          {/* ── Freehands tab ── */}
-          {activeTab === 'Freehands' && (
-            <div
-              className="fixed left-0 right-0 bottom-0 z-30 overflow-hidden bg-black flex flex-col"
-              style={{ top: headerHeight > 0 ? headerHeight : 'calc(max(var(--safe-top, 0px), 8px) + 56px)' }}
-            >
-              <div className="h-full w-full overflow-hidden">
-                <InteractiveMap
-                  businesses={postsWithDistance}
-                  userLat={userLat}
-                  userLng={userLng}
-                  accuracy={userAccuracy}
-                  locationTimestamp={locationTimestamp}
-                  onRequestLocation={requestLocation}
-                  isLocating={isLocating}
-                />
-              </div>
-            </div>
-          )}
-
         </div>
       </main>
       </motion.div>
+
+      {/* ── Freehands tab ── FUERA del motion.div: fixed dentro de un ancestro
+          con transform se vuelve relativo y el mapa sale recortado/invisible. */}
+      {activeTab === 'Freehands' && (
+        <div
+          className="fixed left-0 right-0 bottom-0 z-30 overflow-hidden bg-black flex flex-col"
+          style={{ top: headerHeight > 0 ? headerHeight : 'calc(max(var(--safe-top, 0px), 8px) + 56px)' }}
+        >
+          <div className="h-full w-full overflow-hidden">
+            <InteractiveMap
+              businesses={postsWithDistance}
+              userLat={userLat}
+              userLng={userLng}
+              accuracy={userAccuracy}
+              locationTimestamp={locationTimestamp}
+              onRequestLocation={requestLocation}
+              isLocating={isLocating}
+            />
+          </div>
+        </div>
+      )}
 
       {activeTab !== 'Freehands' && <BottomNav isDark={isDark} />}
 

@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { PlatformBridge } from '@/lib/platform';
+import { readSettings, subscribeSettings } from '@/lib/userSettings';
 
 export interface UserProfile {
   id?: string;
@@ -198,8 +199,10 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   }, [checkAuth]);
 
   // Push Notifications native registration (iOS APNs / Android FCM)
+  // Gate: respeta los ajustes del usuario (settings → push nativo).
+  const [pushSettingVersion, setPushSettingVersion] = useState(0);
   useEffect(() => {
-    if (user?.id && PlatformBridge.isNative()) {
+    if (user?.id && PlatformBridge.isNative() && readSettings().nativePush) {
       PlatformBridge.initPushNotifications({
         onToken: (token) => {
           // Persist push token to backend for targeting
@@ -221,7 +224,14 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         },
       });
     }
-  }, [user?.id]);
+  }, [user?.id, pushSettingVersion]);
+
+  // Re-registro cuando el usuario re-enciende el push en settings
+  useEffect(() => {
+    return subscribeSettings((s) => {
+      if (s.nativePush) setPushSettingVersion((v) => v + 1);
+    });
+  }, []);
 
   // Identity gate: a member must complete their name/username before entering the app.
   // New users (created via OTP) are routed to the identity setup, even if they reopen the app.

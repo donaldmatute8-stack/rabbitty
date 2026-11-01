@@ -1,0 +1,41 @@
+name: Rabbitty POS Cron — Tabs Expiradas + Tipo de Cambio USD
+
+on:
+  schedule:
+    # Diaria 14:00 UTC (8am CDMX): expira tabs huérfanas + refresca USD/MXN de HOY
+    - cron: '0 14 * * *'
+  workflow_dispatch: # Trigger manual desde la pestaña Actions
+
+jobs:
+  expire-stale-tabs:
+    name: Expire Stale Tabs + Refresh FX
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Trigger Order Expiration + FX Refresh
+        run: |
+          APP_URL="${{ secrets.MEMBERSHIPS_APP_URL || 'https://admin.rabbitty.me' }}"
+          CRON_SECRET="${{ secrets.CRON_SECRET }}"
+
+          echo "Triggering expire-orders + FX refresh against $APP_URL..."
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "$APP_URL/api/cron/expire-orders" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Accept: application/json")
+
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "HTTP Status: $HTTP_STATUS"
+          echo "Response: $BODY"
+
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "::error::Expire-orders cron failed with HTTP $HTTP_STATUS"
+            exit 1
+          fi
+
+          EXPIRED=$(echo "$BODY" | grep -o '"expiredCount":[0-9]*' | cut -d: -f2)
+          FXRATE=$(echo "$BODY" | grep -o '"fxRate":[0-9.]*' | cut -d: -f2)
+          echo "Tabs expiradas esta corrida: ${EXPIRED:-0}"
+          echo "USD/MXN de hoy: ${FXRATE:-n/a}"

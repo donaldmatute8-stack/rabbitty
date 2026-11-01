@@ -952,6 +952,11 @@ export default function PosPage() {
       cashGiven: cashGiven && cashGiven > 0 ? cashGiven : undefined,
       change: changeAmount,
       currency: rest?.currency || "MXN",
+      // USD SOLO por opt-in (Configuración → Facturación): en pequeño, valuación de referencia
+      usdAmount: (rest as any)?.showUsdTicket && Number((rest as any)?.usdRate > 0)
+        ? Math.round((total / Number((rest as any).usdRate)) * 100) / 100
+        : undefined,
+      usdRate: (rest as any)?.showUsdTicket ? Number((rest as any)?.usdRate) || undefined : undefined,
       bunzCashbackRate: selectedRabbitter?.currentRewardRate ?? rest?.defaultRewardRate ?? 20,
       estimatedBunz: Math.max(1, Math.round(total * ((selectedRabbitter?.currentRewardRate ?? rest?.defaultRewardRate ?? 20) / 100))),
       customerName: customerName || selectedRabbitter?.name || undefined,
@@ -2409,6 +2414,12 @@ export default function PosPage() {
                 <div>
                   <span className="text-xs uppercase font-bold tracking-wider text-gray-400">Total a Pagar</span>
                   <p className="text-3xl font-black text-white tracking-tight">${total.toFixed(2)}</p>
+                  {/* USD opt-in (Configuración → Facturación): pequeño, bajo el total */}
+                  {(ticketContext?.restaurant as any)?.showUsdTicket && Number((ticketContext?.restaurant as any)?.usdRate > 0) && (
+                    <p className="text-[10px] font-semibold text-gray-500">
+                      ≈ ${(total / Number((ticketContext?.restaurant as any).usdRate)).toFixed(2)} USD @ TC {Number((ticketContext?.restaurant as any).usdRate).toFixed(2)}
+                    </p>
+                  )}
                 </div>
                 <div className="text-right">
                   <span className="text-[10px] uppercase font-bold tracking-wider text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-md border border-cyan-500/20">
@@ -3550,8 +3561,12 @@ export default function PosPage() {
                   subtotal: ord.subtotal || ord.total,
                   tax: ord.tax || 0,
                   total: ord.total,
-                  paymentMethod: ord.bunzPaid && ord.bunzPaid > 0 ? "BUNZ" : "EFECTIVO",
                   currency: rest?.currency || "MXN",
+                  paymentMethod: ord.bunzPaid && ord.bunzPaid > 0 ? "BUNZ" : "EFECTIVO",
+                  usdAmount: (rest as any)?.showUsdTicket && Number((rest as any)?.usdRate > 0)
+                    ? Math.round((ord.total / Number((rest as any).usdRate)) * 100) / 100
+                    : undefined,
+                  usdRate: (rest as any)?.showUsdTicket ? Number((rest as any)?.usdRate) || undefined : undefined,
                   bunzCashbackRate: rest?.defaultRewardRate ?? 20,
                   estimatedBunz: ord.bunzReward || Math.max(1, Math.round(ord.total * 0.2)),
                   customerName: ord.customerName || undefined,

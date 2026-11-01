@@ -99,9 +99,9 @@ function InAppPaymentForm({
           options={{
             layout: 'tabs',
             fields: { billingDetails: 'auto' },
-            // Apple/Google Pay requieren verificar el dominio en Stripe —
-            // sin verificación el botón aparece pero CONGELA al tocarlo.
-            wallets: { applePay: 'never', googlePay: 'never' },
+            // Dominio admin.rabbitty.me VERIFICADO en Stripe (Payment method
+            // domains, test mode) → Apple/Google Pay reactivados in-app.
+            wallets: { applePay: 'auto', googlePay: 'auto' },
           }}
         />
       </div>

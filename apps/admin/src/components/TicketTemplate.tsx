@@ -41,6 +41,9 @@ export interface TicketData {
   cashGiven?: number;
   change?: number;
   currency?: string;
+  /** USD (opt-in por comercio): equivalente de referencia + tasa usada */
+  usdAmount?: number;
+  usdRate?: number;
   bunzCashbackRate?: number; // Kept for legacy compatibility
   estimatedBunz?: number;
   customerName?: string;
@@ -232,6 +235,14 @@ export function TicketTemplate({
           <span>TOTAL ({currency})</span>
           <span className="text-base tracking-tight">${data.total.toFixed(2)}</span>
         </div>
+
+        {/* USD (solo cuando el comercio activa el display en Configuración → Facturación). En pequeño, bajo el total. */}
+        {typeof data.usdAmount === "number" && data.usdAmount > 0 && (
+          <div className={`flex justify-between text-[9px] font-semibold ${isThermalPaper ? "text-gray-700" : "text-gray-500"} print:text-gray-700`}>
+            <span>Valor de referencia en dólar (TC {data.usdRate?.toFixed(2)})</span>
+            <span>≈ ${data.usdAmount.toFixed(2)} USD</span>
+          </div>
+        )}
 
         {/* Payment info */}
         <div className={`pt-1.5 space-y-1 text-[10px] ${isThermalPaper ? "text-gray-700" : "text-gray-400"}`}>

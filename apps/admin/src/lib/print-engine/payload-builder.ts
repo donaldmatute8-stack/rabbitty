@@ -330,6 +330,10 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
   chunks.push(boldOn);
   addText(`TOTAL:    ${tot.padStart(10)}\n`);
   chunks.push(boldOff);
+  // USD opt-in (el comercio activa en Configuración → Facturación): en pequeño
+  if (typeof data.usdAmount === "number" && data.usdAmount > 0) {
+    addText(`US(Ref):  $${data.usdAmount.toFixed(2)} @ TC ${(data.usdRate ?? 0).toFixed(2)}\n`);
+  }
   addText(divider);
 
   // FORMAS DE PAGO
