@@ -141,6 +141,13 @@
       "when": 1793503155825,
       "tag": "0019_thankful_vapor",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1793507685445,
+      "tag": "0020_dusty_dragon_lord",
+      "breakpoints": true
     }
   ]
 }

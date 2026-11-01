@@ -15,6 +15,7 @@ import {
   restaurants,
 } from "@rabbitty/database-restaurant/schema";
 import { users } from "@rabbitty/database-core/schema";
+import { bus, EventTypes } from "@rabbitty/events";
 import crypto from "crypto";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -484,6 +485,30 @@ export async function confirmPaymentIntentSettled(
       recoveryHold: isRecoveryHold,
     };
   });
+
+  // ── Fase 1 Rabbitty Score (H1): ORDER_PAID también en el canal DIGITAL ──
+  // confirmPaymentIntentSettled no emitía ningún evento: el canal Stripe/webhook
+  // quedaba sin trigger para el prompt de rating. Aditivo, post-commit,
+  // best-effort y con payload completo (los pos.ts históricos solo mandan orderId).
+  if (result?.success) {
+    try {
+      const [paidSnapshot] = await db
+        .select({ branchId: orders.branchId, total: orders.total })
+        .from(orders)
+        .where(eq(orders.id, result.orderId))
+        .limit(1);
+      bus.emit(EventTypes.ORDER_PAID, {
+        orderId: result.orderId,
+        branchId: paidSnapshot?.branchId,
+        paymentIntentId: params.paymentIntentId,
+        externalTransactionId: params.externalTransactionId,
+        method: "STRIPE",
+        amount: Number(paidSnapshot?.total || 0),
+      });
+    } catch (emitErr) {
+      console.warn("[paymentCore] ORDER_PAID emit falló (no fatal):", emitErr);
+    }
+  }
 
   // ── Cashback Bunz automático (Rabbitty Pay / Stripe) ──
   // Idéntico al mint de la vía efectivo/terminal (payOrder): idempotente por

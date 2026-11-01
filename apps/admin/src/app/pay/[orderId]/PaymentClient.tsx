@@ -5,7 +5,7 @@ import { trpc } from "../../../lib/trpc-client";
 import { Card, Button, toast } from "@rabbitty/ui";
 import { 
   Sparkles, CheckCircle2, Store, CreditCard, 
-  MessageSquareQuote, ShieldCheck, Loader2 
+  MessageSquareQuote, ShieldCheck, Loader2, Star 
 } from "lucide-react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
@@ -14,6 +14,69 @@ import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-
 const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
   ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
   : null;
+
+/**
+ * ── Fase 1 Rabbitty Score ── rating opcional post-pago en la superficie web.
+ * Chips neutrales idénticos para 1-5★; una evaluación por orden (server-side).
+ */
+function WebRatingCard({ orderId }: { orderId?: string }) {
+  const [stars, setStars] = useState(0);
+  const [attrs, setAttrs] = useState<string[]>([]);
+  const [comment, setComment] = useState("");
+  const [done, setDone] = useState(false);
+  const submit = trpc.ratings.submitRating.useMutation({
+    onSuccess: () => { setDone(true); toast.success("¡Gracias por tu evaluación!"); },
+    onError: (e) => toast.error(e.message),
+  });
+  if (!orderId) return null;
+  const ATTRS = [["atencion", "Atención"], ["comida", "Comida"], ["tiempo", "Tiempo"], ["ambiente", "Ambiente"]] as const;
+
+  return (
+    <Card className="border border-white/10 bg-white/5 p-5 backdrop-blur-md rounded-2xl space-y-3">
+      {done ? (
+        <p className="text-center text-sm font-bold text-emerald-300">¡Gracias por tu evaluación! 🐰</p>
+      ) : (
+        <>
+          <p className="text-sm font-black text-white text-center">¿Cómo estuvo tu experiencia?</p>
+          <div className="flex items-center justify-center gap-2">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <button key={i} type="button" onClick={() => setStars(i)} aria-label={`${i} estrellas`} className="p-1 cursor-pointer">
+                <Star size={26} className={i <= stars ? "text-amber-400 fill-amber-400" : "text-white/20"} />
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap justify-center gap-1.5">
+            {ATTRS.map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setAttrs((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id])}
+                className={`px-2.5 py-1 rounded-full text-[10px] font-bold border cursor-pointer transition-all ${
+                  attrs.includes(id) ? "bg-white/15 border-white/40 text-white" : "bg-white/5 border-white/10 text-white/50"
+                }`}
+              >{label}</button>
+            ))}
+          </div>
+          <textarea
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            maxLength={500}
+            rows={2}
+            placeholder="Comentario (opcional)"
+            className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-xs text-white placeholder-white/30 outline-none resize-none"
+          />
+          <Button
+            onClick={() => submit.mutate({ orderId, stars, attributes: attrs as never, comment: comment.trim() || undefined })}
+            disabled={stars < 1 || submit.isPending}
+            className="w-full"
+          >
+            {submit.isPending ? "Enviando…" : "Enviar evaluación"}
+          </Button>
+        </>
+      )}
+    </Card>
+  );
+}
 
 function StripeCheckoutForm({
   clientSecret,
@@ -155,13 +218,17 @@ export function PaymentClient({ order }: { order: any }) {
 
   if (paymentSuccess) {
     return (
-      <Card className="border border-emerald-500/30 bg-emerald-500/10 p-6 text-center backdrop-blur-md rounded-2xl">
-        <CheckCircle2 className="h-12 w-12 text-emerald-400 mx-auto mb-3" />
-        <h2 className="text-xl font-black text-white">¡Cuenta Liquidada!</h2>
-        <p className="text-sm text-gray-300 mt-1">
-          Tu pago fue acreditado y la comanda ha sido cerrada en caja. ¡Gracias por tu visita!
-        </p>
-      </Card>
+      <div className="space-y-4">
+        <Card className="border border-emerald-500/30 bg-emerald-500/10 p-6 text-center backdrop-blur-md rounded-2xl">
+          <CheckCircle2 className="h-12 w-12 text-emerald-400 mx-auto mb-3" />
+          <h2 className="text-xl font-black text-white">¡Cuenta Liquidada!</h2>
+          <p className="text-sm text-gray-300 mt-1">
+            Tu pago fue acreditado y la comanda ha sido cerrada en caja. ¡Gracias por tu visita!
+          </p>
+        </Card>
+        {/* Fase 1 Rabbitty Score: rating opcional post-pago (misma política que in-app) */}
+        <WebRatingCard orderId={order?.id} />
+      </div>
     );
   }
 

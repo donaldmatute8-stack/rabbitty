@@ -201,6 +201,71 @@ export const payments = pgTable("payments", {
   ...timestamps,
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// RABBITTY SCORE — Fase 1 (ver Docs/RABBITTY-SCORE-PLAN.md)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Rating post-pago: 1 evaluación por orden (UNIQUE orderId), anónima al comercio. */
+export const orderRatings = pgTable("order_ratings", {
+  id: id(),
+  orderId: fkId("orderId").references(() => orders.id).notNull().unique(),
+  branchId: fkId("branchId").references(() => branches.id).notNull(),
+  customerUserId: text("customerUserId").notNull(),
+  stars: integer("stars").notNull(),
+  attributes: jsonb("attributes"), // chips neutrales: atención/comida/tiempo/ambiente
+  comment: text("comment"),
+  isEligible: boolean("isEligible").default(true).notNull(),
+  ineligibleReason: text("ineligibleReason"),
+  // VISIBLE | PENDING_REVIEW | HIDDEN
+  moderationStatus: text("moderationStatus").default("VISIBLE").notNull(),
+  reviewFlag: boolean("reviewFlag").default(false).notNull(),
+  editedAt: timestamp("editedAt"),
+  reportedAt: timestamp("reportedAt"),
+  reportedBy: text("reportedBy"),
+  reportReason: text("reportReason"),
+  ...timestamps,
+});
+
+/** Append-only: creación, edición, anulación, reporte y moderación (auditoría completa). */
+export const orderRatingEvents = pgTable("order_rating_events", {
+  id: id(),
+  ratingId: fkId("ratingId").references(() => orderRatings.id, { onDelete: "cascade" }).notNull(),
+  // CREATED | EDITED | VOIDED | REPORTED | MODERATED_HIDDEN | RESTORED
+  eventType: text("eventType").notNull(),
+  actorUserId: text("actorUserId"),
+  actorRole: text("actorRole"), // AUTHOR | STAFF | GOD | SYSTEM
+  previousStars: integer("previousStars"),
+  newStars: integer("newStars"),
+  previousComment: text("previousComment"),
+  newComment: text("newComment"),
+  reason: text("reason"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+/** Registro de moderación (terceros): motivo obligatorio + estado antes/después. */
+export const moderationLog = pgTable("moderation_log", {
+  id: id(),
+  entityType: text("entityType").notNull(), // ORDER_RATING
+  entityId: text("entityId").notNull(),
+  action: text("action").notNull(), // HIDDEN | RESTORED | REVIEW_FLAGGED | IDENTITY_REVEALED
+  actorUserId: text("actorUserId").notNull(),
+  reason: text("reason").notNull(),
+  previousState: text("previousState"),
+  newState: text("newState"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+/** Score interno (shadow) del servicio por sucursal — jamás visible al comercio en F1. */
+export const merchantScoreShadow = pgTable("merchant_score_shadow", {
+  id: id(),
+  branchId: fkId("branchId").references(() => branches.id).notNull(),
+  score: real("score").notNull(),
+  sampleN: integer("sampleN").notNull(),
+  coverage: real("coverage").notNull(),
+  components: jsonb("components"),
+  computedAt: timestamp("computedAt").defaultNow().notNull(),
+});
+
 export const inventoryItems = pgTable("inventory_items", {
   id: id(),
   branchId: fkId("branchId").references(() => branches.id),

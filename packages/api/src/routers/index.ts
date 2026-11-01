@@ -38,7 +38,7 @@ import { customerChatRouter } from "./customerChat";
 import { moodRouter } from "./mood";
 import { bunzyRouter } from "./bunzy";
 import { godRouter } from "./god";
-
+import { ratingsRouter } from "./ratings";
 import "../services/queue";
 
 export const appRouter = router({
@@ -81,6 +81,7 @@ export const appRouter = router({
   mood: moodRouter,
   bunzy: bunzyRouter,
   god: godRouter,
+  ratings: ratingsRouter,
 });
 
 export type AppRouter = typeof appRouter;

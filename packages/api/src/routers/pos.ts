@@ -38,6 +38,11 @@ async function expireStaleOrders(restaurantDb: any, branchId: string): Promise<v
       UPDATE "orders"
       SET status = 'EXPIRED', "voidReason" = 'STALE_TAB', "updatedAt" = now()
       WHERE id = ANY(${ids})`);
+    // Fase 1 Rabbitty Score (H2): las tabs huérfanas tampoco pueden sostener un rating
+    const { invalidateOrderRating } = await import("./ratings");
+    for (const staleId of ids) {
+      await invalidateOrderRating(restaurantDb, staleId, "STALE_TAB");
+    }
 
     // Cancelar intents vivos y liberar holds de Bunz ligados a esas órdenes
     const liveIntents = await restaurantDb
@@ -1080,6 +1085,8 @@ export const posRouter = router({
         status: "VOIDED",
         voidReason: input.reason,
       }).where(eq(orders.id, input.orderId));
+      // Fase 1 Rabbitty Score (H2): exclusión IMEDIATA del rating al anular
+      await (await import("./ratings")).invalidateOrderRating(ctx.restaurantDb, input.orderId, "ORDER_VOIDED");
       bus.emit(EventTypes.ORDER_VOIDED, { orderId: input.orderId });
       return { success: true };
     }),
@@ -1773,6 +1780,8 @@ export const posRouter = router({
         if (intent.orderId) {
           await ctx.restaurantDb.update(orders).set({ status: "EXPIRED" })
             .where(eq(orders.id, intent.orderId));
+          // Fase 1 Rabbitty Score: exclusión inmediata del rating (intent expirado)
+          await (await import("./ratings")).invalidateOrderRating(ctx.restaurantDb, intent.orderId, "INTENT_EXPIRED");
         }
 
         // Liberar el hold de Bunz reservado (sin esto el saldo queda bloqueado para siempre)
