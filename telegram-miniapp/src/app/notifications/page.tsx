@@ -144,19 +144,23 @@ export default function NotificationsPage() {
   };
 
   return (
-    <ProfileSubpageLayout title="Notificaciones">
-      <PullToRefresh onRefresh={() => fetchNotifications()}>
-      {/* Atajo a Configuración → notificaciones (misma página única) */}
-      <div className="flex justify-end px-1 mb-2">
+    <ProfileSubpageLayout
+      title="Notificaciones"
+      right={
         <button
           type="button"
           onClick={() => { PlatformBridge.hapticFeedback('light'); router.push('/settings?section=notifications'); }}
-          className="flex items-center gap-1.5 text-[11px] font-bold text-(--text-muted) hover:text-[#E91E63] cursor-pointer transition-colors border-none bg-transparent active:scale-95"
-          aria-label="Configuración de notificaciones"
+          title="Ajustes de notificaciones"
+          aria-label="Ajustes de notificaciones"
+          className="w-9 h-9 rounded-full flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
+          style={{ background: 'var(--bg-pressed)', color: 'var(--text-primary)' }}
         >
-          <Settings size={14} /> Ajustes de notificaciones
+          <Settings size={17} />
         </button>
-      </div>
+      }
+    >
+      <PullToRefresh onRefresh={() => fetchNotifications()}>
+      {/* Ajuste de campana (única fuente: /settings) — acceso por el gear del header */}
 
       {!inAppBell ? (
         <div className="bg-(--bg-elevated) p-8 rounded-3xl text-center border border-(--border-subtle) mt-4">
@@ -164,8 +168,7 @@ export default function NotificationsPage() {
             <Bell size={28} />
           </div>
           <h3 className="text-[18px] font-black text-(--text-primary) m-0 mb-2 tracking-[-0.5px]">Notificaciones desactivadas</h3>
-          <p className="text-[13px] text-(--text-muted) m-0 leading-normal">Enciéndelas de nuevo en Ajustes de notificaciones.</p>
-          <button
+          <p className="text-[13px] text-(--text-muted) m-0 leading-normal">Enciéndelas de nuevo en Ajustes de notificaciones.</p>          <button
             type="button"
             onClick={() => router.push('/settings?section=notifications')}
             className="mt-4 px-4 py-2 rounded-xl bg-pink-500 text-white text-xs font-black active:scale-95 transition-transform cursor-pointer border-none"

@@ -12,7 +12,7 @@
  * propina reemplaza el intent (antes la idempotencia congelaba el monto).
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { loadStripe, type Stripe, type StripeElementsOptions } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
@@ -167,11 +167,27 @@ export function InAppPaySheet({
   const [setupError, setSetupError] = useState<string | null>(null);
   const [amountTotalExtra, setAmountTotalExtra] = useState<number | null>(null);
 
+  const [stripeLoadError, setStripeLoadError] = useState<string | null>(null);
   const loadStripeInstance = (key: string) => {
     setStripeInstance('loading');
-    loadStripe(key)
-      .then((s) => setStripeInstance(s ?? null))
-      .catch(() => setStripeInstance(null));
+    // Single-flight: evitar cargar Stripe.js dos veces (React Strict-mode /
+    // double effect puede provocar "múltiples instancias").
+    try {
+      loadStripe(key.trim())
+        .then((s) => {
+          if (s) { setStripeLoadError(null); setStripeInstance(s); }
+          else { setStripeLoadError('Stripe.js devolvió null (script de js.stripe.com no cargó)'); setStripeInstance(null); }
+        })
+        .catch((err: unknown) => {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          console.error('[PAY] loadStripe falló:', errMsg);
+          setStripeLoadError(errMsg);
+          setStripeInstance(null);
+        });
+    } catch (errSync: unknown) {
+      setStripeLoadError(errSync instanceof Error ? errSync.message : String(errSync));
+      setStripeInstance(null);
+    }
   };
 
   useEffect(() => {
@@ -403,7 +419,12 @@ export function InAppPaySheet({
               {clientSecret && stripeInstance === null && (
                 <div className="flex-1 flex flex-col items-center justify-center">
                   <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs font-bold space-y-3 max-w-sm">
-                    <p>No se pudo cargar el módulo de pago (Stripe no respondió). Revisa tu conexión.</p>
+                    <p>No se pudo cargar el módulo de pago (Stripe no respondió — revisa tu conexión).</p>
+                    {stripeLoadError && (
+                      <p className="text-[10px] font-mono text-red-200/70 break-all">
+                        Detalle: {stripeLoadError.slice(0, 160)}
+                      </p>
+                    )}
                     <button
                       onClick={() => { if (publishableKey) loadStripeInstance(publishableKey); }}
                       className="px-3 py-1.5 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 font-black text-[11px]"

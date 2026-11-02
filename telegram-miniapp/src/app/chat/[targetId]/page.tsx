@@ -263,6 +263,8 @@ function VoiceNoteBubble({
 }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { showToast } = useToast();
+  const ctxRef = useRef<AudioContext | null>(null);
+  const sourceRef = useRef<AudioBufferSourceNode | null>(null);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
@@ -343,23 +345,74 @@ function VoiceNoteBubble({
           try { other.pause(); } catch {}
         }
       });
-      el.play().catch((playErr) => {
-        // Diagnóstico visible: iOS WKWebView rechaza ciertos codecs (webm/opus
-        // grabados en Android/web) — probamos el data-URL crudo y avisamos si nada.
-        const el: HTMLAudioElement | null = audioRef.current;
-        if (!el) { setPlaying(false); return; }
-        const rawUrl = el.getAttribute('data-raw-src') || '';
-        if (rawUrl && el.src !== rawUrl) {
-          el.src = rawUrl;
-          el.play().catch(() => {
-            setPlaying(false);
-            showToast(`No se pudo reproducir la nota de voz (${String((playErr as Error)?.message || 'formato no soportado en este dispositivo')})`, 'error');
-          });
-        } else {
-          setPlaying(false);
-          showToast(`No se pudo reproducir la nota de voz (${String((playErr as Error)?.message || 'formato no soportado')})`, 'error');
-        }
-      });
+      el.play().catch(() => void playWithFallbacks(el));
+    }
+  };
+
+  /** Fase audio: base64 (o URL) → ArrayBuffer → decodeAudioData → BufferSource. */
+  const playThroughAudioContext = async (blobOrDataUrl: string): Promise<void> => {
+    const AudioCtor = (window.AudioContext || (window as any).webkitAudioContext) as
+      | (typeof AudioContext)
+      | undefined;
+    if (!AudioCtor) throw new Error('sin AudioContext');
+    const ctx = ctxRef.current ?? new AudioCtor();
+    ctxRef.current = ctx;
+    if (ctx.state === 'suspended') await ctx.resume();
+    let bytes: ArrayBuffer;
+    if (blobOrDataUrl.startsWith('data:')) {
+      const comma = blobOrDataUrl.indexOf(',');
+      const isB64 = blobOrDataUrl.slice(0, comma).includes(';base64');
+      const body = comma >= 0 ? blobOrDataUrl.slice(comma + 1) : blobOrDataUrl;
+      bytes = atob(isB64 ? body : decodeURIComponent(body)).length
+        ? Uint8Array.from(atob(isB64 ? body : decodeURIComponent(body)).split('').map((ch) => ch.charCodeAt(0))).buffer
+        : new ArrayBuffer(0);
+    } else {
+      const res = await fetch(blobOrDataUrl);
+      bytes = await res.arrayBuffer();
+    }
+    const buffer = await ctx.decodeAudioData(bytes);
+    // Detener fuente previa del fallback
+    sourceRef.current?.stop?.();
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.onended = () => { setPlaying(false); setHasPlayed(true); };
+    sourceRef.current = source;
+    source.start();
+    // Duración conocida para la barra
+    if (buffer.duration && Number.isFinite(buffer.duration)) setLoadedSec(Math.max(1, Math.round(buffer.duration)));
+    setPlaying(true);
+    setHasPlayed(true);
+    // Simular progreso via interval hasta que onended dispare
+    const startedAt = ctx.currentTime;
+    const tick = window.setInterval(() => {
+      if (sourceRef.current !== source) { window.clearInterval(tick); return; }
+      const t = ctx.currentTime - startedAt;
+      setCurrentTime(t);
+      setProgress(Math.min(1, t / Math.max(1, buffer.duration)));
+      if (t >= buffer.duration) window.clearInterval(tick);
+    }, 200);
+  };
+
+  /** Cadena de fallbacks al fallar <audio> nativo (iOS WKWebView/codec). */
+  const playWithFallbacks = async (el0: HTMLAudioElement): Promise<void> => {
+    try {
+      const rawUrl = el0.getAttribute('data-raw-src') || '';
+      if (rawUrl && el0.src !== rawUrl) {
+        el0.src = rawUrl;
+        await el0.play();
+        return;
+      }
+    } catch { /* siguiente fallback */ }
+    try {
+      await playThroughAudioContext(rawSrc || el0.currentSrc || el0.src);
+      return;
+    } catch (decodeErr) {
+      setPlaying(false);
+      showToast(
+        `No se pudo reproducir la nota de voz (${(String((decodeErr as Error)?.message || 'códec no soportado en este dispositivo')).slice(0, 80)})`,
+        'error'
+      );
     }
   };
 
