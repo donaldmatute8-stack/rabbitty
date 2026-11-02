@@ -44,6 +44,7 @@ export type SubmitRatingSuccess = {
   ratingId: string | null;
   edited: boolean;
   duplicate?: boolean;
+  branchId: string;
 };
 
 /** db del schema restaurante (drizzle instance) — el canal autentica, aquí se ejecutan las reglas. */
@@ -127,7 +128,7 @@ export async function submitRatingForOrder(
       previousComment: existing.comment,
       newComment: comment,
     });
-    return { ok: true, ratingId: existing.id, edited: true };
+    return { ok: true, ratingId: existing.id, edited: true, branchId: order.branchId };
   }
 
   const [created] = await restaurantDb
@@ -151,7 +152,7 @@ export async function submitRatingForOrder(
       .from(orderRatings)
       .where(eq(orderRatings.orderId, order.id))
       .limit(1);
-    return { ok: true, ratingId: dup?.id ?? null, edited: false, duplicate: true };
+    return { ok: true, ratingId: dup?.id ?? null, edited: false, duplicate: true, branchId: order.branchId };
   }
 
   await restaurantDb.insert(orderRatingEvents).values({
@@ -163,5 +164,87 @@ export async function submitRatingForOrder(
     newComment: comment,
   });
 
-  return { ok: true, ratingId: created.id, edited: false };
+  return { ok: true, ratingId: created.id, edited: false, branchId: order.branchId };
+}
+
+/**
+ * ── Notificación al afiliado por evaluación recibida (H9) ── dual-channel:
+ *  1. Campana del Admin/POS (events contacto con branchId — la que le llega hoy).
+ *  2. In-app + push del RABBITTER-MOBILE del dueño vía outbox durable (core).
+ *     La ruta lo lleva al portal: /ratings (Admin web). Sin emojis.
+ * NO-FATAL: la evaluación ya está guardada — si la notificación falla no
+ * rompe el submit. Se encola a si efectos (notificación persistente).
+ */
+export async function notifyMerchantOfRating(opts: {
+  restaurantDb: any;
+  coreDb?: any;
+  branchId: string;
+  ratingId: string;
+  stars: number;
+  hasComment?: boolean;
+}): Promise<void> {
+  const { branchId, ratingId, stars, hasComment } = opts;
+  const label = `${stars}/5${hasComment ? " con comentario" : ""}`;
+  try {
+    // 1) Campana Admin/POS (events de restaurant — la que ya usa el operativo)
+    await opts.restaurantDb.execute(
+      sql`INSERT INTO "events" ("branchId", "type", "payload", "read", "createdAt")
+          VALUES (${branchId}, 'RATING_RECEIVED', ${JSON.stringify({
+            ratingId,
+            stars,
+            hasComment: Boolean(hasComment),
+            title: "Nueva evaluación de servicio recibida",
+            message: `Tu negocio recibió ${label}. Revísala en Admin → Reputación de Servicio (/ratings).`,
+            link: "/ratings",
+          })}::jsonb, false, now())`
+    );
+  } catch (err) {
+    console.warn("[ratingNotify] campana admin falló (no fatal):", err instanceof Error ? err.message : err);
+  }
+
+  // 2) Móvil del dueño vía outbox (persistente + con CTA al portal del admin)
+  if (opts.coreDb) {
+    try {
+      const {
+        restaurants, branches,
+      } = await import("@rabbitty/database-restaurant/schema");
+      const {
+        ownedBusinesses, notificationsOutbox,
+      } = await import("@rabbitty/database-core/schema");
+
+      const [branch] = await opts.restaurantDb
+        .select({ restaurantId: branches.restaurantId })
+        .from(branches)
+        .where(eq(branches.id, branchId))
+        .limit(1);
+      if (branch?.restaurantId) {
+        const [rest] = await opts.restaurantDb
+          .select({ businessId: restaurants.businessId })
+          .from(restaurants)
+          .where(eq(restaurants.id, branch.restaurantId))
+          .limit(1);
+        if (rest?.businessId) {
+          const [biz] = await (opts.coreDb as any)
+            .select({ ownerId: ownedBusinesses.ownerId })
+            .from(ownedBusinesses)
+            .where(eq(ownedBusinesses.id, rest.businessId))
+            .limit(1);
+          if (biz?.ownerId) {
+            await opts.coreDb.insert(notificationsOutbox).values({
+              userId: biz.ownerId,
+              type: "RATING_RECEIVED",
+              title: "Evaluación de servicio recibida",
+              message: `Tu negocio recibió ${label}. Revisa tu portal: Admin → Reputación de Servicio (/ratings).`,
+              route: "https://admin.rabbitty.me/ratings",
+              data: { ratingId, stars, hasComment: Boolean(hasComment) },
+              dedupeKey: `rating_notify:${ratingId}`,
+              priority: "normal",
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("[ratingNotify] outbox móvil falló (no fatal):", err instanceof Error ? err.message : err);
+    }
+  }
 }

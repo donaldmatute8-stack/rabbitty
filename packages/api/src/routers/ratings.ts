@@ -28,7 +28,7 @@ import {
   PUBLIC_MIN_SAMPLE,
   DUPLICATE_EXACT_THRESHOLD,
 } from "../services/ratingRules";
-import { submitRatingForOrder } from "../services/ratingSubmit";
+import { submitRatingForOrder, notifyMerchantOfRating } from "../services/ratingSubmit";
 
 const ATTRIBUTES = ["atencion", "comida", "tiempo", "ambiente"] as const;
 
@@ -145,6 +145,21 @@ export const ratingsRouter = router({
           WINDOW_CLOSED: "BAD_REQUEST",
         } as const;
         throw new TRPCError({ code: codeByFailure[result.code], message: result.message });
+      }
+      // H9: avisar al afiliado (campana admin + outbox móvil) — no-fatal
+      if (result.ratingId) {
+        try {
+          await notifyMerchantOfRating({
+            restaurantDb: ctx.restaurantDb,
+            coreDb: ctx.coreDb,
+            branchId: result.branchId,
+            ratingId: result.ratingId,
+            stars: input.stars,
+            hasComment: Boolean(input.comment),
+          });
+        } catch (notifyErr) {
+          console.warn("[ratings] notificación del afiliado falló (no fatal):", notifyErr);
+        }
       }
       return { success: true, ratingId: result.ratingId, edited: result.edited, duplicate: result.duplicate };
     }),
