@@ -183,6 +183,7 @@ export async function POST(req: Request) {
       targetId: senderId,
       conversationId: conversation.id,
       businessId: otherId,
+      dedupeKey: userMessage?.id ? `chat_msg:${userMessage.id}` : null,
     }).catch((err) => console.warn('[ChatSend] notifyChatRecipient error:', err));
 
     return NextResponse.json({ success: true, message: userMessage, autoReply, suggestions: [] });

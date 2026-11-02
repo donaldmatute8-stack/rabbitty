@@ -146,6 +146,8 @@ export async function notifyChatRecipient(params: {
   targetId?: string;
   conversationId?: string;
   businessId?: string;
+  /** H15: idempotencia por mensaje (ID de la fila real chat_guardrs) */
+  dedupeKey?: string | null;
 }): Promise<void> {
   const { recipientUserId, recipientTelegramId, senderName, preview, targetId, conversationId, businessId } = params;
   const clean = cleanMessagePreview(preview) || 'Nuevo mensaje';
@@ -178,6 +180,9 @@ export async function notifyChatRecipient(params: {
       type: 'CHAT',
       route: targetId ? `/chat/${targetId}` : '/chat',
       threadId: 'chat',
+      // H15: idempotencia por mensaje (pasa el ID real de la fila para no
+      // re-push entero por reason del cron/piggyback del worker).
+      dedupeKey: params.dedupeKey ?? undefined,
     });
   }
   if (recipientTelegramId && telegramAllowed) {

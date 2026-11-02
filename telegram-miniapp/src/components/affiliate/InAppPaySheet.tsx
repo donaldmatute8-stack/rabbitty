@@ -154,6 +154,12 @@ export function InAppPaySheet({
 }: InAppPaySheetProps) {
   const [step, setStep] = useState<'pay' | 'done'>('pay');
   const [tipAmount, setTipAmount] = useState(0);
+  // ── H15: Pagar con Bunz (cuenta enviada, sin QR) ──
+  const [bunzState, setBunzState] = useState<{
+    balance: number; owed: number; acceptsBunz: boolean; canPayWithBunz: boolean; total: number;
+  } | null>(null);
+  const [bunzBusy, setBunzBusy] = useState(false);
+  const [bunzConfirm, setBunzConfirm] = useState(false);
   const [tipOverlay, setTipOverlay] = useState(false);
   const [tipDraft, setTipDraft] = useState(0);
   const [tipDraftPct, setTipDraftPct] = useState<number | null>(null);
@@ -216,6 +222,32 @@ export function InAppPaySheet({
       setAmountTotalExtra(null);
     }
   }, [isOpen, total]);
+
+  // ── H15: config de pago con Bunz (saldo vs deuda; si el negocio lo permite) ──
+  useEffect(() => {
+    if (!isOpen || !orderId) return;
+    let alive = true;
+    (async () => {
+      try {
+        const headers = await PlatformBridge.getAuthHeaders();
+        const r = await fetch(`/api/pay/bunz-pay?orderId=${encodeURIComponent(orderId)}`, { cache: 'no-store', headers: headers || {} });
+        const d = await r.json().catch(() => null);
+        if (alive && d?.ok) {
+          setBunzState({
+            balance: Number(d.balance ?? 0),
+            owed: Number(d.owed ?? 0),
+            acceptsBunz: Boolean(d.acceptsBunz),
+            canPayWithBunz: Boolean(d.canPayWithBunz),
+            total: Number(d.total ?? 0),
+          });
+        } else if (alive && d && !d.ok && d.status === 409) {
+          // cuenta ya liquidada — sin UI de bunz
+          setBunzState({ balance: 0, owed: 0, acceptsBunz: false, canPayWithBunz: false, total: 0 });
+        }
+      } catch { /* silencioso */ }
+    })();
+    return () => { alive = false; };
+  }, [isOpen, orderId]);
 
   // Total base cuando el caller no lo conoce
   useEffect(() => {
@@ -397,6 +429,77 @@ export function InAppPaySheet({
               <span className="text-[11px] text-white/40">Total a pagar</span>
               <span className="text-[15px] font-black text-white tabular-nums">${grandTotal.toFixed(2)} MXN</span>
             </div>
+
+            {/* ── H15: Pagar con Bunz (cuenta enviada, sin QR) ── */}
+            {bunzState && bunzState.canPayWithBunz && step === 'pay' && (
+              <div className="rounded-2xl border border-violet-400/30 bg-violet-500/[0.06] p-3 mt-2">
+                {bunzConfirm ? (
+                  <div className="space-y-2">
+                    <p className="text-[11px] text-white/70 m-0">Confirma pagar $${bunzState.owed.toFixed(2)} MXN con Bunz · saldo ${bunzState.balance.toFixed(2)}</p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { setBunzConfirm(false); PlatformBridge.hapticFeedback('light'); }}
+                        className="flex-1 rounded-xl border border-white/10 bg-white/[0.04] py-2 text-[11px] font-black text-white/80 cursor-pointer"
+                      >Cancelar</button>
+                      <button
+                        type="button"
+                        disabled={bunzBusy}
+                        onClick={() => {
+                          setBunzBusy(true);
+                          void (async () => {
+                            try {
+                              const headers = await PlatformBridge.getAuthHeaders();
+                              const r = await fetch('/api/pay/bunz-pay', {
+                                method: 'POST',
+                                headers: { ...(headers || {}), 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ orderId, tipAmount }),
+                              });
+                              const d = await r.json().catch(() => null);
+                              if (d?.ok) {
+                                toast.success(`Cuenta liquidada con Bunz`);
+                                PlatformBridge.hapticFeedback('success');
+                                setStep('done');
+                              } else {
+                                toast.error(String(d?.error || 'No se pudo pagar con Bunz').slice(0, 140));
+                              }
+                            } catch (e: unknown) {
+                              toast.error(String((e as Error)?.message || 'Error al pagar con Bunz').slice(0, 140));
+                            } finally {
+                              setBunzBusy(false);
+                              setBunzConfirm(false);
+                            }
+                          })();
+                        }}
+                        className="flex-1 rounded-xl bg-violet-500 hover:bg-violet-400 py-2 text-[11px] font-black text-white cursor-pointer disabled:opacity-40"
+                      >{bunzBusy ? 'Procesando…' : 'Confirmar pago Bunz'}</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { setBunzConfirm(true); PlatformBridge.hapticFeedback('light'); }}
+                    className="w-full flex items-center justify-between gap-3 rounded-xl border border-violet-400/25 bg-violet-500/[0.04] px-3 py-2.5 text-left active:scale-[0.99] transition-transform cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2.5 min-w-0">
+                      <span className="w-9 h-9 rounded-xl bg-violet-500/15 border border-violet-400/30 flex items-center justify-center shrink-0">
+                        <svg className="h-4 w-4 text-violet-300" viewBox="0 0 24 24" fill="currentColor" aria-hidden><circle cx="12" cy="12" r="10" opacity="0.15"/><path d="M12 3v18M9.5 7.5c0-1 .8-1.8 2.5-1.8s2.5.8 2.5 2c0 1.2-1 1.6-2.5 2s-2.5.8-2.5 2 0.8 2 2.5 2 2.5-.8 2.5-2" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round"/></svg>
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-[13px] font-black text-white leading-tight">Pagar con Bunz</span>
+                        <span className="block text-[10px] text-white/40 leading-tight mt-0.5">
+                          Saldo: ${bunzState.balance.toFixed(2)} Bunz
+                        </span>
+                      </span>
+                    </span>
+                    <span className="text-[11px] font-black text-violet-300 shrink-0">Elegir ›</span>
+                  </button>
+                )}
+              </div>
+            )}
+            {bunzState && !bunzState.canPayWithBunz && bunzState.acceptsBunz && bunzState.balance < bunzState.owed && (
+              <p className="text-[10px] text-white/30 px-1 mt-1">Nota: pagar con Bunz requiere saldo suficiente (${bunzState.balance.toFixed(2)} / ${bunzState.owed.toFixed(2)}).</p>
+            )}
             {tipAmount > 0 && (
               <p className="text-[10px] text-white/35 px-1 m-0">
                 Consumo ${round2(grandTotal - tipAmount).toFixed(2)} + propina ${tipAmount.toFixed(2)}

@@ -308,7 +308,7 @@ export const paymentsRouter = router({
         .from(paymentIntents)
         .innerJoin(orders, eq(orders.id, paymentIntents.orderId))
         .where(and(
-          eq(paymentIntents.status, "SUCCEEDED"),
+          inArray(paymentIntents.status, ["SUCCEEDED", "SETTLED"]),
           eq(orders.branchId, ctx.branchId),
           gte(paymentIntents.createdAt, new Date(Date.now() - input.windowSec * 1000))
         ))
