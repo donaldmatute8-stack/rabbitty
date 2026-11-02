@@ -104,6 +104,10 @@ export default function PosPage() {
   const [receiptModal, setReceiptModal] = useState(false);
   // Método elegido pendiente de confirmación (el cobro NO se ejecuta hasta confirmar)
   const [pendingMethod, setPendingMethod] = useState<string | null>(null);
+  // GAP: el COBRAR grande ya no salta directo a VENTA DIRECTA — primero elige
+  // método y confirma ("¿Confirmas pago en Efectivo? Sí / No, cambiar").
+  const [methodPicker, setMethodPicker] = useState<null | "select" | "confirm">(null);
+  const [chosenMethod, setChosenMethod] = useState<string | null>(null);
   // ── GAP 1: beneficios de membresía seleccionables al cobrar ──
   const posBizCtx = trpc.memberships.myBusinessForContext.useQuery(undefined, { staleTime: 5 * 60_000 });
   const [selectedBenefitIds, setSelectedBenefitIds] = useState<string[]>([]);
@@ -249,7 +253,9 @@ export default function PosPage() {
   const sendBillMutation = trpc.pos.sendBillToCustomer.useMutation({
     onSuccess: (data) => {
       toast.success(`🧾 Cuenta enviada a ${data.customerName}!`);
-      if (data.whatsappUrl) {
+      // Con Rabbitter identificado el push in-app es el canal primario: WhatsApp
+      // NO se abre solo — queda como botón manual por si el staff quiere usarlo.
+      if (data.whatsappUrl && data.pushSent !== true) {
         window.open(data.whatsappUrl, "_blank");
       }
       setSendBillModal(false);
@@ -989,8 +995,7 @@ export default function PosPage() {
 
   const requestCheckout = (method: string) => {
     if (cart.length === 0 || isCharging) return;
-    setPendingMethod(method);
-    // Para pagos en efectivo, inicializar con el total exacto o vacío para facilitar la captura
+    setPendingMethod(method);    // Para pagos en efectivo, inicializar con el total exacto o vacío para facilitar la captura
     if (method === "EFECTIVO" || method === "VENTA DIRECTA" || method === "DIVIDIDA") {
       setCashReceived("");
     }
@@ -2044,7 +2049,7 @@ export default function PosPage() {
                 <span className="hidden sm:inline">Enviar al Móvil</span>
               </button>
               <button 
-                onClick={() => requestCheckout("VENTA DIRECTA")}
+                onClick={() => setMethodPicker("select")}
                 disabled={cart.length === 0}
                 className="relative flex-1 overflow-hidden rounded-xl bg-cyan-500 py-2.5 text-base font-black text-gray-950 shadow-[0_8px_25px_rgba(6,182,212,0.35)] transition-all hover:bg-cyan-400 active:scale-95 disabled:opacity-50 disabled:shadow-none group cursor-pointer"
               >
@@ -2395,6 +2400,58 @@ export default function PosPage() {
             <Button onClick={() => setOrderZoomModal(false)}>Cerrar Resumen</Button>
           </div>
         </div>
+      </Dialog>
+
+      {/* ── GAP: selector de método + confirmación (el COBRAR ya no salta directo) ── */}
+      <Dialog
+        open={!!methodPicker}
+        onClose={() => setMethodPicker(null)}
+        title={methodPicker === "select" ? "Elige el método de pago" : "Confirmar método"}
+        className="max-w-md w-full"
+      >
+        {methodPicker === "select" && (
+          <div className="grid grid-cols-2 gap-3 p-1">
+            {([
+              ["EFECTIVO", "💵", "Efectivo", "Cuenta el efectivo y da cambio", "hover:border-emerald-500/50 hover:bg-emerald-500/10"],
+              ["TARJETA", "💳", "Tarjeta", "Terminal o Rabbitty Pay", "hover:border-blue-500/50 hover:bg-blue-500/10"],
+              ["QR BUNZ", "🟣", "QR Bunz", "El cliente paga con su saldo", "hover:border-purple-500/50 hover:bg-purple-500/10"],
+              ["DIVIDIDA", "➗", "Dividir", "Cuenta dividida entre varios", "hover:border-orange-500/50 hover:bg-orange-500/10"],
+            ] as const).map(([method, icon, label, desc, hoverCls]) => (
+              <button
+                key={method}
+                onClick={() => { setChosenMethod(method); setMethodPicker("confirm"); }}
+                className={`flex flex-col items-center gap-1 rounded-2xl border border-white/10 bg-white/5 p-4 text-center transition-all cursor-pointer active:scale-95 ${hoverCls}`}
+              >
+                <span className="text-2xl">{icon}</span>
+                <span className="text-sm font-black text-white">{label}</span>
+                <span className="text-[10px] text-gray-400">{desc}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {methodPicker === "confirm" && chosenMethod && (
+          <div className="space-y-4 p-1 text-center">
+            <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
+              <p className="text-[11px] uppercase font-bold tracking-wider text-gray-400">Método elegido</p>
+              <p className="text-lg font-black text-white my-1">
+                {chosenMethod === "EFECTIVO" ? "💵 Efectivo" : chosenMethod === "TARJETA" ? "💳 Tarjeta" : chosenMethod === "QR BUNZ" ? "🟣 QR Bunz" : "➗ Dividida"}
+              </p>
+              <p className="text-2xl font-black text-cyan-400">${total.toFixed(2)}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="secondary" onClick={() => setMethodPicker("select")} className="py-2.5 text-xs font-bold">
+                No, cambiar
+              </Button>
+              <Button
+                onClick={() => { setMethodPicker(null); setChosenMethod(null); requestCheckout(chosenMethod); }}
+                className="py-2.5 text-xs font-black bg-emerald-500 hover:bg-emerald-400 text-gray-950"
+              >
+                ✓ Sí, cobrar
+              </Button>
+            </div>
+          </div>
+        )}
       </Dialog>
 
       {/* Confirmación de cobro: efectivo con desglose de recibido y cambio o confirmación directa de tarjeta */}
@@ -2777,10 +2834,12 @@ export default function PosPage() {
                     <span>Asignar Rabbitter a esta venta</span>
                   </button>
                 </div>
-                {paidTicketData.claimToken && (
+                {(paidTicketData.claimToken || paidTicketData.orderId) && (
                   <div className="shrink-0 bg-white p-2 rounded-2xl shadow-lg border border-white/20 flex flex-col items-center">
                     <QRCodeSVG
-                      value={`https://app.rabbitty.me/scan?claimToken=${paidTicketData.claimToken}`}
+                      value={paidTicketData.claimToken
+                        ? `https://app.rabbitty.me/scan?claimToken=${paidTicketData.claimToken}`
+                        : `https://app.rabbitty.me/scan?ticket=${paidTicketData.orderId}`}
                       size={76}
                       level="H"
                       includeMargin={false}
@@ -2792,7 +2851,7 @@ export default function PosPage() {
                       }}
                     />
                     <span className="text-[8px] font-mono font-bold text-gray-700 uppercase tracking-wider mt-1">
-                      48h • 1 uso
+                      {paidTicketData.claimToken ? "48h • 1 uso" : "Ver ticket"}
                     </span>
                   </div>
                 )}
@@ -2844,6 +2903,8 @@ export default function PosPage() {
                         `*Total:* $${paidTicketData.total.toFixed(2)} ${paidTicketData.currency}\n\n` +
                         (paidTicketData.claimToken
                           ? `🧾 Ticket digital (ábrelo para verlo, reclamar tus Bunz o compartirlo):\nhttps://app.rabbitty.me/scan?claimToken=${paidTicketData.claimToken}\n\n`
+                          : paidTicketData.orderId
+                          ? `🧾 Ticket digital (ábrelo para verlo o compartirlo):\nhttps://app.rabbitty.me/scan?ticket=${paidTicketData.orderId}\n\n`
                           : "") +
                         `¡Gracias por tu preferencia! 🐰`;
                       window.open(`https://wa.me/52${waPhone}?text=${encodeURIComponent(message)}`, "_blank");
@@ -3355,15 +3416,24 @@ export default function PosPage() {
 
           <div className="space-y-2">
             <label className="text-xs font-bold text-gray-300">
-              Teléfono del cliente (WhatsApp / Push)
+              {selectedRabbitter
+                ? "📲 El pago irá como PUSH in-app al Rabbitter vinculado (paga desde su app)"
+                : "Teléfono del cliente (WhatsApp)"}
             </label>
-            <Input
-              placeholder="10 dígitos (ej. 5512345678)"
-              type="tel"
-              value={waPhone}
-              onChange={(e) => setWaPhone(e.target.value.replace(/\D/g, ''))}
-              className="text-center py-2.5 text-sm"
-            />
+            {!selectedRabbitter && (
+              <Input
+                placeholder="10 dígitos (ej. 5512345678)"
+                type="tel"
+                value={waPhone}
+                onChange={(e) => setWaPhone(e.target.value.replace(/\D/g, ''))}
+                className="text-center py-2.5 text-sm"
+              />
+            )}
+            {selectedRabbitter && (
+              <p className="text-[11px] text-emerald-300 font-semibold">
+                ✓ {selectedRabbitter.name} tiene la app — recibe la notificación al instante y paga desde su teléfono. (WhatsApp opcional: pide su teléfono y actívalo abajo.)
+              </p>
+            )}
           </div>
 
           <div className="flex gap-2 pt-2">
@@ -3415,7 +3485,7 @@ export default function PosPage() {
               disabled={sendBillMutation.isPending || (!selectedRabbitter && waPhone.length < 10)}
               className="flex-1 py-2 font-black text-xs bg-pink-500 hover:bg-pink-400 text-white shadow-lg shadow-pink-500/20 disabled:opacity-40"
             >
-              {sendBillMutation.isPending ? "Despachando..." : "Despachar Cuenta"}
+              {sendBillMutation.isPending ? "Despachando..." : selectedRabbitter ? "📲 Enviar pago in-app" : "Despachar por WhatsApp"}
             </Button>
           </div>
         </div>
@@ -3574,7 +3644,11 @@ export default function PosPage() {
                   ticketFooter: rest?.ticketFooter || "¡Gracias por tu visita!",
                   orderNumber: orderFolio,
                   orderId: ord.id,
-                  claimToken: ord.id,
+                  // Reimpresión/reenvío: SIN token firmado (el claim real ya
+                  // venció o no aplica) — el enlace de WhatsApp/QR usa vista de
+                  // ticket (?ticket=orderId). El QR impreso con claim firmado
+                  // solo se genera en el cobro original.
+                  claimToken: "",
                   date: orderDate.toLocaleString("es-MX", {
                     timeZone: rest?.timezone || "America/Mexico_City",
                     day: "2-digit",

@@ -106,6 +106,33 @@ export default function ScanPage() {
       return;
     }
 
+    // Vista de ticket ya pagado: /scan?ticket={orderId} — el enlace que va en
+    // los reenvíos de WhatsApp (sin firma). Muestra el ticket en pantalla, no
+    // abre la cámara.
+    const urlTicketView = searchParams.get('ticket');
+    if (urlTicketView) {
+      (async () => {
+        try {
+          const r = await fetch(`/api/pos/ticket-view?orderId=${encodeURIComponent(urlTicketView)}`, { cache: 'no-store' });
+          const d = await r.json().catch(() => null);
+          if (d?.success && d?.ticket) {
+            setClaimedTicket({
+              orderId: d.ticket.orderId,
+              orderNumber: d.ticket.orderNumber,
+              total: Number(d.ticket.total ?? 0),
+              createdAt: d.ticket.createdAt,
+              bunzAwarded: Number(d.ticket.bunzAwarded ?? 0),
+              restaurantName: d.ticket.restaurantName,
+            });
+          } else {
+            alert(d?.error || 'No se pudo abrir el ticket.');
+          }
+        } catch {
+          alert('Error de conexión al abrir el ticket.');
+        }
+      })();
+    }
+
     // Auto-reclamo si el usuario abrió el link directo del ticket /scan?claimToken=...
     const urlClaimToken = searchParams.get('claimToken') || searchParams.get('claim');
     if (urlClaimToken) {
