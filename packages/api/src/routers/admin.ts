@@ -129,6 +129,10 @@ export const adminRouter = router({
         analyticsProEnabled: z.boolean().optional(),
         // Política de propinas: permite pagar propinas de tarjeta desde caja al cerrar turno
         tipPayoutEnabled: z.boolean().optional(),
+        // ── Gratificaciones voluntarias (D-11): catálogo Rabbitty, server guard ──
+        gratuityMode: z.enum(["OFF", "POS", "DIGITAL", "BOTH"]).optional(),
+        // Solo convierte pcts DENTRO del catálogo [5,10,15] — el afiliado no crea reglas
+        gratuityPcts: z.array(z.number().int()).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -176,6 +180,16 @@ export const adminRouter = router({
 
       const updateData = { ...input } as any;
       delete updateData.address; // Don't save address on restaurants table
+      // ── Sanity: gratificaciones solo viven para el catálogo [5,10,15] sorteado pedido en
+      //    gratuityRules (el afiliado no puede introducir % custom ni reglas por método) ──
+      if (Array.isArray(updateData.gratuityPcts)) {
+        updateData.gratuityPcts = JSON.stringify(
+          updateData.gratuityPcts
+            .map((n: number) => Number(n))
+            .filter((n: number) => ([5, 10, 15] as number[]).includes(n))
+            .sort((a: number, b: number) => a - b)
+        );
+      }
       await ctx.restaurantDb.update(restaurants).set(updateData).where(eq(restaurants.id, input.id));
 
       if (input.address !== undefined) {

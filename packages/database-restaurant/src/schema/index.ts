@@ -41,6 +41,11 @@ export const restaurants = pgTable("restaurants", {
   analyticsProEnabled: boolean("analyticsProEnabled").default(false).notNull(),
   // ── Propinas: se pagan con el ticket y se reparten en caja (opcional) ──
   tipPayoutEnabled: boolean("tipPayoutEnabled").default(false).notNull(),
+  // ── Gratificaciones voluntarias (D-11) ── Catálogo controlado por Rabbitty:
+  // mode OFF|POS|DIGITAL|BOTH; pcts JSON subset de [5,10,15] (nunca custom);
+  // server guard en gratuityRules. Nada condicionado al método de pago.
+  gratuityMode: text("gratuityMode").default("OFF").notNull(),
+  gratuityPcts: text("gratuityPcts").default("[]").notNull(),
   printerType: text("printerType"),
   printerConfig: jsonb("printerConfig"),
   legalName: text("legalName"),

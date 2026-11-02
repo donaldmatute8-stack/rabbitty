@@ -2,6 +2,7 @@ import { z } from "zod";
 import { and, asc, desc, eq, sql, inArray, or, ilike, gte } from "drizzle-orm";
 import crypto from "crypto";
 import { router, protectedProcedure } from "../trpc";
+import { validateGratuity, parseGratuityPcts, GRATUITY_MAX_PCT } from "../services/gratuityRules";
 import { TRPCError } from "@trpc/server";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
@@ -293,6 +294,37 @@ export const posRouter = router({
       eq(menuCategories.branchId, ctx.branchId)
     ).orderBy(asc(menuCategories.sortOrder));
     return categories;
+  }),
+
+  /**
+   * GRATIFICACIONES VOLUNTARIAS (D-11): config del canal presencial.
+   * Catálogo server-side (gratuityRules) — afiliado solo elige subconjunto [5,10,15]
+   * y canal; NADA condicionado al método de pago. Disabled → Korean UI oculta fila.
+   */
+  getGratuityConfig: protectedProcedure.query(async ({ ctx }) => {
+    let enabled = false;
+    let options: number[] = [];
+    try {
+      const [branch] = await ctx.restaurantDb
+        .select({ restaurantId: branches.restaurantId })
+        .from(branches)
+        .where(eq(branches.id, ctx.branchId))
+        .limit(1);
+      if (branch?.restaurantId) {
+        const [rest] = await ctx.restaurantDb
+          .select({ mode: restaurants.gratuityMode, pcts: restaurants.gratuityPcts })
+          .from(restaurants)
+          .where(eq(restaurants.id, branch.restaurantId))
+          .limit(1);
+        const pcts = parseGratuityPcts(rest?.pcts);
+        const mode = String(rest?.mode || "OFF");
+        enabled = (mode === "POS" || mode === "BOTH") && pcts.length > 0;
+        options = pcts;
+      }
+    } catch {
+      // — faltas de configuración no revientan el POS
+    }
+    return { enabled, options, maxPct: GRATUITY_MAX_PCT };
   }),
 
   getMenuItems: protectedProcedure
@@ -1441,6 +1473,44 @@ export const posRouter = router({
       const { total: calcTotal, subtotal: calcSubtotal, tax: calcTaxAmt } = calcTax(finalAmount);
 
       const posTip = Math.max(0, Math.round(Number(input.tip || 0) * 100) / 100);
+
+      // ── Gratificaciones voluntarias (H10) — server guard INDEPENDIENTE del
+      // medio de pago. Sin opt-in: legacy cap 15% (no rompe lo existente).
+      // Con opt-in POS/BOTH: el monto DEBE corresponder a UNA de las fracciones
+      // del catálogo del negocio (nunca monto arbitrario ni preseleccionado) ──
+      if (posTip > 0) {
+        const [tipBranch] = await ctx.restaurantDb
+          .select({ restaurantId: branches.restaurantId })
+          .from(branches)
+          .where(eq(branches.id, ctx.branchId))
+          .limit(1);
+        let mode = "OFF";
+        let pcts: number[] = [];
+        if (tipBranch?.restaurantId) {
+          const [tipRest] = await ctx.restaurantDb
+            .select({ gratuityMode: restaurants.gratuityMode, gratuityPcts: restaurants.gratuityPcts })
+            .from(restaurants)
+            .where(eq(restaurants.id, tipBranch.restaurantId))
+            .limit(1);
+          mode = String(tipRest?.gratuityMode || "OFF");
+          pcts = parseGratuityPcts(tipRest?.gratuityPcts);
+        }
+        const verdict = validateGratuity(posTip, calcTotal);
+        if (!verdict.ok) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Gratificación inválida para esta orden." });
+        }
+        if (mode === "POS" || mode === "BOTH") {
+          const matchesCatalog = pcts.some(
+            (p) => Math.abs(posTip - Math.round(r2(calcTotal) * (p / 100) * 100) / 100) <= 0.05
+          );
+          if (!matchesCatalog) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "La gratificación debe ser una de las opciones publicadas por el negocio (sin montos arbitrarios ni por canal de pago).",
+            });
+          }
+        }
+      }
 
       await ctx.restaurantDb.update(orders).set({
         subtotal: calcSubtotal,

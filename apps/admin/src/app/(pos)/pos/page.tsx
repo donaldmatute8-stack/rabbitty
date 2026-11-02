@@ -306,6 +306,8 @@ export default function PosPage() {
   const { data: menuItems } = trpc.pos.getMenuItems.useQuery({}, { retry: false });
   const { data: tables } = trpc.pos.getTables.useQuery(undefined, { retry: false });
   const { data: activeTabsData, refetch: refetchActiveTabs } = trpc.pos.getActiveTabs.useQuery(undefined, { refetchInterval: 10000, retry: false });
+  // ── Gratificaciones voluntarias (D-11): config del negocio (Rabbitty catálogo) ──
+  const gratuityCfg = trpc.pos.getGratuityConfig.useQuery(undefined, { retry: false, staleTime: 60_000 });
   const { data: recentCompletedOrders, refetch: refetchRecentOrders } = trpc.pos.getOrders.useQuery(
     { status: "COMPLETED" },
     { enabled: recentOrdersModal, retry: false }
@@ -2134,6 +2136,60 @@ export default function PosPage() {
               </button>
             </div>
 
+            {/* ── Gratificación voluntaria (D-11) — seamless en el sidebar ──
+                Solo si el negocio la activó (catálogo Rabbitty). Sin preselección;
+                "No dejar" es primera clase; independiente del método de pago. ── */}
+            {gratuityCfg?.data?.enabled && (
+              <div className="rounded-xl bg-white/[0.04] border border-white/10 px-2.5 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[9px] font-black uppercase tracking-wider text-gray-500">Gratificación voluntaria</p>
+                    {Number(posTip || 0) > 0 ? (
+                      <p className="text-[11px] font-black text-emerald-400 truncate">
+                        +${Number(posTip).toFixed(2)} · {((Number(posTip) / Math.max(1, total)) * 100).toFixed(0)}% del consumo
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-gray-500">El cliente decide de forma expresa</p>
+                    )}
+                  </div>
+                  {Number(posTip || 0) > 0 && (
+                    <button
+                      onClick={() => { setPosTip(""); }}
+                      className="shrink-0 text-[9px] font-black text-gray-500 hover:text-white px-1.5 py-0.5 rounded-lg bg-white/5 border border-white/10 cursor-pointer transition-colors"
+                      title="Quitar gratificación"
+                    >✕</button>
+                  )}
+                </div>
+                <div className="flex gap-1 mt-1.5 flex-wrap">
+                  <button
+                    onClick={() => { setPosTip(""); }}
+                    className={cn(
+                      "px-2 py-1 rounded-lg text-[10px] font-black border transition-all cursor-pointer",
+                      Number(posTip || 0) === 0
+                        ? "bg-white/10 border-white/25 text-white"
+                        : "bg-white/[0.03] border-white/10 text-gray-400 hover:bg-white/10 hover:text-white"
+                    )}
+                  >No dejar</button>
+                  {(gratuityCfg.data.options ?? []).map((p) => {
+                    const amount = Math.round(total * (p / 100) * 100) / 100;
+                    const selected = Math.abs(Number(posTip || 0) - amount) < 0.05;
+                    return (
+                      <button
+                        key={p}
+                        onClick={() => { setPosTip(String(amount)); }}
+                        className={cn(
+                          "px-2 py-1 rounded-lg text-[10px] font-black border transition-all cursor-pointer",
+                          selected
+                            ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300"
+                            : "bg-white/[0.03] border-white/10 text-gray-400 hover:bg-white/10 hover:text-white"
+                        )}
+                      >{p}%</button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Massive Checkout & Digital Dispatch Buttons */}
             <div className="flex gap-2">
               <button 
@@ -2588,6 +2644,12 @@ export default function PosPage() {
                 <div>
                   <span className="text-[10px] uppercase font-black tracking-[0.18em] text-gray-500">Total a pagar</span>
                   <p className="text-3xl font-black text-white tracking-tight leading-tight">${total.toFixed(2)}</p>
+                  {/* Desglose de gratificación voluntaria (H10) — nunca "recargo" */}
+                  {Number(posTip || 0) > 0 && (
+                    <p className="text-[10px] text-gray-500 leading-snug">
+                      Consumo ${total.toFixed(2)} · Gratificación voluntaria +${Number(posTip).toFixed(2)} · Total con gratificación ${(total + Number(posTip)).toFixed(2)}
+                    </p>
+                  )}
                   {/* USD opt-in (Configuración → Facturación): pequeño, bajo el total */}
                   {(ticketContext?.restaurant as any)?.showUsdTicket && Number((ticketContext?.restaurant as any)?.usdRate > 0) && (
                     <p className="text-[10px] font-semibold text-gray-500">

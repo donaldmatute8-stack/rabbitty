@@ -660,6 +660,67 @@ export default function SettingsPage() {
                     />
                     Permitir pagar propinas de tarjeta desde caja al cerrar turno (opcional en el cierre)
                   </label>
+
+                  {/* ── Gratificaciones voluntarias (D-11) — catálogo Rabbitty ── */}
+                  <div className="rounded-xl p-3 bg-white/5 border border-white/10 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-black uppercase tracking-wider text-gray-300 m-0">Gratificaciones voluntarias</p>
+                      {(r as any)?.gratuityMode && (r as any).gratuityMode !== "OFF" ? (
+                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300">
+                          {String((r as any).gratuityMode) === "POS" ? "POS presencial" : String((r as any).gratuityMode) === "BOTH" ? "POS + Digital" : "Digital (próx.)"}
+                        </span>
+                      ) : (
+                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-gray-500/15 text-gray-400">Deshabilitado</span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-gray-500 m-0 leading-snug">
+                      Catálogo de opciones definido por Rabbitty. "No dejar gratificación" siempre es opción primera y nada va preseleccionado — la elección del cliente es expresa. Independiente del método de pago: jamás aparece como cargo por tarjeta.
+                    </p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {([
+                        ["OFF", "Deshabilitado"],
+                        ["POS", "POS presencial"],
+                        ["BOTH", "POS + Digital (próximamente)"],
+                      ] as const).map(([mode, label]) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => {
+                            setForm((f) => ({ ...f }));
+                            update.mutate({ id: r!.id, gratuityMode: mode });
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-black border transition-all cursor-pointer ${
+                            String((r as any)?.gratuityMode || "OFF") === mode
+                              ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300"
+                              : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-white"
+                          }`}
+                        >{label}</button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] text-gray-500 font-bold">Porcentajes del catálogo:</span>
+                      {[5, 10, 15].map((p) => {
+                        const current = (() => {
+                          try { return JSON.parse(String((r as any)?.gratuityPcts || "[]")) as number[] } catch { return [] as number[] }
+                        })();
+                        const on = current.includes(p);
+                        return (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => {
+                              setForm((f) => ({ ...f }));
+                              const next = on ? current.filter((x) => x !== p) : [...current, p].sort((a, b) => a - b);
+                              update.mutate({ id: r!.id, gratuityPcts: next.length > 0 ? next : [] });
+                            }}
+                            className={`px-2 py-1 rounded-lg text-[10px] font-black border transition-all cursor-pointer ${
+                              on ? "bg-pink-500/15 border-pink-500/40 text-pink-300" : "bg-white/5 border-white/10 text-gray-500 hover:text-white"
+                            }`}
+                          >{p}%</button>
+                        );
+                      })}
+                    </div>
+                  </div>
                   {/* Plan Analíticas Pro (vendible — on/off aquí) */}
                   <div
                     className="flex items-center justify-between gap-3 rounded-xl p-3 cursor-pointer transition-colors hover:bg-white/5"
