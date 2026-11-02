@@ -188,6 +188,8 @@ export default function PosPage() {
   // ── Propina del cobro directo + split DIVIDIDA (efectivo vs Bunz) ──
   const [posTip, setPosTip] = useState("");
   const [splitBunzAsk, setSplitBunzAsk] = useState<number>(0);
+  // Buscador unificado en el modal del QR Neón (check-ins primero, luego lookup)
+  const [qrModalQuery, setQrModalQuery] = useState("");
   const [isSearchingRabbitter, setIsSearchingRabbitter] = useState(false);
   const [isScanningRabbitter, setIsScanningRabbitter] = useState(false);
   const [showBusinessQrModal, setShowBusinessQrModal] = useState(false);
@@ -483,11 +485,17 @@ export default function PosPage() {
   const { data: activeCheckIns, refetch: refetchCheckIns } = trpc.pos.getActiveCheckIns.useQuery(undefined, {
     refetchInterval: showBusinessQrModal ? 2000 : 12000,
     retry: false,
-  });
-  const { data: plannedVisits } = trpc.pos.getPlannedVisits.useQuery(undefined, {
+  });  const { data: plannedVisits } = trpc.pos.getPlannedVisits.useQuery(undefined, {
     refetchInterval: 60000,
     retry: false,
   });
+  // ── Dedupe: excluye de "planean venir" a los que YA tienen check-in activo ──
+  const plannedVisitsDeduped = useMemo(() => {
+    const checkedInIds = new Set((activeCheckIns || []).map((c: any) => c.userId));
+    return (plannedVisits || []).filter((c: any) => !checkedInIds.has(c.userId));
+  }, [plannedVisits, activeCheckIns]);
+
+  // Toast informativo: cada check-in anunciado solo una vez por ref
   const checkInsShownRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     for (const c of activeCheckIns || []) {
@@ -1961,13 +1969,13 @@ export default function PosPage() {
             </div>
 
             {/* ── Planean venir (proximidad accionada) ── */}
-            {!selectedRabbitter && (plannedVisits?.length ?? 0) > 0 && (
+            {!selectedRabbitter && (plannedVisitsDeduped?.length ?? 0) > 0 && (
               <div className="px-2.5 py-2 rounded-xl bg-purple-500/10 border border-purple-500/25 mb-2">
                 <p className="text-[10px] font-black text-purple-300 flex items-center gap-1 mb-1.5">
                   <span>🚶</span> PLANean VENIR (últimas 24h)
                 </p>
                 <div className="flex flex-wrap gap-1.5">
-                  {(plannedVisits || []).slice(0, 4).map((c) => (
+                  {(plannedVisitsDeduped || []).slice(0, 4).map((c) => (
                     <button
                       key={c.userId}
                       type="button"
@@ -3346,6 +3354,63 @@ export default function PosPage() {
             </p>
           </div>
 
+          {/* ── Buscador inteligente: check-ins en local primero, luego lookup general ── */}
+          <div className="w-full text-left space-y-2 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 p-3">
+            <p className="text-[10px] font-black uppercase tracking-wider text-emerald-300">
+              🔍 Identificar Rabbitter (local / general)
+            </p>
+            <input
+              className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm text-white outline-none focus:border-emerald-500/60"
+              placeholder="Nombre, @handle, teléfono o ID del Rabbitter"
+              value={qrModalQuery}
+              onChange={(e) => setQrModalQuery(e.target.value)}
+            />            {(activeCheckIns || []).filter((c: any) =>
+              qrModalQuery.trim().length === 0 ||
+              (c.name || "").toLowerCase().includes(qrModalQuery.trim().toLowerCase())
+            ).slice(0, 4).map((c: any) => (
+              <button
+                key={c.userId}
+                type="button"
+                onClick={async () => {
+                  try {
+                    const res = await utils.pos.lookupRabbitter.fetch({ query: c.userId });
+                    if (res) {
+                      setSelectedRabbitter(res);
+                      toast.success(`🐰 ${res.name} vinculado al cobro (check-in)`);
+                      setShowBusinessQrModal(false);
+                    } else {
+                      toast.error("No se pudo vincular");
+                    }
+                  } catch { toast.error("Error al vincular"); }
+                }}
+                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-white/5 border border-emerald-500/40 text-[11px] font-bold text-white hover:bg-emerald-500/10 active:scale-[0.98] transition-all cursor-pointer"
+              >
+                <span>🟢 {c.name} · hace {Math.max(0, Math.round((c.ageSeconds ?? 9999) / 60))}m</span>
+                <span className="text-emerald-300">+ vincular</span>
+              </button>
+            ))}
+            {qrModalQuery.trim().length > 2 && (
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const res = await utils.pos.lookupRabbitter.fetch({ query: qrModalQuery.trim() });
+                    if (res) {
+                      setSelectedRabbitter(res);
+                      toast.success(`🐰 ${res.name} vinculado al cobro`);
+                      setShowBusinessQrModal(false);
+                    } else {
+                      toast.error("Sin coincidencias en Rabbitty");
+                    }
+                  } catch { toast.error("Error de búsqueda"); }
+                }}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[11px] font-bold text-white hover:bg-white/10 cursor-pointer active:scale-[0.98] transition-all"
+              >
+                🔎 Buscar en toda Rabbitty: "{qrModalQuery.trim()}"
+              </button>
+            )}
+          </div>
+
           <Button
             type="button"
             variant="secondary"
@@ -3514,6 +3579,64 @@ export default function PosPage() {
           <p className="text-xs text-gray-400">
             Despacha la comanda actual directamente al móvil del Rabbitter vía Push nativo o WhatsApp para que revise su cuenta digital y previsualice sus Bunz antes de pagar en caja o mesa.
           </p>
+
+          {/* ── Búsqueda dinámica de Rabbitter (mismo patrón del QR Neón) ── */}
+          <div className="w-full text-left space-y-2 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 p-3">
+            <p className="text-[10px] font-black uppercase tracking-wider text-emerald-300">
+              🔍 Identificar Rabbitter (local / general)
+            </p>
+            <input
+              className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm text-white outline-none focus:border-emerald-500/60"
+              placeholder="Nombre, @handle, teléfono o ID del Rabbitter"
+              value={qrModalQuery}
+              onChange={(e) => setQrModalQuery(e.target.value)}
+            />
+            {(activeCheckIns || []).filter((c: any) =>
+              qrModalQuery.trim().length === 0 ||
+              (c.name || "").toLowerCase().includes(qrModalQuery.trim().toLowerCase())
+            ).slice(0, 4).map((c: any) => (
+              <button
+                key={c.userId}
+                type="button"
+                onClick={async () => {
+                  try {
+                    const res = await utils.pos.lookupRabbitter.fetch({ query: c.userId });
+                    if (res) {
+                      setSelectedRabbitter(res);
+                      toast.success(`🐰 ${res.name} vinculado — recibirá el push in-app`);
+                      setQrModalQuery("");
+                    } else {
+                      toast.error("No se pudo vincular");
+                    }
+                  } catch { toast.error("Error al vincular"); }
+                }}
+                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-white/5 border border-emerald-500/40 text-[11px] font-bold text-white hover:bg-emerald-500/10 active:scale-[0.98] transition-all cursor-pointer"
+              >
+                <span>🟢 {c.name} · hace {Math.max(0, Math.round((c.ageSeconds ?? 9999) / 60))}m</span>
+                <span className="text-emerald-300">+ vincular</span>
+              </button>
+            ))}
+            {qrModalQuery.trim().length > 2 && (
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const res = await utils.pos.lookupRabbitter.fetch({ query: qrModalQuery.trim() });
+                    if (res) {
+                      setSelectedRabbitter(res);
+                      toast.success(`🐰 ${res.name} vinculado — recibirá el pago in-app`);
+                      setQrModalQuery("");
+                    } else {
+                      toast.error("Sin coincidencias en Rabbitty");
+                    }
+                  } catch { toast.error("Error de búsqueda"); }
+                }}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[11px] font-bold text-white hover:bg-white/10 cursor-pointer active:scale-[0.98] transition-all"
+              >
+                🔎 Buscar en toda Rabbitty: "{qrModalQuery.trim()}"
+              </button>
+            )}
+          </div>
 
           <div className="rounded-xl bg-white/5 border border-white/10 p-3 space-y-2">
             <div className="flex justify-between text-xs">
