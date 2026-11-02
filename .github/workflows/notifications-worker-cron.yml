@@ -1,0 +1,36 @@
+name: Rabbitty Notification Worker Cron
+
+on:
+  schedule:
+    # Cada 5 minutos — piso de latencia del outbox (el piggyback tras cada
+    # POST /api/notifications da latencia baja cuando hay tráfico).
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  drain-notifications:
+    name: Drain Notification Outbox
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - name: Trigger Worker
+        run: |
+          APP_URL="${{ secrets.MEMBERSHIPS_APP_URL || 'https://app.rabbitty.me' }}"
+          SECRET="${{ secrets.RABBITTY_API_SECRET || secrets.CRON_SECRET }}"
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "$APP_URL/api/cron/notifications-worker?limit=40" \
+            -H "Authorization: Bearer $SECRET")
+
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "HTTP Status: $HTTP_STATUS"
+          echo "Response: $BODY"
+
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "::error::Notification worker failed with HTTP $HTTP_STATUS"
+            exit 1
+          fi
+
+          echo "Drained OK."

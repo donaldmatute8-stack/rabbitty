@@ -60,22 +60,34 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { title, message, type, route } = body;
+    const { title, message, type, route, dedupeKey, data, priority } = body;
     const userId = isServerToServer ? String(body.userId || "") : caller!.id;
 
     if (!title || !message || (isServerToServer && !userId)) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    const [notification] = await db.insert(notifications).values({
+    // ── P0: entra al OUTBOX (regla de oro: el request nunca llama a APNs directo).
+    // Piggyback: drena hasta 10 eventos sin bloquear la respuesta.
+    const { enqueueOutbox, kickWorker } = await import("@/lib/push/outbox");
+    const enq = await enqueueOutbox({
       userId,
+      type: type || "SYSTEM",
       title,
       message,
-      type: type || "SYSTEM",
-      ...(route ? { route: String(route) } : {}),
-    }).returning();
+      route: route ? String(route) : null,
+      data: typeof data === "object" && data ? data : null,
+      dedupeKey: typeof dedupeKey === "string" && dedupeKey ? dedupeKey : null,
+      priority: priority === "high" || priority === "low" ? priority : "normal",
+    });
+    kickWorker();
 
-    return NextResponse.json({ success: true, notification });
+    if (!enq.enqueued) {
+      // Duplicado (dedupeKey ya existió): idempótente, respuesta informativa
+      return NextResponse.json({ success: true, duplicated: true, id: enq.id });
+    }
+
+    return NextResponse.json({ success: true, queued: true, id: enq.id });
   } catch (error) {
     console.error("[NOTIFICATIONS_POST]", error);
     return NextResponse.json({ error: "Error creating notification" }, { status: 500 });

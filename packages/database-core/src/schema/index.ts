@@ -728,3 +728,31 @@ export const reconciliationRequestsRelations = relations(reconciliationRequests,
   user: one(users, { fields: [reconciliationRequests.userId], references: [users.id] }),
 }));
 
+
+// ── Notificaciones v2.1: outbox durable + registro de entrega ── (Docs/PUSH-NOTIFICATIONS-PLAN.md)
+export const notificationsOutbox = pgTable("notifications_outbox", {
+  id: id(),
+  userId: fkId("userId").references(() => users.id),
+  type: text("type").notNull(),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  route: text("route"),
+  data: jsonb("data"),
+  dedupeKey: text("dedupeKey").unique(),
+  priority: text("priority").default("normal").notNull(),
+  status: text("status").default("QUEUED").notNull(), // QUEUED | PROCESSED | FAILED
+  attempts: integer("attempts").default(0).notNull(),
+  runAfter: timestamp("runAfter").defaultNow().notNull(),
+  ...timestamps,
+});
+
+export const notificationDeliveries = pgTable("notificationDeliveries", {
+  id: id(),
+  notificationId: text("notificationId").notNull(),
+  deviceId: text("deviceId"),
+  channel: text("channel").notNull(), // APNs | inApp
+  // QUEUED | SENT | PROVIDER_ACCEPTED | DELIVERED | OPENED | RETRYING | FAILED | SKIPPED
+  status: text("status").notNull(),
+  reason: text("reason"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
