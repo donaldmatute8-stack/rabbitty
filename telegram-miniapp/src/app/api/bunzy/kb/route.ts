@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ingestSupportKnowledge, knowledgeStats, searchKnowledge } from '@/lib/bunzyRag';
+import { ingestSupportKnowledge, knowledgeStats, searchKnowledge, lastEmbedError } from '@/lib/bunzyRag';
 
 /**
  * ── Bunzy KB (Fase 0 RAG) ── Ingesta y salud del knowledge base semántico.
@@ -54,7 +54,8 @@ export async function POST(req: NextRequest) {
           OLLAMA_API_URL: Boolean(process.env.OLLAMA_API_URL),
           OLLAMA_API_KEY: Boolean(process.env.OLLAMA_API_KEY),
           OLLAMA_MODEL: Boolean(process.env.OLLAMA_MODEL),
-          OLLAMA_EMBED_MODEL: Boolean(process.env.OLLAMA_EMBED_MODEL),
+          OLLAMA_EMBED_MODEL: Boolean(process.env.OLLAMA_EMBED_MODEL || process.env.OLLAMA_MODEL),
+          embedDebug: lastEmbedError.detail,
           OPENAI_API_KEY: Boolean(process.env.OPENAI_API_KEY),
         },
       }, { status: 503 });

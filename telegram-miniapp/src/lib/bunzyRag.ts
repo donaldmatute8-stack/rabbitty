@@ -72,6 +72,7 @@ async function embedWithOllama(texts: string[]): Promise<number[][] | null> {
 
   // Native endpoint primero
   try {
+    lastEmbedError.detail = 'ollama://api/embed intentando';
     const res = await fetch(`${base}/api/embed`, {
       method: "POST",
       headers: {
@@ -81,17 +82,49 @@ async function embedWithOllama(texts: string[]): Promise<number[][] | null> {
       body: JSON.stringify({ model, input: textsSafe }),
     });
     if (res.ok) {
-      const data = (await res.json()) as { embeddings?: number[][] };
+      const data = (await res.json()) as { embeddings?: number[][]; error?: string };
       if (Array.isArray(data.embeddings) && data.embeddings.length === textsSafe.length) {
+        lastEmbedError.detail = 'ok /api/embed';
         return await Promise.all(data.embeddings.map((v) => padTo1536(v)));
       }
-      console.warn("[BunzyRAG] ollama /api/embed respondió sin embeddings");
+      lastEmbedError.detail = `/api/embed respondió sin embeddings: ${JSON.stringify(data).slice(0, 200)}`;
     } else {
-      console.warn("[BunzyRAG] ollama /api/embed HTTP", res.status, "— pruebo /v1/embeddings");
+      const body = await res.text().catch(() => '');
+      lastEmbedError.detail = `/api/embed HTTP ${res.status}: ${body.slice(0, 200)}`;
     }
   } catch (err) {
-    console.warn("[BunzyRAG] ollama /api/embed falló:", err instanceof Error ? err.message : err);
+    lastEmbedError.detail = `/api/embed falló: ${err instanceof Error ? err.message : 'unknown'}`;
   }
+
+  // fallback OpenAI-compat en el mismo host
+  try {
+    const base2 = ollamaEmbedBase() ?? '';
+    const key2 = process.env.OLLAMA_API_KEY || '';
+    const model2 = process.env.OLLAMA_EMBED_MODEL || process.env.OLLAMA_MODEL || 'nomic-embed-text';
+    const res2 = await fetch(`${base2}/v1/embeddings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(key2 ? { Authorization: `Bearer ${key2}` } : {}) },
+      body: JSON.stringify({ model: model2, input: texts }),
+    });
+    if (res2.ok) {
+      const data2 = (await res2.json()) as { data?: Array<{ index: number; embedding: number[] }> };
+      if (Array.isArray(data2.data)) {
+        const out = new Array<number[]>(texts.length);
+        for (const d of data2.data) out[d.index] = await padTo1536(d.embedding);
+        if (out.every(Boolean)) {
+          lastEmbedError.detail = 'ok /v1/embeddings';
+          return out;
+        }
+      }
+      lastEmbedError.detail = '/v1/embeddings sin embeddings válidos';
+    } else {
+      const body = await res2.text().catch(() => '');
+      lastEmbedError.detail = `/v1/embeddings HTTP ${res2.status}: ${body.slice(0, 200)}`;
+    }
+  } catch (err) {
+    lastEmbedError.detail = `/v1/embeddings falló: ${err instanceof Error ? err.message : 'unknown'}`;
+  }
+  void 0;
 
   // Fallback OpenAI-compat en el mismo host
   try {
@@ -117,6 +150,9 @@ async function embedWithOllama(texts: string[]): Promise<number[][] | null> {
   }
   return null;
 }
+
+/** Embeddings: OLLAMA (stack Rabbitty) primero, OpenAI como respaldo. null = sin provider. */
+export const lastEmbedError = { detail: 'sin intento' };
 
 /** Embeddings: OLLAMA (stack Rabbitty) primero, OpenAI como respaldo. null = sin provider. */
 async function embedTexts(texts: string[]): Promise<number[][] | null> {
