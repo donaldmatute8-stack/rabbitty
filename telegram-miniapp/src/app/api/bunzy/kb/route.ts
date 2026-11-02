@@ -47,10 +47,17 @@ export async function POST(req: NextRequest) {
     }
     const result = await ingestSupportKnowledge();
     if (result.skipped) {
-      return NextResponse.json(
-        { ok: false, error: 'Sin proveedor de embeddings — configura OLLAMA_API_URL (+OLLAMA_EMBED_MODEL u OLLAMA_MODEL) o OPENAI_API_KEY en este entorno' },
-        { status: 503 }
-      );
+      return NextResponse.json({
+        ok: false,
+        error: 'Sin proveedor de embeddings — configura OLLAMA_API_URL (+OLLAMA_EMBED_MODEL u OLLAMA_MODEL) o OPENAI_API_KEY en este entorno',
+        envStatus: {
+          OLLAMA_API_URL: Boolean(process.env.OLLAMA_API_URL),
+          OLLAMA_API_KEY: Boolean(process.env.OLLAMA_API_KEY),
+          OLLAMA_MODEL: Boolean(process.env.OLLAMA_MODEL),
+          OLLAMA_EMBED_MODEL: Boolean(process.env.OLLAMA_EMBED_MODEL),
+          OPENAI_API_KEY: Boolean(process.env.OPENAI_API_KEY),
+        },
+      }, { status: 503 });
     }
     const stats = await knowledgeStats();
 
