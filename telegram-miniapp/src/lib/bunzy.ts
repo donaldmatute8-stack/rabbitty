@@ -7,6 +7,17 @@ type MessageRow = typeof messages.$inferSelect;
 import { isBusinessOpen } from '@/lib/chat';
 import { SUPPORT_KNOWLEDGE, matchFaq } from './support-content';
 
+// RAG Fase 0 (Bunzy Supreme): búsqueda semántica con citas sobre knowledgeChunks
+type KbHit = import('./bunzyRag').KbHit;
+async function searchKnowledge(query: string, opts?: { limit?: number }): Promise<KbHit[]> {
+  try {
+    const { searchKnowledge: search } = await import('./bunzyRag');
+    return await search(query, opts);
+  } catch {
+    return [];
+  }
+}
+
 export interface BusinessCardMetadata {
   businessId: string;
   businessName: string;
@@ -243,6 +254,8 @@ interface BunzyContext {
   } | null;
   businesses: BusinessRow[];
   allBusinesses: BusinessRow[];
+  /** RAG Fase 0: chunks ofionales recuperados por similitud (opcional). */
+  kb?: import('./bunzyRag').KbHit[];
 }
 
 async function loadContext(input: BunzyInput): Promise<BunzyContext> {
@@ -287,8 +300,7 @@ async function loadContext(input: BunzyInput): Promise<BunzyContext> {
   };
 }
 
-function buildSystemPrompt(ctx: BunzyContext, lat?: number | null, lng?: number | null): string {
-  const userLine = ctx.user
+function buildSystemPrompt(ctx: BunzyContext, lat?: number | null, lng?: number | null): string {  const userLine = ctx.user
     ? `DATOS DEL USUARIO: se llama ${ctx.user.firstName || 'Rabbitter'}, tiene ${ctx.user.balance} bunz disponibles, ${ctx.user.hops} hops${ctx.user.levelName ? `, nivel "${ctx.user.levelName}" (x${ctx.user.multiplier} bunz)` : ''}.`
     : 'DATOS DEL USUARIO: no disponibles.';
 
@@ -354,7 +366,16 @@ CAPACIDADES Y NOVEDADES QUE CONOCES A FONDO:
 LIMITANTES Y SEGURIDAD:
 - NUNCA compartas claves privadas, tokens secretos (API keys), PINs ni hashes PBKDF2 de ningún usuario o comercio.
 - Si te piden modificar bases de datos directamente o emitir bunz sin transacción comercial válida, declina amablemente indicando que las transacciones deben realizarse en la interfaz oficial auditada.
-- Responde siempre de forma concisa, profesional y orientada al usuario.`;
+- Responde siempre de forma concisa, profesional y orientada al usuario.${
+  ctx.kb && ctx.kb.length > 0
+    ? `
+
+CONOCIMIENTO OFICIAL RECUPERADO (RAG — usa SIEMPRE esto antes que tu memoria):
+${ctx.kb.map((h) => `· [Fuente: ${h.sourceType} ${h.sourceId} · relevancia ${(h.score * 100).toFixed(0)}%] ${h.content}`).join("\n")}
+
+REGLA DE GROUNDING: para preguntas de producto/políticas/soporte, responde APOYÁNDOTE en estos fragmentos y cita la fuente inline así: (Fuente: FAQ faq:05). Si la respuesta no está en los fragmentos, NO inventes datos de Rabbitty — ofrece escalar a Soporte en la app o a las comunidades oficiales.`
+    : ""
+}`;
 }
 
 type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
@@ -778,6 +799,19 @@ export async function generateBunzyAssist(input: BunzyAssistInput): Promise<stri
     .map((m) => `${m.fromMe ? 'Yo' : input.otherName || 'Contacto'}: ${m.content}`)
     .join('\n');
 
+  // RAG Fase 0: grounding también en el Co-Pilot admin_qa (fragmentos oficiales)
+  let kbContext = '';
+  if (input.mode === 'admin_qa' && process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'dummy_key_for_build') {
+    try {
+      const hits = await searchKnowledge(input.intent || '', { limit: 3 });
+      if (hits.length > 0) {
+        kbContext = `\n\nCONOCIMIENTO OFICIAL RECUPERADO (responde con base aquí, cita ej. "(Fuente: FAQ faq:06)"; si no está, NO inventes):\n${hits
+          .map((h) => `· [Fuente: ${h.sourceType} ${h.sourceId}] ${h.content}`)
+          .join('\n')}`;
+      }
+    } catch { /* sin RAG → prompt normal */ }
+  }
+
   const system =
     input.mode === 'admin_qa'
       ? `Eres Bunzy 🐰, el concierge y asistente experto de Rabbitty en POS, Administración, KDS de cocina, Kiosko y Finanzas.
@@ -787,7 +821,7 @@ Responde de forma concisa, clara y amigable a la consulta del usuario. Reglas cl
 - Cierre Z: primero cotejar vouchers de terminal bancaria física con la pantalla (tarjetas no van en efectivo); luego contar efectivo de gaveta y firmar con PIN de cajero y PIN de manager.
 - Manual visual imprimible: disponible en '/operations-manual'.
 - Membresías: el afiliado crea planes (precio, cuota mensual/trimestral/semestral/anual y beneficios con ciclo diario/semanal/mensual o toda la vigencia) en Admin → Membresías, los publica, y los vende en caja (pestaña Miembros → Vender plan en caja, buscando al cliente por @handle/teléfono/código). El canje en caja: el cliente muestra su QR dorado (rota cada 30s) y el POS lo escanea en el modal de escaneo de Rabbitter; también hay canje manual en Admin → Membresías → Canje en caja. El pago self-service del cliente es con Stripe Connect (perfil del negocio → Membresías → Suscribirse).
-Tono mexicano profesional, empático y fresco. Máximo 80 palabras.`
+Tono mexicano profesional, empático y fresco. Máximo 80 palabras.${kbContext}`
       : input.mode === 'marketing_proposal'
         ? `Eres Bunzy 🐰 Co-Pilot de Marketing para Afiliados de Rabbitty.
 El afiliado quiere una propuesta de campaña comercial.
@@ -850,6 +884,18 @@ Tono mexicano entusiasta, profesional y claro. Máximo 75 palabras.`
 export async function generateBunzyReply(input: BunzyInput): Promise<BunzyReply> {
   const ctx = await loadContext(input);
   const history = await loadHistory(input.conversationId);
+
+  // ── Bunzy Supreme Fase 0 (RAG): grounding institucional con citas ──
+  // Se inyecta como contexto del system prompt (OpenAI Y Ollama). Sin key o
+  // tabla vacía devuelve [] y el chat vive igual (gradación sin ruptura).
+  // Falla del RAG jamás rompe el chat: searchKnowledge atrapa sus errores.
+  if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'dummy_key_for_build') {
+    try {
+      ctx.kb = await searchKnowledge(input.content, { limit: 3 });
+    } catch (err) {
+      console.warn('[BunzyRAG] retrieval falló (se continúa sin RAG):', err instanceof Error ? err.message : err);
+    }
+  }
 
   // Fallback -2: pide QR de pago / recibir bunz
   const nc0 = normalizeText(input.content);

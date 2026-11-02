@@ -21,12 +21,16 @@ import {
  * - Nada aquí toca pagos, ledger Bunz, inventario ni cierre de mesa.
  */
 
+import {
+  isOrderEligibleForRating,
+  computeShadowScore,
+  computeCoverage,
+  PUBLIC_MIN_SAMPLE,
+  DUPLICATE_EXACT_THRESHOLD,
+} from "../services/ratingRules";
+import { submitRatingForOrder } from "../services/ratingSubmit";
+
 const ATTRIBUTES = ["atencion", "comida", "tiempo", "ambiente"] as const;
-const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
-const PUBLIC_MIN_SAMPLE = 5;
-const PRIOR_MEAN = 3.0; // no informativo hasta calibración (§5.3 del doc)
-const PRIOR_WEIGHT = 4;
-const RECENCY_HALF_LIFE_DAYS = 90;
 
 /** Guard: staff de la branch, owner del negocio, o God. */
 async function assertBranchAccess(ctx: any, branchId: string): Promise<void> {
@@ -102,14 +106,13 @@ export const ratingsRouter = router({
         .limit(1);
       if (!order) return { rateable: false, reason: "NOT_FOUND" as const };
       if (order.customerId !== ctx.userId) return { rateable: false, reason: "NOT_YOURS" as const };
-      const paidNow = order.status === "COMPLETED" || order.status === "PAID";
-      if (!paidNow) return { rateable: false, reason: "NOT_PAID" as const };
-      const [pay] = await ctx.restaurantDb
+      const [payNow] = await ctx.restaurantDb
         .select({ id: payments.id })
         .from(payments)
         .where(and(eq(payments.orderId, order.id), eq(payments.status, "COMPLETED")))
         .limit(1);
-      if (!pay) return { rateable: false, reason: "NOT_PAID" as const };
+      const elig = isOrderEligibleForRating({ orderStatus: order.status, hasCompletedPayment: Boolean(payNow) });
+      if (!elig.eligible) return { rateable: false, reason: elig.reason };
       const [existing] = await ctx.restaurantDb
         .select({ id: orderRatings.id })
         .from(orderRatings)
@@ -127,120 +130,23 @@ export const ratingsRouter = router({
       comment: z.string().max(500).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const [order] = await ctx.restaurantDb
-        .select({ id: orders.id, branchId: orders.branchId, customerId: orders.customerId, status: orders.status })
-        .from(orders)
-        .where(eq(orders.id, input.orderId))
-        .limit(1);
-      if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Orden no encontrada" });
-      // Autorización sin filtrar datos de órdenes ajenas
-      if (order.customerId !== ctx.userId) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "No puedes evaluar esta orden" });
-      }
-      if (order.status !== "COMPLETED" && order.status !== "PAID") {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "La orden aún no está liquidada" });
-      }
-      const [pay] = await ctx.restaurantDb
-        .select({ id: payments.id })
-        .from(payments)
-        .where(and(eq(payments.orderId, order.id), eq(payments.status, "COMPLETED")))
-        .limit(1);
-      if (!pay) throw new TRPCError({ code: "BAD_REQUEST", message: "La orden aún no está liquidada" });
-
-      const comment = input.comment?.trim() || null;
-
-      // Duplicado EXACTO verificable → PENDING_REVIEW (única regla de ocultamiento
-      // automático permitida; correlación multi-cuenta solo marca REVIEW_FLAG).
-      let moderationStatus: "VISIBLE" | "PENDING_REVIEW" = "VISIBLE";
-      if (comment) {
-        const since = new Date(Date.now() - 72 * 3600 * 1000);
-        const [dupRow] = await ctx.restaurantDb
-          .select({ n: sql<number>`count(*)::int` })
-          .from(orderRatings)
-          .where(and(
-            eq(orderRatings.customerUserId, ctx.userId ?? ""),
-            eq(orderRatings.branchId, order.branchId),
-            eq(orderRatings.comment, comment),
-            gte(orderRatings.createdAt, since)
-          ));
-        if (Number(dupRow?.n ?? 0) >= 3) moderationStatus = "PENDING_REVIEW";
-      }
-
-      const [existing] = await ctx.restaurantDb
-        .select()
-        .from(orderRatings)
-        .where(eq(orderRatings.orderId, order.id))
-        .limit(1);
-
-      if (existing) {
-        if (existing.customerUserId !== ctx.userId) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "No puedes editar esta evaluación" });
-        }
-        if (!existing.isEligible) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "La orden dejó de ser elegible" });
-        }
-        const age = Date.now() - new Date(existing.createdAt ?? existing.updatedAt ?? 0).getTime();
-        if (age > EDIT_WINDOW_MS) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "La ventana de edición (24h) ya cerró" });
-        }
-        await ctx.restaurantDb
-          .update(orderRatings)
-          .set({
-            stars: input.stars,
-            attributes: input.attributes ?? existing.attributes,
-            comment,
-            moderationStatus,
-            editedAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(eq(orderRatings.id, existing.id));
-        await ctx.restaurantDb.insert(orderRatingEvents).values({
-          ratingId: existing.id,
-          eventType: "EDITED",
-          actorUserId: ctx.userId,
-          actorRole: "AUTHOR",
-          previousStars: existing.stars,
-          newStars: input.stars,
-          previousComment: existing.comment,
-          newComment: comment,
-        });
-        return { success: true, ratingId: existing.id, edited: true };
-      }
-
-      const [created] = await ctx.restaurantDb
-        .insert(orderRatings)
-        .values({
-          orderId: order.id,
-          branchId: order.branchId,
-          customerUserId: ctx.userId ?? "",
-          stars: input.stars,
-          attributes: input.attributes ?? null,
-          comment,
-          moderationStatus,
-        })
-        .onConflictDoNothing({ target: orderRatings.orderId })
-        .returning();
-
-      // Doble submit: si el UNIQUE bloqueó, devolver el existente idempotente
-      if (!created) {
-        const [dup] = await ctx.restaurantDb
-          .select({ id: orderRatings.id })
-          .from(orderRatings)
-          .where(eq(orderRatings.orderId, order.id))
-          .limit(1);
-        return { success: true, ratingId: dup?.id ?? null, edited: false, duplicate: true };
-      }
-
-      await ctx.restaurantDb.insert(orderRatingEvents).values({
-        ratingId: created.id,
-        eventType: "CREATED",
-        actorUserId: ctx.userId,
-        actorRole: "AUTHOR",
-        newStars: input.stars,
-        newComment: comment,
+      const result = await submitRatingForOrder(ctx.restaurantDb, {
+        actorUserId: ctx.userId!,
+        orderId: input.orderId,
+        stars: input.stars,
+        attributes: input.attributes,
+        comment: input.comment,
       });
-
-      return { success: true, ratingId: created.id, edited: false };
+      if (!result.ok) {
+        const codeByFailure = {
+          NOT_FOUND: "NOT_FOUND",
+          FORBIDDEN: "FORBIDDEN",
+          NOT_LIQUID: "BAD_REQUEST",
+          WINDOW_CLOSED: "BAD_REQUEST",
+        } as const;
+        throw new TRPCError({ code: codeByFailure[result.code], message: result.message });
+      }
+      return { success: true, ratingId: result.ratingId, edited: result.edited, duplicate: result.duplicate };
     }),
 
   /** Reportar un comentario (comercio). → PENDING_REVIEW (fuera de agregados) + auditoría. */
@@ -344,7 +250,7 @@ export const ratingsRouter = router({
         avgStars: n > 0 ? Math.round(Number(agg?.avgStars ?? 0) * 10) / 10 : null,
         pendingReview: Number(agg?.pendingReview ?? 0),
         // Cobertura de opiniones (NO satisfacción)
-        coverage: { rated, eligible, pct: eligible > 0 ? Math.round((rated / eligible) * 100) : 0 },
+        coverage: computeCoverage(rated, eligible),
         comments: comments.map((c) => ({
           id: c.id,
           stars: c.stars,
@@ -446,19 +352,7 @@ export const ratingsRouter = router({
         .from(orderRatings)
         .where(and(eq(orderRatings.branchId, input.branchId), eq(orderRatings.isEligible, true), sql`${orderRatings.moderationStatus} <> 'PENDING_REVIEW'`));
 
-      let weightedSum = 0;
-      let weightTotal = 0;
-      for (const r of rows) {
-        const ageDays = Math.max(0, (Date.now() - new Date(r.createdAt ?? Date.now()).getTime()) / 86400000);
-        const w = Math.pow(0.5, ageDays / RECENCY_HALF_LIFE_DAYS);
-        weightedSum += Number(r.stars) * w;
-        weightTotal += w;
-      }
-      const recencyMean = weightTotal > 0 ? weightedSum / weightTotal : 0;
-      const n = rows.length;
-      const score = n > 0
-        ? (recencyMean * n + PRIOR_MEAN * PRIOR_WEIGHT) / (n + PRIOR_WEIGHT)
-        : PRIOR_MEAN;
+      const shadow = computeShadowScore(rows as Array<{ stars: number; createdAt: Date | null }>);
 
       const covRes2: any = await ctx.restaurantDb.execute(sql`
         SELECT
@@ -469,20 +363,14 @@ export const ratingsRouter = router({
       const covRows2 = covRes2?.rows ?? covRes2;
       const covRow2 = Array.isArray(covRows2) ? covRows2[0] : covRows2;
       const eligible = Number(covRow2?.eligible ?? 0);
-      const coverage = eligible > 0 ? Math.min(1, n / eligible) : 0;
+      const coverage = eligible > 0 ? Math.min(1, shadow.sampleN / eligible) : 0;
 
       const result = {
         branchId: input.branchId,
-        score: Math.round(score * 100) / 100,
-        sampleN: n,
+        score: shadow.score,
+        sampleN: shadow.sampleN,
         coverage: Math.round(coverage * 1000) / 1000,
-        components: {
-          recencyMean: Math.round(recencyMean * 100) / 100,
-          priorMean: PRIOR_MEAN,
-          priorWeight: PRIOR_WEIGHT,
-          recencyHalfLifeDays: RECENCY_HALF_LIFE_DAYS,
-          method: "bayesian_shrinkage_with_recency",
-        },
+        components: shadow.components,
       };
 
       if (input.persist) {

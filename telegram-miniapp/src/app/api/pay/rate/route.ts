@@ -4,30 +4,43 @@ import { checkRateLimit } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 
-const ADMIN_TRPC = process.env.NEXT_PUBLIC_ADMIN_API_URL || 'https://admin.rabbitty.me/api/trpc';
+// ── Fase 1 Rabbitty Score — proxy del rating post-pago (canal nativo/miniapp) ──
+// `ratings.submitRating` (tRPC admin) es protectedProcedure: vive de la sesión
+// del admin y el comensal del canal nativo no la tiene (por eso el form
+// "cargaba y no pasaba" — el pago sí liquidaba por payments.*, que tiene su
+// propio scoping público). El canal correcto es el INTERNO del admin
+// (/api/internal/rating) protegido por secret compartido, donde el userId del
+// comensal ya fue autenticado AQUÍ (sesión miniapp) y se re-valida allá.
+const INTERNAL_RATING_URL =
+  process.env.INTERNAL_RATING_URL || 'https://admin.rabbitty.me/api/internal/rating';
 
-// tRPC MUTATION POST batch: input en el CUERPO ({"0": {...}})
-async function callAdmin(procedure: string, input: unknown): Promise<any> {
-  const url = `${ADMIN_TRPC}/${procedure}?batch=1`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ '0': input }),
-  });
-  const json = await res.json().catch(() => null);
-  const first = Array.isArray(json) ? json[0] : json;
-  const errMsg = first?.error?.message ?? first?.error?.json?.message;
-  if (!first || first.error || errMsg) {
-    throw new Error(errMsg || `Error llamando a ${procedure} (${res.status})`);
+async function callInternalRating(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const secret = process.env.RATING_INTERNAL_SECRET;
+  if (!secret) {
+    throw new Error('Servidor sin RATING_INTERNAL_SECRET configurado');
   }
-  return first.result?.data;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const res = await fetch(INTERNAL_RATING_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-rating-secret': secret,
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw new Error((json as any)?.error || `HTTP ${res.status} del servidor de evaluaciones`);
+    }
+    return (json as Record<string, unknown>) ?? {};
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
-/**
- * Fase 1 Rabbitty Score — proxy del rating post-pago.
- * El server (ratings.submitRating) valida dueño de la orden, estado COMPLETED/PAID
- * y payment COMPLETED. Aquí solo se reenvía la sesión del comensal.
- */
 export async function POST(req: Request) {
   try {
     const caller = await getAuthenticatedUser(req).catch(() => null);
@@ -49,10 +62,11 @@ export async function POST(req: Request) {
       : undefined;
     const comment = typeof body?.comment === 'string' ? body.comment.slice(0, 500) : undefined;
 
-    const result = await callAdmin('ratings.submitRating', { orderId, stars, attributes, comment });
+    const result = await callInternalRating({ userId: caller.id, orderId, stars, attributes, comment });
     return NextResponse.json({ success: true, ...result });
   } catch (err: any) {
-    console.error('[PAY_RATE_ERROR]', err?.message || err);
-    return NextResponse.json({ success: false, error: String(err?.message || 'Error al enviar evaluación').slice(0, 160) }, { status: 400 });
+    const msg = String(err?.message || 'Error al enviar evaluación').slice(0, 160);
+    console.error('[PAY_RATE_ERROR]', msg);
+    return NextResponse.json({ success: false, error: msg }, { status: 400 });
   }
 }

@@ -699,6 +699,9 @@ importers:
       '@rabbitty/database-restaurant':
         specifier: workspace:*
         version: link:../packages/database-restaurant
+      '@rabbitty/events':
+        specifier: workspace:*
+        version: link:../packages/events
       '@rabbitty/ui':
         specifier: file:../packages/ui
         version: link:../packages/ui

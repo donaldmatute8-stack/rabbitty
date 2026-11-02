@@ -30,6 +30,7 @@
     "@libsql/client": "^0.17.3",
     "@rabbitty/database-core": "file:../packages/database-core",
     "@rabbitty/database-restaurant": "workspace:*",
+    "@rabbitty/events": "workspace:*",
     "@rabbitty/ui": "file:../packages/ui",
     "@stripe/react-stripe-js": "^7.0.1",
     "@stripe/stripe-js": "^10.2.0",

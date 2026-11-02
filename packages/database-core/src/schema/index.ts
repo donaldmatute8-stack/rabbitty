@@ -34,6 +34,14 @@ export const users = pgTable("users", {
   twoFactorMethods: text("twoFactorMethods").default("[]").notNull(), // JSON: ["email","phone"] (OTP); TOTP se deriva de totpEnabled
   ...timestamps,
   scanCode: integer("scanCode").unique(), // Código óptico del RabbittyCode (asignado por el servidor)
+  // Rabbitty Score F3 (D-5): campaña de atribución en el alta del cliente.
+  // Null = ingresa orgánico. Se captura SOLO en la creación (primera vez vista);
+  // no tiene FK a affiliateCampaigns a propósito (id text, sobrevive borrados).
+  firstSeenCampaignId: text("firstSeenCampaignId"),
+  // Push v2.1 (§2.2/§2.3): categorías silenciadas por el usuario (JSON string array
+  // de PushCategoryKey — chat/rewards/orders/proximity/memberships/marketing).
+  // CRITICAL (pagos/cuentas) y SYSTEM nunca se silencian — filtrado en el worker.
+  pushMutedCategories: text("pushMutedCategories").default("[]").notNull(),
 });
 
 export const verificationTokens = pgTable("verificationTokens", {
@@ -743,6 +751,9 @@ export const notificationsOutbox = pgTable("notifications_outbox", {
   status: text("status").default("QUEUED").notNull(), // QUEUED | PROCESSED | FAILED
   attempts: integer("attempts").default(0).notNull(),
   runAfter: timestamp("runAfter").defaultNow().notNull(),
+  // Lease de concurrencia: worker con claim activo (SKIP LOCKED); null = libre.
+  // Expira sola — si un worker muere a mitad del fan-out, la fila vuelve a la cola.
+  lockedUntil: timestamp("lockedUntil"),
   ...timestamps,
 });
 

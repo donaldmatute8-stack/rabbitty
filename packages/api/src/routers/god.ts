@@ -8,8 +8,9 @@ import {
   transactions,
   levels,
   hatTricks,
+  presenceSessions,
 } from "@rabbitty/database-core";
-import { ledgerEntries } from "@rabbitty/database-restaurant/schema";
+import { ledgerEntries, rabbitterScoreShadow } from "@rabbitty/database-restaurant/schema";
 import {
   restaurants,
   branches,
@@ -23,6 +24,12 @@ import {
 // Campañas viven en coreDb
 import { affiliateCampaigns, campaignRedemptions } from "@rabbitty/database-core/schema";
 import { TRPCError } from "@trpc/server";
+import { computeTrustShadow, type TrustPaymentsInput } from "../services/trustRules";
+import { computeAllocationShadow } from "../services/allocRules";
+import { computeShadowScore } from "../services/ratingRules";
+
+/** Desenrolla result de drizzle raw SQL (rows array en pg driver). */
+const sqlRows = (r: unknown) => ((r as { rows?: unknown[] }).rows ?? r) as Array<Record<string, unknown>>;
 
 /**
  * ── GOD ROUTER: operaciones exclusivas del God Admin (requiere identidad + 2FA) ──
@@ -577,6 +584,289 @@ export const godRouter = router({
       },
     };
   }),
+
+  // ── RABBITTER TRUST & ENGAGEMENT (F2, SHADOW) ─────────────────────────────
+  // Score de confiabilidad del comensal: pagos completados vs abandonados,
+  // tabs huérfanas (diagnóstico), disciplina de canjes y presencia honesta.
+  // Todo SHADOW: nunca operativo, nunca visible al cliente, jamás sanciona.
+  getRabbitterTrustShadow: godAdminProcedure
+    .input(z.object({
+      subjectId: z.string().min(1),
+      lookbackDays: z.number().int().min(7).max(365).default(90),
+      persist: z.boolean().default(false),
+    }))
+    .query(async ({ ctx, input }) => {
+      const days = input.lookbackDays;
+
+      // 1) Intent de pago cerrados asignados al sujeto (payer)
+      const intentsRes: any = await ctx.restaurantDb.execute(sql`
+        SELECT status, COUNT(*)::int AS n
+        FROM "payment_intents"
+        WHERE "payerSubjectId" = ${input.subjectId}
+          AND status IN ('SUCCEEDED','FAILED','CANCELLED','EXPIRED')
+          AND "createdAt" >= now() - (${days} || ' days')::interval
+        GROUP BY status`);
+      const byStatus: Record<string, number> = {};
+      for (const r of sqlRows(intentsRes)) byStatus[String(r.status)] = Number(r.n);
+      const payments: TrustPaymentsInput = {
+        succeeded: byStatus.SUCCEEDED ?? 0,
+        failed: byStatus.FAILED ?? 0,
+        cancelled: byStatus.CANCELLED ?? 0,
+        expired: byStatus.EXPIRED ?? 0,
+      };
+
+      // 2) Tabs huérfanas (STALE_TAB) vs liquidación normal del sujeto — diagnóstico
+      //    (el actor tipo cliente/operador queda pendiente de D-7 por diseñar)
+      const tabsRes: any = await ctx.restaurantDb.execute(sql`
+        SELECT
+          COUNT(*) FILTER (WHERE o."voidReason" = 'STALE_TAB')::int AS stale,
+          COUNT(*) FILTER (WHERE o.status IN ('COMPLETED','PAID'))::int AS completed
+        FROM "orders" o
+        WHERE o."customerId" = ${input.subjectId}
+          AND (o.status IN ('COMPLETED','PAID')
+               OR (o."voidReason" = 'STALE_TAB' AND o."createdAt" >= now() - (${days} || ' days')::interval))`);
+
+      // 3) Disciplina de canjes (EARN vs SPEND, Bunz en la ventana)
+      const ledgerRes: any = await ctx.restaurantDb.execute(sql`
+        SELECT
+          type,
+          COUNT(*)::int AS n,
+          COALESCE(SUM(l.amount), 0) AS total
+        FROM "ledger_entries" l
+        WHERE l."payerSubjectId" = ${input.subjectId}
+          AND l.currency = 'BUNZ'
+          AND l.type IN ('EARN','SPEND')
+          AND l."createdAt" >= now() - (${days} || ' days')::interval
+        GROUP BY type`);
+      const earnRow = sqlRows(ledgerRes).find((r) => r.type === "EARN");
+      const spendRow = sqlRows(ledgerRes).find((r) => r.type === "SPEND");
+      const earnBunz = Number(earnRow?.total ?? 0);
+      const spendBunz = Number(spendRow?.total ?? 0);
+      const entryCount = Number(earnRow?.n ?? 0) + Number(spendRow?.n ?? 0);
+
+      // 4) Presencia honesta core (source: gps | scan | geofence cuando llegue)
+      const presenceRows = await ctx.coreDb
+        .select({ source: presenceSessions.source, n: sql<number>`COUNT(*)::int` })
+        .from(presenceSessions)
+        .where(and(
+          eq(presenceSessions.userId, input.subjectId),
+          gte(presenceSessions.startedAt, sql`now() - (${days} || ' days')::interval`)
+        ))
+        .groupBy(presenceSessions.source);
+      const knownSources = new Set<string>(["gps", "scan", "geofence"]);
+      const sessionsBySource = { gps: 0, scan: 0, geofence: 0, other: 0 } as { gps: number; scan: number; geofence: number; other: number };
+      for (const row of presenceRows) {
+        const src = (knownSources.has(row.source) ? row.source : "other") as "gps" | "scan" | "geofence" | "other";
+        sessionsBySource[src] = (sessionsBySource[src] ?? 0) + Number(row.n);
+      }
+
+      // 5) Señales de revisión multi-cuenta (Regla de oro §2: solo marcan)
+      const gmailRes: any = await ctx.coreDb.execute(sql`
+        SELECT COUNT(*)::int AS n FROM "users" u1
+        WHERE u1.id = ${input.subjectId}
+          AND LOWER(u1."email") LIKE '%gmail.com'
+          AND EXISTS (
+            SELECT 1 FROM "users" u2
+            WHERE u2.id <> u1.id
+              AND LOWER(u2."email") LIKE '%gmail.com'
+              AND regexp_replace(SPLIT_PART(LOWER(u2."email"), '@', 1), '\\.', '', 'g')
+                = regexp_replace(SPLIT_PART(LOWER(u1."email"), '@', 1), '\\.', '', 'g')
+          )`);
+      const ipRes: any = await ctx.coreDb.execute(sql`
+        SELECT COUNT(DISTINCT t2."userId")::int AS n
+        FROM "trustedSessions" t1
+        JOIN "trustedSessions" t2 ON t2."ipAddress" = t1."ipAddress" AND t2."userId" <> t1."userId"
+        WHERE t1."userId" = ${input.subjectId} AND t1."ipAddress" IS NOT NULL`);
+      const deviceRes: any = await ctx.coreDb.execute(sql`
+        SELECT COUNT(DISTINCT t2."userId")::int AS n
+        FROM "trustedSessions" t1
+        JOIN "trustedSessions" t2
+          ON COALESCE(t2."deviceName", '?') = COALESCE(t1."deviceName", '?')
+         AND COALESCE(t2."userAgent", '?') = COALESCE(t1."userAgent", '?')
+         AND t2."userId" <> t1."userId"
+        WHERE t1."userId" = ${input.subjectId}`);
+      const tokenRes: any = await ctx.coreDb.execute(sql`
+        SELECT COUNT(DISTINCT u2.id)::int AS n
+        FROM "pushDevices" p1
+        JOIN "pushDevices" p2 ON p2.token = p1.token AND p2."userId" <> p1."userId"
+        LEFT JOIN "users" u2 ON u2.id = p2."userId"
+        WHERE p1."userId" = ${input.subjectId} AND p1.token IS NOT NULL`);
+
+      const reviewFlags = {
+        gmailCluster: Number(sqlRows(gmailRes)[0]?.n ?? 0) > 0,
+        ipSharing: Number(sqlRows(ipRes)[0]?.n ?? 0) > 0,
+        deviceSharing: Number(sqlRows(deviceRes)[0]?.n ?? 0) > 0,
+        pushTokenSharing: Number(sqlRows(tokenRes)[0]?.n ?? 0) > 0,
+        ledgerSuspect: false as boolean,
+      };
+
+      const trust = computeTrustShadow({
+        payments,
+        tabs: { stale: Number(sqlRows(tabsRes)[0]?.stale ?? 0), completed: Number(sqlRows(tabsRes)[0]?.completed ?? 0) },
+        ledger: { earnBunz, spendBunz, entryCount },
+        presence: { sessionsBySource },
+      });
+      reviewFlags.ledgerSuspect = trust.components.ledger.notes?.suspect === true;
+      const reviewFlag = Object.values(reviewFlags).some(Boolean);
+
+      const result = {
+        subjectId: input.subjectId,
+        lookbackDays: days,
+        score: trust.score,
+        confidence: trust.confidence,
+        sampleN: trust.sampleN,
+        components: trust.components,
+        insufficient: trust.insufficient,
+        method: trust.method,
+        reviewFlags,
+        reviewFlag,
+      };
+
+      if (input.persist) {
+        await ctx.restaurantDb.insert(rabbitterScoreShadow).values({
+          subjectId: input.subjectId,
+          score: result.score, // null = datos insuficientes (se guarda igualmente con confidence)
+          confidence: result.confidence,
+          sampleN: result.sampleN,
+          components: {
+            ...result.components,
+            insufficient: result.insufficient,
+            reviewFlags: result.reviewFlags,
+          },
+          reviewFlag,
+        });
+      }
+      return result;
+    }),
+
+  // Cola shadow: últimos snapshots con bandería — supervisión del poder predictivo
+  rabbitterTrustShadowQueue: godAdminProcedure.query(async ({ ctx }) => {
+    const rows = await ctx.restaurantDb
+      .select({
+        subjectId: rabbitterScoreShadow.subjectId,
+        score: rabbitterScoreShadow.score,
+        confidence: rabbitterScoreShadow.confidence,
+        sampleN: rabbitterScoreShadow.sampleN,
+        reviewFlag: rabbitterScoreShadow.reviewFlag,
+        computedAt: rabbitterScoreShadow.computedAt,
+      })
+      .from(rabbitterScoreShadow)
+      .orderBy(desc(rabbitterScoreShadow.reviewFlag), desc(rabbitterScoreShadow.computedAt))
+      .limit(20);
+
+    const names = rows.length
+      ? await ctx.coreDb
+          .select({ id: users.id, username: users.username })
+          .from(users)
+          .where(inArray(users.id, rows.map((r) => r.subjectId)))
+      : [];
+    const nameMap = new Map(names.map((u) => [u.id, u.username]));
+    return rows.map((r) => ({ ...r, username: nameMap.get(r.subjectId) ?? null }));
+  }),
+
+  // ── GROWTH ALLOCATION (F3, SHADOW code only — NUNCA operativo) ────────────
+  // Puntúa campañas activas (servicio F1 + eficiencia + momentum) y propone
+  // acciones al God Admin con reasons explicables. Jamás mueve presupuesto:
+  // Bx2 de Bunzy o el propio God deciden con aprobación humana (D-6).
+  getGrowthAllocationShadow: godAdminProcedure
+    .input(z.object({ limit: z.number().int().min(1).max(50).default(12) }))
+    .query(async ({ ctx, input }) => {
+      const campaigns = await ctx.coreDb
+        .select({
+          id: affiliateCampaigns.id,
+          businessId: affiliateCampaigns.businessId,
+          title: affiliateCampaigns.title,
+          campaignType: affiliateCampaigns.campaignType,
+          rewardPercentage: affiliateCampaigns.rewardPercentage,
+          budgetBunz: affiliateCampaigns.budgetBunz,
+          budgetSpent: affiliateCampaigns.budgetSpent,
+          redemptionCount: affiliateCampaigns.redemptionCount,
+          status: affiliateCampaigns.status,
+          startsAt: affiliateCampaigns.startsAt,
+          expiresAt: affiliateCampaigns.expiresAt,
+        })
+        .from(affiliateCampaigns)
+        .where(inArray(affiliateCampaigns.status, ["ACTIVE", "PAUSED", "EXHAUSTED"]))
+        .orderBy(desc(affiliateCampaigns.startsAt))
+        .limit(input.limit);
+
+      const results = [];
+      for (const c of campaigns) {
+        // Merchant Service Score (F1, bayesiano): ratings de las sucursales del negocio
+        const ratingsRes: any = await ctx.restaurantDb.execute(sql`
+          SELECT r.stars, r."createdAt"
+          FROM "order_ratings" r
+          JOIN "branches" b ON b.id = r."branchId"
+          JOIN "restaurants" t ON t.id = b."restaurantId"
+          WHERE t."businessId" = ${c.businessId}
+            AND r."isEligible" = true
+            AND r."moderationStatus" <> 'PENDING_REVIEW'`);
+        const serviceRows = sqlRows(ratingsRes).map((r) => ({ stars: Number(r.stars), createdAt: new Date(String(r.createdAt)) }));
+        const shadow = computeShadowScore(serviceRows as Array<{ stars: number; createdAt: Date | null }>);
+
+        // Momentum: redenciones 30d del campaignId (campañas viven en CORE DB)
+        const redemRes: any = await ctx.coreDb.execute(sql`
+          SELECT COUNT(*)::int AS n, COALESCE(SUM("fiatSpent"), 0) AS fiat, COUNT(DISTINCT "userId")::int AS users
+          FROM "campaignRedemptions"
+          WHERE "campaignId" = ${c.id} AND "redeemedAt" >= now() - interval '30 days'`);
+        const redemRow = sqlRows(redemRes)[0] ?? { n: 0, fiat: 0, users: 0 };
+
+        const budgetBunz = Number(c.budgetBunz || 0);
+        const budgetSpent = Number(c.budgetSpent || 0);
+        const budgetRemainingBunz = budgetBunz - budgetSpent;
+        const utilization = budgetBunz > 0 ? Math.min(1, budgetSpent / budgetBunz) : 0;
+        const campaignAgeDays = c.startsAt
+          ? Math.max(0, (Date.now() - new Date(c.startsAt).getTime()) / 86_400_000)
+          : 0;
+
+        const alloc = computeAllocationShadow({
+          merchantShadowScore: shadow.sampleN > 0 ? shadow.score : null,
+          serviceSampleN: shadow.sampleN,
+          utilization,
+          redemptions30d: Number(redemRow.n ?? 0),
+          budgetRemainingBunz,
+          campaignAgeDays: Number(campaignAgeDays.toFixed(1)),
+        });
+
+        results.push({
+          campaignId: c.id,
+          businessId: c.businessId,
+          title: c.title,
+          campaignType: c.campaignType,
+          rewardPercentage: c.rewardPercentage,
+          status: c.status,
+          budgetBunz,
+          budgetSpent,
+          budgetRemainingBunz,
+          utilization: Math.round(utilization * 1000) / 1000,
+          redemptions30d: Number(redemRow.n ?? 0),
+          redemptionUsers30d: Number(redemRow.users ?? 0),
+          fiat30d: Number(redemRow.fiat ?? 0),
+          merchantShadow: { score: shadow.score, sampleN: shadow.sampleN },
+          alloc: {
+            score: alloc.score,
+            confidence: alloc.confidence,
+            recommendation: alloc.recommendation,
+            reasons: alloc.reasons,
+            insufficient: alloc.insufficient,
+            method: alloc.method,
+          },
+        });
+      }
+
+      results.sort((a, b) => (b.alloc.score ?? -1) - (a.alloc.score ?? -1));
+      const nBoost = results.filter((r) => r.alloc.recommendation === "BOOST").length;
+      const nRefill = results.filter((r) => r.alloc.recommendation === "REFILL_REQUEST").length;
+      const nPause = results.filter((r) => r.alloc.recommendation === "PAUSE_CANDIDATE").length;
+      const nNurture = results.filter((r) => r.alloc.recommendation === "NURTURE_SERVICE").length;
+
+      return {
+        method: "growth_alloc_shadow_v1",
+        boxShadowLive: results.some((r) => r.merchantShadow.sampleN > 0),
+        summary: { campaigns: results.length, boost: nBoost, refill: nRefill, pause: nPause, nurture: nNurture },
+        campaigns: results,
+      };
+    }),
 
   // ── NEGOCIO / VC: crecimiento, GMV, retención, campañas (upsell) ──
   getGrowthMetrics: godAdminProcedure

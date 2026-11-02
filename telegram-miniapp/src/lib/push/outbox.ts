@@ -11,14 +11,18 @@
  * Dedupe: dedupeKey UNIQUE — webhooks/retries no duplican.
  */
 
-import { and, eq, lte, asc, sql } from "drizzle-orm";
+import { and, eq, lte, asc, sql, or, isNull, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { notifications, notificationsOutbox, notificationDeliveries, pushDevices } from "@/db/schema";
+import { notifications, notificationsOutbox, notificationDeliveries, pushDevices, users } from "@/db/schema";
 import { isApnsConfigured, sendApnsToDevice, type PushPayload } from "@/lib/push/apns";
 import { sendFcmToDevice, isFcmConfigured } from "@/lib/push/fcm";
+import { typePushMuted, parseMutedCategories, categoryForPushType } from "@/lib/push/categories";
 
 export const OUTBOX_MAX_ATTEMPTS = 4;
 export const OUTBOX_BACKOFF_BASE_SECONDS = 30;
+/** Lease del claim SKIP LOCKED: si el worker muere a mitad del fan-out,
+ *  la fila vuelve a ser elegible tras expirar (no se pierde, no se suma retry). */
+export const OUTBOX_LEASE_MS = 120_000;
 
 export interface OutboxInput {
   userId: string;
@@ -75,15 +79,51 @@ export async function processOutboxBatch(limit = 20): Promise<{
     return summary;
   }
 
-  const batch = await db
-    .select()
-    .from(notificationsOutbox)
-    .where(and(eq(notificationsOutbox.status, "QUEUED"), lte(notificationsOutbox.runAfter, new Date())))
-    .orderBy(asc(notificationsOutbox.runAfter))
-    .limit(limit);
+  // Claim transaccional con SKIP LOCKED (§14-3): el cron de GH y el piggyback
+  // pueden correr al mismo tiempo — cada fila la reclama un único worker.
+  // Una fila a medio procesar vuelve a la cola solo si su lease expira.
+  const batch = await db.transaction(async (tx) => {
+    const rows = await tx
+      .select()
+      .from(notificationsOutbox)
+      .where(
+        and(
+          eq(notificationsOutbox.status, "QUEUED"),
+          lte(notificationsOutbox.runAfter, new Date()),
+          or(isNull(notificationsOutbox.lockedUntil), lte(notificationsOutbox.lockedUntil, new Date()))
+        )
+      )
+      .orderBy(asc(notificationsOutbox.runAfter))
+      .limit(limit)
+      .for("update", { skipLocked: true });
+    if (rows.length > 0) {
+      await tx
+        .update(notificationsOutbox)
+        .set({ lockedUntil: new Date(Date.now() + OUTBOX_LEASE_MS), updatedAt: new Date() })
+        .where(inArray(notificationsOutbox.id, rows.map((r) => r.id)));
+    }
+    return rows;
+  });
+
+  // Prefs por categoría del usuario (una sola query para todo el batch)
+  const userPushPrefs = new Map<string, string>();
+  const batchUserIds = Array.from(new Set(batch.map((b) => b.userId)));
+  if (batchUserIds.length > 0) {
+    const prefRows = await db
+      .select({ id: users.id, muted: users.pushMutedCategories })
+      .from(users)
+      .where(inArray(users.id, batchUserIds));
+    for (const row of prefRows) userPushPrefs.set(row.id, row.muted);
+  }
 
   for (const item of batch) {
     summary.processed += 1;
+
+    // Prefs por categoría (v2.1 §2.2): el usuario silencia categorías de PUSH.
+    // CRITICAL/SYSTEM jamás se filtran. El registro in-app (campana) SIEMPRE pasa:
+    // el mute solo apaga el canal del proveedor, no la historia de notificaciones.
+    const mutedCategories = parseMutedCategories(userPushPrefs.get(item.userId));
+    const pushMuted = typePushMuted(mutedCategories, item.type);
     // Todos los devices activos del usuario (iOS→APNs, Android→FCM)
     const usersDevices = await db
       .select({ id: pushDevices.id, token: pushDevices.token, platform: pushDevices.platform })
@@ -107,6 +147,25 @@ export async function processOutboxBatch(limit = 20): Promise<{
     }
 
     // 2) Fan-out por device: iOS → APNs · Android → FCM (P3)
+    // §2.2: si la categoría está silenciada, NO se llama al proveedor — queda
+    // registrado como SKIPPED (category_muted) y el item cierra como PROCESSED.
+    if (pushMuted) {
+      if (notificationId) {
+        await db.insert(notificationDeliveries).values({
+          notificationId,
+          channel: "APNs",
+          status: "SKIPPED",
+          reason: `category_muted:${categoryForPushType(item.type)}`,
+        });
+      }
+      summary.skipped += 1;
+      await db
+        .update(notificationsOutbox)
+        .set({ status: "PROCESSED", lockedUntil: null, updatedAt: new Date() })
+        .where(eq(notificationsOutbox.id, item.id));
+      continue;
+    }
+
     const payload: PushPayload = {
       title: item.title,
       body: item.message,
@@ -150,7 +209,7 @@ export async function processOutboxBatch(limit = 20): Promise<{
       summary.sent += 1;
       await db
         .update(notificationsOutbox)
-        .set({ status: "PROCESSED", updatedAt: new Date() })
+        .set({ status: "PROCESSED", lockedUntil: null, updatedAt: new Date() })
         .where(eq(notificationsOutbox.id, item.id));
     } else {
       const attempts = item.attempts + 1;
@@ -162,6 +221,7 @@ export async function processOutboxBatch(limit = 20): Promise<{
           status: dead ? "FAILED" : "QUEUED",
           attempts,
           runAfter: new Date(Date.now() + nextBackoffSeconds(attempts) * 1000),
+          lockedUntil: null,
           updatedAt: new Date(),
         })
         .where(eq(notificationsOutbox.id, item.id));

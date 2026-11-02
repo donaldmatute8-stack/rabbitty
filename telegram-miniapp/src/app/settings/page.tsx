@@ -171,6 +171,11 @@ export default function SettingsPage() {
             </div>
 
 
+            {/* ── Preferencias por categoría (v2.1 §2.2) — solo cuando el push nativo está ON ── */}
+            {settings.nativePush && (
+              <CategoryMuteRows />
+            )}
+
             {/* ── Diagnóstico de push (¿APNs en Vercel + dispositivo registrado?) ── */}
             <PushDiagnosticsRow />
           </div>
@@ -186,6 +191,85 @@ export default function SettingsPage() {
       )}
 
       <BottomNav isDark={!user} />
+    </div>
+  );
+}
+
+/**
+ * ── CategoryMuteRows ── Preferencias por categoría (v2.1 §2.2): 6 toggles
+ * embebidos bajo el master de push nativo. Mute = { muted: [...activas] }
+ * (representación de silenciados). CRITICAL/SYSTEM no son categorías y jamás
+ * aparecen. Cambio optimista + POST al server (best-effort como el resto).
+ */
+const PREFERENCE_CATEGORIES = [
+  { key: "chat", label: "Chat y mensajes", desc: "Conversaciones con negocios y amigos" },
+  { key: "rewards", label: "Recompensas Bunz", desc: "Ganancias, gastos y transferencias" },
+  { key: "orders", label: "Órdenes y cuentas", desc: "Pago confirmado, cuenta enviada, propinas" },
+  { key: "proximity", label: "Cercanía al local", desc: "Llegada y recordatorios de check-in" },
+  { key: "memberships", label: "Membresías", desc: "Altas, renovaciones y revocaciones" },
+  { key: "marketing", label: "Marketing y ofertas", desc: "Ofertas flash y campañas de tus lugares" },
+];
+// Sincronizado con lib/push/categories.ts — CRITICAL/SYSTEM no son categorías y jamás se silencian.
+
+function CategoryMuteRows() {
+  const [muted, setMuted] = useState<string[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  const load = async () => {
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch("/api/notifications/preferences", { headers: headers || {}, cache: "no-store" });
+      const data = await res.json();
+      if (Array.isArray(data?.muted)) setMuted(data.muted as string[]);
+    } catch { /* sin server: quedan defaults(on) */ }
+    setLoaded(true);
+  };
+
+  useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+
+  const toggleCategory = async (cat: string) => {
+    const next = muted.includes(cat) ? muted.filter((c) => c !== cat) : [...muted, cat];
+    setMuted(next);
+    PlatformBridge.hapticFeedback("light");
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      await fetch("/api/notifications/preferences", {
+        method: "POST",
+        headers: { ...(headers || {}), "Content-Type": "application/json" },
+        body: JSON.stringify({ muted: next }),
+      });
+    } catch { /* best-effort (optimista) */ }
+  };
+
+  if (!loaded) return null;
+
+  return (
+    <div className="mt-2 rounded-xl" style={{ border: "1px dashed var(--border-subtle)", padding: 6 }}>
+      <p className="text-[10px] font-black uppercase tracking-[1.5px] m-0 px-2 pt-1.5" style={{ color: "var(--text-muted)" }}>
+        Qué notificaciones quieres recibir
+      </p>
+      {PREFERENCE_CATEGORIES.map((cat) => {
+        const on = !muted.includes(cat.key);
+        return (
+          <div
+            key={cat.key}
+            role="button"
+            tabIndex={0}
+            onClick={() => { void toggleCategory(cat.key); }}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") void toggleCategory(cat.key); }}
+            className="flex items-start gap-3 px-2 py-2 rounded-lg cursor-pointer transition-colors hover:bg-(--bg-pressed)"
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] font-bold m-0 leading-tight">{cat.label}</p>
+              <p className="text-[10px] m-0 mt-0.5" style={{ color: "var(--text-muted)" }}>{cat.desc}</p>
+            </div>
+            <Switch on={on} onChange={() => { void toggleCategory(cat.key); }} />
+          </div>
+        );
+      })}
+      <p className="text-[9px] m-0 px-2 pb-1.5" style={{ color: "var(--text-muted)" }}>
+        Los pagos, cuentas y avisos de seguridad siempre llegan — por tu protección.
+      </p>
     </div>
   );
 }

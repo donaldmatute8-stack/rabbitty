@@ -67,6 +67,39 @@ interface AnalyticsTenant {
   analyticsProEnabled: boolean; showUsdTicket: boolean; createdAt: string | null;
 }
 
+// ── Rabbitter Trust & Engagement (F2, SHADOW — jamás operativo) ──
+interface TrustShadowQueueRow {
+  subjectId: string; username: string | null;
+  score: number | null; confidence: string; sampleN: number;
+  reviewFlag: boolean; computedAt: string;
+}
+interface TrustComponents {
+  payments: { score: number | null; sampleN: number; notes?: Record<string, unknown> };
+  tabs: { score: number | null; sampleN: number; notes?: Record<string, unknown> };
+  ledger: { score: number | null; sampleN: number; notes?: Record<string, unknown> };
+  presence: { score: number | null; sampleN: number; notes?: Record<string, unknown> };
+}
+interface TrustShadowResult {
+  subjectId: string; score: number | null; confidence: string;
+  sampleN: number; components: TrustComponents; insufficient: string[];
+  reviewFlag: boolean;
+  reviewFlags: { gmailCluster: boolean; ipSharing: boolean; deviceSharing: boolean; pushTokenSharing: boolean; ledgerSuspect: boolean };
+}
+
+// ── Growth Allocation (F3, SHADOW — propuesta, jamás operativo) ──
+interface AllocResult {
+  alloc: { score: number | null; confidence: string; recommendation: string; reasons: string[]; insufficient: string[] };
+  campaignId: string; title: string; campaignType: string; rewardPercentage: number; status: string;
+  budgetBunz: number; budgetSpent: number; budgetRemainingBunz: number;
+  utilization: number; redemptions30d: number; redemptionUsers30d: number; fiat30d: number;
+  merchantShadow: { score: number | null; sampleN: number };
+}
+interface AllocShadowResponse {
+  method: string; boxShadowLive: boolean;
+  summary: { campaigns: number; boost: number; refill: number; pause: number; nurture: number };
+  campaigns: AllocResult[];
+}
+
 const METHOD_COLORS: Record<string, string> = {
   CASH: "#10B981",
   CREDIT_CARD: "#06B6D4",
@@ -82,6 +115,13 @@ export default function GodInsightsPage() {
   const [provisioning, setProvisioning] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [windowDays, setWindowDays] = useState(30);
+  // ── Rabbitter Trust (shadow) ──
+  const [trustQueue, setTrustQueue] = useState<TrustShadowQueueRow[]>([]);
+  const [trustSubject, setTrustSubject] = useState("");
+  const [trustResult, setTrustResult] = useState<TrustShadowResult | null>(null);
+  const [trustLoading, setTrustLoading] = useState(false);
+  // ── Growth Allocation (F3 shadow) ──
+  const [alloc, setAlloc] = useState<AllocShadowResponse | null>(null);
 
   const provisionPro = async (tenantId: string, enabled: boolean) => {
     setProvisioning(tenantId);
@@ -103,7 +143,23 @@ export default function GodInsightsPage() {
       ]);
       setPayments(p); setSecurity(s); setGrowth(g); setTenants(t);
     } catch { setPayments(null); setSecurity(null); setGrowth(null); }
+    try {
+      setTrustQueue(await godQuery<TrustShadowQueueRow[]>("god.rabbitterTrustShadowQueue"));
+      setAlloc(await godQuery<AllocShadowResponse>("god.getGrowthAllocationShadow", { limit: 12 }));
+    } catch { setTrustQueue([]); setAlloc(null); }
     finally { setLoading(false); }
+  };
+
+  const computeTrust = async () => {
+    const subjectId = trustSubject.trim();
+    if (!subjectId) return;
+    setTrustLoading(true);
+    try {
+      // persist: true → snapshot para medir poder predictivo (shadow, no operativo)
+      setTrustResult(await godQuery<TrustShadowResult>("god.getRabbitterTrustShadow", { subjectId, lookbackDays: 90, persist: true }));
+      setTrustQueue(await godQuery<TrustShadowQueueRow[]>("god.rabbitterTrustShadowQueue"));
+    } catch { setTrustResult(null); }
+    finally { setTrustLoading(false); }
   };
 
   useEffect(() => { void load(); /* eslint-disable-line react-hooks/exhaustive-deps */ }, [windowDays]);
@@ -496,8 +552,151 @@ export default function GodInsightsPage() {
           )}
         </Card>
 
-        {/* ───────────── APROVISIONAMIENTO de Analíticas Pro ───────────── */}
+        {/* ───────────── RABBITTER TRUST & ENGAGEMENT (F2, SHADOW) ───────────── */}
         <Card className="p-5 border border-white/10 bg-white/5">
+          <div className="flex items-center gap-3 mb-1">
+            <ShieldCheck className="h-5 w-5 text-amber-400" />
+            <h2 className="text-sm font-black text-white uppercase tracking-wider">Rabbitter Trust &amp; Engagement — Shadow</h2>
+            <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 uppercase tracking-wider">Solo God · no operativo</span>
+          </div>
+          <p className="text-[11px] text-gray-500 mb-4">
+            Score de confiabilidad del comensal: pagos completados vs abandonados, tabs huérfanas (diagnóstico),
+            disciplina de canjes y presencia honesta. Se persiste para medir poder predictivo; jamás mueve un peso.
+          </p>
+
+          <div className="flex items-center gap-2 mb-4">
+            <input
+              value={trustSubject}
+              onChange={(e) => setTrustSubject(e.target.value)}
+              placeholder="subjectId del Rabbitter (id de usuario core)"
+              className="flex-1 rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-xs text-white placeholder:text-gray-600 outline-none focus:border-pink-500/40"
+            />
+            <Button
+              variant="secondary"
+              disabled={trustLoading || !trustSubject.trim()}
+              onClick={() => void computeTrust()}
+              className="rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-black py-2 px-4 hover:bg-amber-500/20 cursor-pointer"
+            >
+              {trustLoading ? "Calculando…" : "Calcular snapshot"}
+            </Button>
+          </div>
+
+          {trustResult && (
+            <div className="rounded-xl bg-white/5 border border-white/10 p-4 mb-4 space-y-3">
+              <div className="flex items-center gap-3 flex-wrap">
+                <p className="text-lg font-black text-white">
+                  {trustResult.score === null ? "Sin datos" : `${trustResult.score.toFixed(1)} / 100`}
+                </p>
+                <span className={cn(
+                  "text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider",
+                  trustResult.confidence === "HIGH" && "bg-emerald-500/15 text-emerald-300",
+                  trustResult.confidence === "MEDIUM" && "bg-blue-500/15 text-blue-300",
+                  trustResult.confidence === "LOW" && "bg-amber-500/15 text-amber-300",
+                  (trustResult.confidence === "NONE" || !["HIGH", "MEDIUM", "LOW"].includes(trustResult.confidence)) && "bg-gray-500/15 text-gray-400"
+                )}>
+                  Confianza {trustResult.confidence}
+                </span>
+                {trustResult.reviewFlag && <Badge className="text-[10px] bg-red-500/20 text-red-300">REVISIÓN multi-cuenta</Badge>}
+                <span className="text-[10px] text-gray-500">muestra n={trustResult.sampleN}</span>
+              </div>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2 text-[10px]">
+                {([
+                  ["Pagos completados", trustResult.components.payments],
+                  ["Tabs huérfanas (diag.)", trustResult.components.tabs],
+                  ["Disciplina de canjes", trustResult.components.ledger],
+                  ["Presencia honesta", trustResult.components.presence],
+                ] as const).map(([label, c]) => (
+                  <div key={label} className="rounded-lg bg-white/5 border border-white/10 p-2.5">
+                    <p className="font-black text-gray-300 uppercase tracking-wider mb-0.5">{label}</p>
+                    <p className="text-white font-black text-sm">
+                      {c.score === null ? "— (sin muestra)" : `${c.score.toFixed(0)}`}
+                    </p>
+                    <p className="text-gray-500">n={c.sampleN}</p>
+                  </div>
+                ))}
+              </div>
+              {trustResult.insufficient.length > 0 && (
+                <p className="text-[10px] text-gray-500">Excluidos por muestra mínima: {trustResult.insufficient.join(", ")}</p>
+              )}
+            </div>
+          )}
+
+          <p className="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-2">Últimos snapshots (cola shadow)</p>
+          <div className="space-y-1 max-h-64 overflow-y-auto custom-scrollbar">
+            {trustQueue.length === 0 && <p className="text-[11px] text-gray-500">Sin snapshots aún.</p>}
+            {trustQueue.map((r) => (
+              <div key={`${r.subjectId}-${r.computedAt}`} className="flex items-center justify-between gap-2 rounded-lg bg-white/5 border border-white/10 px-2.5 py-1.5">
+                <span className="text-[11px] font-black text-white truncate">{r.username ?? r.subjectId.slice(0, 12)}</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  {r.reviewFlag && <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-300">REVISIÓN</span>}
+                  <span className="text-[10px] text-gray-400">{r.score === null ? "—" : r.score.toFixed(1)} · {r.confidence}</span>
+                  <span className="text-[9px] text-gray-600">{new Date(r.computedAt).toLocaleDateString()}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        {/* ───────────── GROWTH ALLOCATION (F3, SHADOW) ───────────── */}
+        <Card className="p-5 border border-white/10 bg-white/5">
+          <div className="flex items-center gap-3 mb-1">
+            <TrendingUp className="h-5 w-5 text-violet-400" />
+            <h2 className="text-sm font-black text-white uppercase tracking-wider">Growth Allocation — Shadow</h2>
+            <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-300 uppercase tracking-wider">Propuesta · requiere aprobación</span>
+          </div>
+          <p className="text-[11px] text-gray-500 mb-4">
+            Puntúa campañas con el score de servicio F1 + eficiencia de presupuesto + momentum de redenciones, y propone acciones
+            (BOOST / REFILL / NURTURE / PAUSE). Jamás mueve dinero solo — toda acción se aprueba explícitamente (D-6, Bx2.B).
+          </p>
+          {alloc && alloc.summary.campaigns > 0 ? (
+            <>
+              <div className="flex gap-2 flex-wrap mb-3 text-[10px] font-black">
+                <span className="px-2 py-1 rounded-lg bg-emerald-500/15 text-emerald-300">BOOST {alloc.summary.boost}</span>
+                <span className="px-2 py-1 rounded-lg bg-blue-500/15 text-blue-300">REFILL {alloc.summary.refill}</span>
+                <span className="px-2 py-1 rounded-lg bg-amber-500/15 text-amber-300">NURTURE {alloc.summary.nurture}</span>
+                <span className="px-2 py-1 rounded-lg bg-red-500/15 text-red-300">PAUSE {alloc.summary.pause}</span>
+                {!alloc.boxShadowLive && (
+                  <span className="px-2 py-1 rounded-lg bg-gray-500/15 text-gray-400">⚠ sin ratings aún — solo pesos renormalizados</span>
+                )}
+              </div>
+              <div className="space-y-1.5 max-h-80 overflow-y-auto custom-scrollbar">
+                {alloc.campaigns.map((c) => (
+                  <div key={c.campaignId} className="rounded-xl bg-white/5 border border-white/10 px-3 py-2.5">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <p className="text-[11px] font-black text-white">{c.title} <span className="text-gray-500">· {c.campaignType} {c.rewardPercentage}%</span></p>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={cn(
+                          "text-[9px] font-black px-1.5 py-0.5 rounded-full",
+                          ({
+                            BOOST: "bg-emerald-500/15 text-emerald-300",
+                            REFILL_REQUEST: "bg-blue-500/15 text-blue-300",
+                            NURTURE_SERVICE: "bg-amber-500/15 text-amber-300",
+                            PAUSE_CANDIDATE: "bg-red-500/15 text-red-300",
+                            OPTIMIZE: "bg-indigo-500/15 text-indigo-300",
+                            KEEP: "bg-gray-500/15 text-gray-400",
+                          }[c.alloc.recommendation as string] || "bg-gray-500/15 text-gray-400")
+                        )}>
+                          {c.alloc.recommendation.replace("_", " ")}
+                        </span>
+                        <span className="text-[10px] font-black text-white">{c.alloc.score === null ? "—" : `${c.alloc.score.toFixed(0)}`}/100</span>
+                      </div>
+                    </div>
+                    <p className="text-[9px] text-gray-500 mt-0.5">
+                      budget {(c.utilization * 100).toFixed(0)}% usado · ${c.budgetRemainingBunz.toLocaleString()} restante · {c.redemptions30d} canjes 30d ({c.redemptionUsers30d} users) · ${c.fiat30d.toLocaleString()} fiat · servicio {c.merchantShadow.sampleN > 0 ? `${c.merchantShadow.score?.toFixed(2)}/5 (n=${c.merchantShadow.sampleN})` : "sin data"}
+                    </p>
+                    <ul className="text-[9px] text-gray-400 mt-1 leading-relaxed">
+                      {c.alloc.reasons.slice(0, 2).map((r, i) => <li key={i}>→ {r}</li>)}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="text-xs text-gray-500 py-3">Sin campañas activas para puntuar todavía.</p>
+          )}
+        </Card>
+
+        {/* ───────────── APROVISIONAMIENTO de Analíticas Pro ───────────── */}        <Card className="p-5 border border-white/10 bg-white/5">
           <div className="flex items-center gap-3 mb-1">
             <Zap className="h-5 w-5 text-emerald-400" />
             <h2 className="text-sm font-black text-white uppercase tracking-wider">Aprovisionamiento — Plan Analíticas Pro</h2>
