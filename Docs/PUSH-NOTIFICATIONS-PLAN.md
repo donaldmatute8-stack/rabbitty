@@ -1,153 +1,237 @@
-# Plan v2 — Notificaciones Push del Ecosistema Rabbitty
+# Plan v2.1 — Notificaciones en tiempo real del Ecosistema Rabbitty
 
-> **Estado:** diseño aprobado para implementación por fases. Reemplaza la v1 (2026-10-17) —
-> conserva su arquitectura (`notify()` central) y la actualiza con todo lo construido desde
-> entonces: motor de proximidad global, geofencing (app cerrada), membresías, ratings,
-> propinas y el diagnóstico de entrega.
+> **Estado:** diseño v2.1 — incorpora las condiciones del review técnico (realtime como capa
+> propia, outbox transaccional, semántica de entrega, geofencing con matriz nativa, paridad
+> Android completa). **No se ejecuta sin aprobar P0.**
 > **Fecha:** 2026-11-02 · Rama base: `main`
+> **Principio rector:** *push no es el motor de tiempo real de Rabbitty — es uno de sus canales.*
+> La meta no es mandar muchas notificaciones: es que cada evento importante actualice el estado
+> correcto, llegue a la persona correcta, por el canal correcto, sin duplicarse ni perderse.
 
 ---
 
-## 1. Estado real del pipeline (verificado en código y prod, 2026-11-02)
+## 0. Las tres capas (concepto que ordena todo el sistema)
+
+| Capa | Función | Mecanismo |
+|---|---|---|
+| **1. Eventos de negocio** | El hecho real ocurre: pago confirmado, cuenta enviada, Bunz minteado, mensaje nuevo, llegada al local | Emisión dentro de la transacción de negocio → **outbox durable** (§2) |
+| **2. Realtime in-app** | La pantalla abierta se actualiza al instante (wallet, orden, chat, presencia) | Suscripción por evento (SSE/WebSocket) — el contrato de eventos es el mismo del outbox |
+| **3. Push** | Avisa/despierta cuando la app NO está activa | APNs/FCM vía worker |
+
+Ejemplos del contrato:
+- El negocio envía la cuenta → la pantalla del Rabbitter cambia en vivo; si no está en la app, push.
+- Un pago se confirma → orden + wallet se actualizan en vivo; push es el aviso adicional.
+- Un mensaje llega → chat se actualiza en vivo; app cerrada → notificación.
+- Un cliente llega al comercio → presencia/ofertas se evalúan **aunque la app esté cerrada** (geofencing §6) — no depende de que esté abierta.
+
+**Regla de diseño:** ningún módulo escribe "directo a APNs" ni consulta por polling su propio dominio — todos publican/consumen eventos del mismo contrato.
+
+---
+
+## 1. Estado real del pipeline (verificado, 2026-11-02)
 
 | Pieza | Estado | Evidencia |
 |---|---|---|
-| Sender APNs (0 deps, HTTP/2 + JWT) | ✅ | `telegram-miniapp/src/lib/push/apns.ts` |
-| Envs APNs en Vercel | ✅ confirmado por el dueño | `APNS_KEY_ID/TEAM_ID/BUNDLE_ID/PRIVATE_KEY/ENV` |
-| Registro de devices (iOS) | ✅ | `pushDevices` + `/api/notifications/push-token` (3 iOS activos) |
-| Token higiene (deactiva 410/Unregistered) | ✅ | `apns.ts:55-60, 218-225` |
-| Deep-links en push (`data.route`) | ✅ (nueva convención: rutas in-app `/chat/x`, `/memberships`, `/pay/x`, `/affiliate/x`) | tap → `router.push` en `AuthProvider:215-221` |
-| Motor de proximidad GLOBAL (antes solo home) | ✅ | `ProximityEngine` en layout raíz: ping al abrir +4s, al resumir y cada 3 min |
-| Ofertas flash de proximidad (server) | ✅ | `ping/route.ts` — cooldown 12h, campaña activa ≥ tasa base |
-| Prompt de check-in | ✅ in-app (≤40m + quieto) | `confirmPresence` del ping + modal en `ProximityEngine` |
-| Chat: notifs se marcan leídas al abrir/responder | ✅ | `chat/history/route.ts` (update type=CHAT route=/chat/{otherId}) |
-| Membresías: alta/caja/Stripe webhook/renovación/revocación/canje → notificación | ✅ | `memberships.ts` + webhook Stripe (entitlements creados) |
-| **Push de proximidad con app CERRADA** | ❌ | Requiere geofencing nativo — **diseño en §3** |
-| **Android (FCM)** | ❌ | `sendPushToUsers` filtra `platform='ios'`; tokens Android se registran pero no reciben — **diseño en §4** |
-| `notify()` central con preferencias/quiet-hours/dedupe | ❌ | Los ~30 senders aún insertan + envían inline — **diseño en §2** |
-| Preferencias por tipo / quiet hours | ❌ | Hoy solo 3 toggles globales (`userSettings`: nativePush/inAppBell/email) |
-| `notificationDeliveries` (auditoría de entrega) | ❌ | Hoy solo logs `[APNs] ✓/✗` en Vercel (fase intermedia) |
-| Badge count en ícono de app | ⚠️ parcial | `aps.badge` soportado por el sender; nadie lo envía |
+| Sender APNs (HTTP/2 + JWT, 0 deps) | ✅ | `telegram-miniapp/src/lib/push/apns.ts` |
+| Envs APNs en Vercel (4/4 confirmadas por el dueño) | ✅ | + verificación runtime: `/api/notifications/push-check` |
+| Registro de devices iOS + higiene (410 → desactiva) | ✅ | `pushDevices`, `push-token/route.ts`, `apns.ts:55-60,218-225` |
+| Deep-links: `data.route` → `router.push` al tocar | ✅ | `AuthProvider:215-221` |
+| Motor de proximidad GLOBAL (cualquier pantalla) | ✅ | `ProximityEngine` (layout raíz): ping +4s, al resumir, cada 3 min |
+| Ofertas flash / prompt de check-in (server-side) | ✅ | `ping/route.ts` — cooldown 12h, `[PING_EVAL]`/`[APNs]` con telemetría |
+| Chat read-sync (notifs se limpian al abrir/responder) | ✅ | `chat/history/route.ts` |
+| Membresías: alta/caja/Stripe/renovación/revocación/canje → notif | ✅ | `memberships.ts` + webhook Stripe |
+| Push con app CERRADA | ❌ | → P4 geofencing (§6) |
+| Android (FCM) | ❌ | → P3 paridad (§7) |
+| `notify()` central + outbox + preferencias por tipo | ❌ | → P0/P1 (§2-§5) — **nada de esto existe todavía** |
+| Métricas de entrega | ❌ | solo logs `[APNs]` → P0 registros mínimos |
 
 ---
 
-## 2. Arquitectura v2: un solo canal, `notify()`
+## 2. Outbox transaccional (P0 — la pieza de confiabilidad)
 
-### 2.1 Principio
-Toda notificación nace de **un solo punto**: `notify()` en `telegram-miniapp/src/lib/push/notify.ts` (ya es la puerta S2S de `miniappClient`). El resto de la app (30 call sites) termina invocándolo o pasando por `/api/notifications` (que lo envuelve).
+**Problema que resuelve:** hoy el envío es inline al flujo de negocio — si el proceso muere entre el insert y APNs, la notificación se pierde; si APNs es lento, retrasa el POS; si el webhook reintenta, duplica.
 
+### 2.1 Arquitectura
 ```
-evento de negocio (60 call sites: chat, mint, membresías, POS, waitlist, cron…)
-  └─ notify({ userId, type, title, message, route, threadId?, dedupeKey?, priority?, data? })
-       ├─ 1. preferencias del usuario por TIPO (notificationPreferences) + quiet hours → ¿push o solo in-app?
-       ├─ 2. dedupeKey (idempotencia: webhook doble / retry no duplica)
-       ├─ 3. INSERT notifications (in-app, badge/unread)
-       ├─ 4. pushDevices activos → APNs (hoy) / FCM (después)
-       └─ 5. notificationDeliveries ← resultado por device (auditoría)
+Evento de negocio
+      │ (misma transacción)
+      ▼
+notificaciones_outbox (durable: {id, userId, type, payload, dedupeKey UNIQUE, status, attempts, runAfter})
+      │
+      ▼
+Notification Worker (cada ~15-30s; Vercel cron o invocation piggyback)
+      ├─ toma batch status=QUEUED (FOR UPDATE SKIP LOCKED)
+      ├─ preferencias por tipo + quiet hours → ¿push, solo in-app, o descartar?
+      ├─ INSERT notifications (in-app)
+      ├─ Realtime fan-out (fase P2; hoy no-op)
+      ├─ APNs/FCM → notificationDeliveries (resultado por device)
+      └─ retry con backoff (status RETRYING, runAfter exponencial; FAILED tras N intentos)
 ```
 
-### 2.2 Cambios de datos (una migración, `0022`)
+- **Regla de oro:** la transacción de negocio NUNCA llama al proveedor de push — solo escribe el outbox. Un fallo de APNs jamás rompe un pago (hoy los sends son best-effort inline, riesgo latente).
+- **Sin infra nueva:** el worker corre como Vercel cron (ya tenemos el patrón: memberships/expire-orders) + invocación piggyback en cada request para baja latencia cuando el servidor está caliente.
+- Evolución futura: si el volumen lo exige, el worker se muda a un servicio dedicado (Railway) — el contrato outbox no cambia.
 
-| Tabla | Cambio | Motivo |
+### 2.2 Semántica de entrega (estados reales, sin promesas falsas)
+| Estado | Significado | Quién lo escribe |
 |---|---|---|
-| `notificationPreferences` (nueva) | `userId`, `type` (enum §5), `enabled`, `channel` (push/inApp/ambos), `quietStart`, `quietEnd`, `tz` | opt-in/out por categoría (estilo X) + horas de silencio |
-| `notificationDeliveries` (nueva) | `notificationId`, `deviceId`, `channel`, `status`, `reason`, `createdAt` | auditoría + métricas de entrega (complementa los logs `[APNs]`) |
-| `notifications` | `+ dedupeKey text unique nullable`, `+ priority text` | idempotencia |
-| `pushDevices` | `+ tz text`, `+ appVersion text` | quiet hours por zona; segmentación |
+| `QUEUED` | Rabbitty aceptó el evento | outbox (tx de negocio) |
+| `SENT` | entregado al transport (HTTP request hecho) | worker |
+| `PROVIDER_ACCEPTED` | APNs/FCM respondió 200 | worker (por device) |
+| `DELIVERED` | confirmación de entrega del device (cuando el proveedor la da — **no todos los canales la garantizan**) | feedback/extension cuando exista |
+| `OPENED` | el usuario tocó la notificación | cliente (pushNotificationActionPerformed → report) |
+| `RETRYING` | fallo temporal (5xx/timeout) con backoff programado | worker |
+| `FAILED` | fallo permanente (token inválido, config rota) | worker |
 
-### 2.3 Preferencias en la UI (ya existe el esqueleto)
-La pantalla Ajustes → Notificaciones (3 switches) se extiende a **lista por categoría** (Chat, Recompensas, Proximidad, Membresías, Órdenes/Caja, Marketing, Sistema) — misma UI estilo X, un switch por fila, mapea 1:1 a `notificationPreferences.type`. Los 3 switches existentes quedan como "maestros" (push nativo on/off, campana, email).
+**Regla de comunicación:** nunca prometemos "entrega garantizada" por `PROVIDER_ACCEPTED`. Métricas operables: tokens inválidos, usuarios con push apagado, errores de config, latencia evento→envío, latencia de apertura, tasa de fallo por plataforma/versión.
 
 ---
 
-## 3. Proximidad con app CERRADA — geofencing (diseño elegido: opción A)
+## 3. Contrato de eventos (estable, para todo Rabbitty)
 
-### 3.1 Cómo funciona (patrón Uber/Maps)
+Un solo catálogo tipado (shared package `@rabbitty/events` — ya existe el bus) usado por: outbox, realtime (futuro), scores (Rabbitty Score F2+), y auditoría.
+
+```ts
+// El MISMO contrato para: outbox → push, realtime in-app, métricas
+interface RabbittyEvent<T extends EventName> {
+  id: string;              // event id (idempotencia)
+  name: T;                 // ORDER_PAID, ACCOUNT_BILL_SENT, CHAT_MESSAGE, BUNZ_MINTED, ARRIVAL…
+  occurredAt: string;      // ISO
+  actor?: { userId?: string; role?: string };
+  subject: { userId?: string; businessId?: string; branchId?: string; orderId?: string; conversationId?: string };
+  payload: EventPayloads[T];
+}
 ```
-[app abierta] GET /api/location/geofences (≤20 comercios a ≤5km, radio 100-150m)
-[engine] registra vallas nativas (CLCircularRegion iOS / GeofencingClient Android)
-[app cerrada] el OS monitorea las vallas con antenas celulares (batería ≈ 0)
-[cruzas una valla] OS despierta la app en background → POST ping source:'geofence'
-[server] evalúa → APNs push "⚡ 15% Bunz en 626 Café" → tap → app abre en el comercio
-```
-
-### 3.2 Implementación
-1. Plugin: `@capacitor-community/background-geolocation` (gratis). iOS usa `significant-location-changes` (~500m de granularidad, funciona con app suspensa); Android usa geofencing real. Upgrade posterior a la opción B (`@transistorsoft`, $399 una vez) solo si se necesita precisión de "cruzaste la puerta".
-2. `Info.plist`: `UIBackgroundModes` += `location`; textos de permiso (`NSLocationAlwaysAndWhenInUseUsageDescription`): *"Rabbitty usa tu ubicación para avisarte de ofertas y check-in cuando llegas a un comercio"*.
-3. Consentimiento: sheet propio antes del permiso del OS ("Activa las alertas al llegar al local"), apagable en Ajustes → Notificaciones (respetamos el toggle maestro).
-4. Engine global (ya existe): al abrir y al cambiar de zona → refresca vallas; callback `onGeofence` → ping con `source:'geofence'` + `stationary:true`.
-5. Server: cero cambios — `ping/route.ts` ya evalúa, notifica y crea presencia. Telemetría `[PING_EVAL]` y `[APNs]` ya desplegada.
-
-### 3.3 Límites honestos
-- iOS: con app **forzada a cerrar** (swipe-up), significant-location-changes sigue despertando la app (es el punto del API) — con precisión de ~500m.
-- Máximo 20 vallas por app en iOS (por eso el endpoint devuelve solo las cercanas y el engine las refresca al moverse de zona).
-- El permiso "Permitir siempre" es necesario y Apple lo revisa: el caso de uso (ofertas al llegar) es legítimo y estándar.
+Los payloads ya existen hoy en los `bus.emit` (ORDER_PAID/ORDER_VOIDED/BUNZ_REWARD/…) — P0 los tipa y les agrega los que faltan (ACCOUNT_BILL_SENT, ARRIVAL, TIP_PAYOUT…). Rabbitty Score F2 consume este mismo contrato para sus señales — **por eso P0 va primero**.
 
 ---
 
-## 4. Android / FCM (hueco completo, diseño)
+## 4. Preferencias: 3 planos distintos (no confundirlos)
 
-1. **Firebase project** + `google-services.json` (Android) — configuración del usuario.
-2. Server: `firebase-admin` (SDK) + cuenta de servicio en Vercel (`FIREBASE_SERVICE_ACCOUNT`).
-3. `sendPushToUsers`: en vez de filtrar `platform='ios'` y solo APNs → **fan-out por plataforma**: iOS → APNs; Android → FCM (`messaging.send({ token, notification, data })` con `android.channel_id` por tipo).
-4. Canales de notificación Android (para que el usuario los regule por categoría en el OS): `chat` (high), `rewards` (default), `proximity` (default), `orders`, `marketing` (silent).
-5. La app nativa ya registra tokens en `pushDevices` con `platform` — no cambia nada del cliente salvo el config de Firebase.
+| Plano | Qué es | Dónde vive | Ejemplo |
+|---|---|---|---|
+| **Canal** | Por dónde recibe: push / campana in-app / email | `userSettings` (3 switches maestros, ya existen) | push nativo on/off |
+| **Categoría** | Qué tipos quiere: chat / recompensas / proximidad / membresías / órdenes / marketing / sistema | `notificationPreferences` (nueva, por type) | proximidad off, chat on |
+| **Estado del sistema** | Realidad del device: permiso OS, token válido, canal bloqueado, quiet hours | OS + `pushDevices` + `notificationDeliveries` | permiso iOS denegado |
 
----
+Reglas:
+- El **switch maestro no puede habilitar push si el OS lo tiene denegado** — la UI muestra el estado real del sistema y el botón lleva a Ajustes del teléfono.
+- **MARKETING** siempre opt-in explícito; **críticos de operación** no se silencian por quiet hours (ver §5); CHAT high pasa quiet hours (como WhatsApp) pero agrupado.
 
-## 5. Catálogo unificado de eventos (matriz v2)
+## 5. Clases de eventos (tratamiento por clase)
 
-Convenciones: **route** = ruta in-app (el tap navega); **quiet-able** = respeta horas de silencio; **dedupeKey** para idempotencia.
+| Clase | Ejemplos | Push | Quiet hours | Rate-limit |
+|---|---|---|---|---|
+| **Críticos de operación** | Cuenta enviada, pago confirmado, orden lista | Realtime + push | NO se silencian | sin límite (dedupe por orden) |
+| **Comunicación** | Chat, respuesta del comercio | Realtime + push agrupado (threadId) | CHAT high pasa; otros respetan | agrupado por hilo |
+| **Engagement** | Bunz, logros, referidos | push configurable | respeta quiet | máx N/día |
+| **Marketing** | Ofertas, campañas, proximidad | **opt-in explícito** | respeta quiet | cooldown 12h + presupuesto |
 
-| # | Evento | Destinatario | type | Prio | Route | Cooldown/dedupe | Estado |
-|---|---|---|---|---|---|---|---|
-| 1 | Chat nuevo mensaje | destinatario | CHAT | high | `/chat/{senderId}` | threadId=conv; no push si está en el chat (read-sync ya implementado) | ✅ |
-| 2 | Bunz recibidos (mint/cashback) | cliente | REWARD | normal | `/profile/wallet` | dedupeKey `pos_rwd_{orderId}` | ✅ |
-| 3 | Bunz canjeados | usuario | REWARD | normal | `/profile/wallet` | dedupeKey canje | ✅ |
-| 4 | Transferencia P2P recibida | receptor | TRANSFER | high | `/profile/wallet` | dedupeKey transfer | ✅ |
-| 5 | Referido completado | inviter | REFERRAL | normal | `/referral` | — | ✅ |
-| 6 | Nivel/logro/hat-trick | usuario | LEVELUP/ACHIEVEMENT | normal | `/profile/gamification` | dedupeKey nivel | ✅ |
-| 7 | **Oferta flash de proximidad** | cliente cerca | LOYALTY_OFFER | normal | `/affiliate/{businessId}` | cooldown 12h por negocio | ✅ |
-| 8 | **Prompt de check-in** | cliente cerca (≤40m) | CHECKIN_PROMPT | normal | (in-app modal; push solo si viene del geofence) | 12h sesiones; "Ahora no" 2h | ✅ in-app · ⏳ push vía geofence (§3) |
-| 9 | Cuenta lista (Enviar Cuenta) | cliente | AFFILIATE | high | `/pay/{orderId}` | dedupeKey orderId | ✅ |
-| 10 | Membresía otorgada/activada/renovada/revocada | miembro | REWARD/SYSTEM | normal | `/memberships` | dedupeKey evento | ✅ |
-| 11 | Canje de cortesía (aviso al otorgante) | otorgante | AFFILIATE | low | `/memberships` | por ciclo | ✅ |
-| 12 | Nueva comanda / llegada de cliente (dueño) | owner | SYSTEM | high | `/business-dashboard` | — | ✅ |
-| 13 | **Propinas: resumen al cierre de caja** | owner/cajero | SYSTEM | low | `/cash-shifts` | por turno | ⏳ F2 |
-| 14 | **Rating recibido** (opcional, anti-spam) | owner | SYSTEM | low | `/ratings` | máx 1/día | ⏳ F2 |
-| 15 | Waitlist/mesa lista | usuario | WAITLIST | high | `/affiliate/{id}` | — | ✅ |
-| 16 | Cumpleaños/bono | usuario | BONUS | low | `/profile` | anual | ✅ |
-| 17 | Marketing/campañas (opt-in) | segmento | MARKETING | low | config | rate-limit global | ⏳ F3 |
-| 18 | Pagos/liquidación Stripe (recibo) | cliente | RECEIPT | low | `/profile/wallet` | dedupeKey payment | ⏳ F2 |
+Catálogo completo con clase por evento: ver matriz v2 (conservada abajo §8) — se añade la columna `class` al estandarizar tipos.
 
 ---
 
-## 6. Quiet hours + permisos
+## 6. Geofencing (P4) — con honestidad de plataforma
 
-- **Quiet hours default**: 22:00–08:00 en la zona del device (`pushDevices.tz`, capturada al registrar token; editable en preferencias). En quiet: solo in-app (el push se pospone o se omite según tipo; CHAT de prioridad high siempre pasa — como WhatsApp).
-- **MARKETING** siempre opt-in explícito (nunca default on).
-- Rate-limit global: máx ~8 push/usuario/día fuera de chat (ya existe rate-limit por ruta; se añade contador diario en `notificationDeliveries`).
-- Los 3 switches maestros actuales (push nativo / campana / email) se mantienen por encima de las categorías.
+**Diseño (mantenido de v2):** `GET /api/location/geofences` (≤20 comercios a ≤5km, radio 100-150m) → engine registra vallas nativas → OS despierta la app al cruzar → ping `source:'geofence'` → todo lo demás (presencia/push/ofertas) ya funciona server-side.
 
-## 7. Fases de implementación (roadmap v2)
+**Precisión de producto:** la valla (100-150m) sirve para **ofertas de proximidad**; NO demuestra que el usuario **entró** al establecimiento ni que consumió. Presencia y check-in siguen siendo señales separadas (`source: gps|scan|geofence` — y el check-in requiere confirmación del usuario o scan).
 
-| Fase | Entregable | Alcance |
+**⚠️ Lo que el review exige y queda como criterio de P4:**
+- iOS distingue 3 escenarios distintos: app **suspendida** / **terminada por el OS** / **force-quit por el usuario**. NO prometer despertar tras force-quit sin validarlo — iOS la conducta con force-quit no está garantizada para todos los APIs.
+- **Matriz de pruebas nativas obligatoria antes de dar P4 por terminado** (dispositivos reales, iOS + Android):
+
+| Escenario | iOS | Android |
 |---|---|---|
-| **P1** | `notify()` central + migración `0022` (prefs, deliveries, dedupeKey) + convertir los ~30 call sites | el 100% del catálogo con push real (incluye eventos que hoy solo in-app) |
-| **P2** | Preferencias por categoría en Ajustes (UI estilo X) + quiet hours + badge count | control del usuario completo |
-| **P3** | Geofencing (§3): plugin + endpoint geofences + consentimiento + rebuild nativo | push con app cerrada |
-| **P4** | Android/FCM (§4) | paridad multiplataforma |
-| **P5** | `notificationDeliveries` métricas + eventos 13/14/18 (propinas al cierre, rating, recibos) + i18n | operación y pulido |
+| App abierta | ✅ trivial | ✅ trivial |
+| App suspendida (background) | probar | probar |
+| Terminada por el OS | probar | probar |
+| Force-quit del usuario | probar (esperar: probablemente NO despierta) | probar |
+| Permiso "Always" concedido vs "While using" | documentar diferencia | documentar |
+| Reconstrucción de vallas al cambiar de zona | probar (moverse >5km y volver) | probar |
+| Batería/restricciones del fabricante (Android) | n/a | probar (Xiaomi/Samsung matan background) |
+| Evento de SALIDA de valla (para cerrar presencia) | probar | probar |
 
-**Orden recomendado:** P1 → P2 (una sesión), P3 + rebuild nativo (otra), P4/P5 después.
+- Verificar capacidades reales del plugin elegido (registro/actualización de regiones, enter/exit, suspensión, terminación, permisos Always) **antes** de escribir el flujo final. Si el plugin gratuito no cubre iOS terminada, documentarlo y decidir: aceptar la limitación (app abierta reciente sí funciona) o subir a la opción pagada.
 
-## 8. Riesgos y mitigaciones
+---
+
+## 7. Android / FCM (P3) — paridad COMPLETA, no "ya manda FCM"
+
+Checklist de cierre de fase (todo probado en device real):
+- [ ] Registro del token FCM + asociación user/device
+- [ ] Renovación de token (rotación) → upsert correcto
+- [ ] Desactivación de tokens inválidos (messaging errors)
+- [ ] Push en: foreground (banner), background (system tray), app terminada (cold start)
+- [ ] Tap → deep-link al destino correcto (data.route)
+- [ ] Canales Android por categoría (chat/rewards/proximity/orders/marketing) + comportamiento al desactivar un canal
+- [ ] Prioridades y quiet hours respetadas
+- [ ] Compatibilidad entre versiones de app (token viejo app antigua)
+
+---
+
+## 8. Catálogo de eventos (matriz v2 conservada + clase)
+
+| # | Evento | Destinatario | type | Clase | Route | Estado |
+|---|---|---|---|---|---|---|
+| 1 | Chat nuevo mensaje | destinatario | CHAT | Comunicación | `/chat/{senderId}` | ✅ |
+| 2 | Bunz recibidos (mint/cashback) | cliente | REWARD | Engagement | `/profile/wallet` | ✅ |
+| 3 | Bunz canjeados | usuario | REWARD | Engagement | `/profile/wallet` | ✅ |
+| 4 | Transferencia P2P | receptor | TRANSFER | Comunicación | `/profile/wallet` | ✅ |
+| 5 | Referido completado | inviter | REFERRAL | Engagement | `/referral` | ✅ |
+| 6 | Nivel/logro/hat-trick | usuario | LEVELUP/ACHIEVEMENT | Engagement | `/profile/gamification` | ✅ |
+| 7 | Oferta flash de proximidad | cliente cerca | LOYALTY_OFFER | Marketing | `/affiliate/{businessId}` | ✅ |
+| 8 | Prompt de check-in | cliente ≤40m | CHECKIN_PROMPT | Marketing | in-app modal / push vía geofence | ✅ in-app · ⏳ P4 |
+| 9 | Cuenta lista (Enviar Cuenta) | cliente | AFFILIATE | Crítico | `/pay/{orderId}` | ✅ |
+| 10 | Membresía otorgada/activada/renovada/revocada | miembro | REWARD/SYSTEM | Crítico | `/memberships` | ✅ |
+| 11 | Canje de cortesía (al otorgante) | otorgante | AFFILIATE | Engagement | `/memberships` | ✅ |
+| 12 | Nueva comanda / llegada (dueño) | owner | SYSTEM | Crítico | `/business-dashboard` | ✅ |
+| 13 | Propinas al cierre de caja | owner/cajero | SYSTEM | Crítico | `/cash-shifts` | ⏳ P5 |
+| 14 | Rating recibido (anti-spam: máx 1/día) | owner | SYSTEM | Engagement | `/ratings` | ⏳ P5 |
+| 15 | Waitlist/mesa lista | usuario | WAITLIST | Crítico | `/affiliate/{id}` | ✅ |
+| 16 | Cumpleaños/bono | usuario | BONUS | Engagement | `/profile` | ✅ |
+| 17 | Marketing/campañas (opt-in) | segmento | MARKETING | Marketing | config | ⏳ P5 |
+| 18 | Recibo de pago Stripe | cliente | RECEIPT | Crítico | `/profile/wallet` | ⏳ P5 |
+
+---
+
+## 9. Cambios de datos (una migración, en P0)
+
+| Tabla | Cambio |
+|---|---|
+| `notifications_outbox` (nueva) | `id`, `userId`, `type`, `payload` jsonb, `dedupeKey` UNIQUE nullable, `status` (QUEUED/PROCESSED/FAILED), `attempts`, `runAfter`, `createdAt` |
+| `notificationPreferences` (nueva) | `userId`, `type`, `enabled`, `channel`, `quietStart/End`, `tz` |
+| `notificationDeliveries` (nueva) | `notificationId`, `deviceId`, `channel`, `status` (según §2.2), `reason`, `createdAt` |
+| `notifications` | `+ dedupeKey UNIQUE nullable`, `+ priority` |
+| `pushDevices` | `+ tz`, `+ appVersion` |
+
+---
+
+## 10. Roadmap v2.1 (reordenado según review)
+
+| Fase | Entregable | Por qué en ese orden |
+|---|---|---|
+| **P0** | Contrato de eventos tipado + outbox + worker + estados de entrega + telemetría | plataforma confiable ANTES de sumar canales — sin esto, notify() hereda el riesgo de perder eventos |
+| **P1** | `notify()` central + migración + conversión de los ~30 emisores | el 100% del catálogo con push real |
+| **P2** | Realtime in-app (SSE/WebSocket sobre el mismo contrato): órdenes, pagos, chat, wallet, presencia | la app abierta se actualiza sola (experiencia Uber) |
+| **P3** | APNs (ya) + FCM Android con paridad completa (§7) | multiplataforma ANTES de complejidad de ubicación |
+| **P4** | Geofencing (§6) + matriz de pruebas nativas + consentimiento | push con app cerrada — sobre plataforma ya confiable |
+| **P5** | Métricas operables + preferencias avanzadas + eventos 13/14/17/18 + badge + i18n | pulido |
+
+## 11. Criterios de aceptación globales
+
+- Ningún flujo de negocio depende del proveedor de push (outbox lo desacopla) — medible: latencia evento→QUEUED <50ms, y cero llamadas APNs dentro de transacciones de negocio.
+- Toda notificación tiene: `dedupeKey` (cuando aplica), `route` navegable, `type` con preferencia, y registro de entrega.
+- Un evento nunca se pierde: outbox con retry/backoff y `FAILED` observable.
+- Realtime y push salen del MISMO contrato — agregar un canal no toca módulos de negocio.
+- P4 no se cierra sin la matriz nativa de §6 completa y documentada.
+
+## 12. Riesgos y mitigaciones (conservados)
 
 | Riesgo | Mitigación |
 |---|---|
-| Apple revisa el uso de location en background | Texto de permiso honesto + consentimiento previo + toggle claro; caso de uso estándar de retail |
-| Spam/fatiga de notificaciones | Quiet hours + cooldowns por tipo + rate-limit diario + MARKETING opt-in |
-| Tokens inválidos (app desinstalada) | Ya resuelto: deactivación automática en 410/Unregistered |
-| Duplicados por webhooks/retries | `dedupeKey` UNIQUE en la tabla + guards existentes |
-| 401 "ciegos" tipo push-check | `notificationDeliveries` guarda reason por device — diagnóstico sin adivinar |
-| Privacidad (coords) | Los logs nunca llevan coordenadas (`[PING_EVAL]` solo dist/accuracy); el geofence solo vive en el device |
+| Fatiga de notificaciones | Quiet hours + cooldowns + rate-limit + MARKETING opt-in |
+| Tokens muertos | Desactivación automática (ya) + métricas de invalidación |
+| Duplicados (webhooks/retries) | dedupeKey UNIQUE + guards existentes |
+| Apple y location en background | Consentimiento honesto + toggle + matriz nativa §6 |
+| Latencia del worker (cron 30s) | Piggyback invocation en requests calientes + prioridad por clase (críticos se procesan en el mismo tick) |
