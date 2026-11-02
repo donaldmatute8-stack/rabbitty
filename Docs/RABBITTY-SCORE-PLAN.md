@@ -136,3 +136,19 @@ Pendiente operativo (no bloqueante): validación en staging del prompt con una o
 | 2026-11-01 | **F1 CERRADA**: reglas puras extraídas a `services/ratingRules.ts`; tests unitarios 10/10 (checklist §6) + integration tests con ROLLBACK (requieren `TEST_DATABASE_URL`); suite API 31/31. |
 | 2026-11-02 | F1 mergeada a `main` (FF `ecd406c`) — el dataset de ratings corre en producción. Rama lista para F2 (rebase sobre main cuando el plan de notificaciones v2.1 esté en P0/P1). |
 | 2026-11-01 | **F2 en rama** (`feat/rabbitty-score`, rebaseada sobre main con push plan v2.1 y pin de drizzle): `trustRules.ts` puro + unitarios 16/16, migración `0022` (`rabbitter_score_shadow` — **aplicar a prod manualmente, norma DRIFT-001**), God queries `getRabbitterTrustShadow` + `rabbitterTrustShadowQueue`, panel shadow en `/god/insights`. Snapshot on-demand (patrón F1); sin cron. Pendiente operativo: correr snapshot contra datos reales y validación manual. |
+
+## 10. Pendientes de F2 — para cerrar y pulir (ANOTADO, no bloquea; se hace al finalizar)
+
+| # | Pendiente | Tipo | Cuándo hacerlo |
+|---|---|---|---|
+| F2-1 | Aplicar migración `0022` a prod Neon: `psql -f packages/database-restaurant/migrations/0022_military_iron_lad.sql` (norma DRIFT-001, nunca `db:migrate` auto) | Migración | Al cerrar F2 |
+| F2-2 | Correr snapshots reales desde `/god/insights` (persist: true) contra 2-3 subjectIds con data viva y validar insumos (pagos/tabs/ledger/presence caen coherentes) | Validación | Al cerrar F2 |
+| F2-3 | Cron opcional de snapshots diarios (hoy es on-demand como F1) — solo si God lo pide, no antes | Enhancement | Después de F2-2 |
+| F2-4 | Decidir D-7 (actor de tab huérfana: cliente vs operador) — si es del usuario, `tabs` entra al score | Decisión | Con datos shadow |
+| F2-5 | Decidir D-8 (atribución de abandono de intent: ¿fricción de UX o del usuario?) | Decisión | Con datos shadow (30-90d) |
+| F2-6 | Exponer `source: 'geofence'` en `presenceSessions` cuando push plan P4 entregue el instrumento nativo (el componente ya lo admite) | Extension | Con P4 |
+| F2-7 | Integrar Trust a `/god/insights` resumen ejecutivo / insights de negocio (hoy el panel vive en God solo) | UI | Con F3/F4 |
+| F2-8 | Calibration pass: revisar pesos (55/25/20), umbrales de abuso (ratio 2.5, 200 Bunz) con distribución real | Tuning | 30-90 días |
+| F2-9 | Push/desplegar rama + merge a main cuando: migration aplicada y validación F2-2 verde (checklist §6 del merge) | Git | Al cerrar F2 |
+
+> **Regla:** F2 en shadow NO bloquea nada operativo. Los F2-x se ejecutan juntos al decidir "finalizar y pulir" — probablemente junto con la validación 30-90 días o al arrancar F3.
