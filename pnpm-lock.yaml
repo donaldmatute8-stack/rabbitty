@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  drizzle-orm: 0.45.2
+
 importers:
 
   .:
@@ -122,7 +125,7 @@ importers:
         version: 9.39.4(jiti@2.7.0)
       eslint-config-next:
         specifier: 16.2.6
-        version: 16.2.6(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
+        version: 16.2.6(@typescript-eslint/parser@8.60.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
       tailwindcss:
         specifier: ^4
         version: 4.3.0
@@ -352,55 +355,6 @@ importers:
         specifier: ^5
         version: 5.9.3
 
-  identity-presentation:
-    dependencies:
-      clsx:
-        specifier: ^2.1.1
-        version: 2.1.1
-      framer-motion:
-        specifier: ^12.40.0
-        version: 12.40.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      lucide-react:
-        specifier: ^1.17.0
-        version: 1.17.0(react@19.2.4)
-      next:
-        specifier: 16.3.3
-        version: 16.3.3(@babel/core@7.29.7)(@playwright/test@1.60.0)(@types/node@20.19.41)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      react:
-        specifier: 19.2.4
-        version: 19.2.4
-      react-dom:
-        specifier: 19.2.4
-        version: 19.2.4(react@19.2.4)
-      tailwind-merge:
-        specifier: ^3.6.0
-        version: 3.6.0
-    devDependencies:
-      '@tailwindcss/postcss':
-        specifier: ^4
-        version: 4.3.0
-      '@types/node':
-        specifier: ^20
-        version: 20.19.41
-      '@types/react':
-        specifier: ^19
-        version: 19.2.15
-      '@types/react-dom':
-        specifier: ^19
-        version: 19.2.3(@types/react@19.2.15)
-      eslint:
-        specifier: ^9
-        version: 9.39.4(jiti@2.7.0)
-      eslint-config-next:
-        specifier: 16.2.6
-        version: 16.2.6(@typescript-eslint/parser@8.60.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
-      tailwindcss:
-        specifier: ^4
-        version: 4.3.0
-      typescript:
-        specifier: ^5
-        version: 5.9.3
-
   landing-page:
     dependencies:
       '@tailwindcss/typography':
@@ -489,8 +443,8 @@ importers:
         specifier: ^1.2.0
         version: 1.2.0
       drizzle-orm:
-        specifier: ^0.45.2
-        version: 0.45.2(@libsql/client@0.17.3)(@opentelemetry/api@1.10.0)(@types/pg@8.20.0)(pg@8.21.0)(postgres@3.4.9)
+        specifier: 0.45.2
+        version: 0.45.2(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@5.0.10))(@opentelemetry/api@1.10.0)(@types/pg@8.20.0)(pg@8.21.0)(postgres@3.4.9)
       ioredis:
         specifier: ^5.11.1
         version: 5.11.1
@@ -580,8 +534,8 @@ importers:
   packages/database-core:
     dependencies:
       drizzle-orm:
-        specifier: ^0.45.2
-        version: 0.45.2(@libsql/client@0.17.3)(@opentelemetry/api@1.10.0)(@types/pg@8.20.0)(pg@8.21.0)(postgres@3.4.9)
+        specifier: 0.45.2
+        version: 0.45.2(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@5.0.10))(@opentelemetry/api@1.10.0)(@types/pg@8.20.0)(pg@8.21.0)(postgres@3.4.9)
       pg:
         specifier: ^8.21.0
         version: 8.21.0
@@ -599,8 +553,8 @@ importers:
   packages/database-restaurant:
     dependencies:
       drizzle-orm:
-        specifier: ^0.45.2
-        version: 0.45.2(@libsql/client@0.17.3)(@opentelemetry/api@1.10.0)(@types/pg@8.20.0)(pg@8.21.0)(postgres@3.4.9)
+        specifier: 0.45.2
+        version: 0.45.2(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@5.0.10))(@opentelemetry/api@1.10.0)(@types/pg@8.20.0)(pg@8.21.0)(postgres@3.4.9)
       pg:
         specifier: ^8.21.0
         version: 8.21.0
@@ -770,8 +724,8 @@ importers:
         specifier: ^2.0.1
         version: 2.0.1
       drizzle-orm:
-        specifier: ^0.45.2
-        version: 0.45.2(@libsql/client@0.17.3)(@opentelemetry/api@1.10.0)(@types/pg@8.20.0)(pg@8.21.0)(postgres@3.4.9)
+        specifier: 0.45.2
+        version: 0.45.2(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@5.0.10))(@opentelemetry/api@1.10.0)(@types/pg@8.20.0)(pg@8.21.0)(postgres@3.4.9)
       firebase-admin:
         specifier: ^14.5.0
         version: 14.5.0
@@ -868,7 +822,7 @@ importers:
         version: 9.39.4(jiti@2.7.0)
       eslint-config-next:
         specifier: 16.2.6
-        version: 16.2.6(@typescript-eslint/parser@8.60.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
+        version: 16.2.6(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
       tailwindcss:
         specifier: ^4
         version: 4.3.0
@@ -7791,7 +7745,7 @@ snapshots:
 
   '@rabbitty/database-core@file:packages/database-core(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@5.0.10))(@opentelemetry/api@1.10.0)(@types/pg@8.20.0)(postgres@3.4.9)':
     dependencies:
-      drizzle-orm: 0.45.2(@libsql/client@0.17.3)(@opentelemetry/api@1.10.0)(@types/pg@8.20.0)(pg@8.21.0)(postgres@3.4.9)
+      drizzle-orm: 0.45.2(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@5.0.10))(@opentelemetry/api@1.10.0)(@types/pg@8.20.0)(pg@8.21.0)(postgres@3.4.9)
       pg: 8.21.0
     transitivePeerDependencies:
       - '@aws-sdk/client-rds-data'
@@ -8999,7 +8953,7 @@ snapshots:
       esbuild: 0.25.12
       tsx: 4.22.3
 
-  drizzle-orm@0.45.2(@libsql/client@0.17.3)(@opentelemetry/api@1.10.0)(@types/pg@8.20.0)(pg@8.21.0)(postgres@3.4.9):
+  drizzle-orm@0.45.2(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@5.0.10))(@opentelemetry/api@1.10.0)(@types/pg@8.20.0)(pg@8.21.0)(postgres@3.4.9):
     optionalDependencies:
       '@libsql/client': 0.17.3(bufferutil@4.1.0)(utf-8-validate@5.0.10)
       '@opentelemetry/api': 1.10.0
@@ -10930,32 +10884,6 @@ snapshots:
       '@next/swc-win32-arm64-msvc': 16.3.3
       '@next/swc-win32-x64-msvc': 16.3.3
       '@opentelemetry/api': 1.10.0
-      '@playwright/test': 1.60.0
-      sharp: 0.35.5(@types/node@20.19.41)
-    transitivePeerDependencies:
-      - '@babel/core'
-      - '@types/node'
-      - babel-plugin-macros
-
-  next@16.3.3(@babel/core@7.29.7)(@playwright/test@1.60.0)(@types/node@20.19.41)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
-    dependencies:
-      '@next/env': 16.3.3
-      '@swc/helpers': 0.5.23
-      baseline-browser-mapping: 2.10.32
-      caniuse-lite: 1.0.30001793
-      postcss: 8.5.23
-      react: 19.2.4
-      react-dom: 19.2.4(react@19.2.4)
-      styled-jsx: 5.1.6(@babel/core@7.29.7)(react@19.2.4)
-    optionalDependencies:
-      '@next/swc-darwin-arm64': 16.3.3
-      '@next/swc-darwin-x64': 16.3.3
-      '@next/swc-linux-arm64-gnu': 16.3.3
-      '@next/swc-linux-arm64-musl': 16.3.3
-      '@next/swc-linux-x64-gnu': 16.3.3
-      '@next/swc-linux-x64-musl': 16.3.3
-      '@next/swc-win32-arm64-msvc': 16.3.3
-      '@next/swc-win32-x64-msvc': 16.3.3
       '@playwright/test': 1.60.0
       sharp: 0.35.5(@types/node@20.19.41)
     transitivePeerDependencies:
