@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { z } from "zod";
-import { isApnsConfigured, sendPushToUsers, type PushPayload } from "@/lib/push/apns";
+
 
 /**
  * Internal endpoint to trigger an iOS push notification.
@@ -46,10 +46,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
-  if (!isApnsConfigured()) {
-    return NextResponse.json({ error: "APNs no está configurado" }, { status: 503 });
-  }
-
   let parsed: z.infer<typeof bodySchema>;
   try {
     parsed = bodySchema.parse(await req.json());
@@ -61,16 +57,24 @@ export async function POST(req: NextRequest) {
   }
 
   const userIds = parsed.userIds?.length ? parsed.userIds : [parsed.userId as string];
-  const payload: PushPayload = {
-    title: parsed.title,
-    body: parsed.body,
-    data: parsed.data,
-    badge: parsed.badge,
-  };
 
+  // P1: entra al OUTBOX (durable) — el worker hace in-app + APNs con estados.
   try {
-    const result = await sendPushToUsers(userIds, payload);
-    return NextResponse.json({ success: true, ...result });
+    const { enqueueOutbox, processOutboxBatch } = await import("@/lib/push/outbox");
+    for (const uid of userIds) {
+      await enqueueOutbox({
+        userId: uid,
+        type: (parsed.data?.type as string) || "SYSTEM",
+        title: parsed.title,
+        message: parsed.body,
+        route: (parsed.data?.route as string) || null,
+        data: parsed.data ?? undefined,
+        dedupeKey: null,
+        priority: parsed.badge ? "high" : "normal",
+      });
+    }
+    const summary = await processOutboxBatch(userIds.length);
+    return NextResponse.json({ success: true, ...summary });
   } catch (error) {
     console.error("[PUSH_SEND]", error);
     return NextResponse.json({ error: "Error enviando push" }, { status: 500 });

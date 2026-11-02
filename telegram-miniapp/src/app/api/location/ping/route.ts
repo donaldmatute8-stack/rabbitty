@@ -3,7 +3,8 @@ import { db } from "@/db";
 import { ownedBusinesses, transactions, notifications, affiliateCampaigns } from "@/db/schema";
 import { and, eq, inArray, sql, gt, gte } from "drizzle-orm";
 import { getAuthenticatedUser } from "@/lib/serverAuth";
-import { isApnsConfigured, sendPushToUser } from "@/lib/push/apns";
+import { isApnsConfigured } from "@/lib/push/apns";
+import { enqueueOutbox, kickWorker } from "@/lib/push/outbox";
 import { restaurantDb } from "@/db/restaurant";
 import { restaurants, branches, events } from "@rabbitty/database-restaurant/schema";
 
@@ -202,22 +203,23 @@ export async function POST(req: NextRequest) {
               .catch(() => {});
 
             if (isApnsConfigured()) {
-              sendPushToUser(caller.id, {
+              // P1: entra al outbox (APNs real via worker; sin duplicar fila in-app)
+              await enqueueOutbox({
+                userId: caller.id,
+                type: "LOYALTY_OFFER",
                 title: pushTitle,
-                body: pushBody,
+                message: pushBody,
+                route: `/affiliate/${b.id}`,
                 data: {
                   type: "PROXIMITY_BOOST",
                   businessId: b.id,
                   businessName: b.name,
                   rewardPercentage: activeBoost.rewardPercentage,
-                  // Tap → abrir el perfil del comercio in-app (mismo destino del feed)
-                  route: `/affiliate/${b.id}`,
                 },
-              })
-                .then((res) => console.log("[PUSH] proximidad boost:", JSON.stringify(res), `caller=${caller.id}`))
-                .catch((err) => {
-                  console.warn("[LOCATION_PING] Push send error:", err);
-                });
+                dedupeKey: `proximity_boost:${cooldownKey}:${Math.floor(Date.now() / (12 * 3600 * 1000))}`,
+                priority: "normal",
+              });
+              kickWorker();
             } else {
               console.warn('[PUSH] APNs no configurado en Vercel — push omitido, solo quedó en campana in-app');
             }
@@ -251,21 +253,23 @@ export async function POST(req: NextRequest) {
               .catch(() => {});
 
             if (isApnsConfigured()) {
-              sendPushToUser(caller.id, {
+              // P1: outbox (APNs real via worker)
+              await enqueueOutbox({
+                userId: caller.id,
+                type: "LOYALTY_OFFER",
                 title: pushTitle,
-                body: pushBody,
+                message: pushBody,
+                route: `/affiliate/${b.id}`,
                 data: {
                   type: "PROXIMITY_LOYALTY",
                   businessId: b.id,
                   businessName: b.name,
-                  // Tap → abrir el perfil del comercio in-app (mismo destino del feed)
                   route: `/affiliate/${b.id}`,
                 },
-              })
-                .then((res) => console.log("[PUSH] proximidad loyalty:", JSON.stringify(res), `caller=${caller.id}`))
-                .catch((err) => {
-                  console.warn("[LOCATION_PING] Push send error:", err);
-                });
+                dedupeKey: `proximity_loyalty:${cooldownKey}:${Math.floor(Date.now() / (12 * 3600 * 1000))}`,
+                priority: "normal",
+              });
+              kickWorker();
             } else {
               console.warn('[PUSH] APNs no configurado en Vercel — push omitido, solo quedó en campana in-app');
             }

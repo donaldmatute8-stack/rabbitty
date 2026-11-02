@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { users, notifications } from "@/db/schema";
+import { users } from "@/db/schema";
 import { eq, ilike, or, sql } from "drizzle-orm";
 import { getAuthenticatedUser } from "@/lib/serverAuth";
 import { requireSecondFactor } from "@/lib/twoFactor";
+import { sendEcosystemNotification } from "@/lib/push/notify";
 import { recordLedgerTransaction, findLedgerEntry } from "@/lib/ledgerHelper";
-import { isApnsConfigured, sendPushToUsers } from "@/lib/push/apns";
+
 
 const MAX_TRANSFER_BUNZ = 10_000_000;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -163,41 +164,27 @@ export async function POST(req: NextRequest) {
       };
     });
 
-    // 6. In-app notifications POST-commit (jamás dentro de la tx del dinero — un fallo
-    //    de notificación jamás revierte una transferencia)
+    // 6. Notificaciones POST-commit (P1: via outbox — la tx del dinero jamás
+    //    toca APNs y un fallo de notificación jamás revierte la transferencia)
     try {
-      await db.insert(notifications).values([
-        {
-          userId: targetUser.id,
-          title: "¡Recibiste Bunz! 🐰✨",
-          message: `${caller.username || "Un amigo"} te envió ${bunzAmount} BUNZ${cleanNote ? `: "${cleanNote}"` : "."}`,
-          type: "TRANSFER",
-          route: "/profile/wallet",
-        },
-        {
-          userId: caller.id,
-          title: "Transferencia enviada",
-          message: `Enviaste ${bunzAmount} BUNZ a @${targetUser.username || targetUser.firstName || "usuario"}.`,
-          type: "TRANSFER",
-          route: "/profile/wallet",
-        },
-      ]);
+      await sendEcosystemNotification({
+        userId: targetUser.id,
+        title: "¡Recibiste Bunz! 🐰✨",
+        message: `${caller.username || "Un amigo"} te envió ${bunzAmount} BUNZ${cleanNote ? `: "${cleanNote}"` : "."}`,
+        type: "TRANSFER",
+        route: "/profile/wallet",
+        threadId: "transfers",
+        dedupeKey: `transfer:${result?.senderNewBalance ?? Date.now()}:${targetUser.id}:${bunzAmount}`,
+      });
+      await sendEcosystemNotification({
+        userId: caller.id,
+        title: "Transferencia enviada",
+        message: `Enviaste ${bunzAmount} BUNZ a @${targetUser.username || targetUser.firstName || "usuario"}.`,
+        type: "TRANSFER",
+        route: "/profile/wallet",
+      });
     } catch (notifyErr) {
       console.error("[WALLET_TRANSFER_NOTIFY]", notifyErr);
-    }
-
-    // Best-effort native push to the recipient (never blocks or fails the transfer).
-    if (isApnsConfigured()) {
-      try {
-        await sendPushToUsers([targetUser.id], {
-          title: "¡Recibiste Bunz! 🐰✨",
-          body: `${caller.username ? `@${caller.username}` : "Un amigo"} te envió ${bunzAmount} BUNZ${cleanNote ? `: "${cleanNote}"` : "."}`,
-          data: { type: "TRANSFER", amount: bunzAmount, route: "/profile/wallet", link: "/profile/wallet" },
-          threadId: "transfers",
-        });
-      } catch (pushError) {
-        console.error("[WALLET_TRANSFER_PUSH]", pushError);
-      }
     }
 
     return NextResponse.json({
