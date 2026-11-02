@@ -124,6 +124,7 @@ export default function PosPage() {
   const linkPostCheckout = trpc.pos.linkCustomerToOrder.useMutation();
   const stripeChargeMutation = trpc.pos.createStripeChargeIntent.useMutation();
   const cancelStripeIntent = trpc.payments.cancelPaymentIntent.useMutation();
+  const verifyStripeIntentMut = trpc.payments.verifyStripePaymentIntent.useMutation();
   const requestCashPaymentMut = trpc.payments.requestCashPayment.useMutation();
   const stripeIntentId = useRef<string | null>(null);
 
@@ -143,18 +144,20 @@ export default function PosPage() {
           : await utils.payments.getPaymentIntent.fetch({ intentId });
         if (fresh?.status === "SUCCEEDED" && modal) {
           setStripePaid(true);
-          toast.success("💳 ¡El pago llegó entre líneas — comanda liquidada!");
+          toast.success("El pago llegó entre líneas — comanda liquidada.");
           setLastPaidOrderId(modal.orderId);
           const realOrderNumber = (modal.orderId || intentId || "").slice(-4).toUpperCase();
           await finalizeCheckout(
             realOrderNumber,
             "STRIPE",
             undefined,
-            selectedRabbitter?.name,
+            selectedRabbitterRef.current?.name,
             modal.bunzApplied || undefined,
             modal.orderId,
             modal.orderId
           );
+          void refetchActiveTabs();
+          void refetchRecentOrders();
           setStripePayModal(null);
           return;
         }
@@ -865,37 +868,61 @@ export default function PosPage() {
 
   // Polling del intento de Stripe: cuando el webhook o la reconciliación
   // server-side liquida (SUCCEEDED), finaliza
+  const settleStripeModal = async () => {
+    const modal = stripePayModal;
+    if (!modal) return;
+    setStripePaid(true);
+    const realOrderNumber = (modal.orderId || "").slice(-4).toUpperCase();
+    if (modal.bunzApplied > 0) {
+      toast.success(`Pago Stripe verificado — +${modal.bunzApplied} Bunz al Rabbitter.`);
+    } else {
+      toast.success("Pago recibido — comanda liquidada.");
+    }
+    setLastPaidOrderId(modal.orderId);
+    await finalizeCheckout(
+      realOrderNumber,
+      "STRIPE",
+      undefined,
+      selectedRabbitterRef.current?.name,
+      modal.bunzApplied || undefined,
+      modal.orderId,
+      modal.orderId
+    );
+    // H8: data del feed (tabs, tickets) fresca de inmediato
+    void refetchActiveTabs();
+    void refetchRecentOrders();
+    setStripePayModal(null);
+  };
+
   useEffect(() => {
     if (!stripePayModal || stripePaid) return;
     const orderOfModal = stripePayModal.orderId;
     let cancelled = false;
+    let ticks = 0;
     const timer = setInterval(async () => {
       try {
         if (!orderOfModal) return;
+        ticks += 1;
         // H8: rastreo por ORDEN (último intent) — el pago puede llegar a un
         // intent regenerado (cancel + re-cobro o link de cuenta /pay/[orderId]).
         const intent = await utils.payments.latestIntentForOrder.fetch({ orderId: orderOfModal });
         if (intent?.status === "SUCCEEDED" && !cancelled) {
           cancelled = true;
           clearInterval(timer);
-          setStripePaid(true);
-          const realOrderNumber = (stripePayModal.orderId || intent.id || "").slice(-4).toUpperCase();
-          if (stripePayModal.bunzApplied > 0) {
-            toast.success(`Pago Stripe verificado — +${stripePayModal.bunzApplied} Bunz al Rabbitter.`);
-          } else {
-            toast.success("Pago recibido — comanda liquidada.");
+          void settleStripeModal();
+          return;
+        }
+        // H8-c: cada 10s el POS pregunta DIRECTO a Stripe (no solo al estado
+        // local) — cubre webhook perdido / red flappy del negocio. Idempotente
+        // (intento SUCCEEDED → early return server) sobre el INTENT actual.
+        if (ticks % 5 === 0 && !cancelled && intent?.id) {
+          const verify = await verifyStripeIntentMut.mutateAsync({ intentId: intent.id })
+            .catch(() => null) as { success?: boolean; orderId?: string; settled?: boolean } | null;
+          if (verify?.success && verify?.orderId === orderOfModal && !cancelled) {
+            cancelled = true;
+            clearInterval(timer);
+            void settleStripeModal();
           }
-          setLastPaidOrderId(stripePayModal.orderId);
-          finalizeCheckout(
-            realOrderNumber,
-            "STRIPE",
-            undefined,
-            selectedRabbitterRef.current?.name,
-            stripePayModal.bunzApplied || undefined,
-            stripePayModal.orderId,
-            stripePayModal.orderId
-          );
-          setStripePayModal(null);
         }
       } catch { /* siguiente ciclo intenta de nuevo */ }
     }, 2000);
@@ -2080,7 +2107,7 @@ export default function PosPage() {
             )}
 
             {/* Quick Payment Methods */}
-            <div className="grid grid-cols-4 gap-1.5 mb-2">
+            <div className="grid grid-cols-3 gap-1.5 mb-2">
               <button 
                 onClick={() => requestCheckout("EFECTIVO")}
                 disabled={cart.length === 0}
@@ -2092,26 +2119,18 @@ export default function PosPage() {
               <button 
                 onClick={() => requestCheckout("TARJETA")}
                 disabled={cart.length === 0}
-                className="group flex flex-col items-center justify-center gap-0.5 rounded-xl bg-white/5 py-1.5 border border-white/10 hover:bg-blue-500/20 hover:border-blue-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
+                className="group flex flex-col items-center justify-center gap-0.5 rounded-xl bg-white/5 py-1.5 border border-white/10 hover:bg-cyan-500/20 hover:border-cyan-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
               >
-                <CreditCard className="h-4 w-4 text-gray-400 group-hover:text-blue-400" />
-                <span className="text-[9px] font-black uppercase tracking-wider text-gray-400 group-hover:text-blue-400">Tarjeta</span>
-              </button>
-              <button 
-                onClick={() => requestCheckout("QR BUNZ")}
-                disabled={cart.length === 0}
-                className="group flex flex-col items-center justify-center gap-0.5 rounded-xl bg-white/5 py-1.5 border border-white/10 hover:bg-purple-500/20 hover:border-purple-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
-              >
-                <QrCode className="h-4 w-4 text-gray-400 group-hover:text-purple-400" />
-                <span className="text-[9px] font-black uppercase tracking-wider text-gray-400 group-hover:text-purple-400">QR Bunz</span>
+                <CreditCard className="h-4 w-4 text-gray-400 group-hover:text-cyan-400" />
+                <span className="text-[9px] font-black uppercase tracking-wider text-gray-400 group-hover:text-cyan-400">Tarjeta</span>
               </button>
               <button 
                 onClick={() => requestCheckout("DIVIDIDA")}
                 disabled={cart.length === 0}
-                className="group flex flex-col items-center justify-center gap-0.5 rounded-xl bg-white/5 py-1.5 border border-white/10 hover:bg-orange-500/20 hover:border-orange-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
+                className="group flex flex-col items-center justify-center gap-0.5 rounded-xl bg-white/5 py-1.5 border border-white/10 hover:bg-amber-500/20 hover:border-amber-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
               >
-                <Split className="h-4 w-4 text-gray-400 group-hover:text-orange-400" />
-                <span className="text-[9px] font-black uppercase tracking-wider text-gray-400 group-hover:text-orange-400">Dividir</span>
+                <Split className="h-4 w-4 text-gray-400 group-hover:text-amber-400" />
+                <span className="text-[9px] font-black uppercase tracking-wider text-gray-400 group-hover:text-amber-400">Dividir</span>
               </button>
             </div>
 
@@ -2486,14 +2505,13 @@ export default function PosPage() {
         onClose={() => setMethodPicker(null)}
         title={methodPicker === "select" ? "Elige el método de pago" : "Confirmar método"}
         kicker="Cobro"
-        className="max-w-md w-full"
+        className="max-w-xl w-full"
       >
         {methodPicker === "select" && (
-          <div className="grid grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-3 gap-2.5">
             {([
               ["EFECTIVO", Banknote, "Efectivo", "Cuenta en caja con cambio", "group-hover:border-emerald-400/60 group-hover:bg-emerald-400/10", "text-emerald-400"],
               ["TARJETA", CreditCard, "Tarjeta", "Rabbitty Pay o terminal física", "group-hover:border-cyan-400/60 group-hover:bg-cyan-400/10", "text-cyan-400"],
-              ["QR BUNZ", QrCode, "QR Bunz", "El comensal paga desde su app", "group-hover:border-violet-400/60 group-hover:bg-violet-400/10", "text-violet-400"],
               ["DIVIDIDA", Split, "Dividida", "Parte efectivo + parte Bunz", "group-hover:border-amber-400/60 group-hover:bg-amber-400/10", "text-amber-400"],
             ] as const).map(([method, Icon, label, desc, hoverCls, iconCls]) => (
               <button
@@ -2585,28 +2603,28 @@ export default function PosPage() {
                 </div>
               </div>
 
-              {/* Rabbitter Vinculado en Cobro */}
+              {/* Rabbitter Vinculado en Cobro (compacto) */}
               {selectedRabbitter && (
-                <div className="rounded-2xl bg-[#E91E63]/[0.07] border border-[#E91E63]/25 p-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className="h-8 w-8 rounded-lg bg-[#E91E63]/15 border border-[#E91E63]/25 flex items-center justify-center">
-                      <Sparkles size={14} className="text-[#FF6BB3]" />
+                <div className="rounded-xl bg-[#E91E63]/[0.07] border border-[#E91E63]/25 px-2.5 py-2 flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="h-6 w-6 shrink-0 rounded-lg bg-[#E91E63]/15 border border-[#E91E63]/25 flex items-center justify-center">
+                      <Sparkles size={12} className="text-[#FF6BB3]" />
                     </div>
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-black text-white">{selectedRabbitter.name}</span>
-                        <span className="text-[9px] font-black text-[#FF6BB3] bg-[#E91E63]/15 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <span className="text-xs font-black text-white truncate">{selectedRabbitter.name}</span>
+                        <span className="text-[8px] font-black text-[#FF6BB3] bg-[#E91E63]/15 px-1 py-0.2 rounded uppercase tracking-wider shrink-0">
                           {selectedRabbitter.level}
                         </span>
                       </div>
-                      <p className="text-[10px] text-gray-500">
+                      <p className="text-[9px] text-gray-500 truncate">
                         {selectedRabbitter.phoneNumber || selectedRabbitter.telegramId || "Cuenta verificada"}
                       </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-[9px] font-black text-gray-500 uppercase tracking-wider block">Recompensa</span>
-                    <span className="text-xs font-black text-emerald-400">
+                  <div className="text-right shrink-0 pl-2">
+                    <span className="text-[8px] font-black text-gray-500 uppercase tracking-wider block">Recompensa</span>
+                    <span className="text-[11px] font-black text-emerald-400">
                       +{Math.floor(total * (selectedRabbitter.currentRewardRate / 100))} Bunz · {selectedRabbitter.currentRewardRate}%
                     </span>
                   </div>
@@ -2856,8 +2874,8 @@ export default function PosPage() {
                 </div>
               )}
 
-              {/* ── Propina opcional (una sola superficie, va 100% al equipo) ── */}
-              {(pendingMethod === "EFECTIVO" || pendingMethod === "VENTA DIRECTA" || pendingMethod === "TARJETA" || pendingMethod === "DIVIDIDA") && (
+              {/* ── Propina opcional (solo en pagos presenciales: efectivo / venta directa / dividida; Rabbitty Pay lleva propina en su propio flujo web/móvil) ── */}
+              {(pendingMethod === "EFECTIVO" || pendingMethod === "VENTA DIRECTA" || (pendingMethod === "TARJETA" && cardFlowChoice === "external") || pendingMethod === "DIVIDIDA") && (
                 <div className="rounded-2xl bg-white/[0.04] border border-white/10 p-3.5">
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">
@@ -3216,6 +3234,29 @@ export default function PosPage() {
                     +{stripePayModal.bunzApplied} Bunz al Rabbitter identificado
                   </p>
                 )}
+                <div className="flex items-center justify-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const latest = stripePayModal?.orderId
+                          ? await utils.payments.latestIntentForOrder.fetch({ orderId: stripePayModal.orderId })
+                          : null;
+                        const target = latest?.id ?? stripeIntentId.current;
+                        if (!target) return;
+                        const verify = await verifyStripeIntentMut.mutateAsync({ intentId: target });
+                        if (verify?.success) {
+                          void settleStripeModal();
+                        } else {
+                          toast.info("Aún no se registra el pago — el comensal quizá está en la pantalla del banco; espera o cambia a efectivo.");
+                        }
+                      } catch {
+                        toast.error("No se pudo consultar el servidor de pagos.");
+                      }
+                    }}
+                    className="text-[11px] font-black text-cyan-400 hover:text-cyan-300 cursor-pointer border border-cyan-400/30 bg-cyan-400/10 rounded-lg px-2.5 py-1.5"
+                  >¿Ya pagó? Verificar ahora</button>
+                </div>
                 <div className="flex flex-col items-center gap-0.5">
                   <button
                     type="button"

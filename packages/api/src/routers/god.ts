@@ -627,16 +627,21 @@ export const godRouter = router({
                OR (o."voidReason" = 'STALE_TAB' AND o."createdAt" >= now() - (${days} || ' days')::interval))`);
 
       // 3) Disciplina de canjes (EARN vs SPEND, Bunz en la ventana)
+      //    Los EARN del comensal viven con payee=usr_{id}; los SPEND con payer=usr_{id}
+      //    (los pagos de negocio llevan el subject del comercio como payer).
       const ledgerRes: any = await ctx.restaurantDb.execute(sql`
-        SELECT
-          type,
-          COUNT(*)::int AS n,
-          COALESCE(SUM(l.amount), 0) AS total
+        SELECT type,
+               COUNT(*)::int AS n,
+               COALESCE(SUM(l.amount), 0) AS total
         FROM "ledger_entries" l
-        WHERE l."payerSubjectId" = ${input.subjectId}
-          AND l.currency = 'BUNZ'
+        WHERE (l.currency = 'BUNZ')
           AND l.type IN ('EARN','SPEND')
           AND l."createdAt" >= now() - (${days} || ' days')::interval
+          AND (
+              (l.type = 'EARN' AND l."payeeSubjectId" IN (${input.subjectId}, ${'usr_' + input.subjectId}))
+           OR (l.type = 'SPEND' AND l."payerSubjectId" IN (${input.subjectId}, ${'usr_' + input.subjectId}))
+          )
+          AND NOT (${input.subjectId} ILIKE 'usr_%')
         GROUP BY type`);
       const earnRow = sqlRows(ledgerRes).find((r) => r.type === "EARN");
       const spendRow = sqlRows(ledgerRes).find((r) => r.type === "SPEND");
