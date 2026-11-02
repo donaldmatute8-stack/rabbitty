@@ -48,6 +48,10 @@ export const restaurants = pgTable("restaurants", {
   bunzMinOrderAmount: real("bunzMinOrderAmount").default(0).notNull(), // 0 = sin mínimo
   bunzMaxOrderAmount: real("bunzMaxOrderAmount").default(0).notNull(), // 0 = sin máximo
   bunzDailyLimit: integer("bunzDailyLimit").default(0).notNull(), // Bunz/día; 0 = sin límite
+  // H16-2: % máximo de la factura pagable con Bunz (100 = sin límite) + catálogo
+  // de productos admisibles (JSON de menuIds; vacío = todos)
+  bunzMaxPctOfBill: integer("bunzMaxPctOfBill").default(100).notNull(),
+  bunzAllowedProducts: text("bunzAllowedProducts").default("[]").notNull(),
   // ── Gratificaciones voluntarias (D-11) ── Catálogo controlado por Rabbitty:
   // mode OFF|POS|DIGITAL|BOTH; pcts JSON subset de [5,10,15] (nunca custom);
   // server guard en gratuityRules. Nada condicionado al método de pago.
@@ -78,6 +82,8 @@ export const branches = pgTable("branches", {
   cashDropThreshold: real("cashDropThreshold").default(3000).notNull(),
   // Retiros mayores a este monto exigen PIN de manager/admin
   cashDropManagerThreshold: real("cashDropManagerThreshold").default(1000).notNull(),
+  // H16-2: override de pagos con Bunz por sucursal (JSON: {enabled, mode, schedule, minOrderAmount, maxOrderAmount, dailyLimit, maxPctOfBill, allowedProducts}) — {} = heredado del negocio
+  bunzOverride: text("bunzOverride").default("{}").notNull(),
   isActive: boolean("isActive").default(true).notNull(),
   ...timestamps,
 });

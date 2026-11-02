@@ -12,7 +12,8 @@ import {
   branches,
   restaurants
 } from "@rabbitty/database-restaurant/schema";
-import { users } from "@rabbitty/database-core/schema";
+import { users, ownedBusinesses } from "@rabbitty/database-core/schema";
+import { orderItems as posOrderItems, menuItems as menuItemsTable } from "@rabbitty/database-restaurant/schema";
 
 
 export type PaymentIntentStatus = 
@@ -390,11 +391,6 @@ export class PaymentIntentService {
         .where(eq(paymentIntents.id, intent.id));
 
       if (intent.orderId) {
-        await tx
-          .update(orders)
-          .set({ status: "COMPLETED", bunzPaid: requiredBunzInt })
-          .where(eq(orders.id, intent.orderId));
-
         await tx.insert(payments).values({
           orderId: intent.orderId,
           method: "BUNZ",
@@ -403,6 +399,57 @@ export class PaymentIntentService {
           status: "COMPLETED",
           verificationMethod: "SYSTEM_VERIFIED",
         });
+
+        // D-13 RESUELTA (2026-11-02): los Bunz pagados con Bunz se acreditan al
+        // STOCK del afiliado (ownedBusinesses.bunzBalance) — cirquito cerrado:
+        // el negocio recibe el valor y puede re-aceptarlo, sin promesa fiat.
+        try {
+          const [bn] = await tx
+            .select({ restaurantId: branches.restaurantId })
+            .from(branches)
+            .where(eq(branches.id, intent.merchantId))
+            .limit(1);
+          if (bn?.restaurantId) {
+            const [rest] = await tx
+              .select({ businessId: restaurants.businessId })
+              .from(restaurants)
+              .where(eq(restaurants.id, bn.restaurantId))
+              .limit(1);
+            if (rest?.businessId) {
+              await tx
+                .update(ownedBusinesses)
+                .set({ bunzBalance: sql`COALESCE("bunzBalance", 0) + ${Number(intent.bunzAmount || 0)}` })
+                .where(eq(ownedBusinesses.id, rest.businessId));
+            }
+          }
+        } catch (creditErr) {
+          console.error("[BUNZ_SETTLE] credito bunzBalance falló (no fatal):", creditErr);
+        }
+
+        // H16-2 partial set: la orden solo marca COMPLETED cuando el total pagado
+        // (todas las payments COMPLETED de la orden) cubre el total de la orden.
+        // Si quedó resto, la orden queda PENDING (como tab) y el POS cobra el
+        // resto en fiat (el watcher/H14-Watch del POS lo ve como payment row).
+        const [orderRow] = await tx
+          .select({ total: orders.total })
+          .from(orders)
+          .where(eq(orders.id, intent.orderId))
+          .limit(1);
+        const paidSoFarRows = (await tx
+          .select({ sum: sql<number>`COALESCE(SUM(${payments.amount}), 0)` })
+          .from(payments)
+          .where(and(eq(payments.orderId, intent.orderId), eq(payments.status, "COMPLETED")))) as Array<{ sum: number }>;
+        const paidSoFar = Number(paidSoFarRows?.[0]?.sum ?? 0);
+        const totalOrder = Number(orderRow?.total || 0);
+        const fullyPaid = totalOrder > 0 ? paidSoFar + 0.005 >= totalOrder : true;
+        await tx
+          .update(orders)
+          .set(
+            fullyPaid
+              ? { status: "COMPLETED", bunzPaid: requiredBunzInt }
+              : { bunzPaid: requiredBunzInt }
+          )
+          .where(eq(orders.id, intent.orderId));
       }
 
       return {

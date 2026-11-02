@@ -417,4 +417,25 @@ export default function AcademyPage() {
       )}
     </div>
   );
-}
+}    content: `## Pagos con Bunz (texto definitivo)
+    
+Permite a tus clientes pagar su cuenta 100% con Bunz desde su App.
+
+### Cómo se activa (Admin → Facturación → Bunz):
+- **Aceptar Bunz** (checkbox de activación)
+- **Disponibilidad**: Siempre / Días y horarios (timezone del negocio)
+- **Mínimo y máximo por factura** (0 = sin límite)
+- **Límite diario de Bunz recibidos** (0 = sin límite, guard atómico)
+- **% máximo de la factura pagable en Bunz** (si es < 100, el resto se cobra fiat en caja)
+- **Catálogo de productos** (opcional; vacío = toda la cuenta)
+
+### Significa para el cliente:
+- El recibo de compra tiene un botoncito "Pagar con Bunz" cuando tiene saldo suficiente.
+- NO aparece si está fuera de horario, superó límite, o el saldo es insuficiente.
+- El pago es atómicamente verificado by Rabbitty (0 conflicto, 0 doble-pago, 0 cashback fiat).
+- Los Bunz que tus clientes pagan se acreditan a tu stock del negocio (re-usables para tus próximas promociones).
+
+### Y notificaciones:
+- Ellynaban al instante? Prompts push y PG-13? El trabajador de push notifica a tu POS
+  si la cuenta fue liquidada por cualquier vía (worlkring también en tu app móvil del owner).`,
+    

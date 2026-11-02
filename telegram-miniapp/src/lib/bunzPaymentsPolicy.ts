@@ -31,6 +31,10 @@ export interface BunzPaymentPolicy {
   /** Bunz diarios máximos recibidos; 0 = sin límite */
   dailyBunzLimit: number;
   timezone: string;
+  /** H16-2: % máximo de factura pagable (100 = todo) */
+  maxPctOfBill?: number;
+  /** H16-2: menuIds admisibles; [] = todos */
+  allowedProducts?: string[];
 }
 
 export type BunzUnavailableReason =
@@ -159,3 +163,89 @@ export function evaluateBunzEligibility(
   }
   return { available: true, reason: null, amountBunz };
 }
+
+// H16-2: override por sucursal — keys opcionales que reemplazan al negocio
+export interface BunzBranchOverride {
+  enabled?: boolean;
+  availabilityMode?: BunzAvailabilityMode;
+  schedule?: { days: number[]; start: string; end: string } | null;
+  minOrderAmount?: number;
+  maxOrderAmount?: number;
+  dailyBunzLimit?: number;
+  maxPctOfBill?: number;
+  allowedProducts?: string[];
+}
+
+export function parseBranchOverride(raw: unknown): BunzBranchOverride {
+  if (typeof raw !== "string" || !raw.trim() || raw.trim() === "{}") return {};
+  try {
+    const obj = JSON.parse(raw) as Record<string, unknown>;
+    const out: BunzBranchOverride = {};
+    if (typeof obj.enabled === "boolean") out.enabled = obj.enabled;
+    if (obj.availabilityMode === "ALWAYS" || obj.availabilityMode === "SCHEDULE") out.availabilityMode = obj.availabilityMode;
+    if (obj.schedule && typeof obj.schedule === "object") {
+      const sc = obj.schedule as { days?: unknown; start?: unknown; end?: unknown };
+      if (Array.isArray(sc.days)) {
+        out.schedule = {
+          days: sc.days.map((d) => Number(d)).filter((n) => Number.isInteger(n) && n >= 0 && n <= 6),
+          start: typeof sc.start === "string" ? sc.start : "09:00",
+          end: typeof sc.end === "string" ? sc.end : "22:00",
+        };
+      }
+    }
+    if (typeof obj.minOrderAmount === "number") out.minOrderAmount = Math.max(0, obj.minOrderAmount);
+    if (typeof obj.maxOrderAmount === "number") out.maxOrderAmount = Math.max(0, obj.maxOrderAmount);
+    if (typeof obj.dailyBunzLimit === "number") out.dailyBunzLimit = Math.max(0, Math.floor(obj.dailyBunzLimit));
+    if (typeof obj.maxPctOfBill === "number") out.maxPctOfBill = Math.min(100, Math.max(0, Math.floor(obj.maxPctOfBill)));
+    if (Array.isArray(obj.allowedProducts)) {
+      out.allowedProducts = (obj.allowedProducts as unknown[]).filter((x): x is string => typeof x === "string");
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/** Merge: la política del negocio con el override de la sucursal encima. */
+export function mergeBranchOverride(base: BunzPaymentPolicy, override: BunzBranchOverride): BunzPaymentPolicy {
+  if (Object.keys(override).length === 0) return base;
+  const merged: BunzPaymentPolicy = { ...base };
+  if (override.enabled !== undefined) merged.enabled = override.enabled;
+  if (override.availabilityMode) merged.availabilityMode = override.availabilityMode;
+  if (override.schedule !== undefined) merged.schedule = override.schedule;
+  if (override.minOrderAmount !== undefined) merged.minOrderAmount = override.minOrderAmount;
+  if (override.maxOrderAmount !== undefined) merged.maxOrderAmount = override.maxOrderAmount;
+  if (override.dailyBunzLimit !== undefined) merged.dailyBunzLimit = override.dailyBunzLimit;
+  if (override.maxPctOfBill !== undefined) merged.maxPctOfBill = override.maxPctOfBill;
+  if (override.allowedProducts !== undefined) merged.allowedProducts = override.allowedProducts;
+  return merged;
+}
+
+/**
+ * Bunz pagables de la factura (H16-2): filtra por productos admisibles y al
+ * cap del % de la factura. Devuelve el monto MXN pagable EN Bunz.
+ */
+export function computeBunzPayable(
+  items: Array<{ id?: string; menuItemId?: string; totalPrice: number } | { id: string; name: string; totalPrice: number }>,
+  totalFloat: number,
+  policy: BunzPaymentPolicy
+): { payable: number; allEligible: boolean } {
+  const allowed = (policy as BunzPaymentPolicy & { allowedProducts?: string[] }).allowedProducts ?? [];
+  const totalItems = items.reduce((acc, i) => acc + Number((i as { totalPrice: number }).totalPrice || 0), 0);
+  if (allowed.length === 0 || totalItems === 0) {
+    // sin filtro de productos: cuenta entera pagable (por offset de tax/incl)
+    const byPct = Math.min(totalFloat, round2(totalFloat * ((policy.maxPctOfBill ?? 100) / 100)));
+    return { payable: round2(Math.min(totalFloat, byPct)), allEligible: true };
+  }
+  const allowedSet = new Set(allowed);
+  const eligibleSum = items
+    .filter((it) => allowedSet.has(String((it as { id?: string; menuItemId?: string }).id ?? (it as { menuItemId?: string }).menuItemId ?? "")))
+    .reduce((acc, it) => acc + Number((it as { totalPrice: number }).totalPrice || 0), 0);
+  const share = totalItems > 0 ? eligibleSum / totalItems : 0; // proporción de la factura (incl IVA)
+  const payable = round2(Math.min(totalFloat, totalFloat * share));
+  const byPct = round2(totalFloat * ((policy.maxPctOfBill ?? 100) / 100));
+  const bounded = round2(Math.min(payable, byPct));
+  return { payable: bounded, allEligible: eligibleSum >= totalItems };
+}
+
+function round2(n: number) { return Math.round(n * 100) / 100; }

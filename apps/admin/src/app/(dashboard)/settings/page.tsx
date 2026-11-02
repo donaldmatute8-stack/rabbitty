@@ -294,7 +294,7 @@ export default function SettingsPage() {
   const [editing, setEditing] = useState<string | null>(null);
   const [adminPinInput, setAdminPinInput] = useState("");
   const [pairModalOpen, setPairModalOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", taxRate: 0, defaultRewardRate: 20, acceptsBunz: true, happyHourStart: "", happyHourEnd: "", happyHourRewardRate: 40, cashDropEnabled: false, cashDropThreshold: 3000, usdRateMode: "AUTO" as "AUTO" | "MANUAL", usdRate: 18, staleOrderHours: 12, bunzAvailabilityMode: "ALWAYS" as "ALWAYS" | "SCHEDULE", bunzSchedule: "{}", bunzMinOrderAmount: 0, bunzMaxOrderAmount: 0, bunzDailyLimit: 0 });
+  const [form, setForm] = useState({ name: "", taxRate: 0, defaultRewardRate: 20, acceptsBunz: true, happyHourStart: "", happyHourEnd: "", happyHourRewardRate: 40, cashDropEnabled: false, cashDropThreshold: 3000, usdRateMode: "AUTO" as "AUTO" | "MANUAL", usdRate: 18, staleOrderHours: 12, bunzAvailabilityMode: "ALWAYS" as "ALWAYS" | "SCHEDULE", bunzSchedule: "{}", bunzMinOrderAmount: 0, bunzMaxOrderAmount: 0, bunzDailyLimit: 0, bunzMaxPctOfBill: 100, bunzAllowedProducts: "[]" });
   const [email, setEmail] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -355,7 +355,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (r) {
-      setForm(prev => ({ ...prev, name: r.name, taxRate: r.taxRate, defaultRewardRate: normalizePercent(r.defaultRewardRate, 20), acceptsBunz: r.acceptsBunz ?? true, bunzAvailabilityMode: ((r as any).bunzAvailabilityMode ?? "ALWAYS") as "ALWAYS" | "SCHEDULE", bunzSchedule: String((r as any).bunzSchedule ?? "{}"), bunzMinOrderAmount: Number((r as any).bunzMinOrderAmount ?? 0), bunzMaxOrderAmount: Number((r as any).bunzMaxOrderAmount ?? 0), bunzDailyLimit: Number((r as any).bunzDailyLimit ?? 0), happyHourStart: r.happyHourStart ?? "", happyHourEnd: r.happyHourEnd ?? "", happyHourRewardRate: normalizePercent(r.happyHourRewardRate, 40), usdRateMode: (r.usdRateMode ?? "AUTO") as "AUTO" | "MANUAL", usdRate: Number(r.usdRate ?? 18), staleOrderHours: r.staleOrderHours ?? 12 }));
+      setForm(prev => ({ ...prev, name: r.name, taxRate: r.taxRate, defaultRewardRate: normalizePercent(r.defaultRewardRate, 20), acceptsBunz: r.acceptsBunz ?? true, bunzAvailabilityMode: ((r as any).bunzAvailabilityMode ?? "ALWAYS") as "ALWAYS" | "SCHEDULE", bunzSchedule: String((r as any).bunzSchedule ?? "{}"), bunzMinOrderAmount: Number((r as any).bunzMinOrderAmount ?? 0), bunzMaxOrderAmount: Number((r as any).bunzMaxOrderAmount ?? 0), bunzDailyLimit: Number((r as any).bunzDailyLimit ?? 0), bunzMaxPctOfBill: Number((r as any).bunzMaxPctOfBill ?? 100), bunzAllowedProducts: String((r as any).bunzAllowedProducts ?? "[]"), happyHourStart: r.happyHourStart ?? "", happyHourEnd: r.happyHourEnd ?? "", happyHourRewardRate: normalizePercent(r.happyHourRewardRate, 40), usdRateMode: (r.usdRateMode ?? "AUTO") as "AUTO" | "MANUAL", usdRate: Number(r.usdRate ?? 18), staleOrderHours: r.staleOrderHours ?? 12 }));
     }
   }, [r]);
 
@@ -375,7 +375,7 @@ export default function SettingsPage() {
       return;
     }
     if (!r) return;
-    setForm({ name: r.name, taxRate: r.taxRate, defaultRewardRate: normalizePercent(r.defaultRewardRate, 20), acceptsBunz: r.acceptsBunz ?? true, bunzAvailabilityMode: ((r as any).bunzAvailabilityMode ?? "ALWAYS") as "ALWAYS" | "SCHEDULE", bunzSchedule: String((r as any).bunzSchedule ?? "{}"), bunzMinOrderAmount: Number((r as any).bunzMinOrderAmount ?? 0), bunzMaxOrderAmount: Number((r as any).bunzMaxOrderAmount ?? 0), bunzDailyLimit: Number((r as any).bunzDailyLimit ?? 0), happyHourStart: r.happyHourStart ?? "", happyHourEnd: r.happyHourEnd ?? "", happyHourRewardRate: normalizePercent(r.happyHourRewardRate, 40), cashDropEnabled: form.cashDropEnabled, cashDropThreshold: form.cashDropThreshold, usdRateMode: (r.usdRateMode ?? "AUTO") as "AUTO" | "MANUAL", usdRate: Number(r.usdRate ?? 18), staleOrderHours: r.staleOrderHours ?? 12 });
+    setForm({ name: r.name, taxRate: r.taxRate, defaultRewardRate: normalizePercent(r.defaultRewardRate, 20), acceptsBunz: r.acceptsBunz ?? true, bunzAvailabilityMode: ((r as any).bunzAvailabilityMode ?? "ALWAYS") as "ALWAYS" | "SCHEDULE", bunzSchedule: String((r as any).bunzSchedule ?? "{}"), bunzMinOrderAmount: Number((r as any).bunzMinOrderAmount ?? 0), bunzMaxOrderAmount: Number((r as any).bunzMaxOrderAmount ?? 0), bunzDailyLimit: Number((r as any).bunzDailyLimit ?? 0), bunzMaxPctOfBill: Number((r as any).bunzMaxPctOfBill ?? 100), bunzAllowedProducts: String((r as any).bunzAllowedProducts ?? "[]"), happyHourStart: r.happyHourStart ?? "", happyHourEnd: r.happyHourEnd ?? "", happyHourRewardRate: normalizePercent(r.happyHourRewardRate, 40), cashDropEnabled: form.cashDropEnabled, cashDropThreshold: form.cashDropThreshold, usdRateMode: (r.usdRateMode ?? "AUTO") as "AUTO" | "MANUAL", usdRate: Number(r.usdRate ?? 18), staleOrderHours: r.staleOrderHours ?? 12 });
     setEditing(section);
   };
 
@@ -893,6 +893,29 @@ export default function SettingsPage() {
                       />
                     </div>
                     <p className="text-[10px] text-gray-500 m-0">0 = sin límite. El límite diario se valida atómicamente (concurrentes incluidos) — dos pagos simultáneos no pueden excederlo.</p>
+
+                    {/* ── H16-2: % facturable + catálogo de productos ── */}
+                    <div className="space-y-2.5 rounded-lg bg-black/30 border border-white/10 p-2.5">
+                      <Input
+                        label="% máximo de la factura pagable en Bunz (0 = ALWAYS100)"
+                        type="number"
+                        value={form.bunzMaxPctOfBill}
+                        onChange={(e) => setForm((f) => ({ ...f, bunzMaxPctOfBill: Math.min(100, Math.max(0, Math.floor(Number(e.target.value)))) }))}
+                      />
+                      <Input
+                        label="Catálogo de menuItemId separados por coma (vacío = todos)"
+                        type="text"
+                        value={String(form.bunzAllowedProducts || '[]')}
+                        onChange={(e) => {
+                          const entries = e.target.value.split(',').map((x) => x.trim()).filter(Boolean);
+                          setForm((f) => ({ ...f, bunzAllowedProducts: JSON.stringify(entries) }));
+                        }}
+                      />
+                      <p className="text-[10px] text-gray-500 m-0">
+                        Si pones un % menor a 100, la parte no cubierta se cobra en fiat en el local (pago mixto). El catálogo filtra qué productos aceptan Bunz.
+                      </p>
+                    </div>
+
                   </div>
                 </div>
                 <div className="rounded-2xl bg-white/5 p-5 border border-white/5">

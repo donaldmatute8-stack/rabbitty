@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { restaurantDb } from "@/db/restaurant";
-import { orders, branches, restaurants, payments } from "@rabbitty/database-restaurant/schema";
+import { orders, branches, restaurants, payments, orderItems } from "@rabbitty/database-restaurant/schema";
 import { and, eq, sql } from "drizzle-orm";
-import { parseBunzPolicy, evaluateBunzEligibility, type BunzEligibility, type BunzUnavailableReason } from "@/lib/bunzPaymentsPolicy";
+import { parseBunzPolicy, evaluateBunzEligibility, mergeBranchOverride, parseBranchOverride, computeBunzPayable, type BunzPaymentPolicy } from "@/lib/bunzPaymentsPolicy";
 import { getAuthenticatedUser } from "@/lib/serverAuth";
 import { checkRateLimit } from "@/lib/rateLimit";
 
@@ -55,7 +55,7 @@ async function owedForOrder(orderId: string): Promise<number> {
 
 /** ── H16 (Nivel A) — política + recepción de hoy server-side SIEMPRE ── */
 async function loadPolicyAndReceivedToday(branchId: string | null): Promise<{
-  policy: ReturnType<typeof parseBunzPolicy>;
+  policy: BunzPaymentPolicy;
   receivedToday: number;
 }> {
   let raw: Record<string, unknown> | null = null;
@@ -93,7 +93,25 @@ async function loadPolicyAndReceivedToday(branchId: string | null): Promise<{
       }
     }
   }
-  const policy = parseBunzPolicy(raw, tz);
+  let policy = parseBunzPolicy(raw, tz) as BunzPaymentPolicy;
+  // H16-2: campos extendidos del negocio + override de la sucursal
+  if (raw) {
+    policy.maxPctOfBill = Math.min(100, Math.max(0, Math.floor(Number(raw.bunzMaxPctOfBill ?? 100) || 100)));
+    try {
+      const arr = JSON.parse(String(raw.bunzAllowedProducts ?? "[]"));
+      policy.allowedProducts = Array.isArray(arr) ? arr as string[] : [];
+    } catch {
+      policy.allowedProducts = [];
+    }
+    if (branchId) {
+      const [br] = await restaurantDb
+        .select({ ov: branches.bunzOverride })
+        .from(branches)
+        .where(eq(branches.id, branchId))
+        .limit(1);
+      if (br?.ov) policy = mergeBranchOverride(policy, parseBranchOverride(br.ov));
+    }
+  }
 
   // Bunz recibidos HOY por el negocio (proxyatura: payments BUNZ COMPLETED en
   // la branch, localizado por timezone del comercio — recorte calendar del día).
@@ -170,6 +188,7 @@ export async function GET(req: NextRequest) {
       orderId,
       total: Number(order.total || 0),
       owed: remaining,
+      payable: eligibility.amountBunz,
       balance,
       acceptsBunz,
       available: eligibility.available,
@@ -212,8 +231,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'No puedes pagar una cuenta que no es tuya' }, { status: 403 });
     }
 
-    // H16: política comercial (Nivel B) + guard atómico del límite diario
+    // H16/H16-2: política comercial + bunzPayable (por productos/% del factura)
     const rest = await loadRestaurantForBranch(order.branchId);
+    const policyPre = await loadPolicyAndReceivedToday(order.branchId);
 
     // 🔒 Anti-fraude: el monto se calcula SIEMPRE server-side (total − pagado),
     // nunca se confía en un amount del body.
@@ -231,8 +251,30 @@ export async function POST(req: NextRequest) {
     const balance = Math.max(0, Number(userRow?.earned ?? 0) - Number(userRow?.spent ?? 0));
 
     // Nivel A+ B evaluado server-side — el affilado no puede tocar reglas
-    const { policy, receivedToday } = await loadPolicyAndReceivedToday(order.branchId);
-    const eligibility0 = evaluateBunzEligibility(policy, { owed, balance, receivedToday });
+    const { policy, receivedToday } = policyPre;
+    const policyAndReceived = policyPre;
+    // Bunz pagables: productos admisibles + % máximo de la factura
+    const { payable: bunzPayable, allEligible } = computeBunzPayable(
+      await (async () => {
+        const items = await restaurantDb
+          .select({ id: orderItems.id, totalPrice: orderItems.totalPrice, menuItemId: orderItems.menuItemId, voidedAt: orderItems.voidedAt })
+          .from(orderItems)
+          .where(eq(orderItems.orderId, orderId));
+        return items
+          .filter((i) => !i.voidedAt)
+          .map((i) => ({ id: String(i.menuItemId ?? i.id), totalPrice: Number(i.totalPrice || 0) }));
+      })(),
+      owed > 0 ? Math.max(0, Number(order.total || 0) - 0) : 0,
+      policy
+    );
+    // owed del flujo se define en bunzPayable (puede ser parcial) — el resto en fiat
+    const realOwed = owed;
+    const owed0 = Math.min(owed, bunzPayable);
+    void policyAndReceived;
+    const eligibility0 = evaluateBunzEligibility(policy, { owed: owed0, balance, receivedToday });
+    if (owed0 <= 0) {
+      return NextResponse.json({ ok: false, error: 'Ningún producto de esta cuenta es pagable en Bunz', code: 'ORDER_OUT_OF_RANGE' }, { status: 400 });
+    }
     if (!eligibility0.available) {
       return NextResponse.json({
         ok: false,
@@ -247,7 +289,7 @@ export async function POST(req: NextRequest) {
     const result = await restaurantDb.transaction(async (guardTx: { execute: (q: any) => Promise<unknown> }) => {
       await guardTx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${businessKey}))`);
       const { receivedToday: recvNow } = await loadPolicyAndReceivedToday(order.branchId);
-      const elig = evaluateBunzEligibility(policy, { owed, balance, receivedToday: recvNow });
+      const elig = evaluateBunzEligibility(policy, { owed: owed0, balance, receivedToday: recvNow });
       if (!elig.available) {
         return { ok: false, error: 'Pagos con Bunz no disponibles esta vez', reason: elig.reason ?? 'LIMIT_REACHED' };
       }
@@ -257,7 +299,7 @@ export async function POST(req: NextRequest) {
       try {
         const intent = await callAdmin('payments.createIntent', {
           orderId,
-          amountMxn: owed,
+          amountMxn: owed0,
           idempotencyKey: `bill_bunz_${orderId}`,
         });
         const intentId = String(intent?.id ?? '');
@@ -277,7 +319,8 @@ export async function POST(req: NextRequest) {
       );
     }
     const approved = (result?.approved ?? {}) as Record<string, unknown>;
-    const paidAmount = Number(approved?.amountMxn ?? owed);
+    const paidAmount = Number(approved?.amountMxn ?? owed0);
+    const remainingAfter = Math.max(0, realOwed - paidAmount);
 
     return NextResponse.json({
       ok: true,
@@ -285,7 +328,10 @@ export async function POST(req: NextRequest) {
       orderId,
       paid: paidAmount,
       intentId: String(result?.intentId ?? ''),
-      note: 'Cuenta liquidada con Bunz — POS watcher y tabs refrescados server-side',
+      note: remainingAfter > 0
+        ? `Pago parcial con Bunz — quedan ${remainingAfter.toFixed(2)} MXN por cobrar en fiat al local`
+        : 'Cuenta liquidada con Bunz — POS watcher y tabs refrescados server-side',
+      remaining: remainingAfter,
     });
   } catch (err: any) {
     const msg = String(err?.message || 'No se pudo pagar con Bunz').slice(0, 180);
