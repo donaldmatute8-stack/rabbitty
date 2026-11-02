@@ -14,6 +14,10 @@ export interface AuthenticatedUser {
   tonWalletAddress?: string | null;
   totalBunzEarned?: number | null;
   hops?: number | null;
+  /** Push v2.1 §2.4: reglas por Rabbitter (proximidadAllAlerts y similares) */
+  pushRules?: Record<string, boolean> | null;
+  /** Categorías silenciadas (§2.2) — para el worker/proximidad */
+  pushMutedCategories?: string[] | null;
 }
 
 /**
@@ -21,6 +25,29 @@ export interface AuthenticatedUser {
  * 1. Bearer / X-Session-Token header (Web & Native iOS/Android persistent session)
  * 2. Telegram WebApp initData HMAC (X-Init-Data header or query param)
  */
+/** Parser de pushRules/pushMutedCategories SIN cycle (reimpl local del contrato). */
+function parseUserRulesJson(raw: unknown): Record<string, boolean> {
+  if (typeof raw !== "string" || !raw.trim()) return {};
+  try {
+    const obj = JSON.parse(raw) as Record<string, unknown>;
+    const known: Record<string, string> = {
+      proximityAllAlerts: "proximityAllAlerts",
+    };
+    const out: Record<string, boolean> = {};
+    for (const [k, mapped] of Object.entries(known)) {
+      out[mapped] = obj[k] === true;
+    }
+    return out;
+  } catch { return {}; }
+}
+function parseUserCategories(raw: unknown): string[] {
+  if (typeof raw !== "string" || !raw.trim()) return [];
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? (arr as unknown[]).filter((x): x is string => typeof x === "string") : [];
+  } catch { return []; }
+}
+
 export async function getAuthenticatedUser(req: Request | NextRequest): Promise<AuthenticatedUser | null> {
   try {
     const authHeader = req.headers.get("authorization");
@@ -56,6 +83,8 @@ export async function getAuthenticatedUser(req: Request | NextRequest): Promise<
             tonWalletAddress: user.tonWalletAddress,
             totalBunzEarned: user.totalBunzEarned,
             hops: user.hops,
+            pushRules: parseUserRulesJson(user.pushRules),
+            pushMutedCategories: parseUserCategories(user.pushMutedCategories),
           };
         }
       }
@@ -82,6 +111,8 @@ export async function getAuthenticatedUser(req: Request | NextRequest): Promise<
             tonWalletAddress: user.tonWalletAddress,
             totalBunzEarned: user.totalBunzEarned,
             hops: user.hops,
+            pushRules: parseUserRulesJson(user.pushRules),
+            pushMutedCategories: parseUserCategories(user.pushMutedCategories),
           };
         }
       }

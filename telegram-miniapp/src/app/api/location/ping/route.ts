@@ -26,8 +26,11 @@ function getDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: numbe
 }
 
 import { checkRateLimit } from "@/lib/rateLimit";
+import { parsePushRules } from "@/lib/push/categories";
 
 const COOLDOWN_SECONDS = 12 * 60 * 60; // 12 horas
+/** H12: reglas por Rabbitter — ventana de dedup corto cuando piden TODAS las alertas. */
+const PROXIMITY_BYPASS_DEDUPE_WINDOW_MS = 5 * 60 * 1000; // 5 min
 
 async function isCooldownActive(key: string, cooldownSec: number): Promise<boolean> {
   const res = await checkRateLimit(`cd:${key}`, 1, cooldownSec);
@@ -55,6 +58,10 @@ export async function POST(req: NextRequest) {
   try {
     const caller = await getAuthenticatedUser(req);
     const body = await req.json();
+    // H12 — Reglas por Rabbitter (v2.1 §2.4): "TODAS las alertas de afiliados cerca"
+    // = SIN límite anti-spam de 12h; dedupe corto (5 min) para no spamear el bugle.
+    const userRules = parsePushRules(caller?.pushRules);
+    const allAlertsMode = userRules.proximityAllAlerts === true;
     const { lat, lng, accuracy, timestamp, stationary, prevLat, prevLng } = body;
     // "Inmóvil": el cliente compara con su ping anterior (dist < 25m) o reporta speed≈0
 
@@ -186,9 +193,10 @@ export async function POST(req: NextRequest) {
           };
 
           const cooldownKey = `push:boost:${caller.id}:${b.id}`;
-          const isBoostCoolingDown = await isCooldownActive(cooldownKey, COOLDOWN_SECONDS);
+          const isBoostCoolingDown = allAlertsMode ? false : await isCooldownActive(cooldownKey, COOLDOWN_SECONDS);
 
           if (!isBoostCoolingDown) {
+            const dedupeWindowMs = allAlertsMode ? PROXIMITY_BYPASS_DEDUPE_WINDOW_MS : 12 * 3600 * 1000;
             const pushTitle = `⚡ ¡${activeBoost.rewardPercentage}% Bunz en ${b.name}!`;
             const pushBody = `Pasa en tu caminata de hoy: ${activeBoost.headline || `obtenemos recompensa especial de +${activeBoost.rewardPercentage}% Bunz`}.`;
 
@@ -216,7 +224,7 @@ export async function POST(req: NextRequest) {
                   businessName: b.name,
                   rewardPercentage: activeBoost.rewardPercentage,
                 },
-                dedupeKey: `proximity_boost:${cooldownKey}:${Math.floor(Date.now() / (12 * 3600 * 1000))}`,
+                dedupeKey: `proximity_boost:${cooldownKey}:${Math.floor(Date.now() / dedupeWindowMs)}`,
                 priority: "normal",
               });
               kickWorker();
@@ -236,9 +244,10 @@ export async function POST(req: NextRequest) {
           };
 
           const cooldownKey = `push:loyalty:${caller.id}:${b.id}`;
-          const isCoolingDown = await isCooldownActive(cooldownKey, COOLDOWN_SECONDS);
+          const isCoolingDown = allAlertsMode ? false : await isCooldownActive(cooldownKey, COOLDOWN_SECONDS);
 
           if (!isCoolingDown) {
+            const dedupeWindowMs = allAlertsMode ? PROXIMITY_BYPASS_DEDUPE_WINDOW_MS : 12 * 3600 * 1000;
             const pushTitle = `🐰 ¡Estás cerca de ${b.name}!`;
             const pushBody = `Visita #${visitCount + 1}: Recibe doble cashback (hasta 50 Bunz) en tu consumo de hoy al pagar en caja.`;
 
@@ -266,7 +275,7 @@ export async function POST(req: NextRequest) {
                   businessName: b.name,
                   route: `/affiliate/${b.id}`,
                 },
-                dedupeKey: `proximity_loyalty:${cooldownKey}:${Math.floor(Date.now() / (12 * 3600 * 1000))}`,
+                dedupeKey: `proximity_loyalty:${cooldownKey}:${Math.floor(Date.now() / dedupeWindowMs)}`,
                 priority: "normal",
               });
               kickWorker();

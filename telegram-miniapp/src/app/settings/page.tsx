@@ -173,7 +173,10 @@ export default function SettingsPage() {
 
             {/* ── Preferencias por categoría (v2.1 §2.2) — solo cuando el push nativo está ON ── */}
             {settings.nativePush && (
-              <CategoryMuteRows />
+              <>
+                <CategoryMuteRows />
+                <CategoryRulesRows />
+              </>
             )}
 
             {/* ── Diagnóstico de push (¿APNs en Vercel + dispositivo registrado?) ── */}
@@ -270,6 +273,80 @@ function CategoryMuteRows() {
       <p className="text-[9px] m-0 px-2 pb-1.5" style={{ color: "var(--text-muted)" }}>
         Los pagos, cuentas y avisos de seguridad siempre llegan — por tu protección.
       </p>
+    </div>
+  );
+}
+
+/**
+ * ── CategoryRulesRows (v2.1 §2.4) ── reglas opt-in por Rabbitter (módulo de
+ * reglas activables/desactivables desde Ajustes). Cada regla describe SU efecto
+ * (ej. " TODAS las alertas de afiliados cerca, sin límite anti-spam").
+ * Persisto en users.pushRules vía POST /api/notifications/preferences.
+ */
+const RULE_CATALOG = [
+  {
+    key: 'proximityAllAlerts',
+    label: 'Recibir TODAS las alertas near',
+    desc: 'Sin límite anti-spam de 12h por negocio — llega cada alerta de cercanía (máx 1 por negocio cada 5 min).',
+  },
+];
+
+function CategoryRulesRows() {
+  const [rules, setRules] = useState<Record<string, boolean>>({});
+  const [loaded, setLoaded] = useState(false);
+
+  const load = async () => {
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch('/api/notifications/preferences', { headers: headers || {}, cache: 'no-store' });
+      const data = await res.json();
+      if (data?.rules && typeof data.rules === 'object') setRules(data.rules);
+    } catch { /* sin server: defaults OFF */ }
+    setLoaded(true);
+  };
+
+  useEffect(() => { void load(); }, []);
+
+  const toggleRule = async (key: string) => {
+    const next = { ...rules, [key]: !rules[key] };
+    setRules(next);
+    PlatformBridge.hapticFeedback('light');
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      await fetch('/api/notifications/preferences', {
+        method: 'POST',
+        headers: { ...(headers || {}), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rules: next }),
+      });
+    } catch { /* best-effort (optimista) */ }
+  };
+
+  if (!loaded) return null;
+
+  return (
+    <div className="mt-2 rounded-xl" style={{ border: '1px solid var(--border-subtle)', padding: 6 }}>
+      <p className="text-[10px] font-black uppercase tracking-[1.5px] m-0 px-2 pt-1.5" style={{ color: 'var(--text-muted)' }}>
+        Reglas de notificaciones
+      </p>
+      {RULE_CATALOG.map((rule) => {
+        const on = rules[rule.key] === true;
+        return (
+          <div
+            key={rule.key}
+            role="button"
+            tabIndex={0}
+            onClick={() => { void toggleRule(rule.key); }}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') void toggleRule(rule.key); }}
+            className="flex items-start gap-3 px-2 py-2 rounded-lg cursor-pointer transition-colors hover:bg-(--bg-pressed)"
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] font-bold m-0 leading-tight">{rule.label}</p>
+              <p className="text-[10px] m-0 mt-0.5" style={{ color: 'var(--text-muted)' }}>{rule.desc}</p>
+            </div>
+            <Switch on={on} onChange={() => { void toggleRule(rule.key); }} />
+          </div>
+        );
+      })}
     </div>
   );
 }

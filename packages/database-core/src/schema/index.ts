@@ -42,6 +42,11 @@ export const users = pgTable("users", {
   // de PushCategoryKey — chat/rewards/orders/proximity/memberships/marketing).
   // CRITICAL (pagos/cuentas) y SYSTEM nunca se silencian — filtrado en el worker.
   pushMutedCategories: text("pushMutedCategories").default("[]").notNull(),
+  // Push v2.1 §2.4: reglas opcionales por Rabbitter (JSON obj — keys opt-in):
+  //  proximityAllAlerts  → recibe TODAS las alertas de afiliados al estar cerca
+  //                        (sin límite anti-spam de 12h; dedupe ventana 5 min)
+  //  Otros keys se ignoran — reglas nuevas se agregan al contrato lib/push/rules.
+  pushRules: text("pushRules").default("{}").notNull(),
 });
 
 export const verificationTokens = pgTable("verificationTokens", {
