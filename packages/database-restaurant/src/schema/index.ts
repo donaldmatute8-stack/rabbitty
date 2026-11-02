@@ -41,6 +41,13 @@ export const restaurants = pgTable("restaurants", {
   analyticsProEnabled: boolean("analyticsProEnabled").default(false).notNull(),
   // ── Propinas: se pagan con el ticket y se reparten en caja (opcional) ──
   tipPayoutEnabled: boolean("tipPayoutEnabled").default(false).notNull(),
+  // ── Pagos con Bunz: reglas comerciales del afiliado (H16 Nivel B) ──
+  // Rabbitty gobierna el nivel global (gratuityRules/bunzPaymentsPolicy server).
+  bunzAvailabilityMode: text("bunzAvailabilityMode").default("ALWAYS").notNull(), // ALWAYS | SCHEDULE
+  bunzSchedule: text("bunzSchedule").default("{}").notNull(), // {days:[0..6],start:"HH:MM",end:"HH:MM"}
+  bunzMinOrderAmount: real("bunzMinOrderAmount").default(0).notNull(), // 0 = sin mínimo
+  bunzMaxOrderAmount: real("bunzMaxOrderAmount").default(0).notNull(), // 0 = sin máximo
+  bunzDailyLimit: integer("bunzDailyLimit").default(0).notNull(), // Bunz/día; 0 = sin límite
   // ── Gratificaciones voluntarias (D-11) ── Catálogo controlado por Rabbitty:
   // mode OFF|POS|DIGITAL|BOTH; pcts JSON subset de [5,10,15] (nunca custom);
   // server guard en gratuityRules. Nada condicionado al método de pago.

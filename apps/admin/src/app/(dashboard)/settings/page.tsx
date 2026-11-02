@@ -294,7 +294,7 @@ export default function SettingsPage() {
   const [editing, setEditing] = useState<string | null>(null);
   const [adminPinInput, setAdminPinInput] = useState("");
   const [pairModalOpen, setPairModalOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", taxRate: 0, defaultRewardRate: 20, acceptsBunz: true, happyHourStart: "", happyHourEnd: "", happyHourRewardRate: 40, cashDropEnabled: false, cashDropThreshold: 3000, usdRateMode: "AUTO" as "AUTO" | "MANUAL", usdRate: 18, staleOrderHours: 12 });
+  const [form, setForm] = useState({ name: "", taxRate: 0, defaultRewardRate: 20, acceptsBunz: true, happyHourStart: "", happyHourEnd: "", happyHourRewardRate: 40, cashDropEnabled: false, cashDropThreshold: 3000, usdRateMode: "AUTO" as "AUTO" | "MANUAL", usdRate: 18, staleOrderHours: 12, bunzAvailabilityMode: "ALWAYS" as "ALWAYS" | "SCHEDULE", bunzSchedule: "{}", bunzMinOrderAmount: 0, bunzMaxOrderAmount: 0, bunzDailyLimit: 0 });
   const [email, setEmail] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -355,7 +355,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (r) {
-      setForm(prev => ({ ...prev, name: r.name, taxRate: r.taxRate, defaultRewardRate: normalizePercent(r.defaultRewardRate, 20), acceptsBunz: r.acceptsBunz ?? true, happyHourStart: r.happyHourStart ?? "", happyHourEnd: r.happyHourEnd ?? "", happyHourRewardRate: normalizePercent(r.happyHourRewardRate, 40), usdRateMode: (r.usdRateMode ?? "AUTO") as "AUTO" | "MANUAL", usdRate: Number(r.usdRate ?? 18), staleOrderHours: r.staleOrderHours ?? 12 }));
+      setForm(prev => ({ ...prev, name: r.name, taxRate: r.taxRate, defaultRewardRate: normalizePercent(r.defaultRewardRate, 20), acceptsBunz: r.acceptsBunz ?? true, bunzAvailabilityMode: ((r as any).bunzAvailabilityMode ?? "ALWAYS") as "ALWAYS" | "SCHEDULE", bunzSchedule: String((r as any).bunzSchedule ?? "{}"), bunzMinOrderAmount: Number((r as any).bunzMinOrderAmount ?? 0), bunzMaxOrderAmount: Number((r as any).bunzMaxOrderAmount ?? 0), bunzDailyLimit: Number((r as any).bunzDailyLimit ?? 0), happyHourStart: r.happyHourStart ?? "", happyHourEnd: r.happyHourEnd ?? "", happyHourRewardRate: normalizePercent(r.happyHourRewardRate, 40), usdRateMode: (r.usdRateMode ?? "AUTO") as "AUTO" | "MANUAL", usdRate: Number(r.usdRate ?? 18), staleOrderHours: r.staleOrderHours ?? 12 }));
     }
   }, [r]);
 
@@ -375,7 +375,7 @@ export default function SettingsPage() {
       return;
     }
     if (!r) return;
-    setForm({ name: r.name, taxRate: r.taxRate, defaultRewardRate: normalizePercent(r.defaultRewardRate, 20), acceptsBunz: r.acceptsBunz ?? true, happyHourStart: r.happyHourStart ?? "", happyHourEnd: r.happyHourEnd ?? "", happyHourRewardRate: normalizePercent(r.happyHourRewardRate, 40), cashDropEnabled: form.cashDropEnabled, cashDropThreshold: form.cashDropThreshold, usdRateMode: (r.usdRateMode ?? "AUTO") as "AUTO" | "MANUAL", usdRate: Number(r.usdRate ?? 18), staleOrderHours: r.staleOrderHours ?? 12 });
+    setForm({ name: r.name, taxRate: r.taxRate, defaultRewardRate: normalizePercent(r.defaultRewardRate, 20), acceptsBunz: r.acceptsBunz ?? true, bunzAvailabilityMode: ((r as any).bunzAvailabilityMode ?? "ALWAYS") as "ALWAYS" | "SCHEDULE", bunzSchedule: String((r as any).bunzSchedule ?? "{}"), bunzMinOrderAmount: Number((r as any).bunzMinOrderAmount ?? 0), bunzMaxOrderAmount: Number((r as any).bunzMaxOrderAmount ?? 0), bunzDailyLimit: Number((r as any).bunzDailyLimit ?? 0), happyHourStart: r.happyHourStart ?? "", happyHourEnd: r.happyHourEnd ?? "", happyHourRewardRate: normalizePercent(r.happyHourRewardRate, 40), cashDropEnabled: form.cashDropEnabled, cashDropThreshold: form.cashDropThreshold, usdRateMode: (r.usdRateMode ?? "AUTO") as "AUTO" | "MANUAL", usdRate: Number(r.usdRate ?? 18), staleOrderHours: r.staleOrderHours ?? 12 });
     setEditing(section);
   };
 
@@ -796,6 +796,104 @@ export default function SettingsPage() {
                     <input type="checkbox" checked={form.acceptsBunz} onChange={(e) => setForm((f) => ({ ...f, acceptsBunz: e.target.checked }))} className="h-5 w-5 rounded border-white/10 bg-white/5 text-pink-500 cursor-pointer" />
                     Acepta Bunz como forma de pago
                   </label>
+
+                  {/* ── H16 Nivel B: reglas comerciales de pagos con Bunz ── */}
+                  <div className="rounded-xl p-3 bg-white/5 border border-white/10 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-black uppercase tracking-wider text-gray-300 m-0">Disponibilidad de pagos con Bunz</p>
+                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${form.acceptsBunz ? 'bg-emerald-500/15 text-emerald-300' : 'bg-gray-500/15 text-gray-400'}`}>
+                        {form.acceptsBunz ? 'ACTIVO' : 'DESHABILITADO'}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-gray-500 m-0 leading-snug">
+                      Rabbitty gobierna las reglas del sistema (saldo server-side, atomicidad, 0 cashback en pagos 100% Bunz, auditoría). Aquí defines
+                      <strong className="text-gray-400"> cuándo y cuánto</strong> aceptas, dentro de esos límites. Si no está disponible para el comensal, la opción simplemente no aparece.
+                    </p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {([
+                        ["ALWAYS", "Siempre disponible"],
+                        ["SCHEDULE", "Días y horarios"],
+                      ] as const).map(([mode, label]) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => setForm((f) => ({ ...f, bunzAvailabilityMode: mode }))}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-black border transition-all cursor-pointer ${
+                            form.bunzAvailabilityMode === mode
+                              ? 'bg-violet-500/15 border-violet-500/40 text-violet-300'
+                              : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-white'
+                          }`}
+                        >{label}</button>
+                      ))}
+                    </div>
+                    {form.bunzAvailabilityMode === "SCHEDULE" && (
+                      <div className="space-y-2.5 rounded-lg bg-black/30 border border-white/10 p-2.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {[
+                            ["Dom", 0],["Lun", 1],["Mar", 2],["Mié", 3],["Jue", 4],["Vie", 5],["Sáb", 6],
+                          ].map(([label, day]) => {
+                            const days = (() => { try { return JSON.parse(form.bunzSchedule).days as number[] } catch { return [] } })();
+                            const on = days.includes(Number(day));
+                            return (
+                              <button
+                                key={label as string}
+                                type="button"
+                                onClick={() => {
+                                  const next = on ? days.filter((d) => d !== Number(day)) : [...days, Number(day)].sort((a, b) => a - b);
+                                  const sched = (() => { try { return JSON.parse(form.bunzSchedule) } catch { return {} } })() as Record<string, unknown>;
+                                  setForm((f) => ({ ...f, bunzSchedule: JSON.stringify({ days: next, start: sched.start ?? '09:00', end: sched.end ?? '22:00' }) }));
+                                }}
+                                className={`px-2 py-1 rounded-lg text-[10px] font-black border transition-all cursor-pointer ${
+                                  on ? 'bg-violet-500/15 border-violet-500/40 text-violet-300' : 'bg-white/5 border-white/10 text-gray-500 hover:text-white'
+                                }`}
+                              >{label as string}</button>
+                            );
+                          })}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Input
+                            label="Hora inicio"
+                            type="time"
+                            value={(() => { try { return JSON.parse(form.bunzSchedule).start ?? '09:00' } catch { return '09:00' } })()} 
+                            onChange={(e) => {
+                              const sched = (() => { try { return JSON.parse(form.bunzSchedule) } catch { return {} } })() as Record<string, unknown>;
+                              setForm((f) => ({ ...f, bunzSchedule: JSON.stringify({ ...sched, start: e.target.value }) }));
+                            }}
+                          />
+                          <Input
+                            label="Hora fin"
+                            type="time"
+                            value={(() => { try { return JSON.parse(form.bunzSchedule).end ?? '22:00' } catch { return '22:00' } })()}
+                            onChange={(e) => {
+                              const sched = (() => { try { return JSON.parse(form.bunzSchedule) } catch { return {} } })() as Record<string, unknown>;
+                              setForm((f) => ({ ...f, bunzSchedule: JSON.stringify({ ...sched, end: e.target.value }) }));
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-3 gap-2">
+                      <Input
+                        label="Mínimo Bunz/factura"
+                        type="number"
+                        value={form.bunzMinOrderAmount}
+                        onChange={(e) => setForm((f) => ({ ...f, bunzMinOrderAmount: Math.max(0, Number(e.target.value)) }))}
+                      />
+                      <Input
+                        label="Máximo Bunz/factura"
+                        type="number"
+                        value={form.bunzMaxOrderAmount}
+                        onChange={(e) => setForm((f) => ({ ...f, bunzMaxOrderAmount: Math.max(0, Number(e.target.value)) }))}
+                      />
+                      <Input
+                        label="Límite diario Bunz"
+                        type="number"
+                        value={form.bunzDailyLimit}
+                        onChange={(e) => setForm((f) => ({ ...f, bunzDailyLimit: Math.max(0, Math.floor(Number(e.target.value))) }))}
+                      />
+                    </div>
+                    <p className="text-[10px] text-gray-500 m-0">0 = sin límite. El límite diario se valida atómicamente (concurrentes incluidos) — dos pagos simultáneos no pueden excederlo.</p>
+                  </div>
                 </div>
                 <div className="rounded-2xl bg-white/5 p-5 border border-white/5">
                   <h4 className="mb-3 text-sm font-bold text-pink-400">Happy Hour (Bunz x2)</h4>

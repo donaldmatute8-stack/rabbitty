@@ -129,6 +129,12 @@ export const adminRouter = router({
         analyticsProEnabled: z.boolean().optional(),
         // Política de propinas: permite pagar propinas de tarjeta desde caja al cerrar turno
         tipPayoutEnabled: z.boolean().optional(),
+        // ── H16: Pagos con Bunz — Nivel B comercial (afiliado) ──
+        bunzAvailabilityMode: z.enum(["ALWAYS", "SCHEDULE"]).optional(),
+        bunzSchedule: z.string().optional(), // JSON {days:[0..6],start:"HH:MM",end:"HH:MM"}
+        bunzMinOrderAmount: z.number().min(0).optional(),
+        bunzMaxOrderAmount: z.number().min(0).optional(),
+        bunzDailyLimit: z.number().int().min(0).optional(),
         // ── Gratificaciones voluntarias (D-11): catálogo Rabbitty, server guard ──
         gratuityMode: z.enum(["OFF", "POS", "DIGITAL", "BOTH"]).optional(),
         // Solo convierte pcts DENTRO del catálogo [5,10,15] — el afiliado no crea reglas
@@ -182,6 +188,24 @@ export const adminRouter = router({
       delete updateData.address; // Don't save address on restaurants table
       // ── Sanity: gratificaciones solo viven para el catálogo [5,10,15] sorteado pedido en
       //    gratuityRules (el afiliado no puede introducir % custom ni reglas por método) ──
+      // H16: sanitiza el schedule JSON (solo días 0-6 + HH:MM) — el afiliado
+      // no puede inyectar reglas globales ni campos extra
+      if (typeof updateData.bunzSchedule === 'string') {
+        try {
+          const parsed = JSON.parse(updateData.bunzSchedule);
+          const clean = {
+            days: Array.isArray(parsed.days) ? parsed.days.map(Number).filter((d: number) => Number.isInteger(d) && d >= 0 && d <= 6) : [],
+            start: /^\d{2}:\d{2}$/.test(String(parsed.start ?? '')) ? String(parsed.start) : '09:00',
+            end: /^\d{2}:\d{2}$/.test(String(parsed.end ?? '')) ? String(parsed.end) : '22:00',
+          };
+          updateData.bunzSchedule = JSON.stringify(clean);
+        } catch {
+          delete updateData.bunzSchedule;
+        }
+      }
+      if (updateData.bunzMinOrderAmount !== undefined) updateData.bunzMinOrderAmount = Math.max(0, Number(updateData.bunzMinOrderAmount) || 0);
+      if (updateData.bunzMaxOrderAmount !== undefined) updateData.bunzMaxOrderAmount = Math.max(0, Number(updateData.bunzMaxOrderAmount) || 0);
+      if (updateData.bunzDailyLimit !== undefined) updateData.bunzDailyLimit = Math.max(0, Math.floor(Number(updateData.bunzDailyLimit) || 0));
       if (Array.isArray(updateData.gratuityPcts)) {
         updateData.gratuityPcts = JSON.stringify(
           updateData.gratuityPcts

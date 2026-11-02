@@ -3,7 +3,8 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { restaurantDb } from "@/db/restaurant";
 import { orders, branches, restaurants, payments } from "@rabbitty/database-restaurant/schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import { parseBunzPolicy, evaluateBunzEligibility, type BunzEligibility, type BunzUnavailableReason } from "@/lib/bunzPaymentsPolicy";
 import { getAuthenticatedUser } from "@/lib/serverAuth";
 import { checkRateLimit } from "@/lib/rateLimit";
 
@@ -51,6 +52,67 @@ async function owedForOrder(orderId: string): Promise<number> {
   return Math.max(0, paid);
 }
 
+
+/** ── H16 (Nivel A) — política + recepción de hoy server-side SIEMPRE ── */
+async function loadPolicyAndReceivedToday(branchId: string | null): Promise<{
+  policy: ReturnType<typeof parseBunzPolicy>;
+  receivedToday: number;
+}> {
+  let raw: Record<string, unknown> | null = null;
+  let tz = "America/Mexico_City";
+  if (branchId) {
+    const [branch] = await restaurantDb
+      .select({ restaurantId: branches.restaurantId })
+      .from(branches)
+      .where(eq(branches.id, branchId))
+      .limit(1);
+    if (branch?.restaurantId) {
+      const [rest] = await restaurantDb
+        .select({
+          acceptsBunz: restaurants.acceptsBunz,
+          mode: restaurants.bunzAvailabilityMode,
+          schedule: restaurants.bunzSchedule,
+          minOrder: restaurants.bunzMinOrderAmount,
+          maxOrder: restaurants.bunzMaxOrderAmount,
+          dailyLimit: restaurants.bunzDailyLimit,
+          tz: restaurants.timezone,
+        })
+        .from(restaurants)
+        .where(eq(restaurants.id, branch.restaurantId))
+        .limit(1);
+      if (rest) {
+        raw = {
+          acceptsBunz: rest.acceptsBunz,
+          bunzAvailabilityMode: rest.mode,
+          bunzSchedule: rest.schedule,
+          bunzMinOrderAmount: rest.minOrder,
+          bunzMaxOrderAmount: rest.maxOrder,
+          bunzDailyLimit: rest.dailyLimit,
+        };
+        tz = rest.tz || tz;
+      }
+    }
+  }
+  const policy = parseBunzPolicy(raw, tz);
+
+  // Bunz recibidos HOY por el negocio (proxyatura: payments BUNZ COMPLETED en
+  // la branch, localizado por timezone del comercio — recorte calendar del día).
+  const receivedToday = await restaurantDb
+    .select({ total: sql<number>`COUNT(*)*0 + COALESCE(SUM(${payments.amount}), 0)` })
+    .from(payments)
+    .innerJoin(orders, eq(orders.id, payments.orderId))
+    .where(and(
+      eq(payments.method, "BUNZ"),
+      eq(payments.status, "COMPLETED"),
+      eq(orders.branchId, branchId || "x-y-z-nulo"),
+      sql`(${payments.createdAt} AT TIME ZONE ${policy.timezone})::date = (now() AT TIME ZONE ${policy.timezone})::date`
+    ))
+    .then((rows) => Number((rows[0] as Record<string, unknown>)?.total ?? 0))
+    .catch(() => 0 as number);
+
+  return { policy, receivedToday };
+}
+
 const ADMIN_TRPC = process.env.NEXT_PUBLIC_ADMIN_API_URL || 'https://admin.rabbitty.me/api/trpc';
 
 // tRPC mutation batch proxy (input en el cuerpo, es el mismo patrón de /api/pay/setup)
@@ -95,6 +157,14 @@ export async function GET(req: NextRequest) {
       .limit(1);
     const balance = Math.max(0, Number(userRow?.earned ?? 0) - Number(userRow?.spent ?? 0));
 
+    // H16: disponibilidad calculada SERVER-side por la política (Nivel B)
+    const { policy, receivedToday } = await loadPolicyAndReceivedToday(order.branchId);
+    const eligibility = evaluateBunzEligibility(policy, {
+      owed: remaining,
+      balance,
+      receivedToday,
+    });
+
     return NextResponse.json({
       ok: true,
       orderId,
@@ -102,7 +172,11 @@ export async function GET(req: NextRequest) {
       owed: remaining,
       balance,
       acceptsBunz,
-      canPayWithBunz: acceptsBunz && remaining > 0 && balance >= remaining,
+      available: eligibility.available,
+      unavailableReason: eligibility.reason,
+      dailyBunzLimit: policy.dailyBunzLimit,
+      receivedToday,
+      canPayWithBunz: eligibility.available,
       businessName: rest?.name || null,
       status: order.status,
     });
@@ -138,10 +212,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'No puedes pagar una cuenta que no es tuya' }, { status: 403 });
     }
 
+    // H16: política comercial (Nivel B) + guard atómico del límite diario
     const rest = await loadRestaurantForBranch(order.branchId);
-    if (!rest || !rest.acceptsBunz) {
-      return NextResponse.json({ ok: false, error: 'Este negocio no acepta Bunz como método de pago' }, { status: 400 });
-    }
 
     // 🔒 Anti-fraude: el monto se calcula SIEMPRE server-side (total − pagado),
     // nunca se confía en un amount del body.
@@ -151,38 +223,68 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'Esta cuenta ya está liquidada' }, { status: 409 });
     }
 
-    // Balance del comprador (FOR UPDATE equivalente: los rowsдебen estar en tx)
     const [userRow] = await db
       .select({ earned: users.totalBunzEarned, spent: users.totalBunzSpent })
       .from(users)
       .where(eq(users.id, caller.id))
       .limit(1);
     const balance = Math.max(0, Number(userRow?.earned ?? 0) - Number(userRow?.spent ?? 0));
-    if (balance < owed) {
-      return NextResponse.json({ ok: false, error: `Saldo insuficiente: tienes ${balance.toFixed(2)} Bunz, necesitas ${owed.toFixed(2)}` }, { status: 400 });
+
+    // Nivel A+ B evaluado server-side — el affilado no puede tocar reglas
+    const { policy, receivedToday } = await loadPolicyAndReceivedToday(order.branchId);
+    const eligibility0 = evaluateBunzEligibility(policy, { owed, balance, receivedToday });
+    if (!eligibility0.available) {
+      return NextResponse.json({
+        ok: false,
+        error: 'Pagos con Bunz no disponibles para esta cuenta: ' + eligibility0.reason,
+        code: eligibility0.reason,
+      }, { status: 400 });
     }
 
-    // Motor central: createIntent 1:1 + approveIntent (settle atómico con
-    // distribución, ledger SPEND, payments row BUNZ COMPLETED, orden COMPLETED).
-    const intent = await callAdmin('payments.createIntent', {
-      orderId,
-      amountMxn: owed,
-      idempotencyKey: `bill_bunz_${orderId}`,
-    });
-    const intentId = String(intent?.id ?? '');
-    if (!intentId) {
-      return NextResponse.json({ ok: false, error: 'No se pudo crear el intent del pago' }, { status: 500 });
+    // Límite diario ATÓMICO (advisory lock por negocio): waiting other bunz-pay
+    // get serialized here — dos pagos concurrentes no exceden el máximo.
+    const businessKey = String(order.branchId || rest?.id || 'unknown');
+    const result = await restaurantDb.transaction(async (guardTx: { execute: (q: any) => Promise<unknown> }) => {
+      await guardTx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${businessKey}))`);
+      const { receivedToday: recvNow } = await loadPolicyAndReceivedToday(order.branchId);
+      const elig = evaluateBunzEligibility(policy, { owed, balance, receivedToday: recvNow });
+      if (!elig.available) {
+        return { ok: false, error: 'Pagos con Bunz no disponibles esta vez', reason: elig.reason ?? 'LIMIT_REACHED' };
+      }
+      // (el lock se mantiene hasta terminar el settle — atomicidad real)
+      let localError: string | null = null;
+      let wrapped: Record<string, unknown> | null = null;
+      try {
+        const intent = await callAdmin('payments.createIntent', {
+          orderId,
+          amountMxn: owed,
+          idempotencyKey: `bill_bunz_${orderId}`,
+        });
+        const intentId = String(intent?.id ?? '');
+        if (!intentId) throw new Error('No se pudo crear el intent del pago');
+        const approved = await callAdmin('payments.approveIntent', { intentId });
+        wrapped = { intentId, approved };
+      } catch (err: unknown) {
+        localError = err instanceof Error ? err.message : 'No se pudo ejecutar el pago con Bunz';
+      }
+      if (localError) throw new Error(localError);
+      return { ok: true, ...wrapped };
+    }) as { ok: boolean; error?: string; reason?: string; intentId?: string; approved?: Record<string, unknown> } | null;
+    if (result && result.ok === false) {
+      return NextResponse.json(
+        { ok: false, error: result.error || 'Pagos con Bunz no disponibles', code: result.reason },
+        { status: 400 }
+      );
     }
-    const approved = await callAdmin('payments.approveIntent', { intentId });
-
-    const paidAmount = Number((approved as Record<string, unknown>)?.amountMxn ?? owed);
+    const approved = (result?.approved ?? {}) as Record<string, unknown>;
+    const paidAmount = Number(approved?.amountMxn ?? owed);
 
     return NextResponse.json({
       ok: true,
       success: true,
       orderId,
       paid: paidAmount,
-      intentId,
+      intentId: String(result?.intentId ?? ''),
       note: 'Cuenta liquidada con Bunz — POS watcher y tabs refrescados server-side',
     });
   } catch (err: any) {
