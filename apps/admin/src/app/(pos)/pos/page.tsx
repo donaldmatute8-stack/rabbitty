@@ -185,6 +185,9 @@ export default function PosPage() {
   const [lastPaidOrderId, setLastPaidOrderId] = useState<string | null>(null);
   const [cardFlowChoice, setCardFlowChoice] = useState<"stripe" | "external" | null>(null);
   const [rabbitterQuery, setRabbitterQuery] = useState("");
+  // ── Propina del cobro directo + split DIVIDIDA (efectivo vs Bunz) ──
+  const [posTip, setPosTip] = useState("");
+  const [splitBunzAsk, setSplitBunzAsk] = useState<number>(0);
   const [isSearchingRabbitter, setIsSearchingRabbitter] = useState(false);
   const [isScanningRabbitter, setIsScanningRabbitter] = useState(false);
   const [showBusinessQrModal, setShowBusinessQrModal] = useState(false);
@@ -1015,6 +1018,17 @@ export default function PosPage() {
       : pendingMethod === "TARJETA" && chosen && String(chosen).includes("EXTERNA")
         ? "TARJETA_EXTERNA"
         : pendingMethod;
+    // GAP: split DIVIDIDA — el resto (total − efectivo recibido) se cobra con Bunz
+    const splitBunz = pendingMethod === "DIVIDIDA"
+      ? Math.max(0, Math.round((total - (parseFloat(cashReceived) || 0)) * 100) / 100)
+      : 0;
+    if (pendingMethod === "DIVIDIDA") {
+      const bunzAsk = Math.max(0, Math.round((total - (parseFloat(cashReceived) || 0)) * 100) / 100);
+      if (!selectedRabbitter?.id || bunzAsk <= 0 || bunzAsk >= total) {
+        toast.error("Para dividir: vincula al Rabbitter y pon el efectivo de su parte");
+        return;
+      }
+    }
     setPendingMethod(null);
     setIsCharging(true);
     try {
@@ -1109,6 +1123,10 @@ export default function PosPage() {
           })),
           // GAP 1: beneficios de membresía seleccionados en el modal de cobro
           entitlementIds: selectedBenefitIds.length > 0 ? selectedBenefitIds : undefined,
+          // ── Propina (opcional) + split DIVIDIDA (efectivo + Bunz) ──
+          tip: Number(posTip || 0),
+          splitCash: pendingMethod === "DIVIDIDA" ? (parseFloat(cashReceived) || 0) : undefined,
+          splitBunz: pendingMethod === "DIVIDIDA" ? Math.max(0, Math.round((total - (parseFloat(cashReceived) || 0)) * 100) / 100) : undefined,
         });
 
         if (checkoutResult.orderNumber) {
@@ -2414,8 +2432,7 @@ export default function PosPage() {
             {([
               ["EFECTIVO", "💵", "Efectivo", "Cuenta el efectivo y da cambio", "hover:border-emerald-500/50 hover:bg-emerald-500/10"],
               ["TARJETA", "💳", "Tarjeta", "Terminal o Rabbitty Pay", "hover:border-blue-500/50 hover:bg-blue-500/10"],
-              ["QR BUNZ", "🟣", "QR Bunz", "El cliente paga con su saldo", "hover:border-purple-500/50 hover:bg-purple-500/10"],
-              ["DIVIDIDA", "➗", "Dividir", "Cuenta dividida entre varios", "hover:border-orange-500/50 hover:bg-orange-500/10"],
+              ["DIVIDIDA", "➗", "Dividir", "Parte efectivo + parte Bunz", "hover:border-orange-500/50 hover:bg-orange-500/10"],
             ] as const).map(([method, icon, label, desc, hoverCls]) => (
               <button
                 key={method}
@@ -2706,17 +2723,66 @@ export default function PosPage() {
                     </div>
                   )}
                 </div>
+              ) : pendingMethod === "DIVIDIDA" ? (
+                <div className="py-2 space-y-3">
+                  {/* GAP: split real — efectivo + Bunz del Rabbitter vinculado */}
+                  <div className="p-3 rounded-2xl bg-orange-500/10 border border-orange-500/25 space-y-3">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-orange-300 flex items-center gap-1.5">
+                      ➗ Cuenta dividida: Efectivo + Bunz
+                    </p>
+                    <div>
+                      <label className="text-[11px] font-bold text-gray-300 block mb-1">¿Cuánto paga en EFECTIVO?</label>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        step="any"
+                        value={cashReceived}
+                        onChange={(e) => setCashReceived(e.target.value)}
+                        placeholder={total.toFixed(2)}
+                        className="w-full pl-3 pr-3 py-2.5 rounded-2xl bg-gray-900 border-2 border-white/15 focus:border-orange-500 text-lg font-black text-white placeholder-gray-600 outline-none"
+                      />
+                    </div>
+                    {selectedRabbitter ? (
+                      <div className="flex justify-between items-center text-[11px] text-gray-300 bg-white/5 rounded-lg px-2.5 py-1.5">
+                        <span>Resto: <strong className="text-orange-200 font-black">${(total - numericReceived).toFixed(2)}</strong> se cobra con Bunz</span>
+                        <span className="text-white/70">🐰 {selectedRabbitter.name}</span>
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-amber-300 font-bold">
+                        ⚠️ Vincula al Rabbitter arriba — la parte Bunz se cobra de su saldo.
+                      </p>
+                    )}
+                  </div>
+                </div>
               ) : (
                 <div className="py-2 text-center text-sm text-gray-300">
                   ¿Confirmas el cobro de esta orden con <strong className="text-white">{pendingMethod}</strong>?
                 </div>
               )}
 
+              {/* ── Propina opcional (efectivo/tarjeta) — va 100% al equipo ── */}
+              {(pendingMethod === "EFECTIVO" || pendingMethod === "VENTA DIRECTA" || pendingMethod === "TARJETA" || pendingMethod === "DIVIDIDA") && (
+                <div className="px-1">
+                  <label className="text-[11px] font-bold text-gray-300 block mb-1">
+                    💸 Propina para el equipo (opcional)
+                  </label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="any"
+                    value={posTip}
+                    onChange={(e) => setPosTip(e.target.value.replace(/[^0-9.]/g, "").slice(0, 7))}
+                    placeholder="0.00"
+                    className="w-full py-2 rounded-xl bg-white/5 border border-white/10 text-sm font-black text-white text-center outline-none focus:border-pink-500/60"
+                  />
+                </div>
+              )}
+
               {/* Botones de Acción */}
               <div className="grid grid-cols-2 gap-3 pt-2">
-                <Button 
-                  variant="secondary" 
-                  id="pos-cancel-charge" 
+                <Button
+                  variant="secondary"
+                  id="pos-cancel-charge"
                   onClick={() => {
                     setPendingMethod(null);
                     setCashReceived("");
@@ -3077,6 +3143,54 @@ export default function PosPage() {
             Escanea el <strong className="text-pink-400">Rabbitty Code</strong> del cliente o ingresa su teléfono / usuario para vincularlo a la cuenta y acreditar su recompensa automáticamente al cobrar.
           </p>
 
+          {/* ── En local: check-in activo (un clic) ── */}
+          {(activeCheckIns?.length ?? 0) > 0 && (
+            <div className="px-2.5 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/25">
+              <p className="text-[10px] font-black text-emerald-300 flex items-center gap-1 mb-1.5">
+                <span>🟢</span> EN EL LOCAL AHORA (check-in)
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {(activeCheckIns || []).slice(0, 6).map((c) => (
+                  <button
+                    key={c.userId}
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const res = await utils.pos.lookupRabbitter.fetch({ query: c.userId });
+                        if (res) {
+                          setRabbitterQuery("");
+                          if (receiptModal && lastPaidOrderId) {
+                            const linked = await linkPostCheckout.mutateAsync({
+                              orderId: lastPaidOrderId,
+                              customerId: res.id,
+                              customerPhone: res.phoneNumber || res.telegramId || "sin-telefono",
+                              customerName: res.name,
+                              awardBunz: true,
+                            });
+                            setRabbitterModalOpen(false);
+                            setLastPaidOrderId(null);
+                            setPaidTicketData((prev: any) => prev ? { ...prev, awardedBunz: linked.awardedBunz || prev.awardedBunz } : prev);
+                            toast.success(linked.awardedBunz > 0 ? `🐰 ¡${linked.awardedBunz} Bunz a ${res.name}!` : `🐰 Cliente asignado.`);
+                          } else {
+                            setSelectedRabbitter(res);
+                            toast.success(`🐰 ¡Rabbitter vinculado: ${res.name}!`);
+                          }
+                        } else {
+                          toast.error("No se encontró al cliente");
+                        }
+                      } catch {
+                        toast.error("Error al vincular");
+                      }
+                    }}
+                    className="px-2.5 py-1.5 rounded-lg bg-white/5 border border-emerald-500/40 text-[11px] font-bold text-white hover:border-emerald-500/70 hover:bg-emerald-500/10 active:scale-95 transition-all"
+                  >
+                    {c.name} <span className="text-emerald-300">· {c.name.includes("@") ? "" : "vincular"}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Opción de Escaneo con Cámara en Vivo */}
           {isScanningRabbitter ? (
             <div className="space-y-3 flex flex-col items-center">
@@ -3415,6 +3529,38 @@ export default function PosPage() {
           </div>
 
           <div className="space-y-2">
+            {/* ── Selector unificado: check-in en local + teléfono/ID fallback ── */}
+            {(activeCheckIns?.length ?? 0) > 0 && (
+              <div className="px-2.5 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/25">
+                <p className="text-[10px] font-black text-emerald-300 flex items-center gap-1 mb-1.5">
+                  <span>🟢</span> CLIENTES EN EL LOCAL (check-in activo) — toca para vincular
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {(activeCheckIns || []).slice(0, 6).map((c) => (
+                    <button
+                      key={c.userId}
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const res = await utils.pos.lookupRabbitter.fetch({ query: c.userId });
+                          if (res) {
+                            setSelectedRabbitter(res);
+                            toast.success(`🐰 ${res.name} vinculado — recibirá el push in-app`);
+                          } else {
+                            toast.error("No se pudo vincular al cliente");
+                          }
+                        } catch {
+                          toast.error("Error al vincular");
+                        }
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg bg-white/5 border border-emerald-500/40 text-[11px] font-bold text-white hover:border-emerald-500/80 hover:bg-emerald-500/10 active:scale-95 transition-all"
+                    >
+                      🐰 {c.name} <span className="text-emerald-300">+ vincular</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <label className="text-xs font-bold text-gray-300">
               {selectedRabbitter
                 ? "📲 El pago irá como PUSH in-app al Rabbitter vinculado (paga desde su app)"

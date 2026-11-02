@@ -7,6 +7,11 @@ import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
 import { tables as tablesTable, tableSessions, branches, menuCategories, menuItems, orders, orderItems, payments, menuItemModifiers, restaurants, events as posEvents, paymentIntents, bunzReserves } from "@rabbitty/database-restaurant/schema";
 import { users as coreUsers, membershipSubscriptions as coreMembershipSubs, membershipEntitlements as coreMembershipEnts, entitlementUsages as coreEntUsages } from "@rabbitty/database-core/schema";
+/** Split DIVIDIDA activo? */
+function pendingSplit(input: { splitBunz?: number; splitCash?: number }): boolean {
+  return typeof input.splitBunz === "number" && input.splitBunz > 0;
+}
+
 import { miniappClient } from "../services/miniapp-client";
 import { assertOpenShiftForCash } from "../services/cashShift";
 
@@ -1256,6 +1261,10 @@ export const posRouter = router({
         // DISCOUNT_PCT, CREDIT_BALANCE). El server re-verifica propiedad y cuota —
         // el POS solo puede pedir, no forzar.
         entitlementIds: z.array(z.string().uuid()).max(5).optional(),
+        // ── Propina + split DIVIDIDA (efectivo + Bunz) ──
+        tip: z.number().min(0).max(5000).optional(),
+        splitCash: z.number().min(0).optional(),
+        splitBunz: z.number().min(0).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -1431,22 +1440,30 @@ export const posRouter = router({
       // Desglose fiscal canónico: subtotal + tax = total (sin discrepancias)
       const { total: calcTotal, subtotal: calcSubtotal, tax: calcTaxAmt } = calcTax(finalAmount);
 
+      const posTip = Math.max(0, Math.round(Number(input.tip || 0) * 100) / 100);
+
       await ctx.restaurantDb.update(orders).set({
         subtotal: calcSubtotal,
         tax: calcTaxAmt,
         discount: calculatedDiscount,
         total: calcTotal,
+        tip: posTip,
       }).where(eq(orders.id, order.id));
 
       // 3. Delegate to payOrder logic (insert payment, deduct inventory, trigger Bunz and CRM)
       // GAP 1: si hubo CREDIT_BALANCE, el crédito es un pago parcial propio —
       // el método del cajero cubre el resto (la lógica de Bunz/CRM corre sobre
       // el cobro normal, sin duplicar).
-      const mainPaymentAmount = r2(Math.max(0, calcTotal - creditApplied));
+      // ── Split DIVIDIDA: pagos separados — efectivo + Bunz del cliente ──
+      const isSplit = pendingSplit(input);
+      const mainPaymentAmount = isSplit
+        ? r2(Math.max(0, input.splitCash! + posTip))
+        : r2(Math.max(0, calcTotal - creditApplied));
       const [payment] = await ctx.restaurantDb.insert(payments).values({
         orderId: order.id,
         method: input.paymentMethod,
         amount: mainPaymentAmount,
+        tipAmount: posTip,
         verificationMethod: "CASHIER_CONFIRMED",
       }).returning();
 
@@ -1460,6 +1477,34 @@ export const posRouter = router({
         });
       }
 
+      // ── Split: la parte Bunz se cobra del saldo del cliente (post-commit) ──
+      if (isSplit) {
+        const bunzPart = Math.max(0, r2(Number(input.splitBunz!) - creditApplied));
+        if (bunzPart > 0 && (input.customerPhone || input.customerId)) {
+          const bizIdSplit = (await resolveBusinessIdFromBranch(ctx.restaurantDb, ctx.branchId)) || ctx.branchId;
+          try {
+            await miniappClient.chargeBunz(input.customerPhone || input.customerId!, bunzPart, order.id, bizIdSplit);
+            await ctx.restaurantDb.insert(payments).values({
+              orderId: order.id,
+              method: "BUNZ",
+              amount: bunzPart,
+              status: "COMPLETED",
+              verificationMethod: "CASHIER_CONFIRMED",
+            }).catch?.(() => {});
+          } catch (chargeErr) {
+            console.error("[SPLIT_BUNZ] charge falló — el cajero cobra en efectivo esta parte:", chargeErr);
+            await ctx.restaurantDb.insert(payments).values({
+              orderId: order.id,
+              method: "CASH",
+              amount: bunzPart,
+              status: "COMPLETED",
+              verificationMethod: "CASHIER_CONFIRMED",
+            }).catch?.(() => {});
+          }
+        }
+      }
+
+      void payment;
 
       await ctx.restaurantDb.update(orders).set({ status: "COMPLETED" }).where(eq(orders.id, order.id));
 
