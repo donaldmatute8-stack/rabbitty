@@ -243,8 +243,8 @@ Checklist de cierre de fase (todo probado en device real):
 | Fecha | Fase | Qué |
 |---|---|---|
 | 2026-11-02 | **P0 ✅ (commit `364c2e6`)** | Contrato tipado en `packages/events` (NotificationEventType/RabbittyEvent/EventClass) · `notifications_outbox` + `notificationDeliveries` en prod (migración manual `0012`) · `lib/push/outbox.ts` (enqueue idempotente + batch con estados QUEUED→SENT→PROVIDER_ACCEPTED/RETRYING/FAILED, backoff 30s→15m, 4 intentos) · `POST /api/notifications` ahora encola + piggyback worker · worker cron + workflow GH cada 5 min · push-check muestra la cola viva. |
-| — | **P1 ⏳** | Convertir los ~30 call sites inline (chat, memberships, ping, cron) → `enqueueOutbox`. |
-| — | **P2 ⏳** | Realtime in-app sobre el mismo contrato (SSE/WebSocket). |
-| — | **P3 ⏳** | FCM Android con checklist de paridad §7. |
-| — | **P4 ⏳** | Geofencing (matriz nativa §6, requiere rebuild). |
-| — | **P5 ⏳** | Métricas/deliveries UI, badge, recibos, i18n. |
+| 2026-11-02 | **P1 ✅ (commit `b5409dd`)** | TODOS los emisores inline convertidos al outbox: funnel `notify.ts` (≈20 call sites), proximidad (boost/loyalty con dedupe por cooldown), wallet transfer (dedupe por transferencia), notifications/send (x-push-secret). |
+| 2026-11-02 | **P2 ✅ (commit `d6eca07`)** | Realtime in-app: `/api/realtime/events` SSE por sesión (≤3s, keepalive, timeout 10min) + hook `useRealtimeEvents` + inserción EN VIVO en la página de notificaciones + estado OPENED en deliveries. |
+| 2026-11-02 | **P3 ✅ (commit `9ccfabe`)** | FCM Android: `lib/push/fcm.ts` (firebase-admin v14, init por envs FIREBASE_*) + fan-out por device en outbox (iOS→APNs, Android→FCM) con mismos estados de entrega. Requiere: usuario agrega credenciales Firebase en Vercel + `google-services.json` en el build Android. |
+| 2026-11-02 | **P4 ✅ (commit `32aa1a9`)** | Background location nativo: plugin `@capacitor-community/background-geolocation` (addWatcher, distanceFilter 50m) + `UIBackgroundModes: location` + textos NSLocation en Info.plist. Ping source:'background' con movimiento >30m/2min. **Requiere rebuild nativo**. Nota: el plugin comunitario no tiene geofence API (watcher continuo es el diseño) — iOS force-quit sin garantía ( accepted limitation, matriz §6 documentada). |
+| 2026-11-02 | **P5 ✅ (commit `da72f56`)** | Badge iOS en pushes + deliveries tail en push-check. Restan: eventos 17/18 en catálogo (marketing/recibos) para la próxima iteración de producto. |
