@@ -773,7 +773,11 @@ export default function ScanPage() {
       <div className="relative z-50 px-4 w-full flex flex-col items-center gap-3">
         <div className="flex items-center justify-between w-full">
           <button
-            onClick={() => router.back()}
+            onClick={() => {
+              // Al cerrar el scanner SIN acción → salir del escáner hacia el feed/home
+              // (la vivencia es "regreso a casa app", no stack-push al mismo lugar).
+              router.replace("/");
+            }}
             className="w-10 h-10 rounded-full bg-(--bg-elevated) backdrop-blur-md border border-(--border-subtle) text-(--text-primary) flex items-center justify-center cursor-pointer shadow-xs active:scale-95 transition-transform"
           >
             <ArrowLeft size={20} />

@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { Button, Dialog, Input, toast, cn, useWakeLock } from "@rabbitty/ui";
-import { Clock, Search, Users, CreditCard, Banknote, QrCode, SplitSquareHorizontal, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, Table2, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, ClipboardCheck, Camera, History, RotateCw } from "lucide-react";
+import { Clock, Search, Users, CreditCard, Banknote, QrCode, Split, Smartphone, Landmark, Table2, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, ClipboardCheck, Camera, History, RotateCw } from "lucide-react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import QRDiscovery from "@/components/QRDiscovery";
@@ -126,6 +126,54 @@ export default function PosPage() {
   const cancelStripeIntent = trpc.payments.cancelPaymentIntent.useMutation();
   const requestCashPaymentMut = trpc.payments.requestCashPayment.useMutation();
   const stripeIntentId = useRef<string | null>(null);
+
+  // ── H7 (race de cierre): el comensal puede liquidar segundos DESPUÉS de que
+  // el operador cierra el QR. Cerrar ya no cancela a ciegas: re-lee el intent
+  // en el server; si ya vino SUCCEEDED, liquida normal (y SOLO si sigue
+  // pendiente cancela el intent + su hold). Evita "cancelada" con pago vivo. ──
+  const resolveStripeModalClose = async (opts?: { reason?: "SWITCH_TO_CASH" | "OPERATOR_CLOSED"; switchToCash?: boolean }) => {
+    const modal = stripePayModal;
+    const intentId = stripeIntentId.current;
+    try {
+      if (intentId && !stripePaid) {
+        const fresh = await utils.payments.getPaymentIntent.fetch({ intentId });
+        if (fresh?.status === "SUCCEEDED" && modal) {
+          setStripePaid(true);
+          toast.success("💳 ¡El pago llegó entre líneas — comanda liquidada!");
+          setLastPaidOrderId(modal.orderId);
+          const realOrderNumber = (modal.orderId || intentId || "").slice(-4).toUpperCase();
+          await finalizeCheckout(
+            realOrderNumber,
+            "STRIPE",
+            undefined,
+            selectedRabbitter?.name,
+            modal.bunzApplied || undefined,
+            modal.orderId,
+            modal.orderId
+          );
+          setStripePayModal(null);
+          return;
+        }
+        void cancelStripeIntent.mutateAsync({ intentId, reason: opts?.reason }).catch(() => {});
+      }
+      if (opts?.switchToCash && modal?.orderId) {
+        try {
+          await requestCashPaymentMut.mutateAsync({
+            orderId: modal.orderId,
+            notes: "Cambio de método: cobro digital → efectivo en caja",
+          });
+          toast.success("Cuenta marcada para pago en efectivo — cobra en caja con tu PIN");
+        } catch (e: any) {
+          toast.error(String(e?.message || "").slice(0, 140) || "No se pudo marcar el cobro en efectivo");
+        }
+      }
+    } catch (e) {
+      // polling/cancel: no-fatal, el flujo del outbox y los crons reconcilian
+      console.warn("[POS] resolveStripeModalClose:", e instanceof Error ? e.message : e);
+    }
+    setStripePayModal(null);
+  };
+
   const [stripePayModal, setStripePayModal] = useState<{ payUrl: string; amount: number; orderId: string; expiresAt: Date; bunzApplied: number } | null>(null);
   const [stripePaid, setStripePaid] = useState(false);
   const [sendBillModal, setSendBillModal] = useState(false);
@@ -2058,7 +2106,7 @@ export default function PosPage() {
                 disabled={cart.length === 0}
                 className="group flex flex-col items-center justify-center gap-0.5 rounded-xl bg-white/5 py-1.5 border border-white/10 hover:bg-orange-500/20 hover:border-orange-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
               >
-                <SplitSquareHorizontal className="h-4 w-4 text-gray-400 group-hover:text-orange-400" />
+                <Split className="h-4 w-4 text-gray-400 group-hover:text-orange-400" />
                 <span className="text-[9px] font-black uppercase tracking-wider text-gray-400 group-hover:text-orange-400">Dividir</span>
               </button>
             </div>
@@ -2433,46 +2481,54 @@ export default function PosPage() {
         open={!!methodPicker}
         onClose={() => setMethodPicker(null)}
         title={methodPicker === "select" ? "Elige el método de pago" : "Confirmar método"}
+        kicker="Cobro"
         className="max-w-md w-full"
       >
         {methodPicker === "select" && (
-          <div className="grid grid-cols-2 gap-3 p-1">
+          <div className="grid grid-cols-2 gap-2.5">
             {([
-              ["EFECTIVO", "💵", "Efectivo", "Cuenta el efectivo y da cambio", "hover:border-emerald-500/50 hover:bg-emerald-500/10"],
-              ["TARJETA", "💳", "Tarjeta", "Terminal o Rabbitty Pay", "hover:border-blue-500/50 hover:bg-blue-500/10"],
-              ["DIVIDIDA", "➗", "Dividir", "Parte efectivo + parte Bunz", "hover:border-orange-500/50 hover:bg-orange-500/10"],
-            ] as const).map(([method, icon, label, desc, hoverCls]) => (
+              ["EFECTIVO", Banknote, "Efectivo", "Cuenta en caja con cambio", "group-hover:border-emerald-400/60 group-hover:bg-emerald-400/10", "text-emerald-400"],
+              ["TARJETA", CreditCard, "Tarjeta", "Rabbitty Pay o terminal física", "group-hover:border-cyan-400/60 group-hover:bg-cyan-400/10", "text-cyan-400"],
+              ["QR BUNZ", QrCode, "QR Bunz", "El comensal paga desde su app", "group-hover:border-violet-400/60 group-hover:bg-violet-400/10", "text-violet-400"],
+              ["DIVIDIDA", Split, "Dividida", "Parte efectivo + parte Bunz", "group-hover:border-amber-400/60 group-hover:bg-amber-400/10", "text-amber-400"],
+            ] as const).map(([method, Icon, label, desc, hoverCls, iconCls]) => (
               <button
                 key={method}
                 onClick={() => { setChosenMethod(method); setMethodPicker("confirm"); }}
-                className={`flex flex-col items-center gap-1 rounded-2xl border border-white/10 bg-white/5 p-4 text-center transition-all cursor-pointer active:scale-95 ${hoverCls}`}
+                className={`group flex items-start gap-2.5 rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-left transition-all cursor-pointer active:scale-[0.97] ${hoverCls}`}
               >
-                <span className="text-2xl">{icon}</span>
-                <span className="text-sm font-black text-white">{label}</span>
-                <span className="text-[10px] text-gray-400">{desc}</span>
+                <div className="h-9 w-9 shrink-0 rounded-xl bg-white/[0.06] border border-white/10 flex items-center justify-center">
+                  <Icon size={17} className={iconCls} />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-[13px] font-black text-white leading-tight block">{label}</span>
+                  <span className="text-[10px] text-gray-400 leading-snug">{desc}</span>
+                </div>
               </button>
             ))}
           </div>
         )}
 
         {methodPicker === "confirm" && chosenMethod && (
-          <div className="space-y-4 p-1 text-center">
-            <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
-              <p className="text-[11px] uppercase font-bold tracking-wider text-gray-400">Método elegido</p>
-              <p className="text-lg font-black text-white my-1">
-                {chosenMethod === "EFECTIVO" ? "💵 Efectivo" : chosenMethod === "TARJETA" ? "💳 Tarjeta" : chosenMethod === "QR BUNZ" ? "🟣 QR Bunz" : "➗ Dividida"}
+          <div className="space-y-4 text-center">
+            <div className="rounded-2xl bg-white/[0.04] border border-white/10 p-4">
+              <p className="text-[10px] uppercase font-black tracking-[0.18em] text-gray-500">Método elegido</p>
+              <p className="text-base font-black text-white my-1.5">{chosenMethod === "EFECTIVO" ? "Efectivo" : chosenMethod === "TARJETA" ? "Tarjeta" : chosenMethod === "QR BUNZ" ? "QR Bunz" : "Dividida"}</p>
+              <p className="text-3xl font-black tracking-tight">
+                <span className="text-gray-500 text-lg align-top">$</span>
+                <span className="bg-gradient-to-r from-[#FF2E93] to-[#E91E63] bg-clip-text text-transparent">${total.toFixed(2)}</span>
+                <span className="text-xs text-gray-500 font-bold"> MXN</span>
               </p>
-              <p className="text-2xl font-black text-cyan-400">${total.toFixed(2)}</p>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <Button variant="secondary" onClick={() => setMethodPicker("select")} className="py-2.5 text-xs font-bold">
-                No, cambiar
+            <div className="grid grid-cols-2 gap-2.5">
+              <Button variant="secondary" onClick={() => setMethodPicker("select")} className="py-3 text-xs font-bold rounded-2xl border-white/10 bg-white/[0.04] hover:bg-white/10">
+                Cambiar
               </Button>
               <Button
                 onClick={() => { setMethodPicker(null); setChosenMethod(null); requestCheckout(chosenMethod); }}
-                className="py-2.5 text-xs font-black bg-emerald-500 hover:bg-emerald-400 text-gray-950"
+                className="py-3 text-xs font-black rounded-2xl bg-gradient-to-r from-[#FF2E93] to-[#E91E63] hover:opacity-90 shadow-[0_8px_24px_-8px_rgba(233,30,99,0.5)] border-none"
               >
-                ✓ Sí, cobrar
+                Cobrar
               </Button>
             </div>
           </div>
@@ -2482,8 +2538,9 @@ export default function PosPage() {
       {/* Confirmación de cobro: efectivo con desglose de recibido y cambio o confirmación directa de tarjeta */}
       <Dialog 
         open={!!pendingMethod} 
-        onClose={() => setPendingMethod(null)} 
-        title={pendingMethod === "EFECTIVO" || pendingMethod === "VENTA DIRECTA" || pendingMethod === "DIVIDIDA" ? "Cobro en Efectivo" : "Confirmar cobro"}
+        onClose={() => { setPendingMethod(null); setCashReceived(""); }} 
+        title="Cobro"
+        kicker="Confirmar y liquidar"
         className="max-w-md w-full"
       >
         {(() => {
@@ -2500,11 +2557,15 @@ export default function PosPage() {
 
           return (
             <div className="flex flex-col gap-4 p-2">
-              {/* Resumen Superior */}
-              <div className="rounded-2xl bg-white/5 border border-white/10 p-3.5 flex items-center justify-between">
+              {/* Resumen Superior — glass premium */}
+              <div className="rounded-2xl bg-white/[0.04] border border-white/10 p-4 flex items-center justify-between relative overflow-hidden">
+                <div
+                  aria-hidden
+                  className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-[#FF2E93] via-[#E91E63] to-[#8B5CF6] opacity-70"
+                />
                 <div>
-                  <span className="text-xs uppercase font-bold tracking-wider text-gray-400">Total a Pagar</span>
-                  <p className="text-3xl font-black text-white tracking-tight">${total.toFixed(2)}</p>
+                  <span className="text-[10px] uppercase font-black tracking-[0.18em] text-gray-500">Total a pagar</span>
+                  <p className="text-3xl font-black text-white tracking-tight leading-tight">${total.toFixed(2)}</p>
                   {/* USD opt-in (Configuración → Facturación): pequeño, bajo el total */}
                   {(ticketContext?.restaurant as any)?.showUsdTicket && Number((ticketContext?.restaurant as any)?.usdRate > 0) && (
                     <p className="text-[10px] font-semibold text-gray-500">
@@ -2513,34 +2574,36 @@ export default function PosPage() {
                   )}
                 </div>
                 <div className="text-right">
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-md border border-cyan-500/20">
-                    {pendingMethod === "VENTA DIRECTA" ? "EFECTIVO" : pendingMethod === "DIVIDIDA" ? "EFECTIVO (DIVIDIDA)" : pendingMethod}
+                  <span className="text-[10px] uppercase font-black tracking-wider text-[#E91E63] bg-[#E91E63]/10 px-2 py-0.5 rounded-full border border-[#E91E63]/20">
+                    {pendingMethod === "VENTA DIRECTA" ? "Efectivo" : pendingMethod === "DIVIDIDA" ? "Efectivo + Bunz" : String(pendingMethod).replace("TARJETA", "Tarjeta")}
                   </span>
-                  <p className="text-[11px] text-gray-400 mt-1">{cart.reduce((s, i) => s + i.quantity, 0)} artículo(s)</p>
+                  <p className="text-[11px] text-gray-500 mt-1">{cart.reduce((s, i) => s + i.quantity, 0)} artículo(s)</p>
                 </div>
               </div>
 
               {/* Rabbitter Vinculado en Cobro */}
               {selectedRabbitter && (
-                <div className="rounded-2xl bg-pink-500/10 border border-pink-500/25 p-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">🐰</span>
+                <div className="rounded-2xl bg-[#E91E63]/[0.07] border border-[#E91E63]/25 p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-8 w-8 rounded-lg bg-[#E91E63]/15 border border-[#E91E63]/25 flex items-center justify-center">
+                      <Sparkles size={14} className="text-[#FF6BB3]" />
+                    </div>
                     <div>
                       <div className="flex items-center gap-1.5">
                         <span className="text-xs font-black text-white">{selectedRabbitter.name}</span>
-                        <span className="text-[9px] font-black text-pink-400 bg-pink-500/20 px-1 py-0.2 rounded uppercase">
+                        <span className="text-[9px] font-black text-[#FF6BB3] bg-[#E91E63]/15 px-1.5 py-0.5 rounded uppercase tracking-wider">
                           {selectedRabbitter.level}
                         </span>
                       </div>
-                      <p className="text-[10px] text-gray-400">
-                        {selectedRabbitter.phoneNumber || selectedRabbitter.telegramId || "Cuenta Verificada"}
+                      <p className="text-[10px] text-gray-500">
+                        {selectedRabbitter.phoneNumber || selectedRabbitter.telegramId || "Cuenta verificada"}
                       </p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Recompensa</span>
+                    <span className="text-[9px] font-black text-gray-500 uppercase tracking-wider block">Recompensa</span>
                     <span className="text-xs font-black text-emerald-400">
-                      +{Math.floor(total * (selectedRabbitter.currentRewardRate / 100))} Bunz ({selectedRabbitter.currentRewardRate}%)
+                      +{Math.floor(total * (selectedRabbitter.currentRewardRate / 100))} Bunz · {selectedRabbitter.currentRewardRate}%
                     </span>
                   </div>
                 </div>
@@ -2652,80 +2715,101 @@ export default function PosPage() {
                   </div>
                 </>
               ) : pendingMethod === "TARJETA" ? (
-                <div className="py-2 space-y-3">
+                <div className="py-1 space-y-3">
                   {stripeStatus.data?.chargesEnabled && (
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 gap-2">
                       <button
                         type="button"
                         onClick={() => setCardFlowChoice("stripe")}
                         className={cn(
-                          "flex flex-col items-center gap-1 p-3 rounded-xl border text-center transition-all cursor-pointer",
+                          "flex items-start gap-3 p-3.5 rounded-2xl border text-left transition-all cursor-pointer",
                           cardFlowChoice === "stripe"
-                            ? "bg-cyan-500/15 border-cyan-500/50"
-                            : "bg-white/5 border-white/10 hover:bg-white/10"
+                            ? "bg-cyan-400/10 border-cyan-400/50 shadow-[0_0_28px_-8px_rgba(6,182,212,0.4)]"
+                            : "bg-white/[0.04] border-white/10 hover:bg-white/[0.07] hover:border-white/20"
                         )}
                       >
-                        <span className="text-xl">📱</span>
-                        <span className="text-[11px] font-black text-cyan-300">Rabbitty Pay</span>
-                        <span className="text-[9px] text-gray-400 leading-snug">Paga desde su teléfono con Apple Pay / tarjeta (QR en pantalla)</span>
+                        <div className={cn(
+                          "h-10 w-10 shrink-0 rounded-xl flex items-center justify-center border transition-colors",
+                          cardFlowChoice === "stripe" ? "bg-cyan-400/15 border-cyan-400/40" : "bg-white/[0.06] border-white/10"
+                        )}>
+                          <Smartphone size={18} className={cardFlowChoice === "stripe" ? "text-cyan-300" : "text-gray-400"} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[13px] font-black text-white leading-tight">Rabbitty Pay</span>
+                            {cardFlowChoice === "stripe" && (
+                              <span className="text-[9px] font-black text-cyan-300 bg-cyan-400/15 border border-cyan-400/30 px-1.5 py-0.5 rounded-full uppercase tracking-wider">Seleccionado</span>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-gray-400 leading-snug block mt-0.5">
+                            El comensal paga desde su teléfono con Apple Pay o tarjeta · QR en pantalla
+                          </span>
+                        </div>
                       </button>
                       <button
                         type="button"
                         onClick={() => setCardFlowChoice("external")}
                         className={cn(
-                          "flex flex-col items-center gap-1 p-3 rounded-xl border text-center transition-all cursor-pointer",
+                          "flex items-start gap-3 p-3.5 rounded-2xl border text-left transition-all cursor-pointer",
                           cardFlowChoice === "external"
-                            ? "bg-blue-500/15 border-blue-500/50"
-                            : "bg-white/5 border-white/10 hover:bg-white/10"
+                            ? "bg-[#8B5CF6]/10 border-[#8B5CF6]/50 shadow-[0_0_28px_-8px_rgba(139,92,246,0.4)]"
+                            : "bg-white/[0.04] border-white/10 hover:bg-white/[0.07] hover:border-white/20"
                         )}
                       >
-                        <span className="text-xl">🏦</span>
-                        <span className="text-[11px] font-black text-blue-300">Mi Terminal</span>
-                        <span className="text-[9px] text-gray-400 leading-snug">Cobra con tu terminal física (Clip / BBVA / MP) y confirma aquí</span>
+                        <div className={cn(
+                          "h-10 w-10 shrink-0 rounded-xl flex items-center justify-center border transition-colors",
+                          cardFlowChoice === "external" ? "bg-[#8B5CF6]/15 border-[#8B5CF6]/40" : "bg-white/[0.06] border-white/10"
+                        )}>
+                          <Landmark size={18} className={cardFlowChoice === "external" ? "text-violet-300" : "text-gray-400"} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[13px] font-black text-white leading-tight">Mi Terminal</span>
+                            {cardFlowChoice === "external" && (
+                              <span className="text-[9px] font-black text-violet-300 bg-violet-400/15 border border-violet-400/30 px-1.5 py-0.5 rounded-full uppercase tracking-wider">Seleccionado</span>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-gray-400 leading-snug block mt-0.5">
+                            Cobra con tu terminal física (Clip / BBVA / MP) y confirma aquí
+                          </span>
+                        </div>
                       </button>
                     </div>
                   )}
                   {cardFlowChoice === "external" ? (
-                    <>
-                      <div className="inline-flex p-3 rounded-2xl bg-blue-500/10 border border-blue-500/30 text-blue-400 mb-1">
-                        <CreditCard className="h-7 w-7 animate-pulse" />
+                    <div className="rounded-2xl bg-white/[0.04] border border-white/10 p-4 space-y-2.5">
+                      <h3 className="text-sm font-black text-white">Cobro con terminal externa</h3>
+                      <p className="text-xs text-gray-400 leading-relaxed">
+                        Pasa la tarjeta física del cliente en tu terminal bancaria (Clip, BBVA o Mercado Pago).
+                      </p>
+                      <div className="rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-between px-3 py-2.5">
+                        <span className="text-[11px] text-gray-400">Total a cobrar en terminal</span>
+                        <strong className="text-lg font-black text-white tracking-tight">${total.toFixed(2)}</strong>
                       </div>
-                      <div>
-                        <h3 className="text-base font-black text-white">💳 Cobro con Terminal Externa</h3>
-                        <p className="text-xs text-gray-300 mt-1 max-w-xs mx-auto leading-relaxed">
-                          Pasa la tarjeta física del cliente en tu terminal bancaria (Clip, BBVA o Mercado Pago).
-                        </p>
-                      </div>
-                      <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-500/30 text-left text-xs space-y-1.5">
-                        <div className="flex justify-between items-center text-gray-300">
-                          <span>Total a cobrar en terminal:</span>
-                          <strong className="text-base font-black text-cyan-400">${total.toFixed(2)}</strong>
-                        </div>
-                        <p className="text-[11px] text-gray-400 leading-snug">
-                          Presiona <strong className="text-emerald-400">✅ Terminal Aprobada</strong> únicamente tras verificar el voucher o mensaje de éxito en la máquina física.
-                        </p>
-                      </div>
+                      <p className="text-[10px] text-gray-500 leading-snug">
+                        Confirma con <strong className="text-emerald-400">Terminal aprobada</strong> únicamente después de verificar el voucher o el mensaje de éxito en la máquina física.
+                      </p>
                       {selectedTableId && orderType === "DINE_IN" && (
-                        <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-300 text-[11px] font-semibold flex items-center gap-1.5 text-left">
-                          <span>⏳</span>
-                          <span>La mesa y comanda se mantendrán protegidas hasta confirmar la aprobación.</span>
+                        <div className="rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-300 text-[11px] font-semibold flex items-center gap-1.5 p-2">
+                          <AlertTriangle size={12} className="shrink-0" />
+                          <span>La mesa y comanda quedarán protegidas hasta confirmar la aprobación.</span>
                         </div>
                       )}
-                    </>
+                    </div>
                   ) : (
-                    <div className="p-4 rounded-2xl bg-cyan-950/30 border border-cyan-500/30 text-center space-y-3">
-                      <div className="inline-flex p-3 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 mb-1">
-                        <QrCode className="h-7 w-7 animate-pulse" />
+                    <div className="rounded-2xl bg-cyan-400/[0.06] border border-cyan-400/25 p-4 text-center space-y-2.5">
+                      <div className="inline-flex h-10 w-10 rounded-xl bg-cyan-400/15 border border-cyan-400/30 items-center justify-center">
+                        <QrCode size={18} className="text-cyan-300 animate-pulse" />
                       </div>
-                      <h3 className="text-base font-black text-white">📱 Cobro Digital con Rabbitty Pay</h3>
-                      <p className="text-xs text-gray-300 max-w-xs mx-auto leading-relaxed">
-                        Se generará un código QR en pantalla para que el cliente pague con <strong className="text-white">Apple Pay</strong> o tarjeta desde su teléfono.
+                      <h3 className="text-sm font-black text-white">Cobro digital con Rabbitty Pay</h3>
+                      <p className="text-xs text-gray-400 max-w-xs mx-auto leading-relaxed">
+                        Se genera un código en pantalla para que el cliente pague con <strong className="text-white">Apple Pay</strong> o tarjeta desde su teléfono.
                       </p>
-                      <div className="p-2.5 rounded-xl bg-cyan-900/30 border border-cyan-500/20 text-xs flex justify-between items-center">
-                        <span className="text-gray-300">Total a liquidar:</span>
-                        <strong className="text-base font-black text-cyan-400">${total.toFixed(2)} MXN</strong>
+                      <div className="rounded-xl bg-white/[0.04] border border-white/10 flex justify-between items-center px-3 py-2.5">
+                        <span className="text-[11px] text-gray-400">Total a liquidar</span>
+                        <strong className="text-lg font-black text-white tracking-tight">${total.toFixed(2)} <span className="text-[10px] text-gray-500 font-bold">MXN</span></strong>
                       </div>
-                      <p className="text-[10px] text-gray-400">
+                      <p className="text-[10px] text-gray-500">
                         La comanda se liquida y el ticket se emite automáticamente cuando Stripe confirma el pago.
                       </p>
                     </div>
@@ -2734,12 +2818,12 @@ export default function PosPage() {
               ) : pendingMethod === "DIVIDIDA" ? (
                 <div className="py-2 space-y-3">
                   {/* GAP: split real — efectivo + Bunz del Rabbitter vinculado */}
-                  <div className="p-3 rounded-2xl bg-orange-500/10 border border-orange-500/25 space-y-3">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-orange-300 flex items-center gap-1.5">
-                      ➗ Cuenta dividida: Efectivo + Bunz
+                  <div className="p-3.5 rounded-2xl bg-amber-400/[0.06] border border-amber-400/25 space-y-3">
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-300 flex items-center gap-1.5">
+                      <Split size={12} /> Cuenta dividida · efectivo + Bunz
                     </p>
                     <div>
-                      <label className="text-[11px] font-bold text-gray-300 block mb-1">¿Cuánto paga en EFECTIVO?</label>
+                      <label className="text-[11px] font-bold text-gray-300 block mb-1">¿Cuánto paga en efectivo?</label>
                       <input
                         type="number"
                         inputMode="decimal"
@@ -2747,17 +2831,17 @@ export default function PosPage() {
                         value={cashReceived}
                         onChange={(e) => setCashReceived(e.target.value)}
                         placeholder={total.toFixed(2)}
-                        className="w-full pl-3 pr-3 py-2.5 rounded-2xl bg-gray-900 border-2 border-white/15 focus:border-orange-500 text-lg font-black text-white placeholder-gray-600 outline-none"
+                        className="w-full pl-3 pr-3 py-2.5 rounded-2xl bg-white/[0.05] border-2 border-white/10 focus:border-amber-400/60 text-lg font-black text-white placeholder-gray-600 outline-none transition-colors"
                       />
                     </div>
                     {selectedRabbitter ? (
-                      <div className="flex justify-between items-center text-[11px] text-gray-300 bg-white/5 rounded-lg px-2.5 py-1.5">
-                        <span>Resto: <strong className="text-orange-200 font-black">${(total - numericReceived).toFixed(2)}</strong> se cobra con Bunz</span>
-                        <span className="text-white/70">🐰 {selectedRabbitter.name}</span>
+                      <div className="flex justify-between items-center text-[11px] text-gray-300 bg-white/[0.04] border border-white/10 rounded-xl px-2.5 py-1.5">
+                        <span>Resto: <strong className="text-amber-200 font-black">${(total - numericReceived).toFixed(2)}</strong> se cobra con Bunz</span>
+                        <span className="text-gray-400">{selectedRabbitter.name}</span>
                       </div>
                     ) : (
-                      <p className="text-[10px] text-amber-300 font-bold">
-                        ⚠️ Vincula al Rabbitter arriba — la parte Bunz se cobra de su saldo.
+                      <p className="text-[10px] text-amber-300 font-bold flex items-center gap-1">
+                        <AlertTriangle size={11} /> Vincula al Rabbitter arriba — la parte Bunz se cobra de su saldo.
                       </p>
                     )}
                   </div>
@@ -2768,26 +2852,54 @@ export default function PosPage() {
                 </div>
               )}
 
-              {/* ── Propina opcional (efectivo/tarjeta) — va 100% al equipo ── */}
+              {/* ── Propina opcional (una sola superficie, va 100% al equipo) ── */}
               {(pendingMethod === "EFECTIVO" || pendingMethod === "VENTA DIRECTA" || pendingMethod === "TARJETA" || pendingMethod === "DIVIDIDA") && (
-                <div className="px-1">
-                  <label className="text-[11px] font-bold text-gray-300 block mb-1">
-                    💸 Propina para el equipo (opcional)
-                  </label>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    step="any"
-                    value={posTip}
-                    onChange={(e) => setPosTip(e.target.value.replace(/[^0-9.]/g, "").slice(0, 7))}
-                    placeholder="0.00"
-                    className="w-full py-2 rounded-xl bg-white/5 border border-white/10 text-sm font-black text-white text-center outline-none focus:border-pink-500/60"
-                  />
+                <div className="rounded-2xl bg-white/[0.04] border border-white/10 p-3.5">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">
+                      Propina para el equipo · opcional
+                    </label>
+                    <span className="text-[9px] font-bold text-emerald-400/80">100% al equipo</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-gray-500">$</span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        step="any"
+                        value={posTip}
+                        onChange={(e) => setPosTip(e.target.value.replace(/[^0-9.]/g, "").slice(0, 7))}
+                        placeholder="0.00"
+                        className="w-full pl-7 pr-2 py-2 rounded-xl bg-white/[0.05] border border-white/10 text-sm font-black text-white text-center outline-none focus:border-[#E91E63]/60 focus:bg-white/[0.08] transition-colors"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setPosTip(String(Math.round(total * 0.10 * 100) / 100))}
+                      className={cn(
+                        "px-2.5 py-2 rounded-xl text-[10px] font-black border transition-all cursor-pointer",
+                        Number(posTip) > 0 && Math.abs(Number(posTip) - total * 0.10) < 0.05
+                          ? "bg-[#E91E63]/15 border-[#E91E63]/40 text-[#FF6BB3]"
+                          : "bg-white/[0.05] border-white/10 text-gray-400 hover:bg-white/10 hover:text-white"
+                      )}
+                    >10%</button>
+                    <button
+                      type="button"
+                      onClick={() => setPosTip(String(Math.round(total * 0.15 * 100) / 100))}
+                      className={cn(
+                        "px-2.5 py-2 rounded-xl text-[10px] font-black border transition-all cursor-pointer",
+                        Number(posTip) > 0 && Math.abs(Number(posTip) - total * 0.15) < 0.05
+                          ? "bg-[#E91E63]/15 border-[#E91E63]/40 text-[#FF6BB3]"
+                          : "bg-white/[0.05] border-white/10 text-gray-400 hover:bg-white/10 hover:text-white"
+                      )}
+                    >15%</button>
+                  </div>
                 </div>
               )}
 
               {/* Botones de Acción */}
-              <div className="grid grid-cols-2 gap-3 pt-2">
+              <div className="grid grid-cols-2 gap-3 pt-1">
                 <Button
                   variant="secondary"
                   id="pos-cancel-charge"
@@ -2795,7 +2907,7 @@ export default function PosPage() {
                     setPendingMethod(null);
                     setCashReceived("");
                   }}
-                  className="rounded-xl py-3 font-bold"
+                  className="rounded-2xl py-3.5 font-bold border-white/10 bg-white/[0.04] hover:bg-white/10"
                 >
                   Cancelar
                 </Button>
@@ -2810,18 +2922,18 @@ export default function PosPage() {
                     (window as any).__rabbittyCardFlow = m;
                     confirmCheckout(finalCash);
                   }} 
-                  className={`rounded-xl py-3 font-black text-sm shadow-lg cursor-pointer ${
+                  className={`rounded-2xl py-3.5 font-black text-sm border-none cursor-pointer transition-all ${
                     isCash && cashReceived !== "" && numericReceived < total
                       ? "opacity-40 cursor-not-allowed bg-gray-700 text-gray-400"
-                      : "bg-emerald-500 hover:bg-emerald-400 text-gray-950 shadow-emerald-500/20"
+                      : "bg-gradient-to-r from-[#FF2E93] to-[#E91E63] text-white shadow-[0_10px_30px_-10px_rgba(233,30,99,0.55)] hover:opacity-90"
                   }`}
                 >
                   {isCash
-                    ? (change > 0 ? `Cobrar (Cambio $${change.toFixed(2)})` : "Cobrar Orden")
+                    ? (change > 0 ? `Cobrar · Cambio $${change.toFixed(2)}` : "Cobrar orden")
                     : pendingMethod === "TARJETA"
                     ? (cardFlowChoice === "external"
-                        ? "✅ Terminal Aprobada (Cerrar Cuenta)"
-                        : "💳 Generar cobro Rabbitty Pay")
+                        ? "Terminal aprobada · Cerrar cuenta"
+                        : "Generar cobro Rabbitty Pay")
                     : "Confirmar y cobrar"}
                 </Button>
               </div>
@@ -3011,39 +3123,36 @@ export default function PosPage() {
         open={!!qrPaymentModal}
         onClose={() => setQrPaymentModal(null)}
         title="Pago con Bunz"
+        kicker="Cobro desde la app del comensal"
+        className="max-w-sm w-full"
       >
         {qrPaymentModal && (
-          <div className="flex flex-col items-center justify-center p-6 space-y-6">
+          <div className="flex flex-col items-center justify-center space-y-5">
             <div className="text-center">
-              <h2 className="text-2xl font-black text-white">Escanea para Pagar</h2>
-              <p className="text-gray-400 mt-2">
-                Paga <span className="font-bold text-white">${qrPaymentModal.amount.toFixed(2)} MXN</span> con <span className="font-bold text-purple-400">{qrPaymentModal.bunz.toFixed(2)} Bunz</span>
+              <p className="text-gray-400 text-xs leading-relaxed">
+                El comensal escanea desde su app — paga <span className="font-bold text-white">${qrPaymentModal.amount.toFixed(2)} MXN</span> con <span className="font-bold text-violet-300">{qrPaymentModal.bunz.toFixed(2)} Bunz</span>
               </p>
             </div>
-            
-            <div className="bg-white p-4 rounded-2xl shadow-[0_0_40px_rgba(168,85,247,0.3)] border-4 border-purple-500 relative">
+            <div className="bg-white p-3 rounded-2xl shadow-[0_0_50px_-12px_rgba(139,92,246,0.45)] relative">
               {pollData?.status === "PAYMENT_VERIFIED" || pollData?.status === "SETTLED" ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm rounded-xl">
-                  <CheckCircle2 className="w-16 h-16 text-emerald-500 mb-2" />
-                  <span className="text-emerald-600 font-bold">¡Pago Verificado!</span>
+                  <CheckCircle2 className="w-14 h-14 text-emerald-500 mb-2" />
+                  <span className="text-emerald-600 font-bold">¡Pago verificado!</span>
                 </div>
               ) : null}
               <QRDiscovery
                   value={`rabbitty://pay?intent=${qrPaymentModal.intentId}&fallback=https://rabbitty.me/scan`}
                   variant="rabbitter"
-                  size={250}
+                  size={230}
                   revealMode="immediate"
                   surfaceKey="pos-pay"
                 />
             </div>
-
             <PosQrCountdown expiresAt={qrPaymentModal.expiresAt} />
-
-            {/* ── (El modal de Rabbitty Pay/Stripe vive ahora en su propio Dialog, fuera de este) ── */}
-            <div className="flex gap-4 w-full">
-              <Button 
-                variant="secondary" 
-                className="flex-1" 
+            <div className="flex w-full">
+              <Button
+                variant="secondary"
+                className="flex-1 rounded-2xl border-white/10 bg-white/[0.04] hover:bg-white/10"
                 onClick={() => setQrPaymentModal(null)}
                 disabled={pollData?.status === "PAYMENT_VERIFIED" || pollData?.status === "SETTLED"}
               >
@@ -3054,80 +3163,67 @@ export default function PosPage() {
         )}
       </Dialog>
 
-      {/* ── Modal Rabbitty Pay (Stripe Connect) — QR/URL hacia /pay/[orderId] ──
-          Dialog INDEPENDIENTE: antes estaba anidado dentro del Dialog de Bunz
-          y como qrPaymentModal es null en cobros Stripe, nunca se montaba. */}
+      {/* ── Modal Rabbitty Pay (Stripe Connect) — QR/URL hacia /pay/[orderId] ── */}
       <Dialog
         open={!!stripePayModal}
-        onClose={() => {
-          if (stripeIntentId.current && !stripePaid) {
-            void cancelStripeIntent.mutateAsync({ intentId: stripeIntentId.current }).catch(() => {});
-            toast.info("Cobro Stripe cancelado; cualquier hold de Bunz fue liberado.");
-          }
-          setStripePayModal(null);
-        }}
-        title="Cobro Digital — Rabbitty Pay"
+        onClose={() => { void resolveStripeModalClose({ reason: "OPERATOR_CLOSED" }); }}
+        title="Cobro Digital · Rabbitty Pay"
+        kicker="Esperando pago del comensal"
+        className="max-w-sm w-full"
       >
         {stripePayModal && (
-          <div className="flex flex-col items-center justify-center p-6 space-y-6">
+          <div className="flex flex-col items-center justify-center space-y-5">
             {stripePaid ? (
-              <div className="flex flex-col items-center justify-center">
-                <CheckCircle2 className="w-16 h-16 text-emerald-500" />
-                <span className="text-emerald-500 font-bold mt-2">¡Pago liquidado!</span>
+              <div className="flex flex-col items-center justify-center py-2">
+                <CheckCircle2 className="w-14 h-14 text-emerald-500" />
+                <span className="text-emerald-400 font-black mt-2">¡Pago liquidado!</span>
               </div>
             ) : (
               <>
                 <div className="text-center">
-                  <h2 className="text-2xl font-black text-white">💳 Cobro Rabbitty Pay</h2>
-                  <p className="text-gray-400 mt-1 text-sm">
-                    Muestra este código al comensal: paga <span className="font-bold text-white">${stripePayModal.amount.toFixed(2)} MXN</span> con Apple Pay o tarjeta desde su teléfono.
+                  <p className="text-gray-400 text-xs leading-relaxed">
+                    Muestra este código al comensal para pagar con <span className="font-bold text-white">Apple Pay</span> o tarjeta desde su teléfono.
                   </p>
+                  <div className="mt-2 inline-flex items-baseline gap-1 rounded-xl bg-white/[0.04] border border-white/10 px-3 py-1.5">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-gray-500 mr-1">Monto</span>
+                    <span className="text-lg font-black text-white tracking-tight">${stripePayModal.amount.toFixed(2)}</span>
+                    <span className="text-[10px] text-gray-500 font-bold">MXN</span>
+                  </div>
                 </div>
-                <div className="bg-white p-4 rounded-2xl shadow-[0_0_40px_rgba(6,182,212,0.35)] border-4 border-cyan-500 relative">
+                <div className="bg-white p-3 rounded-2xl shadow-[0_0_50px_-12px_rgba(6,182,212,0.45)] relative">
                   <QRDiscovery
                     value={stripePayModal.payUrl}
                     logoSrc="/Ra.png"
                     variant="rabbitter"
-                    size={250}
+                    size={230}
                     revealMode="immediate"
                     surfaceKey="pos-stripe"
                   />
                 </div>
-                <div className="flex flex-col items-center gap-1 text-center">
-                  <p className="text-xs text-gray-400">La comanda se liquida automáticamente en el POS al confirmar el pago.</p>
-                  {stripePayModal.bunzApplied > 0 && <p className="text-[11px] font-bold text-pink-300">🎁 +{stripePayModal.bunzApplied} Bunz al Rabbitter identificado</p>}
+                <div className="flex items-center gap-2 text-[11px] text-gray-400">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-60" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400" />
+                  </span>
+                  Esperando confirmación — la comanda se liquida sola al pagar.
+                </div>
+                {stripePayModal.bunzApplied > 0 && (
+                  <p className="text-[11px] font-black text-[#FF6BB3] bg-[#E91E63]/10 border border-[#E91E63]/25 rounded-full px-2.5 py-1">
+                    +{stripePayModal.bunzApplied} Bunz al Rabbitter identificado
+                  </p>
+                )}
+                <div className="flex flex-col items-center gap-0.5">
                   <button
                     type="button"
-                    onClick={async () => {
-                      if (stripeIntentId.current) {
-                        await cancelStripeIntent.mutateAsync({ intentId: stripeIntentId.current }).catch(() => {});
-                      }
-                      setStripePayModal(null);
-                      toast.info("Cobro Stripe cancelado; cualquier hold de Bunz fue liberado.");
-                    }}
-                    className="text-[11px] font-bold text-gray-500 hover:text-red-400 mt-1 cursor-pointer"
+                    onClick={async () => { await resolveStripeModalClose({ reason: "OPERATOR_CLOSED" }); }}
+                    className="text-[11px] font-bold text-gray-500 hover:text-red-400 cursor-pointer"
                   >Cancelar cobro</button>
                   <button
                     type="button"
-                    onClick={async () => {
-                      if (stripeIntentId.current) {
-                        await cancelStripeIntent.mutateAsync({ intentId: stripeIntentId.current, reason: "SWITCH_TO_CASH" }).catch(() => {});
-                      }
-                      if (!stripePayModal) return;
-                      try {
-                        await requestCashPaymentMut.mutateAsync({
-                          orderId: stripePayModal.orderId,
-                          notes: "Cambio de método: cobro digital → efectivo en caja",
-                        });
-                        toast.success("💵 Cuenta marcada para pago en efectivo — cobra en caja con tu PIN");
-                      } catch (e: any) {
-                        toast.error(String(e?.message || "").slice(0, 140) || "No se pudo marcar el cobro en efectivo");
-                      }
-                      setStripePayModal(null);
-                    }}
+                    onClick={async () => { await resolveStripeModalClose({ reason: "SWITCH_TO_CASH", switchToCash: true }); }}
                     disabled={requestCashPaymentMut.isPending}
-                    className="text-[11px] font-bold text-gray-300 hover:text-amber-400 mt-1 cursor-pointer disabled:opacity-50"
-                  >💵 Cambiar a cobro en efectivo</button>
+                    className="text-[11px] font-bold text-gray-400 hover:text-amber-400 cursor-pointer disabled:opacity-50"
+                  >Cambiar a cobro en efectivo</button>
                 </div>
               </>
             )}
