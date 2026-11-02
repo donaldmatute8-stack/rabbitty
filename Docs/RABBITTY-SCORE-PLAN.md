@@ -1,9 +1,15 @@
 # RABBITTY SCORE — Plan, Fases y Roadmap
 
-> **Estado:** Fase 1 — EN IMPLEMENTACIÓN (rama `feat/rabbitty-score`)
-> **Última actualización:** 2026-11-01
+> **Estado:** Fase 1 — ✅ CERRADA (implementada y ya en `main` vía merge FF `ecd406c`).
+> Fase 2 (Trust & Engagement shadow) — ⏳ PENDIENTE, arranca en esta rama.
+> **Última actualización:** 2026-11-02
 > **Dueño de producto:** Marco (God Admin)
 > **Principio rector:** la reputación construye confianza; **no** toca la economía base (Bunz/cashback) en Fase 1.
+>
+> 📌 **Plan relacionado:** `Docs/PUSH-NOTIFICATIONS-PLAN.md` (v2.1) — el stack de notificaciones
+> (outbox, realtime, FCM, geofencing con matriz nativa) se implementa en `main` y esta rama se
+> rebasea sobre él antes de arrancar F2/F3, porque Trust & Engagement consume las mismas
+> señales de proximidad y los mismos eventos de negocio.
 
 ---
 
@@ -23,14 +29,25 @@ Un sistema de confianza de dos caras al estilo Uber: **Rabbitter Trust & Engagem
 
 | Fase | Entregable | Estado | Notas |
 |---|---|---|---|
-| **F1-E1** | Rating post-pago (ambos canales: Stripe settle y efectivo con PIN) | ✅ Implementado | `ORDER_PAID` ahora se emite en settle digital (`paymentCore`); prompt in-app (`RatingSheet`) y web (`WebRatingCard` en /pay) |
-| **F1-E2** | Superficie Affiliate (agregado, n, comentarios anónimos, estado de moderación) | ✅ Implementado | `/ratings` en admin: agregado con n≥5, cobertura como muestra, comentarios sin identidad, reporte |
-| **F1-E3** | God Admin: reporte, moderación manual con motivo, historial, identidad solo-God | ✅ Implementado | `moderateRating`/`moderationQueue` (god), `moderation_log` + `order_rating_events`, motivo obligatorio |
-| **F1-E4** | Shadow score interno (bayesiano suavizado, recencia, cobertura) | ✅ Implementado | `ratings.merchantScoreShadow` (god) con persistencia opcional en `merchant_score_shadow`; sin uso operativo |
-| F2 | Rabbitter Trust & Engagement en shadow (señales de confiabilidad, calibración) | ⏳ Pendiente | Requiere instrumentación de atribución de abandono de tabs |
+| **F1-E1** | Rating post-pago (ambos canales: Stripe settle y efectivo con PIN) | ✅ **EN PROD** | Prompt in-app (RatingSheet) + web (WebRatingCard en /pay) |
+| **F1-E2** | Superficie Affiliate (agregado, n, comentarios anónimos, estado de moderación) | ✅ **EN PROD** | `/ratings` (sidebar admin: Reputación de Servicio) |
+| **F1-E3** | God Admin: reporte, moderación manual con motivo, historial, identidad solo-God | ✅ **EN PROD** | `moderateRating`/`moderationQueue`, `moderation_log` + `order_rating_events` |
+| **F1-E4** | Shadow score interno (bayesiano suavizado, recencia, cobertura) | ✅ **EN PROD** | `ratings.merchantScoreShadow` (god) + snapshots `merchant_score_shadow`; sin uso operativo |
+| **F1-tests** | Tests de aceptación (checklist §6) | ✅ Unit 10/10 + integración ROLLBACK | Suite API 31/31 |
+| **F1-staging** | Validación manual del prompt en producción (ambos canales) | ⏳ Pendiente operativo | No bloquea F2 |
+| **F2** | Rabbitter Trust & Engagement en shadow | ⏳ **SIGUIENTE** | Rebase sobre main (push plan v2.1) antes de arrancar |
 | F3 | Growth Allocation (promos/visibilidad con scores calibrados) | ⏳ Pendiente | Requiere presupuesto/autorización + atribución de campañas |
 | F4 | Beneficios variables y tiering vendible (liga con Analíticas Pro) | ⏳ Pendiente | Solo con datos de F2/F3 |
 | F5 | Rabbitty Score público + multiplicadores | ⏳ Pendiente | Decisión económica explícita — no automática |
+
+#### Backlog F2 — señales de Trust (en shadow)
+| Señal | Fuente | Instrumentación necesaria |
+|---|---|---|
+| Pagos completados vs abandonados | `payment_intents` por `payerSubjectId` | Contable existe; falta atribuir abandono (¿fricción de producto o usuario?) |
+| Tabs huérfanas por causa | `orders.voidReason='STALE_TAB'` | Falta registrar actor (¿cliente u operador?) — decisión de diseño |
+| Canjes legítimos vs abuso | `ledgerEntries` (ratio SPEND/EARN) + lupa multi-cuenta | Lupa ya implementada (`god.getAccountSecurity.identityLinkSignals`) — solo señal de revisión, nunca sanción |
+| Presencia honesta | `presenceSessions` (GPS ≤ geofence, `source: gps/scan/geofence`) | gps/scan ya existen; `geofence` llega con push plan v2.1 (P4) |
+| Estabilidad del chat | flags de bloqueo | NO medir en F2 (requiere proceso de revisión — decisión del review) |
 
 ## 4. Hallazgos de auditoría que mandaron el diseño
 
@@ -111,5 +128,6 @@ Pendiente operativo (no bloqueante): validación en staging del prompt con una o
 | Fecha | Cambio |
 |---|---|
 | 2026-11-01 | Creación. Versión final de alcance aprobada (9 puntos del review incorporados). Inicio de F1 en `feat/rabbitty-score`. |
-| 2026-11-01 | **F1 implementada en rama** `feat/rabbitty-score`: migración `0020` aplicada a prod (4 tablas), emisión `ORDER_PAID` en settle digital, invalidación inmediata en 3 transiciones, router `ratings`, prompts in-app y web, superficie `/ratings`, moderación God y shadow score. Pendiente: pruebas de integración del checklist §6 + merge tras validación en staging. |
-| 2026-11-01 | **F1 CERRADA**: reglas puras extraídas a `services/ratingRules.ts`; tests unitarios 10/10 (checklist §6) + integration tests con ROLLBACK (requieren `TEST_DATABASE_URL`); suite API 31/31. Rama lista para PR de F1. |
+| 2026-11-01 | **F1 implementada en rama** `feat/rabbitty-score`: migración `0020` aplicada a prod (4 tablas), emisión `ORDER_PAID` en settle digital, invalidación inmediata en 3 transiciones, router `ratings`, prompts in-app y web, superficie `/ratings`, moderación God y shadow score. |
+| 2026-11-01 | **F1 CERRADA**: reglas puras extraídas a `services/ratingRules.ts`; tests unitarios 10/10 (checklist §6) + integration tests con ROLLBACK (requieren `TEST_DATABASE_URL`); suite API 31/31. |
+| 2026-11-02 | F1 mergeada a `main` (FF `ecd406c`) — el dataset de ratings corre en producción. Rama lista para F2 (rebase sobre main cuando el plan de notificaciones v2.1 esté en P0/P1). |
