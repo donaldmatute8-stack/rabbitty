@@ -13,9 +13,10 @@
 
 import { and, eq, lte, asc, sql, or, isNull, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { notifications, notificationsOutbox, notificationDeliveries, pushDevices } from "@/db/schema";
+import { notifications, notificationsOutbox, notificationDeliveries, pushDevices, users } from "@/db/schema";
 import { isApnsConfigured, sendApnsToDevice, type PushPayload } from "@/lib/push/apns";
 import { sendFcmToDevice, isFcmConfigured } from "@/lib/push/fcm";
+import { typePushMuted, parseMutedCategories, categoryForPushType } from "@/lib/push/categories";
 
 export const OUTBOX_MAX_ATTEMPTS = 4;
 export const OUTBOX_BACKOFF_BASE_SECONDS = 30;
@@ -104,8 +105,25 @@ export async function processOutboxBatch(limit = 20): Promise<{
     return rows;
   });
 
+  // Prefs por categoría del usuario (una sola query para todo el batch)
+  const userPushPrefs = new Map<string, string>();
+  const batchUserIds = Array.from(new Set(batch.map((b) => b.userId)));
+  if (batchUserIds.length > 0) {
+    const prefRows = await db
+      .select({ id: users.id, muted: users.pushMutedCategories })
+      .from(users)
+      .where(inArray(users.id, batchUserIds));
+    for (const row of prefRows) userPushPrefs.set(row.id, row.muted);
+  }
+
   for (const item of batch) {
     summary.processed += 1;
+
+    // Prefs por categoría (v2.1 §2.2): el usuario silencia categorías de PUSH.
+    // CRITICAL/SYSTEM jamás se filtran. El registro in-app (campana) SIEMPRE pasa:
+    // el mute solo apaga el canal del proveedor, no la historia de notificaciones.
+    const mutedCategories = parseMutedCategories(userPushPrefs.get(item.userId));
+    const pushMuted = typePushMuted(mutedCategories, item.type);
     // Todos los devices activos del usuario (iOS→APNs, Android→FCM)
     const usersDevices = await db
       .select({ id: pushDevices.id, token: pushDevices.token, platform: pushDevices.platform })
@@ -129,6 +147,25 @@ export async function processOutboxBatch(limit = 20): Promise<{
     }
 
     // 2) Fan-out por device: iOS → APNs · Android → FCM (P3)
+    // §2.2: si la categoría está silenciada, NO se llama al proveedor — queda
+    // registrado como SKIPPED (category_muted) y el item cierra como PROCESSED.
+    if (pushMuted) {
+      if (notificationId) {
+        await db.insert(notificationDeliveries).values({
+          notificationId,
+          channel: "APNs",
+          status: "SKIPPED",
+          reason: `category_muted:${categoryForPushType(item.type)}`,
+        });
+      }
+      summary.skipped += 1;
+      await db
+        .update(notificationsOutbox)
+        .set({ status: "PROCESSED", lockedUntil: null, updatedAt: new Date() })
+        .where(eq(notificationsOutbox.id, item.id));
+      continue;
+    }
+
     const payload: PushPayload = {
       title: item.title,
       body: item.message,

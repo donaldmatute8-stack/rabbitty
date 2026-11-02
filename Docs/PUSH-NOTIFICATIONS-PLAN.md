@@ -250,6 +250,7 @@ Checklist de cierre de fase (todo probado en device real):
 | 2026-11-02 | **P5 ✅ (commit `da72f56`)** | Badge iOS en pushes + deliveries tail en push-check. |
 | 2026-11-01 | **§14-3 ✅ código + §14-5 verificado (rama score)** | Outbox: claim transaccional con `FOR UPDATE SKIP LOCKED` + lease `lockedUntil` 120s + índice parcial worker (`manual/0016_outbox_lease.sql`, pendiente psql a prod). Pagos: confirmado post-commit/no-fatal por diseño en `paymentCore` y `notify`. |
 | 2026-11-01 | **§14-3 ✅ CERRADO** — `0016` aplicada a prod (columna `lockedUntil` + índice worker verificados). §14-1 Firebase Android → **ON HOLD por decisión: 100% iOS-first hasta flujo probado punta a punta**. |
+| 2026-11-02 | **§15.1 ✅ preferencias por categoría de punta a punta** — catálogo `packages/events` (PushCategory/categoryForType + UNMUTABLE), espejo miniapp `lib/push/categories.ts` con test de sincronía 4/4, `users.pushMutedCategories` (`0019` aplicada a prod), worker: mute de categoría → push SKIPPED (in-app SIEMPRE, críticos jamás), `/api/notifications/preferences` GET/POST, 6 toggles en settings bajo el master de push. |
 | 2026-11-02 | **POS UX (commits `4101293`, `c0b45b2`)** | Métodos saneados (QR Bunz fuera del picker), split real (efectivo+Bunz via chargeBunz), propina en el checkout directo, selector/buscador dinámico de Rabbitters en QR Neón + Identificar + Enviar Cuenta (local primero, lookup general), dedupe plannedVisits vs check-ins. |
 
 ## 14. Pendientes operativos (NO olvidar — gates de lanzamiento del review)
@@ -266,7 +267,7 @@ Checklist de cierre de fase (todo probado en device real):
 
 ## 15. Pendientes de product (post-MVP, no urgentes)
 
-- Preferencias por categoría en Ajustes (chat/recompensas/proximidad/membresías/órdenes/marketing) estilo X — plan v2.1 §2.2/§2.3, hoy solo los 3 toggles maestros.
-- Query `opens` en push-check (analytics del tap-rate) para P5.
-- Plantillas centralizadas + i18n de push/es-MX (mapeo por condición).
+- ~~Preferencias por categoría en Ajustes~~ — ✅ **HECHO (2026-11-02, rama score)**: catálogo en `packages/events` (PushCategory + categoryForType) + espejo `lib/push/categories.ts` con test de sincronía 4/4; columna `users.pushMutedCategories` (migración manual `0019` **aplicada a prod**); filtro del worker (mute = SKIPPED `category_muted:`, in-app siempre pasa, CRITICAL/SYSTEM jamás); ruta `/api/notifications/preferences` GET/POST; UI con 6 toggles bajo el master de push en settings (los pagos/cuentas/seguridad no silenciables).
+- ~~Query `opens` en push-check (analytics del tap-rate)~~ — ⏳ requiere tracking client-side del tap (evento nativo post-build) — bloqueado fino por el flujo iOS.
+- Plantillas centralizadas + i18n de push/es-MX (mapeo por condición) — ⏳ se retoma junto con F3 operativo (los templates cambian con la organización de campañas).
 - Rabbitty Score F2 — mismo document tracking en RABBITTY-SCORE-PLAN.md.

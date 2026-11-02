@@ -38,6 +38,10 @@ export const users = pgTable("users", {
   // Null = ingresa orgánico. Se captura SOLO en la creación (primera vez vista);
   // no tiene FK a affiliateCampaigns a propósito (id text, sobrevive borrados).
   firstSeenCampaignId: text("firstSeenCampaignId"),
+  // Push v2.1 (§2.2/§2.3): categorías silenciadas por el usuario (JSON string array
+  // de PushCategoryKey — chat/rewards/orders/proximity/memberships/marketing).
+  // CRITICAL (pagos/cuentas) y SYSTEM nunca se silencian — filtrado en el worker.
+  pushMutedCategories: text("pushMutedCategories").default("[]").notNull(),
 });
 
 export const verificationTokens = pgTable("verificationTokens", {

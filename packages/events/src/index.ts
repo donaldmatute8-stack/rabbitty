@@ -89,3 +89,56 @@ export const EVENT_CLASS_BY_TYPE: Record<string, string> = {
   MEMBERSHIP_REVOKED: EventClass.CRITICAL,
   SYSTEM: EventClass.SYSTEM,
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// P2.1 · Categorías de push (preferencias por tipo — plan v2.1 §2.2/§2.3)
+// El usuario silencia CATEGORÍAS (no tipos individuales). CRITICAL y SYSTEM
+// jamás se silencian: pagos, cuentas y seguridad siempre pasan (§2.3).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const PushCategory = {
+  CHAT: "chat",               // mensajes y comunicación
+  REWARDS: "rewards",         // bunz mint/redeem/transfer
+  ORDERS: "orders",           // órdenes, cuenta enviada, propinas
+  PROXIMITY: "proximity",     // llegada al local, prompt de check-in
+  MEMBERSHIPS: "memberships", // altas/renovaciones/revocaciones
+  MARKETING: "marketing",     // ofertas flash y campañas
+} as const;
+
+export type PushCategoryKey = (typeof PushCategory)[keyof typeof PushCategory];
+
+/** Tipos NO silenciables (críticos/sistema): siempre notifican. */
+export const UNMUTABLE_TYPES = new Set(["TIP_PAYOUT", "SYSTEM"]);
+
+export function categoryForType(type: string): PushCategoryKey {
+  switch (type) {
+    case "CHAT_MESSAGE":
+      return PushCategory.CHAT;
+    case "BUNZ_MINTED":
+    case "BUNZ_REDEEMED":
+    case "BUNZ_TRANSFER_RECEIVED":
+    case "RATING_REPORTED":
+      return PushCategory.REWARDS;
+    case "ORDER_COMPLETED":
+    case "ORDER_VOIDED":
+    case "ACCOUNT_BILL_SENT":
+    case "TIP_PAYOUT":
+      return PushCategory.ORDERS;
+    case "ARRIVAL":
+    case "CHECKIN_PROMPT":
+      return PushCategory.PROXIMITY;
+    case "MEMBERSHIP_GRANTED":
+    case "MEMBERSHIP_RENEWED":
+    case "MEMBERSHIP_REVOKED":
+      return PushCategory.MEMBERSHIPS;
+    case "OFFER_FLASH":
+    default:
+      return PushCategory.MARKETING;
+  }
+}
+
+/** ¿Este tipo está silenciado por los prefs del usuario (array JSON de PushCategoryKey)? */
+export function typeMuted(mutedCategories: string[], type: string): boolean {
+  if (UNMUTABLE_TYPES.has(type)) return false;
+  return mutedCategories.includes(categoryForType(type));
+}
