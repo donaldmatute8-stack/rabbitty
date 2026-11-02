@@ -27,10 +27,13 @@ export default function RatingSheet({
   orderId,
   businessName,
   onClose,
+  onSubmitted,
 }: {
   orderId: string;
   businessName?: string;
   onClose: () => void;
+  /** H10: cuando el rating fue enviado con éxito — el caller decide a dónde llevar al usuario (ej. salir al feed). */
+  onSubmitted?: () => void;
 }) {
   const [stars, setStars] = useState<number>(0);
   const [attrs, setAttrs] = useState<Attr[]>([]);
@@ -57,7 +60,12 @@ export default function RatingSheet({
       if (!data?.success) throw new Error(data?.error || 'No se pudo enviar');
       PlatformBridge.hapticFeedback('success');
       setDone(true);
-      setTimeout(onClose, 1400);
+      if (onSubmitted) {
+        // H10: post-submit → el caller sale del cobro a feed (auto)
+        setTimeout(() => onSubmitted(), 1200);
+      } else {
+        setTimeout(onClose, 1400);
+      }
     } catch (e: any) {
       toast.error(String(e?.message || 'No se pudo enviar tu evaluación').slice(0, 140));
     } finally {

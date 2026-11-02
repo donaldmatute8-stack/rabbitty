@@ -472,7 +472,12 @@ export function InAppPaySheet({
             <p className="text-lg font-black text-white">¡Cuenta liquidada!</p>
             <p className="text-xs text-white/50">Tu pago y tu cashback Bunz ya están acreditados. 🐰</p>
             <div className="w-full max-w-sm pt-2">
-              <RatingSheet orderId={orderId || ''} businessName={businessName} onClose={() => setStep('done')} />
+              <RatingSheet
+                orderId={orderId || ''}
+                businessName={businessName}
+                onClose={() => setStep('done')}
+                onSubmitted={() => onClose()}
+              />
             </div>
           </div>
         )}

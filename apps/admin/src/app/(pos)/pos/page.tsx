@@ -1054,6 +1054,7 @@ export default function PosPage() {
       total,
       tip: Number(posTip || 0) || undefined,
       gratuityMode: String((rest as any)?.gratuityMode || "OFF"),
+      customerAssigned: Boolean(selectedRabbitter?.id) || undefined,
       paymentMethod: method,
       cashGiven: cashGiven && cashGiven > 0 ? cashGiven : undefined,
       change: changeAmount,
@@ -2138,56 +2139,64 @@ export default function PosPage() {
               </button>
             </div>
 
-            {/* ── Gratificación voluntaria (D-11) — seamless en el sidebar ──
-                Solo si el negocio la activó (catálogo Rabbitty). Sin preselección;
-                "No dejar" es primera clase; independiente del método de pago. ── */}
+            {/* ── Gratificación voluntaria (D-11) — compacta y seamless en una sola fila ── */}
             {gratuityCfg?.data?.enabled && (
-              <div className="rounded-xl bg-white/[0.04] border border-white/10 px-2.5 py-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[9px] font-black uppercase tracking-wider text-gray-500">Gratificación voluntaria</p>
-                    {Number(posTip || 0) > 0 ? (
-                      <p className="text-[11px] font-black text-emerald-400 truncate">
-                        +${Number(posTip).toFixed(2)} · {((Number(posTip) / Math.max(1, total)) * 100).toFixed(0)}% del consumo
-                      </p>
-                    ) : (
-                      <p className="text-[10px] text-gray-500">El cliente decide de forma expresa</p>
-                    )}
-                  </div>
-                  {Number(posTip || 0) > 0 && (
-                    <button
-                      onClick={() => { setPosTip(""); }}
-                      className="shrink-0 text-[9px] font-black text-gray-500 hover:text-white px-1.5 py-0.5 rounded-lg bg-white/5 border border-white/10 cursor-pointer transition-colors"
-                      title="Quitar gratificación"
-                    >✕</button>
+              <div className="rounded-xl bg-white/[0.03] border border-white/10 px-2 py-1.5 flex items-center justify-between gap-1.5">
+                <div className="min-w-0 shrink-0">
+                  <p className="text-[9px] font-black uppercase tracking-wider text-gray-500 leading-tight">
+                    Gratificación
+                  </p>
+                  {Number(posTip || 0) > 0 ? (
+                    <p className="text-[10px] font-black text-emerald-400 leading-tight truncate">
+                      +${Number(posTip).toFixed(2)}
+                    </p>
+                  ) : (
+                    <p className="text-[9px] text-gray-500 leading-tight">Opcional</p>
                   )}
                 </div>
-                <div className="flex gap-1 mt-1.5 flex-wrap">
+
+                <div className="flex items-center gap-1 shrink-0">
                   <button
+                    type="button"
                     onClick={() => { setPosTip(""); }}
                     className={cn(
-                      "px-2 py-1 rounded-lg text-[10px] font-black border transition-all cursor-pointer",
+                      "px-1.5 py-0.5 rounded-lg text-[9px] font-black border transition-all cursor-pointer whitespace-nowrap",
                       Number(posTip || 0) === 0
                         ? "bg-white/10 border-white/25 text-white"
                         : "bg-white/[0.03] border-white/10 text-gray-400 hover:bg-white/10 hover:text-white"
                     )}
-                  >No dejar</button>
+                  >
+                    No dejar
+                  </button>
                   {(gratuityCfg.data.options ?? []).map((p) => {
                     const amount = Math.round(total * (p / 100) * 100) / 100;
                     const selected = Math.abs(Number(posTip || 0) - amount) < 0.05;
                     return (
                       <button
                         key={p}
+                        type="button"
                         onClick={() => { setPosTip(String(amount)); }}
                         className={cn(
-                          "px-2 py-1 rounded-lg text-[10px] font-black border transition-all cursor-pointer",
+                          "px-1.5 py-0.5 rounded-lg text-[9px] font-black border transition-all cursor-pointer whitespace-nowrap",
                           selected
                             ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300"
                             : "bg-white/[0.03] border-white/10 text-gray-400 hover:bg-white/10 hover:text-white"
                         )}
-                      >{p}%</button>
+                      >
+                        {p}%
+                      </button>
                     );
                   })}
+                  {Number(posTip || 0) > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => { setPosTip(""); }}
+                      className="shrink-0 text-[9px] font-black text-gray-500 hover:text-white px-1 py-0.5 rounded-md bg-white/5 border border-white/10 cursor-pointer transition-colors"
+                      title="Quitar gratificación"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -3084,53 +3093,72 @@ export default function PosPage() {
 
           {/* Acciones Post-Cobro: Recompensa Rabbitter + Impresión + WhatsApp */}
           <div className="flex flex-col gap-2.5 pt-1 shrink-0">
-            {/* Bloque de Recompensa / Claim QR limpio y alineado */}
-            {paidTicketData && !paidTicketData.awardedBunz && (
-              <div className="flex items-center justify-between gap-3 p-2.5 rounded-2xl bg-pink-500/10 border border-pink-500/25">
-                <div className="flex-1 min-w-0 space-y-1.5">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm">🐰</span>
-                    <span className="text-xs font-black text-pink-200">
-                      +{paidTicketData.estimatedBunz ?? 0} Bunz disponibles
-                    </span>
+            {(() => {
+              if (!paidTicketData || paidTicketData.awardedBunz) return null;
+              // H10: Rabbitter ya asignado → Bunz directo a cuenta, NO claim QR
+              if (paidTicketData.customerAssigned) {
+                return (
+                  <div className="flex items-center gap-2.5 p-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/25">
+                    <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-black text-emerald-300 truncate">
+                        {paidTicketData.awardedBunz && paidTicketData.awardedBunz > 0
+                          ? `+${paidTicketData.awardedBunz} Bunz acreditados a ${paidTicketData.customerName || "Rabbitter"}`
+                          : `Cashback acreditado a ${(paidTicketData.customerName || "Rabbitter").slice(0, 24)}`}
+                      </p>
+                      <p className="text-[10px] text-gray-500 leading-snug">
+                        Sin QR de reclamo — el Rabbitter ya estaba asignado al cobro.
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-[11px] text-gray-400 leading-snug">
-                    El cliente puede escanear el QR o puedes asignarlo manualmente a su cuenta.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setRabbitterModalOpen(true)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pink-500/25 hover:bg-pink-500/35 text-pink-200 border border-pink-500/40 text-[11px] font-black transition-all cursor-pointer active:scale-95"
-                  >
-                    <Sparkles className="h-3.5 w-3.5 text-pink-300" />
-                    <span>Asignar Rabbitter a esta venta</span>
-                  </button>
+                );
+              }
+              return (
+                <div className="flex items-center justify-between gap-3 p-2.5 rounded-2xl bg-pink-500/10 border border-pink-500/25">
+                  <div className="flex-1 min-w-0 space-y-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-black text-pink-200">
+                        +{paidTicketData.estimatedBunz ?? 0} Bunz disponibles
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-400 leading-snug">
+                      Sin Rabbitter identificado: el cliente abre el enlace del ticket desde su app para reclamar, o lo asignas manualmente aquí.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setRabbitterModalOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pink-500/25 hover:bg-pink-500/35 text-pink-200 border border-pink-500/40 text-[11px] font-black transition-all cursor-pointer active:scale-95"
+                    >
+                      <Sparkles className="h-3.5 w-3.5 text-pink-300" />
+                      <span>Asignar Rabbitter a esta venta</span>
+                    </button>
+                  </div>
+                  {(paidTicketData.claimToken || paidTicketData.orderId) && (
+                    <div className="shrink-0 bg-white p-2 rounded-2xl shadow-lg border border-white/20 flex flex-col items-center">
+                      <QRCodeSVG
+                        value={paidTicketData.claimToken
+                          ? `https://app.rabbitty.me/scan?claimToken=${paidTicketData.claimToken}`
+                          : `https://app.rabbitty.me/scan?ticket=${paidTicketData.orderId}`}
+                        size={76}
+                        level="H"
+                        includeMargin={false}
+                        imageSettings={{
+                          src: "/Ra.png",
+                          height: 18,
+                          width: 18,
+                          excavate: true,
+                        }}
+                      />
+                      <span className="text-[8px] font-mono font-bold text-gray-700 uppercase tracking-wider mt-1">
+                        {paidTicketData.claimToken ? "48h • 1 uso" : "Ver ticket"}
+                      </span>
+                    </div>
+                  )}
                 </div>
-                {(paidTicketData.claimToken || paidTicketData.orderId) && (
-                  <div className="shrink-0 bg-white p-2 rounded-2xl shadow-lg border border-white/20 flex flex-col items-center">
-                    <QRCodeSVG
-                      value={paidTicketData.claimToken
-                        ? `https://app.rabbitty.me/scan?claimToken=${paidTicketData.claimToken}`
-                        : `https://app.rabbitty.me/scan?ticket=${paidTicketData.orderId}`}
-                      size={76}
-                      level="H"
-                      includeMargin={false}
-                      imageSettings={{
-                        src: "/Ra.png",
-                        height: 18,
-                        width: 18,
-                        excavate: true,
-                      }}
-                    />
-                    <span className="text-[8px] font-mono font-bold text-gray-700 uppercase tracking-wider mt-1">
-                      {paidTicketData.claimToken ? "48h • 1 uso" : "Ver ticket"}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
+              );
+            })()}
 
-            {/* Fila combinada: Imprimir Ticket + Enviar por WhatsApp */}
+                        {/* Fila combinada: Imprimir Ticket + Enviar por WhatsApp */}
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
               <Button
                 id="pos-print-receipt"

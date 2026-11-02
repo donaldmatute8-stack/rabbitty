@@ -37,6 +37,8 @@ export interface TicketData {
   tip?: number;
   /** D-11 Gratificaciones: modo del negocio (OFF|POS|DIGITAL|BOTH) — etiqueta dinámica del ticket */
   gratuityMode?: string;
+  /** H10: el Rabbitter ya estaba asignado (Bunz directo a cuenta — sin QR de claim) */
+  customerAssigned?: boolean;
   total: number;
   paymentMethod?: string;
   payments?: Array<{ method: string; amount: number }>;
