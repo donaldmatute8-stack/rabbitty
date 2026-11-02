@@ -2,7 +2,7 @@ import { createHash } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { isApnsConfigured } from "@/lib/push/apns";
 import { db } from "@/db";
-import { pushDevices, notificationsOutbox } from "@/db/schema";
+import { pushDevices, notificationsOutbox, notificationDeliveries } from "@/db/schema";
 import { desc } from "drizzle-orm";
 import { getAuthenticatedUser } from "@/lib/serverAuth";
 
@@ -62,6 +62,12 @@ export async function GET(req: NextRequest) {
       missingEnvs: missing,
       apnsEnv: process.env.APNS_ENV || "production",
       devices: devices.map((d: { token: string }) => ({ ...d, token: String(d.token).slice(-12) })),
+      // Telemetría de entregas (P5): últimas filas de notificationDeliveries
+      deliveries: await db
+        .select({ channel: notificationDeliveries.channel, status: notificationDeliveries.status, reason: notificationDeliveries.reason, createdAt: notificationDeliveries.createdAt })
+        .from(notificationDeliveries)
+        .orderBy(desc(notificationDeliveries.createdAt))
+        .limit(8),
       // Cola viva: últimos eventos en outbox (visibilidad de la plataforma P0)
       outbox: await db
         .select({ id: notificationsOutbox.id, type: notificationsOutbox.type, status: notificationsOutbox.status, attempts: notificationsOutbox.attempts })

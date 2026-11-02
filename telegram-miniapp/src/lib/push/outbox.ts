@@ -110,6 +110,7 @@ export async function processOutboxBatch(limit = 20): Promise<{
     const payload: PushPayload = {
       title: item.title,
       body: item.message,
+      badge: 1, // P5: badge en el ícono de la app (contador de no leídos)
       data: { ...(item.data as Record<string, string> ?? {}), ...(item.route ? { route: item.route } : {}) },
     };
     let anyOk = false;
