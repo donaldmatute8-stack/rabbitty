@@ -433,7 +433,7 @@ Permite a tus clientes pagar su cuenta 100% con Bunz desde su App.
 - El recibo de compra tiene un botoncito "Pagar con Bunz" cuando tiene saldo suficiente.
 - NO aparece si está fuera de horario, superó límite, o el saldo es insuficiente.
 - El pago es atómicamente verificado by Rabbitty (0 conflicto, 0 doble-pago, 0 cashback fiat).
-- Los Bunz que tus clientes pagan se acreditan a tu stock del negocio (re-usables para tus próximas promociones).
+- Al redimir los Bunz, tu stock de disponibilidad se reduce — el producto/servicio comprometido se cumple (cierre del ciclo de emisión).
 
 ### Y notificaciones:
 - Ellynaban al instante? Prompts push y PG-13? El trabajador de push notifica a tu POS

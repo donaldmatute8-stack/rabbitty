@@ -117,7 +117,7 @@ export const FAQS: FaqItem[] = [
 export const DOC_SECTIONS: { title: string; body: string }[] = [
   {
     title: 'Pagar cuentas con Bunz (sin QR)',
-    body: 'Los negocios afiliados pueden aceptar que tu cuenta se pague 100% con Bunz directamente desde tu App (botón "Pagar con Bunz" en el recibo), sin escanear QR. Requiere: que el negocio lo permita (Admin → Facturación), que tengas saldo suficiente, y horario dentro del que el negocio publicado. No genera cashback (los Bunz no generan Bunz). Si el pago es parcial por límite de % configurable del negocio, el resto se cobra en fiat en el local. El negocio puede configurar disponibilidad, mínimos/máximos por factura, límite diario (atómico) y un % máximo de la factura pagable en Bunz, además de filtrar por catálogo de productos.',
+    body: 'Los negocios afiliados pueden aceptar que tu cuenta se pague 100% con Bunz directamente desde tu App (botón "Pagar con Bunz" en el recibo), sin escanear QR. Requiere: que el negocio lo permita (Admin → Facturación), que tengas saldo suficiente, y horario dentro del que el negocio publicado. No genera cashback (los Bunz no generan Bunz). Si el pago es parcial por límite de % configurable del negocio, el resto se cobra en fiat en el local. El negocio configura disponibilidad (horario), mínimos/máximos por factura, límite diario atómico, % máximo de la factura pagable en Bunz y catálogo de productos. Al redimirse los Bunz, el stock de disponibilidad del negocio se reduce (su oferente cumple el compromiso) — sin cashback por pagos en Bunz.',
   },
 
   {

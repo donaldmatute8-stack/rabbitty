@@ -85,10 +85,12 @@ export async function POST(req: NextRequest) {
         })
         .returning();
 
-      // Credit business vault when receiving Bunz from a customer redemption
+      // H16-ECONOMIA (corrección 2026-11-02): la redención CONSUME el stock de
+      // respaldo del negocio (inventario cumple la oferta que respaldó esos
+      // Bunz) — ya NO se acredita (creaba disponibilidad sin respaldo nuevo = inflación)
       await tx
         .update(ownedBusinesses)
-        .set({ bunzBalance: sql`COALESCE(${ownedBusinesses.bunzBalance}, 0) + ${bunzCost}` })
+        .set({ bunzBalance: sql`GREATEST(0, COALESCE(${ownedBusinesses.bunzBalance}, 0) - ${bunzCost})` })
         .where(eq(ownedBusinesses.id, businessId));
 
 

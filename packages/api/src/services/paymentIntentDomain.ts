@@ -400,9 +400,10 @@ export class PaymentIntentService {
           verificationMethod: "SYSTEM_VERIFIED",
         });
 
-        // D-13 RESUELTA (2026-11-02): los Bunz pagados con Bunz se acreditan al
-        // STOCK del afiliado (ownedBusinesses.bunzBalance) — cirquito cerrado:
-        // el negocio recibe el valor y puede re-aceptarlo, sin promesa fiat.
+        // D-13 RESUELTA (2026-11-02, modelo corregido por Marco): el stock
+        // (bunzBalance) es DISPONIBILIDAD DE REDENCIÓN del afiliado — al pagar
+        // con Bunz, la oferta se cumple y el stock SE REDUCE (los Bunz no
+        // "van" a una cuenta del negocio; emisión ≠ tesorería).
         try {
           const [bn] = await tx
             .select({ restaurantId: branches.restaurantId })
@@ -418,7 +419,7 @@ export class PaymentIntentService {
             if (rest?.businessId) {
               await tx
                 .update(ownedBusinesses)
-                .set({ bunzBalance: sql`COALESCE("bunzBalance", 0) + ${Number(intent.bunzAmount || 0)}` })
+                .set({ bunzBalance: sql`GREATEST(0, COALESCE("bunzBalance", 0) - ${Number(intent.bunzAmount || 0)})` })
                 .where(eq(ownedBusinesses.id, rest.businessId));
             }
           }
