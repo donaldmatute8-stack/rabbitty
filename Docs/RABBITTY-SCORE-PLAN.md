@@ -125,6 +125,8 @@ Pendiente operativo (no bloqueante): validación en staging del prompt con una o
 - **Métricas de adopción esperadas (F1):** ≥25% de órdenes elegibles con rating en la primera semana; ≥60% de comentarios legítimos visibles; 0 alteraciones al ledger (test #9).
 - **Revisión de calibración:** a los 30/90 días se recalibran prior y W; se documenta en este archivo.
 - **God panel:** agregados de reputación se integran a `/god/insights` en una iteración posterior (F2).
+- **Integración Bunzy (motor de scoring/optimización):** definida en `BUNZY_ROADMAP_SUPREMO.md` §11 (Bx0→Bx3). Trigger: F2 cerrado + ≥30 días de snapshots shadow — **no el 100% del Score, no "ahora"**. Bx0 entra con F2, Bx2 apoya F3/F4 con propuesta + aprobación humana.
+- **Instrumentación para F3:** `firstSeenCampaignId` en alta de cliente (D-5) — se implementa ANTES de F3 para que la data de atribución acumule durante el corredor shadow.
 - **Riesgo principal a vigilar:** sesgo de respuesta (quien ratea no es muestra aleatoria) — la cobertura por segmento se monitorea desde el día 1.
 
 ## 9. Registro de cambios del documento
