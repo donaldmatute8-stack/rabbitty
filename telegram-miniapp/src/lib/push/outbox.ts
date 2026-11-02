@@ -15,6 +15,7 @@ import { and, eq, lte, asc, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { notifications, notificationsOutbox, notificationDeliveries, pushDevices } from "@/db/schema";
 import { isApnsConfigured, sendApnsToDevice, type PushPayload } from "@/lib/push/apns";
+import { sendFcmToDevice, isFcmConfigured } from "@/lib/push/fcm";
 
 export const OUTBOX_MAX_ATTEMPTS = 4;
 export const OUTBOX_BACKOFF_BASE_SECONDS = 30;
@@ -83,11 +84,11 @@ export async function processOutboxBatch(limit = 20): Promise<{
 
   for (const item of batch) {
     summary.processed += 1;
+    // Todos los devices activos del usuario (iOS→APNs, Android→FCM)
     const usersDevices = await db
-      .select({ id: pushDevices.id, token: pushDevices.token })
+      .select({ id: pushDevices.id, token: pushDevices.token, platform: pushDevices.platform })
       .from(pushDevices)
       .where(and(eq(pushDevices.userId, item.userId), eq(pushDevices.isActive, true)));
-    void usersDevices;
 
     // 1) In-app primero (siempre — es el registro de la campana)
     const [inApp] = await db
@@ -105,7 +106,7 @@ export async function processOutboxBatch(limit = 20): Promise<{
       });
     }
 
-    // 2) APNs por device activo
+    // 2) Fan-out por device: iOS → APNs · Android → FCM (P3)
     const payload: PushPayload = {
       title: item.title,
       body: item.message,
@@ -114,11 +115,20 @@ export async function processOutboxBatch(limit = 20): Promise<{
     let anyOk = false;
     for (const dev of usersDevices) {
       try {
-        const res = await sendApnsToDevice(dev.token, payload);
+        let channel = "APNs";
+        let res: { ok: boolean; status: number; reason?: string };
+        if ((dev.platform ?? "ios") === "android") {
+          // P3: FCM (Android) — con paridad de estados de entrega
+          const fcmRes = await sendFcmToDevice(dev.token, payload);
+          channel = "FCM";
+          res = fcmRes;
+        } else {
+          res = await sendApnsToDevice(dev.token, payload);
+        }
         await db.insert(notificationDeliveries).values({
           notificationId,
           deviceId: dev.id ?? null,
-          channel: "APNs",
+          channel,
           status: res.ok ? "PROVIDER_ACCEPTED" : classifyProviderResult(res.status).status,
           reason: res.ok ? null : `HTTP ${res.status} ${res.reason ?? ""}`.trim(),
         });
