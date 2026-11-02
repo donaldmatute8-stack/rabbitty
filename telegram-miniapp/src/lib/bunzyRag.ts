@@ -72,6 +72,7 @@ async function embedWithOllama(texts: string[]): Promise<number[][] | null> {
 
   // Native endpoint primero
   try {
+    lastEmbedError.attempts.push('embed-request');
     lastEmbedError.detail = 'ollama://api/embed intentando';
     const res = await fetch(`${base}/api/embed`, {
       method: "POST",
@@ -152,7 +153,7 @@ async function embedWithOllama(texts: string[]): Promise<number[][] | null> {
 }
 
 /** Embeddings: OLLAMA (stack Rabbitty) primero, OpenAI como respaldo. null = sin provider. */
-export const lastEmbedError = { detail: 'sin intento' };
+export const lastEmbedError = { detail: 'sin intento', attempts: [] as string[] };
 
 /** Embeddings: OLLAMA (stack Rabbitty) primero, OpenAI como respaldo. null = sin provider. */
 async function embedTexts(texts: string[]): Promise<number[][] | null> {
