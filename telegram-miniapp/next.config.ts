@@ -22,6 +22,7 @@ const nextConfig: NextConfig = {
       "'unsafe-inline'",
       "https://telegram.org",
       "https://*.telegram.org",
+      "https://js.stripe.com",
     ].join(" ");
     return [
       {
@@ -45,7 +46,7 @@ const nextConfig: NextConfig = {
               "img-src 'self' data: blob: https:",
               "font-src 'self' data:",
               "connect-src 'self' https: wss:",
-              "frame-src 'self' https://telegram.org",
+              "frame-src 'self' https://telegram.org https://js.stripe.com https://*.stripe.com",
               "manifest-src 'self'",
             ].join("; "),
           },
