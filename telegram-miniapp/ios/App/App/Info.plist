@@ -89,6 +89,11 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
+		<string>location</string>
 	</array>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Rabbitty usa tu ubicación para avisarte de ofertas y registrar tu check-in automáticamente cuando llegas a un comercio afiliado.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Rabbitty usa tu ubicación para mostrarte comercios cercanos y avisarte de ofertas cuando llegas al local.</string>
 </dict>
 </plist>

@@ -71,8 +71,63 @@ export default function ProximityEngine() {
       if (document.visibilityState === "visible" && !stopped) void ping();
     };
     document.addEventListener("visibilitychange", onVisible);
+
     return () => { stopped = true; clearTimeout(t0); clearInterval(iv); document.removeEventListener("visibilitychange", onVisible); };
   }, [handlePingPresence]);
+
+  // ── P4: BACKGROUND LOCATION (app cerrada/suspendida) ──
+  // El plugin comunitario NO tiene API de geofence — usa addWatcher nativo con
+  // UIBackgroundModes=location (ya en Info.plist). Movimiento >30m o >2min
+  // → ping source:'background' → push ⚡/check-in llegan con app cerrada.
+  // Trade-off batería: moderado (distanceFilter 50m). iOS force-quit sigue sin
+  // garantizado (matriz de pruebas del review) — documentado en Docs.
+  useEffect(() => {
+    if (!user?.id || !PlatformBridge.isNative()) return;
+    let alive = true;
+    const lastRef = { lat: Number.NaN, lng: Number.NaN, ts: 0 };
+    let lastAllowed = 0;
+    (async () => {
+      try {
+        const bg = await import("@capacitor-community/background-geolocation");
+        const plugin = (bg as unknown as {
+          BackgroundGeolocationPlugin: {
+            addWatcher: (o: unknown, cb: (p?: unknown, e?: unknown) => void) => Promise<string>;
+            removeWatcher: (o: unknown) => Promise<void>;
+          };
+        }).BackgroundGeolocationPlugin;
+        const watcherId = await plugin.addWatcher(
+          {
+            background: true, // requiere UIBackgroundModes 'location' (ya en Info.plist)
+            localsOnly: false,
+            distanceFilter: 50,
+          },
+          (position?: unknown, error?: unknown) => {
+            if (error || !alive) return;
+            const pos = position as { coords?: { latitude?: number; longitude?: number } };
+            const lat = pos?.coords?.latitude;
+            const lng = pos?.coords?.longitude;
+            if (typeof lat !== "number" || typeof lng !== "number") return;
+            const moved = Number.isNaN(lastRef.lat) || (Math.abs(lat - lastRef.lat) + Math.abs(lng - lastRef.lng)) > 0.0003;
+            const elapsed = Date.now() - lastAllowed;
+            if (!moved && elapsed < 2 * 60 * 1000) return;
+            lastRef.lat = lat; lastRef.lng = lng;
+            lastAllowed = Date.now();
+            void PlatformBridge.getAuthHeaders().then((h) =>
+              fetch("/api/location/ping", {
+                method: "POST",
+                headers: { ...h, "Content-Type": "application/json" },
+                body: JSON.stringify({ lat, lng, accuracy: 100, timestamp: Date.now(), stationary: false, source: "background" }),
+              }).catch(() => {})
+            );
+          }
+        );
+        console.log("[BACKGROUND_LOC] watcher activo:", watcherId);
+      } catch (err) {
+        console.warn("[BACKGROUND_LOC] no disponible (requiere rebuild nativo):", err);
+      }
+    })();
+    return () => { alive = false; };
+  }, [user?.id]);
 
   // Solo usuarios logueados (el ping anónimo no aporta presencia)
   if (!user?.id) return null;
