@@ -59,6 +59,10 @@ export const cashShiftsRouter = router({
     .input(z.object({ ...branchInput, pin, openingFloat: money, registerId: z.string().default("MAIN") }))
     .mutation(async ({ ctx, input }) => {
       const branchId = await resolveBranchId(ctx, input.branchId);
+      // ── Al abrir caja: limpiar tabs huérfanas del día anterior (expectativa
+      // del administrador:_trade "abro caja y no hay tabs de ayer"). ──
+      const { expireStaleOrders } = await import("../services/tabsSweep");
+      await expireStaleOrders(ctx.restaurantDb, branchId);
       const cashier = await findStaffByPin(ctx.restaurantDb, branchId, input.pin, CASHIER_ROLES, "PIN de cajero incorrecto");
       try {
         return await ctx.restaurantDb.transaction(async (tx: any) => {

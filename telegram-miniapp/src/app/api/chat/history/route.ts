@@ -127,6 +127,23 @@ export async function GET(req: Request) {
       )
       .catch(() => {});
 
+    // ── Notificaciones de este chat: abrí/respondí la conversación → ya vi,
+    // mis pushes de ESE hilo se marcan leídas (deja de sonar el badge). ──
+    // GAP #2 del reporte: "al contestar un mensaje se desactiva la notificación".
+    try {
+      await db
+        .update((await import('@/db/schema')).notifications)
+        .set({ isRead: true })
+        .where(
+          and(
+            eq((await import('@/db/schema')).notifications.userId, userId),
+            eq((await import('@/db/schema')).notifications.type, 'CHAT'),
+            eq((await import('@/db/schema')).notifications.route, `/chat/${otherId}`),
+          ),
+        )
+        .catch(() => {});
+    } catch { /* best-effort */ }
+
     const history = await db.query.messages.findMany({
       where: eq(messages.conversationId, conversation.id),
       orderBy: [asc(messages.createdAt)],

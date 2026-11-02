@@ -10,68 +10,6 @@ import { users as coreUsers, membershipSubscriptions as coreMembershipSubs, memb
 import { miniappClient } from "../services/miniapp-client";
 import { assertOpenShiftForCash } from "../services/cashShift";
 
-/**
- * ── Tabs huérfanas: expiración de órdenes nunca ejecutadas ──
- * Órdenes PENDING / CASH_PAYMENT_REQUESTED más viejas que staleOrderHours
- * (horas configurables por el admin en restaurants.staleOrderHours, default 12)
- * se marcan EXPIRED + voidReason STALE_TAB: quedan fuera de tabs/dashboard y de
- * la contabilidad, pero auditables en DB. Cutoff en SQL (nunca Date en params).
- */
-async function expireStaleOrders(restaurantDb: any, branchId: string): Promise<void> {
-  try {
-    const staleRes: any = await restaurantDb.execute(sql`
-      SELECT o.id AS "orderId" FROM "orders" o
-      JOIN "branches" b ON b.id = o."branchId" AND b.id = ${branchId}
-      JOIN "restaurants" r ON r.id = b."restaurantId"
-      WHERE o."branchId" = ${branchId}
-        AND o.status IN ('PENDING', 'CASH_PAYMENT_REQUESTED')
-        AND o."createdAt" < (now() AT TIME ZONE 'UTC') - (COALESCE(r."staleOrderHours", 12) * interval '1 hour')
-    `);
-    // postgres.js devuelve array directo (sin .rows)
-    const staleRows = staleRes?.rows ?? staleRes;
-    const ids: string[] = Array.isArray(staleRows)
-      ? staleRows.map((x: { orderId?: string }) => x.orderId).filter((v): v is string => Boolean(v))
-      : [];
-    if (ids.length === 0) return;
-
-    await restaurantDb.execute(sql`
-      UPDATE "orders"
-      SET status = 'EXPIRED', "voidReason" = 'STALE_TAB', "updatedAt" = now()
-      WHERE id = ANY(${ids})`);
-    // Fase 1 Rabbitty Score (H2): las tabs huérfanas tampoco pueden sostener un rating
-    const { invalidateOrderRating } = await import("./ratings");
-    for (const staleId of ids) {
-      await invalidateOrderRating(restaurantDb, staleId, "STALE_TAB");
-    }
-
-    // Cancelar intents vivos y liberar holds de Bunz ligados a esas órdenes
-    const liveIntents = await restaurantDb
-      .select()
-      .from(paymentIntents)
-      .where(and(inArray(paymentIntents.orderId, ids), eq(paymentIntents.status, "PENDING_PAYMENT")));
-    for (const intent of liveIntents) {
-      if (Number(intent.bunzAmount || 0) > 0) {
-        const { releasePaymentIntentHold } = await import("../services/paymentCore");
-        await releasePaymentIntentHold(restaurantDb, {
-          paymentIntentId: intent.id,
-          reason: "STALE_TAB",
-        }).catch((err: unknown) => console.warn("[POS] release hold falló:", err));
-      } else {
-        await restaurantDb
-          .update(paymentIntents)
-          .set({ status: "CANCELLED", updatedAt: new Date() })
-          .where(eq(paymentIntents.id, intent.id));
-      }
-      // Doble seguridad: marcar holds residuales como liberados
-      await restaurantDb
-        .update(bunzReserves)
-        .set({ status: "RELEASED", releasedAt: new Date(), failureReason: "STALE_TAB" })
-        .where(and(eq(bunzReserves.paymentIntentId, intent.id), eq(bunzReserves.status, "RESERVED")));
-    }
-  } catch (expErr) {
-    console.warn("[POS] sweep de tabs expiradas falló:", expErr);
-  }
-}
 
 /**
  * USD: convierte monto MXN → USD con la tasa configurable por el admin
@@ -425,6 +363,7 @@ export const posRouter = router({
     // (config del restaurante, default 12h) se marcan EXPIRED: nunca fueron
     // ejecutadas ni pagadas → no se contabilizan ni bloquean el tablero,
     // pero quedan auditables (voidReason = STALE_TAB).
+    const { expireStaleOrders } = await import("../services/tabsSweep");
     await expireStaleOrders(ctx.restaurantDb, ctx.branchId);
 
     const openRows = await ctx.restaurantDb.execute(sql`
@@ -1807,6 +1746,7 @@ export const posRouter = router({
    */
   getActiveTabs: protectedProcedure.query(async ({ ctx }) => {
     // Auto-limpieza: tabs huérfanas (nunca pagadas ni ejecutadas) fuera del feed
+    const { expireStaleOrders } = await import("../services/tabsSweep");
     await expireStaleOrders(ctx.restaurantDb, ctx.branchId);
 
     // 1. Obtener todas las mesas de la sucursal

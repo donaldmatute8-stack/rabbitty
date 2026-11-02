@@ -216,6 +216,8 @@ export async function POST(req: NextRequest) {
               }).catch((err) => {
                 console.warn("[LOCATION_PING] Push send error:", err);
               });
+            } else {
+              console.warn('[PUSH] APNs no configurado en Vercel — push omitido, solo quedó en campana in-app');
             }
 
             triggeredOffers.push(b.name);
@@ -260,6 +262,8 @@ export async function POST(req: NextRequest) {
               }).catch((err) => {
                 console.warn("[LOCATION_PING] Push send error:", err);
               });
+            } else {
+              console.warn('[PUSH] APNs no configurado en Vercel — push omitido, solo quedó en campana in-app');
             }
 
             triggeredOffers.push(b.name);
