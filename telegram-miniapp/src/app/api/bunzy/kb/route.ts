@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ingestSupportKnowledge, knowledgeStats } from '@/lib/bunzyRag';
+import { ingestSupportKnowledge, knowledgeStats, searchKnowledge } from '@/lib/bunzyRag';
 
 /**
  * ── Bunzy KB (Fase 0 RAG) ── Ingesta y salud del knowledge base semántico.
@@ -53,7 +53,24 @@ export async function POST(req: NextRequest) {
       );
     }
     const stats = await knowledgeStats();
-    return NextResponse.json({ ok: true, seeded: result.seeded, ...stats });
+
+    // ── Certificación semántica integrada (smoke test) — no fiamos de que
+    // "algo entró": exige que la consulta canónica recupere la FAQ correcta.
+    // El seedOrFail arroja error si la retrieval no funciona.
+    const semantic = await searchKnowledge('¿Cómo gano Bunz?', { limit: 3 }).catch(() => []);
+    const semanticOk = semantic.some((h) => h.sourceId.startsWith('faq:') && h.score >= 0.25);
+
+    return NextResponse.json({
+      ok: semanticOk,
+      seeded: result.seeded,
+      ...stats,
+      semanticCheck: {
+        ok: semanticOk,
+        top: semantic[0] ?? null,
+        required: 'sourceId=faq:* · score ≥ 0.25',
+      },
+      error: semanticOk ? undefined : 'Seed OK pero la retrieval semántica no devolvió la FAQ esperada — revisar embeddings',
+    }, { status: semanticOk ? 200 : 502 });
   } catch (err) {
     console.error('[BunzyKB] ingesta falló:', err);
     return NextResponse.json({ error: 'Error interno de ingesta' }, { status: 500 });
