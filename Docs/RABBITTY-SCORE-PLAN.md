@@ -34,7 +34,7 @@ Un sistema de confianza de dos caras al estilo Uber: **Rabbitter Trust & Engagem
 | **F1-E3** | God Admin: reporte, moderación manual con motivo, historial, identidad solo-God | ✅ **EN PROD** | `moderateRating`/`moderationQueue`, `moderation_log` + `order_rating_events` |
 | **F1-E4** | Shadow score interno (bayesiano suavizado, recencia, cobertura) | ✅ **EN PROD** | `ratings.merchantScoreShadow` (god) + snapshots `merchant_score_shadow`; sin uso operativo |
 | **F1-tests** | Tests de aceptación (checklist §6) | ✅ Unit 10/10 + integración ROLLBACK | Suite API 31/31 |
-| **F1-staging** | Validación manual del prompt en producción (ambos canales) | ⏳ Pendiente operativo | No bloquea F2 |
+| **F1-staging** | Validación manual del prompt en producción (ambos canales) | 🔴 **BLOQUEADO POR EL BUG H6** — probar de nuevo tras deploy con `RATING_INTERNAL_SECRET` en Vercel (miniapp + admin); los atributos chips/comentarios ya funcionan, el submit es lo que colgaba | No bloquea F2 |
 | **F2** | Rabbitter Trust & Engagement en shadow | 🔧 **EN RAMA** | Reglas puras + snapshot `rabbitter_score_shadow` + panel God en `/god/insights`. Pendiente: aplicar migración `0022` a prod y validación operativa |
 | F3 | Growth Allocation (promos/visibilidad con scores calibrados) | 🔧 **SHADOW EN RAMA (code only)** | Motor puro `allocRules.ts` + query `getGrowthAllocationShadow` + panel en `/god/insights`. Nada operativo — requiere presupuesto/autorización (D-6) + data de atribución D-5 acumulándose. Bunzy entra como advisor (Bx2) cuando haya data |
 | F4 | Beneficios variables y tiering vendible (liga con Analíticas Pro) | ⏳ Pendiente | Solo con datos de F2/F3 |
@@ -53,6 +53,8 @@ Un sistema de confianza de dos caras al estilo Uber: **Rabbitter Trust & Engagem
 
 ## 4. Hallazgos de auditoría que mandaron el diseño
 
+## 4. Hallazgos de auditoría que mandaron el diseño
+
 | # | Hallazgo (verificado en código) | Resolución en F1 |
 |---|---|---|
 | H1 | `ORDER_PAID` **no se emite** en `confirmPaymentIntentSettled` (paymentCore.ts no tiene ningún `bus.emit`) — el canal digital no podía disparar el prompt | Se añade emisión con payload completo `{orderId, branchId, paymentId, method, amount}` post-commit |
@@ -60,6 +62,7 @@ Un sistema de confianza de dos caras al estilo Uber: **Rabbitter Trust & Engagem
 | H3 | Payloads de `ORDER_PAID` en pos.ts son mínimos (`{orderId}`) | El listener re-hidrata por `orderId` (branch/customer) — defensivo |
 | H4 | Las cortesías no tenían entitlements al activarse por webhook Stripe | Corregido en el batch de membresías (mismo repo) |
 | H5 | Rating no debe usar propina / % Rabbitty Pay / velocidad de liquidación | Excluidos del score de servicio en F1 |
+| H6 | **BUG de device (2026-11-02):** el submit del rating por canal NATIVO/miniapp ("carga y no pasa nada") — el proxy `/api/pay/rate` llamaba `ratings.submitRating` (protectedProcedure de la sesión admin) SIN sesión; el pago sí liquidaba porque `payments.*` usa `publicLimitedProcedure` con su propio scoping | Motor extraído a `ratingSubmit.ts` compartido + canal interno `/api/internal/rating` (secret) en admin + proxy con autenticación del comensal y timeout 8s. Pendiente deploy: env `RATING_INTERNAL_SECRET` en Vercel (miniapp + admin) |
 
 ## 5. Diseño técnico F1
 
@@ -136,6 +139,7 @@ Pendiente operativo (no bloqueante): validación en staging del prompt con una o
 | 2026-11-01 | **F1 implementada en rama** `feat/rabbitty-score`: migración `0020` aplicada a prod (4 tablas), emisión `ORDER_PAID` en settle digital, invalidación inmediata en 3 transiciones, router `ratings`, prompts in-app y web, superficie `/ratings`, moderación God y shadow score. |
 | 2026-11-01 | **F1 CERRADA**: reglas puras extraídas a `services/ratingRules.ts`; tests unitarios 10/10 (checklist §6) + integration tests con ROLLBACK (requieren `TEST_DATABASE_URL`); suite API 31/31. |
 | 2026-11-02 | F1 mergeada a `main` (FF `ecd406c`) — el dataset de ratings corre en producción. Rama lista para F2 (rebase sobre main cuando el plan de notificaciones v2.1 esté en P0/P1). |
+| 2026-11-02 | **H6 corregido (bug de device en staging nativo)**: motor de submit extraído a `services/ratingSubmit.ts` (dual-canal: tRPC web + interno HTTP) + `/api/internal/rating` en admin con `x-rating-secret` + proxy `/api/pay/rate` ahora autentica al comensal, manda `userId` validado y con timeout 8s. Pendiente deploy: env `RATING_INTERNAL_SECRET` en Vercel (miniapp + admin). Tests del rating 10/10. |
 | 2026-11-02 | **F3 SHADOW en rama (code only)**: `allocRules.ts` puro (servicio 40% + eficiencia 35% + momentum 25%, recomendaciones BOOST/REFILL/NURTURE/PAUSE/OPTIMIZE/KEEP con reasons explicables) + unitarios 8/8 + `getGrowthAllocationShadow` en god + panel shadow en `/god/insights`. **Nunca operativo** — acciones requieren aprobación humana (D-6). Bunzy Bx2 entra cuando haya data shadow madura. |
 | 2026-11-01 | **GATE de mañana (marco, 2026-11-02):** pruebas del flujo pago 1-paso con propina + prompt rating (F1) **en un tenant real** — cierre de F1-staging y del §14-5 (pagos no cuelgan). Resultado = GO para ejecutar el cierre de F2 (§10: F2-1/F2-2) y arrancar la cuenta regresiva de 30 días (Bunzy Bx0 / F3). |
 | 2026-11-01 | **D-5 instrumentado (F3-ready)**: `users.firstSeenCampaignId` + captura en alta Telegram (`camp_` en startParam) y OTP verify (body opcional); migración `0017` aplicada a prod. La atribución acumula desde ya durante el shadow. |
