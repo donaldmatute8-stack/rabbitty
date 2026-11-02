@@ -122,6 +122,7 @@ Pendiente operativo (no bloqueante): validación en staging del prompt con una o
 | D-5 | Atribución de campañas (Growth) | ✅ **INSTRUMENTADO (2026-11-01):** columna `users.firstSeenCampaignId` (nullable, sin FK a propósito) + captura en los 2 puntos de alta real: `auth/telegram` (prefijo `camp_{campaignId}` en startParam, solo en creación y solo si la campaña existe) y `auth/otp/verify` (body.campaignId opcional — el front lo pasará cuando existan links de campaña en /login). Migración manual `0017` **aplicada a prod** (norma DRIFT-001). La data acumula durante el corredor shadow → insumo listo para F3 || D-6 | Presupuesto de promos cofinanciadas | F3/F4; tope % GMV + autorización God |
 | D-7 | ¿Quién causa la tab huérfana (cliente vs operador)? Define si `tabs` entra al score | **Actual:** componente diagnóstico puro, fuera del score |
 | D-8 | Atribuir abandono de payment intent: ¿fricción de UX (checkout→3DS) o del usuario? | F2 shadow lo clasifica como `expired/cancelled/failed` sin juzgar; decidir con datos |
+| D-10 | **Auditoría cashback (2026-11-02): el settle QR-Bunz (`approveIntent`) TAMBIÉN mintea cashback** (`rewardRate × amountMxn`) al comensal que acaba de pagar TODO en Bunz — es diseño preexistente (paymentIntentDomain), no roto por H8. ¿Es intencional (cashback por compra sin importar instrumento) o doble-beneficio a corregir? | Revisar con God antes de F3 — si se corrige, parche en paymentIntentDomain §6 con nota de recalibración de economía |
 
 ## 8. Cómo darle seguimiento
 

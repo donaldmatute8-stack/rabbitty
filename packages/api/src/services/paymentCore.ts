@@ -570,6 +570,13 @@ export async function reconcileOrderCashback(
   payerId = intentRows.find((r: { payerSubjectId: string | null }) => !!r.payerSubjectId)?.payerSubjectId ?? null;
   // 2) fallback: el comensal vinculado en la orden (canal Enviar Cuenta / /pay)
   if (!payerId) payerId = order.customerId ?? null;
+  // 3) Coherencia (H8): el destinatario del cashback SIEMPRE es el comensal de
+  //    la orden — si el payer del intent difiere del customerId duradero
+  //    (p. ej. rebind en POS tras crear el intent), gana el customerId.
+  if (payerId && order.customerId && payerId !== order.customerId) {
+    console.warn(`[CASHBACK_RECONCILE] orderId=${order.id} payer del intent ≠ customerId — uso el customerId (${order.customerId})`);
+    payerId = order.customerId;
+  }
   if (!payerId) return { minted: false, skipped: "NO_PAYER" };
 
   // businessId del comercio (branches → restaurants.businessId), fallback del branchId
