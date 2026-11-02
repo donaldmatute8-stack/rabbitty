@@ -8,6 +8,8 @@ import PullToRefresh from '@/components/ui/PullToRefresh';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { PlatformBridge } from '@/lib/platform';
 import { readSettings, subscribeSettings } from '@/lib/userSettings';
+import { useToast } from '@/contexts/ToastContext';
+import { useRealtimeEvents } from '@/lib/useRealtimeEvents';
 
 interface Notification {
   id: string;
@@ -35,6 +37,7 @@ export default function NotificationsPage() {
   const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const { user, loading: authLoading } = useAuth();
+  const { showToast } = useToast();
   const [fetching, setFetching] = useState(true);
   // Ajuste de campana (única fuente: /settings) + shortcut en el header
   const [inAppBell, setInAppBell] = useState(true);
@@ -142,6 +145,21 @@ export default function NotificationsPage() {
       default: return <Coins className="w-6 h-6 text-[#E91E63]" />;
     }
   };
+
+  // ── P2: realtime — nuevas notificaciones aparecen en vivo (sin pull) ──
+  useRealtimeEvents(
+    (n) => {
+      setNotifications((prev) => {
+        if (prev.some((x) => x.id === n.id)) return prev;
+        return [
+          { id: n.id, title: n.title, message: n.message, type: n.type, route: n.route ?? null, isRead: false, createdAt: new Date().toISOString() },
+          ...prev,
+        ];
+      });
+      showToast(`🔔 ${n.title}`, "success");
+    },
+    Boolean(user?.id && inAppBell)
+  );
 
   return (
     <ProfileSubpageLayout

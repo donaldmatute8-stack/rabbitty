@@ -170,6 +170,7 @@ export default function SettingsPage() {
               })}
             </div>
 
+
             {/* ── Diagnóstico de push (¿APNs en Vercel + dispositivo registrado?) ── */}
             <PushDiagnosticsRow />
           </div>
