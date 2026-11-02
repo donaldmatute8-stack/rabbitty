@@ -1,5 +1,6 @@
 name: Rabbitty POS Cron — Tabs Expiradas + Tipo de Cambio USD
 
+# rearmed: re-registración de schedule tras corridas 401 ya corregidas · 14:00 UTC
 on:
   schedule:
     # Diaria 14:00 UTC (8am CDMX): expira tabs huérfanas + refresca USD/MXN de HOY
