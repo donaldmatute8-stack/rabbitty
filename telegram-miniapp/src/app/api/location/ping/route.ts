@@ -213,9 +213,11 @@ export async function POST(req: NextRequest) {
                   // Tap → abrir el perfil del comercio in-app (mismo destino del feed)
                   route: `/affiliate/${b.id}`,
                 },
-              }).catch((err) => {
-                console.warn("[LOCATION_PING] Push send error:", err);
-              });
+              })
+                .then((res) => console.log("[PUSH] proximidad boost:", JSON.stringify(res), `caller=${caller.id}`))
+                .catch((err) => {
+                  console.warn("[LOCATION_PING] Push send error:", err);
+                });
             } else {
               console.warn('[PUSH] APNs no configurado en Vercel — push omitido, solo quedó en campana in-app');
             }
@@ -259,9 +261,11 @@ export async function POST(req: NextRequest) {
                   // Tap → abrir el perfil del comercio in-app (mismo destino del feed)
                   route: `/affiliate/${b.id}`,
                 },
-              }).catch((err) => {
-                console.warn("[LOCATION_PING] Push send error:", err);
-              });
+              })
+                .then((res) => console.log("[PUSH] proximidad loyalty:", JSON.stringify(res), `caller=${caller.id}`))
+                .catch((err) => {
+                  console.warn("[LOCATION_PING] Push send error:", err);
+                });
             } else {
               console.warn('[PUSH] APNs no configurado en Vercel — push omitido, solo quedó en campana in-app');
             }

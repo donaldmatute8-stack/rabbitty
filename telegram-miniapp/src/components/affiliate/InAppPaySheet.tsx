@@ -166,6 +166,9 @@ export function InAppPaySheet({
   const [baseAmount, setBaseAmount] = useState<number>(total);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [amountTotalExtra, setAmountTotalExtra] = useState<number | null>(null);
+  // Guard: evita que el effect se dispare 2 veces (StrictMode/re-renders) y
+  // cree dos intents para la misma orden con la misma propina.
+  const startGuardRef = useRef<string | null>(null);
 
   const [stripeLoadError, setStripeLoadError] = useState<string | null>(null);
   const loadStripeInstance = (key: string) => {
@@ -234,6 +237,10 @@ export function InAppPaySheet({
   /** Crea (o reemplaza) el intent con la propina indicada y monta Elements. */
   const startPayment = async (tipMxn: number, replaceIntent: string | null = null) => {
     if (!orderId) return;
+    const guardKey = `${orderId}:${tipMxn}:${replaceIntent}`;
+    // Mismo destino en curso → no duplicar creación de intents
+    if (startGuardRef.current === guardKey && loadingSetup) return;
+    startGuardRef.current = guardKey;
     setLoadingSetup(true);
     setSetupError(null);
     try {

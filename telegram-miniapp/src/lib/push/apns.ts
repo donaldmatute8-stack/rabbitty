@@ -213,9 +213,11 @@ export async function sendPushToUsers(
         const res = await sendApnsToDevice(device.token, payload);
         if (res.ok) {
           result.sent += 1;
+          console.log(`[APNs] ✓ enviado (${res.status}) para token …${device.token.slice(-10)}`);
           return;
         }
         result.failed += 1;
+        console.warn(`[APNs] ✗ fallo HTTP ${res.status} reason=${res.reason || "?"} token …${device.token.slice(-10)}`);
         if (
           res.status === INVALID_TOKEN_STATUS ||
           (res.reason && INVALID_TOKEN_REASONS.has(res.reason))
