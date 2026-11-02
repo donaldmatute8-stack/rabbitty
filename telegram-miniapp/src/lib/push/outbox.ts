@@ -11,7 +11,7 @@
  * Dedupe: dedupeKey UNIQUE — webhooks/retries no duplican.
  */
 
-import { and, eq, lte, asc, sql } from "drizzle-orm";
+import { and, eq, lte, asc, sql, or, isNull, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { notifications, notificationsOutbox, notificationDeliveries, pushDevices } from "@/db/schema";
 import { isApnsConfigured, sendApnsToDevice, type PushPayload } from "@/lib/push/apns";
@@ -19,6 +19,9 @@ import { sendFcmToDevice, isFcmConfigured } from "@/lib/push/fcm";
 
 export const OUTBOX_MAX_ATTEMPTS = 4;
 export const OUTBOX_BACKOFF_BASE_SECONDS = 30;
+/** Lease del claim SKIP LOCKED: si el worker muere a mitad del fan-out,
+ *  la fila vuelve a ser elegible tras expirar (no se pierde, no se suma retry). */
+export const OUTBOX_LEASE_MS = 120_000;
 
 export interface OutboxInput {
   userId: string;
@@ -75,12 +78,31 @@ export async function processOutboxBatch(limit = 20): Promise<{
     return summary;
   }
 
-  const batch = await db
-    .select()
-    .from(notificationsOutbox)
-    .where(and(eq(notificationsOutbox.status, "QUEUED"), lte(notificationsOutbox.runAfter, new Date())))
-    .orderBy(asc(notificationsOutbox.runAfter))
-    .limit(limit);
+  // Claim transaccional con SKIP LOCKED (§14-3): el cron de GH y el piggyback
+  // pueden correr al mismo tiempo — cada fila la reclama un único worker.
+  // Una fila a medio procesar vuelve a la cola solo si su lease expira.
+  const batch = await db.transaction(async (tx) => {
+    const rows = await tx
+      .select()
+      .from(notificationsOutbox)
+      .where(
+        and(
+          eq(notificationsOutbox.status, "QUEUED"),
+          lte(notificationsOutbox.runAfter, new Date()),
+          or(isNull(notificationsOutbox.lockedUntil), lte(notificationsOutbox.lockedUntil, new Date()))
+        )
+      )
+      .orderBy(asc(notificationsOutbox.runAfter))
+      .limit(limit)
+      .for("update", { skipLocked: true });
+    if (rows.length > 0) {
+      await tx
+        .update(notificationsOutbox)
+        .set({ lockedUntil: new Date(Date.now() + OUTBOX_LEASE_MS), updatedAt: new Date() })
+        .where(inArray(notificationsOutbox.id, rows.map((r) => r.id)));
+    }
+    return rows;
+  });
 
   for (const item of batch) {
     summary.processed += 1;
@@ -150,7 +172,7 @@ export async function processOutboxBatch(limit = 20): Promise<{
       summary.sent += 1;
       await db
         .update(notificationsOutbox)
-        .set({ status: "PROCESSED", updatedAt: new Date() })
+        .set({ status: "PROCESSED", lockedUntil: null, updatedAt: new Date() })
         .where(eq(notificationsOutbox.id, item.id));
     } else {
       const attempts = item.attempts + 1;
@@ -162,6 +184,7 @@ export async function processOutboxBatch(limit = 20): Promise<{
           status: dead ? "FAILED" : "QUEUED",
           attempts,
           runAfter: new Date(Date.now() + nextBackoffSeconds(attempts) * 1000),
+          lockedUntil: null,
           updatedAt: new Date(),
         })
         .where(eq(notificationsOutbox.id, item.id));

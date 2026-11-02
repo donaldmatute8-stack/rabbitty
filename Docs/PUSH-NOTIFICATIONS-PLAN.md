@@ -248,19 +248,20 @@ Checklist de cierre de fase (todo probado en device real):
 | 2026-11-02 | **P3 ✅ (commit `9ccfabe`)** | FCM Android: `lib/push/fcm.ts` (firebase-admin v14, init por envs FIREBASE_*) + fan-out por device en outbox (iOS→APNs, Android→FCM) con mismos estados de entrega. Requiere: usuario agrega credenciales Firebase en Vercel + `google-services.json` en el build Android. |
 | 2026-11-02 | **P4 ✅ (commit `32aa1a9`)** | Background location nativo: plugin `@capacitor-community/background-geolocation` (addWatcher, distanceFilter 50m) + `UIBackgroundModes: location` + textos NSLocation en Info.plist. Ping source:'background' con movimiento >30m/2min. **Requiere rebuild nativo**. Nota: el plugin comunitario no tiene geofence API (watcher continuo es el diseño) — iOS force-quit sin garantía ( accepted limitation, matriz §6 documentada). |
 | 2026-11-02 | **P5 ✅ (commit `da72f56`)** | Badge iOS en pushes + deliveries tail en push-check. |
+| 2026-11-01 | **§14-3 ✅ código + §14-5 verificado (rama score)** | Outbox: claim transaccional con `FOR UPDATE SKIP LOCKED` + lease `lockedUntil` 120s + índice parcial worker (`manual/0016_outbox_lease.sql`, pendiente psql a prod). Pagos: confirmado post-commit/no-fatal por diseño en `paymentCore` y `notify`. |
 | 2026-11-02 | **POS UX (commits `4101293`, `c0b45b2`)** | Métodos saneados (QR Bunz fuera del picker), split real (efectivo+Bunz via chargeBunz), propina en el checkout directo, selector/buscador dinámico de Rabbitters en QR Neón + Identificar + Enviar Cuenta (local primero, lookup general), dedupe plannedVisits vs check-ins. |
 
 ## 14. Pendientes operativos (NO olvidar — gates de lanzamiento del review)
 
 | # | Pendiente | Criterio de cierre | Dónde |
 |---|---|---|---|
-| 1 | **Config Firebase (Android)** | FIREBASE_SERVICE_ACCOUNT en Vercel + google-services.json en build Android + prueba real con token FCM en foreground/background/terminated + deep-link | Vercel miniapp, Xcode/Studio build |
-| 2 | **Matriz nativa de geofence/background-idle (iOS force-quit vs suspended)** | Runner test post-build v11 en device real: moverse a un local, app cerrada, ¿llega el push? Documentar resultados | Docs del plan, §6 |
-| 3 | **Outbox concurrencia (worker duplicado)** | Proveer doble-process guard: migración que agregue coluna lock leve o `FOR UPDATE SKIP LOCKED` en SELECT del batch (pending DB migration). Hoy: recursieve retry con backoff — el cron puede disponer de un job en 5min si piggyback falla, así que no es crítico como banda 1. | P0 worker |
+| 1 | **Config Firebase (Android)** | FIREBASE_SERVICE_ACCOUNT en Vercel + google-services.json en build Android + prueba real con token FCM en foreground/background/terminated + deep-link | Vercel miniapp, Xcode/Studio build — **bloqueado por creds (user)** |
+| 2 | **Matriz nativa de geofence/background-idle (iOS force-quit vs suspended)** | Runner test post-build en device real: moverse a un local, app cerrada, ¿llega el push? Documentar resultados | Docs del plan, §6 — **build v11/v12 deployado; falta ejecutar la matriz en device** |
+| 3 | ~~Outbox concurrencia (worker duplicado)~~ | **✅ CÓDIGO (2026-11-01, rama score):** claim transaccional `FOR UPDATE SKIP LOCKED` + lease de 120s (`lockedUntil`, expira sola si el worker muere a mitad del fan-out) + índice parcial worker. Migración manual `database-core/migrations/manual/0016_outbox_lease.sql` — **aplicar a prod con psql (DRIFT-001)** | `telegram-miniapp/src/lib/push/outbox.ts` |
 | 4 | **SSE re-connection stress** | Test connect/disconnect ×10, Last-Event-ID o cursor equivalente, recovery tras drop. El hook ya reintentar cada 5s; el cursor (orderId) se reconstruye de la lista del fetch inicial. | Notifications page + network log |
-| 5 | **Pagos no quedar colgados** | Confirmar que el fallo del push no cohíbe el directCheckout ni el cierre de orden — outbox+retry no debris nunca en un pago (verificado por diseño + test en staging) | staging flow |
+| 5 | ~~**Pagos no quedar colgados**~~ | **✅ VERIFICADO POR DISEÑO (2026-11-01):** `ORDER_PAID`, mint de cashback y enqueue outbox son **post-commit y no-fatal** (try/catch propio, nunca dentro de la tx de negocio ni del settle). Falta solo el test de staging para cerrar la bitácora. | `paymentCore.ts:500-522`, `notify.ts` (enqueue con catch propio) |
 | 6 | **Eventos 17/18 (marketing opt-in, recibo Stripe auto-push)** | Post-growth: el marketing necesita opt-in settings por categoría; el recibo requeriria proyectar un EVENT RECIBIENDO (stripe webhook es cuenta ya)... | P5+ pending |
-| 7 | **Rabbitty Score F2 (branch feat/rabbitty-score)** | Rebase de la branch sobre main y arrancar F2 Trust & Engagement shadow | BRANCH DONE, awaiting GO |
+| 7 | **Rabbitty Score F2 (branch feat/rabbitty-score)** | Rebase de la branch sobre main y arrancar F2 Trust & Engagement shadow | ✅ BRANCH DONE + F2 shadow implementado (ver RABBITTY-SCORE-PLAN.md §10 para el cierre) |
 
 ## 15. Pendientes de product (post-MVP, no urgentes)
 

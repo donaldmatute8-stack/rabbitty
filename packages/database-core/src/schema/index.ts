@@ -743,6 +743,9 @@ export const notificationsOutbox = pgTable("notifications_outbox", {
   status: text("status").default("QUEUED").notNull(), // QUEUED | PROCESSED | FAILED
   attempts: integer("attempts").default(0).notNull(),
   runAfter: timestamp("runAfter").defaultNow().notNull(),
+  // Lease de concurrencia: worker con claim activo (SKIP LOCKED); null = libre.
+  // Expira sola — si un worker muere a mitad del fan-out, la fila vuelve a la cola.
+  lockedUntil: timestamp("lockedUntil"),
   ...timestamps,
 });
 
