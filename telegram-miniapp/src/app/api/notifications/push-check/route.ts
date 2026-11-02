@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { isApnsConfigured } from "@/lib/push/apns";
 import { db } from "@/db";
@@ -6,24 +7,36 @@ import { desc } from "drizzle-orm";
 import { getAuthenticatedUser } from "@/lib/serverAuth";
 
 /**
- * ── Diagnóstico de push (Fase reparación) ──
- * Duplica la pregunta que el código hace en silencio: ¿están configurados los
- * envs de APNs en Vercel y hay dispositivos iOS activos registrados?
- * Auth por sesión del usuario o por Bearer RABBITTY_API_SECRET (S2S).
- * Responde: apnsConfigured, envs faltantes, dispositivos y los últimos pushes
- * encontrados en la campana (para comparar "fila creada vs push enviado").
+ * ── Diagnóstico de push (Fase reparación) v2 ──
+ * AUTH: sesión del usuario (getAuthHeaders de la app) O sesión S2S — ANTES
+ * exigía RABBITTY_API_SECRET y si Vercel tenía un valor distinto al local
+ * devolvía 401 sin explicación. Ahora:
+ *  - usuario con sesión válida funciona directo (botón "Diagnóstico de push")
+ *  - si viene S2S y no coincide, respondemos HUELLA (sha256·8) del esperado y
+ *    del provisto — comparable sin exponer el valor.
+ * Responde: apnsConfigured, envs APNs faltantes, dispositivos iOS activos.
  */
+const fingerprint = (v: string) => createHash("sha256").update(v).digest("hex").slice(0, 8);
+
 export async function GET(req: NextRequest) {
   try {
-    const serverSecret = process.env.RABBITTY_API_SECRET;
-    const authHeader = req.headers.get("authorization");
-    const s2s = !!serverSecret && authHeader === `Bearer ${serverSecret}`;
-    const caller = s2s ? { id: "s2s" } : await getAuthenticatedUser(req).catch(() => null);
+    const caller = await getAuthenticatedUser(req).catch(() => null);
+    const providedSecret = req.headers.get("authorization")?.replace(/^Bearer /, "").trim() || "";
+
     if (!caller) {
-      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+      // Sin sesión: solo revelamos huellas de comparación (nada del valor)
+      const expected = process.env.RABBITTY_API_SECRET;
+      return NextResponse.json({
+        success: true,
+        auth: "no-session",
+        s2sEnabled: Boolean(expected),
+        expectedFingerprint: expected ? fingerprint(expected) : null,
+        providedFingerprint: providedSecret ? fingerprint(providedSecret) : null,
+        hint: "Si expectedFingerprint ≠ providedFingerprint, tu valor local de RABBITTY_API_SECRET difiere del de Vercel — cópialo desde Vercel (Settings → Environment variables).",
+        diagnosticNeeds: "abre el Diagnóstico de push dentro de la app (sesión) para ver dispositivos y APNs.",
+      });
     }
 
-    // Espejo exacto de getConfig() en lib/push/apns.ts (sin leer claves)
     const missing: string[] = [];
     if (!process.env.APNS_KEY_ID?.trim()) missing.push("APNS_KEY_ID");
     if (!process.env.APNS_TEAM_ID?.trim()) missing.push("APNS_TEAM_ID");
@@ -34,7 +47,8 @@ export async function GET(req: NextRequest) {
       .select({
         platform: pushDevices.platform,
         isActive: pushDevices.isActive,
-        tokenPrefix: pushDevices.token,
+        token: pushDevices.token,
+        userId: pushDevices.userId,
         updatedAt: pushDevices.updatedAt,
       })
       .from(pushDevices)
@@ -43,10 +57,11 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      callerId: "id" in caller ? (caller as { id: string }).id : null,
       apnsConfigured: isApnsConfigured(),
       missingEnvs: missing,
       apnsEnv: process.env.APNS_ENV || "production",
-      devices: devices.map((d: { tokenPrefix: string }) => ({ ...d, tokenPrefix: String(d.tokenPrefix).slice(-12) })),
+      devices: devices.map((d: { token: string }) => ({ ...d, token: String(d.token).slice(-12) })),
     });
   } catch (err: unknown) {
     console.error("[PUSH_CHECK]", err);

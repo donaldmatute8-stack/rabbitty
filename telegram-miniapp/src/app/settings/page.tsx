@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
+import { toast } from '@rabbitty/ui';
 import { ArrowLeft, Bell, BellRing, Smartphone, Mail, ShieldCheck, HelpCircle, ChevronRight } from 'lucide-react';
 import BottomNav from '@/components/BottomNav';
 import { PlatformBridge } from '@/lib/platform';
@@ -168,6 +169,9 @@ export default function SettingsPage() {
                 );
               })}
             </div>
+
+            {/* ── Diagnóstico de push (¿APNs en Vercel + dispositivo registrado?) ── */}
+            <PushDiagnosticsRow />
           </div>
 
           {/* ── Accesos rápidos ── */}
@@ -181,6 +185,75 @@ export default function SettingsPage() {
       )}
 
       <BottomNav isDark={!user} />
+    </div>
+  );
+}
+
+/**
+ * ── PushDiagnosticsRow ── Consulta /api/notifications/push-check CON LA SESIÓN
+ * del usuario y muestra el resultado (APNs, envs faltantes, dispositivos).
+ */
+function PushDiagnosticsRow() {
+  const [state, setState] = useState<"idle" | "loading" | "result" | "error">( "idle" );
+  const [result, setResult] = useState<{
+    apnsConfigured?: boolean; missingEnvs?: string[]; apnsEnv?: string;
+    devices?: Array<{ platform: string; isActive: boolean; token: string; updatedAt: string | null }>;
+  } | null>(null);
+
+  const check = async () => {
+    setState("loading");
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch("/api/notifications/push-check", { headers: headers || {}, cache: "no-store" });
+      const data = await res.json();
+      if (!data?.success) throw new Error(data?.error || data?.hint || `HTTP ${res.status}`);
+      setResult(data);
+      setState("result");
+    } catch (err: unknown) {
+      toast.error(String((err as Error)?.message || "No se pudo diagosticar push").slice(0, 120));
+      setState("idle");
+    }
+  };
+
+  if (state !== "result") {
+    return (
+      <button
+        type="button"
+        onClick={() => { void check(); PlatformBridge.hapticFeedback("light"); }}
+        disabled={state === "loading"}
+        className="mt-2 mx-1 w-[calc(100%-8px)] text-left text-[11px] font-bold text-white/35 hover:text-[#E91E63] rounded-xl py-2 transition-colors border-none bg-transparent cursor-pointer disabled:opacity-50"
+      >
+        {state === "loading" ? "Consultando servidor de push…" : "⟡ Diagnóstico de push (¿APNs en Vercel? ¿dispositivos?)"}
+      </button>
+    );
+  }
+
+  const d = result;
+  return (
+    <div className="mt-3 mx-1 rounded-2xl bg-black/30 border border-white/10 p-3 space-y-1.5 text-[11px] leading-snug">
+      <div className="flex justify-between">
+        <span className="text-white/50">APNs en Vercel</span>
+        <span className={d?.apnsConfigured ? "text-emerald-300 font-bold" : "text-red-300 font-bold"}>
+          {d?.apnsConfigured ? "✓ configurado" : `✗ faltan: ${(d?.missingEnvs ?? []).join(", ") || "?"}`}
+        </span>
+      </div>
+      <div className="flex justify-between">
+        <span className="text-white/50">Entorno APNs</span>
+        <span className="text-white font-bold">{d?.apnsEnv}</span>
+      </div>
+      {(d?.devices ?? []).map((dev, i: number) => (
+        <div key={i} className="flex justify-between border-t border-white/5 pt-1">
+          <span className="text-white/50 font-mono">…{dev.token.slice(-10)} · {dev.platform}</span>
+          <span className={dev.isActive ? "text-emerald-300 font-bold" : "text-gray-400"}>
+            {dev.isActive ? "activo" : "inactivo"} · {dev.updatedAt ? new Date(dev.updatedAt).toLocaleString("es-MX", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "short" }) : "—"}
+          </span>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={(() => { setState("idle"); setResult(null); })}
+        className="text-[10px] font-bold text-white/30 hover:text-white py-0.5 cursor-pointer"
+      >Cerrar diagnóstico</button>
     </div>
   );
 }
