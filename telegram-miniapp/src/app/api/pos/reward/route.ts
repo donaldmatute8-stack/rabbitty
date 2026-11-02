@@ -254,6 +254,9 @@ export async function POST(request: Request) {
       });
 
       // Push notification al usuario que recibió los Bunz en POS
+      // H14: dedupeKey explícito (la clave del ledger) — sin esto, cada corrida
+      // del worker re-emitía la misma notificación por push (dedupeKey null no
+      // bloquea el UNIQUE de la outbox) — la tormenta de "8 Bunz" al pagar.
       await sendEcosystemNotification({
         userId: existingUser.id,
         title: `✨ ¡Recibiste +${bunzToMint.toLocaleString()} Bunz!`,
@@ -262,6 +265,7 @@ export async function POST(request: Request) {
         route: '/profile/wallet',
         pushData: { bunzAmount: bunzToMint, orderId: order_id || '' },
         threadId: 'rewards',
+        dedupeKey: idempotencyKey,
       });
 
       return NextResponse.json({ 

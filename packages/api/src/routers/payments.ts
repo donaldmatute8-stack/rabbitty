@@ -289,6 +289,39 @@ export const paymentsRouter = router({
       return row || null;
     }),
 
+  /**
+   * H14-Watch: último intent liquidado para ORDENES de la branch (90s ventana).
+   * El POS mira SIEMPRE (no solo con modal abierto): cuando el comensal paga
+   * por otro lado (link de cuenta / re-cobro), el operador lo confirma al toque.
+   */
+  recentSettledForBranch: protectedProcedure
+    .input(z.object({ windowSec: z.number().int().min(60).max(3600).default(900) }))
+    .query(async ({ ctx, input }) => {
+      const { paymentIntents, orders } = await import("@rabbitty/database-restaurant/schema");
+      const rows = await ctx.restaurantDb
+        .select({
+          intentId: paymentIntents.id,
+          orderId: paymentIntents.orderId,
+          amountMxn: paymentIntents.amountMxn,
+          paidAt: paymentIntents.paidAt,
+        })
+        .from(paymentIntents)
+        .innerJoin(orders, eq(orders.id, paymentIntents.orderId))
+        .where(and(
+          eq(paymentIntents.status, "SUCCEEDED"),
+          eq(orders.branchId, ctx.branchId),
+          gte(paymentIntents.createdAt, new Date(Date.now() - input.windowSec * 1000))
+        ))
+        .orderBy(desc(paymentIntents.paidAt))
+        .limit(10);
+      return rows.map((r) => ({
+        intentId: r.intentId,
+        orderId: r.orderId,
+        amount: Number(r.amountMxn || 0),
+        paidAt: r.paidAt,
+      }));
+    }),
+
   cancelPaymentIntent: publicLimitedProcedure
     .input(z.object({
       intentId: z.string(),

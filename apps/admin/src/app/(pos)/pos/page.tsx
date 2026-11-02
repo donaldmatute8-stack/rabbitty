@@ -868,6 +868,32 @@ export default function PosPage() {
     };
   }, [qrPaymentModal, API_SERVER_URL]);
 
+  // ── H14-Watch: settlements remotos de la branch (al margen del modal) ──
+  // Si el comensal paga (link de cuenta, re-cobro, etc.) mientras el operador
+  // no tiene el QR abierto, el POS lo detecta al vuelo (poll 8s, ventana 15 min).
+  const settleWatchSeen = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const timer = setInterval(async () => {
+      try {
+        const recent = await utils.payments.recentSettledForBranch.fetch({ windowSec: 900 });
+        let fresh = 0;
+        for (const it of recent) {
+          if (!settleWatchSeen.current.has(it.intentId)) {
+            settleWatchSeen.current.add(it.intentId);
+            if (fresh < 3) {
+              fresh += 1;
+              toast.info(`Venta liquidada de forma remota — $${(it.amount ?? 0).toFixed(2)} MXN. Ya aparece en Historial/Reportes.`);
+            }
+            void refetchActiveTabs();
+            void refetchRecentOrders();
+          }
+        }
+        if (recent.length > 60) settleWatchSeen.current = new Set(recent.slice(0, 60).map((x) => x.intentId));
+      } catch { /* silencioso — el watcher es best-effort */ }
+    }, 8000);
+    return () => clearInterval(timer);
+  }, []);
+
   // Polling del intento de Stripe: cuando el webhook o la reconciliación
   // server-side liquida (SUCCEEDED), finaliza
   const settleStripeModal = async () => {
