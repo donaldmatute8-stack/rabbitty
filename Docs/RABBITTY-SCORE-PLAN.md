@@ -36,7 +36,7 @@ Un sistema de confianza de dos caras al estilo Uber: **Rabbitter Trust & Engagem
 | **F1-tests** | Tests de aceptación (checklist §6) | ✅ Unit 10/10 + integración ROLLBACK | Suite API 31/31 |
 | **F1-staging** | Validación manual del prompt en producción (ambos canales) | ⏳ Pendiente operativo | No bloquea F2 |
 | **F2** | Rabbitter Trust & Engagement en shadow | 🔧 **EN RAMA** | Reglas puras + snapshot `rabbitter_score_shadow` + panel God en `/god/insights`. Pendiente: aplicar migración `0022` a prod y validación operativa |
-| F3 | Growth Allocation (promos/visibilidad con scores calibrados) | ⏳ Pendiente | Requiere presupuesto/autorización + atribución de campañas |
+| F3 | Growth Allocation (promos/visibilidad con scores calibrados) | ⏳ Pendiente | Requiere presupuesto/autorización + atribución de campañas. **Aquí entra Bunzy como advisor de sugerencias (Bx2, ver BUNZY_ROADMAP_SUPREMO.md §11)** |
 | F4 | Beneficios variables y tiering vendible (liga con Analíticas Pro) | ⏳ Pendiente | Solo con datos de F2/F3 |
 | F5 | Rabbitty Score público + multiplicadores | ⏳ Pendiente | Decisión económica explícita — no automática |
 
