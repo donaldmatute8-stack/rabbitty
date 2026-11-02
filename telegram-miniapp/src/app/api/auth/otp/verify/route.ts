@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { users, webSessions, verificationTokens } from '@/db/schema';
+import { users, webSessions, verificationTokens, affiliateCampaigns } from '@/db/schema';
 import { and, eq, gt, or, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 import { rateLimit, retryAfterSec, checkOnly, registerHit, resetLimit, getClientIp, hashOtp } from '@/lib/otp';
@@ -164,6 +164,21 @@ export async function POST(req: NextRequest) {
 
     const isNewUser = !user;
 
+    // ── Rabbitty Score F3 (D-5): atribución de campaña en el alta ──
+    // `campaignId` es opcional en el body (hoy nadie lo envía; el front lo pasará
+    // cuando existan links de campaña en /login). Solo se captura en la CREACIÓN
+    // y solo si la campaña existe (evita basura injection en el campo).
+    let firstSeenCampaignId: string | null = null;
+    const candidateCampaignId = typeof body?.campaignId === 'string' ? body.campaignId.trim() : '';
+    if (candidateCampaignId) {
+      const [campaign] = await db
+        .select({ id: affiliateCampaigns.id })
+        .from(affiliateCampaigns)
+        .where(eq(affiliateCampaigns.id, candidateCampaignId))
+        .limit(1);
+      if (campaign) firstSeenCampaignId = campaign.id;
+    }
+
     let resolvedUser = user;
     if (!resolvedUser) {
       const usernameBase = isEmail ? email.split('@')[0] : `user_${rawInput.replace(/\D/g, '').slice(-6)}`;
@@ -181,6 +196,7 @@ export async function POST(req: NextRequest) {
         totalBunzEarned: 0,
         totalBunzSpent: 0,
         role: 'USER',
+        ...(firstSeenCampaignId ? { firstSeenCampaignId } : {}),
       }).returning();
     }
 

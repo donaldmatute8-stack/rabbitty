@@ -34,6 +34,10 @@ export const users = pgTable("users", {
   twoFactorMethods: text("twoFactorMethods").default("[]").notNull(), // JSON: ["email","phone"] (OTP); TOTP se deriva de totpEnabled
   ...timestamps,
   scanCode: integer("scanCode").unique(), // Código óptico del RabbittyCode (asignado por el servidor)
+  // Rabbitty Score F3 (D-5): campaña de atribución en el alta del cliente.
+  // Null = ingresa orgánico. Se captura SOLO en la creación (primera vez vista);
+  // no tiene FK a affiliateCampaigns a propósito (id text, sobrevive borrados).
+  firstSeenCampaignId: text("firstSeenCampaignId"),
 });
 
 export const verificationTokens = pgTable("verificationTokens", {

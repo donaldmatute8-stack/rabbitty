@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { validateTelegramInitData, parseTelegramUser } from '@/lib/telegramAuth';
 import { resolveUniqueUsername } from '@/lib/username';
 import { db } from '@/db';
-import { users, referrals, webSessions, ownedBusinesses, pendingVaults } from '@/db/schema';
+import { users, referrals, webSessions, ownedBusinesses, pendingVaults, affiliateCampaigns } from '@/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 import { recordLedgerTransaction, findLedgerEntry } from '@/lib/ledgerHelper';
@@ -33,7 +33,24 @@ export async function POST(req: Request) {
     }
 
     const telegramId = tUser.id.toString();
-    
+
+    // ── Rabbitty Score F3 (D-5): atribución de campaña en el alta ──
+    // startParam admite el prefijo `camp_{campaignId}` (link de campaña).
+    // Solo se captura en la CREACIÓN del usuario (primera vez vista) y SOLO
+    // si la campaña existe en el catálogo (evita basura injection en el campo).
+    let firstSeenCampaignId: string | null = null;
+    if (startParam && startParam.startsWith('camp_')) {
+      const candidateId = startParam.replace('camp_', '').trim();
+      if (candidateId) {
+        const [campaign] = await db
+          .select({ id: affiliateCampaigns.id })
+          .from(affiliateCampaigns)
+          .where(eq(affiliateCampaigns.id, candidateId))
+          .limit(1);
+        if (campaign) firstSeenCampaignId = campaign.id;
+      }
+    }
+
     let user = await db.query.users.findFirst({
       where: eq(users.telegramId, telegramId)
     });
@@ -47,7 +64,8 @@ export async function POST(req: Request) {
         username,
         firstName: tUser.first_name || null,
         lastName: tUser.last_name || null,
-        totalBunzEarned: 0
+        totalBunzEarned: 0,
+        ...(firstSeenCampaignId ? { firstSeenCampaignId } : {}),
       }).returning();
       user = newUser;
     }

@@ -114,8 +114,7 @@ Pendiente operativo (no bloqueante): validación en staging del prompt con una o
 | D-2 | ¿El Rabbitter ve su propio historial de ratings en F1? | No (evitar gaming); reevaluar con data shadow |
 | D-3 | ¿Prompt también en web `/pay`? | Sí, mismo endpoint |
 | D-4 | ¿Comentario obligatorio con 1-2★? | No, siempre opcional |
-| D-5 | Atribución de campañas (Growth) | F3; requiere `firstSeenCampaignId` en alta de cliente |
-| D-6 | Presupuesto de promos cofinanciadas | F3/F4; tope % GMV + autorización God |
+| D-5 | Atribución de campañas (Growth) | ✅ **INSTRUMENTADO (2026-11-01):** columna `users.firstSeenCampaignId` (nullable, sin FK a propósito) + captura en los 2 puntos de alta real: `auth/telegram` (prefijo `camp_{campaignId}` en startParam, solo en creación y solo si la campaña existe) y `auth/otp/verify` (body.campaignId opcional — el front lo pasará cuando existan links de campaña en /login). Migración manual `0017` **aplicada a prod** (norma DRIFT-001). La data acumula durante el corredor shadow → insumo listo para F3 || D-6 | Presupuesto de promos cofinanciadas | F3/F4; tope % GMV + autorización God |
 | D-7 | ¿Quién causa la tab huérfana (cliente vs operador)? Define si `tabs` entra al score | **Actual:** componente diagnóstico puro, fuera del score |
 | D-8 | Atribuir abandono de payment intent: ¿fricción de UX (checkout→3DS) o del usuario? | F2 shadow lo clasifica como `expired/cancelled/failed` sin juzgar; decidir con datos |
 
@@ -137,6 +136,7 @@ Pendiente operativo (no bloqueante): validación en staging del prompt con una o
 | 2026-11-01 | **F1 implementada en rama** `feat/rabbitty-score`: migración `0020` aplicada a prod (4 tablas), emisión `ORDER_PAID` en settle digital, invalidación inmediata en 3 transiciones, router `ratings`, prompts in-app y web, superficie `/ratings`, moderación God y shadow score. |
 | 2026-11-01 | **F1 CERRADA**: reglas puras extraídas a `services/ratingRules.ts`; tests unitarios 10/10 (checklist §6) + integration tests con ROLLBACK (requieren `TEST_DATABASE_URL`); suite API 31/31. |
 | 2026-11-02 | F1 mergeada a `main` (FF `ecd406c`) — el dataset de ratings corre en producción. Rama lista para F2 (rebase sobre main cuando el plan de notificaciones v2.1 esté en P0/P1). |
+| 2026-11-01 | **D-5 instrumentado (F3-ready)**: `users.firstSeenCampaignId` + captura en alta Telegram (`camp_` en startParam) y OTP verify (body opcional); migración `0017` aplicada a prod. La atribución acumula desde ya durante el shadow. |
 | 2026-11-01 | **F2 en rama** (`feat/rabbitty-score`, rebaseada sobre main con push plan v2.1 y pin de drizzle): `trustRules.ts` puro + unitarios 16/16, migración `0022` (`rabbitter_score_shadow` — **aplicar a prod manualmente, norma DRIFT-001**), God queries `getRabbitterTrustShadow` + `rabbitterTrustShadowQueue`, panel shadow en `/god/insights`. Snapshot on-demand (patrón F1); sin cron. Pendiente operativo: correr snapshot contra datos reales y validación manual. |
 
 ## 10. Pendientes de F2 — para cerrar y pulir (ANOTADO, no bloquea; se hace al finalizar)
