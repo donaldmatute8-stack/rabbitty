@@ -527,67 +527,93 @@ export async function confirmPaymentIntentSettled(
   // mint falla, el pago queda liquidado y el cliente reclama con su ticket).
   if (result?.success) {
     try {
-      const [intentRow] = await db
-        .select({ payerSubjectId: paymentIntents.payerSubjectId, merchantId: paymentIntents.merchantId })
-        .from(paymentIntents)
-        .where(eq(paymentIntents.id, params.paymentIntentId))
-        .limit(1);
-      const [paidOrder] = await db
-        .select({ status: orders.status, total: orders.total, bunzReward: orders.bunzReward })
-        .from(orders)
-        .where(eq(orders.id, result.orderId))
-        .limit(1);
-
-      const payerId = intentRow?.payerSubjectId;
-      const orderIsPaid = paidOrder?.status === "COMPLETED" || paidOrder?.status === "PAID";
-      const alreadyRewarded = Number((paidOrder as any)?.bunzReward || 0) > 0;
-
-      if (payerId && paidOrder && orderIsPaid && !alreadyRewarded) {
-        // businessId del comercio (branches → restaurants.businessId), con fallback al branchId
-        let businessId: string = intentRow.merchantId;
-        const [branch] = await db
-          .select({ restaurantId: branches.restaurantId })
-          .from(branches)
-          .where(eq(branches.id, intentRow.merchantId))
-          .limit(1);
-        if (branch?.restaurantId) {
-          const [rest] = await db
-            .select({ businessId: restaurants.businessId })
-            .from(restaurants)
-            .where(eq(restaurants.id, branch.restaurantId))
-            .limit(1);
-          if (rest?.businessId) businessId = rest.businessId;
-        }
-
-        const attemptReward = async (): Promise<{ success: boolean; bunz?: number } | null> => {
-          const { miniappClient } = await import("./miniapp-client");
-          try {
-            return await miniappClient.rewardBunz(payerId, Number(paidOrder.total || 0), result.orderId, businessId);
-          } catch (firstErr) {
-            console.error("[STRIPE_CASHBACK_FAIL] orderId=" + result.orderId + " intento 1:", firstErr);
-            await new Promise((r) => setTimeout(r, 800));
-            return await miniappClient.rewardBunz(payerId, Number(paidOrder.total || 0), result.orderId, businessId);
-          }
-        };
-        let res: Awaited<ReturnType<typeof attemptReward>> = null;
-        try {
-          res = await attemptReward();
-        } catch (secondErr) {
-          console.error("[STRIPE_CASHBACK_FAIL] orderId=" + result.orderId + " intento 2 definitivo:", secondErr);
-        }
-        if (res?.success) {
-          await db
-            .update(orders)
-            .set({ bunzReward: res.bunz ?? 0 })
-            .where(eq(orders.id, result.orderId));
-        }
-      }
+      await reconcileOrderCashback(db, { orderId: result.orderId });
     } catch (err) {
       console.error("[STRIPE_CASHBACK_FAIL] orderId=" + result.orderId, err);
     }
   }
 
   return result;
+}
+
+/**
+ * ── conciliación de cashback por orden (H8) ──
+ * Se usa al liquidar (webhook Stripe) y en re-ejecución manual/admin
+ * (POST /api/internal/cashback-reconcile). Cubre el caso en que el intent
+ * ganador llegó SIN pagador (intent de la /pay regenerado tras un cancel,
+ * o pago desde el link de cuenta) — resuelve al comensal vía:
+ *   1) payerSubjectId de cualquier intent vinculado a la orden,
+ *   2) fallback a orders.customerId (el POS sí lo vinculó al crear la orden).
+ * Idempotente doble: bunzReward>0 ya acreditado → skip; y la ledger key
+ * pos_rwd_{orderId} no duplica.
+ */
+export async function reconcileOrderCashback(
+  db: Db,
+  params: { orderId: string }
+): Promise<{ minted: boolean; bunz?: number; skipped?: "ALREADY_REWARDED" | "NO_PAYER" | "NOT_PAID" | "NO_ORDER" }> {
+  const [order] = await db
+    .select({ id: orders.id, customerId: orders.customerId, branchId: orders.branchId, status: orders.status, total: orders.total, bunzReward: orders.bunzReward })
+    .from(orders)
+    .where(eq(orders.id, params.orderId))
+    .limit(1);
+  if (!order) return { minted: false, skipped: "NO_ORDER" };
+  const orderIsPaid = order.status === "COMPLETED" || order.status === "PAID";
+  if (!orderIsPaid) return { minted: false, skipped: "NOT_PAID" };
+  if (Number(order.bunzReward || 0) > 0) return { minted: false, skipped: "ALREADY_REWARDED" };
+
+  // 1) payer directo de cualquier intent de la orden (los de POS sí lo llevan)
+  let payerId: string | null = null;
+  const intentRows = await db
+    .select({ payerSubjectId: paymentIntents.payerSubjectId })
+    .from(paymentIntents)
+    .where(eq(paymentIntents.orderId, params.orderId));
+  payerId = intentRows.find((r: { payerSubjectId: string | null }) => !!r.payerSubjectId)?.payerSubjectId ?? null;
+  // 2) fallback: el comensal vinculado en la orden (canal Enviar Cuenta / /pay)
+  if (!payerId) payerId = order.customerId ?? null;
+  if (!payerId) return { minted: false, skipped: "NO_PAYER" };
+
+  // businessId del comercio (branches → restaurants.businessId), fallback del branchId
+  let businessId: string = order.branchId;
+  if (order.branchId) {
+    const [branch] = await db
+      .select({ restaurantId: branches.restaurantId })
+      .from(branches)
+      .where(eq(branches.id, order.branchId))
+      .limit(1);
+    if (branch?.restaurantId) {
+      const [rest] = await db
+        .select({ businessId: restaurants.businessId })
+        .from(restaurants)
+        .where(eq(restaurants.id, branch.restaurantId))
+        .limit(1);
+      if (rest?.businessId) businessId = rest.businessId;
+    }
+  }
+
+  const attemptReward = async (): Promise<{ success: boolean; bunz?: number } | null> => {
+    const { miniappClient } = await import("./miniapp-client");
+    try {
+      return await miniappClient.rewardBunz(payerId!, Number(order.total || 0), order.id, businessId);
+    } catch (firstErr) {
+      console.error("[CASHBACK_RECONCILE] orderId=" + order.id + " intento 1:", firstErr);
+      await new Promise((r) => setTimeout(r, 800));
+      return await miniappClient.rewardBunz(payerId!, Number(order.total || 0), order.id, businessId);
+    }
+  };
+  let res: Awaited<ReturnType<typeof attemptReward>> = null;
+  try {
+    res = await attemptReward();
+  } catch (secondErr) {
+    console.error("[CASHBACK_RECONCILE] orderId=" + order.id + " intento 2 definitivo:", secondErr);
+  }
+  if (res?.success) {
+    await db
+      .update(orders)
+      .set({ bunzReward: res.bunz ?? 0 })
+      .where(eq(orders.id, order.id));
+    return { minted: true, bunz: res.bunz ?? 0 };
+  }
+  return { minted: false };
 }
 
 /**

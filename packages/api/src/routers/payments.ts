@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, eq, inArray, gte, lt, sql } from "drizzle-orm";
+import { and, eq, inArray, gte, lt, sql, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure, publicLimitedProcedure, resolveBranchId } from "../trpc";
 import { orders, payments, tables, tableSessions, orderItems, menuItems } from "@rabbitty/database-restaurant/schema";
@@ -259,6 +259,34 @@ export const paymentsRouter = router({
       }
 
       return intent;
+    }),
+
+  /**
+   * ÚLTIMO intent de una ORDEN (H8): el POS rastrea por ORDEN, no por intent —
+   * así el modal detecta el pago aunque el intent rastreado fue cancelado y el
+   * comensal pagó el intent regenerado (p.ej. vía link de cuenta / /pay).
+   * Solo campos no-sensibles, scoping del staff por sucursal.
+   */
+  latestIntentForOrder: protectedProcedure
+    .input(z.object({ orderId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const { paymentIntents, orders } = await import("@rabbitty/database-restaurant/schema");
+      const [row] = await ctx.restaurantDb
+        .select({
+          id: paymentIntents.id,
+          status: paymentIntents.status,
+          amountMxn: paymentIntents.amountMxn,
+          paidAt: paymentIntents.paidAt,
+        })
+        .from(paymentIntents)
+        .innerJoin(orders, eq(orders.id, paymentIntents.orderId))
+        .where(and(
+          eq(paymentIntents.orderId, input.orderId),
+          eq(orders.branchId, ctx.branchId)
+        ))
+        .orderBy(desc(paymentIntents.createdAt))
+        .limit(1);
+      return row || null;
     }),
 
   cancelPaymentIntent: publicLimitedProcedure

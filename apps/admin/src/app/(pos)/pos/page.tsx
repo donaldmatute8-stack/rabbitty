@@ -136,7 +136,11 @@ export default function PosPage() {
     const intentId = stripeIntentId.current;
     try {
       if (intentId && !stripePaid) {
-        const fresh = await utils.payments.getPaymentIntent.fetch({ intentId });
+        // H8: por ORDEN — el pago puede haber entrado a un intent regenerado
+        const modalOrderId = modal?.orderId;
+        const fresh = modalOrderId
+          ? await utils.payments.latestIntentForOrder.fetch({ orderId: modalOrderId })
+          : await utils.payments.getPaymentIntent.fetch({ intentId });
         if (fresh?.status === "SUCCEEDED" && modal) {
           setStripePaid(true);
           toast.success("💳 ¡El pago llegó entre líneas — comanda liquidada!");
@@ -863,30 +867,30 @@ export default function PosPage() {
   // server-side liquida (SUCCEEDED), finaliza
   useEffect(() => {
     if (!stripePayModal || stripePaid) return;
-    const pollIntentId = stripeIntentId.current;
+    const orderOfModal = stripePayModal.orderId;
     let cancelled = false;
     const timer = setInterval(async () => {
       try {
-        if (!pollIntentId) return;
-        // Via cliente tRPC (autenticación y URL correctas en cualquier entorno),
-        // nunca un fetch hardcodeado a producción desde localhost.
-        const intent = await utils.payments.getPaymentIntent.fetch({ intentId: pollIntentId });
+        if (!orderOfModal) return;
+        // H8: rastreo por ORDEN (último intent) — el pago puede llegar a un
+        // intent regenerado (cancel + re-cobro o link de cuenta /pay/[orderId]).
+        const intent = await utils.payments.latestIntentForOrder.fetch({ orderId: orderOfModal });
         if (intent?.status === "SUCCEEDED" && !cancelled) {
           cancelled = true;
           clearInterval(timer);
           setStripePaid(true);
-          const realOrderNumber = (stripePayModal.orderId || stripeIntentId.current || "").slice(-4).toUpperCase();
+          const realOrderNumber = (stripePayModal.orderId || intent.id || "").slice(-4).toUpperCase();
           if (stripePayModal.bunzApplied > 0) {
-            toast.success(`🐰 ¡Pago Stripe verificado! +${stripePayModal.bunzApplied} Bunz al Rabbitter.`);
+            toast.success(`Pago Stripe verificado — +${stripePayModal.bunzApplied} Bunz al Rabbitter.`);
           } else {
-            toast.success("💳 ¡Pago Stripe recibido! Comanda liquidada.");
+            toast.success("Pago recibido — comanda liquidada.");
           }
           setLastPaidOrderId(stripePayModal.orderId);
           finalizeCheckout(
             realOrderNumber,
             "STRIPE",
             undefined,
-            selectedRabbitter?.name,
+            selectedRabbitterRef.current?.name,
             stripePayModal.bunzApplied || undefined,
             stripePayModal.orderId,
             stripePayModal.orderId
