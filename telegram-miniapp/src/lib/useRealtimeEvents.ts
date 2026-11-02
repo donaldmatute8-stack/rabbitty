@@ -14,13 +14,15 @@ export function useRealtimeEvents(
   ) => void,
   enabled: boolean
 ) {
+  // Última versión del handler en un ref (el effect lo consume sin re-crear streams)
   const handlerRef = useRef(onNotification);
-  handlerRef.current = onNotification;
+  useEffect(() => {
+    handlerRef.current = onNotification;
+  }, [onNotification]);
 
   useEffect(() => {
     if (!enabled) return;
     let destroyed = false;
-    let backlog: ReturnType<typeof setTimeout> | null = null;
 
     const run = async () => {
       while (!destroyed) {
