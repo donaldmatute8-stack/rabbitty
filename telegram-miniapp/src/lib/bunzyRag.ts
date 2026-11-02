@@ -36,8 +36,92 @@ function openAiKey(): string | null {
   return key && key !== "dummy_key_for_build" ? key : null;
 }
 
-/** Embeddings en batch. null = sin API key (modo local/build). */
+/**
+ * ── Embeddings provider-agnostic (el stack de Rabbitty es Ollama, no OpenAI) ──
+ * 1) OLLAMA_API_URL (+OLLAMA_API_KEY, OLLAMA_EMBED_MODEL || OLLAMA_MODEL):
+ *    native /api/embed → fallback OpenAI-compat /v1/embeddings en el mismo host.
+ * 2) OPENAI_API_KEY como respaldo.
+ *
+ * pgvector column es vector(1536). Si el modelo de embeddings da menos dims,
+ * se PADDEA con ceros — la similitud coseno se PRESERVA exacta (los ceros no
+ * aportan al dot ni a la norma; query == docs = misma deducción). Si da MÁS de
+ * 1536, error explícito (la columna requeriría migración de dimensión).
+ */
+function ollamaEmbedBase(): string | null {
+  const raw = process.env.OLLAMA_API_URL;
+  if (!raw) return null;
+  for (const suffix of ["/api/chat", "/v1/chat/completions", "/chat/completions", "/chat", "/v1/messages"]) {
+    if (raw.endsWith(suffix)) return raw.slice(0, -suffix.length);
+  }
+  return raw.replace(/\/$/, "");
+}
+
+async function padTo1536(v: number[]): Promise<number[]> {
+  const dim = v.length;
+  if (dim === 1536) return v;
+  if (dim > 1536) throw new Error(`embedding dim ${dim} > 1536 (columna pgvector) — migración de dimensión requerida`);
+  return [...v, ...new Array(1536 - dim).fill(0)];
+}
+
+async function embedWithOllama(texts: string[]): Promise<number[][] | null> {
+  const base = ollamaEmbedBase();
+  if (!base) return null;
+  const key = process.env.OLLAMA_API_KEY || "";
+  const model = process.env.OLLAMA_EMBED_MODEL || process.env.OLLAMA_MODEL || "nomic-embed-text";
+  const textsSafe = texts.map((t) => (t || " "));
+
+  // Native endpoint primero
+  try {
+    const res = await fetch(`${base}/api/embed`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(key ? { Authorization: `Bearer ${key}` } : {}),
+      },
+      body: JSON.stringify({ model, input: textsSafe }),
+    });
+    if (res.ok) {
+      const data = (await res.json()) as { embeddings?: number[][] };
+      if (Array.isArray(data.embeddings) && data.embeddings.length === textsSafe.length) {
+        return await Promise.all(data.embeddings.map((v) => padTo1536(v)));
+      }
+      console.warn("[BunzyRAG] ollama /api/embed respondió sin embeddings");
+    } else {
+      console.warn("[BunzyRAG] ollama /api/embed HTTP", res.status, "— pruebo /v1/embeddings");
+    }
+  } catch (err) {
+    console.warn("[BunzyRAG] ollama /api/embed falló:", err instanceof Error ? err.message : err);
+  }
+
+  // Fallback OpenAI-compat en el mismo host
+  try {
+    const res = await fetch(`${base}/v1/embeddings`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(key ? { Authorization: `Bearer ${key}` } : {}),
+      },
+      body: JSON.stringify({ model, input: textsSafe }),
+    });
+    if (res.ok) {
+      const data = (await res.json()) as { data?: Array<{ index: number; embedding: number[] }> };
+      if (Array.isArray(data.data)) {
+        const out = new Array<number[]>(textsSafe.length);
+        for (const d of data.data) out[d.index] = await padTo1536(d.embedding);
+        if (out.every(Boolean)) return out;
+      }
+      console.warn("[BunzyRAG] ollama /v1/embeddings sin embeddings válidos");
+    }
+  } catch (err) {
+    console.warn("[BunzyRAG] ollama /v1/embeddings falló:", err instanceof Error ? err.message : err);
+  }
+  return null;
+}
+
+/** Embeddings: OLLAMA (stack Rabbitty) primero, OpenAI como respaldo. null = sin provider. */
 async function embedTexts(texts: string[]): Promise<number[][] | null> {
+  const viaOllama = await embedWithOllama(texts);
+  if (viaOllama) return viaOllama;
   const key = openAiKey();
   if (!key) return null;
   try {

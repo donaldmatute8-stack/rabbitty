@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
     const result = await ingestSupportKnowledge();
     if (result.skipped) {
       return NextResponse.json(
-        { ok: false, error: 'OPENAI_API_KEY no configurada en este entorno — seed omitido' },
+        { ok: false, error: 'Sin proveedor de embeddings — configura OLLAMA_API_URL (+OLLAMA_EMBED_MODEL u OLLAMA_MODEL) o OPENAI_API_KEY en este entorno' },
         { status: 503 }
       );
     }

@@ -71,7 +71,7 @@ try {
 const data = await res.json().catch(() => null);
 
 if (res.status === 503) {
-  fail(2, 'OPENAI_API_KEY no está en el proyecto miniapp de Vercel — agrégala como env (mismo runtime que el chat de Bunzy) y re-corre este smoke.');
+  fail(2, 'Sin proveedor de embeddings en el server — verifica OLLAMA_API_URL (+ OLLAMA_EMBED_MODEL, ej. nomic-embed-text) u OPENAI_API_KEY en Vercel y re-corre este smoke.');
 }
 if (res.status === 401) fail(1, 'Auth rechazada en el POST — secret inconsistentes entre proyecto Vercel y tu shell.');
 if (!data) fail(1, `Respuesta no-JSON (HTTP ${res.status})`);
