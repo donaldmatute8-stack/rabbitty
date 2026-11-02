@@ -247,4 +247,24 @@ Checklist de cierre de fase (todo probado en device real):
 | 2026-11-02 | **P2 ✅ (commit `d6eca07`)** | Realtime in-app: `/api/realtime/events` SSE por sesión (≤3s, keepalive, timeout 10min) + hook `useRealtimeEvents` + inserción EN VIVO en la página de notificaciones + estado OPENED en deliveries. |
 | 2026-11-02 | **P3 ✅ (commit `9ccfabe`)** | FCM Android: `lib/push/fcm.ts` (firebase-admin v14, init por envs FIREBASE_*) + fan-out por device en outbox (iOS→APNs, Android→FCM) con mismos estados de entrega. Requiere: usuario agrega credenciales Firebase en Vercel + `google-services.json` en el build Android. |
 | 2026-11-02 | **P4 ✅ (commit `32aa1a9`)** | Background location nativo: plugin `@capacitor-community/background-geolocation` (addWatcher, distanceFilter 50m) + `UIBackgroundModes: location` + textos NSLocation en Info.plist. Ping source:'background' con movimiento >30m/2min. **Requiere rebuild nativo**. Nota: el plugin comunitario no tiene geofence API (watcher continuo es el diseño) — iOS force-quit sin garantía ( accepted limitation, matriz §6 documentada). |
-| 2026-11-02 | **P5 ✅ (commit `da72f56`)** | Badge iOS en pushes + deliveries tail en push-check. Restan: eventos 17/18 en catálogo (marketing/recibos) para la próxima iteración de producto. |
+| 2026-11-02 | **P5 ✅ (commit `da72f56`)** | Badge iOS en pushes + deliveries tail en push-check. |
+| 2026-11-02 | **POS UX (commits `4101293`, `c0b45b2`)** | Métodos saneados (QR Bunz fuera del picker), split real (efectivo+Bunz via chargeBunz), propina en el checkout directo, selector/buscador dinámico de Rabbitters en QR Neón + Identificar + Enviar Cuenta (local primero, lookup general), dedupe plannedVisits vs check-ins. |
+
+## 14. Pendientes operativos (NO olvidar — gates de lanzamiento del review)
+
+| # | Pendiente | Criterio de cierre | Dónde |
+|---|---|---|---|
+| 1 | **Config Firebase (Android)** | FIREBASE_SERVICE_ACCOUNT en Vercel + google-services.json en build Android + prueba real con token FCM en foreground/background/terminated + deep-link | Vercel miniapp, Xcode/Studio build |
+| 2 | **Matriz nativa de geofence/background-idle (iOS force-quit vs suspended)** | Runner test post-build v11 en device real: moverse a un local, app cerrada, ¿llega el push? Documentar resultados | Docs del plan, §6 |
+| 3 | **Outbox concurrencia (worker duplicado)** | Proveer doble-process guard: migración que agregue coluna lock leve o `FOR UPDATE SKIP LOCKED` en SELECT del batch (pending DB migration). Hoy: recursieve retry con backoff — el cron puede disponer de un job en 5min si piggyback falla, así que no es crítico como banda 1. | P0 worker |
+| 4 | **SSE re-connection stress** | Test connect/disconnect ×10, Last-Event-ID o cursor equivalente, recovery tras drop. El hook ya reintentar cada 5s; el cursor (orderId) se reconstruye de la lista del fetch inicial. | Notifications page + network log |
+| 5 | **Pagos no quedar colgados** | Confirmar que el fallo del push no cohíbe el directCheckout ni el cierre de orden — outbox+retry no debris nunca en un pago (verificado por diseño + test en staging) | staging flow |
+| 6 | **Eventos 17/18 (marketing opt-in, recibo Stripe auto-push)** | Post-growth: el marketing necesita opt-in settings por categoría; el recibo requeriria proyectar un EVENT RECIBIENDO (stripe webhook es cuenta ya)... | P5+ pending |
+| 7 | **Rabbitty Score F2 (branch feat/rabbitty-score)** | Rebase de la branch sobre main y arrancar F2 Trust & Engagement shadow | BRANCH DONE, awaiting GO |
+
+## 15. Pendientes de product (post-MVP, no urgentes)
+
+- Preferencias por categoría en Ajustes (chat/recompensas/proximidad/membresías/órdenes/marketing) estilo X — plan v2.1 §2.2/§2.3, hoy solo los 3 toggles maestros.
+- Query `opens` en push-check (analytics del tap-rate) para P5.
+- Plantillas centralizadas + i18n de push/es-MX (mapeo por condición).
+- Rabbitty Score F2 — mismo document tracking en RABBITTY-SCORE-PLAN.md.
