@@ -56,6 +56,7 @@ export async function POST(req: NextRequest) {
           OLLAMA_MODEL: Boolean(process.env.OLLAMA_MODEL),
           OLLAMA_EMBED_MODEL: Boolean(process.env.OLLAMA_EMBED_MODEL || process.env.OLLAMA_MODEL),
           embedDebug: lastEmbedError.detail,
+          embedAttempts: lastEmbedError.attempts,
           OPENAI_API_KEY: Boolean(process.env.OPENAI_API_KEY),
         },
       }, { status: 503 });
