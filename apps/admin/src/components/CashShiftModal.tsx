@@ -259,9 +259,11 @@ export function CashShiftModal({
                 <span className="text-[10px] font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-full px-2 py-0.5">ABIERTO</span>
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="p-2.5 rounded-xl bg-black/40 border border-white/10">
-                  <span className="text-[10px] uppercase font-bold text-gray-400 block">Cajero actual</span>
-                  <span className="font-black text-white">{data.shift.currentStaffName ?? "—"}</span>
+                <div className="p-2.5 rounded-xl bg-black/40 border border-white/10 min-w-0">
+                  <span className="text-[10px] uppercase font-bold text-gray-400 block truncate">Cajero actual</span>
+                  <span className="font-black text-white block truncate text-xs sm:text-sm" title={data.shift.currentStaffName ?? "—"}>
+                    {data.shift.currentStaffName ?? "—"}
+                  </span>
                 </div>
                 <div className="p-2.5 rounded-xl bg-black/40 border border-white/10">
                   <span className="text-[10px] uppercase font-bold text-gray-400 block">Fondo inicial</span>
