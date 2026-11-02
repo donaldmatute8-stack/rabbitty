@@ -2,7 +2,7 @@ name: Rabbitty Notification Worker Cron
 
 on:
   schedule:
-    # Cada 5 minutos — piso de latencia del outbox (el piggyback tras cada
+    # rearmed: re-registración de schedule tras fallos · corre cada 5 minutos — piso de latencia del outbox (el piggyback tras cada
     # POST /api/notifications da latencia baja cuando hay tráfico).
     - cron: '*/5 * * * *'
   workflow_dispatch:

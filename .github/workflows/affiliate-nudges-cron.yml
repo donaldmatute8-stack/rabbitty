@@ -2,7 +2,7 @@ name: Rabbitty Affiliate Nudges Cron
 
 on:
   schedule:
-    # Diario 15:00 UTC (9amMX) — nudge de username a afiliados sin reclamar
+    # rearmed: re-registración de schedule tras fallos · diario 15:00 UTC (9amMX) — nudge de username a afiliados sin reclamar
     - cron: '0 15 * * *'
   workflow_dispatch:
 
