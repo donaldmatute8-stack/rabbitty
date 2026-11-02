@@ -35,6 +35,8 @@ export interface TicketData {
   tax?: number;
   discount?: number;
   tip?: number;
+  /** D-11 Gratificaciones: modo del negocio (OFF|POS|DIGITAL|BOTH) — etiqueta dinámica del ticket */
+  gratuityMode?: string;
   total: number;
   paymentMethod?: string;
   payments?: Array<{ method: string; amount: number }>;
@@ -225,7 +227,7 @@ export function TicketTemplate({
 
         {!!data.tip && data.tip > 0 && (
           <div className="flex justify-between text-amber-400">
-            <span>Propina voluntaria</span>
+            <span>{String(data.gratuityMode) === "POS" || String(data.gratuityMode) === "BOTH" ? "Gratificación voluntaria" : "Propina voluntaria"}</span>
             <span>+${data.tip.toFixed(2)}</span>
           </div>
         )}

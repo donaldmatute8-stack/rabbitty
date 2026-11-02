@@ -327,9 +327,13 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
   
   addText(`SUBTOTAL: ${sub.padStart(10)}\n`);
   addText(`IVA:      ${tax.padStart(10)}\n`);
-  // Propina separada de la cuenta (si el cobro digital la incluyó)
+  // D-11 Gratificaciones: etiqueta dinámica según el modo del negocio
+  // (POS/BOTH → "GRATIFICACIÓN"; default → legacy "PROPINA")
   if (typeof data.tip === "number" && data.tip > 0) {
-    addText(`PROPINA:  $${data.tip.toFixed(2).padStart(9)}\n`);
+    const label = String((data as any).gratuityMode) === "POS" || String((data as any).gratuityMode) === "BOTH"
+      ? "GRATIF."
+      : "PROPINA";
+    addText(`${label}:  $${data.tip.toFixed(2).padStart(9)}\n`);
   }
   chunks.push(boldOn);
   addText(`TOTAL:    ${tot.padStart(10)}\n`);

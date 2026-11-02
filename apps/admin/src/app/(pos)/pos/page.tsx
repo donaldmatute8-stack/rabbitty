@@ -1052,6 +1052,8 @@ export default function PosPage() {
       tax,
       discount: 0,
       total,
+      tip: Number(posTip || 0) || undefined,
+      gratuityMode: String((rest as any)?.gratuityMode || "OFF"),
       paymentMethod: method,
       cashGiven: cashGiven && cashGiven > 0 ? cashGiven : undefined,
       change: changeAmount,
@@ -4143,6 +4145,7 @@ export default function PosPage() {
                   tax: ord.tax || 0,
                   total: ord.total,
                   tip: Number(ord.tip || 0),
+                  gratuityMode: String((rest as any)?.gratuityMode || "OFF"),
                   currency: rest?.currency || "MXN",
                   paymentMethod: ord.bunzPaid && ord.bunzPaid > 0 ? "BUNZ" : "EFECTIVO",
                   usdAmount: (rest as any)?.showUsdTicket && Number((rest as any)?.usdRate > 0)
