@@ -1,0 +1,37 @@
+name: Rabbitty Affiliate Nudges Cron
+
+on:
+  schedule:
+    # Diario 15:00 UTC (9amMX) — nudge de username a afiliados sin reclamar
+    - cron: '0 15 * * *'
+  workflow_dispatch:
+
+jobs:
+  affiliate-nudges:
+    name: Affiliate Username Nudges
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Trigger Affiliate Nudges
+        run: |
+          APP_URL="${{ secrets.ADMIN_APP_URL || 'https://admin.rabbitty.me' }}"
+          CRON_SECRET="${{ secrets.CRON_SECRET }}"
+
+          echo "Triggering affiliate nudges against $APP_URL..."
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "$APP_URL/api/cron/affiliate-nudges" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "x-cron-secret: $CRON_SECRET" \
+            -H "Accept: application/json")
+
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "HTTP Status: $HTTP_STATUS"
+          echo "Response: $BODY"
+
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "::error::Affiliate nudges cron failed with HTTP $HTTP_STATUS"
+            exit 1
+          fi

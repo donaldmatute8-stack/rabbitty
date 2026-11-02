@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getRestaurantDb } from "@rabbitty/api/db";
-import { submitRatingForOrder } from "@rabbitty/api/services/ratingSubmit";
+import { getRestaurantDb, getCoreDb } from "@rabbitty/api/db";
+import { submitRatingForOrder, notifyMerchantOfRating } from "@rabbitty/api/services/ratingSubmit";
 
 export const runtime = "nodejs";
 
@@ -70,6 +70,21 @@ export async function POST(req: NextRequest) {
         { ok: false, error: result.message, code: result.code },
         { status: FAILURE_STATUS[result.code] ?? 400 }
       );
+    }
+    // H9: aviso dual-channel al afiliado (no-fatal)
+    if (result.ratingId) {
+      try {
+        await notifyMerchantOfRating({
+          restaurantDb: getRestaurantDb(),
+          coreDb: getCoreDb(),
+          branchId: result.branchId,
+          ratingId: result.ratingId,
+          stars,
+          hasComment: Boolean(comment),
+        });
+      } catch (notifyErr) {
+        console.warn("[INTERNAL_RATING] notificación del afiliado falló (no fatal):", notifyErr);
+      }
     }
     return NextResponse.json({ success: true, ...result });
   } catch (err: unknown) {
