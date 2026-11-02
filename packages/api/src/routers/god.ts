@@ -25,6 +25,8 @@ import {
 import { affiliateCampaigns, campaignRedemptions } from "@rabbitty/database-core/schema";
 import { TRPCError } from "@trpc/server";
 import { computeTrustShadow, type TrustPaymentsInput } from "../services/trustRules";
+import { computeAllocationShadow } from "../services/allocRules";
+import { computeShadowScore } from "../services/ratingRules";
 
 /** Desenrolla result de drizzle raw SQL (rows array en pg driver). */
 const sqlRows = (r: unknown) => ((r as { rows?: unknown[] }).rows ?? r) as Array<Record<string, unknown>>;
@@ -761,6 +763,110 @@ export const godRouter = router({
     const nameMap = new Map(names.map((u) => [u.id, u.username]));
     return rows.map((r) => ({ ...r, username: nameMap.get(r.subjectId) ?? null }));
   }),
+
+  // ── GROWTH ALLOCATION (F3, SHADOW code only — NUNCA operativo) ────────────
+  // Puntúa campañas activas (servicio F1 + eficiencia + momentum) y propone
+  // acciones al God Admin con reasons explicables. Jamás mueve presupuesto:
+  // Bx2 de Bunzy o el propio God deciden con aprobación humana (D-6).
+  getGrowthAllocationShadow: godAdminProcedure
+    .input(z.object({ limit: z.number().int().min(1).max(50).default(12) }))
+    .query(async ({ ctx, input }) => {
+      const campaigns = await ctx.coreDb
+        .select({
+          id: affiliateCampaigns.id,
+          businessId: affiliateCampaigns.businessId,
+          title: affiliateCampaigns.title,
+          campaignType: affiliateCampaigns.campaignType,
+          rewardPercentage: affiliateCampaigns.rewardPercentage,
+          budgetBunz: affiliateCampaigns.budgetBunz,
+          budgetSpent: affiliateCampaigns.budgetSpent,
+          redemptionCount: affiliateCampaigns.redemptionCount,
+          status: affiliateCampaigns.status,
+          startsAt: affiliateCampaigns.startsAt,
+          expiresAt: affiliateCampaigns.expiresAt,
+        })
+        .from(affiliateCampaigns)
+        .where(inArray(affiliateCampaigns.status, ["ACTIVE", "PAUSED", "EXHAUSTED"]))
+        .orderBy(desc(affiliateCampaigns.startsAt))
+        .limit(input.limit);
+
+      const results = [];
+      for (const c of campaigns) {
+        // Merchant Service Score (F1, bayesiano): ratings de las sucursales del negocio
+        const ratingsRes: any = await ctx.restaurantDb.execute(sql`
+          SELECT r.stars, r."createdAt"
+          FROM "order_ratings" r
+          JOIN "branches" b ON b.id = r."branchId"
+          JOIN "restaurants" t ON t.id = b."restaurantId"
+          WHERE t."businessId" = ${c.businessId}
+            AND r."isEligible" = true
+            AND r."moderationStatus" <> 'PENDING_REVIEW'`);
+        const serviceRows = sqlRows(ratingsRes).map((r) => ({ stars: Number(r.stars), createdAt: new Date(String(r.createdAt)) }));
+        const shadow = computeShadowScore(serviceRows as Array<{ stars: number; createdAt: Date | null }>);
+
+        // Momentum: redenciones 30d del campaignId (campañas viven en CORE DB)
+        const redemRes: any = await ctx.coreDb.execute(sql`
+          SELECT COUNT(*)::int AS n, COALESCE(SUM("fiatSpent"), 0) AS fiat, COUNT(DISTINCT "userId")::int AS users
+          FROM "campaignRedemptions"
+          WHERE "campaignId" = ${c.id} AND "redeemedAt" >= now() - interval '30 days'`);
+        const redemRow = sqlRows(redemRes)[0] ?? { n: 0, fiat: 0, users: 0 };
+
+        const budgetBunz = Number(c.budgetBunz || 0);
+        const budgetSpent = Number(c.budgetSpent || 0);
+        const budgetRemainingBunz = budgetBunz - budgetSpent;
+        const utilization = budgetBunz > 0 ? Math.min(1, budgetSpent / budgetBunz) : 0;
+        const campaignAgeDays = c.startsAt
+          ? Math.max(0, (Date.now() - new Date(c.startsAt).getTime()) / 86_400_000)
+          : 0;
+
+        const alloc = computeAllocationShadow({
+          merchantShadowScore: shadow.sampleN > 0 ? shadow.score : null,
+          serviceSampleN: shadow.sampleN,
+          utilization,
+          redemptions30d: Number(redemRow.n ?? 0),
+          budgetRemainingBunz,
+          campaignAgeDays: Number(campaignAgeDays.toFixed(1)),
+        });
+
+        results.push({
+          campaignId: c.id,
+          businessId: c.businessId,
+          title: c.title,
+          campaignType: c.campaignType,
+          rewardPercentage: c.rewardPercentage,
+          status: c.status,
+          budgetBunz,
+          budgetSpent,
+          budgetRemainingBunz,
+          utilization: Math.round(utilization * 1000) / 1000,
+          redemptions30d: Number(redemRow.n ?? 0),
+          redemptionUsers30d: Number(redemRow.users ?? 0),
+          fiat30d: Number(redemRow.fiat ?? 0),
+          merchantShadow: { score: shadow.score, sampleN: shadow.sampleN },
+          alloc: {
+            score: alloc.score,
+            confidence: alloc.confidence,
+            recommendation: alloc.recommendation,
+            reasons: alloc.reasons,
+            insufficient: alloc.insufficient,
+            method: alloc.method,
+          },
+        });
+      }
+
+      results.sort((a, b) => (b.alloc.score ?? -1) - (a.alloc.score ?? -1));
+      const nBoost = results.filter((r) => r.alloc.recommendation === "BOOST").length;
+      const nRefill = results.filter((r) => r.alloc.recommendation === "REFILL_REQUEST").length;
+      const nPause = results.filter((r) => r.alloc.recommendation === "PAUSE_CANDIDATE").length;
+      const nNurture = results.filter((r) => r.alloc.recommendation === "NURTURE_SERVICE").length;
+
+      return {
+        method: "growth_alloc_shadow_v1",
+        boxShadowLive: results.some((r) => r.merchantShadow.sampleN > 0),
+        summary: { campaigns: results.length, boost: nBoost, refill: nRefill, pause: nPause, nurture: nNurture },
+        campaigns: results,
+      };
+    }),
 
   // ── NEGOCIO / VC: crecimiento, GMV, retención, campañas (upsell) ──
   getGrowthMetrics: godAdminProcedure

@@ -86,6 +86,20 @@ interface TrustShadowResult {
   reviewFlags: { gmailCluster: boolean; ipSharing: boolean; deviceSharing: boolean; pushTokenSharing: boolean; ledgerSuspect: boolean };
 }
 
+// ── Growth Allocation (F3, SHADOW — propuesta, jamás operativo) ──
+interface AllocResult {
+  alloc: { score: number | null; confidence: string; recommendation: string; reasons: string[]; insufficient: string[] };
+  campaignId: string; title: string; campaignType: string; rewardPercentage: number; status: string;
+  budgetBunz: number; budgetSpent: number; budgetRemainingBunz: number;
+  utilization: number; redemptions30d: number; redemptionUsers30d: number; fiat30d: number;
+  merchantShadow: { score: number | null; sampleN: number };
+}
+interface AllocShadowResponse {
+  method: string; boxShadowLive: boolean;
+  summary: { campaigns: number; boost: number; refill: number; pause: number; nurture: number };
+  campaigns: AllocResult[];
+}
+
 const METHOD_COLORS: Record<string, string> = {
   CASH: "#10B981",
   CREDIT_CARD: "#06B6D4",
@@ -106,6 +120,8 @@ export default function GodInsightsPage() {
   const [trustSubject, setTrustSubject] = useState("");
   const [trustResult, setTrustResult] = useState<TrustShadowResult | null>(null);
   const [trustLoading, setTrustLoading] = useState(false);
+  // ── Growth Allocation (F3 shadow) ──
+  const [alloc, setAlloc] = useState<AllocShadowResponse | null>(null);
 
   const provisionPro = async (tenantId: string, enabled: boolean) => {
     setProvisioning(tenantId);
@@ -129,7 +145,8 @@ export default function GodInsightsPage() {
     } catch { setPayments(null); setSecurity(null); setGrowth(null); }
     try {
       setTrustQueue(await godQuery<TrustShadowQueueRow[]>("god.rabbitterTrustShadowQueue"));
-    } catch { setTrustQueue([]); }
+      setAlloc(await godQuery<AllocShadowResponse>("god.getGrowthAllocationShadow", { limit: 12 }));
+    } catch { setTrustQueue([]); setAlloc(null); }
     finally { setLoading(false); }
   };
 
@@ -618,6 +635,65 @@ export default function GodInsightsPage() {
               </div>
             ))}
           </div>
+        </Card>
+
+        {/* ───────────── GROWTH ALLOCATION (F3, SHADOW) ───────────── */}
+        <Card className="p-5 border border-white/10 bg-white/5">
+          <div className="flex items-center gap-3 mb-1">
+            <TrendingUp className="h-5 w-5 text-violet-400" />
+            <h2 className="text-sm font-black text-white uppercase tracking-wider">Growth Allocation — Shadow</h2>
+            <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-300 uppercase tracking-wider">Propuesta · requiere aprobación</span>
+          </div>
+          <p className="text-[11px] text-gray-500 mb-4">
+            Puntúa campañas con el score de servicio F1 + eficiencia de presupuesto + momentum de redenciones, y propone acciones
+            (BOOST / REFILL / NURTURE / PAUSE). Jamás mueve dinero solo — toda acción se aprueba explícitamente (D-6, Bx2.B).
+          </p>
+          {alloc && alloc.summary.campaigns > 0 ? (
+            <>
+              <div className="flex gap-2 flex-wrap mb-3 text-[10px] font-black">
+                <span className="px-2 py-1 rounded-lg bg-emerald-500/15 text-emerald-300">BOOST {alloc.summary.boost}</span>
+                <span className="px-2 py-1 rounded-lg bg-blue-500/15 text-blue-300">REFILL {alloc.summary.refill}</span>
+                <span className="px-2 py-1 rounded-lg bg-amber-500/15 text-amber-300">NURTURE {alloc.summary.nurture}</span>
+                <span className="px-2 py-1 rounded-lg bg-red-500/15 text-red-300">PAUSE {alloc.summary.pause}</span>
+                {!alloc.boxShadowLive && (
+                  <span className="px-2 py-1 rounded-lg bg-gray-500/15 text-gray-400">⚠ sin ratings aún — solo pesos renormalizados</span>
+                )}
+              </div>
+              <div className="space-y-1.5 max-h-80 overflow-y-auto custom-scrollbar">
+                {alloc.campaigns.map((c) => (
+                  <div key={c.campaignId} className="rounded-xl bg-white/5 border border-white/10 px-3 py-2.5">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <p className="text-[11px] font-black text-white">{c.title} <span className="text-gray-500">· {c.campaignType} {c.rewardPercentage}%</span></p>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={cn(
+                          "text-[9px] font-black px-1.5 py-0.5 rounded-full",
+                          ({
+                            BOOST: "bg-emerald-500/15 text-emerald-300",
+                            REFILL_REQUEST: "bg-blue-500/15 text-blue-300",
+                            NURTURE_SERVICE: "bg-amber-500/15 text-amber-300",
+                            PAUSE_CANDIDATE: "bg-red-500/15 text-red-300",
+                            OPTIMIZE: "bg-indigo-500/15 text-indigo-300",
+                            KEEP: "bg-gray-500/15 text-gray-400",
+                          }[c.alloc.recommendation as string] || "bg-gray-500/15 text-gray-400")
+                        )}>
+                          {c.alloc.recommendation.replace("_", " ")}
+                        </span>
+                        <span className="text-[10px] font-black text-white">{c.alloc.score === null ? "—" : `${c.alloc.score.toFixed(0)}`}/100</span>
+                      </div>
+                    </div>
+                    <p className="text-[9px] text-gray-500 mt-0.5">
+                      budget {(c.utilization * 100).toFixed(0)}% usado · ${c.budgetRemainingBunz.toLocaleString()} restante · {c.redemptions30d} canjes 30d ({c.redemptionUsers30d} users) · ${c.fiat30d.toLocaleString()} fiat · servicio {c.merchantShadow.sampleN > 0 ? `${c.merchantShadow.score?.toFixed(2)}/5 (n=${c.merchantShadow.sampleN})` : "sin data"}
+                    </p>
+                    <ul className="text-[9px] text-gray-400 mt-1 leading-relaxed">
+                      {c.alloc.reasons.slice(0, 2).map((r, i) => <li key={i}>→ {r}</li>)}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="text-xs text-gray-500 py-3">Sin campañas activas para puntuar todavía.</p>
+          )}
         </Card>
 
         {/* ───────────── APROVISIONAMIENTO de Analíticas Pro ───────────── */}        <Card className="p-5 border border-white/10 bg-white/5">
