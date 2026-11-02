@@ -102,6 +102,7 @@ export async function POST(req: NextRequest) {
         nearBusinesses.push({ business: b, dist });
       }
     }
+    console.log(`[PING_DIAG] user=${caller?.id ?? "anon"} near=${nearBusinesses.length} allAlerts=${allAlertsMode} lat=${lat} lng=${lng}`);
 
     // Fetch any active campaigns / flash boosts for nearby businesses
     const nearBusinessIds = nearBusinesses.map((nb) => nb.business.id);
@@ -335,6 +336,44 @@ export async function POST(req: NextRequest) {
       }
 
       matches.push(match);
+
+        // ── H12-reminder: modo "TODAS las alertas cerca" — recordatorio de
+        // proximidad sin campaña y sin exigir ≥10 visitas (dedupe 5 min). ──
+        if (caller && allAlertsMode && dist <= 250 && (!accuracy || accuracy <= 200)) {
+          const reminderKey = `push:reminder:${caller.id}:${b.id}`;
+          const pushTitle = `📍 Estás cerca de ${b.name}`;
+          const pushBody = `${effectiveReward}% Bunz en tu consumo de hoy al pagar — pasa y liquida.`;
+
+          await db
+            .insert(notifications)
+            .values({
+              userId: caller.id,
+              title: pushTitle,
+              message: pushBody,
+              type: "CHECKIN_PROMPT",
+            })
+            .catch(() => {});
+
+          if (isApnsConfigured()) {
+            await enqueueOutbox({
+              userId: caller.id,
+              type: "CHECKIN_PROMPT",
+              title: pushTitle,
+              message: pushBody,
+              route: `/affiliate/${b.id}`,
+              data: {
+                type: "PROXIMITY_REMINDER",
+                businessId: b.id,
+                businessName: b.name,
+                rewardPercentage: effectiveReward,
+              },
+              dedupeKey: `proximity_reminder:${reminderKey}:${Math.floor(Date.now() / PROXIMITY_BYPASS_DEDUPE_WINDOW_MS)}`,
+              priority: "normal",
+            }).catch(() => {});
+            kickWorker();
+          }
+          triggeredOffers.push(b.name);
+        }
     }
 
     matches.sort((a, b) => a.distanceMeters - b.distanceMeters);

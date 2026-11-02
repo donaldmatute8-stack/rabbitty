@@ -166,12 +166,24 @@ export async function processOutboxBatch(limit = 20): Promise<{
       continue;
     }
 
+    // H17-badge: iOS badge sincronizado con el unread in-app real al momento
+    // del envío (antes badge:1 fijo dejaba ícono activo con 0 sin leer).
+    let unreadBadge = 1;
+    try {
+      const [unreadRow] = await db
+        .select({ n: sql<number>`COUNT(*)::int` })
+        .from(notifications)
+        .where(and(eq(notifications.userId, item.userId), eq(notifications.isRead, false)));
+      unreadBadge = Math.max(0, Number(unreadRow?.n ?? 0)) || 1;
+    } catch { /* fallback badge 1 */ }
+
     const payload: PushPayload = {
       title: item.title,
       body: item.message,
-      badge: 1, // P5: badge en el ícono de la app (contador de no leídos)
+      badge: unreadBadge, // H17-badge: unread real (sync icono ↔ centro de notificaciones)
       data: { ...(item.data as Record<string, string> ?? {}), ...(item.route ? { route: item.route } : {}) },
     };
+
     let anyOk = false;
     for (const dev of usersDevices) {
       try {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { users, webSessions, referrals } from '@/db/schema';
+import { users, webSessions, referrals , presenceSessions } from '@/db/schema';
 import { and, eq, gt, sql } from 'drizzle-orm';
 
 export async function GET(req: NextRequest) {
@@ -49,11 +49,21 @@ export async function GET(req: NextRequest) {
       .where(and(eq(referrals.inviterId, profile.id), eq(referrals.status, 'PENDING')));
     pendingBunz = result[0]?.total ?? 0;
 
+    // H18: 'negocios visitados' = DISTINCT negocios con presencia real (no el
+    // contador acumulado de check-ins que cuenta días repetidos)
+    const distinctBizRows = await db
+      .select({ businessId: presenceSessions.businessId })
+      .from(presenceSessions)
+      .where(eq(presenceSessions.userId, profile.id))
+      .groupBy(presenceSessions.businessId);
+    const distinctBusinesses = distinctBizRows.length;
+
     return NextResponse.json({
       success: true,
       profile: {
         ...profile,
         pendingBunz,
+        distinctBusinesses,
       },
     }, { status: 200 });
   } catch (error) {

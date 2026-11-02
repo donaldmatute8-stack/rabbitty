@@ -18,6 +18,7 @@ export interface UserProfile {
   totalBunzEarned?: number;
   totalBunzSpent?: number;
   visitedBusinesses?: number;
+  distinctBusinesses?: number;
   level?: {
     id?: string;
     name?: string;

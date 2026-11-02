@@ -544,14 +544,20 @@ export default function FeedPage() {
       {/* Indicador pull-to-refresh (conejo + barras, identidad RabbittyLoader) */}
       <div
         style={{
-          height: refreshingFeed || pullDist > 4 ? (refreshingFeed ? 64 : Math.max(0, pullDist * 0.6)) : 0,
+          height: refreshingFeed || pullDist > 4 ? (refreshingFeed ? 56 : Math.max(0, pullDist * 0.5)) : 0,
           opacity: refreshingFeed || pullDist > 4 ? 1 : 0,
           overflow: 'hidden',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          position: 'relative',
-          zIndex: 50,
+          // H19: loader ancl bajo el menú compacto (bunz'in/Stock/Freehands) y
+          // Arriba del Rabbitty Pass — nunca arriba de todo
+          position: 'fixed',
+          left: 0,
+          right: 0,
+          top: 'calc(var(--safe-top, 0px) + 66px)',
+          zIndex: 60,
+          pointerEvents: 'none',
           transition: refreshingFeed ? 'height 180ms ease' : 'height 60ms linear, opacity 120ms ease',
         }}
         aria-hidden={!refreshingFeed && pullDist <= 4}

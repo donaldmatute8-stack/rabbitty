@@ -26,7 +26,9 @@ interface UserProfile {
   hops?: number;
   role?: string;
   totalBunzEarned?: number;
+  totalBunzSpent?: number;
   visitedBusinesses?: number;
+  distinctBusinesses?: number;
 }
 
 interface GamificationLevelResponse {
@@ -247,7 +249,7 @@ export default function ProfilePage() {
             <div className="flex items-center gap-1.5 mb-1.5">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 13L6 3L10 10L12 6L14 13" stroke="#E91E63" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </div>
-            <p className="text-[26px] font-extrabold text-(--text-primary) tracking-[-0.5px]">{user?.visitedBusinesses ?? 0}</p>
+            <p className="text-[26px] font-extrabold text-(--text-primary) tracking-[-0.5px]">{user?.distinctBusinesses ?? user?.visitedBusinesses ?? 0}</p>
             <p className="text-xs text-(--text-muted) mt-0.5">Negocios visitados</p>
           </div>
         </motion.div>
@@ -436,7 +438,7 @@ export default function ProfilePage() {
     <DeleteAccountModal
       isOpen={showDeleteModal}
       onClose={() => setShowDeleteModal(false)}
-      userBunzBalance={Math.max(0, (user?.totalBunzEarned || 0) - (user?.visitedBusinesses || 0))}
+      userBunzBalance={Math.max(0, (user?.totalBunzEarned || 0) - (user?.totalBunzSpent || 0))}
       onDeleted={() => {
         setShowDeleteModal(false);
         logout();
