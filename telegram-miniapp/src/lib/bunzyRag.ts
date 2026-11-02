@@ -88,13 +88,15 @@ async function embedWithOllama(texts: string[]): Promise<number[][] | null> {
         lastEmbedError.detail = 'ok /api/embed';
         return await Promise.all(data.embeddings.map((v) => padTo1536(v)));
       }
-      lastEmbedError.detail = `/api/embed respondió sin embeddings: ${JSON.stringify(data).slice(0, 200)}`;
+      lastEmbedError.attempts.push(`/api/embed sin embeddings: ${JSON.stringify(data).slice(0, 180)}`);
+      lastEmbedError.detail = `/api/embed sin embeddings: ${JSON.stringify(data).slice(0, 180)}`;
     } else {
       const body = await res.text().catch(() => '');
-      lastEmbedError.detail = `/api/embed HTTP ${res.status}: ${body.slice(0, 200)}`;
+      lastEmbedError.attempts.push(`/api/embed HTTP ${res.status}: ${body.slice(0, 180)}`);
+      lastEmbedError.detail = `/api/embed HTTP ${res.status}: ${body.slice(0, 180)}`;
     }
   } catch (err) {
-    lastEmbedError.detail = `/api/embed falló: ${err instanceof Error ? err.message : 'unknown'}`;
+    lastEmbedError.attempts.push(`/api/embed falló: ${err instanceof Error ? err.message : 'unknown'}`);
   }
 
   // fallback OpenAI-compat en el mismo host
