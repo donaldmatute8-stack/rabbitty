@@ -1,8 +1,8 @@
 # RABBITTY SCORE — Plan, Fases y Roadmap
 
 > **Estado:** Fase 1 — ✅ CERRADA (implementada y ya en `main` vía merge FF `ecd406c`).
-> Fase 2 (Trust & Engagement shadow) — ⏳ PENDIENTE, arranca en esta rama.
-> **Última actualización:** 2026-11-02
+> Fase 2 (Trust & Engagement shadow) — 🔧 **EN RAMA** (implementada; migración `0022` pendiente de aplicar a prod manualmente → norma DRIFT-001).
+> **Última actualización:** 2026-11-01
 > **Dueño de producto:** Marco (God Admin)
 > **Principio rector:** la reputación construye confianza; **no** toca la economía base (Bunz/cashback) en Fase 1.
 >
@@ -35,19 +35,21 @@ Un sistema de confianza de dos caras al estilo Uber: **Rabbitter Trust & Engagem
 | **F1-E4** | Shadow score interno (bayesiano suavizado, recencia, cobertura) | ✅ **EN PROD** | `ratings.merchantScoreShadow` (god) + snapshots `merchant_score_shadow`; sin uso operativo |
 | **F1-tests** | Tests de aceptación (checklist §6) | ✅ Unit 10/10 + integración ROLLBACK | Suite API 31/31 |
 | **F1-staging** | Validación manual del prompt en producción (ambos canales) | ⏳ Pendiente operativo | No bloquea F2 |
-| **F2** | Rabbitter Trust & Engagement en shadow | ⏳ **SIGUIENTE** | Rebase sobre main (push plan v2.1) antes de arrancar |
+| **F2** | Rabbitter Trust & Engagement en shadow | 🔧 **EN RAMA** | Reglas puras + snapshot `rabbitter_score_shadow` + panel God en `/god/insights`. Pendiente: aplicar migración `0022` a prod y validación operativa |
 | F3 | Growth Allocation (promos/visibilidad con scores calibrados) | ⏳ Pendiente | Requiere presupuesto/autorización + atribución de campañas |
 | F4 | Beneficios variables y tiering vendible (liga con Analíticas Pro) | ⏳ Pendiente | Solo con datos de F2/F3 |
 | F5 | Rabbitty Score público + multiplicadores | ⏳ Pendiente | Decisión económica explícita — no automática |
 
 #### Backlog F2 — señales de Trust (en shadow)
-| Señal | Fuente | Instrumentación necesaria |
+| Señal | Fuente | Estado en F2 |
 |---|---|---|
-| Pagos completados vs abandonados | `payment_intents` por `payerSubjectId` | Contable existe; falta atribuir abandono (¿fricción de producto o usuario?) |
-| Tabs huérfanas por causa | `orders.voidReason='STALE_TAB'` | Falta registrar actor (¿cliente u operador?) — decisión de diseño |
-| Canjes legítimos vs abuso | `ledgerEntries` (ratio SPEND/EARN) + lupa multi-cuenta | Lupa ya implementada (`god.getAccountSecurity.identityLinkSignals`) — solo señal de revisión, nunca sanción |
-| Presencia honesta | `presenceSessions` (GPS ≤ geofence, `source: gps/scan/geofence`) | gps/scan ya existen; `geofence` llega con push plan v2.1 (P4) |
+| Pagos completados vs abandonados | `payment_intents` por `payerSubjectId` | ✅ Componente `payments` (55%): SUCCEEDED sobre cerrados (90d); ≥3 cerrados para ser confiable. La atribución de abandono (¿fricción de producto o usuario?) sigue abierta → D-8 |
+| Tabs huérfanas por causa | `orders.voidReason='STALE_TAB'` | ✅ Componente `tabs` (diagnóstico — NO entra al score consolidado hasta decidir D-7). Falta registrar actor (¿cliente u operador?) |
+| Canjes legítimos vs abuso | `ledgerEntries` (ratio SPEND/EARN) + lupa multi-cuenta | ✅ Componente `ledger` (25%): sospecha si ratio > 2.5 o acumula ≥200 Bunz sin redimir — SOLO marca `reviewFlag`, nunca sanciona. Lupa ya existente (`getAccountSecurity.identityLinkSignals`) |
+| Presencia honesta | `presenceSessions` (GPS ≤ geofence, `source: gps/scan/geofence`) | ✅ Componente `presence` (20%). `geofence` como fuente llega con push plan v2.1 (P4) — el componente ya la admite (`other` mientras tanto) |
 | Estabilidad del chat | flags de bloqueo | NO medir en F2 (requiere proceso de revisión — decisión del review) |
+
+**Método (shadow v1, `trust_shadow_v1`):** score 0–100 = promedio ponderado de los componentes CON datos suficientes (renormalización de pesos). Sin muestra suficiente en ninguno → `score: null` + `confidence: NONE`. `confidence`: HIGH (todo confiable + ≥10 pagos), MEDIUM (≥3 pagos + todo confiable), LOW (resto). Snapshot persistido en `rabbitter_score_shadow` (restaurant DB) con `reviewFlag` agregado de las 5 señales multi-cuenta (gmail cluster, IP, device, push token, ledger) — Regla de oro §2: solo revisión.
 
 ## 4. Hallazgos de auditoría que mandaron el diseño
 
@@ -114,6 +116,8 @@ Pendiente operativo (no bloqueante): validación en staging del prompt con una o
 | D-4 | ¿Comentario obligatorio con 1-2★? | No, siempre opcional |
 | D-5 | Atribución de campañas (Growth) | F3; requiere `firstSeenCampaignId` en alta de cliente |
 | D-6 | Presupuesto de promos cofinanciadas | F3/F4; tope % GMV + autorización God |
+| D-7 | ¿Quién causa la tab huérfana (cliente vs operador)? Define si `tabs` entra al score | **Actual:** componente diagnóstico puro, fuera del score |
+| D-8 | Atribuir abandono de payment intent: ¿fricción de UX (checkout→3DS) o del usuario? | F2 shadow lo clasifica como `expired/cancelled/failed` sin juzgar; decidir con datos |
 
 ## 8. Cómo darle seguimiento
 
@@ -131,3 +135,4 @@ Pendiente operativo (no bloqueante): validación en staging del prompt con una o
 | 2026-11-01 | **F1 implementada en rama** `feat/rabbitty-score`: migración `0020` aplicada a prod (4 tablas), emisión `ORDER_PAID` en settle digital, invalidación inmediata en 3 transiciones, router `ratings`, prompts in-app y web, superficie `/ratings`, moderación God y shadow score. |
 | 2026-11-01 | **F1 CERRADA**: reglas puras extraídas a `services/ratingRules.ts`; tests unitarios 10/10 (checklist §6) + integration tests con ROLLBACK (requieren `TEST_DATABASE_URL`); suite API 31/31. |
 | 2026-11-02 | F1 mergeada a `main` (FF `ecd406c`) — el dataset de ratings corre en producción. Rama lista para F2 (rebase sobre main cuando el plan de notificaciones v2.1 esté en P0/P1). |
+| 2026-11-01 | **F2 en rama** (`feat/rabbitty-score`, rebaseada sobre main con push plan v2.1 y pin de drizzle): `trustRules.ts` puro + unitarios 16/16, migración `0022` (`rabbitter_score_shadow` — **aplicar a prod manualmente, norma DRIFT-001**), God queries `getRabbitterTrustShadow` + `rabbitterTrustShadowQueue`, panel shadow en `/god/insights`. Snapshot on-demand (patrón F1); sin cron. Pendiente operativo: correr snapshot contra datos reales y validación manual. |

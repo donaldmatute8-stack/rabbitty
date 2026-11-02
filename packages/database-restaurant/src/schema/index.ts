@@ -270,6 +270,24 @@ export const merchantScoreShadow = pgTable("merchant_score_shadow", {
   computedAt: timestamp("computedAt").defaultNow().notNull(),
 });
 
+/**
+ * ── Rabbitter Trust & Engagement (F2, SHADOW) ── snapshot del score de
+ * confiabilidad por sujeto (subjectId = payerSubjectId / user id de core).
+ * Jamás se expone al cliente ni modifica economía/ledger (Reglas de oro §3).
+ * Ver Docs/RABBITTY-SCORE-PLAN.md §F2.
+ */
+export const rabbitterScoreShadow = pgTable("rabbitter_score_shadow", {
+  id: id(),
+  subjectId: text("subjectId").notNull(),
+  score: real("score"),
+  confidence: text("confidence").notNull(),
+  sampleN: integer("sampleN").notNull(),
+  components: jsonb("components"),
+  reviewFlag: boolean("reviewFlag").default(false).notNull(),
+  computedAt: timestamp("computedAt").defaultNow().notNull(),
+});
+
+
 export const inventoryItems = pgTable("inventory_items", {
   id: id(),
   branchId: fkId("branchId").references(() => branches.id),
