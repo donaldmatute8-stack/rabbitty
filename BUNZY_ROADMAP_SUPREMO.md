@@ -34,6 +34,7 @@
 | **Contexto** | Por request (user + businesses + ubicación + últimos mensajes) | Estadeless. No recuerda preferencias, historial pasado, lenguaje, patrones o feedback del usuario. |
 | **Proveedor IA** | OpenAI (`gpt-4o-mini`) + Ollama fallback | Bien, pero sin RAG, sin grounding con KB propia, sin trazabilidad/citas. |
 | **Memoria** | 0 persistente | No hay aprendizaje por usuario. Cada conversación empieza desde cero. |
+| **RAG Fase 0** | ✅ **IMPLEMENTADO (2026-11-02, rama score)** | `bunzyRag.ts`: búsqueda coseno sobre `knowledgeChunks` (pgvector HNSW) con degradación graceful; grounding con citas `(Fuente: FAQ faq:XX)` en `buildSystemPrompt` (OpenAI + Ollama) y en `admin_qa`; ingesta idempotente post-deploy vía `POST /api/bunzy/kb` (header `x-bunzy-kb-secret`). Tablas aplicadas a prod (migración manual `0018` verificado). Seed pendiente de ejecutar en producción (requiere OPENAI_API_KEY de Vercel al llamar la ruta). |
 
 **Veredicto:** Bunzy hoy es un **agente reactivo (Q&A + tools)**. Para subirlo a "nivel supremo" necesita pasar a **agente proactivo + con memoria + con conocimiento propio (RAG)** y una capa de **identidad + wallet** bien definida.
 
@@ -140,7 +141,7 @@ App/Telegram (parcial) + WhatsApp Business Cloud + Web Widget + Push + Voice (ST
 
 | Fase | Alcance | Esfuerzo | Impacto | Orden |
 |---|---|---|---|---|
-| **Fase 0** | RAG (pgvector + KB + tool search_knowledge + citations) | Bajo–Medio | **Alto** | **1º** |
+| **Fase 0** | RAG (pgvector + KB + tool search_knowledge + citations) | Bajo–Medio | **Alto** | **1º — ✅ IMPLEMENTADO 2026-11-02 (código + tablas en prod; falta seed post-deploy)** |
 | **Fase 1** | MAG (memories + persona + reflection loop + recall) | Medio | **Altísimo** | **2º** |
 | **Fase 2** | Identidad canónica + wallets (Ra link) | Bajo | Alto | **3º** |
 | **Fase 3** | Wallet Abstraction + Thirdweb (AA + Paymaster + Onramp) | Medio | Alto | 4º |
