@@ -550,7 +550,7 @@ export async function confirmPaymentIntentSettled(
 export async function reconcileOrderCashback(
   db: Db,
   params: { orderId: string }
-): Promise<{ minted: boolean; bunz?: number; skipped?: "ALREADY_REWARDED" | "NO_PAYER" | "NOT_PAID" | "NO_ORDER" }> {
+): Promise<{ minted: boolean; bunz?: number; skipped?: "ALREADY_REWARDED" | "NO_PAYER" | "NOT_PAID" | "NO_ORDER" | "NO_FIAT" }> {
   const [order] = await db
     .select({ id: orders.id, customerId: orders.customerId, branchId: orders.branchId, status: orders.status, total: orders.total, bunzReward: orders.bunzReward })
     .from(orders)
@@ -579,6 +579,21 @@ export async function reconcileOrderCashback(
   }
   if (!payerId) return { minted: false, skipped: "NO_PAYER" };
 
+  // 4) Cashback SOLO sobre la parte FIAT (D-10): si la venta se pagó toda en
+  //    Bunz, no hay cashback. fiatMxn = amountMxn − bunzAmount del intent.
+  let fiatMxn = Number(order.total || 0);
+  if (intentRows.length > 0) {
+    const [covered] = await db
+      .select({ amountMxn: paymentIntents.amountMxn, bunzAmount: paymentIntents.bunzAmount })
+      .from(paymentIntents)
+      .where(eq(paymentIntents.orderId, params.orderId))
+      .limit(1);
+    if (covered) {
+      fiatMxn = Math.max(0, Number(covered.amountMxn || 0) - Number(covered.bunzAmount || 0));
+    }
+  }
+  if (fiatMxn <= 0) return { minted: false, skipped: "NO_FIAT" };
+
   // businessId del comercio (branches → restaurants.businessId), fallback del branchId
   let businessId: string = order.branchId;
   if (order.branchId) {
@@ -600,11 +615,11 @@ export async function reconcileOrderCashback(
   const attemptReward = async (): Promise<{ success: boolean; bunz?: number } | null> => {
     const { miniappClient } = await import("./miniapp-client");
     try {
-      return await miniappClient.rewardBunz(payerId!, Number(order.total || 0), order.id, businessId);
+      return await miniappClient.rewardBunz(payerId!, fiatMxn, order.id, businessId);
     } catch (firstErr) {
       console.error("[CASHBACK_RECONCILE] orderId=" + order.id + " intento 1:", firstErr);
       await new Promise((r) => setTimeout(r, 800));
-      return await miniappClient.rewardBunz(payerId!, Number(order.total || 0), order.id, businessId);
+      return await miniappClient.rewardBunz(payerId!, fiatMxn, order.id, businessId);
     }
   };
   let res: Awaited<ReturnType<typeof attemptReward>> = null;

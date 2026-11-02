@@ -338,7 +338,10 @@ export class PaymentIntentService {
         }
       }
 
-      // 6. Issue Authoritative Cashback / Reward to customer on settlement
+      // 6. Cashback OFICIAL — SOLO sobre la parte FIAT de la venta.
+      // Regla económica (decisión D-10, 2026-11-02): el cashback se gana al
+      // comprar con fiat a los afiliados; pagar CON Bunz no genera Bunz
+      // (fiatMxn = amountMxn − bunzAmount; venta 100% Bunz ⇒ 0 cashback).
       if (payerSubjectId && payerSubjectId !== "SYSTEM") {
         // Tasa real del negocio (branch → restaurant.defaultRewardRate); 20 solo como fallback
         let cashbackRate = 20;
@@ -353,8 +356,9 @@ export class PaymentIntentService {
         } catch (rateErr) {
           console.error("[intent.settle] Error resolviendo rewardRate, fallback 20%:", rateErr);
         }
-        const rewardAmount = Math.round(intent.amountMxn * (cashbackRate / 100));
-        if (rewardAmount > 0) {
+        const fiatMxn = Math.max(0, Number(intent.amountMxn || 0) - Number(intent.bunzAmount || 0));
+        const rewardAmount = Math.floor(fiatMxn * (cashbackRate / 100));
+        if (fiatMxn > 0 && rewardAmount > 0) {
           await tx
             .update(users)
             .set({ totalBunzEarned: sql`COALESCE(${users.totalBunzEarned}, 0) + ${rewardAmount}` })

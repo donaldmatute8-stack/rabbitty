@@ -1,8 +1,8 @@
 # RABBITTY SCORE — Plan, Fases y Roadmap
 
-> **Estado:** Fase 1 — ✅ CERRADA (implementada y ya en `main` vía merge FF `ecd406c`).
-> Fase 2 (Trust & Engagement shadow) — 🔧 **EN RAMA** (implementada; migración `0022` pendiente de aplicar a prod manualmente → norma DRIFT-001).
-> **Última actualización:** 2026-11-01
+> **Estado:** Fase 1 — ✅ CERRADA (implementada y ya en `main`: rating en prod con canal nativo verificado).
+> Fase 2 (Trust & Engagement shadow) — 🔧 **EN RAMA** (implementada; en el cierre: migración `0022` → §10).
+> **Última actualización:** 2026-11-02
 > **Dueño de producto:** Marco (God Admin)
 > **Principio rector:** la reputación construye confianza; **no** toca la economía base (Bunz/cashback) en Fase 1.
 >
@@ -50,8 +50,6 @@ Un sistema de confianza de dos caras al estilo Uber: **Rabbitter Trust & Engagem
 | Estabilidad del chat | flags de bloqueo | NO medir en F2 (requiere proceso de revisión — decisión del review) |
 
 **Método (shadow v1, `trust_shadow_v1`):** score 0–100 = promedio ponderado de los componentes CON datos suficientes (renormalización de pesos). Sin muestra suficiente en ninguno → `score: null` + `confidence: NONE`. `confidence`: HIGH (todo confiable + ≥10 pagos), MEDIUM (≥3 pagos + todo confiable), LOW (resto). Snapshot persistido en `rabbitter_score_shadow` (restaurant DB) con `reviewFlag` agregado de las 5 señales multi-cuenta (gmail cluster, IP, device, push token, ledger) — Regla de oro §2: solo revisión.
-
-## 4. Hallazgos de auditoría que mandaron el diseño
 
 ## 4. Hallazgos de auditoría que mandaron el diseño
 
@@ -119,7 +117,12 @@ Pendiente operativo (no bloqueante): validación en staging del prompt con una o
 | D-2 | ¿El Rabbitter ve su propio historial de ratings en F1? | No (evitar gaming); reevaluar con data shadow |
 | D-3 | ¿Prompt también en web `/pay`? | Sí, mismo endpoint |
 | D-4 | ¿Comentario obligatorio con 1-2★? | No, siempre opcional |
-| D-5 | Atribución de campañas (Growth) | ✅ **INSTRUMENTADO (2026-11-01):** columna `users.firstSeenCampaignId` (nullable, sin FK a propósito) + captura en los 2 puntos de alta real: `auth/telegram` (prefijo `camp_{campaignId}` en startParam, solo en creación y solo si la campaña existe) y `auth/otp/verify` (body.campaignId opcional — el front lo pasará cuando existan links de campaña en /login). Migración manual `0017` **aplicada a prod** (norma DRIFT-001). La data acumula durante el corredor shadow → insumo listo para F3 || D-6 | Presupuesto de promos cofinanciadas | F3/F4; tope % GMV + autorización God |
+| D-5 | Atribución de campañas (Growth) | ✅ **INSTRUMENTADO (2026-11-01):** columna `users.firstSeenCampaignId` (nullable, sin FK a propósito) + captura en los 2 puntos de alta real: `auth/telegram` (prefijo `camp_{campaignId}` en startParam, solo en creación y solo si la campaña existe) y `auth/otp/verify` (body.campaignId opcional — el front lo pasará cuando existan links de campaña en /login). Migración manual `0017` **aplicada a prod** (norma DRIFT-001). La data acumula durante el corredor shadow → insumo listo para F3 |
+| D-6 | Presupuesto de promos cofinanciadas | F3/F4; tope % GMV + autorización God |
+| D-7 | ¿Quién causa la tab huérfana (cliente vs operador)? Define si `tabs` entra al score | **Actual:** componente diagnóstico puro, fuera del score |
+| D-8 | Atribuir abandono de payment intent: ¿fricción de UX (checkout→3DS) o del usuario? | F2 shadow lo clasifica como `expired/cancelled/failed` sin juzgar; decidir con datos |
+| D-9 | ¿Recompensar evaluar con hops (+2 hops por rating honesto, cap/coldown anti-gaming)? Levanta cobertura y suaviza el sesgo de respuesta sin tocar el score | **Pendiente decisión de Marco** — no implementado hasta su visto bueno |
+| D-10 | Regla de economía del cashback (auditoría 2026-11-02): el settle del QR-Bunz minteaba cashback sobre TODA la venta aunque se pagara 100% en Bunz — doble-beneficio | ✅ **DECIDIDO y APLICADO: el cashback SOLO se gana con venta fiat** — `fiatMxn = amountMxn − bunzAmount` en `paymentIntentDomain` (settle) y `reconcileOrderCashback` (H8; skip `NO_FIAT`). Pagos mixtos: proporcional al fiat. Registry: los Bunz no generan Bunz |
 | D-7 | ¿Quién causa la tab huérfana (cliente vs operador)? Define si `tabs` entra al score | **Actual:** componente diagnóstico puro, fuera del score |
 | D-8 | Atribuir abandono de payment intent: ¿fricción de UX (checkout→3DS) o del usuario? | F2 shadow lo clasifica como `expired/cancelled/failed` sin juzgar; decidir con datos |
 | D-10 | **Auditoría cashback (2026-11-02): el settle QR-Bunz (`approveIntent`) TAMBIÉN mintea cashback** (`rewardRate × amountMxn`) al comensal que acaba de pagar TODO en Bunz — es diseño preexistente (paymentIntentDomain), no roto por H8. ¿Es intencional (cashback por compra sin importar instrumento) o doble-beneficio a corregir? | Revisar con God antes de F3 — si se corrige, parche en paymentIntentDomain §6 con nota de recalibración de economía |
@@ -144,6 +147,7 @@ Pendiente operativo (no bloqueante): validación en staging del prompt con una o
 | 2026-11-02 | F1 mergeada a `main` (FF `ecd406c`) — el dataset de ratings corre en producción. Rama lista para F2 (rebase sobre main cuando el plan de notificaciones v2.1 esté en P0/P1). |
 | 2026-11-02 | **H6 corregido (bug de device en staging nativo)**: motor de submit extraído a `services/ratingSubmit.ts` (dual-canal: tRPC web + interno HTTP) + `/api/internal/rating` en admin con `x-rating-secret` + proxy `/api/pay/rate` ahora autentica al comensal, manda `userId` validado y con timeout 8s. Pendiente deploy: env `RATING_INTERNAL_SECRET` en Vercel (miniapp + admin). Tests del rating 10/10. |
 | 2026-11-02 | **Prueba device ka13 07:04 (post-H6):** rating nativo ✅ entró completo (stars+chips+comentario). Descubiertos H7 (race de cierre QR) y H8 (cashback sin mintear por intent sin pagador) — ambos corregidos en rama. |
+| 2026-11-02 | **F1-staging VALIDADO en device (ka13):** rating nativo entró completo (stars/chips/comentario) post-H6 + secret. **H7/H8 descubiertos y corregidos en el mismo session** (race de cierre QR y cashback sin mint por intent sin pagador). **D-10 RESUELTA:** cashback solo con venta fiat (`fiatMxn = amountMxn − bunzAmount`); pagos 100% Bunz ⇒ 0 cashback; mixtos ⇒ proporcional. Auditoría cashback full (4 rutas × Rabbitter/Afiliado × POS/nativa) sin otros hallazgos. |
 | 2026-11-02 | **F3 SHADOW en rama (code only)**: `allocRules.ts` puro (servicio 40% + eficiencia 35% + momentum 25%, recomendaciones BOOST/REFILL/NURTURE/PAUSE/OPTIMIZE/KEEP con reasons explicables) + unitarios 8/8 + `getGrowthAllocationShadow` en god + panel shadow en `/god/insights`. **Nunca operativo** — acciones requieren aprobación humana (D-6). Bunzy Bx2 entra cuando haya data shadow madura. |
 | 2026-11-01 | **GATE de mañana (marco, 2026-11-02):** pruebas del flujo pago 1-paso con propina + prompt rating (F1) **en un tenant real** — cierre de F1-staging y del §14-5 (pagos no cuelgan). Resultado = GO para ejecutar el cierre de F2 (§10: F2-1/F2-2) y arrancar la cuenta regresiva de 30 días (Bunzy Bx0 / F3). |
 | 2026-11-01 | **D-5 instrumentado (F3-ready)**: `users.firstSeenCampaignId` + captura en alta Telegram (`camp_` en startParam) y OTP verify (body opcional); migración `0017` aplicada a prod. La atribución acumula desde ya durante el shadow. |
