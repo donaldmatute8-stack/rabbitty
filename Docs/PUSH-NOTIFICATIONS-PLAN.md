@@ -235,3 +235,16 @@ Checklist de cierre de fase (todo probado en device real):
 | Duplicados (webhooks/retries) | dedupeKey UNIQUE + guards existentes |
 | Apple y location en background | Consentimiento honesto + toggle + matriz nativa §6 |
 | Latencia del worker (cron 30s) | Piggyback invocation en requests calientes + prioridad por clase (críticos se procesan en el mismo tick) |
+
+---
+
+## 13. Log de implementación
+
+| Fecha | Fase | Qué |
+|---|---|---|
+| 2026-11-02 | **P0 ✅ (commit `364c2e6`)** | Contrato tipado en `packages/events` (NotificationEventType/RabbittyEvent/EventClass) · `notifications_outbox` + `notificationDeliveries` en prod (migración manual `0012`) · `lib/push/outbox.ts` (enqueue idempotente + batch con estados QUEUED→SENT→PROVIDER_ACCEPTED/RETRYING/FAILED, backoff 30s→15m, 4 intentos) · `POST /api/notifications` ahora encola + piggyback worker · worker cron + workflow GH cada 5 min · push-check muestra la cola viva. |
+| — | **P1 ⏳** | Convertir los ~30 call sites inline (chat, memberships, ping, cron) → `enqueueOutbox`. |
+| — | **P2 ⏳** | Realtime in-app sobre el mismo contrato (SSE/WebSocket). |
+| — | **P3 ⏳** | FCM Android con checklist de paridad §7. |
+| — | **P4 ⏳** | Geofencing (matriz nativa §6, requiere rebuild). |
+| — | **P5 ⏳** | Métricas/deliveries UI, badge, recibos, i18n. |
