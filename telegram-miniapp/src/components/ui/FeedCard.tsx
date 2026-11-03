@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useSyncExternalStore } from 'react';
+import { useState, useEffect, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
@@ -161,6 +161,9 @@ export default function FeedCard({
   };
 
   const [imgError, setImgError] = useState(false);
+  // Si la portada cambia (el afiliado sube otra, o la anterior falló durante un
+  // deploy), el fallback no debe quedarse pegado: se reintenta con la URL nueva.
+  useEffect(() => { setImgError(false); }, [imageUrl]);
 
   return (
     <>
