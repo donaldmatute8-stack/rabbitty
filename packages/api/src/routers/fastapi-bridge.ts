@@ -4,6 +4,8 @@ import { router, godAdminProcedure, protectedProcedure } from "../trpc";
 import { bus, EventTypes } from "@rabbitty/events";
 import { miniappClient, configureMiniapp, getMiniappConfig } from "../services/miniapp-client";
 import { ownedBusinesses } from "@rabbitty/database-core";
+import { ledgerEntries } from "@rabbitty/database-restaurant/schema";
+import crypto from "crypto";
 import { TRPCError } from "@trpc/server";
 
 export const fastapiBridgeRouter = router({
@@ -162,10 +164,27 @@ export const fastapiBridgeRouter = router({
       }
     }),
 
+  /**
+   * W4 (auditoría H17) — Refill de respaldo del afiliado.
+   *
+   * Crear capacidad de redención es una operación económica: el modelo §0 exige
+   * "fuente documentada y aprobada (actor + motivo)". Antes esta ruta sumaba
+   * `bunzBalance` sin actor, sin motivo y sin registro contable — imposible de
+   * auditar y de conciliar (D-14/D-17).
+   *
+   * Orden de escritura: primero el asiento de ledger, después el balance. Si el
+   * balance falla, queda una entrada huérfana DETECTABLE; al revés quedaría
+   * respaldo emitido sin registro, que es peor. No hay transacción cruzada
+   * posible (core y restaurant son bases distintas).
+   */
   rechargeBusinessBunz: godAdminProcedure
     .input(z.object({
       businessId: z.string(),
       amount: z.number().int().positive(),
+      /** Motivo obligatorio: es la "fuente documentada y aprobada" del modelo. */
+      reason: z.string().trim().min(5).max(500),
+      /** Idempotencia opcional para reintentos del cliente. */
+      idempotencyKey: z.string().min(8).max(120).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const [business] = await ctx.coreDb.select().from(ownedBusinesses).where(eq(ownedBusinesses.id, input.businessId));
@@ -182,14 +201,52 @@ export const fastapiBridgeRouter = router({
         delete vData.lastLowIncentiveAlertAt;
       }
 
-      await ctx.coreDb.update(ownedBusinesses)
+      const actorId = ctx.userId ?? "SYSTEM";
+      const idempotencyKey = input.idempotencyKey ?? `refill_${input.businessId}_${crypto.randomUUID()}`;
+
+      // 1) Registro contable del incremento de respaldo (actor + motivo + origen).
+      try {
+        await ctx.restaurantDb.insert(ledgerEntries).values({
+          payerSubjectId: actorId,
+          payeeSubjectId: input.businessId,
+          amount: input.amount,
+          currency: "BUNZ",
+          type: "MINT",
+          referenceId: input.businessId,
+          idempotencyKey,
+          metadata: {
+            kind: "BACKING_REFILL",
+            reason: input.reason,
+            actorId,
+            actorRole: "GOD_ADMIN",
+            previousBalance: business.bunzBalance ?? 0,
+          },
+        });
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (msg.includes("duplicate key") || msg.includes("unique")) {
+          throw new TRPCError({ code: "CONFLICT", message: "Esta recarga ya fue registrada (idempotencia)." });
+        }
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `No se pudo registrar la recarga en el ledger: ${msg}` });
+      }
+
+      // 2) Incremento del respaldo disponible, devolviendo el saldo real.
+      const [updated] = await ctx.coreDb.update(ownedBusinesses)
         .set({
-          bunzBalance: sql`${ownedBusinesses.bunzBalance} + ${input.amount}`,
+          bunzBalance: sql`COALESCE(${ownedBusinesses.bunzBalance}, 0) + ${input.amount}`,
           verificationData: JSON.stringify(vData),
         })
-        .where(eq(ownedBusinesses.id, input.businessId));
+        .where(eq(ownedBusinesses.id, input.businessId))
+        .returning({ bunzBalance: ownedBusinesses.bunzBalance });
 
-      return { success: true, bunzBalance: business.bunzBalance + input.amount };
+      if (!updated) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Recarga registrada en ledger (${idempotencyKey}) pero el balance no se actualizó. Requiere corrección manual.`,
+        });
+      }
+
+      return { success: true, bunzBalance: updated.bunzBalance ?? 0, idempotencyKey };
     }),
 
   onEvent: protectedProcedure

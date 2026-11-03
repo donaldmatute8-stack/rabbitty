@@ -166,7 +166,16 @@ export default function RestaurantSyncPage() {
                           onClick={() => {
                             const amount = parseInt(rechargeAmount[restaurant.id]);
                             if (!amount || amount < 1) { toast.error("Ingresa una cantidad válida"); return; }
-                            rechargeBunz.mutate({ businessId: restaurant.id, amount });
+                            // W4 (auditoría H17): crear respaldo exige motivo documentado
+                            // (actor + motivo van al ledger). No se puede recargar "porque sí".
+                            const reason = window.prompt(
+                              `Motivo de la recarga de ${amount} Bunz para ${restaurant.name}.\n\nQueda registrado en el ledger con tu usuario y la fecha.`
+                            );
+                            if (!reason || reason.trim().length < 5) {
+                              toast.error("La recarga necesita un motivo (mín. 5 caracteres)");
+                              return;
+                            }
+                            rechargeBunz.mutate({ businessId: restaurant.id, amount, reason: reason.trim() });
                             setRechargeAmount(prev => ({ ...prev, [restaurant.id]: "" }));
                           }}
                           disabled={rechargeBunz.isPending || !rechargeAmount[restaurant.id]}
@@ -175,6 +184,9 @@ export default function RestaurantSyncPage() {
                           Recargar
                         </button>
                       </div>
+                      <p className="mt-1.5 text-[10px] text-gray-500">
+                        Queda registrado en el ledger con actor, motivo y fecha — auditable para conciliación.
+                      </p>
                     </div>
                   </div>
                 ))}

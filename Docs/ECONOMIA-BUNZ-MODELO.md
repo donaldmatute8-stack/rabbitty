@@ -131,11 +131,12 @@ Cada writer que incrementa `ownedBusinesses.bunzBalance` debe demostrar **qué c
 de redención incorpora y qué respaldo la autoriza**; un retry no debe volver a sumar.
 Detalle por writer en `Docs/ECONOMIA-BUNZ-AUDIT-H17.md` (veredictos por ruta).
 
-**Estado 2026-11-03:** los writers de **consumo** (W5, W6, W7, U2, U8) ya cumplen el
-patrón §3 y están marcados en la matriz. Lo que falta para declarar el mapa completo es
-la **metadata de origen** en los writers de **incremento** (de dónde salió cada Bunz:
-venta fiat o inventario comprometido) — es el insumo de D-17, no un cambio de código
-pendiente de dinero.
+**Estado 2026-11-03:** los writers de **consumo** (W5, W6, W7, U2, U8, U10) ya cumplen el
+patrón §3, y el writer de **refill administrativo** (W4) ya exige motivo, actor y asiento
+de ledger `MINT` — un incremento de respaldo ya no puede ocurrir sin fuente documentada.
+Lo que falta para declarar el mapa completo es la **metadata de origen** en los writers de
+**incremento automático** (W1/W2/W3: venta fiat o inventario comprometido) — es el insumo
+de D-17, no un cambio de código pendiente de dinero.
 
 ## 6..Future — Tesorería de afiliados y blockchain
 
