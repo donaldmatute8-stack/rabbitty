@@ -357,14 +357,18 @@ export default function InteractiveMap({
     const isIosDevice = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
     // ── 1. NATIVO: plugin de reconocimiento de voz (iOS/Android en Capacitor) ──
-    // Con este plugin el micrófono del mapa SÍ escucha voz en la app nativa
-    // (requiere `npx cap sync` + rebuild nativo; en falla cae a Web Speech).
+    // H-MAP-VOICE: antes cualquier fallo del import caía silenciosamente a Web
+    // Speech (que NO existe en WKWebView) → el usuario solo veía "escribe tu
+    // búsqueda". Ahora el diagnóstico es por niveles: plugin ausente en este
+    // BUILD → mensaje de actualización; permiso negado → mensaje de Ajustes.
     if (PlatformBridge.isNative()) {
       try {
-        const SpeechRecognitionLib = await import('@capacitor-community/speech-recognition');
-        const SpeechRecognitionPlugin = (SpeechRecognitionLib as Record<string, unknown>).SpeechRecognition ?? SpeechRecognitionLib;
+        const sr = await import('@capacitor-community/speech-recognition');
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const plugin = SpeechRecognitionPlugin as any;
+        const plugin = ((sr as Record<string, unknown>).SpeechRecognition ?? sr) as any;
+        if (!plugin?.checkPermissions || !plugin?.start) {
+          throw new Error('SPEECH_PLUGIN_NOT_IN_BUILD');
+        }
         const perm = await plugin.checkPermissions();
         if (perm?.speechRecognition !== 'granted') {
           const req = await plugin.requestPermissions();
@@ -384,7 +388,12 @@ export default function InteractiveMap({
         return;
       } catch (speechErr) {
         setIsListening(false);
-        console.warn('[SpeechRec] plugin nativo no disponible, cae a Web Speech:', speechErr);
+        const msg = speechErr instanceof Error ? speechErr.message : String(speechErr ?? '');
+        if (msg.includes('SPEECH_PLUGIN_NOT_IN_BUILD')) {
+          console.warn('[SpeechRec] plugin no está en este build nativo (requiere cap sync + rebuild)');
+        } else {
+          console.warn('[SpeechRec] plugin nativo falló, cae a Web Speech:', speechErr);
+        }
         // continúa al fallback Web Speech / escritura
       }
     }
@@ -392,11 +401,17 @@ export default function InteractiveMap({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const SpeechRec = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
 
-    // En iOS WKWebView / Capacitor o navegadores móviles sin soporte seguro de SpeechRecognition
+    // En WKWebView de iOS NUNCA existe Web Speech: si el plugin nativo tampoco
+    // está en este build, el mensaje honesto es de actualización — no culpar
+    // al usuario pidiendo escribir cuando igual no tiene voz.
     if (!SpeechRec || (isIosDevice && (PlatformBridge.isNative() || PlatformBridge.isTelegram()))) {
       copilotInputRef.current?.focus();
-      setCopilotReply('Escribe tu búsqueda a Bunzy aquí ✍️');
-      setTimeout(() => setCopilotReply(null), 3500);
+      setCopilotReply(
+        isIosDevice && PlatformBridge.isNative()
+          ? 'El micrófono llega con la próxima actualización de la app · escribe aquí ✍️'
+          : 'Escribe tu búsqueda a Bunzy aquí ✍️'
+      );
+      setTimeout(() => setCopilotReply(null), 4000);
       return;
     }
 
@@ -906,29 +921,65 @@ export default function InteractiveMap({
           className="absolute inset-x-3 z-30 max-w-md mx-auto pointer-events-auto animate-fadeIn transition-all duration-300"
           style={{ bottom: PlatformBridge.isTelegram() ? 116 : 108 }}
         >
-          <div 
+          <div
             onClick={() => router.push(`/affiliate/${selected.id}`)}
             className="p-4 rounded-3xl border shadow-2xl backdrop-blur-2xl flex flex-col gap-2.5 cursor-pointer relative overflow-hidden transition-all active:scale-98"
             style={{
-              background: isDark ? 'rgba(18, 12, 28, 0.98)' : 'rgba(255, 255, 255, 0.98)',
-              borderColor: isDark ? 'rgba(233, 30, 99, 0.45)' : 'rgba(233, 30, 99, 0.3)',
-              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.45)',
+              // H-MAP-CARD: glassmorphism real (alpha bajo + blur+saturate) —
+              // antes era casi opaco (0.98) y el blur no se apreciaba.
+              background: isDark
+                ? 'linear-gradient(160deg, rgba(20,12,30,0.78) 0%, rgba(10,7,18,0.68) 100%)'
+                : 'linear-gradient(160deg, rgba(255,255,255,0.82) 0%, rgba(255,244,248,0.74) 100%)',
+              backdropFilter: 'blur(26px) saturate(165%)',
+              WebkitBackdropFilter: 'blur(26px) saturate(165%)',
+              borderColor: isDark ? 'rgba(233, 30, 99, 0.35)' : 'rgba(233, 30, 99, 0.25)',
+              boxShadow: isDark
+                ? '0 20px 50px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)'
+                : '0 20px 50px rgba(15,8,20,0.18), inset 0 1px 0 rgba(255,255,255,0.65)',
             }}
           >
-            {/* Grab Handle bar */}
-            <div className="absolute top-1.5 inset-x-0 flex justify-center pointer-events-none">
-              <span className="w-8 h-1 rounded-full bg-white/20" />
-            </div>
+            {/* Glow decorativo del borde superior (tinte del brand) */}
+            <div
+              className="absolute inset-x-0 top-0 h-px pointer-events-none"
+              style={{ background: 'linear-gradient(90deg, transparent 12%, rgba(233,30,99,0.55) 50%, transparent 88%)' }}
+            />
+
+            {/* Cerrar — burbuja glass esquinada fuera del flujo (antes
+                convivía apiñada junto al título) */}            <button
+              type="button"
+              aria-label="Cerrar"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelected(null);
+              }}
+              className="absolute top-2.5 right-2.5 z-10 w-7 h-7 rounded-full flex items-center justify-center cursor-pointer border active:scale-90 transition-transform"
+              style={{
+                background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(13,9,20,0.08)',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+                borderColor: isDark ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.08)',
+                color: 'var(--text-muted)',
+              }}
+            >
+              <X size={13} strokeWidth={2.6} />
+            </button>
 
             <div className="flex items-center gap-3.5 mt-1">
               {/* Business Logo / Emoji Avatar */}
-              <div className="w-14 h-14 rounded-2xl overflow-hidden shrink-0 border border-(--border-subtle) bg-(--bg-subtle) flex items-center justify-center">
+              <div
+                className="w-14 h-14 rounded-2xl overflow-hidden shrink-0 border flex items-center justify-center"
+                style={{
+                  borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.08)',
+                  background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.7)',
+                  boxShadow: '0 4px 14px rgba(0,0,0,0.18)',
+                }}
+              >
                 {selected.logoUrl || selected.imageUrl ? (
                   /* eslint-disable-next-line @next/next/no-img-element */
-                  <img 
-                    src={selected.logoUrl || selected.imageUrl} 
-                    alt={selected.name || 'Comercio'} 
-                    className="w-full h-full object-cover" 
+                  <img
+                    src={selected.logoUrl || selected.imageUrl}
+                    alt={selected.name || 'Comercio'}
+                    className="w-full h-full object-cover"
                   />
                 ) : (
                   <span className="text-2xl">{getIcon(selected.category || selected.device)}</span>
@@ -937,22 +988,9 @@ export default function InteractiveMap({
 
               {/* Info Column */}
               <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-1">
-                  <h3 className="m-0 text-base font-black truncate" style={{ color: 'var(--text-primary)' }}>
-                    {selected.name || selected.user}
-                  </h3>
-                  
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelected(null);
-                    }}
-                    className="w-6 h-6 rounded-full bg-(--bg-subtle) hover:bg-[#E91E63]/20 flex items-center justify-center text-(--text-muted) hover:text-[#E91E63] border-none cursor-pointer"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
+                <h3 className="m-0 text-base font-black truncate pr-8" style={{ color: 'var(--text-primary)' }}>
+                  {selected.name || selected.user}
+                </h3>
 
                 <p className="m-0 text-xs font-semibold text-(--text-muted) mt-0.5 truncate">
                   {selected.category || selected.device || 'Comercio Afiliado'} • {selected.distance ? `${selected.distance} km` : 'Cerca de ti'}
@@ -975,8 +1013,10 @@ export default function InteractiveMap({
                 </div>
               </div>
 
-              {/* Navigation CTA button */}
-              <div 
+              {/* Navigation CTA — píldora integrada con icono + etiqueta (antes
+                  era una caja cuadrada desconectada del diseño de la tarjeta) */}
+              <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   PlatformBridge.hapticFeedback('medium');
@@ -984,10 +1024,15 @@ export default function InteractiveMap({
                   window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
                 }}
                 title="Abrir en Google Maps"
-                className="w-10 h-10 rounded-2xl bg-[#E91E63] text-white flex items-center justify-center shrink-0 shadow-lg shadow-pink-500/30 hover:scale-105 active:scale-95 transition-transform cursor-pointer"
+                className="shrink-0 h-10 pl-3 pr-3.5 rounded-full flex items-center gap-1.5 text-white font-black text-[11px] tracking-wide active:scale-95 transition-transform cursor-pointer border-none"
+                style={{
+                  background: 'linear-gradient(135deg, #E91E63 0%, #FF2E93 100%)',
+                  boxShadow: '0 6px 18px rgba(233,30,99,0.4), inset 0 1px 0 rgba(255,255,255,0.25)',
+                }}
               >
-                <Navigation size={18} className="rotate-45" />
-              </div>
+                <Navigation size={14} className="rotate-45" strokeWidth={2.6} />
+                <span>Ir</span>
+              </button>
             </div>
 
             {/* Micro Details Row: Horario / Dirección */}

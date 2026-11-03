@@ -28,12 +28,15 @@ export default function RatingSheet({
   businessName,
   onClose,
   onSubmitted,
+  compact = false,
 }: {
   orderId: string;
   businessName?: string;
   onClose: () => void;
   /** H10: cuando el rating fue enviado con éxito — el caller decide a dónde llevar al usuario (ej. salir al feed). */
   onSubmitted?: () => void;
+  /** H-RATE-UX: presentación compacta secundaria (post-liquidación) — la experiencia va ABAJO, atrás del éxito grande. */
+  compact?: boolean;
 }) {
   const [stars, setStars] = useState<number>(0);
   const [attrs, setAttrs] = useState<Attr[]>([]);
@@ -77,47 +80,51 @@ export default function RatingSheet({
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="mt-4 rounded-3xl bg-white/5 border border-white/10 p-4 space-y-3"
+      className={`rounded-3xl bg-white/5 border border-white/10 space-y-3 ${compact ? 'p-3' : 'p-4'}`}
     >
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-sm font-black text-white">¿Cómo estuvo tu experiencia{businessName ? ` en ${businessName}` : ''}?</p>
-          <p className="text-[10px] text-white/40">Opcional — nos ayuda a mejorar el servicio del comercio.</p>
+      <div className={compact ? 'flex items-start justify-between gap-2' : 'flex items-start justify-between'}>
+        <div className="min-w-0">
+          <p className={`${compact ? 'text-[11px]' : 'text-sm'} font-black text-white`}>
+            ¿Cómo estuvo tu experiencia{businessName ? ` en ${businessName}` : ''}?
+          </p>
+          <p className={`${compact ? 'text-[9px]' : 'text-[10px]'} text-white/40`}>Opcional — nos ayuda a mejorar el servicio del comercio.</p>
         </div>
-        <button onClick={onClose} aria-label="Cerrar" className="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-white/50">
-          <X size={14} />
-        </button>
+        {!compact && (
+          <button onClick={onClose} aria-label="Cerrar" className="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-white/50">
+            <X size={14} />
+          </button>
+        )}
       </div>
 
       {done ? (
-        <div className="py-3 text-center">
-          <CheckCircle2 className="h-8 w-8 text-emerald-400 mx-auto" />
-          <p className="text-xs font-bold text-white/80 mt-2">¡Gracias por tu evaluación!</p>
+        <div className={compact ? 'py-2 text-center' : 'py-3 text-center'}>
+          <CheckCircle2 className={`${compact ? 'h-6 w-6' : 'h-8 w-8'} text-emerald-400 mx-auto`} />
+          <p className={`${compact ? 'text-[10px]' : 'text-xs'} font-bold text-white/80 mt-2`}>¡Gracias por tu evaluación!</p>
         </div>
       ) : (
         <>
           {/* Estrellas */}
-          <div className="flex items-center justify-center gap-2">
+          <div className={`flex items-center justify-center ${compact ? 'gap-1' : 'gap-2'}`}>
             {[1, 2, 3, 4, 5].map((i) => (
               <motion.button
                 key={i}
                 whileTap={{ scale: 0.85 }}
                 onClick={() => { setStars(i); PlatformBridge.hapticFeedback('light'); }}
                 aria-label={`${i} estrellas`}
-                className="p-1"
+                className="p-0.5"
               >
-                <Star size={30} className={i <= stars ? 'text-amber-400 fill-amber-400' : 'text-white/20'} />
+                <Star size={compact ? 21 : 30} className={i <= stars ? 'text-amber-400 fill-amber-400' : 'text-white/20'} />
               </motion.button>
             ))}
           </div>
 
           {/* Chips neutrales (mismos para todas las calificaciones) */}
-          <div className="flex flex-wrap justify-center gap-1.5">
+          <div className={`flex flex-wrap justify-center ${compact ? 'gap-1' : 'gap-1.5'}`}>
             {ATTRS.map((a) => (
               <button
                 key={a.id}
                 onClick={() => toggleAttr(a.id)}
-                className={`px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all ${
+                className={`${compact ? 'px-2 py-0.5 text-[9px]' : 'px-2.5 py-1 text-[10px]'} rounded-full font-bold border transition-all ${
                   attrs.includes(a.id) ? 'bg-white/15 border-white/40 text-white' : 'bg-white/5 border-white/10 text-white/50'
                 }`}
               >
@@ -130,15 +137,15 @@ export default function RatingSheet({
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             maxLength={500}
-            rows={2}
-            placeholder="Comentario (opcional)"
-            className="w-full rounded-2xl bg-white/5 border border-white/10 px-3 py-2 text-xs text-white placeholder-white/30 outline-none focus:border-[#E91E63]/50 resize-none"
+            rows={compact ? 1 : 2}
+            placeholder={compact ? 'Comentario (opcional)' : 'Comentario (opcional)'}
+            className={`w-full rounded-2xl bg-white/5 border border-white/10 px-3 py-2 text-white placeholder-white/30 outline-none focus:border-[#E91E63]/50 resize-none ${compact ? 'text-[10px]' : 'text-xs'}`}
           />
 
           <button
             onClick={() => void submit()}
             disabled={stars < 1 || sending}
-            className="w-full bg-linear-to-r from-[#FF2E93] to-[#E91E63] text-white font-black text-xs py-3 rounded-2xl flex items-center justify-center gap-2 disabled:opacity-40 active:scale-[0.98] transition-transform"
+            className={`w-full bg-linear-to-r from-[#FF2E93] to-[#E91E63] text-white font-black rounded-2xl flex items-center justify-center gap-2 disabled:opacity-40 active:scale-[0.98] transition-transform ${compact ? 'text-[11px] py-2.5' : 'text-xs py-3'}`}
           >
             {sending ? <><Loader2 size={14} className="animate-spin" /> Enviando…</> : 'Enviar evaluación'}
           </button>

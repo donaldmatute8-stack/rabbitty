@@ -563,25 +563,78 @@ export function InAppPaySheet({
         )}
 
         {step === 'done' && (
-          <div className="flex-1 flex flex-col items-center justify-center text-center space-y-3">
+          <div className="flex-1 flex flex-col items-center justify-center px-2 py-4">
+            {/* Éxito grande — icono custom animado: disco esmeralda con check + conejo Bunz + anillos */}
             <motion.div
-              initial={{ scale: 0.6, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ type: 'spring', damping: 12 }}
-              className="w-16 h-16 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center"
+              initial={{ scale: 0.4, opacity: 0 }}
+              animate={{ scale: [0.4, 1.09, 1], opacity: 1 }}
+              transition={{ type: 'spring', damping: 11, stiffness: 260 }}
+              className="relative w-32 h-32 mb-2 flex items-center justify-center shrink-0"
             >
-              <CheckCircle2 className="h-9 w-9 text-emerald-400" />
+              {/* Anillos expansivos (pulso) */}
+              <motion.span
+                animate={{ scale: [0.62, 1.85], opacity: [0.8, 0] }}
+                transition={{ duration: 1.5, repeat: Infinity, ease: 'easeOut' }}
+                className="absolute inset-0 rounded-full border-2 border-emerald-400/40"
+              />
+              <motion.span
+                animate={{ scale: [1, 1.25, 1], opacity: [0.35, 0.06, 0.35] }}
+                transition={{ duration: 2, repeat: Infinity, delay: 0.28, ease: 'easeInOut' }}
+                className="absolute inset-0 rounded-full border border-emerald-400/30"
+              />
+              {/* Disco principal */}
+              <div
+                className="relative w-24 h-24 rounded-full flex items-center justify-center"
+                style={{
+                  background: 'radial-gradient(circle at 32% 26%, rgba(255,255,255,0.18), rgba(16,68,47,0.75) 62%, rgba(4,24,17,0.94))',
+                  border: '1px solid rgba(52,211,153,0.5)',
+                  boxShadow: '0 0 46px rgba(52,211,153,0.3), inset 0 0 24px rgba(16,185,129,0.18)',
+                }}
+              >
+                {/* Conejo Bunz supervisando su pago */}
+                <span className="absolute text-[19px] right-2.5 -top-0.5 select-none" style={{ filter: 'drop-shadow(0 0 6px rgba(52,211,153,0.4))' }}>🐰</span>
+                <motion.div
+                  initial={{ scale: 0.2, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ delay: 0.16, type: 'spring', damping: 12, stiffness: 300 }}
+                >
+                  <CheckCircle2 size={54} strokeWidth={2.6} className="text-emerald-400" />
+                </motion.div>
+              </div>
             </motion.div>
-            <p className="text-lg font-black text-white">¡Cuenta liquidada!</p>
-            <p className="text-xs text-white/50">Tu pago y tu cashback Bunz ya están acreditados. 🐰</p>
-            <div className="w-full max-w-sm pt-2">
+
+            <motion.h3
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.12 }}
+              className="m-0 text-2xl font-black text-white leading-tight" style={{ letterSpacing: '-0.5px' }}
+            >
+              ¡Cuenta liquidada!
+            </motion.h3>
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.2 }}
+              className="text-[10.5px] text-white/40 mt-1 mb-2"
+            >
+              Tu pago y tu cashback Bunz ya están acreditados 🐰
+            </motion.p>
+
+            {/* Evaluación — ABAJO y compacta (secundaria, no la estrella del show) */}
+            <motion.div
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="w-full max-w-sm mt-1"
+            >
               <RatingSheet
+                compact
                 orderId={orderId || ''}
                 businessName={businessName}
                 onClose={() => setStep('done')}
                 onSubmitted={() => onClose()}
               />
-            </div>
+            </motion.div>
           </div>
         )}
 

@@ -541,50 +541,9 @@ export default function FeedPage() {
       }}
     >
       <LocationNudge />
-      {/* Indicador pull-to-refresh (conejo + barras, identidad RabbittyLoader) */}
-      <div
-        style={{
-          height: refreshingFeed || pullDist > 4 ? (refreshingFeed ? 56 : Math.max(0, pullDist * 0.5)) : 0,
-          opacity: refreshingFeed || pullDist > 4 ? 1 : 0,
-          overflow: 'hidden',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          // H19: loader ancl bajo el menú compacto (bunz'in/Stock/Freehands) y
-          // Arriba del Rabbitty Pass — nunca arriba de todo
-          position: 'fixed',
-          left: 0,
-          right: 0,
-          top: 'calc(var(--safe-top, 0px) + 66px)',
-          zIndex: 60,
-          pointerEvents: 'none',
-          transition: refreshingFeed ? 'height 180ms ease' : 'height 60ms linear, opacity 120ms ease',
-        }}
-        aria-hidden={!refreshingFeed && pullDist <= 4}
-      >
-        <div className="flex items-center gap-2.5">
-          <motion.span
-            animate={{ rotate: [0, -12, 12, 0] }}
-            transition={{ repeat: Infinity, duration: 1.1, ease: 'easeInOut' }}
-            className="text-lg"
-          >
-            🐰
-          </motion.span>
-          <div className="flex items-center gap-[3px] h-4">
-            {[0, 1, 2, 3, 4, 5].map((i) => (
-              <motion.div
-                key={i}
-                className="w-[3px] rounded-full bg-linear-to-t from-purple-600 via-pink-500 to-cyan-300"
-                animate={{ height: [6, 14, 6] }}
-                transition={{ repeat: Infinity, duration: 0.8, delay: i * 0.09, ease: 'easeInOut' }}
-              />
-            ))}
-          </div>
-          <span className="text-[10px] font-black text-white/70 uppercase tracking-[1.5px]">
-            {refreshingFeed ? 'Actualizando…' : 'Suelta para actualizar'}
-          </span>
-        </div>
-      </div>
+      {/* H-PULL-LOADER: el indicador del pull-to-refresh se movió a flujo
+          (entre el menú de tabs y la tarjeta Rabbitty Pass) — ver <main>.
+          Antes estaba fixed en top:66px y tapaba el header. */}
       {/* Contenedor animado con efecto X/Twitter al abrir el Drawer lateral */}
       <motion.div
         animate={drawerOpen ? {
@@ -832,6 +791,45 @@ export default function FeedPage() {
 
       <main className="flex-1 w-full max-w-150 mx-auto px-4">
         <div className="pt-4">
+          {/* Pull-to-refresh descubierto: vive EN FLUJO entre el menú de tabs y la
+              tarjeta Rabbitty Pass (H-PULL-LOADER). Al jalar crece este espacio y
+              el loader se asoma justo debajo de los tabs, sin tapar nada. */}
+          <div
+            style={{
+              height: refreshingFeed || pullDist > 4 ? (refreshingFeed ? 56 : Math.max(0, pullDist * 0.5)) : 0,
+              opacity: refreshingFeed || pullDist > 4 ? 1 : 0,
+              overflow: 'hidden',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              pointerEvents: 'none',
+              transition: refreshingFeed ? 'height 180ms ease' : 'height 60ms linear, opacity 120ms ease',
+            }}
+            aria-hidden={!refreshingFeed && pullDist <= 4}
+          >
+            <div className="flex items-center gap-2.5">
+              <motion.span
+                animate={{ rotate: [0, -12, 12, 0] }}
+                transition={{ repeat: Infinity, duration: 1.1, ease: 'easeInOut' }}
+                className="text-lg"
+              >
+                🐰
+              </motion.span>
+              <div className="flex items-center gap-[3px] h-4">
+                {[0, 1, 2, 3, 4, 5].map((i) => (
+                  <motion.div
+                    key={i}
+                    className="w-[3px] rounded-full bg-linear-to-t from-purple-600 via-pink-500 to-cyan-300"
+                    animate={{ height: [6, 14, 6] }}
+                    transition={{ repeat: Infinity, duration: 0.8, delay: i * 0.09, ease: 'easeInOut' }}
+                  />
+                ))}
+              </div>
+              <span className="text-[10px] font-black text-white/70 uppercase tracking-[1.5px]">
+                {refreshingFeed ? 'Actualizando…' : 'Suelta para actualizar'}
+              </span>
+            </div>
+          </div>
 
           {/* Loader del conejo (global, se muestra al actualizar desde cualquier pestaña) */}
           {loading && !(activeTab === "bunz'in") && (

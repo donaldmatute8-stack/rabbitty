@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bell, CheckCircle2, AlertCircle, Gift, Coins, Flame, Home, MessageCircle, Store, Users, ArrowLeftRight, Settings } from 'lucide-react';
+import { Bell, CheckCircle2, AlertCircle, Gift, Coins, Flame, Home, MessageCircle, Store, Users, ArrowLeftRight, Settings, CheckCheck } from 'lucide-react';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import PullToRefresh from '@/components/ui/PullToRefresh';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -115,7 +115,7 @@ export default function NotificationsPage() {
 
   const markAsRead = async (id: string) => {
     try {
-      setNotifications(prev => 
+      setNotifications(prev =>
         prev.map(n => n.id === id ? { ...n, isRead: true } : n)
       );
       const headers = await PlatformBridge.getAuthHeaders();
@@ -126,6 +126,27 @@ export default function NotificationsPage() {
       }).catch((e) => console.warn('[Notifications] Failed to persist read state:', e));
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  // H-READ-ALL: marca TODAS las notificaciones como leídas (server ya soporta
+  // PATCH { all: true }); el estado local se pinta optimista y el badge
+  // (inbox del miniapp / iOS) se alinea con el siguiente cycle del worker.
+  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const markAllAsRead = async () => {
+    if (unreadCount === 0) return;
+    PlatformBridge.hapticFeedback('light');
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ all: true }),
+      }).catch(() => {});
+      showToast('Todas marcadas como leídas', 'success');
+    } catch {
+      /* best-effort: el server toma la fuente del badge al próximo load */
     }
   };
 
@@ -165,16 +186,32 @@ export default function NotificationsPage() {
     <ProfileSubpageLayout
       title="Notificaciones"
       right={
-        <button
-          type="button"
-          onClick={() => { PlatformBridge.hapticFeedback('light'); router.push('/settings?section=notifications'); }}
-          title="Ajustes de notificaciones"
-          aria-label="Ajustes de notificaciones"
-          className="w-9 h-9 rounded-full flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
-          style={{ background: 'var(--bg-pressed)', color: 'var(--text-primary)' }}
-        >
-          <Settings size={17} />
-        </button>
+        <div className="flex items-center gap-1.5">
+          {/* H-READ-ALL: accesible desde el header, solo cuando hay sin leer */}
+          {unreadCount > 0 && (
+            <button
+              type="button"
+              onClick={() => void markAllAsRead()}
+              title="Marcar todas como leídas"
+              aria-label="Marcar todas como leídas"
+              className="flex items-center gap-1 h-9 px-3 rounded-full flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
+              style={{ background: 'var(--bg-pressed)', color: 'var(--text-primary)' }}
+            >
+              <CheckCheck size={15} strokeWidth={2.6} />
+              <span className="text-[10px] font-black tracking-tight">Leer todo</span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => { PlatformBridge.hapticFeedback('light'); router.push('/settings?section=notifications'); }}
+            title="Ajustes de notificaciones"
+            aria-label="Ajustes de notificaciones"
+            className="w-9 h-9 rounded-full flex items-center justify-center cursor-pointer border-none active:scale-90 transition-transform"
+            style={{ background: 'var(--bg-pressed)', color: 'var(--text-primary)' }}
+          >
+            <Settings size={17} />
+          </button>
+        </div>
       }
     >
       <PullToRefresh onRefresh={() => fetchNotifications()}>
