@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Card } from "@rabbitty/ui";
-import { BookOpen, ChevronRight, Building2, DollarSign, Monitor, Store, Award, Megaphone, Cake, QrCode, Gift, Store as StoreIcon, Salad, Truck, Receipt as ReceiptIcon, Clock, Users, Sparkles, Activity, Compass, Headphones, Flame, Ticket } from "lucide-react";
+import { BookOpen, ChevronRight, Building2, DollarSign, Monitor, Store, Award, Megaphone, Cake, QrCode, Gift, Store as StoreIcon, Salad, Truck, Receipt as ReceiptIcon, Clock, Users, Sparkles, Activity, Compass, Headphones, Flame, Ticket, Coins } from "lucide-react";
 
 type GuideRole = "all" | "admin" | "pos" | "marketing" | "phygital";
 
@@ -281,7 +281,33 @@ Cada venta en efectivo queda ligada a un turno de caja con un cajero responsable
     role: "marketing",
     content: `## Gestión de Clientes\n\nVisualiza y administra la base de clientes del restaurante.\n\n### Información disponible:\n- Nombre, teléfono, cumpleaños\n- Total de visitas y gasto acumulado\n- Última visita\n- Segmento automático (VIP, RECURRENT, NEW, CHURN_RISK)\n- Consentimiento de marketing`,
   },
-];
+    {
+      id: "pagos-con-bunz",
+      icon: Coins,
+      label: "Pagos con Bunz",
+      desc: "Configura disponibilidad, límites y catálogo de productos para que tus clientes paguen con Bunz sin QR",
+      role: "pos",
+      content: `## Pagos con Bunz — acepta Bunz directamente en el pago
+
+Permite a tus clientes pagar su cuenta 100% con Bunz desde su App (botón "Pagar con Bunz" en el recibo), sin escanear QR.
+
+### Cómo se activa (Admin → Facturación → Bunz):
+- **Aceptar Bunz** (checkbox de activación)
+- **Disponibilidad**: Siempre / Días y horarios (timezone del negocio)
+- **Mínimo y máximo por factura** (0 = sin límite)
+- **Límite diario de Bunz recibidos** (0 = sin límite, guard atómico)
+- **% máximo de la factura pagable en Bunz** (si es < 100, el resto se cobra fiat en caja)
+- **Catálogo de productos** (opcional; vacío = toda la cuenta)
+
+### Para el cliente:
+- El recibo de compra tiene un botón "Pagar con Bunz" cuando tiene saldo suficiente.
+- NO aparece si está fuera de horario, superó límite, o el saldo es insuficiente.
+- El pago es verificado atómicamente por Rabbitty (0 conflictos, 0 doble-pago, 0 cashback fiat sobre consumo 100% Bunz según D-10).
+- Al redimir los Bunz, tu stock de disponibilidad se reduce — el producto/servicio comprometido se cumple (cierre del ciclo de emisión).
+
+### Y notificaciones:
+El push worker notifica a tu POS al instante cuando la cuenta fue liquidada por cualquier vía (funciona también en tu app móvil del owner).`,
+    },];
 
 const ROLES: { key: GuideRole; label: string }[] = [
   { key: "all", label: "Todas" },
@@ -417,25 +443,4 @@ export default function AcademyPage() {
       )}
     </div>
   );
-}    content: `## Pagos con Bunz (texto definitivo)
-    
-Permite a tus clientes pagar su cuenta 100% con Bunz desde su App.
-
-### Cómo se activa (Admin → Facturación → Bunz):
-- **Aceptar Bunz** (checkbox de activación)
-- **Disponibilidad**: Siempre / Días y horarios (timezone del negocio)
-- **Mínimo y máximo por factura** (0 = sin límite)
-- **Límite diario de Bunz recibidos** (0 = sin límite, guard atómico)
-- **% máximo de la factura pagable en Bunz** (si es < 100, el resto se cobra fiat en caja)
-- **Catálogo de productos** (opcional; vacío = toda la cuenta)
-
-### Significa para el cliente:
-- El recibo de compra tiene un botoncito "Pagar con Bunz" cuando tiene saldo suficiente.
-- NO aparece si está fuera de horario, superó límite, o el saldo es insuficiente.
-- El pago es atómicamente verificado by Rabbitty (0 conflicto, 0 doble-pago, 0 cashback fiat).
-- Al redimir los Bunz, tu stock de disponibilidad se reduce — el producto/servicio comprometido se cumple (cierre del ciclo de emisión).
-
-### Y notificaciones:
-- Ellynaban al instante? Prompts push y PG-13? El trabajador de push notifica a tu POS
-  si la cuenta fue liquidada por cualquier vía (worlkring también en tu app móvil del owner).`,
-    
+}
