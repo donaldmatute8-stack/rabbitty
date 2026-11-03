@@ -8,7 +8,7 @@ import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
 import { deriveOrderStage, type OrderStage, orderStageStepIndex } from "@rabbitty/events";
 import { tables as tablesTable, tableSessions, branches, menuCategories, menuItems, orders, orderItems, payments, menuItemModifiers, restaurants, events as posEvents, paymentIntents, bunzReserves } from "@rabbitty/database-restaurant/schema";
-import { users as coreUsers, membershipSubscriptions as coreMembershipSubs, membershipEntitlements as coreMembershipEnts, entitlementUsages as coreEntUsages } from "@rabbitty/database-core/schema";
+import { users as coreUsers, systemSettings, membershipSubscriptions as coreMembershipSubs, membershipEntitlements as coreMembershipEnts, entitlementUsages as coreEntUsages } from "@rabbitty/database-core/schema";
 /** Split DIVIDIDA activo? */
 function pendingSplit(input: { splitBunz?: number; splitCash?: number }): boolean {
   return typeof input.splitBunz === "number" && input.splitBunz > 0;
@@ -302,8 +302,51 @@ export const posRouter = router({
    * Catálogo server-side (gratuityRules) — afiliado solo elige subconjunto [5,10,15]
    * y canal; NADA condicionado al método de pago. Disabled → Korean UI oculta fila.
    */
-  getGratuityConfig: protectedProcedure.query(async ({ ctx }) => {
-    let enabled = false;
+  /**
+   * ── Aviso sonoro de pedidos (por restaurante) ──
+   * Vive en systemSettings (core) para no tocar el esquema del restaurante:
+   * key `pos_order_sound:<restaurantId>` = "on" | "off" (default: on).
+   */
+  getOrderAlertSettings: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      const [branch] = await ctx.restaurantDb
+        .select({ restaurantId: branches.restaurantId })
+        .from(branches)
+        .where(eq(branches.id, ctx.branchId))
+        .limit(1);
+      if (!branch?.restaurantId) return { soundEnabled: true };
+      const [row] = await ctx.coreDb
+        .select({ value: systemSettings.value })
+        .from(systemSettings)
+        .where(eq(systemSettings.key, `pos_order_sound:${branch.restaurantId}`))
+        .limit(1);
+      return { soundEnabled: row?.value !== "off" };
+    } catch {
+      return { soundEnabled: true };
+    }
+  }),
+
+  setOrderAlertSound: protectedProcedure
+    .input(z.object({ enabled: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const [branch] = await ctx.restaurantDb
+        .select({ restaurantId: branches.restaurantId })
+        .from(branches)
+        .where(eq(branches.id, ctx.branchId))
+        .limit(1);
+      if (!branch?.restaurantId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Esta sucursal no tiene restaurante asociado" });
+      }
+      const key = `pos_order_sound:${branch.restaurantId}`;
+      const value = input.enabled ? "on" : "off";
+      await ctx.coreDb
+        .insert(systemSettings)
+        .values({ key, value })
+        .onConflictDoUpdate({ target: systemSettings.key, set: { value, updatedAt: new Date() } });
+      return { success: true, soundEnabled: input.enabled };
+    }),
+
+  getGratuityConfig: protectedProcedure.query(async ({ ctx }) => {    let enabled = false;
     let options: number[] = [];
     try {
       const [branch] = await ctx.restaurantDb

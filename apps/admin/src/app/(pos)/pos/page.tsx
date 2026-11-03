@@ -188,7 +188,7 @@ export default function PosPage() {
   const [activeTabsModal, setActiveTabsModal] = useState(false);
   // Alerta gigante + sonido cuando entra un pedido nuevo desde la app
   const [orderAlertOpen, setOrderAlertOpen] = useState(false);
-  const prevAppPendingRef = useRef(0);
+  const prevAppPendingRef = useRef<number | null>(null);
   // B1: una sola superficie "Operación" con dos vistas dentro (comandas / app)
   const [tabsView, setTabsView] = useState<"ALL" | "APP">("ALL");
   // B3: gratificación colapsada por defecto (se abre al clic)
@@ -319,6 +319,12 @@ export default function PosPage() {
   const { data: menuItems } = trpc.pos.getMenuItems.useQuery({}, { retry: false });
   const { data: tables } = trpc.pos.getTables.useQuery(undefined, { retry: false });
   const { data: activeTabsData, refetch: refetchActiveTabs } = trpc.pos.getActiveTabs.useQuery(undefined, { refetchInterval: 10000, retry: false });
+  // Ajuste de sonido de la alerta de pedidos (por restaurante)
+  const { data: orderAlertCfg } = trpc.pos.getOrderAlertSettings.useQuery(undefined, { retry: false, staleTime: 60_000 });
+  const setOrderAlertSound = trpc.pos.setOrderAlertSound.useMutation({
+    onSuccess: (r) => toast.success(r.soundEnabled ? "🔔 Sonido activado" : "🔕 Sonido desactivado"),
+    onError: () => toast.error("No se pudo guardar el ajuste de sonido"),
+  });
   // B1: pedidos nuevos desde la app (sin tomar) — alimenta el badge del header
   const appPendingCount = useMemo(
     () => (activeTabsData?.activeTabs ?? []).filter((t) => t.fromApp && (t.stage ?? "RECEIVED") === "RECEIVED").length,
@@ -329,9 +335,9 @@ export default function PosPage() {
   useEffect(() => {
     const prev = prevAppPendingRef.current;
     prevAppPendingRef.current = appPendingCount;
-    if (appPendingCount > prev && prev >= 0) {
-      setOrderAlertOpen(true);
-    }
+    // El primer render no alerta: solo avisa cuando ENTRA uno nuevo.
+    if (prev === null) return;
+    if (appPendingCount > prev) setOrderAlertOpen(true);
   }, [appPendingCount]);
   const appTabsCount = useMemo(
     () => (activeTabsData?.activeTabs ?? []).filter((t) => t.fromApp).length,
@@ -3821,6 +3827,7 @@ export default function PosPage() {
       <PosOrderAlert
         open={orderAlertOpen}
         count={appPendingCount}
+        soundEnabled={orderAlertCfg?.soundEnabled !== false}
         onOpen={() => {
           setOrderAlertOpen(false);
           setTabsView("APP");
@@ -3865,6 +3872,29 @@ export default function PosPage() {
               {appPendingCount > 0 && (
                 <span className="w-1.5 h-1.5 rounded-full bg-pink-400 animate-pulse" />
               )}
+            </button>
+          </div>
+
+          {/* Ajuste de sonido: solo afecta al aviso de pedidos nuevos */}
+          <div className="flex items-center justify-between gap-3 px-1">
+            <div className="min-w-0">
+              <p className="text-[11px] font-black text-gray-200 m-0">Aviso al entrar un pedido</p>
+              <p className="text-[10px] text-gray-500 m-0">Alerta a pantalla completa + sonido (dos tonos).</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={orderAlertCfg?.soundEnabled !== false}
+              onClick={() => setOrderAlertSound.mutate({ enabled: !(orderAlertCfg?.soundEnabled !== false) })}
+              disabled={setOrderAlertSound.isPending}
+              className={cn(
+                "shrink-0 px-3 py-2 rounded-xl text-[11px] font-black border cursor-pointer transition-all active:scale-95 disabled:opacity-50",
+                orderAlertCfg?.soundEnabled !== false
+                  ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300"
+                  : "bg-white/5 border-white/10 text-gray-400",
+              )}
+            >
+              {orderAlertCfg?.soundEnabled !== false ? "🔔 Sonido activado" : "🔕 Silencio"}
             </button>
           </div>
 

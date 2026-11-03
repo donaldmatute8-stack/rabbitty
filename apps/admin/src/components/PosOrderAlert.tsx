@@ -17,23 +17,37 @@ import { Smartphone, Volume2, ArrowRight, X } from 'lucide-react';
 interface Props {
   open: boolean;
   count: number;
+  /** Ajuste del negocio: si está apagado, la alerta sale muda. */
+  soundEnabled?: boolean;
   onOpen: () => void;
   onDismiss: () => void;
 }
 
-export function PosOrderAlert({ open, count, onOpen, onDismiss }: Props) {
+export function PosOrderAlert({ open, count, soundEnabled = true, onOpen, onDismiss }: Props) {
   const ctxRef = useRef<AudioContext | null>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
-    if (!open) {
-      if (timerRef.current) clearInterval(timerRef.current);
-      timerRef.current = null;
+    const clearTimers = () => {
+      timersRef.current.forEach(clearTimeout);
+      timersRef.current = [];
+    };
+    const closeCtx = () => {
       ctxRef.current?.close().catch(() => {});
       ctxRef.current = null;
+    };
+
+    if (!open) {
+      clearTimers();
+      closeCtx();
+      return;
+    }
+    if (!soundEnabled) {
+      closeCtx();
       return;
     }
 
+    // Un solo aviso: dos tonos al entrar (0 s y 0.9 s) y silencio.
     const beep = () => {
       try {
         if (!ctxRef.current) {
@@ -43,19 +57,18 @@ export function PosOrderAlert({ open, count, onOpen, onDismiss }: Props) {
         }
         const ctx = ctxRef.current!;
         if (ctx.state === 'suspended') void ctx.resume();
-        // Doble tono ascendente tipo "nuevo pedido"
         [880, 1180].forEach((freq, i) => {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
           osc.type = 'sine';
           osc.frequency.value = freq;
-          const start = ctx.currentTime + i * 0.15;
+          const start = ctx.currentTime + i * 0.14;
           gain.gain.setValueAtTime(0.0001, start);
-          gain.gain.exponentialRampToValueAtTime(0.35, start + 0.02);
-          gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.13);
+          gain.gain.exponentialRampToValueAtTime(0.32, start + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.12);
           osc.connect(gain).connect(ctx.destination);
           osc.start(start);
-          osc.stop(start + 0.15);
+          osc.stop(start + 0.14);
         });
       } catch {
         /* audio bloqueado: la alerta visual sigue */
@@ -63,15 +76,13 @@ export function PosOrderAlert({ open, count, onOpen, onDismiss }: Props) {
     };
 
     beep();
-    timerRef.current = setInterval(beep, 1600);
+    timersRef.current.push(setTimeout(beep, 900));
 
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-      timerRef.current = null;
-      ctxRef.current?.close().catch(() => {});
-      ctxRef.current = null;
+      clearTimers();
+      closeCtx();
     };
-  }, [open]);
+  }, [open, soundEnabled]);
 
   return (
     <AnimatePresence>
