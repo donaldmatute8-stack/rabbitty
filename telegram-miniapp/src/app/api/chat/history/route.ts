@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { conversations, messages, users, ownedBusinesses } from '@/db/schema';
-import { and, eq, inArray, isNull, ne, or, asc } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne, or, asc, desc, sql, type SQL } from 'drizzle-orm';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 import { getOwnedBusinessIds, resolveConversationAccess, isBusinessOpen } from '@/lib/chat';
+import { decodeChatCursor, encodeChatCursor } from '@/lib/chatCursor';
 
 export async function GET(req: Request) {
   try {
@@ -115,39 +116,64 @@ export async function GET(req: Request) {
       });
     }
 
-    await db
-      .update(messages)
-      .set({ readAt: new Date() })
-      .where(
-        and(
+    // H-FASE0 · regla §9 del plan: GET no muta estado. La marca de lectura
+    // (readAt del otro + badge de notificaciones) es COMANDO explícito —
+    // vive en POST /api/chat/mark-read y el cliente la llama al confirmar
+    // visibilidad. Antar: una precarga o un retry ya no "lee" por el usuario.
+
+    // H-FASE0 · paginación por cursor compuesto + delta:
+    //  - SIN `after` (carga inicial): LAS ÚLTIMAS 50 (`before` para cargar
+    //    más antiguos), ordenadas asc para pintar.
+    //  - CON `after`: solo los mensajes nuevos desde el cursor confirmado
+    //    (delta del interval — ya no re-descarga toda la conversación cada 4s).
+    // History enriquecido con flag de cxc.
+    const cursorRaw = searchParams.get('after');
+    const beforeRaw = searchParams.get('before');
+    const LIMIT = 50;
+
+    const cursor = decodeChatCursor(cursorRaw);
+    const before = decodeChatCursor(beforeRaw);
+
+    const where: SQL | undefined = cursor || before
+      ? and(
           eq(messages.conversationId, conversation.id),
-          ne(messages.senderId, access.myParticipantId),
-          isNull(messages.readAt),
-        ),
-      )
-      .catch(() => {});
-
-    // ── Notificaciones de este chat: abrí/respondí la conversación → ya vi,
-    // mis pushes de ESE hilo se marcan leídas (deja de sonar el badge). ──
-    // GAP #2 del reporte: "al contestar un mensaje se desactiva la notificación".
-    try {
-      await db
-        .update((await import('@/db/schema')).notifications)
-        .set({ isRead: true })
-        .where(
-          and(
-            eq((await import('@/db/schema')).notifications.userId, userId),
-            eq((await import('@/db/schema')).notifications.type, 'CHAT'),
-            eq((await import('@/db/schema')).notifications.route, `/chat/${otherId}`),
-          ),
+          cursor
+            ? (sql`("createdAt" > ${cursor.createdAt}) OR ("createdAt" = ${cursor.createdAt} AND "id" > ${cursor.id})`) as SQL
+            : (sql`("createdAt" < ${before!.createdAt}) OR ("createdAt" = ${before!.createdAt} AND "id" < ${before!.id})`) as SQL,
         )
-        .catch(() => {});
-    } catch { /* best-effort */ }
+      : eq(messages.conversationId, conversation.id);
 
-    const history = await db.query.messages.findMany({
-      where: eq(messages.conversationId, conversation.id),
-      orderBy: [asc(messages.createdAt)],
-    });
+    let history;
+    let hasMore = false;
+    if (cursor) {
+      // Delta: los nuevos desde el cursor confirmado (asc para pintar).
+      history = await db.query.messages.findMany({
+        where: where as never,
+        orderBy: [asc(messages.createdAt)],
+        limit: LIMIT + 1,
+      });
+      hasMore = false; // el delta no pagina infinito hacia atrás
+    } else {
+      // Inicial / carga de antiguos: últimos (o previos a `before`), limit+1
+      // para saber si hay más; se pintan asc.
+      const rows = await db.query.messages.findMany({
+        where: where as never,
+        orderBy: [desc(messages.createdAt)],
+        limit: LIMIT + 1,
+      });
+      hasMore = rows.length > LIMIT;
+      history = rows.slice(0, LIMIT).reverse();
+    }
+
+    const latestMessage = history.length > 0 ? history[history.length - 1] : null;
+    const nextCursor = latestMessage
+      ? encodeChatCursor({
+          createdAt: (latestMessage.createdAt instanceof Date
+            ? latestMessage.createdAt.toISOString()
+            : String(latestMessage.createdAt)),
+          id: latestMessage.id,
+        })
+      : null;
 
     // H21: 'online' real — presenceSession abierta del par con ping vivo (≤5 min)
     let partnerOnline: boolean | null = null;
@@ -177,6 +203,9 @@ export async function GET(req: Request) {
       partnerOnline,
       otherTypingAt: conversation[access.otherTypingColumn],
       messages: history,
+      // H-FASE0: contratos de la paginación/delta
+      hasMore,
+      nextCursor,
     });
   } catch (error) {
     console.error('Chat history error:', error);

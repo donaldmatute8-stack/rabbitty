@@ -6,6 +6,7 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { PlatformBridge } from '@/lib/platform';
+import { cursorFromMessage } from '@/lib/chatCursor';
 import { useTheme } from '@/contexts/ThemeContext';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { QRCodeSVG } from 'qrcode.react';
@@ -568,6 +569,11 @@ export default function ChatRoomPage() {
   const router = useRouter();
 
   const [messages, setMessages] = useState<Message[]>([]);
+  // ── H-FASE0: paginación/delta (plan §4) ──
+  const [cursor, setCursor] = useState<string>( '');
+  const cursorRef = useRef('');
+  const [hasOlder, setHasOlder] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [partnerOnline, setPartnerOnline] = useState<boolean | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [myParticipantId, setMyParticipantId] = useState<string | null>(null);
@@ -784,7 +790,7 @@ export default function ChatRoomPage() {
         : `/api/chat/history?targetId=${encodeURIComponent(String(targetId))}`;
     };
 
-    const apply = (data: HistoryResponse) => {
+    const apply = (data: HistoryResponse & Partial<{ hasMore: boolean; nextCursor: string | null }>, mode: 'initial' | 'delta' | 'older' = 'initial') => {
       if (!data.success) return;
       if (data.conversationId) {
         conversationIdRef.current = data.conversationId;
@@ -803,16 +809,47 @@ export default function ChatRoomPage() {
       if (typeof data.partnerOnline === 'boolean') setPartnerOnline(data.partnerOnline);
       otherTypingAtRef.current = data.otherTypingAt ?? null;
       if (data.messages) {
-        setMessages((prev) => {
-          if (prev.length === data.messages!.length) {
-            const lastPrev = prev[prev.length - 1];
-            const lastNew = data.messages![data.messages!.length - 1];
-            if (lastPrev?.id === lastNew?.id && lastPrev?.content === lastNew?.content) {
-              return prev;
+        if (mode === 'older') {
+          // H-FASE0 · paginación hacia atrás: prepend sin duplicar (antiguos)
+          setMessages((prev) => {
+            const known = new Set(prev.map(m => m.id));
+            const older = data.messages!.filter(m => !known.has(m.id));
+            return [...older, ...prev];
+          });
+        } else if (mode === 'delta') {
+          // H-FASE0 · delta del interval: solo LOS NUEVOS se append (sin
+          // re-descarga entera). Antes cada tick reemplazaba toda la lista.
+          setMessages((prev) => {
+            const known = new Set(prev.map(m => m.id));
+            const fresh = data.messages!.filter(m => !known.has(m.id));
+            if (fresh.length === 0) return prev;
+            return [...prev, ...fresh];
+          });
+        } else {
+          setMessages((prev) => {
+            if (prev.length === data.messages!.length) {
+              const lastPrev = prev[prev.length - 1];
+              const lastNew = data.messages![data.messages!.length - 1];
+              if (lastPrev?.id === lastNew?.id && lastPrev?.content === lastNew?.content) {
+                return prev;
+              }
             }
-          }
-          return data.messages!;
-        });
+            return data.messages!;
+          });
+        }
+      }
+      // H-FASE0 · cursores: confirmado = base del delta y del load-older.
+      // El cursor AVANZA con el último mensaje recibido (el cliente ya lo
+      // pinta = procesado). `hasOlder` solo se toca en initial/older (el
+      // delta no dice nada del historial pasado).
+      if (mode !== 'delta') setHasOlder(Boolean(data.hasMore));
+      if (mode !== 'older') {
+        const last = data.messages?.[data.messages!.length - 1];
+        if (last) {
+          const next = cursorFromMessage({ createdAt: last.createdAt as string, id: last.id });
+          cursorRef.current = next;
+          setCursor(next);
+        }
       }
 
       if (urlPrefill && data.conversationId && !prefillApplied) {
@@ -825,7 +862,7 @@ export default function ChatRoomPage() {
       try {
         const headers = await PlatformBridge.getAuthHeaders();
         const res = await fetch(buildUrl(), { headers });
-        apply(await res.json());
+        apply(await res.json(), 'initial');
       } catch (err) {
         console.error('Error cargando chat', err);
       } finally {
@@ -835,11 +872,19 @@ export default function ChatRoomPage() {
 
     fetchHistory();
 
+    // H-FASE0 · delta: el interval (4s) ya no re-descarga la conversación
+    // completa — pide SOLO lo nuevo desde el cursor confirmado. El cursor
+    // avanza cuando el client recibió (procesó) el lote, no meramente al
+    // recibir la respuesta HTTP.
     const interval = setInterval(async () => {
       try {
+        const id = conversationIdRef.current;
+        if (!id) return;
         const headers = await PlatformBridge.getAuthHeaders();
-        const res = await fetch(buildUrl(), { headers });
-        apply(await res.json());
+        const base = `/api/chat/history?conversationId=${encodeURIComponent(id)}`;
+        const withDelta = cursorRef.current ? `${base}&after=${encodeURIComponent(cursorRef.current)}` : base;
+        const res = await fetch(withDelta, { headers });
+        apply(await res.json(), 'delta');
       } catch {
         /* ignore */
       }
@@ -854,6 +899,56 @@ export default function ChatRoomPage() {
       setShowTyping(Boolean(at) && Date.now() - Date.parse(at as string) < TYPING_WINDOW_MS);
     }, 1500);
     return () => clearInterval(interval);
+  }, []);
+
+  // ── H-FASE0 · mark-read (regla §9: comando, no efecto del GET) ──
+  // Marca leído SOLO cuando la conversación está abierta Y la pestaña visible:
+  // una precarga, un background o un retry no "leen" por el usuario.
+  useEffect(() => {
+    const id = conversationIdRef.current;
+    if (!id || document.visibilityState !== 'visible') return;
+    const unread = messages.filter((m) => m.senderId !== myParticipantId && !m.readAt);
+    if (unread.length === 0) return;
+    PlatformBridge.getAuthHeaders().then((headers) => {
+      fetch('/api/chat/mark-read', {
+        method: 'POST',
+        headers: { ...(headers || {}), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId: id }),
+      }).catch(() => {});
+    });
+  }, [messages, myParticipantId, conversationId]);
+
+  // H-FASE0 · reconexión a la vista: al volver a foreground, el delta se pide
+  // de inmediato (gap fill — cursor confirmado) en lugar de esperar hasta 4s.
+  useEffect(() => {
+    const onVisible = () => {
+      const id = conversationIdRef.current;
+      if (document.visibilityState !== 'visible' || !id || !cursorRef.current) return;
+      void (async () => {
+        try {
+          const headers = await PlatformBridge.getAuthHeaders();
+          const res = await fetch(
+            `/api/chat/history?conversationId=${encodeURIComponent(id)}&after=${encodeURIComponent(cursorRef.current)}`,
+            { headers },
+          );
+          const data = await res.json();
+          if (data?.success && Array.isArray(data.messages) && data.messages.length > 0) {
+            setMessages((prev) => {
+              const known = new Set(prev.map((m: { id: string }) => m.id));
+              const fresh = data.messages.filter((m: { id: string }) => !known.has(m.id));
+              if (fresh.length === 0) return prev;
+              return [...prev, ...fresh];
+            });
+            const last = data.messages[data.messages.length - 1];
+            const next = cursorFromMessage({ createdAt: last.createdAt, id: last.id });
+            cursorRef.current = next;
+            setCursor(next);
+          }
+        } catch { /* silencioso */ }
+      })();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
   }, []);
 
   useEffect(() => {
@@ -930,6 +1025,11 @@ export default function ChatRoomPage() {
 
     tempCounterRef.current += 1;
     const tempId = `temp-${tempCounterRef.current}`;
+    // H-FASE0 · idempotencia de envío: uuid por MENSAJE — si la respuesta se
+    // pierde y el usuario reintenta, el server regresa el MISMO mensaje
+    // (UNIQUE conversation+clientMessageId) y el optimista se reemplaza, no
+    // se duplica.
+    const clientMessageId = crypto.randomUUID();
     let metaOut: MessageMetadata | null = isLoc && explicitCoords ? { kind: 'LOCATION', lat: explicitCoords.lat, lng: explicitCoords.lng } as MessageMetadata : null;
     if (replyTo && !isLoc) {
       metaOut = { kind: 'REPLY', replyTo } as MessageMetadata;
@@ -960,13 +1060,21 @@ export default function ChatRoomPage() {
           lat: explicitCoords?.lat ?? coords?.lat ?? null,
           lng: explicitCoords?.lng ?? coords?.lng ?? null,
           metadata: metaOut ?? null,
+          clientMessageId,
         }),
       });
       const data: SendResponse = await res.json();
       if (data.success) {
         if (replyTo) setReplyTo(null);
         setMessages((prev) => {
+          // H-FASE0 · delta-safe: reemplaza el optimistic por el id real y
+          // evita insertar el server-side si otro tick ya lo trajo (dedupe
+          // por id — el worker at-least-once jamás duplica a la vista).
+          const known = new Set(prev.filter(m => !m.id.startsWith('temp-')).map(m => m.id));
           const replaced = prev.map((m) => (m.id === tempId && data.message ? data.message : m));
+          if (data.message && known.has(data.message.id)) {
+            return prev; // el realtime/interval ya lo entregó
+          }
           const extra: Message[] = [];
           if (data.botResponse) {
             extra.push(data.botResponse);
@@ -979,8 +1087,40 @@ export default function ChatRoomPage() {
       }
     } catch (err) {
       console.error('Error enviando', err);
+      showToast('No se pudo enviar el mensaje — intenta de nuevo', 'error');
     } finally {
       setSending(false);
+    }
+  };
+
+  // ── H-FASE0 · loadOlder: paginación hacia atrás con `before` = cursor del
+  // mensaje MÁS ANTIGUO en pantalla (no del último recibido). ──
+  const loadOlder = async () => {
+    if (loadingOlder || messages.length === 0) return;
+    setLoadingOlder(true);
+    try {
+      const id = conversationIdRef.current;
+      if (!id) return;
+      const oldest = messages[0];
+      const before = cursorFromMessage({ createdAt: oldest.createdAt as string, id: oldest.id });
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch(
+        `/api/chat/history?conversationId=${encodeURIComponent(id)}&before=${encodeURIComponent(before)}`,
+        { headers },
+      );
+      const data = await res.json();
+      if (data?.success && Array.isArray(data.messages) && data.messages.length > 0) {
+        const known = new Set(messages.map((m: { id: string }) => m.id));
+        const older = data.messages.filter((m: { id: string }) => !known.has(m.id));
+        setMessages((prev) => [...older, ...prev]);
+        setHasOlder(Boolean(data.hasMore));
+      } else if (data?.success) {
+        setHasOlder(false);
+      }
+    } catch {
+      /* silencioso */
+    } finally {
+      setLoadingOlder(false);
     }
   };
 
@@ -2352,7 +2492,29 @@ export default function ChatRoomPage() {
             />
           </div>
         ) : (
-          messages.map((msg, idx) => {
+          <>
+          {hasOlder && !loading && (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '6px 0 2px' }}>
+              <button
+                type="button"
+                onClick={() => void loadOlder()}
+                disabled={loadingOlder}
+                className="cursor-pointer active:scale-95 transition-transform border-none"
+                style={{
+                  background: 'var(--bg-pressed)',
+                  color: 'var(--text-muted)',
+                  fontSize: 10.5,
+                  fontWeight: 800,
+                  padding: '5px 12px',
+                  borderRadius: 999,
+                  opacity: loadingOlder ? 0.6 : 1,
+                }}
+              >
+                {loadingOlder ? 'Cargando…' : 'Mensajes anteriores'}
+              </button>
+            </div>
+          )}
+          {messages.map((msg, idx) => {
             const isMe = msg.senderId === myParticipantId;
             const isSelected = selectedIds.includes(msg.id);
             const prevMsg = idx > 0 ? messages[idx - 1] : null;
@@ -2535,6 +2697,8 @@ export default function ChatRoomPage() {
               </motion.div>
             );
           })
+          }
+          </>
         )}
 
         {(sending && isBot) || showTyping ? (

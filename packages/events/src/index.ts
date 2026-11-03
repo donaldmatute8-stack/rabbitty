@@ -142,3 +142,9 @@ export function typeMuted(mutedCategories: string[], type: string): boolean {
   if (UNMUTABLE_TYPES.has(type)) return false;
   return mutedCategories.includes(categoryForType(type));
 }
+export {
+  encodeChatCursor,
+  decodeChatCursor,
+  cursorFromMessage,
+  type ChatCursor,
+} from "./chatCursor";

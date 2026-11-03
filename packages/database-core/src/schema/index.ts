@@ -1,4 +1,4 @@
-import { pgTable, text, integer, real, timestamp, boolean, uuid, jsonb, customType, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, real, timestamp, boolean, uuid, jsonb, customType, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
 const id = () => uuid("id").defaultRandom().$defaultFn(() => crypto.randomUUID()).primaryKey();
@@ -214,7 +214,13 @@ export const conversations = pgTable("conversations", {
   lastMessageAt: timestamp("lastMessageAt").defaultNow(),
   createdAt: timestamp("createdAt").defaultNow(),
   updatedAt: timestamp("updatedAt").defaultNow(),
-});
+}, (table) => [
+  // Mensajería Fase 0 (plan RABBITTY-MENSAJES-PLAN §4): el inbox y el matcher
+  // de conversación por par eran seq scans — índices para ambas orientaciones.
+  index("conversations_p1_idx").on(table.participant1, table.participant2, table.updatedAt),
+  index("conversations_p2_idx").on(table.participant2, table.participant1, table.updatedAt),
+  index("conversations_last_message_idx").on(table.lastMessageAt),
+]);
 
 export const messages = pgTable("messages", {
   id: id(),
@@ -223,9 +229,18 @@ export const messages = pgTable("messages", {
   content: text("content").notNull(),
   type: text("type").default("TEXT").notNull(),
   metadata: jsonb("metadata"),
+  // Mensajería Fase 0.5: idem de envío del cliente — UNIQUE(conversationId,
+  // clientMessageId) hace que un reintento del cliente sea el MISMO mensaje,
+  // no un duplicado (prerrequisito del outbox at-least-once).
+  clientMessageId: text("clientMessageId"),
   readAt: timestamp("readAt"),
   createdAt: timestamp("createdAt").defaultNow(),
-});
+}, (table) => [
+  // Cursor compuesto (createdAt, id) + cobertura del scan de unread.
+  index("messages_conv_created_idx").on(table.conversationId, table.createdAt, table.id),
+  index("messages_sender_read_idx").on(table.senderId, table.readAt),
+  uniqueIndex("messages_client_id_uidx").on(table.conversationId, table.clientMessageId),
+]);
 
 export const qrSessions = pgTable("qrSessions", {
   id: id(),
