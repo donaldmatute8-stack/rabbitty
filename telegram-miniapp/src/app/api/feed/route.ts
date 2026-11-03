@@ -3,6 +3,11 @@ import { db } from '@/db';
 
 import { ownedBusinesses, affiliateCampaigns } from '@/db/schema';
 import { desc, eq, inArray, and, gt, gte } from 'drizzle-orm';
+import { resolveBusinessCover } from '@/lib/businessCover';
+
+// H-COVER-SSOT: el feed es dato vivo (cover/negocios cambian). Sin esto Next
+// puede servir la respuesta cacheada del build y la portada nueva no aparece.
+export const dynamic = 'force-dynamic';
 
 const parseSafeJson = <T>(str: string | null | undefined, fallback: T): T => {
   if (!str) return fallback;
@@ -48,8 +53,12 @@ export async function GET() {
     }
 
     const feedItems = businesses.map((b) => {
-      const parsedGallery = parseSafeJson<string[]>(b.gallery, []);
-      const imageUrl = parsedGallery.length > 0 ? parsedGallery[0] : 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=800&q=80';
+      // Misma fuente que la página del afiliado y el OG (H-COVER-SSOT).
+      const imageUrl = resolveBusinessCover({
+        id: b.id,
+        gallery: b.gallery,
+        category: b.category,
+      });
       const activeDays = parseSafeJson<number[]>(b.activeDays, [1, 2, 3, 4, 5, 6, 7]);
       const boost = boostMap.get(b.id);
       const effectiveReward = boost ? Math.max(b.rewardPercentage, boost.rewardPercentage) : b.rewardPercentage;

@@ -23,6 +23,7 @@ import Image from 'next/image';
 import BottomNav from '@/components/BottomNav';
 import { useToast } from '@/contexts/ToastContext';
 import { PlatformBridge } from '@/lib/platform';
+import { parseGallery, resolveBusinessCover } from '@/lib/businessCover';
 import { MoodCheckInSheet } from '@/components/mood/MoodCheckInSheet';
 import { DigitalMenuCatalog, CatalogCategory } from '@/components/affiliate/DigitalMenuCatalog';
 import { TableContextSheet } from '@/components/affiliate/TableContextSheet';
@@ -347,17 +348,13 @@ function AffiliateProfileContent() {
     );
   }
 
-  let parsedGallery: string[] = [];
-  try {
-    parsedGallery = affiliate.gallery ? JSON.parse(affiliate.gallery) : [];
-  } catch {
-    /* parse fallback */
-  }
-  const coverImage =
-    affiliate.coverImageUrl ||
-    (parsedGallery.length > 0
-      ? parsedGallery[0]
-      : 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=1200&q=85');
+  const parsedGallery = parseGallery(affiliate.gallery);
+  const coverImage = resolveBusinessCover({
+    id: affiliate.id,
+    gallery: affiliate.gallery,
+    category: affiliate.category,
+    coverImageUrl: affiliate.coverImageUrl,
+  });
 
   const targetWebsite = affiliate.website || affiliate.webUrl || 'https://rabbitty.me';
   const formattedWebUrl = targetWebsite.startsWith('http')

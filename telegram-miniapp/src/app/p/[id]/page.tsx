@@ -3,6 +3,7 @@ import Image from 'next/image';
 import { db } from '@/db';
 import { ownedBusinesses } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+import { resolveBusinessCover } from '@/lib/businessCover';
 import { MapPin, Tag, ExternalLink } from 'lucide-react';
 
 const parseGallery = (galleryStr: string | null | undefined): string[] => {
@@ -29,8 +30,11 @@ export async function generateMetadata(
     return { title: 'Negocio no encontrado | Rabbitty' };
   }
 
-  const gallery = parseGallery(business.gallery);
-  const image = gallery.length > 0 ? gallery[0] : 'https://images.unsplash.com/photo-1554118811-1e0d58224f24';
+  const image = resolveBusinessCover({
+    id: business.id,
+    gallery: business.gallery,
+    category: business.category,
+  });
 
   return {
     title: `${business.name} en Rabbitty 🐰`,
@@ -58,8 +62,11 @@ export default async function PublicAffiliatePage({ params }: Props) {
     return <div className="min-h-screen flex items-center justify-center">Negocio no encontrado</div>;
   }
 
-  const gallery = parseGallery(business.gallery);
-  const coverImage = gallery.length > 0 ? gallery[0] : 'https://images.unsplash.com/photo-1554118811-1e0d58224f24';
+  const coverImage = resolveBusinessCover({
+    id: business.id,
+    gallery: business.gallery,
+    category: business.category,
+  });
   const telegramDeepLink = `https://t.me/Rabbittyme_bot/app?startapp=affiliate_${business.id}`;
 
   return (
