@@ -313,7 +313,7 @@ export default function OperationsManualPage() {
                 <Sparkles className="h-4 w-4" /> Rabbitty Pay en Mesa
               </div>
               <p className="text-xs text-gray-400 print:text-gray-600 leading-relaxed">
-                1. Vincula tu cuenta bancaria en <strong className="text-white print:text-black">Configuración → Pasarela</strong> (o con Bunzy).<br />
+                1. Vincula tu cuenta bancaria en <strong className="text-white print:text-black">Ajustes → Pasarela & Stripe Connect</strong> (o con Bunzy).<br />
                 2. El comensal escanea el QR en mesa.<br />
                 3. Paga al instante con <strong className="text-white print:text-black">Apple Pay, Tarjeta o Bunz</strong>.<br />
                 4. La mesa se libera en el POS y el dinero entra a tu CLABE.
@@ -355,7 +355,7 @@ export default function OperationsManualPage() {
               <ul className="text-xs text-gray-400 space-y-1 pl-4 list-disc">
                 <li><strong className="text-white print:text-black">Pausar no la borra:</strong> puedes atender personas 2-3-4 y, cuando la persona 1 regresa, su tab sigue aquí con todo lo que pidió.</li>
                 <li><strong className="text-white print:text-black">Cobro digital:</strong> el botón <strong>Cobrar</strong> crea el QR de Rabbitty Pay SIN duplicar la orden; si prefieres cobrar en caja, usa "Cambiar a cobro en efectivo" dentro del QR.</li>
-                <li><strong className="text-white print:text-red-400">Si nunca se ejecuta, expira sola:</strong> después de las horas configuradas (default 12h, hasta 72h en Ajustes → Facturación) la tab se marca <strong>EXPIRADA</strong> y desaparece: <strong className="text-white print:text-black">no se contabiliza como venta</strong> ni bloquea la mesa, y queda auditada en el sistema.</li>
+                <li><strong className="text-white print:text-red-400">Si nunca se ejecuta, expira sola:</strong> después de las horas configuradas (default 12h, hasta 72h en Mi negocio → Operación POS) la tab se marca <strong>EXPIRADA</strong> y desaparece: <strong className="text-white print:text-black">no se contabiliza como venta</strong> ni bloquea la mesa, y queda auditada en el sistema.</li>
               </ul>
             </Card>
 
@@ -364,10 +364,10 @@ export default function OperationsManualPage() {
                 <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
                   <Banknote className="h-4 w-4" /> Cobros en Dólares (turistas) y valor USD
                 </span>
-                <Badge variant="secondary" className="border-emerald-500/30 text-emerald-300">Ruta: /settings → Facturación</Badge>
+                <Badge variant="secondary" className="border-emerald-500/30 text-emerald-300">Ruta: Mi negocio → Operación POS</Badge>
               </div>
               <p className="text-xs text-gray-400 print:text-gray-600 leading-relaxed">
-                El tipo de cambio <strong className="text-white print:text-black">USD → MXN</strong> se configura en Ajustes → Facturación & Impuestos:
+                El tipo de cambio <strong className="text-white print:text-black">USD → MXN</strong> se configura en Mi negocio → Operación POS:
               </p>
               <ul className="text-xs text-gray-400 space-y-1 pl-4 list-disc">
                 <li><strong className="text-emerald-400">🌐 Automático (recomendado):</strong> el sistema consulta el valor del dólar del día a una API gratuita y lo mantiene actualizado solo — no tienes que hacer nada.</li>

@@ -121,6 +121,16 @@ export const DOC_SECTIONS: { title: string; body: string }[] = [
   },
 
   {
+    title: 'Dónde configuro mi negocio (Admin)',
+    body: 'Toda la configuración del negocio vive en UN solo lugar: menú Configuración → "Mi negocio" (/perfil-negocio), con 5 pestañas. (1) Perfil público: nombre, "Acerca de", dirección, sitio web, portada y logo, días y horario, % de cashback, y el canal de atención del chat. Es lo que ve el Rabbitter en la app. (2) Sucursal: nombre en el ticket, slug para QR y links, teléfono, email, pie del ticket y datos fiscales (razón social, RFC, régimen, moneda, IVA, zona horaria). (3) Operación POS: Happy Hour, tipo de cambio USD (automático o manual), horas antes de expirar una comanda sin pagar, sonido y alerta de pedidos nuevos, mostrar USD en el ticket, propinas de tarjeta pagables en caja y gratificación voluntaria (opciones 5/10/15%). (4) Bunz: aceptar Bunz como pago, disponibilidad, mínimos/máximos, % máximo de la cuenta pagable en Bunz y límite diario. (5) Equipo & Hardware: accesos directos. Lo operativo sigue en su propia pantalla: Menú & productos (/menu), Personal y PIN (/staff), Impresoras (/hardware), POS (/pos), Sucursales y afiliados (/restaurants). La seguridad de la cuenta (2FA, Face ID, dispositivos) está en Ajustes → Seguridad.',
+  },
+
+  {
+    title: 'Face ID, 2FA y seguridad de la cuenta (incluye negocios)',
+    body: 'En Ajustes → Seguridad, cualquier cuenta —también las de negocio/afiliado— puede registrar Face ID o huella como llave de acceso (se guarda por usuario, en el dispositivo) y activar 2FA con app autenticadora. La tarjeta de biometría del founder es distinta: gestiona la llave maestra de la plataforma. Si un afiliado dice que no ve la opción de Face ID, es porque estaba entrando a la tarjeta equivocada; ahora su cuenta tiene su propia tarjeta con sus propias llaves.',
+  },
+
+  {
     title: 'El Ecosistema Rabbitty',
     body: 'Rabbitty es una red de recompensas que conecta negocios locales y consumidores con un modelo Give-to-Get. Al visitar los comercios de la red Stock y escanear tu billetera, recibes un porcentaje de tus compras en Bunz.',
   },
