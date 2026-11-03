@@ -123,6 +123,9 @@ function AffiliateProfileContent() {
   const [showMessageSelector, setShowMessageSelector] = useState(false);
   const [showMoodCheckIn, setShowMoodCheckIn] = useState(false);
   const [checkingInPresence, setCheckingInPresence] = useState(false);
+  // H-PRESYNC: el estado se hidrata del SERVER (sesión abierta / check-in de hoy en
+  // ledger), nunca solo de useState local — si confirmaste en el modal de proximidad
+  // u otro flujo, este botón lo refleja al entrar (y en vivo vía evento 'rabbitty:presence-confirmed').
   const [hasPresenceCheckedIn, setHasPresenceCheckedIn] = useState(false);
 
   // Header scroll & Bottom Nav visibility synchronization
@@ -202,6 +205,32 @@ function AffiliateProfileContent() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [id, initialTableNum]);
+
+  // H-PRESYNC: hidratar "Estoy aquí" del SERVER al entrar (el estado real vive en
+  // presenceSessions/ledger, no en useState local) + sync en vivo cuando otro
+  // flujo (modal de proximidad, etc.) confirma presencia para este negocio.
+  useEffect(() => {
+    if (!affiliate?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const headers = await PlatformBridge.getAuthHeaders();
+        if (!headers?.Authorization && !headers?.['X-Init-Data']) return;
+        const res = await fetch(`/api/location/presence?businessId=${affiliate.id}`, { headers });
+        const data = await res.json().catch(() => null);
+        if (!cancelled && data?.success) setHasPresenceCheckedIn(Boolean(data.active));
+      } catch { /* best-effort: sin conexión se conserva el estado local */ }
+    })();
+    const onPresenceConfirmed = (e: Event) => {
+      const bizId = (e as CustomEvent<{ businessId?: string }>).detail?.businessId;
+      if (bizId && bizId === affiliate.id) setHasPresenceCheckedIn(true);
+    };
+    window.addEventListener('rabbitty:presence-confirmed', onPresenceConfirmed);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('rabbitty:presence-confirmed', onPresenceConfirmed);
+    };
+  }, [affiliate?.id]);
 
   const handleAddToCart = (
     item: CatalogItem,

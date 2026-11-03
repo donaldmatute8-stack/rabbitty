@@ -224,6 +224,10 @@ export default function ProximityEngine() {
                   });
                   const data = await res.json().catch(() => ({}));
                   if (res.ok && data?.success !== false) {
+                    // H-PRESYNC: aviso a todas las superficies montadas (p. ej. el botón
+                    // "Estoy aquí" de /affiliate/[id]) — el estado server ya está
+                    // persistido aquí; quien cargue después lo irá a leer al server.
+                    window.dispatchEvent(new CustomEvent('rabbitty:presence-confirmed', { detail: { businessId: presenceConfirm.businessId } }));
                     PlatformBridge.hapticFeedback("success");
                     showToast(`📍 ¡Check-in en ${presenceConfirm.businessName} activado! El comercio ya te ve en caja`, "success");
                     setPresenceConfirm(null);
