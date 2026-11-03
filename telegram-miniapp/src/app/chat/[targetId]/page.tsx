@@ -3346,43 +3346,50 @@ export default function ChatRoomPage() {
             />
           </div>
 
-          <button
-            type="button"
-            onClick={() => runBunzy('marketing_proposal')}
-            disabled={bunzyBusy}
-            style={{
-              width: '100%',
-              border: '1px solid rgba(255,138,0,0.3)',
-              borderRadius: '100px',
-              padding: '14px',
-              fontSize: '15px',
-              fontWeight: 800,
-              color: '#FF8A00',
-              background: 'rgba(255,138,0,0.08)',
-              cursor: bunzyBusy ? 'not-allowed' : 'pointer',
-            }}
-          >
-            🚀 Crear propuesta comercial / campaña
-          </button>
+          {/* Herramientas de NEGOCIO (afiliado). Si quien chatea es un Rabbitter
+              no se muestran: el backend ya degradaba estos modos a "draft", así
+              que para él eran botones sin efecto. */}
+          {isBusinessInbox && (
+            <>
+              <button
+                type="button"
+                onClick={() => runBunzy('marketing_proposal')}
+                disabled={bunzyBusy}
+                style={{
+                  width: '100%',
+                  border: '1px solid rgba(255,138,0,0.3)',
+                  borderRadius: '100px',
+                  padding: '14px',
+                  fontSize: '15px',
+                  fontWeight: 800,
+                  color: '#FF8A00',
+                  background: 'rgba(255,138,0,0.08)',
+                  cursor: bunzyBusy ? 'not-allowed' : 'pointer',
+                }}
+              >
+                🚀 Crear propuesta comercial / campaña
+              </button>
 
-          <button
-            type="button"
-            onClick={() => runBunzy('admin_qa')}
-            disabled={bunzyBusy}
-            style={{
-              width: '100%',
-              border: '1px solid rgba(233,30,99,0.3)',
-              borderRadius: '100px',
-              padding: '14px',
-              fontSize: '15px',
-              fontWeight: 800,
-              color: '#FF2E93',
-              background: 'rgba(233,30,99,0.08)',
-              cursor: bunzyBusy ? 'not-allowed' : 'pointer',
-            }}
-          >
-            🏪 Preguntar sobre POS, Caja o Admin
-          </button>
+              <button
+                type="button"
+                onClick={() => runBunzy('admin_qa')}
+                disabled={bunzyBusy}
+                style={{
+                  width: '100%',
+                  border: '1px solid rgba(233,30,99,0.3)',
+                  borderRadius: '100px',
+                  padding: '14px',
+                  fontSize: '15px',
+                  fontWeight: 800,
+                  color: '#FF2E93',
+                  background: 'rgba(233,30,99,0.08)',
+                  cursor: bunzyBusy ? 'not-allowed' : 'pointer',
+                }}
+              >
+                🏪 Preguntar sobre POS, Caja o Admin
+              </button>
+            </>
+          )}
 
           <button
             type="button"
