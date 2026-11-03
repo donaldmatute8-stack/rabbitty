@@ -22,9 +22,12 @@ describe("orderStages — derivación de seguimiento", () => {
       .toBe("READY");
   });
 
-  it("COMPLETED/PAID → DONE (incluso si items quedaron raros)", () => {
+  it("COMPLETED → DONE (incluso si items quedaron raros); PAID sigue vivo", () => {
     expect(deriveOrderStage({ order: { status: "COMPLETED" }, items: [{ status: "PENDING" }] })).toBe("DONE");
-    expect(deriveOrderStage({ order: { status: "PAID" }, items: [{ status: "READY" }] })).toBe("DONE");
+    // Pagado ≠ entregado: el pedido sigue cocinándose y la tarjeta debe vivir.
+    expect(deriveOrderStage({ order: { status: "PAID" }, items: [{ status: "PENDING" }] })).toBe("RECEIVED");
+    expect(deriveOrderStage({ order: { status: "PAID" }, items: [{ status: "IN_PROGRESS" }] })).toBe("PREPARING");
+    expect(deriveOrderStage({ order: { status: "PAID" }, items: [{ status: "READY" }] })).toBe("READY");
   });
 
   it("EXPIRED/CANCELLED/VOIDED → DONE (la tarjeta muere, no se comparte)", () => {

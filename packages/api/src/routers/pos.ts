@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, asc, desc, eq, sql, inArray, or, ilike, gte } from "drizzle-orm";
+import { and, asc, desc, eq, sql, inArray, or, ilike, gte, isNull } from "drizzle-orm";
 import crypto from "crypto";
 import { router, protectedProcedure } from "../trpc";
 import { validateGratuity, parseGratuityPcts, GRATUITY_MAX_PCT } from "../services/gratuityRules";
@@ -466,6 +466,66 @@ export const posRouter = router({
         return { ...order, items: itemsWithNames };
       }));
       return ordersWithItems;
+    }),
+
+  /**
+   * H-PERSIST · ensureCustomerTab — vincular a un Rabbitter NO se queda en
+   * memoria: abre (o reutiliza) una comanda PENDING persistente para ESE
+   * cliente en esta sucursal. No se ejecuta ni se cobra: queda en Tabs para
+   * agregarle productos o cobrarla aparte cuando el cliente decida.
+   *
+   * Reutiliza comandas PENDING del cliente de las últimas 12h (mismo criterio
+   * que el barrido de tabs huérfanas) para no acumular borradores.
+   */
+  ensureCustomerTab: protectedProcedure
+    .input(z.object({
+      customerId: z.string(),
+      customerName: z.string().optional(),
+      customerPhone: z.string().optional(),
+      orderType: z.enum(["DINE_IN", "TO_GO", "DELIVERY"]).default("TO_GO"),
+      tableId: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const [existing] = await ctx.restaurantDb
+        .select({ id: orders.id, total: orders.total, createdAt: orders.createdAt })
+        .from(orders)
+        .where(and(
+          eq(orders.branchId, ctx.branchId),
+          eq(orders.customerId, input.customerId),
+          eq(orders.status, "PENDING"),
+          isNull(orders.voidReason),
+          gte(orders.createdAt, sql`(now() AT TIME ZONE 'UTC') - interval '12 hours'`),
+        ))
+        .orderBy(desc(orders.createdAt))
+        .limit(1);
+
+      if (existing) {
+        // Mantener fresca la identidad del cliente vinculado (teléfono/nombre).
+        await ctx.restaurantDb.update(orders).set({
+          customerName: input.customerName ?? undefined,
+          customerPhone: input.customerPhone ?? undefined,
+          updatedAt: new Date(),
+        }).where(eq(orders.id, existing.id));
+        return { orderId: existing.id, created: false, total: Number(existing.total || 0) };
+      }
+
+      const [order] = await ctx.restaurantDb.insert(orders).values({
+        branchId: ctx.branchId,
+        tableId: input.tableId ?? null,
+        orderType: input.orderType,
+        customerId: input.customerId,
+        customerName: input.customerName ?? null,
+        customerPhone: input.customerPhone ?? null,
+        subtotal: 0,
+        tax: 0,
+        discount: 0,
+        tip: 0,
+        total: 0,
+        status: "PENDING",
+      }).returning();
+      if (!order) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "No se pudo abrir la comanda del cliente" });
+      bus.emit(EventTypes.ORDER_CREATED, { orderId: order.id, tableId: input.tableId });
+      return { orderId: order.id, created: true, total: 0 };
     }),
 
   createOrder: protectedProcedure
@@ -1298,6 +1358,9 @@ export const posRouter = router({
         tip: z.number().min(0).max(5000).optional(),
         splitCash: z.number().min(0).optional(),
         splitBunz: z.number().min(0).optional(),
+        // H-PERSIST: si el cliente fue vinculado antes, la comanda ya existe
+        // (PENDING, en Tabs). El cobro la REUTILIZA en vez de crear otra.
+        existingOrderId: z.string().uuid().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -1311,21 +1374,51 @@ export const posRouter = router({
         });
       }
 
-      // 1. Create order
-      const [order] = await ctx.restaurantDb.insert(orders).values({
-        branchId: ctx.branchId,
-        tableId: input.tableId ?? null,
-        orderType: input.orderType,
-        customerId: input.customerId ?? null,
-        customerName: input.customerName ?? null,
-        customerPhone: input.customerPhone ?? null,
-        subtotal: 0,
-        tax: 0,
-        discount: 0,
-        tip: 0,
-        total: 0,
-        status: "PENDING",
-      }).returning();
+      // 1. Orden: reutiliza la comanda persistente del cliente si existe
+      //    (H-PERSIST) — así vincular no deja un borrador huérfano en Tabs.
+      let order: typeof orders.$inferSelect;
+      if (input.existingOrderId) {
+        const [reused] = await ctx.restaurantDb
+          .update(orders)
+          .set({
+            tableId: input.tableId ?? null,
+            orderType: input.orderType,
+            customerId: input.customerId ?? null,
+            customerName: input.customerName ?? null,
+            customerPhone: input.customerPhone ?? null,
+            updatedAt: new Date(),
+          })
+          .where(and(
+            eq(orders.id, input.existingOrderId),
+            eq(orders.branchId, ctx.branchId),
+            inArray(orders.status, ["PENDING", "CASH_PAYMENT_REQUESTED"]),
+          ))
+          .returning();
+        if (!reused) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "La comanda abierta del cliente ya no está disponible. Vuelve a vincularlo." });
+        }
+        order = reused;
+        // La comanda era borrador (sin items ejecutados): se limpian por si
+        // quedó algún item de una edición previa, y se reescribe el carrito.
+        await ctx.restaurantDb.delete(orderItems).where(eq(orderItems.orderId, order.id));
+      } else {
+        const [created] = await ctx.restaurantDb.insert(orders).values({
+          branchId: ctx.branchId,
+          tableId: input.tableId ?? null,
+          orderType: input.orderType,
+          customerId: input.customerId ?? null,
+          customerName: input.customerName ?? null,
+          customerPhone: input.customerPhone ?? null,
+          subtotal: 0,
+          tax: 0,
+          discount: 0,
+          tip: 0,
+          total: 0,
+          status: "PENDING",
+        }).returning();
+        if (!created) throw new Error("No se pudo crear la orden en base de datos");
+        order = created;
+      }
 
       if (!order) throw new Error("No se pudo crear la orden en base de datos");
 

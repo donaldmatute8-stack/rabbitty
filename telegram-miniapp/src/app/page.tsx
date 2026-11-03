@@ -851,8 +851,9 @@ export default function FeedPage() {
             </div>
           )}
 
-          {/* ── H-TRACK: tarjeta de seguimiento (top del feed, sobre el pass) ── */}
-          {activeTab === "bunz'in" && trackingLoaded && user?.id != null && (
+          {/* ── H-TRACK-GLOBAL: tarjeta de seguimiento en TODAS las pestañas
+              (arriba del contenido). Ocultable/recuperable por el Rabbitter. ── */}
+          {trackingLoaded && user?.id != null && (
             <OrderTrackingCard orders={trackedOrders} onRefresh={() => void refreshTracking()} />
           )}
 

@@ -34,8 +34,12 @@ export interface OrderStageInput {
 /** Deriva la etapa con lo que existe hoy en la DB (orders + order_items). */
 export function deriveOrderStage({ order, items }: OrderStageInput): OrderStage {
   const status = String(order.status ?? "");
-  if (status === "COMPLETED" || status === "PAID") return "DONE";
+  // COMPLETED = entrega confirmada por el personal en el POS → la tarjeta muere.
+  if (status === "COMPLETED") return "DONE";
   if (status === "EXPIRED" || status === "CANCELLED" || status === "VOIDED") return "DONE";
+
+  // PAID NO es terminal: el Rabbitter puede pagar antes de que le entreguen
+  // (botón "Pagar ahora" en la tarjeta) y el pedido sigue su curso en cocina.
 
   // Item-stage: KDS/kitchen mueve PENDING → IN_PROGRESS → READY/SERVED
   const itemStatuses = items.map((i) => String(i.status ?? "PENDING"));

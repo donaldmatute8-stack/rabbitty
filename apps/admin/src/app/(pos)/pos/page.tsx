@@ -185,6 +185,12 @@ export default function PosPage() {
   const [stripePaid, setStripePaid] = useState(false);
   const [sendBillModal, setSendBillModal] = useState(false);
   const [activeTabsModal, setActiveTabsModal] = useState(false);
+  // B1: una sola superficie "Operación" con dos vistas dentro (comandas / app)
+  const [tabsView, setTabsView] = useState<"ALL" | "APP">("ALL");
+  // B3: gratificación colapsada por defecto (se abre al clic)
+  const [gratuityOpen, setGratuityOpen] = useState(false);
+  // H-PERSIST: comanda persistente del Rabbitter vinculado (sobrevive reloads)
+  const [draftOrderId, setDraftOrderId] = useState<string | null>(null);
   const [pausedCartsModal, setPausedCartsModal] = useState(false);
   const [recentOrdersModal, setRecentOrdersModal] = useState(false);
   // Anti doble-impresión: el ref bloquea de forma síncrona; el estado pinta el loader
@@ -306,6 +312,20 @@ export default function PosPage() {
   const { data: menuItems } = trpc.pos.getMenuItems.useQuery({}, { retry: false });
   const { data: tables } = trpc.pos.getTables.useQuery(undefined, { retry: false });
   const { data: activeTabsData, refetch: refetchActiveTabs } = trpc.pos.getActiveTabs.useQuery(undefined, { refetchInterval: 10000, retry: false });
+  // B1: pedidos nuevos desde la app (sin tomar) — alimenta el badge del header
+  const appPendingCount = useMemo(
+    () => (activeTabsData?.activeTabs ?? []).filter((t) => t.fromApp && (t.stage ?? "RECEIVED") === "RECEIVED").length,
+    [activeTabsData],
+  );
+  const appTabsCount = useMemo(
+    () => (activeTabsData?.activeTabs ?? []).filter((t) => t.fromApp).length,
+    [activeTabsData],
+  );
+  // B1: la lista que se pinta según la vista elegida dentro de "Operación"
+  const visibleTabs = useMemo(() => {
+    const all = activeTabsData?.activeTabs ?? [];
+    return tabsView === "APP" ? all.filter((t) => t.fromApp) : all;
+  }, [activeTabsData, tabsView]);
   // ── Gratificaciones voluntarias (D-11): config del negocio (Rabbitty catálogo) ──
   const gratuityCfg = trpc.pos.getGratuityConfig.useQuery(undefined, { retry: false, staleTime: 60_000 });
   const { data: recentCompletedOrders, refetch: refetchRecentOrders } = trpc.pos.getOrders.useQuery(
@@ -605,7 +625,7 @@ export default function PosPage() {
       toast.info(`📸 ${fresh.name} escaneó tu QR — cliente vinculado`);
       utils.pos.lookupRabbitter.fetch({ query: fresh.userId })
         .then((res) => {
-          if (res) setSelectedRabbitter(res);
+          if (res) setSelectedRabbitter(res); // H-PERSIST lo toma el efecto central
         })
         .catch(() => {});
     }
@@ -613,11 +633,56 @@ export default function PosPage() {
 
   // ── Selector manual de clientes con check-in: el comercio ELIGE de la lista
   // de rabbitters presentes — nunca se vincula automáticamente ──
+  // H-PERSIST: vincular abre (o reutiliza) una comanda PENDING del cliente en
+  // DB. No cobra ni ejecuta nada: la comanda queda en Operación → comandas para
+  // agregarle productos o cobrarla aparte aunque se recargue el POS.
+  const ensureCustomerTab = trpc.pos.ensureCustomerTab.useMutation();
+  const linkRabbitter = async (rabbitter: {
+    id: string;
+    name: string;
+    phoneNumber?: string | null;
+    telegramId?: string | null;
+    bunzBalance: number;
+    hops: number;
+    level: string;
+    currentRewardRate: number;
+  }) => {
+    setSelectedRabbitter(rabbitter);
+  };
+
+  // H-PERSIST: CUALQUIER vía de vinculación (select, QR, búsqueda, planea venir)
+  // desemboca aquí: al quedar un Rabbitter seleccionado se abre/reutiliza su
+  // comanda PENDING en DB. Así el vínculo no vive solo en memoria ni se cuelga.
+  const draftCustomerRef = useRef<string | null>(null);
+  const draftPendingRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedRabbitter) return;
+    if (draftCustomerRef.current === selectedRabbitter.id && draftOrderId) return;
+    if (draftPendingRef.current === selectedRabbitter.id) return; // ya va en vuelo
+    draftPendingRef.current = selectedRabbitter.id;
+    draftCustomerRef.current = selectedRabbitter.id;
+    ensureCustomerTab.mutate(
+      {
+        customerId: selectedRabbitter.id,
+        customerName: selectedRabbitter.name,
+        customerPhone: selectedRabbitter.phoneNumber || selectedRabbitter.telegramId || undefined,
+        orderType: "TO_GO",
+      },
+      {
+        onSuccess: (r) => { setDraftOrderId(r.orderId); void refetchActiveTabs(); },
+        onError: () => {
+          draftPendingRef.current = null;
+          toast.warning("Vinculado, pero no se pudo abrir la comanda persistente");
+        },
+      },
+    );
+  }, [selectedRabbitter, draftOrderId]);
+
   const handlePickCheckIn = async (userId: string) => {
     try {
       const res = await utils.pos.lookupRabbitter.fetch({ query: userId });
       if (res) {
-        setSelectedRabbitter(res);
+        await linkRabbitter(res);
         toast.success(`🐰 ${res.name} vinculado — ${res.currentRewardRate}% Cashback`);
       }
     } catch {
@@ -1132,6 +1197,11 @@ export default function PosPage() {
     setCart([]);
     setSelectedTableId(null);
     setSelectedRabbitter(null);
+    // H-PERSIST: la comanda del cliente quedó cobrada/ejecutada — se suelta el
+    // borrador para que la próxima vinculación abra una nueva.
+    setDraftOrderId(null);
+    draftCustomerRef.current = null;
+    draftPendingRef.current = null;
   };
 
   const requestCheckout = (method: string) => {
@@ -1265,6 +1335,8 @@ export default function PosPage() {
           tip: Number(posTip || 0),
           splitCash: pendingMethod === "DIVIDIDA" ? (parseFloat(cashReceived) || 0) : undefined,
           splitBunz: pendingMethod === "DIVIDIDA" ? Math.max(0, Math.round((total - (parseFloat(cashReceived) || 0)) * 100) / 100) : undefined,
+          // H-PERSIST: reutiliza la comanda abierta del cliente vinculado.
+          existingOrderId: draftOrderId || undefined,
         });
 
         if (checkoutResult.orderNumber) {
@@ -1419,18 +1491,29 @@ export default function PosPage() {
             )}
           </div>
 
-          {/* Orders Cluster: Tabs (Las ventas en espera y pausa viven junto al carrito activo) */}
+          {/* Orders Cluster: UNA sola superficie "Operación" — dentro viven las
+              comandas/mesas y los pedidos que llegan desde la app Rabbitty.
+              (B1: menos ruido en el header, todo cableado al mismo modal.) */}
           <div className="flex items-center rounded-xl bg-white/5 border border-white/10 p-0.5">
             <button
               onClick={() => setActiveTabsModal(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-purple-300 hover:bg-purple-500/15 text-xs font-bold transition-all cursor-pointer active:scale-95"
-              title="Comandas activas en mesas / tienda"
+              title="Operación: comandas abiertas + pedidos desde la app Rabbitty"
             >
               <Users className="h-3.5 w-3.5 text-purple-400" />
-              <span>Tabs</span>
+              <span>Operación</span>
               <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-purple-500/30 text-purple-200">
                 {activeTabsData?.totalActiveCount ?? 0}
               </span>
+              {appPendingCount > 0 && (
+                <span
+                  className="flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[10px] font-black bg-pink-500/25 text-pink-200 border border-pink-500/40 animate-pulse"
+                  title={`${appPendingCount} pedido(s) nuevo(s) desde la app sin tomar`}
+                >
+                  <Smartphone className="h-2.5 w-2.5" />
+                  {appPendingCount}
+                </span>
+              )}
             </button>
           </div>
 
@@ -1818,6 +1901,14 @@ export default function PosPage() {
                         <span>{selectedRabbitter.phoneNumber || selectedRabbitter.telegramId || "Cuenta Verificada"}</span>
                         <span>•</span>
                         <span className="text-emerald-400 font-bold">{selectedRabbitter.currentRewardRate}% Cashback</span>
+                        {draftOrderId && (
+                          <>
+                            <span>•</span>
+                            <span className="text-cyan-300 font-bold" title="Comanda persistente: sobrevive recargas y se puede cobrar aparte desde Operación">
+                              Comanda #{draftOrderId.slice(-4).toUpperCase()}
+                            </span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1855,24 +1946,40 @@ export default function PosPage() {
                     >
                       <QrCode className="h-3 w-3 text-pink-400" /> QR Neón
                     </button>
-                    {(activeCheckIns?.length ?? 0) > 0 && (
+                    {((activeCheckIns?.length ?? 0) > 0 || (plannedVisitsDeduped?.length ?? 0) > 0) && (
                       <select
                         defaultValue=""
                         onChange={(e) => {
-                          if (e.target.value) {
-                            void handlePickCheckIn(e.target.value);
+                          const value = e.target.value;
+                          if (value) {
+                            void handlePickCheckIn(value);
                             e.currentTarget.value = "";
                           }
                         }}
-                        className="max-w-27.5 px-1.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 border border-emerald-500/40 text-[10px] font-black transition-all cursor-pointer truncate"
-                        title="Clientes con check-in activo — elige quién se vincula a esta orden"
+                        className="max-w-30 px-1.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 border border-emerald-500/40 text-[10px] font-black transition-all cursor-pointer truncate"
+                        title="Vincular a un Rabbitter: en el local (check-in activo) o que planea venir"
                       >
-                        <option value="" className="text-gray-900">🐰 En local ({activeCheckIns!.length})</option>
-                        {activeCheckIns!.map((c: any) => (
-                          <option key={c.userId} value={c.userId} className="text-gray-900">
-                            {c.name} · hace {Math.max(0, Math.round((c.ageSeconds ?? 9999) / 60))}m
-                          </option>
-                        ))}
+                        <option value="" className="text-gray-900">
+                          🐰 Vincular ({(activeCheckIns?.length ?? 0) + (plannedVisitsDeduped?.length ?? 0)})
+                        </option>
+                        {(activeCheckIns?.length ?? 0) > 0 && (
+                          <optgroup label="🟢 En el local (check-in activo)" className="text-gray-900">
+                            {(activeCheckIns || []).map((c: any) => (
+                              <option key={c.userId} value={c.userId} className="text-gray-900">
+                                {c.name} · hace {Math.max(0, Math.round((c.ageSeconds ?? 9999) / 60))}m
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {(plannedVisitsDeduped?.length ?? 0) > 0 && (
+                          <optgroup label="🚶 Planean venir (24h)" className="text-gray-900">
+                            {(plannedVisitsDeduped || []).map((c: any) => (
+                              <option key={c.userId} value={c.userId} className="text-gray-900">
+                                {c.name} · planeó venir
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
                       </select>
                     )}
                     <button
@@ -2098,65 +2205,6 @@ export default function PosPage() {
               )}
             </div>
 
-            {/* ── Planean venir (proximidad accionada) ── */}
-            {!selectedRabbitter && (plannedVisitsDeduped?.length ?? 0) > 0 && (
-              <div className="px-2.5 py-2 rounded-xl bg-purple-500/10 border border-purple-500/25 mb-2">
-                <p className="text-[10px] font-black text-purple-300 flex items-center gap-1 mb-1.5">
-                  <span>🚶</span> PLANean VENIR (últimas 24h)
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {(plannedVisitsDeduped || []).slice(0, 4).map((c) => (
-                    <button
-                      key={c.userId}
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          const res = await utils.pos.lookupRabbitter.fetch({ query: c.userId });
-                          if (res) { setSelectedRabbitter(res); toast.success(`🐰 ${res.name} vinculado (planeó venir)`); }
-                        } catch { toast.error('Error al vincular'); }
-                      }}
-                      className="px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[11px] font-bold text-white hover:border-purple-500/50 active:scale-95 transition-all"
-                    >
-                      {c.name} <span className="text-purple-300">+ vincular</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* ── Presencia: clientes con check-in activo en el local ── */}
-            {!selectedRabbitter && (activeCheckIns?.length ?? 0) > 0 && (
-              <div className="px-2.5 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/25 mb-2">
-                <p className="text-[10px] font-black text-emerald-300 flex items-center gap-1 mb-1.5">
-                  <span>🟢</span> CLIENTES EN EL LOCAL (check-in activo)
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {(activeCheckIns || []).slice(0, 4).map((c) => (
-                    <button
-                      key={c.userId}
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          const res = await utils.pos.lookupRabbitter.fetch({ query: c.userId });
-                          if (res) {
-                            setSelectedRabbitter(res);
-                            toast.success(`🐰 ${res.name} vinculado al cobro (check-in)`);
-                          } else {
-                            toast.error("No se pudo vincular al cliente");
-                          }
-                        } catch {
-                          toast.error("Error al vincular");
-                        }
-                      }}
-                      className="px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[11px] font-bold text-white hover:border-emerald-500/50 active:scale-95 transition-all"
-                    >
-                      {c.name} <span className="text-emerald-300">+ vincular</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* Quick Payment Methods */}
             <div className="grid grid-cols-3 gap-1.5 mb-2">
               <button 
@@ -2185,65 +2233,74 @@ export default function PosPage() {
               </button>
             </div>
 
-            {/* ── Gratificación voluntaria (D-11) — compacta y seamless en una sola fila ── */}
+            {/* ── Gratificación voluntaria (D-11) — colapsada por defecto:
+                una sola fila; se abre al clic para ahorrar espacio. ── */}
             {gratuityCfg?.data?.enabled && (
-              <div className="rounded-xl bg-white/[0.03] border border-white/10 px-2 py-1.5 flex items-center justify-between gap-1.5">
-                <div className="min-w-0 shrink-0">
-                  <p className="text-[9px] font-black uppercase tracking-wider text-gray-500 leading-tight">
+              <div className="rounded-xl bg-white/[0.03] border border-white/10 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setGratuityOpen((o) => !o)}
+                  aria-expanded={gratuityOpen}
+                  className="w-full px-2 py-1.5 flex items-center justify-between gap-2 bg-transparent border-0 cursor-pointer text-left"
+                >
+                  <span className="text-[9px] font-black uppercase tracking-wider text-gray-500">
                     Gratificación
-                  </p>
-                  {Number(posTip || 0) > 0 ? (
-                    <p className="text-[10px] font-black text-emerald-400 leading-tight truncate">
-                      +${Number(posTip).toFixed(2)}
-                    </p>
-                  ) : (
-                    <p className="text-[9px] text-gray-500 leading-tight">Opcional</p>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => { setPosTip(""); }}
-                    className={cn(
-                      "px-1.5 py-0.5 rounded-lg text-[9px] font-black border transition-all cursor-pointer whitespace-nowrap",
-                      Number(posTip || 0) === 0
-                        ? "bg-white/10 border-white/25 text-white"
-                        : "bg-white/[0.03] border-white/10 text-gray-400 hover:bg-white/10 hover:text-white"
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    {Number(posTip || 0) > 0 ? (
+                      <span className="text-[10px] font-black text-emerald-400">+${Number(posTip).toFixed(2)}</span>
+                    ) : (
+                      <span className="text-[9px] text-gray-500">Opcional</span>
                     )}
-                  >
-                    No dejar
-                  </button>
-                  {(gratuityCfg.data.options ?? []).map((p) => {
-                    const amount = Math.round(total * (p / 100) * 100) / 100;
-                    const selected = Math.abs(Number(posTip || 0) - amount) < 0.05;
-                    return (
-                      <button
-                        key={p}
-                        type="button"
-                        onClick={() => { setPosTip(String(amount)); }}
-                        className={cn(
-                          "px-1.5 py-0.5 rounded-lg text-[9px] font-black border transition-all cursor-pointer whitespace-nowrap",
-                          selected
-                            ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300"
-                            : "bg-white/[0.03] border-white/10 text-gray-400 hover:bg-white/10 hover:text-white"
-                        )}
-                      >
-                        {p}%
-                      </button>
-                    );
-                  })}
-                  {Number(posTip || 0) > 0 && (
+                    <ChevronDown className={cn("h-3 w-3 text-gray-400 transition-transform", gratuityOpen && "rotate-180")} />
+                  </span>
+                </button>
+
+                {gratuityOpen && (
+                  <div className="px-2 pb-2 flex items-center gap-1 flex-wrap">
                     <button
                       type="button"
                       onClick={() => { setPosTip(""); }}
-                      className="shrink-0 text-[9px] font-black text-gray-500 hover:text-white px-1 py-0.5 rounded-md bg-white/5 border border-white/10 cursor-pointer transition-colors"
-                      title="Quitar gratificación"
+                      className={cn(
+                        "px-1.5 py-0.5 rounded-lg text-[9px] font-black border transition-all cursor-pointer whitespace-nowrap",
+                        Number(posTip || 0) === 0
+                          ? "bg-white/10 border-white/25 text-white"
+                          : "bg-white/[0.03] border-white/10 text-gray-400 hover:bg-white/10 hover:text-white"
+                      )}
                     >
-                      ✕
+                      No dejar
                     </button>
-                  )}
-                </div>
+                    {(gratuityCfg.data.options ?? []).map((p) => {
+                      const amount = Math.round(total * (p / 100) * 100) / 100;
+                      const selected = Math.abs(Number(posTip || 0) - amount) < 0.05;
+                      return (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => { setPosTip(String(amount)); }}
+                          className={cn(
+                            "px-1.5 py-0.5 rounded-lg text-[9px] font-black border transition-all cursor-pointer whitespace-nowrap",
+                            selected
+                              ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300"
+                              : "bg-white/[0.03] border-white/10 text-gray-400 hover:bg-white/10 hover:text-white"
+                          )}
+                        >
+                          {p}%
+                        </button>
+                      );
+                    })}
+                    {Number(posTip || 0) > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => { setPosTip(""); }}
+                        className="shrink-0 text-[9px] font-black text-gray-500 hover:text-white px-1 py-0.5 rounded-md bg-white/5 border border-white/10 cursor-pointer transition-colors"
+                        title="Quitar gratificación"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -3705,61 +3762,59 @@ export default function PosPage() {
       <Dialog
         open={activeTabsModal}
         onClose={() => setActiveTabsModal(false)}
-        title="Rabbitty Tabs & Comandas Activas"
+        title="Operación · Comandas y Pedidos"
         className="max-w-2xl w-full"
       >
         <div className="space-y-4 p-1">
-          {/* ── H-TRACK: banner persistente de pedidos desde la app móvil ── */}
-          {(() => {
-            const appTab = (activeTabsData?.activeTabs ?? []).filter(
-              (t: { fromApp?: boolean; stage?: string; customer?: unknown }) => t.fromApp && t.customer
-            );
-            const pendingCount = appTab.filter((t: { stage?: string }) => (t.stage ?? 'RECEIVED') === 'RECEIVED').length;
-            if (appTab.length === 0) return null;
-            return (
-              <div
-                className="rounded-2xl border p-3 flex items-center gap-3 animate-pulse-slow"
-                style={{
-                  background: pendingCount > 0
-                    ? 'linear-gradient(135deg, rgba(233,30,99,0.18), rgba(10,5,12,0.7))'
-                    : 'rgba(255,255,255,0.04)',
-                  borderColor: pendingCount > 0 ? 'rgba(233,30,99,0.55)' : 'rgba(255,255,255,0.12)',
-                }}
-              >
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                  style={{ background: 'rgba(233,30,99,0.25)', border: '1px solid rgba(233,30,99,0.45)' }}>
-                  <Smartphone size={17} className="text-[#E91E63]" strokeWidth={2.5} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[12px] font-black text-white m-0 leading-tight">
-                    {pendingCount > 0
-                      ? `🔔 ${pendingCount > 1 ? pendingCount + ' pedidos nuevos' : '1 pedido nuevo'} desde la app Rabbitty`
-                      : 'Pedidos desde la app en curso'}
-                  </p>
-                  <p className="text-[10px] text-gray-400 m-0 leading-tight mt-0.5">
-                    Sin asignar a mesa — toma la orden cuando puedas; el Rabbitter ve el estatus en su app
-                  </p>
-                </div>
-              </div>
-            );
-          })()}
-          <div className="flex items-center justify-between pb-2 border-b border-white/5">
-            <p className="text-xs text-gray-400">
-              Mesas y comandas abiertas en tiempo real con identificación de clientes.
-            </p>
-            <Button
-              variant="secondary"
-              onClick={() => refetchActiveTabs()}
-              className="py-1 px-3 text-xs font-bold rounded-xl border border-white/10 hover:border-white/20 transition-all cursor-pointer flex items-center gap-1.5"
+          {/* ── B1: una superficie, dos vistas (comandas / pedidos de la app) ── */}
+          <div className="flex items-center gap-1 p-0.5 rounded-xl bg-white/5 border border-white/10">
+            <button
+              type="button"
+              onClick={() => setTabsView("ALL")}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-black transition-all cursor-pointer",
+                tabsView === "ALL" ? "bg-purple-500/25 text-purple-100" : "text-gray-400 hover:text-white"
+              )}
             >
-              <RotateCw className="h-3 w-3 text-gray-400" />
-              Refrescar
-            </Button>
+              <Users className="h-3.5 w-3.5" />
+              Comandas
+              <span className="px-1.5 rounded-full text-[10px] bg-black/30">{activeTabsData?.totalActiveCount ?? 0}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTabsView("APP")}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-black transition-all cursor-pointer",
+                tabsView === "APP" ? "bg-pink-500/25 text-pink-100" : "text-gray-400 hover:text-white"
+              )}
+            >
+              <Smartphone className="h-3.5 w-3.5" />
+              Desde la app
+              <span className="px-1.5 rounded-full text-[10px] bg-black/30">{appTabsCount}</span>
+              {appPendingCount > 0 && (
+                <span className="w-1.5 h-1.5 rounded-full bg-pink-400 animate-pulse" />
+              )}
+            </button>
           </div>
 
+          {appPendingCount > 0 && (
+            <div
+              className="rounded-xl border p-2.5 flex items-center gap-2.5"
+              style={{
+                background: 'linear-gradient(135deg, rgba(233,30,99,0.16), rgba(10,5,12,0.6))',
+                borderColor: 'rgba(233,30,99,0.5)',
+              }}
+            >
+              <Smartphone size={15} className="text-[#E91E63] shrink-0" strokeWidth={2.5} />
+              <p className="text-[11px] font-black text-white m-0 leading-tight">
+                🔔 {appPendingCount > 1 ? `${appPendingCount} pedidos nuevos` : '1 pedido nuevo'} desde la app — sin asignar a mesa
+              </p>
+            </div>
+          )}
+
           <div className="max-h-[28rem] overflow-y-auto custom-scrollbar space-y-3 pr-1">
-            {activeTabsData && activeTabsData.activeTabs.length > 0 ? (
-              activeTabsData.activeTabs.map((tab) => (
+            {visibleTabs.length > 0 ? (
+              visibleTabs.map((tab) => (
                 <div
                   key={tab.orderId}
                   className="rounded-2xl bg-white/[0.04] border border-white/10 p-4 hover:border-cyan-500/30 hover:bg-white/[0.06] transition-all space-y-3"
@@ -3897,7 +3952,9 @@ export default function PosPage() {
               ))
             ) : (
               <div className="text-center py-12 text-gray-500 text-xs">
-                No hay comandas activas pendientes en esta sucursal.
+                {tabsView === "APP"
+                  ? "Sin pedidos desde la app por ahora. Cuando un Rabbitter pida desde el local, aparece aquí."
+                  : "No hay comandas activas pendientes en esta sucursal."}
               </div>
             )}
           </div>

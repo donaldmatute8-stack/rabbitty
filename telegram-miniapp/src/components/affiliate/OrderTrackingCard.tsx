@@ -10,7 +10,7 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Package, ChefHat, CheckCircle2, X, Sparkles, ChevronRight, RefreshCw, Wallet, Utensils, ShoppingBag } from 'lucide-react';
+import { Package, ChefHat, CheckCircle2, X, Sparkles, ChevronRight, ChevronUp, RefreshCw, Wallet, Utensils } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
 import type { TrackedOrder } from '@/lib/useOrderTracking';
 import { InAppPaySheet } from './InAppPaySheet';
@@ -35,16 +35,25 @@ interface OrderDetail {
 export function OrderTrackingCard({
   orders,
   onRefresh,
-  hidden = false,
 }: {
   orders: TrackedOrder[];
   onRefresh?: () => void;
-  /** no mostrar (el caller decide por pestaña/estado) */
-  hidden?: boolean;
 }) {
   const [detailId, setDetailId] = useState<string | null>(null);
-  if (hidden || orders.length === 0) return null;
+  // ── H-TRACK-GLOBAL: la tarjeta vive en TODAS las pestañas. El Rabbitter
+  // puede ocultarla (se guarda por pedido) y recuperarla desde una píldora
+  // compacta; un pedido NUEVO vuelve a mostrarse solo (no se pierde).
+  const [hiddenOrderId, setHiddenOrderId] = useState<string | null>(null);
+  React.useEffect(() => {
+    try {
+      const stored = localStorage.getItem('rabbitty_track_hidden_v1');
+      if (stored) setHiddenOrderId(stored);
+    } catch { /* sin storage */ }
+  }, []);
+
+  if (orders.length === 0) return null;
   const order = orders[0]; // más reciente (singular en la práctica)
+  const hidden = hiddenOrderId === order.orderId;
   const progress = Math.max(0, Math.min(1, order.stageStep / Math.max(1, order.stageCount - 1 + 0.001)));
   const StageIcon = STAGE_ICONS[Math.min(3, order.stageStep)] ?? Package;
   const done = order.stage === 'DONE';
@@ -53,6 +62,48 @@ export function OrderTrackingCard({
     PlatformBridge.hapticFeedback('light');
     setDetailId(order.orderId);
   };
+
+  const hide = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    PlatformBridge.hapticFeedback('light');
+    try { localStorage.setItem('rabbitty_track_hidden_v1', order.orderId); } catch { /* noop */ }
+    setHiddenOrderId(order.orderId);
+  };
+
+  const show = () => {
+    PlatformBridge.hapticFeedback('light');
+    try { localStorage.removeItem('rabbitty_track_hidden_v1'); } catch { /* noop */ }
+    setHiddenOrderId(null);
+  };
+
+  // Oculta: píldora mínima (en flujo, alineada a la derecha) para recuperarla.
+  if (hidden) {
+    return (
+      <>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="px-1 mb-2 flex justify-end">
+          <button
+            type="button"
+            onClick={show}
+            className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black border-none cursor-pointer active:scale-95 transition-transform"
+            style={{
+              background: 'rgba(233,30,99,0.12)',
+              border: '1px solid rgba(233,30,99,0.30)',
+              color: '#F48FB1',
+            }}
+            title="Mostrar seguimiento del pedido"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            🐰 {order.stageLabel} · ${order.total.toFixed(0)}
+          </button>
+        </motion.div>
+        <OrderTrackSheet
+          orderId={detailId}
+          onClose={() => setDetailId(null)}
+          onUpdated={() => onRefresh?.()}
+        />
+      </>
+    );
+  }
 
   return (
     <>
@@ -106,6 +157,15 @@ export function OrderTrackingCard({
             </div>
 
             <div className="flex flex-col items-center gap-0.5 shrink-0 text-white/45">
+              <button
+                type="button"
+                onClick={hide}
+                aria-label="Ocultar seguimiento"
+                title="Ocultar (puedes recuperarlo con la píldora)"
+                className="border-none bg-transparent cursor-pointer p-0.5 text-white/45 hover:text-white transition-colors"
+              >
+                <ChevronUp size={15} />
+              </button>
               <ChevronRight size={16} />
               {onRefresh && (
                 <button

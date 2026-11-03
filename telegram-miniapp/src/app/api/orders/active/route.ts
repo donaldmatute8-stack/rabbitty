@@ -88,7 +88,11 @@ export async function GET(req: Request) {
       : [];
     const bizMap = new Map(bizInfo.map((b) => [b.id, b]));
 
-    const payload = rows.map((o) => {
+    const payload = rows
+      // H-PERSIST: la comanda-borrador (solo vínculo, sin productos) NO es un
+      // pedido del Rabbitter — no debe pintar tarjeta de seguimiento.
+      .filter((o) => (itemsByOrder.get(o.id)?.length ?? 0) > 0)
+      .map((o) => {
       const items = itemsByOrder.get(o.id) ?? [];
       const stage: OrderStage = deriveOrderStage({ order: { status: o.status }, items });
       const meta = ORDER_STAGE_META[stage];
