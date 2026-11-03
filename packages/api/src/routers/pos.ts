@@ -486,7 +486,7 @@ export const posRouter = router({
       tableId: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const [existing] = await ctx.restaurantDb
+      const candidates = await ctx.restaurantDb
         .select({ id: orders.id, total: orders.total, createdAt: orders.createdAt })
         .from(orders)
         .where(and(
@@ -497,7 +497,20 @@ export const posRouter = router({
           gte(orders.createdAt, sql`(now() AT TIME ZONE 'UTC') - interval '12 hours'`),
         ))
         .orderBy(desc(orders.createdAt))
-        .limit(1);
+        .limit(5);
+
+      // Solo sirve como borrador de vínculo una comanda VACÍA. Si el cliente ya
+      // tiene una comanda CON productos, esa se cobra aparte en Operación y aquí
+      // se abre un borrador nuevo (nunca se reutiliza para no borrarle el pedido).
+      let existing: { id: string; total: unknown } | undefined;
+      for (const c of candidates) {
+        const [draftItem] = await ctx.restaurantDb
+          .select({ id: orderItems.id })
+          .from(orderItems)
+          .where(eq(orderItems.orderId, c.id))
+          .limit(1);
+        if (!draftItem) { existing = c; break; }
+      }
 
       if (existing) {
         // Mantener fresca la identidad del cliente vinculado (teléfono/nombre).
@@ -1431,9 +1444,20 @@ export const posRouter = router({
           throw new TRPCError({ code: "NOT_FOUND", message: "La comanda abierta del cliente ya no está disponible. Vuelve a vincularlo." });
         }
         order = reused;
-        // La comanda era borrador (sin items ejecutados): se limpian por si
-        // quedó algún item de una edición previa, y se reescribe el carrito.
-        await ctx.restaurantDb.delete(orderItems).where(eq(orderItems.orderId, order.id));
+        // La comanda debe seguir siendo un BORRADOR. Si alguien ya le agregó
+        // productos (p. ej. desde Operación), NO se borran: se aborta para no
+        // perder el pedido del cliente — se cobra desde Operación.
+        const [draftItem] = await ctx.restaurantDb
+          .select({ id: orderItems.id })
+          .from(orderItems)
+          .where(eq(orderItems.orderId, order.id))
+          .limit(1);
+        if (draftItem) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Esa comanda ya tiene productos. Cóbrala desde Operación para no duplicarla ni borrar el pedido del cliente.",
+          });
+        }
       } else {
         const [created] = await ctx.restaurantDb.insert(orders).values({
           branchId: ctx.branchId,

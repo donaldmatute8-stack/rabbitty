@@ -900,6 +900,14 @@ export default function PosPage() {
   const directCheckoutMutation = trpc.pos.directCheckout.useMutation({
     onError: (err) => {
       toast.error(err.message || "Error al procesar el cobro en el backend");
+      // H-PERSIST: si la comanda del vínculo ya no sirve (la cobraron aparte o
+      // tiene productos), se suelta para que el POS no quede atascado.
+      if (/comanda/i.test(err.message || "")) {
+        setDraftOrderId(null);
+        draftCustomerRef.current = null;
+        draftPendingRef.current = null;
+        void refetchActiveTabs();
+      }
     },
   });
 
