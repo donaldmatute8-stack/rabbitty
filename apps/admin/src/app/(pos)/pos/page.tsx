@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import { trpc } from "../../../lib/trpc-client";
+import { PosOrderAlert } from "../../../components/PosOrderAlert";
 import { Button, Dialog, Input, toast, cn, useWakeLock } from "@rabbitty/ui";
 import { Clock, Search, Users, CreditCard, Banknote, QrCode, Split, Smartphone, Landmark, Table2, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, ClipboardCheck, Camera, History, RotateCw, ChefHat, Flame } from "lucide-react";
 import Link from "next/link";
@@ -185,12 +186,18 @@ export default function PosPage() {
   const [stripePaid, setStripePaid] = useState(false);
   const [sendBillModal, setSendBillModal] = useState(false);
   const [activeTabsModal, setActiveTabsModal] = useState(false);
+  // Alerta gigante + sonido cuando entra un pedido nuevo desde la app
+  const [orderAlertOpen, setOrderAlertOpen] = useState(false);
+  const prevAppPendingRef = useRef(0);
   // B1: una sola superficie "Operación" con dos vistas dentro (comandas / app)
   const [tabsView, setTabsView] = useState<"ALL" | "APP">("ALL");
   // B3: gratificación colapsada por defecto (se abre al clic)
   const [gratuityOpen, setGratuityOpen] = useState(false);
   // H-PERSIST: comanda persistente del Rabbitter vinculado (sobrevive reloads)
   const [draftOrderId, setDraftOrderId] = useState<string | null>(null);
+  // Si la comanda vinculada YA trae productos (pedido real del móvil), el cobro
+  // del carrito NO debe reutilizarla: se cobra desde su botón "Cobrar".
+  const [draftHasItems, setDraftHasItems] = useState(false);
   const [pausedCartsModal, setPausedCartsModal] = useState(false);
   const [recentOrdersModal, setRecentOrdersModal] = useState(false);
   // Anti doble-impresión: el ref bloquea de forma síncrona; el estado pinta el loader
@@ -317,6 +324,15 @@ export default function PosPage() {
     () => (activeTabsData?.activeTabs ?? []).filter((t) => t.fromApp && (t.stage ?? "RECEIVED") === "RECEIVED").length,
     [activeTabsData],
   );
+
+  // ── Alerta GIGANTE + sonido: solo cuando ENTRA un pedido nuevo (no en cada poll)
+  useEffect(() => {
+    const prev = prevAppPendingRef.current;
+    prevAppPendingRef.current = appPendingCount;
+    if (appPendingCount > prev && prev >= 0) {
+      setOrderAlertOpen(true);
+    }
+  }, [appPendingCount]);
   const appTabsCount = useMemo(
     () => (activeTabsData?.activeTabs ?? []).filter((t) => t.fromApp).length,
     [activeTabsData],
@@ -324,8 +340,14 @@ export default function PosPage() {
   // B1: la lista que se pinta según la vista elegida dentro de "Operación"
   const visibleTabs = useMemo(() => {
     const all = activeTabsData?.activeTabs ?? [];
-    return tabsView === "APP" ? all.filter((t) => t.fromApp) : all;
+    // "Comandas" = mesas/mostrador del local · "Desde la app" = pedidos del móvil.
+    // Antes "Comandas" mostraba TODO, así que al alternar parecía no hacer nada.
+    return tabsView === "APP" ? all.filter((t) => t.fromApp) : all.filter((t) => !t.fromApp);
   }, [activeTabsData, tabsView]);
+  const tableTabsCount = useMemo(
+    () => (activeTabsData?.activeTabs ?? []).filter((t) => !t.fromApp).length,
+    [activeTabsData],
+  );
   // ── Gratificaciones voluntarias (D-11): config del negocio (Rabbitty catálogo) ──
   const gratuityCfg = trpc.pos.getGratuityConfig.useQuery(undefined, { retry: false, staleTime: 60_000 });
   const { data: recentCompletedOrders, refetch: refetchRecentOrders } = trpc.pos.getOrders.useQuery(
@@ -665,6 +687,7 @@ export default function PosPage() {
     if (draftOrderId && draftCustomerRef.current && draftCustomerRef.current !== selectedRabbitter.id) {
       releaseCustomerTab.mutate({ orderId: draftOrderId });
       setDraftOrderId(null);
+      setDraftHasItems(false);
     }
     draftPendingRef.current = selectedRabbitter.id;
     draftCustomerRef.current = selectedRabbitter.id;
@@ -676,7 +699,11 @@ export default function PosPage() {
         orderType: "TO_GO",
       },
       {
-        onSuccess: (r) => { setDraftOrderId(r.orderId); void refetchActiveTabs(); },
+        onSuccess: (r) => {
+          setDraftOrderId(r.orderId);
+          setDraftHasItems(Boolean((r as { hasItems?: boolean }).hasItems));
+          void refetchActiveTabs();
+        },
         onError: () => {
           draftPendingRef.current = null;
           toast.warning("Vinculado, pero no se pudo abrir la comanda persistente");
@@ -692,6 +719,7 @@ export default function PosPage() {
     if (!draftCustomerRef.current) return;
     releaseCustomerTab.mutate({ orderId: draftOrderId });
     setDraftOrderId(null);
+      setDraftHasItems(false);
     draftCustomerRef.current = null;
     draftPendingRef.current = null;
     void refetchActiveTabs();
@@ -904,6 +932,7 @@ export default function PosPage() {
       // tiene productos), se suelta para que el POS no quede atascado.
       if (/comanda/i.test(err.message || "")) {
         setDraftOrderId(null);
+      setDraftHasItems(false);
         draftCustomerRef.current = null;
         draftPendingRef.current = null;
         void refetchActiveTabs();
@@ -1227,6 +1256,7 @@ export default function PosPage() {
     // H-PERSIST: la comanda del cliente quedó cobrada/ejecutada — se suelta el
     // borrador para que la próxima vinculación abra una nueva.
     setDraftOrderId(null);
+      setDraftHasItems(false);
     draftCustomerRef.current = null;
     draftPendingRef.current = null;
   };
@@ -1363,7 +1393,9 @@ export default function PosPage() {
           splitCash: pendingMethod === "DIVIDIDA" ? (parseFloat(cashReceived) || 0) : undefined,
           splitBunz: pendingMethod === "DIVIDIDA" ? Math.max(0, Math.round((total - (parseFloat(cashReceived) || 0)) * 100) / 100) : undefined,
           // H-PERSIST: reutiliza la comanda abierta del cliente vinculado.
-          existingOrderId: draftOrderId || undefined,
+          // Solo se reutiliza un BORRADOR vacío. Si la comanda vinculada ya
+          // es el pedido real del móvil, se cobra desde su tarjeta en Operación.
+          existingOrderId: draftOrderId && !draftHasItems ? draftOrderId : undefined,
         });
 
         if (checkoutResult.orderNumber) {
@@ -3785,6 +3817,18 @@ export default function PosPage() {
         </div>
       </Dialog>
 
+      {/* ── Alerta gigante + sonido: pedido nuevo desde la app ── */}
+      <PosOrderAlert
+        open={orderAlertOpen}
+        count={appPendingCount}
+        onOpen={() => {
+          setOrderAlertOpen(false);
+          setTabsView("APP");
+          setActiveTabsModal(true);
+        }}
+        onDismiss={() => setOrderAlertOpen(false)}
+      />
+
       {/* ── Modal de Rabbitty Tabs / Comandas Activas en Tienda ── */}
       <Dialog
         open={activeTabsModal}
@@ -3805,7 +3849,7 @@ export default function PosPage() {
             >
               <Users className="h-3.5 w-3.5" />
               Comandas
-              <span className="px-1.5 rounded-full text-[10px] bg-black/30">{activeTabsData?.totalActiveCount ?? 0}</span>
+              <span className="px-1.5 rounded-full text-[10px] bg-black/30">{tableTabsCount}</span>
             </button>
             <button
               type="button"
@@ -3947,31 +3991,131 @@ export default function PosPage() {
                     </div>
                   )}
 
-                  {/* ── H-TRACK · etapa rápida para pedidos desde la app ── */}
+                  {/* ── H-TRACK · flujo grande: Recibido → Procesando → Despachando
+                       → Cobrar. Cada paso empuja la etapa al móvil (bidireccional). ── */}
                   {tab.fromApp && (() => {
-                    const stageLabels: Record<string, { title: string; icon: ReturnType<typeof CheckCircle2> }> = {
-                      RECEIVED: { title: 'Pedido recibido', icon: <Smartphone className="h-3.5 w-3.5" /> },
-                      PREPARING: { title: 'En preparación', icon: <Flame className="h-3.5 w-3.5" /> },
-                      READY: { title: 'Listo para entrega', icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
-                      DONE: { title: 'Entregado', icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
-                    };
-                    const next = nextStageOf(String(tab.stage ?? 'RECEIVED'));
+                    const stage = String(tab.stage ?? 'RECEIVED');
+                    const steps = [
+                      { id: 'RECEIVED', label: 'Recibido', Icon: Smartphone },
+                      { id: 'PREPARING', label: 'Procesando', Icon: Flame },
+                      { id: 'READY', label: 'Despachando', Icon: Bike },
+                      { id: 'DONE', label: 'Entregado', Icon: CheckCircle2 },
+                    ];
+                    const idx = Math.max(0, steps.findIndex((s) => s.id === stage));
+                    const next = nextStageOf(stage);
+                    const nextCopy = next === 'PREPARING'
+                      ? { label: 'Procesando', hint: 'Avisar al cliente que ya lo estamos haciendo', Icon: Flame }
+                      : next === 'READY'
+                        ? { label: 'Despachando', hint: 'Listo: el cliente ya puede recogerlo', Icon: Bike }
+                        : next === 'DONE'
+                          ? { label: 'Entregado', hint: 'Cerrar el pedido', Icon: CheckCircle2 }
+                          : null;
+                    const isEmpty = Number(tab.total ?? 0) === 0 && (tab.items?.length ?? 0) === 0;
+
                     return (
-                      <div className="pt-2 border-t border-white/5 flex items-center justify-between gap-2">
-                        <span className="inline-flex items-center gap-1.5 text-[10px] font-black text-pink-300 bg-pink-500/10 border border-pink-500/30 px-2 py-1 rounded-lg">
-                          {stageLabels[tab.stage ?? 'RECEIVED']?.icon}
-                          {stageLabels[tab.stage ?? 'RECEIVED']?.title ?? 'Recibido'}
-                        </span>
-                        {next && (
+                      <div className="pt-3 border-t border-white/10 space-y-3">
+                        {/* Progreso 4 pasos */}
+                        <div className="grid grid-cols-4 gap-1">
+                          {steps.map((s, i) => {
+                            const done = i <= idx;
+                            const current = i === idx;
+                            return (
+                              <div key={s.id} className="flex flex-col items-center gap-1">
+                                <div
+                                  className={cn(
+                                    "w-full h-1.5 rounded-full",
+                                    done ? "bg-cyan-400" : "bg-white/10",
+                                  )}
+                                />
+                                <span
+                                  className={cn(
+                                    "text-[9px] font-black uppercase tracking-wide flex items-center gap-1",
+                                    current ? "text-cyan-300" : done ? "text-cyan-500/70" : "text-gray-500",
+                                  )}
+                                >
+                                  <s.Icon className="h-3 w-3" />
+                                  {s.label}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {isEmpty ? (
+                          <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 px-3 py-2.5">
+                            <p className="text-[11px] font-black text-amber-300 m-0">Comanda sin productos</p>
+                            <p className="text-[10px] text-amber-200/70 m-0 mt-0.5">
+                              Es el borrador del vínculo. Agrega productos o cobra desde aquí.
+                            </p>
+                          </div>
+                        ) : null}
+
+                        {/* CTA gigante */}
+                        {nextCopy ? (
                           <button
                             type="button"
-                            onClick={() => stageMutation.mutate({ orderId: tab.orderId, stage: next })}
+                            onClick={() => stageMutation.mutate({ orderId: tab.orderId, stage: next! })}
                             disabled={stageMutation.isPending}
-                            className="text-[10px] font-black text-gray-950 bg-cyan-400 hover:bg-cyan-300 border-0 cursor-pointer px-3 py-1.5 rounded-lg active:scale-95 transition-transform flex items-center gap-1.5"
+                            className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-cyan-400 hover:bg-cyan-300 text-gray-950 text-base font-black cursor-pointer active:scale-[0.99] transition-transform disabled:opacity-60 shadow-lg shadow-cyan-500/20"
                           >
-                            {next === 'PREPARING' ? '🔥 Empezar a preparar' : next === 'READY' ? '✅ Marcar listo' : '📦 Marcar entregado'}
+                            <nextCopy.Icon className="h-5 w-5" />
+                            {nextCopy.label}
+                            <span className="text-[11px] font-bold opacity-70 normal-case">· {nextCopy.hint}</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => void chargeOpenTab(tab)}
+                            disabled={tabChargeMutation.isPending || Number(tab.total ?? 0) <= 0}
+                            className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-emerald-400 hover:bg-emerald-300 text-gray-950 text-base font-black cursor-pointer active:scale-[0.99] transition-transform disabled:opacity-50 shadow-lg shadow-emerald-500/20"
+                          >
+                            <CreditCard className="h-5 w-5" />
+                            Cobrar ${Number(tab.total ?? 0).toFixed(2)}
                           </button>
                         )}
+
+                        {/* Acciones secundarias grandes */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await sendBillMutation.mutateAsync({
+                                orderId: tab.orderId,
+                                customerId: tab.customer?.id || undefined,
+                                phone: tab.customer?.phone || undefined,
+                                customerName: tab.customer?.name || undefined,
+                              });
+                            }}
+                            disabled={sendBillMutation.isPending || !tab.customer}
+                            className="flex items-center justify-center gap-1.5 py-3 rounded-xl bg-pink-500/15 hover:bg-pink-500/25 text-pink-300 border border-pink-500/30 text-xs font-black cursor-pointer active:scale-95 transition-transform disabled:opacity-40"
+                          >
+                            <Send className="h-4 w-4" />
+                            Enviar cuenta
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedRabbitter({
+                                id: tab.customer?.id || '',
+                                name: tab.customer?.name || 'Rabbitter',
+                                phoneNumber: tab.customer?.phone || null,
+                                telegramId: tab.customer?.username || null,
+                                bunzBalance: 0,
+                                hops: 0,
+                                level: '',
+                                currentRewardRate: 0,
+                              });
+                              setDraftOrderId(tab.orderId);
+                              setDraftHasItems(true);
+                              setActiveTabsModal(false);
+                            }}
+                            disabled={!tab.customer}
+                            className="flex items-center justify-center gap-1.5 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-gray-200 border border-white/10 text-xs font-black cursor-pointer active:scale-95 transition-transform disabled:opacity-40"
+                          >
+                            <Plus className="h-4 w-4" />
+                            Agregar más
+                          </button>
+                        </div>
                       </div>
                     );
                   })()}

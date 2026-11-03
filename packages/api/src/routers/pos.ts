@@ -499,17 +499,27 @@ export const posRouter = router({
         .orderBy(desc(orders.createdAt))
         .limit(5);
 
-      // Solo sirve como borrador de vínculo una comanda VACÍA. Si el cliente ya
-      // tiene una comanda CON productos, esa se cobra aparte en Operación y aquí
-      // se abre un borrador nuevo (nunca se reutiliza para no borrarle el pedido).
-      let existing: { id: string; total: unknown } | undefined;
-      for (const c of candidates) {
-        const [draftItem] = await ctx.restaurantDb
-          .select({ id: orderItems.id })
-          .from(orderItems)
-          .where(eq(orderItems.orderId, c.id))
-          .limit(1);
-        if (!draftItem) { existing = c; break; }
+      // Preferencia: la orden REAL del pedido (con productos). Si el Rabbitter
+      // ya pidió desde la app, el POS debe vincular ESA orden y no abrir un
+      // borrador en $0 — de ahí que "Desde la app" saliera en $0 y el cobro no
+      // coincidiera con lo que ve el cliente.
+      const candidateIds = candidates.map((c) => c.id);
+      const itemRows = candidateIds.length > 0
+        ? await ctx.restaurantDb
+            .select({ orderId: orderItems.orderId })
+            .from(orderItems)
+            .where(inArray(orderItems.orderId, candidateIds))
+        : [];
+      const withItems = new Set(itemRows.map((r) => r.orderId));
+
+      // 1º una comanda con productos (pedido del móvil o comanda viva),
+      // 2º un borrador vacío reutilizable.
+      let existing: { id: string; total: unknown } | undefined =
+        candidates.find((c) => withItems.has(c.id)) ?? candidates.find((c) => !withItems.has(c.id));
+
+      if (existing && !withItems.has(existing.id) && Number(existing.total || 0) > 0) {
+        // Borrador con total pero sin items = dato inconsistente: no reutilizar.
+        existing = undefined;
       }
 
       if (existing) {
@@ -519,7 +529,12 @@ export const posRouter = router({
           customerPhone: input.customerPhone ?? undefined,
           updatedAt: new Date(),
         }).where(eq(orders.id, existing.id));
-        return { orderId: existing.id, created: false, total: Number(existing.total || 0) };
+        return {
+          orderId: existing.id,
+          created: false,
+          total: Number(existing.total || 0),
+          hasItems: withItems.has(existing.id),
+        };
       }
 
       const [order] = await ctx.restaurantDb.insert(orders).values({
