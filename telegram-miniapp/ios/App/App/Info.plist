@@ -91,6 +91,10 @@
 		<string>remote-notification</string>
 		<string>location</string>
 	</array>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>NSSupportsLiveActivitiesFrequentUpdates</key>
+	<true/>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Rabbitty usa tu ubicación para avisarte de ofertas y registrar tu check-in automáticamente cuando llegas a un comercio afiliado.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

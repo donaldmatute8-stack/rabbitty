@@ -1,6 +1,15 @@
 import UIKit
 import Capacitor
 
+/// Subclase del bridge para registrar plugins LOCALES del proyecto (los que no
+/// vienen de un paquete SPM y por tanto no aparecen en `packageClassList`).
+/// Hoy: RabbittyLiveActivity (Live Activity del pedido en curso).
+class RabbittyBridgeViewController: CAPBridgeViewController {
+    override func capacitorDidLoad() {
+        bridge?.registerPluginInstance(RabbittyLiveActivityPlugin())
+    }
+}
+
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
 
@@ -8,7 +17,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = scene as? UIWindowScene else { return }
 
         window = UIWindow(windowScene: windowScene)
-        window?.rootViewController = CAPBridgeViewController()
+        window?.rootViewController = RabbittyBridgeViewController()
         window?.makeKeyAndVisible()
 
         SceneDelegateProxy.shared.scene(scene, willConnectTo: session, options: connectionOptions)
