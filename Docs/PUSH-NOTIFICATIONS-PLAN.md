@@ -106,17 +106,25 @@ Los payloads ya existen hoy en los `bus.emit` (ORDER_PAID/ORDER_VOIDED/BUNZ_REWA
 
 ---
 
-## 4. Preferencias: 3 planos distintos (no confundirlos)
+## 4. Preferencias: planos distintos (no confundirlos)
 
-| Plano | Qué es | Dónde vive | Ejemplo |
+| Plano | Qué es | Dónde vive (implementado) | Ejemplo |
 |---|---|---|---|
-| **Canal** | Por dónde recibe: push / campana in-app / email | `userSettings` (3 switches maestros, ya existen) | push nativo on/off |
-| **Categoría** | Qué tipos quiere: chat / recompensas / proximidad / membresías / órdenes / marketing / sistema | `notificationPreferences` (nueva, por type) | proximidad off, chat on |
+| **Canal — push nativo** | ¿Quiere recibir en el teléfono? | `pushDevices.isActive` (token on/off) | push nativo on/off |
+| **Canal — campana in-app** | ¿Quiere ver la campana/historial dentro de la app? | `users.pushInAppEnabled` (boolean, default `true`) | campana off, push on |
+| **Categoría** | Qué tipos de aviso quiere | `users.pushMutedCategories` (JSON array de `PushCategoryKey`) | proximidad off, chat on |
 | **Estado del sistema** | Realidad del device: permiso OS, token válido, canal bloqueado, quiet hours | OS + `pushDevices` + `notificationDeliveries` | permiso iOS denegado |
+
+> ⚠️ **H22 — los dos planos de canal son INDEPENDIENTES (semántica tipo Facebook).**
+> - **Categoría muteada** (`pushMutedCategories`) ⇒ no se crea campana **y** no sale push.
+> - **Campana apagada** (`pushInAppEnabled = false`) ⇒ no se crea campana, **pero el push sí sale y marca el badge iOS**.
+>
+> El error que corregía H22 era tratarlos como uno solo: apagar la campana mataba el push (el usuario dejaba de enterarse de todo sin haberlo pedido). El detalle anterior de este documento (§15.1) decía "mute de categoría → push SKIPPED (in-app SIEMPRE)" — **esa línea era incorrecta y quedó superseded por H22**: el mute de categoría también apaga la campana, y el plano que permite "sin campana pero con push" es `pushInAppEnabled`.
 
 Reglas:
 - El **switch maestro no puede habilitar push si el OS lo tiene denegado** — la UI muestra el estado real del sistema y el botón lleva a Ajustes del teléfono.
 - **MARKETING** siempre opt-in explícito; **críticos de operación** no se silencian por quiet hours (ver §5); CHAT high pasa quiet hours (como WhatsApp) pero agrupado.
+- **CRITICAL y SYSTEM no son categorías**: nunca aparecen como toggle y jamás se silencian por categoría.
 
 ## 5. Clases de eventos (tratamiento por clase)
 
@@ -250,7 +258,8 @@ Checklist de cierre de fase (todo probado en device real):
 | 2026-11-02 | **P5 ✅ (commit `da72f56`)** | Badge iOS en pushes + deliveries tail en push-check. |
 | 2026-11-01 | **§14-3 ✅ código + §14-5 verificado (rama score)** | Outbox: claim transaccional con `FOR UPDATE SKIP LOCKED` + lease `lockedUntil` 120s + índice parcial worker (`manual/0016_outbox_lease.sql`, pendiente psql a prod). Pagos: confirmado post-commit/no-fatal por diseño en `paymentCore` y `notify`. |
 | 2026-11-01 | **§14-3 ✅ CERRADO** — `0016` aplicada a prod (columna `lockedUntil` + índice worker verificados). §14-1 Firebase Android → **ON HOLD por decisión: 100% iOS-first hasta flujo probado punta a punta**. |
-| 2026-11-02 | **§15.1 ✅ preferencias por categoría de punta a punta** — catálogo `packages/events` (PushCategory/categoryForType + UNMUTABLE), espejo miniapp `lib/push/categories.ts` con test de sincronía 4/4, `users.pushMutedCategories` (`0019` aplicada a prod), worker: mute de categoría → push SKIPPED (in-app SIEMPRE, críticos jamás), `/api/notifications/preferences` GET/POST, 6 toggles en settings bajo el master de push. |
+| 2026-11-03 | **H22 ✅ CERRADO — dos planos de canal separados.** Bug: apagar "Notificaciones en la app" en Ajustes mataba también el push nativo (el usuario se quedaba sin enterarse de nada). Fix: nueva columna `users.pushInAppEnabled` (boolean NOT NULL DEFAULT true, migración manual `0027` **aplicada a prod** y verificada por `information_schema`); el worker de outbox lee ambos planos — campana solo si `!pushMuted && inAppEnabled`, y el push sale igual cuando solo está apagada la campana (marca badge iOS). `/api/notifications/preferences` GET expone `inAppEnabled` y POST acepta `{ muted }`, `{ inAppEnabled }` o `{ rules }` (antes exigía `muted` y devolvía 400). Settings hidrata el switch del server (fuente de verdad) y cada toggle llama a su endpoint (antes cualquier toggle llamaba al de push-token). `push-verify` reporta `pushInAppEnabled` para diagnóstico. **Corrige §15.1**: el mute de categoría apaga campana *y* push; el "push sí, campana no" es el plano canal. |
+| 2026-11-02 | **§15.1 ✅ preferencias por categoría de punta a punta** — catálogo `packages/events` (PushCategory/categoryForType + UNMUTABLE), espejo miniapp `lib/push/categories.ts` con test de sincronía 4/4, `users.pushMutedCategories` (`0019` aplicada a prod), worker: mute de categoría → push SKIPPED, `/api/notifications/preferences` GET/POST, 6 toggles en settings bajo el master de push. **(Corregido por H22 el 2026-11-03: la campana también se apaga con el mute de categoría.)** |
 | 2026-11-02 | **H13 + diagnóstico de crons** (pos): push-verify interno (GET dispositivos+outbox, POST processBatch manual). **CONSTATADO**: los crons de GH `notifications-worker` y `expire-orders` fallan con HTTP 401 — el secret `CRON_SECRET` de GitHub **no coincide** con el valor en Vercel miniapp. Acción: alinear CRON_SECRET GH↔Vercel (y RABBITTY_API_SECRET si hubo rotación). El outbox manual (push-verify POST) entregó `+20 Bunz` PROVIDER_ACCEPTED (Apple recibió el push ✓). |
 | 2026-11-02 | **POS UX (commits `4101293`, `c0b45b2`)** | Métodos saneados (QR Bunz fuera del picker), split real (efectivo+Bunz via chargeBunz), propina en el checkout directo, selector/buscador dinámico de Rabbitters en QR Neón + Identificar + Enviar Cuenta (local primero, lookup general), dedupe plannedVisits vs check-ins. |
 

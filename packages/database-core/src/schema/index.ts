@@ -42,6 +42,11 @@ export const users = pgTable("users", {
   // de PushCategoryKey — chat/rewards/orders/proximity/memberships/marketing).
   // CRITICAL (pagos/cuentas) y SYSTEM nunca se silencian — filtrado en el worker.
   pushMutedCategories: text("pushMutedCategories").default("[]").notNull(),
+  // Push v2.1 §4 · plano CANAL (H22): campana in-app por Rabbitter. `false` =
+  // el usuario no quiere campana, pero el push nativo SÍ llega y marca el badge
+  // iOS (semántica tipo Facebook). El plano CATEGORÍA (pushMutedCategories) es
+  // independiente y sí apaga ambos. CRITICAL/SYSTEM nunca se silencian.
+  pushInAppEnabled: boolean("pushInAppEnabled").default(true).notNull(),
   // Push v2.1 §2.4: reglas opcionales por Rabbitter (JSON obj — keys opt-in):
   //  proximityAllAlerts  → recibe TODAS las alertas de afiliados al estar cerca
   //                        (sin límite anti-spam de 12h; dedupe ventana 5 min)

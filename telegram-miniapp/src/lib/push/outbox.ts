@@ -105,37 +105,43 @@ export async function processOutboxBatch(limit = 20): Promise<{
     return rows;
   });
 
-  // Prefs por categoría del usuario (una sola query para todo el batch)
-  const userPushPrefs = new Map<string, string>();
+  // Prefs del usuario (una sola query para todo el batch): plano CATEGORÍA
+  // (pushMutedCategories) y plano CANAL (pushInAppEnabled).
+  const userPushPrefs = new Map<string, { muted: string; inAppEnabled: boolean }>();
   const batchUserIds = Array.from(new Set(batch.map((b) => b.userId)));
   if (batchUserIds.length > 0) {
     const prefRows = await db
-      .select({ id: users.id, muted: users.pushMutedCategories })
+      .select({ id: users.id, muted: users.pushMutedCategories, inAppEnabled: users.pushInAppEnabled })
       .from(users)
       .where(inArray(users.id, batchUserIds));
-    for (const row of prefRows) userPushPrefs.set(row.id, row.muted);
+    for (const row of prefRows) {
+      userPushPrefs.set(row.id, { muted: row.muted, inAppEnabled: row.inAppEnabled !== false });
+    }
   }
 
   for (const item of batch) {
     summary.processed += 1;
 
-    // Prefs por categoría (v2.1 §2.2): el usuario silencia categorías de PUSH.
-    // CRITICAL/SYSTEM jamás se filtran. El registro in-app (campana) SIEMPRE pasa:
-    // el mute solo apaga el canal del proveedor, no la historia de notificaciones.
-    const mutedCategories = parseMutedCategories(userPushPrefs.get(item.userId));
+    // ── Dos planos distintos, no confundirlos (v2.1 §4) ──
+    // CATEGORÍA (pushMutedCategories): el Rabbitter no quiere ese tipo de aviso
+    //   → sin campana y sin push (los CRITICAL/SYSTEM nunca se silencian).
+    // CANAL (pushInAppEnabled): no quiere campana, pero el push nativo SÍ sale
+    //   y marca el badge iOS (semántica tipo Facebook — H22).
+    const prefs = userPushPrefs.get(item.userId);
+    const mutedCategories = parseMutedCategories(prefs?.muted);
     const pushMuted = typePushMuted(mutedCategories, item.type);
+    const inAppEnabled = prefs?.inAppEnabled !== false;
     // Todos los devices activos del usuario (iOS→APNs, Android→FCM)
     const usersDevices = await db
       .select({ id: pushDevices.id, token: pushDevices.token, platform: pushDevices.platform })
       .from(pushDevices)
       .where(and(eq(pushDevices.userId, item.userId), eq(pushDevices.isActive, true)));
 
-    // 1) In-app primero (H22: si la categoría está muteada, NO se inserta la
-    // campana — el push a iOS sí sale yográficamente suí marca el ícono)
-    // H22: si la categoría está muteada, NO se inserta la campana — el push a
-    // iOS sí sale y el ícono iOS marca el badge (semántica tipo Facebook).
+    // 1) In-app primero. H22: el plano CANAL apaga SOLO la campana — el push
+    // sigue saliendo y el ícono iOS marca el badge. El plano CATEGORÍA apaga
+    // ambos (ver bloque SKIPPED abajo).
     let notificationId: string | null = null;
-    if (!pushMuted) {
+    if (!pushMuted && inAppEnabled) {
       const [inApp] = await db
         .insert(notifications)
         .values({ userId: item.userId, title: item.title, message: item.message, type: item.type, ...(item.route ? { route: item.route } : {}) })

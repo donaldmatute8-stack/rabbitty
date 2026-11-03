@@ -50,8 +50,8 @@ const SETTINGS_COPY = {
     icon: Smartphone,
   },
   inAppBell: {
-    label: 'Notificaciones en la app',
-    desc: 'Campana dentro de Rabbitty: historia de tus alerts y recompensas.',
+    label: 'Campana en la app',
+    desc: 'Historial dentro de Rabbitty. Si la apagas, el push sigue llegando y marca el ícono.',
     icon: BellRing,
   },
   email: {
@@ -72,8 +72,26 @@ export default function SettingsPage() {
 
   useEffect(() => {
     setSettings(readSettings());
-    return subscribeSettings(setSettings);
-  }, []);
+    const unsubscribe = subscribeSettings(setSettings);
+    // H22 · plano CANAL: el worker lee `users.pushInAppEnabled`, así que el
+    // switch "Notificaciones en la app" debe hidratarse del server (fuente de
+    // verdad), no solo del storage local.
+    if (user?.id) {
+      void (async () => {
+        try {
+          const headers = await PlatformBridge.getAuthHeaders();
+          const res = await fetch('/api/notifications/preferences', { headers: headers || {}, cache: 'no-store' });
+          const data = await res.json();
+          if (typeof data?.inAppEnabled === 'boolean') {
+            const merged = { ...readSettings(), inAppBell: data.inAppEnabled };
+            setSettings(merged);
+            saveSettings(merged);
+          }
+        } catch { /* best-effort */ }
+      })();
+    }
+    return unsubscribe;
+  }, [user?.id]);
 
   useEffect(() => {
     if (section === 'notifications') {
@@ -91,19 +109,29 @@ export default function SettingsPage() {
     const next = { ...settings, [key]: !settings[key] };
     setSettings(next);
     saveSettings(next);
-    // Server-side: al apagar el push nativo desactivamos los tokens del
-    // dispositivo (el motor deja de enviar); al encender, AuthProvider
-    // re-registra el token (POST /api/notifications/push-token) → isActive.
-    if (user?.id) {
-      try {
-        const headers = await PlatformBridge.getAuthHeaders();
+    if (!user?.id) return;
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      if (key === 'nativePush') {
+        // Al apagar el push nativo desactivamos los tokens del dispositivo (el
+        // motor deja de enviar); al encender, AuthProvider re-registra el token
+        // (POST /api/notifications/push-token) → isActive.
         await fetch('/api/notifications/push-token', {
-          method: key === 'nativePush' && !next.nativePush ? 'DELETE' : 'POST',
+          method: next.nativePush ? 'POST' : 'DELETE',
           headers: { ...headers, 'Content-Type': 'application/json' },
-          body: key === 'nativePush' && !next.nativePush ? JSON.stringify({}) : JSON.stringify({ rearm: true }),
+          body: next.nativePush ? JSON.stringify({ rearm: true }) : JSON.stringify({}),
         });
-      } catch { /* best-effort */ }
-    }
+      } else if (key === 'inAppBell') {
+        // H22 · plano CANAL: apagar la campana NO apaga el push nativo — el
+        // worker deja de insertar la campana pero el push sí sale y marca el
+        // badge iOS (semántica tipo Facebook).
+        await fetch('/api/notifications/preferences', {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ inAppEnabled: next.inAppBell }),
+        });
+      }
+    } catch { /* best-effort */ }
   };
 
   return (
@@ -271,7 +299,8 @@ function CategoryMuteRows() {
         );
       })}
       <p className="text-[9px] m-0 px-2 pb-1.5" style={{ color: "var(--text-muted)" }}>
-        Los pagos, cuentas y avisos de seguridad siempre llegan — por tu protección.
+        Si apagas una categoría dejas de recibir su campana y su push. Los pagos, cuentas y avisos de
+        seguridad siempre llegan — por tu protección.
       </p>
     </div>
   );

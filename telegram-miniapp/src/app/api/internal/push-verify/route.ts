@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
       .select({ id: pushDevices.id, platform: pushDevices.platform, isActive: pushDevices.isActive, updatedAt: pushDevices.updatedAt, token: pushDevices.token })
       .from(pushDevices)
       .where(eq(pushDevices.userId, userId));
-    const [oubox] = await db.select({ pushRules: users.pushRules, muted: users.pushMutedCategories }).from(users).where(eq(users.id, userId)).limit(1);
+    const [oubox] = await db.select({ pushRules: users.pushRules, muted: users.pushMutedCategories, inAppEnabled: users.pushInAppEnabled }).from(users).where(eq(users.id, userId)).limit(1);
 
     return NextResponse.json({
       ok: true,
@@ -38,6 +38,7 @@ export async function GET(req: NextRequest) {
       })),
       pushRules: oubox?.pushRules ?? "{}",
       pushMutedCategories: oubox?.muted ?? "[]",
+      pushInAppEnabled: oubox?.inAppEnabled !== false,
     });
   } catch (err: unknown) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "error" }, { status: 500 });
