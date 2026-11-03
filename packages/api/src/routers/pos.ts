@@ -2229,6 +2229,9 @@ export const posRouter = router({
               type: "SYSTEM",
               route: "/",
               dedupeKey: stageKey,
+              // Seguimiento de pedido = aviso "vivo": prioridad alta para que
+              // llegue con la pantalla bloqueada y atraviese Focus (iOS).
+              priority: "high",
             });
           }
         } catch (noticeErr) {

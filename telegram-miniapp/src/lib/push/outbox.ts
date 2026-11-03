@@ -189,6 +189,18 @@ export async function processOutboxBatch(limit = 20): Promise<{
       body: item.message,
       badge: unreadBadge, // H17-badge: unread real (sync icono ↔ centro de notificaciones)
       data: { ...(item.data as Record<string, string> ?? {}), ...(item.route ? { route: item.route } : {}) },
+      // Seguimiento de pedidos = notificación "viva": se reemplaza a sí misma
+      // (collapse-id por pedido) y usa time-sensitive para atravesar Focus.
+      ...(item.dedupeKey?.startsWith("order_stage:")
+        ? {
+            collapseId: `order:${item.dedupeKey.split(":")[1]}`,
+            threadId: `order:${item.dedupeKey.split(":")[1]}`,
+            interruptionLevel: "time-sensitive" as const,
+            relevanceScore: 1,
+          }
+        : item.priority === "high"
+          ? { interruptionLevel: "time-sensitive" as const }
+          : {}),
     };
 
     let anyOk = false;

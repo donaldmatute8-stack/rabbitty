@@ -36,6 +36,14 @@ export interface PushPayload {
   sound?: string;
   threadId?: string;
   collapseId?: string;
+  /**
+   * Nivel de interrupción iOS. `time-sensitive` atraviesa Focus / No molestar
+   * (requiere el entitlement en la app; si falta, iOS lo degrada a `active`
+   * sin fallar). Se usa para el seguimiento de pedidos en curso.
+   */
+  interruptionLevel?: "passive" | "active" | "time-sensitive" | "critical";
+  /** Mayor prioridad de ordenamiento dentro del grupo (iOS 15+). */
+  relevanceScore?: number;
 }
 
 export interface ApnsDeviceResult {
@@ -119,6 +127,8 @@ function buildBody(payload: PushPayload): Record<string, unknown> {
   };
   if (typeof payload.badge === "number") aps.badge = payload.badge;
   if (payload.threadId) aps["thread-id"] = payload.threadId;
+  if (payload.interruptionLevel) aps["interruption-level"] = payload.interruptionLevel;
+  if (typeof payload.relevanceScore === "number") aps["relevance-score"] = payload.relevanceScore;
 
   return { aps, ...(payload.data ?? {}) };
 }
