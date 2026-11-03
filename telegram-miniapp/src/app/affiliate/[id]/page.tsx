@@ -642,92 +642,110 @@ function AffiliateProfileContent() {
       </div>
 
       {/* Content Container (Card Overlap) */}
-      <div className="relative bg-[#0D0D15] rounded-t-[36px] -mt-8 px-6 pt-7 pb-20 border-t border-white/10 shadow-2xl space-y-6">
-        {/* Title, Category & Verification */}
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-black tracking-tight text-white leading-tight">
+      <div className="relative bg-[#0D0D15] rounded-t-[36px] -mt-8 px-5 pt-6 pb-20 border-t border-white/10 shadow-2xl space-y-5">
+        {/* Title, Category & Schedule in a Sleek Header */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white leading-tight truncate">
               {affiliate.name}
             </h1>
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+              <span className="text-[11px] font-black text-[#E91E63] uppercase tracking-wider">
+                {affiliate.category}
+              </span>
+              <span className="text-white/20">•</span>
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-gray-300">
+                <Clock size={12} className="text-gray-400" />
+                <span>{affiliate.startTime} - {affiliate.endTime}</span>
+              </span>
+              <span className="text-white/20">•</span>
+              <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
+                openNow
+                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                  : 'bg-red-500/15 text-red-400 border border-red-500/30'
+              }`}>
+                {openNow ? 'Abierto' : 'Cerrado'}
+              </span>
+            </div>
           </div>
-          <p className="text-xs font-black text-[#E91E63] uppercase tracking-wider mt-1.5 flex items-center gap-2">
-            <span>{affiliate.category}</span>
-            <span className="text-white/30">•</span>
-            <span className="text-emerald-400 font-bold lowercase">
-              {affiliate.startTime} - {affiliate.endTime}
-            </span>
-          </p>
         </div>
 
-        {/* Action Quick Links (Minimalist, integrated sleek action bar) */}
-        <div className="flex items-center justify-around py-2 px-1 bg-white/[0.03] border border-white/8 rounded-2xl backdrop-blur-md">
+        {/* Action Quick Links (Llegar, Mood, Mesa, Mensaje) Rediseñados */}
+        <div className="grid grid-cols-4 gap-2 py-2 px-2 bg-white/[0.03] border border-white/10 rounded-2xl backdrop-blur-xl shadow-lg">
           <motion.button
-            whileTap={{ scale: 0.92 }}
+            whileTap={{ scale: 0.94 }}
             onClick={() => {
               PlatformBridge.hapticFeedback('medium');
-              // 1era opción por defecto: abrir automáticamente el mapa Freehands con el afiliado
+              // 1era opción automática: abre nuestro mapa interactivo
               router.push(`/?tab=Freehands&affiliate=${affiliate.id}`);
             }}
-            className="flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-colors hover:bg-white/5 active:opacity-80 border-none bg-transparent cursor-pointer"
+            className="flex flex-col items-center gap-1.5 py-1.5 px-1 rounded-xl transition-all hover:bg-white/5 active:opacity-80 border-none bg-transparent cursor-pointer"
           >
-            <div className="w-9 h-9 rounded-full bg-[#E91E63]/12 text-[#E91E63] border border-[#E91E63]/25 flex items-center justify-center">
-              <Navigation size={16} />
+            <div className="w-10 h-10 rounded-xl bg-[#E91E63]/15 text-[#FF2E93] border border-[#E91E63]/30 flex items-center justify-center shadow-sm">
+              <Navigation size={18} />
             </div>
-            <span className="text-[10px] font-bold text-white/80 tracking-tight">Llegar</span>
+            <span className="text-[10px] font-black text-white/90 tracking-tight">Llegar</span>
           </motion.button>
 
           <motion.button
-            whileTap={{ scale: 0.92 }}
+            whileTap={{ scale: 0.94 }}
             onClick={() => {
               PlatformBridge.hapticFeedback('medium');
               setShowMoodCheckIn(true);
             }}
-            className="flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-colors hover:bg-white/5 active:opacity-80 border-none bg-transparent cursor-pointer"
+            className="flex flex-col items-center gap-1.5 py-1.5 px-1 rounded-xl transition-all hover:bg-white/5 active:opacity-80 border-none bg-transparent cursor-pointer"
           >
-            <div className="w-9 h-9 rounded-full bg-amber-500/12 text-amber-400 border border-amber-500/25 flex items-center justify-center">
-              <Sparkles size={16} />
+            <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center justify-center shadow-sm">
+              <Sparkles size={18} />
             </div>
-            <span className="text-[10px] font-bold text-amber-400 tracking-tight">Mood</span>
+            <span className="text-[10px] font-black text-amber-400 tracking-tight">Mood</span>
           </motion.button>
 
-          {capabilities.tableServiceEnabled && tables.length > 0 && (
+          {capabilities.tableServiceEnabled && tables.length > 0 ? (
             <motion.button
-              whileTap={{ scale: 0.92 }}
+              whileTap={{ scale: 0.94 }}
               onClick={() => setShowTableSheet(true)}
-              className="flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-colors hover:bg-white/5 active:opacity-80 border-none bg-transparent cursor-pointer"
+              className="flex flex-col items-center gap-1.5 py-1.5 px-1 rounded-xl transition-all hover:bg-white/5 active:opacity-80 border-none bg-transparent cursor-pointer"
             >
-              <div className="w-9 h-9 rounded-full bg-purple-500/12 text-purple-400 border border-purple-500/25 flex items-center justify-center">
-                <QrCode size={16} />
+              <div className="w-10 h-10 rounded-xl bg-purple-500/15 text-purple-400 border border-purple-500/30 flex items-center justify-center shadow-sm">
+                <QrCode size={18} />
               </div>
-              <span className="text-[10px] font-bold text-white/80 tracking-tight">
+              <span className="text-[10px] font-black text-white/90 tracking-tight">
                 {tableNumber ? `#${tableNumber}` : 'Mesa'}
               </span>
             </motion.button>
+          ) : (
+            <div className="flex flex-col items-center gap-1.5 py-1.5 px-1 opacity-30 pointer-events-none">
+              <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-gray-500">
+                <QrCode size={18} />
+              </div>
+              <span className="text-[10px] font-bold text-gray-500">Mesa</span>
+            </div>
           )}
 
           <motion.button
-            whileTap={{ scale: 0.92 }}
+            whileTap={{ scale: 0.94 }}
             onClick={() => setShowMessageSelector(true)}
-            className="flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-colors hover:bg-white/5 active:opacity-80 border-none bg-transparent cursor-pointer"
+            className="flex flex-col items-center gap-1.5 py-1.5 px-1 rounded-xl transition-all hover:bg-white/5 active:opacity-80 border-none bg-transparent cursor-pointer"
           >
-            <div className="w-9 h-9 rounded-full bg-orange-500/12 text-orange-400 border border-orange-500/25 flex items-center justify-center">
-              <MessageCircle size={16} />
+            <div className="w-10 h-10 rounded-xl bg-orange-500/15 text-orange-400 border border-orange-500/30 flex items-center justify-center shadow-sm">
+              <MessageCircle size={18} />
             </div>
-            <span className="text-[10px] font-bold text-white/80 tracking-tight">Mensaje</span>
+            <span className="text-[10px] font-black text-white/90 tracking-tight">Mensaje</span>
           </motion.button>
         </div>
 
-        {/* Interactive Segmented Experience Tabs (2 tabs, perfectly balanced) */}
-        <div className="sticky top-[calc(max(var(--safe-top,0px),env(safe-area-inset-top,0px))+56px)] z-30 -mx-2 px-2 py-2 bg-[#0D0D15]/95 backdrop-blur-xl">
+        {/* Interactive Segmented Experience Tabs */}
+        <div className="sticky top-[calc(max(var(--safe-top,0px),env(safe-area-inset-top,0px))+56px)] z-30 -mx-1 px-1 py-1 bg-[#0D0D15]/95 backdrop-blur-xl">
           <div className="grid grid-cols-2 p-1 bg-[#161622] rounded-2xl border border-white/10 shadow-lg">
             <button
               onClick={() => {
                 PlatformBridge.hapticFeedback('light');
                 setActiveTab('menu');
               }}
-              className={`py-2.5 rounded-xl text-xs font-black tracking-wide transition-all flex items-center justify-center gap-2 ${
+              className={`py-2.5 rounded-xl text-xs font-black tracking-wide transition-all flex items-center justify-center gap-2 cursor-pointer ${
                 activeTab === 'menu'
-                  ? 'bg-[#E91E63] text-white shadow-md shadow-[#E91E63]/30'
+                  ? 'bg-gradient-to-r from-[#FF2E93] to-[#E91E63] text-white shadow-md shadow-[#E91E63]/30'
                   : 'text-white/60 hover:text-white'
               }`}
             >
@@ -739,9 +757,9 @@ function AffiliateProfileContent() {
                 PlatformBridge.hapticFeedback('light');
                 setActiveTab('info');
               }}
-              className={`py-2.5 rounded-xl text-xs font-black tracking-wide transition-all flex items-center justify-center gap-2 ${
+              className={`py-2.5 rounded-xl text-xs font-black tracking-wide transition-all flex items-center justify-center gap-2 cursor-pointer ${
                 activeTab === 'info'
-                  ? 'bg-[#E91E63] text-white shadow-md shadow-[#E91E63]/30'
+                  ? 'bg-gradient-to-r from-[#FF2E93] to-[#E91E63] text-white shadow-md shadow-[#E91E63]/30'
                   : 'text-white/60 hover:text-white'
               }`}
             >
