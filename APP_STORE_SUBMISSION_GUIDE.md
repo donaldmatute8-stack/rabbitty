@@ -386,8 +386,8 @@ Selecciona la opción recomendada:
 
 Ya generadas con la resolución oficial exigida por Apple (**2732 × 2048 px** en horizontal / landscape):
 
-1. [Rabbitty_POS_iPad_Screen1.png](file:///Users/Marco/Documents/Company/Rabbitty/dApp/Rabbitty_POS_iPad_Screen1.png) _(Terminal POS, Comandas y Descuento Bunz)_
-2. [Rabbitty_POS_iPad_Screen2.png](file:///Users/Marco/Documents/Company/Rabbitty/dApp/Rabbitty_POS_iPad_Screen2.png) _(Impresora Térmica, Gestión de Mesas en Vivo)_
+1. [Rabbitty_POS_iPad_Screen1.png](file:///Users/Marco/Documents/Company/Rabbitty/app-store-screenshots/Rabbitty_POS_iPad_Screen1.png) _(Terminal POS, Comandas y Descuento Bunz)_
+2. [Rabbitty_POS_iPad_Screen2.png](file:///Users/Marco/Documents/Company/Rabbitty/app-store-screenshots/Rabbitty_POS_iPad_Screen2.png) _(Impresora Térmica, Gestión de Mesas en Vivo)_
 
 ---
 

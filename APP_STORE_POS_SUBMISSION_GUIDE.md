@@ -89,9 +89,9 @@ Thank you for your review. Please contact support@rabbitty.me if you require any
 Ya generadas con la resolución exacta que exige Apple (**2732 x 2048 px** en horizontal para iPad):
 
 1. **Pantalla 1 (Terminal POS & Comandas):**  
-   `dApp/Rabbitty_POS_iPad_Screen1.png`
+   `../app-store-screenshots/Rabbitty_POS_iPad_Screen1.png`
 2. **Pantalla 2 (Impresión Térmica & Mapa de Mesas):**  
-   `dApp/Rabbitty_POS_iPad_Screen2.png`
+   `../app-store-screenshots/Rabbitty_POS_iPad_Screen2.png`
 
 ---
 
