@@ -454,7 +454,12 @@ export const paymentsRouter = router({
   getPublishableKey: publicLimitedProcedure
     .query(async () => {
       const pk = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "";
-      return { publishableKey: pk, ready: Boolean(pk), mode: process.env.STRIPE_SECRET_KEY?.startsWith("sk_test") ? "test" : "live" };
+      // H24: `_test` cubre sk_test_/rk_test_/pk_test_. Antes solo se miraba
+      // `sk_test`, así que una llave restringida de prueba (rk_test_) se
+      // reportaba como "live" — riesgo de creer que se cobra dinero real.
+      const secretKey = process.env.STRIPE_SECRET_KEY || "";
+      const isTest = secretKey.includes("_test_") || pk.includes("_test_");
+      return { publishableKey: pk, ready: Boolean(pk), mode: isTest ? "test" : "live" };
     }),
 
   getStripeAccountStatus: protectedProcedure
