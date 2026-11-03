@@ -23,11 +23,27 @@ describe("Rabbitty Trust F2 — reglas puras", () => {
       expect(computePaymentsComponent({ succeeded: 1, failed: 0, cancelled: 0, expired: 1 }).score).toBeNull();
     });
 
-    it("score = % de SUCCEEDED sobre cerrados y expone notes", () => {
+    it("score = % de pagos sobre los ATRIBUIBLES (D-8: fricción y desconocido no penalizan)", () => {
       const c = computePaymentsComponent({ succeeded: 8, failed: 1, cancelled: 1, expired: 0 });
-      expect(c.score).toBe(80);
+      // failed ⇒ fricción del proveedor, cancelled ⇒ causa desconocida: ambos fuera del denominador
+      expect(c.score).toBe(100);
       expect(c.sampleN).toBe(10);
-      expect(c.notes).toEqual({ succeeded: 8 });
+      expect(c.notes?.rawScore).toBe(80); // vista cruda conservada para comparar en shadow
+      expect(c.notes?.attributable).toBe(8);
+      expect(c.notes?.abandonment).toEqual({ user: 0, friction: 1, system: 0, unknown: 1 });
+    });
+
+    it("D-8: el abandono del USUARIO sí cuenta en contra", () => {
+      const c = computePaymentsComponent({ succeeded: 6, failed: 0, cancelled: 0, expired: 2 });
+      expect(c.score).toBe(75); // 6 / (6 + 2 expirados del usuario)
+      expect(c.notes?.attributable).toBe(8);
+      expect(c.notes?.abandonment).toEqual({ user: 2, friction: 0, system: 0, unknown: 0 });
+    });
+
+    it("D-8: sin atribución explícita se deriva del estado (heurística declarada)", () => {
+      const c = computePaymentsComponent({ succeeded: 5, failed: 2, cancelled: 3, expired: 1 });
+      expect(c.notes?.abandonment).toEqual({ user: 1, friction: 2, system: 0, unknown: 3 });
+      expect(c.score).toBe(83.33); // 5 / (5 + 1)
     });
 
     it("0 pagos exitosos ⇒ score 0 (no null — hay muestra)", () => {

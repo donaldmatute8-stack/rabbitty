@@ -31,6 +31,41 @@ export interface TrustPaymentsInput {
   failed: number;
   cancelled: number;
   expired: number;
+  /**
+   * D-8 · Atribución de abandono. Si no viene, se deriva del estado con la
+   * heurística declarada en `deriveAbandonment()`.
+   */
+  abandonment?: AbandonmentBreakdown;
+}
+
+/**
+ * D-8 · Causa del cierre de un intent que NO terminó en pago.
+ * Solo `user` cuenta en contra del Rabbitter; `friction` y `system` son
+ * responsabilidad del producto, no de la persona.
+ */
+export interface AbandonmentBreakdown {
+  user: number;
+  friction: number;
+  system: number;
+  unknown: number;
+}
+
+/**
+ * D-8 · Atribución sin telemetría de cliente (heurística declarada, shadow).
+ * - EXPIRED  → el intent murió por TTL sin completarse ⇒ abandono del usuario.
+ * - FAILED   → el proveedor rechazó (tarjeta/3DS) ⇒ fricción, no del usuario.
+ * - CANCELLED→ puede ser el usuario, la caja o el sistema ⇒ UNKNOWN (no penaliza).
+ *
+ * Cuando el checkout reporte el evento real (sheet_closed, 3ds_failed, …) este
+ * clasificador se sustituye por la causa observada; el contrato no cambia.
+ */
+export function deriveAbandonment(input: TrustPaymentsInput): AbandonmentBreakdown {
+  return {
+    user: input.expired,
+    friction: input.failed,
+    system: 0,
+    unknown: input.cancelled,
+  };
 }
 
 export interface TrustTabsInput {
@@ -85,14 +120,33 @@ export interface TrustShadowResult {
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-/** Componente pagos: intent cerrados con SUCCEEDED vs total de intent cerrados. */
+/**
+ * Componente pagos: intent cerrados con SUCCEEDED/SETTLED vs los atribuibles.
+ *
+ * D-8: el denominador NO incluye fricción (tarjeta rechazada, 3DS) ni fallos
+ * del sistema ni cancelaciones de causa desconocida — penalizar al Rabbitter
+ * por un bug nuestro o por un rechazo del banco destruye la señal. Se expone
+ * `rawScore` (succeeded / todos los cerrados) para comparar en el shadow.
+ */
 export function computePaymentsComponent(input: TrustPaymentsInput): TrustComponent {
   const closed = input.succeeded + input.failed + input.cancelled + input.expired;
   if (closed < TRUST_MIN_PAYMENT_SAMPLE) {
     return { score: null, sampleN: closed };
   }
-  const pct = (input.succeeded / closed) * 100;
-  return { score: round2(pct), sampleN: closed, notes: { succeeded: input.succeeded } };
+  const abandonment = input.abandonment ?? deriveAbandonment(input);
+  const attributable = input.succeeded + abandonment.user;
+  const rawScore = (input.succeeded / closed) * 100;
+  const score = attributable > 0 ? (input.succeeded / attributable) * 100 : 0;
+  return {
+    score: round2(score),
+    sampleN: closed,
+    notes: {
+      succeeded: input.succeeded,
+      rawScore: round2(rawScore),
+      attributable,
+      abandonment,
+    },
+  };
 }
 
 /** Componente tabs: huérfanas STALE_TAB vs órdenes cerradas del sujeto. */

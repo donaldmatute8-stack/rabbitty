@@ -350,7 +350,7 @@ export const analyticsRouter = router({
         .groupBy(paymentIntents.status);
       const byStatus = intents.reduce<Record<string, number>>((acc, r) => { acc[r.status] = Number(r.count); return acc; }, {});
       const total = Object.values(byStatus).reduce((s, n) => s + n, 0);
-      const settled = (byStatus["SUCCEEDED"] ?? 0) + (byStatus["PROCESSING"] ?? 0);
+      const settled = (byStatus["SUCCEEDED"] ?? 0) + (byStatus["SETTLED"] ?? 0) + (byStatus["PROCESSING"] ?? 0);
       const abandonedRows = await ctx.restaurantDb
         .select({ count: sql<number>`COUNT(*)` })
         .from(paymentIntents)

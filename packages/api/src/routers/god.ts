@@ -442,7 +442,7 @@ export const godRouter = router({
           byStatus: intentsByStatus,
           ...(() => {
             const s = intentsByStatus;
-            const settled = (s["SUCCEEDED"] ?? 0) + (s["PROCESSING"] ?? 0);
+            const settled = (s["SUCCEEDED"] ?? 0) + (s["SETTLED"] ?? 0) + (s["PROCESSING"] ?? 0);
             const failed = (s["EXPIRED"] ?? 0) + (s["CANCELLED"] ?? 0) + (s["FAILED"] ?? 0);
             const conversion = intentsTotal > 0 ? Math.round((settled / intentsTotal) * 1000) / 10 : 0;
             return { settled, failed, conversion, abandoned: Number(abandoned[0]?.count || 0) };
@@ -599,20 +599,31 @@ export const godRouter = router({
       const days = input.lookbackDays;
 
       // 1) Intent de pago cerrados asignados al sujeto (payer)
+      //    D-8: dos vocabularios conviven — SUCCEEDED (tarjeta/Stripe) y SETTLED
+      //    (Bunz/QR). Ambos significan "pagado"; contarlos por separado dejaba
+      //    invisibles los pagos con Bunz.
       const intentsRes: any = await ctx.restaurantDb.execute(sql`
         SELECT status, COUNT(*)::int AS n
         FROM "payment_intents"
         WHERE "payerSubjectId" = ${input.subjectId}
-          AND status IN ('SUCCEEDED','FAILED','CANCELLED','EXPIRED')
+          AND status IN ('SUCCEEDED','SETTLED','FAILED','CANCELLED','EXPIRED')
           AND "createdAt" >= now() - (${days} || ' days')::interval
         GROUP BY status`);
       const byStatus: Record<string, number> = {};
       for (const r of sqlRows(intentsRes)) byStatus[String(r.status)] = Number(r.n);
       const payments: TrustPaymentsInput = {
-        succeeded: byStatus.SUCCEEDED ?? 0,
+        succeeded: (byStatus.SUCCEEDED ?? 0) + (byStatus.SETTLED ?? 0),
         failed: byStatus.FAILED ?? 0,
         cancelled: byStatus.CANCELLED ?? 0,
         expired: byStatus.EXPIRED ?? 0,
+        // D-8 · atribución de abandono (heurística declarada en trustRules):
+        // EXPIRED → usuario · FAILED → fricción del proveedor · CANCELLED → desconocido.
+        abandonment: {
+          user: byStatus.EXPIRED ?? 0,
+          friction: byStatus.FAILED ?? 0,
+          system: 0,
+          unknown: byStatus.CANCELLED ?? 0,
+        },
       };
 
       // 2) Tabs huérfanas (STALE_TAB) vs liquidación normal del sujeto — diagnóstico
