@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { trpc } from "../../../lib/trpc-client";
+import { AccountBiometricsCard } from "../../../components/AccountBiometricsCard";
 import { Card, Badge, Button, Input, toast } from "@rabbitty/ui";
 import { 
   Store, DollarSign, Gift, Monitor, Edit3, Check, X, 
@@ -1486,7 +1487,9 @@ function God2FAPasskeysCard() {
   };
 
   const isGod = status?.required;
-  if (!isGod) return null;
+  // Cuentas de negocio (no god): Face ID con sus PROPIOS passkeys.
+  // Antes la tarjeta devolvía null y el afiliado no veía nada de biometría.
+  if (!isGod) return <AccountBiometricsCard />;
 
   return (
     <Card className="p-6 border border-pink-500/20 bg-pink-500/5 backdrop-blur-md lg:col-span-2">
