@@ -35,12 +35,28 @@ export default function GodGamificacionPage() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ title: "", description: "", rewardHops: "100", rewardBunz: "50", conditionTarget: "1" });
+  // Flags de producto (visibilidad de features en el móvil)
+  const [flags, setFlags] = useState<Record<string, boolean>>({});
+  const [savingFlag, setSavingFlag] = useState<string | null>(null);
+
+  const toggleFlag = async (key: "vibe_passport_enabled", enabled: boolean) => {
+    setSavingFlag(key);
+    try {
+      await godQuery("god.setAppFlag", { key, enabled }, true);
+      setFlags((f) => ({ ...f, [key]: enabled }));
+      toast.success(enabled ? "✅ Activado — visible en la app" : "Oculto en la app");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al guardar el flag");
+    } finally { setSavingFlag(null); }
+  };
 
   const load = async () => {
     setLoading(true);
     try {
       const d = await godQuery<{ levels: Level[]; tricks: Trick[] }>("god.getGamification");
       setTricks(d.tricks || []); setLevels(d.levels || []);
+      const f = await godQuery<{ vibe_passport_enabled: boolean }>("god.getAppFlags");
+      setFlags({ vibe_passport_enabled: Boolean(f?.vibe_passport_enabled) });
     } catch { /* noop */ } finally { setLoading(false); }
   };
   useEffect(() => { void load(); }, []);
@@ -85,6 +101,39 @@ export default function GodGamificacionPage() {
             <RefreshCw className="h-3.5 w-3.5" />
           </Button>
         </div>
+
+        {/* Flags de producto — lo que se ve en la app móvil */}
+        <Card className="p-5 border border-white/10 bg-white/5">
+          <h2 className="text-sm font-black text-white uppercase tracking-wider pb-1">🎛️ Visibilidad en la app</h2>
+          <p className="text-[11px] text-gray-400 pb-3">
+            Activa features cuando haya masa crítica. Apagado = invisible para los Rabbitters (sin redeploy).
+          </p>
+          <div className="flex items-center justify-between gap-4 px-3 py-3 rounded-xl bg-black/40 border border-white/5">
+            <div className="min-w-0">
+              <p className="text-[12px] font-black text-gray-100">Rabbitty Vibe Passport</p>
+              <p className="text-[11px] text-gray-500">
+                Banner en el home + rutas temáticas en Explorar. Recomendado: activarlo con 10+ aliados.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={!!flags.vibe_passport_enabled}
+              aria-label="Activar Rabbitty Vibe Passport"
+              disabled={savingFlag === "vibe_passport_enabled"}
+              onClick={() => void toggleFlag("vibe_passport_enabled", !flags.vibe_passport_enabled)}
+              className={`relative shrink-0 w-12 h-6.5 rounded-full transition-colors cursor-pointer disabled:opacity-50 ${
+                flags.vibe_passport_enabled ? "bg-emerald-500" : "bg-white/15"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 h-5.5 w-5.5 rounded-full bg-white shadow transition-all ${
+                  flags.vibe_passport_enabled ? "left-6" : "left-0.5"
+                }`}
+              />
+            </button>
+          </div>
+        </Card>
 
         {/* Trucos */}
         <Card className="p-5 border border-white/10 bg-white/5">

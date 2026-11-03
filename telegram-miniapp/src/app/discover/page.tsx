@@ -7,6 +7,7 @@ import { Search, Store, Sparkles, ChevronLeft } from 'lucide-react';
 import BottomNav from '@/components/BottomNav';
 import { PlatformBridge } from '@/lib/platform';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useAppFlags } from '@/lib/useAppFlags';
 
 import { VibePassportRoute } from '@/types/mood';
 
@@ -35,6 +36,7 @@ interface PassportRouteWithProgress extends VibePassportRoute {
 export default function DiscoverPage() {
   const router = useRouter();
   const { isDark } = useTheme();
+  const appFlags = useAppFlags();
   const [query, setQuery] = useState('');
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [loading, setLoading] = useState(false);
@@ -168,7 +170,8 @@ export default function DiscoverPage() {
 
         {!loading && !query && (
           <div className="space-y-6">
-            {/* Vibe Passport Spotlight */}
+            {/* Vibe Passport Spotlight — solo con el flag activo (Admin God) */}
+            {appFlags.vibe_passport_enabled && (
             <div 
               className="rounded-3xl p-4.5 border transition-all"
               style={{
@@ -266,7 +269,7 @@ export default function DiscoverPage() {
                 ))}
               </div>
             </div>
-
+            )}
             <div className="text-center py-6">
               <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
                 <Store size={26} style={{ color: 'var(--text-muted)' }} />

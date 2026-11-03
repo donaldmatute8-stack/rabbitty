@@ -9,6 +9,7 @@ import {
   levels,
   hatTricks,
   presenceSessions,
+  systemSettings,
 } from "@rabbitty/database-core";
 import { ledgerEntries, rabbitterScoreShadow } from "@rabbitty/database-restaurant/schema";
 import {
@@ -1094,6 +1095,36 @@ export const godRouter = router({
     const allTricks = await ctx.coreDb.select().from(hatTricks).orderBy(desc(hatTricks.createdAt));
     return { levels: allLevels, tricks: allTricks };
   }),
+
+  /**
+   * ── Flags de producto (systemSettings) ──
+   * Toggles globales que el móvil lee por /api/settings. `vibe_passport_enabled`
+   * oculta el Vibe Passport hasta que el founder tenga masa crítica de aliados.
+   */
+  getAppFlags: godAdminProcedure.query(async ({ ctx }) => {
+    const rows = await ctx.coreDb.select().from(systemSettings);
+    const map = new Map(rows.map((r) => [r.key, r.value]));
+    return {
+      vibe_passport_enabled: map.get("vibe_passport_enabled") === "true",
+    };
+  }),
+
+  setAppFlag: godAdminProcedure
+    .input(z.object({
+      key: z.enum(["vibe_passport_enabled"]),
+      enabled: z.boolean(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const value = input.enabled ? "true" : "false";
+      await ctx.coreDb
+        .insert(systemSettings)
+        .values({ key: input.key, value })
+        .onConflictDoUpdate({
+          target: systemSettings.key,
+          set: { value, updatedAt: new Date() },
+        });
+      return { success: true, key: input.key, enabled: input.enabled };
+    }),
 
   createHatTrick: godAdminProcedure
     .input(
