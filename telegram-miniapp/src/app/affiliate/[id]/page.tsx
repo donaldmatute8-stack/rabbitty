@@ -643,30 +643,28 @@ function AffiliateProfileContent() {
 
       {/* Content Container (Card Overlap) */}
       <div className="relative bg-[#0D0D15] rounded-t-[36px] -mt-8 px-5 pt-6 pb-20 border-t border-white/10 shadow-2xl space-y-5">
-        {/* Title, Category & Schedule in a Sleek Header */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white leading-tight truncate">
+        {/* Pill central: nombre · tipo de negocio · horario · estado (H-UI-PILL) */}
+        <div className="flex justify-center">
+          <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full border border-white/12 bg-white/[0.04] backdrop-blur-xl max-w-full shadow-lg">
+            <h1 className="text-base font-black tracking-tight text-white truncate m-0 max-w-[42vw]">
               {affiliate.name}
             </h1>
-            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-              <span className="text-[11px] font-black text-[#E91E63] uppercase tracking-wider">
-                {affiliate.category}
-              </span>
-              <span className="text-white/20">•</span>
-              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-gray-300">
-                <Clock size={12} className="text-gray-400" />
-                <span>{affiliate.startTime} - {affiliate.endTime}</span>
-              </span>
-              <span className="text-white/20">•</span>
-              <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
-                openNow
-                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                  : 'bg-red-500/15 text-red-400 border border-red-500/30'
-              }`}>
-                {openNow ? 'Abierto' : 'Cerrado'}
-              </span>
-            </div>
+            <span className="w-1 h-1 rounded-full bg-white/25 shrink-0" />
+            <span className="text-[10px] font-black text-[#E91E63] uppercase tracking-wider truncate max-w-[26vw]">
+              {affiliate.category}
+            </span>
+            <span className="w-1 h-1 rounded-full bg-white/25 shrink-0" />
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-gray-300 shrink-0">
+              <Clock size={11} className="text-gray-400" />
+              <span>{affiliate.startTime}–{affiliate.endTime}</span>
+            </span>
+            <span className={`shrink-0 text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+              openNow
+                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                : 'bg-red-500/15 text-red-400 border border-red-500/30'
+            }`}>
+              {openNow ? 'Abierto' : 'Cerrado'}
+            </span>
           </div>
         </div>
 
