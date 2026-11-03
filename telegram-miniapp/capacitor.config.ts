@@ -24,6 +24,11 @@ const config: CapacitorConfig = {
       backgroundColor: "#0A0A0A",
       showSpinner: false,
     },
+    PushNotifications: {
+      // Sin esto, iOS NO muestra nada con la app abierta (el plugin devuelve []).
+      // Se vio en device: los pushes llegaban (APNs 200) pero no aparecían.
+      presentationOptions: ["banner", "list", "sound", "badge"],
+    },
   },
 };
 

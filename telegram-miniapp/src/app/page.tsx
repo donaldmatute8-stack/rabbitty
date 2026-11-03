@@ -23,6 +23,7 @@ import RabbittyContourLoader from '@/components/ui/RabbittyContourLoader';
 import { useOrderTracking } from '@/lib/useOrderTracking';
 import { useAppFlags } from '@/lib/useAppFlags';
 import { OrderTrackingCard, OrderTrackSheet } from '@/components/affiliate/OrderTrackingCard';
+import { PushPermissionBanner } from '@/components/notifications/PushPermissionBanner';
 import { openBunzy } from '@/lib/bunzyLaunch';
 import { MoodCheckInSheet } from '@/components/mood/MoodCheckInSheet';
 import { WelcomeRitual } from '@/components/ui/WelcomeRitual';
@@ -875,6 +876,9 @@ export default function FeedPage() {
               <RabbittyContourLoader size={54} label="Actualizando..." />
             </div>
           )}
+
+          {/* Permiso de notificaciones: recordatorio visible mientras no esté concedido */}
+          <PushPermissionBanner />
 
           {/* ── H-TRACK-GLOBAL: tarjeta de seguimiento en TODAS las pestañas
               (arriba del contenido). Ocultable/recuperable por el Rabbitter. ── */}
