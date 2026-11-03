@@ -3,7 +3,7 @@ import LocationNudge from '@/components/LocationNudge';
 
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Bell, Sparkles, ChevronRight, Home } from 'lucide-react';
+import { Bell, Sparkles, ChevronRight, Home, Package } from 'lucide-react';
 import Link from 'next/link';
 import useSWR from 'swr';
 import BottomNav from '@/components/BottomNav';
@@ -21,7 +21,8 @@ import ProfileDrawer from '@/components/ProfileDrawer';
 import { useTheme } from '@/contexts/ThemeContext';
 import RabbittyContourLoader from '@/components/ui/RabbittyContourLoader';
 import { useOrderTracking } from '@/lib/useOrderTracking';
-import { OrderTrackingCard } from '@/components/affiliate/OrderTrackingCard';
+import { useAppFlags } from '@/lib/useAppFlags';
+import { OrderTrackingCard, OrderTrackSheet } from '@/components/affiliate/OrderTrackingCard';
 import { openBunzy } from '@/lib/bunzyLaunch';
 import { MoodCheckInSheet } from '@/components/mood/MoodCheckInSheet';
 import { WelcomeRitual } from '@/components/ui/WelcomeRitual';
@@ -134,6 +135,11 @@ export default function FeedPage() {
       showToast('🎉 ¡Pedido completado!', 'success');
     },
   );
+  // Sheet del pedido abierto desde el ícono de la barra superior (H-TRACK-NAV)
+  const [trackOpenId, setTrackOpenId] = useState<string | null>(null);
+  const activeOrder = trackedOrders[0] ?? null;
+  // Flags de producto (Vibe Passport se activa desde Admin God)
+  const appFlags = useAppFlags();
 
   const { user } = useAuth();
   const userAvatar = useUserAvatar(user, 'E91E63');
@@ -662,6 +668,25 @@ export default function FeedPage() {
               </button>
 
               <div className="flex items-center gap-2.5">
+                {/* H-TRACK-NAV: acceso al pedido en curso — SOLO si hay uno.
+                    Es el punto de entrada cuando la tarjeta del feed se oculta. */}
+                {activeOrder && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      PlatformBridge.hapticFeedback('medium');
+                      setTrackOpenId(activeOrder.orderId);
+                    }}
+                    className="relative w-9 h-9 rounded-full flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.04)] active:scale-95 transition-transform"
+                    style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(233,30,99,0.45)' }}
+                    aria-label={`Pedido en curso: ${activeOrder.stageLabel}`}
+                    title={`${activeOrder.businessName} · ${activeOrder.stageLabel}`}
+                  >
+                    <Package size={17} strokeWidth={2.5} className="text-[#E91E63]" />
+                    <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#E91E63] animate-pulse" style={{ border: '1.5px solid var(--bg-elevated)' }} />
+                  </button>
+                )}
+
                 {/* Notification Bell */}
                 <Link 
                   href="/notifications" 
@@ -865,7 +890,9 @@ export default function FeedPage() {
                 <MembershipCard user={user} levelName={user?.level?.name || '1'} isDark={isDark} />
               </div>
 
-              {/* Rabbitty Vibe Passport Quick Banner */}
+              {/* Rabbitty Vibe Passport Quick Banner — solo si el founder lo
+                  activó en Admin God (flag vibe_passport_enabled). */}
+              {appFlags.vibe_passport_enabled && (
               <div className="px-1 mt-1 mb-5">
                 <Link
                   href="/discover"
@@ -895,6 +922,7 @@ export default function FeedPage() {
                   <ChevronRight size={18} className="text-[#E91E63]/80 shrink-0" />
                 </Link>
               </div>
+              )}
 
               {postsWithDistance.length > 0 && (
                 <div className="flex items-center gap-3 mb-4 mt-2">
@@ -1060,6 +1088,12 @@ export default function FeedPage() {
       `}} />
 
       <ProfileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      {/* H-TRACK-NAV: mismo pedido que abre la tarjeta, desde el ícono superior */}
+      <OrderTrackSheet
+        orderId={trackOpenId}
+        onClose={() => setTrackOpenId(null)}
+        onUpdated={() => void refreshTracking()}
+      />
       <MoodCheckInSheet
         isOpen={moodOpen}
         onClose={() => {

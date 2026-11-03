@@ -10,7 +10,7 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Package, ChefHat, CheckCircle2, X, Sparkles, ChevronRight, ChevronUp, RefreshCw, Wallet, Utensils } from 'lucide-react';
+import { Package, ChefHat, CheckCircle2, X, Sparkles, ChevronRight, ChevronUp, Wallet, Utensils } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
 import type { TrackedOrder } from '@/lib/useOrderTracking';
 import { InAppPaySheet } from './InAppPaySheet';
@@ -40,9 +40,10 @@ export function OrderTrackingCard({
   onRefresh?: () => void;
 }) {
   const [detailId, setDetailId] = useState<string | null>(null);
-  // ── H-TRACK-GLOBAL: la tarjeta vive en TODAS las pestañas. El Rabbitter
-  // puede ocultarla (se guarda por pedido) y recuperarla desde una píldora
-  // compacta; un pedido NUEVO vuelve a mostrarse solo (no se pierde).
+  // ── H-TRACK-GLOBAL: la tarjeta vive en TODAS las pestañas y el Rabbitter
+  // puede ocultarla (se guarda por pedido). Al ocultarla NO queda píldora en el
+  // feed: el acceso pasa al ícono de pedido de la barra superior. Un pedido
+  // NUEVO vuelve a mostrarse solo (no se pierde).
   const [hiddenOrderId, setHiddenOrderId] = useState<string | null>(null);
   React.useEffect(() => {
     try {
@@ -53,7 +54,6 @@ export function OrderTrackingCard({
 
   if (orders.length === 0) return null;
   const order = orders[0]; // más reciente (singular en la práctica)
-  const hidden = hiddenOrderId === order.orderId;
   const progress = Math.max(0, Math.min(1, order.stageStep / Math.max(1, order.stageCount - 1 + 0.001)));
   const StageIcon = STAGE_ICONS[Math.min(3, order.stageStep)] ?? Package;
   const done = order.stage === 'DONE';
@@ -70,40 +70,13 @@ export function OrderTrackingCard({
     setHiddenOrderId(order.orderId);
   };
 
-  const show = () => {
-    PlatformBridge.hapticFeedback('light');
-    try { localStorage.removeItem('rabbitty_track_hidden_v1'); } catch { /* noop */ }
-    setHiddenOrderId(null);
-  };
+  // ¿Está oculta la tarjeta de ESTE pedido? (page.tsx lo usa para decidir si
+  // muestra la tarjeta o solo el ícono de la barra superior)
+  const hidden = hiddenOrderId === order.orderId;
 
-  // Oculta: píldora mínima (en flujo, alineada a la derecha) para recuperarla.
-  if (hidden) {
-    return (
-      <>
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="px-1 mb-2 flex justify-end">
-          <button
-            type="button"
-            onClick={show}
-            className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black border-none cursor-pointer active:scale-95 transition-transform"
-            style={{
-              background: 'rgba(233,30,99,0.12)',
-              border: '1px solid rgba(233,30,99,0.30)',
-              color: '#F48FB1',
-            }}
-            title="Mostrar seguimiento del pedido"
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            🐰 {order.stageLabel} · ${order.total.toFixed(0)}
-          </button>
-        </motion.div>
-        <OrderTrackSheet
-          orderId={detailId}
-          onClose={() => setDetailId(null)}
-          onUpdated={() => onRefresh?.()}
-        />
-      </>
-    );
-  }
+  // Oculto: la tarjeta desaparece del feed. El acceso sigue en el ícono del
+  // pedido en la barra superior (page.tsx) — no ocupa espacio aquí.
+  if (hidden) return null;
 
   return (
     <>
@@ -112,10 +85,14 @@ export function OrderTrackingCard({
         animate={{ opacity: 1, y: 0 }}
         className="px-1 mb-3"
       >
-        <button
-          type="button"
+        {/* La tarjeta NO es un <button>: dentro vive el botón de ocultar.
+            Un <button> anidado provoca clics cruzados (ocultar vs abrir). */}
+        <div
+          role="button"
+          tabIndex={0}
           onClick={openDetail}
-          className="w-full text-left border-none cursor-pointer active:scale-[0.98] transition-transform rounded-3xl p-3.5"
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(); } }}
+          className="relative w-full text-left cursor-pointer active:scale-[0.98] transition-transform rounded-3xl p-3.5"
           style={{
             background: 'linear-gradient(135deg, rgba(233,30,99,0.10) 0%, rgba(20,10,20,0.55) 100%)',
             border: '1px solid rgba(233,30,99,0.30)',
@@ -124,6 +101,19 @@ export function OrderTrackingCard({
             WebkitBackdropFilter: 'blur(14px)',
           }}
         >
+          {/* Ocultar: botón propio, esquina superior derecha y con área táctil
+              de 36px — separado del resto de la tarjeta (que abre el pedido). */}
+          <button
+            type="button"
+            onClick={hide}
+            aria-label="Ocultar seguimiento"
+            title="Ocultar (el ícono del pedido queda en la barra superior)"
+            className="absolute top-1.5 right-1.5 z-10 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/15 text-white/55 hover:text-white transition-colors cursor-pointer"
+            style={{ width: 36, height: 36, border: '1px solid rgba(255,255,255,0.10)' }}
+          >
+            <ChevronUp size={16} strokeWidth={2.6} />
+          </button>
+
           <div className="flex items-center gap-3">
             {/* Icono de etapa */}
             <div
@@ -134,7 +124,7 @@ export function OrderTrackingCard({
               <StageIcon size={20} className="text-[#E91E63]" strokeWidth={2.4} />
             </div>
 
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 pr-9">
               <div className="flex items-center gap-1.5">
                 {!done && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />}
                 <p className="text-[10px] font-black uppercase tracking-[1.2px] m-0 truncate" style={{ color: '#E91E63' }}>
@@ -155,35 +145,17 @@ export function OrderTrackingCard({
                 <span className="text-white/45 font-medium"> · ${order.total.toFixed(0)} MXN</span>
               </p>
             </div>
-
-            <div className="flex flex-col items-center gap-0.5 shrink-0 text-white/45">
-              <button
-                type="button"
-                onClick={hide}
-                aria-label="Ocultar seguimiento"
-                title="Ocultar (puedes recuperarlo con la píldora)"
-                className="border-none bg-transparent cursor-pointer p-0.5 text-white/45 hover:text-white transition-colors"
-              >
-                <ChevronUp size={15} />
-              </button>
-              <ChevronRight size={16} />
-              {onRefresh && (
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onRefresh(); }}
-                  aria-label="Actualizar"
-                  className="border-none bg-transparent cursor-pointer p-0.5 text-(--text-muted)"
-                >
-                  <RefreshCw size={12} />
-                </button>
-              )}
-            </div>
           </div>
 
-          <p className="text-[9px] text-white/35 m-0 mt-1.5 pl-[52px] truncate">
+          <p className="text-[9px] text-white/35 m-0 mt-1.5 pl-[52px] pr-9 truncate">
             {order.itemsSummary.slice(0, 3).join(' · ')}{order.itemsSummary.length > 3 ? ` +${order.itemsSummary.length - 3} más` : ''}
           </p>
-        </button>
+
+          {/* Affordance de apertura: fuera del área del botón de ocultar */}
+          <span className="absolute bottom-2.5 right-3 flex items-center gap-0.5 text-[9px] font-black text-white/40">
+            Ver <ChevronRight size={12} />
+          </span>
+        </div>
       </motion.div>
 
       <OrderTrackSheet
@@ -195,7 +167,7 @@ export function OrderTrackingCard({
   );
 }
 
-function OrderTrackSheet({
+export function OrderTrackSheet({
   orderId,
   onClose,
   onUpdated,

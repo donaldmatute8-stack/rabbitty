@@ -29,6 +29,8 @@ import { DigitalMenuCatalog, CatalogCategory } from '@/components/affiliate/Digi
 import { TableContextSheet } from '@/components/affiliate/TableContextSheet';
 import { TableBillSheet } from '@/components/affiliate/TableBillSheet';
 import { Receipt } from 'lucide-react';
+import { OrderTrackSheet } from '@/components/affiliate/OrderTrackingCard';
+import type { TrackedOrder } from '@/lib/useOrderTracking';
 import { OrderCartSheet, CartItem } from '@/components/affiliate/OrderCartSheet';
 import { CatalogItem, CatalogModifier } from '@/components/affiliate/ProductDetailModal';
 
@@ -40,6 +42,8 @@ interface AffiliateData {
   distance?: string;
   startTime?: string;
   endTime?: string;
+  activeDays?: string;
+  timezone?: string;
   rewardPercentage: number;
   description?: string;
   gallery?: string;
@@ -53,6 +57,51 @@ interface AffiliateData {
   givesBunz?: boolean;
   acceptsBunz?: boolean;
   owner?: { phoneNumber?: string };
+}
+
+// ── Horario real del negocio (activeDays ISO 1=Lun…7=Dom + startTime/endTime) ──
+// La app antes decía "Abierto Hoy" con punto verde siempre, sin mirar la config.
+function toMinutes(hhmm?: string): number {
+  const [h, m] = (hhmm || '00:00').split(':').map(Number);
+  return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
+}
+
+function resolveOpenState(
+  activeDaysRaw?: string,
+  startTime?: string,
+  endTime?: string,
+  timezone?: string,
+): { openNow: boolean; days: number[]; opens: number; closes: number } {
+  let days: number[] = [1, 2, 3, 4, 5, 6, 7];
+  try {
+    const parsed = JSON.parse(activeDaysRaw || '[]');
+    if (Array.isArray(parsed) && parsed.length > 0) days = parsed.map(Number);
+  } catch { /* default: todos los días */ }
+
+  const tz = timezone || 'America/Mexico_City';
+  let day = 1;
+  let minutes = 0;
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz, hour12: false, weekday: 'short', hour: '2-digit', minute: '2-digit',
+    }).formatToParts(new Date());
+    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
+    const map: Record<string, number> = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 };
+    day = map[get('weekday')] ?? 1;
+    minutes = (Number(get('hour')) % 24) * 60 + Number(get('minute'));
+  } catch { /* sin Intl: se evalúa con la hora local del device */ }
+
+  const opens = toMinutes(startTime);
+  const closes = toMinutes(endTime);
+  const overnight = closes <= opens; // 22:00 → 02:00
+  const activeToday = days.includes(day);
+  const activeYesterday = days.includes(day === 1 ? 7 : day - 1);
+
+  const openNow = overnight
+    ? (activeToday && minutes >= opens) || (activeYesterday && minutes < closes)
+    : activeToday && minutes >= opens && minutes < closes;
+
+  return { openNow, days, opens, closes };
 }
 
 interface BusinessResponse {
@@ -131,6 +180,12 @@ function AffiliateProfileContent() {
   // u otro flujo, este botón lo refleja al entrar (y en vivo vía evento 'rabbitty:presence-confirmed').
   const [hasPresenceCheckedIn, setHasPresenceCheckedIn] = useState(false);
 
+  // H-TRACK-LOCAL: si el Rabbitter tiene un pedido en curso EN ESTE negocio, el
+  // botón "Estoy Aquí" cambia de estado (rojo · "Pedido en Curso") y abre el
+  // seguimiento con el MISMO sheet del home.
+  const [activeOrder, setActiveOrder] = useState<TrackedOrder | null>(null);
+  const [trackOpenId, setTrackOpenId] = useState<string | null>(null);
+
   // Header scroll & Bottom Nav visibility synchronization
   const [isScrolled, setIsScrolled] = useState(false);
   const [isNavVisible, setIsNavVisible] = useState(true);
@@ -208,6 +263,33 @@ function AffiliateProfileContent() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [id, initialTableNum]);
+
+  // H-TRACK-LOCAL: pedido en curso de ESTE negocio (mismo endpoint del home).
+  // Polling 15s + al volver a foreground, igual que useOrderTracking.
+  useEffect(() => {
+    if (!affiliate?.id) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const headers = await PlatformBridge.getAuthHeaders();
+        if (!headers?.Authorization && !headers?.['X-Init-Data']) return;
+        const res = await fetch('/api/orders/active', { headers, cache: 'no-store' });
+        const data = await res.json().catch(() => null);
+        if (cancelled || !data?.success || !Array.isArray(data.orders)) return;
+        const mine = (data.orders as TrackedOrder[]).find((o) => o.businessId === affiliate.id) ?? null;
+        setActiveOrder(mine);
+      } catch { /* best-effort */ }
+    };
+    void load();
+    const iv = setInterval(() => { if (document.visibilityState === 'visible') void load(); }, 15_000);
+    const onVisible = () => { if (document.visibilityState === 'visible') void load(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      cancelled = true;
+      clearInterval(iv);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [affiliate?.id]);
 
   // H-PRESYNC: hidratar "Estoy aquí" del SERVER al entrar (el estado real vive en
   // presenceSessions/ledger, no en useState local) + sync en vivo cuando otro
@@ -361,6 +443,24 @@ function AffiliateProfileContent() {
     ? targetWebsite
     : `https://${targetWebsite}`;
 
+  // Horario real (días + horas configurados en el admin), no un texto fijo.
+  const openState = resolveOpenState(
+    affiliate.activeDays,
+    affiliate.startTime,
+    affiliate.endTime,
+    affiliate.timezone,
+  );
+  const openNow = openState.openNow;
+  const activeDayLabels =
+    openState.days.length === 7
+      ? 'Todos los días'
+      : openState.days
+          .slice()
+          .sort((a, b) => a - b)
+          .map((d) => ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'][d - 1] ?? '')
+          .filter(Boolean)
+          .join(' · ');
+
   return (
     <div className="bg-[#0D0D15] min-h-screen pb-36 relative text-white">
       {/* Floating Dynamic Header */}
@@ -450,49 +550,70 @@ function AffiliateProfileContent() {
         <div className="absolute bottom-10 left-5 right-5 z-20 flex items-center justify-between gap-2 pointer-events-auto">
           {/* Left Badges: Check-in & Table */}
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Botón Estoy Aquí / Check-in */}
-            <motion.button
-              initial={{ scale: 0.85, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ type: 'spring', delay: 0.1 }}
-              type="button"
-              disabled={checkingInPresence || hasPresenceCheckedIn}
-              onClick={async () => {
-                if (checkingInPresence || hasPresenceCheckedIn) return;
-                setCheckingInPresence(true);
-                PlatformBridge.hapticFeedback('medium');
-                try {
-                  const headers = await PlatformBridge.getAuthHeaders();
-                  const res = await fetch('/api/location/confirm-presence', {
-                    method: 'POST',
-                    headers: { ...headers, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ businessId: affiliate.id }),
-                  });
-                  const data = await res.json().catch(() => ({}));
-                  if (res.ok && data?.success !== false) {
-                    setHasPresenceCheckedIn(true);
-                    PlatformBridge.hapticFeedback('success');
-                    showToast(`📍 ¡Check-in en ${affiliate.name} confirmado! El comercio te ve en caja.`, 'success');
-                  } else {
+            {/* Botón Estoy Aquí / Check-in — o "Pedido en Curso" si hay un
+                pedido activo en ESTE negocio (H-TRACK-LOCAL): al tocarlo abre
+                el mismo seguimiento del home. */}
+            {activeOrder ? (
+              <motion.button
+                initial={{ scale: 0.85, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: 'spring', delay: 0.1 }}
+                type="button"
+                onClick={() => {
+                  PlatformBridge.hapticFeedback('medium');
+                  setTrackOpenId(activeOrder.orderId);
+                }}
+                className="h-9 px-3.5 rounded-full flex items-center gap-2 text-xs font-black shadow-lg border backdrop-blur-xl transition-all active:scale-95 cursor-pointer bg-red-500/95 text-white border-red-300/50 shadow-[0_4px_16px_rgba(239,68,68,0.45)]"
+                title={`${activeOrder.stageLabel} · $${activeOrder.total.toFixed(0)} MXN — toca para ver el seguimiento`}
+                aria-label={`Pedido en curso: ${activeOrder.stageLabel}. Abrir seguimiento`}
+              >
+                <span className="inline-block w-2 h-2 rounded-full bg-white animate-pulse" />
+                <span>Pedido en Curso</span>
+              </motion.button>
+            ) : (
+              <motion.button
+                initial={{ scale: 0.85, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: 'spring', delay: 0.1 }}
+                type="button"
+                disabled={checkingInPresence || hasPresenceCheckedIn}
+                onClick={async () => {
+                  if (checkingInPresence || hasPresenceCheckedIn) return;
+                  setCheckingInPresence(true);
+                  PlatformBridge.hapticFeedback('medium');
+                  try {
+                    const headers = await PlatformBridge.getAuthHeaders();
+                    const res = await fetch('/api/location/confirm-presence', {
+                      method: 'POST',
+                      headers: { ...headers, 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ businessId: affiliate.id }),
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (res.ok && data?.success !== false) {
+                      setHasPresenceCheckedIn(true);
+                      PlatformBridge.hapticFeedback('success');
+                      showToast(`📍 ¡Check-in en ${affiliate.name} confirmado! El comercio te ve en caja.`, 'success');
+                    } else {
+                      PlatformBridge.hapticFeedback('error');
+                      showToast(data?.error || 'No se pudo registrar el check-in', 'error');
+                    }
+                  } catch {
                     PlatformBridge.hapticFeedback('error');
-                    showToast(data?.error || 'No se pudo registrar el check-in', 'error');
+                    showToast('Error de conexión al registrar check-in', 'error');
+                  } finally {
+                    setCheckingInPresence(false);
                   }
-                } catch {
-                  PlatformBridge.hapticFeedback('error');
-                  showToast('Error de conexión al registrar check-in', 'error');
-                } finally {
-                  setCheckingInPresence(false);
-                }
-              }}
-              className={`h-9 px-3.5 rounded-full flex items-center gap-2 text-xs font-black shadow-lg border backdrop-blur-xl transition-all active:scale-95 cursor-pointer ${
-                hasPresenceCheckedIn
-                  ? 'bg-emerald-500/90 text-white border-emerald-400/40 shadow-[0_4px_16px_rgba(16,185,129,0.35)]'
-                  : 'bg-black/65 hover:bg-black/85 text-white border-white/20 hover:border-pink-500/60 shadow-[0_4px_16px_rgba(0,0,0,0.5)]'
-              }`}
-            >
-              <span className={`inline-block w-2 h-2 rounded-full ${hasPresenceCheckedIn ? 'bg-white' : 'bg-[#E91E63] animate-ping'}`} />
-              <span>{hasPresenceCheckedIn ? '✓ Estoy Aquí' : checkingInPresence ? 'Activando...' : 'Estoy Aquí'}</span>
-            </motion.button>
+                }}
+                className={`h-9 px-3.5 rounded-full flex items-center gap-2 text-xs font-black shadow-lg border backdrop-blur-xl transition-all active:scale-95 cursor-pointer ${
+                  hasPresenceCheckedIn
+                    ? 'bg-emerald-500/90 text-white border-emerald-400/40 shadow-[0_4px_16px_rgba(16,185,129,0.35)]'
+                    : 'bg-black/65 hover:bg-black/85 text-white border-white/20 hover:border-pink-500/60 shadow-[0_4px_16px_rgba(0,0,0,0.5)]'
+                }`}
+              >
+                <span className={`inline-block w-2 h-2 rounded-full ${hasPresenceCheckedIn ? 'bg-white' : 'bg-[#E91E63] animate-ping'}`} />
+                <span>{hasPresenceCheckedIn ? '✓ Estoy Aquí' : checkingInPresence ? 'Activando...' : 'Estoy Aquí'}</span>
+              </motion.button>
+            )}
 
             {/* Table indicator badge if seated */}
             {tableNumber && (
@@ -769,45 +890,55 @@ function AffiliateProfileContent() {
                 </div>
                 <div>
                   <p className="font-bold text-sm text-white">{affiliate.address}</p>
-                  <p className="text-xs text-white/50 mt-0.5">A {affiliate.distance || '1.0km'} de ti</p>
+                  {affiliate.distance && (
+                    <p className="text-xs text-white/50 mt-0.5">A {affiliate.distance} de ti</p>
+                  )}
                 </div>
               </div>
 
               <div className="h-px bg-white/5" />
 
               <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center text-emerald-400 shrink-0">
+                <div className={`w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center shrink-0 ${openNow ? 'text-emerald-400' : 'text-white/40'}`}>
                   <Clock size={18} />
                 </div>
                 <div>
                   <p className="font-bold text-sm text-white flex items-center gap-2">
-                    Abierto Hoy <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                    {openNow ? 'Abierto ahora' : 'Cerrado ahora'}
+                    <span className={`w-2 h-2 rounded-full ${openNow ? 'bg-emerald-400' : 'bg-white/25'}`} />
                   </p>
                   <p className="text-xs text-white/50 mt-0.5">
-                    {affiliate.startTime} - {affiliate.endTime}
+                    {affiliate.startTime || '—'} - {affiliate.endTime || '—'}
+                  </p>
+                  <p className="text-[10px] text-white/35 mt-0.5">
+                    {activeDayLabels} · {affiliate.timezone || 'America/Mexico_City'}
                   </p>
                 </div>
               </div>
 
-              {/* Website Link Action */}
-              <div className="h-px bg-white/5" />
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center text-blue-400 shrink-0">
-                    <Globe size={18} />
+              {/* Website Link Action — solo si el negocio configuró su sitio */}
+              {(affiliate.website || affiliate.webUrl) && (
+                <>
+                  <div className="h-px bg-white/5" />
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center text-blue-400 shrink-0">
+                        <Globe size={18} />
+                      </div>
+                      <div>
+                        <p className="font-bold text-sm text-white">Sitio Web Oficial</p>
+                        <p className="text-xs text-white/50">{targetWebsite}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setShowInAppBrowser(true)}
+                      className="px-3.5 py-1.5 rounded-xl bg-white/10 text-white text-xs font-bold hover:bg-white/15"
+                    >
+                      Visitar
+                    </button>
                   </div>
-                  <div>
-                    <p className="font-bold text-sm text-white">Sitio Web Oficial</p>
-                    <p className="text-xs text-white/50">{targetWebsite}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowInAppBrowser(true)}
-                  className="px-3.5 py-1.5 rounded-xl bg-white/10 text-white text-xs font-bold hover:bg-white/15"
-                >
-                  Visitar
-                </button>
-              </div>
+                </>
+              )}
             </div>
 
             {/* Gallery */}
@@ -833,14 +964,13 @@ function AffiliateProfileContent() {
               </div>
             )}
 
-            {/* About text */}
-            <div className="space-y-2">
-              <h3 className="text-sm font-black uppercase tracking-wider text-white">Acerca de</h3>
-              <p className="text-xs text-white/70 leading-relaxed">
-                {affiliate.description ||
-                  'Este establecimiento forma parte de la red de comercios oficiales afiliados a Rabbitty Rewards.'}
-              </p>
-            </div>
+            {/* About text — solo si el negocio lo configuró (sin relleno) */}
+            {affiliate.description && affiliate.description.trim().length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-sm font-black uppercase tracking-wider text-white">Acerca de</h3>
+                <p className="text-xs text-white/70 leading-relaxed">{affiliate.description}</p>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1148,6 +1278,13 @@ function AffiliateProfileContent() {
         onClose={() => setShowMoodCheckIn(false)}
         businessId={affiliate.id}
         businessName={affiliate.name}
+      />
+
+      {/* H-TRACK-LOCAL: seguimiento del pedido de ESTE negocio (mismo sheet del home) */}
+      <OrderTrackSheet
+        orderId={trackOpenId}
+        onClose={() => setTrackOpenId(null)}
+        onUpdated={() => setTrackOpenId(null)}
       />
 
       <BottomNav />
