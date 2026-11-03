@@ -149,6 +149,18 @@ export async function GET(req: Request) {
       orderBy: [asc(messages.createdAt)],
     });
 
+    // H21: 'online' real — presenceSession abierta del par con ping vivo (≤5 min)
+    let partnerOnline: boolean | null = null;
+    if (otherId && otherId !== 'bot') {
+      try {
+        const { presenceSessions } = await import('@/db/schema');
+        const openRow = await db.query.presenceSessions.findFirst({
+          where: and(eq(presenceSessions.userId, otherId), isNull(presenceSessions.endedAt)),
+        });
+        partnerOnline = Boolean(openRow && (Date.now() - new Date(openRow.lastPingAt).getTime()) <= 5 * 60 * 1000);
+      } catch { partnerOnline = null; }
+    }
+
     return NextResponse.json({
       success: true,
       conversationId: conversation.id,
@@ -162,6 +174,7 @@ export async function GET(req: Request) {
       targetCategory,
       targetBusinessId,
       businessOpen,
+      partnerOnline,
       otherTypingAt: conversation[access.otherTypingColumn],
       messages: history,
     });

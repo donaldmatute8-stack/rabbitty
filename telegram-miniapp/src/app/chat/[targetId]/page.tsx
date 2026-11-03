@@ -91,6 +91,7 @@ interface ForwardConversation {
 }
 
 interface HistoryResponse {
+  partnerOnline?: boolean | null;
   success?: boolean;
   conversationId?: string;
   myParticipantId?: string;
@@ -567,6 +568,7 @@ export default function ChatRoomPage() {
   const router = useRouter();
 
   const [messages, setMessages] = useState<Message[]>([]);
+  const [partnerOnline, setPartnerOnline] = useState<boolean | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [myParticipantId, setMyParticipantId] = useState<string | null>(null);
   const [isBusinessInbox, setIsBusinessInbox] = useState(false);
@@ -798,6 +800,7 @@ export default function ChatRoomPage() {
       if (data.targetCategory !== undefined) setTargetCategory(data.targetCategory);
       if (data.targetBusinessId !== undefined) setTargetBusinessId(data.targetBusinessId);
       if (data.businessOpen !== undefined) setBusinessOpen(data.businessOpen);
+      if (typeof data.partnerOnline === 'boolean') setPartnerOnline(data.partnerOnline);
       otherTypingAtRef.current = data.otherTypingAt ?? null;
       if (data.messages) {
         setMessages((prev) => {
@@ -1775,7 +1778,19 @@ export default function ChatRoomPage() {
   };
 
   const isTypingActive = (isBot && (sending || animatingBotMessageIds.length > 0)) || showTyping;
-  const headerStatus = isTypingActive ? 'escribiendo…' : isBot ? 'Bunzy IA en línea' : businessOpen === false ? 'Fuera de horario' : 'En línea';
+  // H21: 'online' real — no decorativo. La API de mensajes regresa partnerOnline
+  // (presenciaSession abierta del par en los últimos 5 min); cae a Fuera de línea.
+  const headerStatus = isTypingActive
+    ? 'escribiendo…'
+    : isBot
+      ? 'Bunzy IA en línea'
+      : businessOpen === false
+        ? 'Fuera de horario'
+        : partnerOnline === true
+          ? 'En línea'
+          : partnerOnline === false
+            ? 'Sin conexión'
+            : 'Rabbitty';
   const headerColor = isTypingActive ? 'var(--rabbitty-pink)' : isBot || businessOpen !== false ? '#4CAF50' : '#9E9E9E';
 
   return (

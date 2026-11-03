@@ -130,20 +130,21 @@ export async function processOutboxBatch(limit = 20): Promise<{
       .from(pushDevices)
       .where(and(eq(pushDevices.userId, item.userId), eq(pushDevices.isActive, true)));
 
-    // 1) In-app primero (siempre — es el registro de la campana)
-    const [inApp] = await db
-      .insert(notifications)
-      .values({ userId: item.userId, title: item.title, message: item.message, type: item.type, ...(item.route ? { route: item.route } : {}) })
-      .onConflictDoNothing()
-      .returning({ id: notifications.id });
-    const notificationId = inApp?.id ?? null;
-
-    if (notificationId) {
-      await db.insert(notificationDeliveries).values({
-        notificationId,
-        channel: "inApp",
-        status: "SENT",
-      });
+    // 1) In-app primero (H22: si la categoría está muteada, NO se inserta la
+    // campana — el push a iOS sí sale yográficamente suí marca el ícono)
+    // H22: si la categoría está muteada, NO se inserta la campana — el push a
+    // iOS sí sale y el ícono iOS marca el badge (semántica tipo Facebook).
+    let notificationId: string | null = null;
+    if (!pushMuted) {
+      const [inApp] = await db
+        .insert(notifications)
+        .values({ userId: item.userId, title: item.title, message: item.message, type: item.type, ...(item.route ? { route: item.route } : {}) })
+        .onConflictDoNothing()
+        .returning({ id: notifications.id });
+      notificationId = inApp?.id ?? null;
+      if (notificationId) {
+        await db.insert(notificationDeliveries).values({ notificationId, channel: "inApp", status: "SENT" });
+      }
     }
 
     // 2) Fan-out por device: iOS → APNs · Android → FCM (P3)
@@ -185,6 +186,7 @@ export async function processOutboxBatch(limit = 20): Promise<{
     };
 
     let anyOk = false;
+    const deliveryRefId = notificationId ?? item.id; // deliveries sin FK — id de outbox nos sirve de fallback
     for (const dev of usersDevices) {
       try {
         let channel = "APNs";
@@ -198,7 +200,7 @@ export async function processOutboxBatch(limit = 20): Promise<{
           res = await sendApnsToDevice(dev.token, payload);
         }
         await db.insert(notificationDeliveries).values({
-          notificationId,
+          notificationId: deliveryRefId,
           deviceId: dev.id ?? null,
           channel,
           status: res.ok ? "PROVIDER_ACCEPTED" : classifyProviderResult(res.status).status,
@@ -207,7 +209,7 @@ export async function processOutboxBatch(limit = 20): Promise<{
         if (res.ok) anyOk = true;
       } catch (err) {
         await db.insert(notificationDeliveries).values({
-          notificationId,
+          notificationId: deliveryRefId,
           deviceId: dev.id ?? null,
           channel: "APNs",
           status: "RETRYING",

@@ -243,6 +243,9 @@ function suggestionsFor(content: string, hasBusiness: boolean, multiple = false)
 }
 
 interface BunzyContext {
+  /** H21: doorway rol — true si el usuario posee un negocio (opciones B2B visibles) */
+  isAdminSide?: boolean | null;
+  userRole?: string | null;
   user: {
     firstName: string | null;
     balance: number;
@@ -271,9 +274,18 @@ async function loadContext(input: BunzyInput): Promise<BunzyContext> {
   const userRow = await db.query.users
     .findFirst({
       where: eq(users.id, input.userId),
-      columns: { firstName: true, totalBunzEarned: true, totalBunzSpent: true, hops: true, levelId: true, username: true, id: true },
+      columns: { firstName: true, totalBunzEarned: true, totalBunzSpent: true, hops: true, levelId: true, username: true, id: true, role: true },
     })
     .catch(() => undefined);
+  // H21: rol real para gate de opciones B2B — solo dueños/staff ven opciones de admin
+  let isAdminSide: boolean | null = null;
+  try {
+    const bizRow = await db.query.ownedBusinesses.findFirst({
+      where: eq(ownedBusinesses.ownerId, input.userId),
+      columns: { id: true },
+    });
+    isAdminSide = Boolean(bizRow);
+  } catch { isAdminSide = null; }
 
   let levelName: string | null = null;
   let multiplier = 1;
@@ -297,6 +309,8 @@ async function loadContext(input: BunzyInput): Promise<BunzyContext> {
       : null,
     businesses: ranked,
     allBusinesses,
+    isAdminSide,
+    userRole: userRow?.role ?? null,
   };
 }
 
@@ -1002,11 +1016,15 @@ export async function generateBunzyReply(input: BunzyInput): Promise<BunzyReply>
   if (!text) return fallback;
 
   const metadata = businessCardFromText(text, ctx.allBusinesses);
+  // H21: gate de rol — un Rabbitter nunca recibe sugerencias de admin/negocio
+  const isAdmin = ctx.isAdminSide === true || (ctx.userRole ?? 'USER') !== 'USER';
+  const suggestions = suggestionsFor(input.content, Boolean(metadata))
+    .filter((sx) => isAdmin || !/POS|Admin|admin|caja|Caja|KDS|cocina/i.test(sx));
   return {
     content: text,
     type: metadata ? 'CARD' : fallback.type,
     metadata,
-    suggestions: suggestionsFor(input.content, Boolean(metadata)),
+    suggestions,
     options: fallback.options,
     orderDraft: fallback.orderDraft,
   };
