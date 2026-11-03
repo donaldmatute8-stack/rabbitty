@@ -66,16 +66,27 @@ export async function POST(req: Request) {
     );
   }
 
-  let event: any;
+  // H24: en Stripe cada "event destination" tiene SU propio signing secret.
+  // Como necesitamos dos destinos (Your account + Connected accounts) para
+  // cubrir cobros del POS y membresías de afiliados, STRIPE_WEBHOOK_SECRET
+  // acepta una lista separada por comas y validamos contra cada una.
+  const webhookSecrets = webhookSecret.split(",").map((s) => s.trim()).filter(Boolean);
+  const rawBody = await req.text();
 
-  try {
-    const rawBody = await req.text();
-    const stripe = getStripeClient();
-    event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
-  } catch (err: any) {
-    console.error("[Stripe Webhook] Error verificando firma criptográfica:", err.message);
+  let event: any;
+  let lastErr: any = null;
+  for (const secret of webhookSecrets) {
+    try {
+      event = getStripeClient().webhooks.constructEvent(rawBody, signature, secret);
+      break;
+    } catch (err: any) {
+      lastErr = err;
+    }
+  }
+  if (!event) {
+    console.error("[Stripe Webhook] Error verificando firma criptográfica:", lastErr?.message);
     return NextResponse.json(
-      { error: `Firma inválida: ${err.message}` },
+      { error: `Firma inválida: ${lastErr?.message ?? "sin secretos configurados"}` },
       { status: 400 }
     );
   }
@@ -173,8 +184,11 @@ export async function POST(req: Request) {
             ? await stripe.subscriptions.retrieve(session.subscription, {} as any, { stripeAccount: acct })
             : await stripe.subscriptions.retrieve(session.subscription);
 
-          const periodStart = new Date((stripeSub as any).current_period_start * 1000);
-          const periodEnd = new Date((stripeSub as any).current_period_end * 1000);
+          // H24: en versiones nuevas el periodo vive en el subscription item.
+          const subAny = stripeSub as any;
+          const item = subAny.items?.data?.[0];
+          const periodStart = new Date((subAny.current_period_start ?? item?.current_period_start) * 1000);
+          const periodEnd = new Date((subAny.current_period_end ?? item?.current_period_end) * 1000);
 
           // Idempotente: si ya existe por paymentProviderSubId, no duplicar
           const [dup] = await coreDb.select({ id: membershipSubscriptions.id })
@@ -247,7 +261,14 @@ export async function POST(req: Request) {
       case "invoice.payment_succeeded": {
         // ── Membresías: renovación del ciclo → extender currentPeriodEnd ──
         const invoice = event.data.object;
-        const stripeSubId = invoice.subscription;
+        // H24: desde la API 2025-03-31 (basil) `invoice.subscription` se movió a
+        // `invoice.parent.subscription_details.subscription`. Soportamos ambas
+        // formas para que la renovación no se pierda si cambias la versión del
+        // payload del webhook.
+        const stripeSubId =
+          invoice.subscription ||
+          invoice.parent?.subscription_details?.subscription ||
+          null;
         if (stripeSubId) {
           const coreDb = getCoreDb();
           const [sub] = await coreDb.select({ sub: membershipSubscriptions, version: membershipPlanVersions })
