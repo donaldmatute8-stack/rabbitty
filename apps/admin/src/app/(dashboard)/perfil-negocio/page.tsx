@@ -71,6 +71,13 @@ export default function BusinessProfilePage() {
   const rest = (restaurantsQuery.data as Array<Record<string, unknown>> | undefined)?.[0] ?? null;
   const restaurantId = typeof rest?.id === "string" ? rest.id : null;
 
+  // ── Canal de respuesta del chat del negocio ──
+  const chatQuery = trpc.settings.getChatReplyChannel.useQuery(undefined, { retry: false });
+  const setChatChannel = trpc.settings.setChatReplyChannel.useMutation({
+    onSuccess: () => toast.success("✅ Canal del chat actualizado"),
+    onError: () => toast.error("No se pudo guardar el canal del chat"),
+  });
+
   // ── Sonido de pedidos ──
   const alertCfg = trpc.pos.getOrderAlertSettings.useQuery(undefined, { retry: false, staleTime: 60_000 });
   const setAlertSound = trpc.pos.setOrderAlertSound.useMutation({
@@ -87,6 +94,7 @@ export default function BusinessProfilePage() {
     startTime: "09:00", endTime: "21:00", timezone: "America/Mexico_City",
     activeDays: [1, 2, 3, 4, 5, 6, 7] as number[],
     rewardPercentage: "10",
+    coverImageUrl: "", logoUrl: "",
   });
 
   const [branch, setBranch] = useState({
@@ -99,6 +107,7 @@ export default function BusinessProfilePage() {
     usdRateMode: "AUTO" as "AUTO" | "MANUAL", usdRate: "18",
     staleOrderHours: "12", showUsdTicket: false, tipPayoutEnabled: false,
     gratuityMode: "OFF" as "OFF" | "POS" | "DIGITAL" | "BOTH",
+    gratuityPcts: [10] as number[],
   });
 
   const [bunz, setBunz] = useState({
@@ -125,6 +134,13 @@ export default function BusinessProfilePage() {
       timezone: biz.timezone ?? "America/Mexico_City",
       activeDays: days,
       rewardPercentage: String(biz.rewardPercentage ?? 10),
+      coverImageUrl: (() => {
+        try {
+          const g = JSON.parse(biz.gallery || "[]");
+          return Array.isArray(g) && typeof g[0] === "string" ? g[0] : "";
+        } catch { return ""; }
+      })(),
+      logoUrl: biz.logoUrl ?? "",
     });
   }, [biz]);
 
@@ -155,6 +171,12 @@ export default function BusinessProfilePage() {
       showUsdTicket: Boolean(r.showUsdTicket),
       tipPayoutEnabled: Boolean(r.tipPayoutEnabled),
       gratuityMode: (["OFF", "POS", "DIGITAL", "BOTH"].includes(String(r.gratuityMode)) ? String(r.gratuityMode) : "OFF") as "OFF" | "POS" | "DIGITAL" | "BOTH",
+      gratuityPcts: (() => {
+        try {
+          const parsed = JSON.parse(String(r.gratuityPcts ?? "[]"));
+          return Array.isArray(parsed) && parsed.length > 0 ? parsed.map(Number) : [10];
+        } catch { return [10]; }
+      })(),
     });
     setBunz({
       acceptsBunz: Boolean(r.acceptsBunz ?? true),
@@ -182,6 +204,8 @@ export default function BusinessProfilePage() {
         endTime: form.endTime,
         timezone: form.timezone,
         rewardPercentage: Number(form.rewardPercentage) || 10,
+        coverImageUrl: form.coverImageUrl.trim() || null,
+        logoUrl: form.logoUrl.trim() || null,
       });
       toast.success("✅ Perfil actualizado — ya se ve en la app");
       void utils.settings.getBusinessProfile.invalidate();
@@ -225,6 +249,7 @@ export default function BusinessProfilePage() {
         showUsdTicket: pos.showUsdTicket,
         tipPayoutEnabled: pos.tipPayoutEnabled,
         gratuityMode: pos.gratuityMode,
+        gratuityPcts: pos.gratuityPcts,
       });
     } catch { /* toast */ }
   };
@@ -239,6 +264,7 @@ export default function BusinessProfilePage() {
         bunzMinOrderAmount: Number(bunz.bunzMinOrderAmount) || 0,
         bunzMaxOrderAmount: Number(bunz.bunzMaxOrderAmount) || 0,
         bunzDailyLimit: Number(bunz.bunzDailyLimit) || 0,
+        bunzMaxPctOfBill: Number(bunz.bunzMaxPctOfBill) || 100,
       });
     } catch { /* toast */ }
   };
@@ -349,6 +375,42 @@ export default function BusinessProfilePage() {
 
             <Card className="p-5 border border-white/10 bg-white/5 space-y-3">
               <h2 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2 m-0">
+                <Sparkles className="h-4 w-4 text-pink-400" /> Portada y logo
+              </h2>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <Field label="Portada (URL)" hint="Es la imagen del home y del feed. Vacío = pool temático de Rabbitty.">
+                  <Input
+                    value={form.coverImageUrl}
+                    onChange={(e) => setForm({ ...form, coverImageUrl: e.target.value })}
+                    placeholder="https://…/portada.webp"
+                    className={textInput}
+                  />
+                </Field>
+                <Field label="Logo (URL)" hint="Sale en la tarjeta de seguimiento y en el POS.">
+                  <Input
+                    value={form.logoUrl}
+                    onChange={(e) => setForm({ ...form, logoUrl: e.target.value })}
+                    placeholder="https://…/logo.png"
+                    className={textInput}
+                  />
+                </Field>
+              </div>
+              {(form.coverImageUrl || form.logoUrl) && (
+                <div className="flex items-center gap-3 pt-1">
+                  {form.coverImageUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={form.coverImageUrl} alt="Portada" className="h-16 w-28 object-cover rounded-xl border border-white/10" />
+                  )}
+                  {form.logoUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={form.logoUrl} alt="Logo" className="h-16 w-16 object-cover rounded-xl border border-white/10" />
+                  )}
+                </div>
+              )}
+            </Card>
+
+            <Card className="p-5 border border-white/10 bg-white/5 space-y-3">
+              <h2 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2 m-0">
                 <Clock className="h-4 w-4 text-amber-400" /> Horario de servicio
               </h2>
               <div className="flex flex-wrap gap-1.5">
@@ -392,6 +454,22 @@ export default function BusinessProfilePage() {
                   onChange={(e) => setForm({ ...form, rewardPercentage: e.target.value.replace(/[^\d]/g, "") })}
                   className={`${textInput} w-24`}
                 />
+              </Field>
+            </Card>
+
+            <Card className="p-5 border border-white/10 bg-white/5 space-y-3">
+              <h2 className="text-sm font-black text-white uppercase tracking-wider m-0">💬 Atención por chat</h2>
+              <Field label="¿Quién responde a los Rabbitters?" hint="Aplica a la bandeja del negocio y a las notificaciones de mensaje.">
+                <select
+                  value={chatQuery.data?.chatReplyChannel ?? "hybrid"}
+                  onChange={(e) => setChatChannel.mutate({ channel: e.target.value as "hybrid" | "telegram" | "admin" | "mobile" })}
+                  className="w-full rounded-lg border border-white/10 text-white text-xs h-9 px-2 bg-black/50"
+                >
+                  <option value="hybrid">Híbrido (app + Telegram)</option>
+                  <option value="mobile">Solo app móvil</option>
+                  <option value="admin">Solo admin (web)</option>
+                  <option value="telegram">Solo Telegram</option>
+                </select>
               </Field>
             </Card>
 
@@ -563,6 +641,39 @@ export default function BusinessProfilePage() {
                   <option value="BOTH">POS + digital</option>
                 </select>
               </Field>
+
+              {pos.gratuityMode !== "OFF" && (
+                <Field label="Opciones que ve el cajero" hint="Catálogo fijo de Rabbitty — el cajero no puede inventar porcentajes.">
+                  <div className="flex gap-2">
+                    {[5, 10, 15].map((pct) => {
+                      const active = pos.gratuityPcts.includes(pct);
+                      return (
+                        <button
+                          key={pct}
+                          type="button"
+                          onClick={() =>
+                            setPos({
+                              ...pos,
+                              gratuityPcts: active
+                                ? (pos.gratuityPcts.filter((x) => x !== pct).length > 0
+                                    ? pos.gratuityPcts.filter((x) => x !== pct)
+                                    : pos.gratuityPcts)
+                                : [...pos.gratuityPcts, pct].sort((a, b) => a - b),
+                            })
+                          }
+                          className={`px-4 py-2 rounded-xl text-xs font-black border cursor-pointer transition-all ${
+                            active
+                              ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300"
+                              : "bg-white/5 border-white/10 text-gray-400 hover:text-white"
+                          }`}
+                        >
+                          {pct}%
+                        </button>
+                      );
+                    })}
+                  </div>
+                </Field>
+              )}
             </Card>
 
             <div className="flex items-center justify-end pb-8">
@@ -613,6 +724,9 @@ export default function BusinessProfilePage() {
                 </Field>
                 <Field label="Máximo de compra ($)" hint="0 = sin máximo">
                   <Input inputMode="decimal" value={bunz.bunzMaxOrderAmount} onChange={(e) => setBunz({ ...bunz, bunzMaxOrderAmount: e.target.value.replace(/[^\d.]/g, "") })} className={textInput} />
+                </Field>
+                <Field label="% máximo de la cuenta pagable con Bunz">
+                  <Input inputMode="numeric" value={bunz.bunzMaxPctOfBill} onChange={(e) => setBunz({ ...bunz, bunzMaxPctOfBill: e.target.value.replace(/[^\d]/g, "") })} className={textInput} />
                 </Field>
                 <Field label="Límite de Bunz por día" hint="0 = sin límite">
                   <Input inputMode="numeric" value={bunz.bunzDailyLimit} onChange={(e) => setBunz({ ...bunz, bunzDailyLimit: e.target.value.replace(/[^\d]/g, "") })} className={textInput} />

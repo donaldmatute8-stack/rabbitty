@@ -153,6 +153,10 @@ export const settingsRouter = router({
       endTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
       timezone: z.string().max(60).optional(),
       rewardPercentage: z.number().int().min(1).max(100).optional(),
+      /** Logo del negocio (URL) */
+      logoUrl: z.string().max(500).nullable().optional(),
+      /** Portada: se guarda como gallery[0] (fuente única en el móvil) */
+      coverImageUrl: z.string().max(500).nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const [biz] = await ctx.coreDb
@@ -179,6 +183,23 @@ export const settingsRouter = router({
       if (input.endTime !== undefined) patch.endTime = input.endTime;
       if (input.timezone !== undefined) patch.timezone = input.timezone;
       if (input.rewardPercentage !== undefined) patch.rewardPercentage = input.rewardPercentage;
+      if (input.logoUrl !== undefined) patch.logoUrl = input.logoUrl?.trim() || null;
+      if (input.coverImageUrl !== undefined) {
+        // H-COVER-SSOT: la portada vive en gallery[0]; el resto de la galería se
+        // conserva tal cual (solo se reemplaza la primera posición).
+        const [current] = await ctx.coreDb
+          .select({ gallery: ownedBusinesses.gallery })
+          .from(ownedBusinesses)
+          .where(eq(ownedBusinesses.id, biz.id))
+          .limit(1);
+        let rest: string[] = [];
+        try {
+          const parsed = JSON.parse(current?.gallery || "[]");
+          if (Array.isArray(parsed)) rest = parsed.filter((x): x is string => typeof x === "string").slice(1);
+        } catch { /* galería corrupta → se reinicia */ }
+        const cover = input.coverImageUrl?.trim();
+        patch.gallery = JSON.stringify(cover ? [cover, ...rest] : rest);
+      }
 
       await ctx.coreDb.update(ownedBusinesses).set(patch).where(eq(ownedBusinesses.id, biz.id));
       return { success: true };

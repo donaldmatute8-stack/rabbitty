@@ -135,6 +135,8 @@ export const adminRouter = router({
         bunzMinOrderAmount: z.number().min(0).optional(),
         bunzMaxOrderAmount: z.number().min(0).optional(),
         bunzDailyLimit: z.number().int().min(0).optional(),
+        /** % máximo de la factura pagable con Bunz (100 = sin límite) */
+        bunzMaxPctOfBill: z.number().int().min(1).max(100).optional(),
         // ── Gratificaciones voluntarias (D-11): catálogo Rabbitty, server guard ──
         gratuityMode: z.enum(["OFF", "POS", "DIGITAL", "BOTH"]).optional(),
         // Solo convierte pcts DENTRO del catálogo [5,10,15] — el afiliado no crea reglas
@@ -206,6 +208,7 @@ export const adminRouter = router({
       if (updateData.bunzMinOrderAmount !== undefined) updateData.bunzMinOrderAmount = Math.max(0, Number(updateData.bunzMinOrderAmount) || 0);
       if (updateData.bunzMaxOrderAmount !== undefined) updateData.bunzMaxOrderAmount = Math.max(0, Number(updateData.bunzMaxOrderAmount) || 0);
       if (updateData.bunzDailyLimit !== undefined) updateData.bunzDailyLimit = Math.max(0, Math.floor(Number(updateData.bunzDailyLimit) || 0));
+      if (updateData.bunzMaxPctOfBill !== undefined) updateData.bunzMaxPctOfBill = Math.min(100, Math.max(1, Math.round(Number(updateData.bunzMaxPctOfBill) || 100)));
       if (Array.isArray(updateData.gratuityPcts)) {
         updateData.gratuityPcts = JSON.stringify(
           updateData.gratuityPcts
