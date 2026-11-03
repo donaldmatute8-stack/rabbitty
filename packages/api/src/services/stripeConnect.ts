@@ -61,6 +61,20 @@ export async function createStripeConnectOnboardingLink(params: {
 
   let stripeAccountId = accountRecord?.stripeAccountId;
 
+  // H24: al pasar de test a live los `acct_...` de prueba NO existen en live
+  // (y una cuenta puede haberse eliminado en Stripe). Sin esto, el link de
+  // onboarding fallaría con "No such account" y el afiliado no podría cobrar.
+  if (stripeAccountId) {
+    try {
+      await stripe.accounts.retrieve(stripeAccountId);
+    } catch {
+      console.warn(
+        `[StripeConnect] cuenta ${stripeAccountId} no existe en este modo (test→live o eliminada) — se recrea`
+      );
+      stripeAccountId = undefined;
+    }
+  }
+
   if (!stripeAccountId) {
     // Crear cuenta Stripe Express para México (MXN)
     const account = await stripe.accounts.create({
@@ -84,19 +98,32 @@ export async function createStripeConnectOnboardingLink(params: {
 
     stripeAccountId = account.id;
 
-    const [created] = await params.db
-      .insert(merchantPaymentAccounts)
-      .values({
-        branchId: params.branchId,
-        stripeAccountId: account.id,
-        chargesEnabled: account.charges_enabled,
-        payoutsEnabled: account.payouts_enabled,
-        defaultCurrency: "MXN",
-        platformFeePercent: 0.01, // 1% comisión plataforma por defecto
-      })
-      .returning();
+    if (accountRecord) {
+      // Reutilizamos la fila (conserva platformFeePercent y metadata)
+      await params.db
+        .update(merchantPaymentAccounts)
+        .set({
+          stripeAccountId: account.id,
+          chargesEnabled: account.charges_enabled,
+          payoutsEnabled: account.payouts_enabled,
+          updatedAt: new Date(),
+        })
+        .where(eq(merchantPaymentAccounts.id, accountRecord.id));
+    } else {
+      const [created] = await params.db
+        .insert(merchantPaymentAccounts)
+        .values({
+          branchId: params.branchId,
+          stripeAccountId: account.id,
+          chargesEnabled: account.charges_enabled,
+          payoutsEnabled: account.payouts_enabled,
+          defaultCurrency: "MXN",
+          platformFeePercent: 0.01, // 1% comisión plataforma por defecto
+        })
+        .returning();
 
-    accountRecord = created;
+      accountRecord = created;
+    }
   }
 
   // Generar link de onboarding
@@ -130,7 +157,22 @@ export async function syncStripeAccountStatus(params: {
     return { chargesEnabled: false, payoutsEnabled: false };
   }
 
-  const account = await stripe.accounts.retrieve(accountRecord.stripeAccountId);
+  // H24: si la cuenta es de test (o fue eliminada), `retrieve` truena en live.
+  // Devolvemos "no habilitado" en vez de romper el panel del afiliado; el
+  // onboarding se auto-repara al pedir el link (createStripeConnectOnboardingLink).
+  let account: Awaited<ReturnType<typeof stripe.accounts.retrieve>>;
+  try {
+    account = await stripe.accounts.retrieve(accountRecord.stripeAccountId);
+  } catch (err: any) {
+    console.warn(
+      `[StripeConnect] no se pudo leer ${accountRecord.stripeAccountId}: ${err?.message ?? err}`
+    );
+    return {
+      chargesEnabled: false,
+      payoutsEnabled: false,
+      stripeAccountId: accountRecord.stripeAccountId,
+    };
+  }
 
   await params.db
     .update(merchantPaymentAccounts)
