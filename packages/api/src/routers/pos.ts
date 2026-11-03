@@ -528,6 +528,39 @@ export const posRouter = router({
       return { orderId: order.id, created: true, total: 0 };
     }),
 
+  /**
+   * H-PERSIST · releaseCustomerTab — suelta el borrador de vínculo cuando el
+   * cajero cambia de Rabbitter o lo desvincula. Solo actúa sobre comandas
+   * realmente vacías ($0, PENDING, sin items): si el cliente ya tiene productos
+   * o cobros, NO se toca — se queda en Operación para cobrarse aparte.
+   * Se marca EXPIRED + voidReason (auditable) en vez de borrar la fila.
+   */
+  releaseCustomerTab: protectedProcedure
+    .input(z.object({ orderId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const [order] = await ctx.restaurantDb
+        .select({ id: orders.id, total: orders.total, status: orders.status })
+        .from(orders)
+        .where(and(eq(orders.id, input.orderId), eq(orders.branchId, ctx.branchId)))
+        .limit(1);
+      if (!order) return { released: false, reason: "NOT_FOUND" as const };
+      if (order.status !== "PENDING") return { released: false, reason: "NOT_PENDING" as const };
+      if (Number(order.total || 0) > 0) return { released: false, reason: "HAS_TOTAL" as const };
+
+      const [item] = await ctx.restaurantDb
+        .select({ id: orderItems.id })
+        .from(orderItems)
+        .where(eq(orderItems.orderId, order.id))
+        .limit(1);
+      if (item) return { released: false, reason: "HAS_ITEMS" as const };
+
+      await ctx.restaurantDb
+        .update(orders)
+        .set({ status: "EXPIRED", voidReason: "DRAFT_RELEASED", updatedAt: new Date() })
+        .where(and(eq(orders.id, order.id), eq(orders.status, "PENDING")));
+      return { released: true, reason: "RELEASED" as const };
+    }),
+
   createOrder: protectedProcedure
     .input(
       z.object({

@@ -655,10 +655,17 @@ export default function PosPage() {
   // comanda PENDING en DB. Así el vínculo no vive solo en memoria ni se cuelga.
   const draftCustomerRef = useRef<string | null>(null);
   const draftPendingRef = useRef<string | null>(null);
+  const releaseCustomerTab = trpc.pos.releaseCustomerTab.useMutation();
   useEffect(() => {
     if (!selectedRabbitter) return;
     if (draftCustomerRef.current === selectedRabbitter.id && draftOrderId) return;
     if (draftPendingRef.current === selectedRabbitter.id) return; // ya va en vuelo
+    // Cambió de Rabbitter: el borrador del anterior se suelta SOLO si quedó
+    // vacío (sin productos); si tiene productos, se cobra aparte en Operación.
+    if (draftOrderId && draftCustomerRef.current && draftCustomerRef.current !== selectedRabbitter.id) {
+      releaseCustomerTab.mutate({ orderId: draftOrderId });
+      setDraftOrderId(null);
+    }
     draftPendingRef.current = selectedRabbitter.id;
     draftCustomerRef.current = selectedRabbitter.id;
     ensureCustomerTab.mutate(
@@ -676,6 +683,18 @@ export default function PosPage() {
         },
       },
     );
+  }, [selectedRabbitter, draftOrderId]);
+
+  // Al desvincular, si el borrador quedó vacío se suelta (no deja comandas $0
+  // colgadas en Operación). Si tiene productos, se conserva para cobro aparte.
+  useEffect(() => {
+    if (selectedRabbitter || !draftOrderId) return;
+    if (!draftCustomerRef.current) return;
+    releaseCustomerTab.mutate({ orderId: draftOrderId });
+    setDraftOrderId(null);
+    draftCustomerRef.current = null;
+    draftPendingRef.current = null;
+    void refetchActiveTabs();
   }, [selectedRabbitter, draftOrderId]);
 
   const handlePickCheckIn = async (userId: string) => {
