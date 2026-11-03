@@ -294,6 +294,22 @@ export const systemSettings = pgTable("systemSettings", {
   updatedAt: timestamp("updatedAt").defaultNow(),
 });
 
+/**
+ * ── Live Activity de pedidos (iOS 16.2+) ──
+ * Token de push POR ACTIVIDAD (no por device): lo emite el plugin nativo al
+ * iniciar la tarjeta en la pantalla de bloqueo. Sirve para refrescar la etapa
+ * aunque la app esté suspendida (apns-topic *.push-type.liveactivity).
+ */
+export const liveActivityTokens = pgTable("live_activity_tokens", {
+  id: id(),
+  userId: fkId("userId"),
+  orderId: text("orderId").notNull(),
+  token: text("token").notNull().unique(),
+  platform: text("platform").default("ios").notNull(),
+  createdAt: timestamp("createdAt").defaultNow(),
+  updatedAt: timestamp("updatedAt").defaultNow(),
+});
+
 export const treasury = pgTable("treasury", {
   id: id(),
   concept: text("concept").notNull(),

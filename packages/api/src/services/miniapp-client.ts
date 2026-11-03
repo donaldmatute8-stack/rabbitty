@@ -223,6 +223,35 @@ export const miniappClient = {
     });
   },
 
+  /**
+   * ── Live Activity (iOS 16.2+) ── mueve la tarjeta de la pantalla de bloqueo
+   * sin depender de que la app esté abierta. Best-effort: nunca lanza.
+   */
+  async updateLiveActivity(data: {
+    orderId: string;
+    event?: "update" | "end";
+    contentState: {
+      stage: string;
+      stageLabel: string;
+      step: number;
+      stepCount: number;
+      total: number;
+      itemsSummary: string;
+    };
+    alertTitle?: string;
+    alertBody?: string;
+  }): Promise<{ success: boolean; sent?: number; reason?: string }> {
+    try {
+      return await fetchApi("/api/internal/live-activity/update", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    } catch (err) {
+      console.warn("[LIVE ACTIVITY] no se pudo actualizar:", err instanceof Error ? err.message : err);
+      return { success: false, reason: "REQUEST_FAILED" };
+    }
+  },
+
   async lookupUserByPhone(phone: string): Promise<{ exists: boolean; userId?: string }> {
     try {
       const res = await fetch(`${config!.url}/api/pos/reward`, {

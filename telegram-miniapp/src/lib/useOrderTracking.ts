@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PlatformBridge } from '@/lib/platform';
+import { syncOrderLiveActivity, type LiveActivityOrder } from '@/lib/liveActivity';
 
 export interface TrackedOrder {
   orderId: string;
@@ -50,6 +51,22 @@ export function useOrderTracking(enabled = true, onOrderRemoved?: (orderId: stri
         }
         knownIds.current = new Set(next.map((o) => o.orderId));
         setOrders(next);
+        // Live Activity (iOS): mantiene la tarjeta de bloqueo al día. No-op en web.
+        const top = next[0];
+        const liveOrder: LiveActivityOrder | null = top
+          ? {
+              orderId: top.orderId,
+              businessName: top.businessName,
+              orderType: top.orderType,
+              stage: top.stage,
+              stageLabel: top.stageLabel,
+              step: top.stageStep,
+              stepCount: top.stageCount,
+              total: top.total,
+              itemsSummary: (top.itemsSummary || []).join(' · '),
+            }
+          : null;
+        void syncOrderLiveActivity(liveOrder);
       }
       setLoaded(true);
     } catch {

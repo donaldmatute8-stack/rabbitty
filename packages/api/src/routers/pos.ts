@@ -2165,7 +2165,7 @@ export const posRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const [order] = await ctx.restaurantDb
-        .select({ id: orders.id, branchId: orders.branchId, status: orders.status, customerId: orders.customerId })
+        .select({ id: orders.id, branchId: orders.branchId, status: orders.status, customerId: orders.customerId, total: orders.total })
         .from(orders)
         .where(eq(orders.id, input.orderId))
         .limit(1);
@@ -2232,6 +2232,25 @@ export const posRouter = router({
               // Seguimiento de pedido = aviso "vivo": prioridad alta para que
               // llegue con la pantalla bloqueada y atraviese Focus (iOS).
               priority: "high",
+            });
+
+            // ── Live Activity (iOS): la tarjeta de bloqueo cambia de etapa
+            // aunque la app esté cerrada (push dirigido al token de la actividad).
+            await miniappClient.updateLiveActivity({
+              orderId: input.orderId,
+              event: input.stage === "DONE" ? "end" : "update",
+              contentState: {
+                stage: input.stage,
+                stageLabel:
+                  input.stage === "PREPARING" ? "En preparación"
+                  : input.stage === "READY" ? "Listo para recoger"
+                  : input.stage === "DONE" ? "Entregado"
+                  : "Pedido recibido",
+                step: orderStageStepIndex(input.stage as OrderStage),
+                stepCount: 4,
+                total: Number(order.total ?? 0),
+                itemsSummary: "",
+              },
             });
           }
         } catch (noticeErr) {

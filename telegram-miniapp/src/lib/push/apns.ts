@@ -190,7 +190,6 @@ export async function sendApnsToDevice(
 }
 
 const INVALID_TOKEN_STATUS = 410; // Unregistered / ExpiredToken
-
 async function deactivateToken(token: string): Promise<void> {
   await db
     .update(pushDevices)
@@ -248,4 +247,106 @@ export async function sendPushToUsers(
 /** Dispatch a notification to every active iOS device of a single user. */
 export function sendPushToUser(userId: string, payload: PushPayload): Promise<PushDispatchResult> {
   return sendPushToUsers([userId], payload);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Live Activities (iOS 16.2+)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface LiveActivityContentState {
+  stage: string;
+  stageLabel: string;
+  step: number;
+  stepCount: number;
+  total: number;
+  itemsSummary: string;
+}
+
+export interface LiveActivityPushPayload {
+  event: "update" | "end";
+  contentState: LiveActivityContentState;
+  /** Segundos hasta marcar la actividad como obsoleta. */
+  staleInSeconds?: number;
+  /** Segundos hasta descartar la tarjeta tras `end`. */
+  dismissalInSeconds?: number;
+  alertTitle?: string;
+  alertBody?: string;
+}
+
+/**
+ * Envía un update/end a UNA Live Activity concreta.
+ *
+ * A diferencia de una push normal, ésta va dirigida al token de la ACTIVIDAD
+ * (no al device token) y usa el topic con sufijo `.push-type.liveactivity`.
+ */
+export async function sendLiveActivityUpdate(
+  activityToken: string,
+  payload: LiveActivityPushPayload,
+): Promise<ApnsDeviceResult> {
+  const cfg = getConfig();
+  if (!cfg) throw new Error("APNS_NOT_CONFIGURED");
+
+  const providerToken = getProviderToken(cfg);
+  const now = Math.floor(Date.now() / 1000);
+
+  const aps: Record<string, unknown> = {
+    timestamp: now,
+    event: payload.event,
+    "content-state": payload.contentState,
+  };
+  if (payload.event === "update") {
+    aps["stale-date"] = now + (payload.staleInSeconds ?? 3600);
+    aps["relevance-score"] = 100;
+  } else if (typeof payload.dismissalInSeconds === "number") {
+    aps["dismissal-date"] = now + payload.dismissalInSeconds;
+  }
+  if (payload.alertTitle) {
+    aps.alert = { title: payload.alertTitle, body: payload.alertBody ?? "" };
+    aps.sound = "default";
+  }
+
+  const body = JSON.stringify({ aps });
+  const client = http2.connect(`https://${cfg.host}`);
+
+  return await new Promise<ApnsDeviceResult>((resolve, reject) => {
+    const req = client.request({
+      ":method": "POST",
+      ":path": `/3/device/${activityToken}`,
+      authorization: `bearer ${providerToken}`,
+      "apns-topic": `${cfg.bundleId}.push-type.liveactivity`,
+      "apns-push-type": "liveactivity",
+      "apns-priority": "10",
+      "apns-expiration": "0",
+      "content-type": "application/json",
+    });
+
+    let status = 0;
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("response", (headers) => {
+      status = Number(headers[":status"]) || 0;
+    });
+    req.on("data", (chunk: string) => {
+      raw += chunk;
+    });
+    req.on("end", () => {
+      client.close();
+      let reason: string | undefined;
+      if (raw) {
+        try {
+          reason = (JSON.parse(raw) as { reason?: string }).reason;
+        } catch {
+          /* non-JSON */
+        }
+      }
+      resolve({ token: activityToken, ok: status === 200, status, reason });
+    });
+    req.on("error", (err) => {
+      client.close();
+      reject(err);
+    });
+
+    req.write(body);
+    req.end();
+  });
 }
