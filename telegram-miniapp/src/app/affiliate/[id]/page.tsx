@@ -95,6 +95,8 @@ function AffiliateProfileContent() {
   const [activeTab, setActiveTab] = useState<'menu' | 'info'>('menu');
   const [membershipPlans, setMembershipPlans] = useState<{ planId: string; planName: string; planDescription?: string | null; versionId: string; priceFiat: number; currency: string; billingInterval: string; alreadySubscribed: boolean }[]>([]);
   const [subscribing, setSubscribing] = useState<string | null>(null);
+  // H-PRESYNC · Voy: igual criterio que "Estoy aquí" — se hidrata del server
+  // (PLAN_VISIT reciente en business_interactions, ventana antispam 12h).
   const [planVisitSent, setPlanVisitSent] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
 
@@ -218,7 +220,10 @@ function AffiliateProfileContent() {
         if (!headers?.Authorization && !headers?.['X-Init-Data']) return;
         const res = await fetch(`/api/location/presence?businessId=${affiliate.id}`, { headers });
         const data = await res.json().catch(() => null);
-        if (!cancelled && data?.success) setHasPresenceCheckedIn(Boolean(data.active));
+        if (!cancelled && data?.success) {
+          setHasPresenceCheckedIn(Boolean(data.active));
+          setPlanVisitSent(Boolean(data.planVisitRecent));
+        }
       } catch { /* best-effort: sin conexión se conserva el estado local */ }
     })();
     const onPresenceConfirmed = (e: Event) => {
@@ -642,36 +647,56 @@ function AffiliateProfileContent() {
         )}
 
         {/* Tab 2: Sucursal, Ubicación, Happy Hour & Galería */}
-        {/* ── "Planeo ir": acciona la proximidad y avisa al comercio ── */}
+        {/* ── "Planeo ir": acciona la proximidad y avisa al comercio ──
+            H-PRESYNC: se oculta si ya estás checkeado (no puedes "planeo ir"
+            cuando ya te registraste aquí), y muestra tu estado hidratado. */}
         <div className="rounded-2xl p-4 flex items-center justify-between gap-3" style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
           <div className="min-w-0">
-            <p className="text-white font-bold text-sm">📍 Estoy cerca, planeo ir</p>
-            <p className="text-white/50 text-xs mt-0.5">Avisa al comercio y te reciben con tu oferta lista</p>
+            {hasPresenceCheckedIn ? (
+              <>
+                <p className="text-white font-bold text-sm">✓ Ya estás aquí</p>
+                <p className="text-white/50 text-xs mt-0.5">Tu check-in está activo en este local</p>
+              </>
+            ) : (
+              <>
+                <p className="text-white font-bold text-sm">📍 Estoy cerca, planeo ir</p>
+                <p className="text-white/50 text-xs mt-0.5">Avisa al comercio y te reciben con tu oferta lista</p>
+              </>
+            )}
           </div>
-          <button
-            onClick={async () => {
-              try {
-                PlatformBridge.hapticFeedback('light');
-                const headers = await PlatformBridge.getAuthHeaders();
-                const res = await fetch('/api/location/plan-visit', {
-                  method: 'POST',
-                  headers: { ...headers, 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ businessId: id }),
-                });
-                const data = await res.json();
-                showToast(data?.message || (data?.error || 'Listo'), data?.success ? 'success' : 'info');
-                setPlanVisitSent(true);
-              } catch { showToast('No se pudo enviar', 'error'); }
-            }}
-            disabled={planVisitSent}
-            className="shrink-0 px-4 py-2.5 rounded-full text-xs font-bold active:scale-95 transition-transform"
-            style={{
-              background: planVisitSent ? 'rgba(255,255,255,0.08)' : 'linear-gradient(135deg, #8B5CF6 0%, #A855F7 100%)',
-              color: planVisitSent ? 'rgba(255,255,255,0.4)' : '#FFF',
-            }}
-          >
-            {planVisitSent ? '✓ Avisado' : 'Voy'}
-          </button>
+          {hasPresenceCheckedIn ? (
+            <div
+              className="shrink-0 px-4 py-2.5 rounded-full text-xs font-bold flex items-center gap-1.5"
+              style={{ background: 'rgba(16,185,129,0.15)', color: '#34D399', border: '1px solid rgba(52,211,153,0.4)' }}
+            >
+              <span>Check-in activo</span>
+            </div>
+          ) : (
+            <button
+              onClick={async () => {
+                try {
+                  PlatformBridge.hapticFeedback('light');
+                  const headers = await PlatformBridge.getAuthHeaders();
+                  const res = await fetch('/api/location/plan-visit', {
+                    method: 'POST',
+                    headers: { ...headers, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ businessId: id }),
+                  });
+                  const data = await res.json();
+                  showToast(data?.message || (data?.error || 'Listo'), data?.success ? 'success' : 'info');
+                  setPlanVisitSent(true);
+                } catch { showToast('No se pudo enviar', 'error'); }
+              }}
+              disabled={planVisitSent}
+              className="shrink-0 px-4 py-2.5 rounded-full text-xs font-bold active:scale-95 transition-transform cursor-pointer"
+              style={{
+                background: planVisitSent ? 'rgba(255,255,255,0.08)' : 'linear-gradient(135deg, #8B5CF6 0%, #A855F7 100%)',
+                color: planVisitSent ? 'rgba(255,255,255,0.4)' : '#FFF',
+              }}
+            >
+              {planVisitSent ? '✓ Avisado' : 'Voy'}
+            </button>
+          )}
         </div>
 
         {/* ── Membresías del negocio (Stripe Connect) ── */}

@@ -57,12 +57,27 @@ export async function GET(req: NextRequest) {
 
     const checkedInToday = Number(todayRow?.n ?? 0) > 0;
 
+    // 3. ¿"Voy" (PLAN_VISIT) reciente? — antispam del server es 1/12h; la UI
+    //    hidrata con esto para que "Voy ✓ Avisado" no se reinicie al re-entrar.
+    const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
+    const pv = await db.execute(
+      sql`SELECT id FROM "business_interactions"
+          WHERE "userId" = ${caller.id} AND "businessId" = ${biz.id}
+            AND action = 'PLAN_VISIT' AND "createdAt" >= ${twelveHoursAgo.toISOString()}
+          LIMIT 1`
+    ).then((r: unknown) => {
+      const rows = (r as { rows?: Array<{ id: string }> }).rows || (r as unknown as Array<{ id: string }>);
+      return rows[0] ?? null;
+    });
+
     return NextResponse.json({
       success: true,
       active: Boolean(open) || checkedInToday,
       openSession: Boolean(open),
       since: open?.startedAt ?? null,
       checkedInToday,
+      // Según el server: ya avisó "Voy" en el horario de antispam.
+      planVisitRecent: Boolean(pv),
       businessId: biz.id,
       businessName: biz.name,
     });
