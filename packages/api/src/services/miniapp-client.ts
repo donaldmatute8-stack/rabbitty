@@ -208,10 +208,18 @@ export const miniappClient = {
     userId: string; title: string; message: string; type?: string;
     /** Ruta in-app que el comensal abre al tocar la notificación (p. ej. /pay/[orderId]) */
     route?: string;
+    /** Idempotencia de campana/push (el outbox es UNIQUE por dedupeKey) */
+    dedupeKey?: string;
+    priority?: "high" | "low" | "normal";
   }): Promise<NotificationResult> {
     return fetchApi("/api/notifications", {
       method: "POST",
-      body: JSON.stringify({ ...data, ...(data.route ? { route: data.route } : {}) }),
+      body: JSON.stringify({
+        ...data,
+        ...(data.route ? { route: data.route } : {}),
+        ...(data.dedupeKey ? { dedupeKey: data.dedupeKey } : {}),
+        ...(data.priority ? { priority: data.priority } : {}),
+      }),
     });
   },
 

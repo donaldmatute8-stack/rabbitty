@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { Button, Dialog, Input, toast, cn, useWakeLock } from "@rabbitty/ui";
-import { Clock, Search, Users, CreditCard, Banknote, QrCode, Split, Smartphone, Landmark, Table2, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, ClipboardCheck, Camera, History, RotateCw } from "lucide-react";
+import { Clock, Search, Users, CreditCard, Banknote, QrCode, Split, Smartphone, Landmark, Table2, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, ClipboardCheck, Camera, History, RotateCw, ChefHat, Flame } from "lucide-react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import QRDiscovery from "@/components/QRDiscovery";
@@ -631,6 +631,26 @@ export default function PosPage() {
   // El polling de stripePayModal detecta SUCCEEDED y liquida: la sesión de mesa
   // se cierra sola vía confirmPaymentIntentSettled.
   const tabChargeMutation = trpc.payments.createPaymentIntent.useMutation();
+  // ── H-TRACK: botones de etapa (Recibido → Preparando → Listo → Entregado)
+  // para pedidos desde la app (fromApp): el tracking bidireccional
+  // mobile ↔ POS vive aquí — el Rabbitter ve la etapa en su tarjeta.
+  const stageMutation = trpc.pos.setOrderStage.useMutation({
+    onSuccess: (_d, vars) => {
+      if (vars.stage === 'READY') toast.success('Pedido listo — el Rabbitter lo ve en su app');
+      else if (vars.stage === 'DONE') toast.success('Pedido entregado y cerrado');
+      else toast.info('Etapa actualizada');
+      void refetchActiveTabs();
+    },
+    onError: (e) => toast.error(e.message || 'No se pudo actualizar'),
+  });
+  const nextStageOf = (stage: string | undefined) : 'PREPARING' | 'READY' | 'DONE' | null => {
+    switch (stage) {
+      case 'RECEIVED': return 'PREPARING';
+      case 'PREPARING': return 'READY';
+      case 'READY': return 'DONE';
+      default: return null; // DONE / PAYMENT_PENDING: sin botón de avance rápido
+    }
+  };
   const chargeOpenTab = async (tab: { orderId: string; total: number; status?: string }) => {
     if (!tab?.orderId) return;
     try {
@@ -3689,6 +3709,40 @@ export default function PosPage() {
         className="max-w-2xl w-full"
       >
         <div className="space-y-4 p-1">
+          {/* ── H-TRACK: banner persistente de pedidos desde la app móvil ── */}
+          {(() => {
+            const appTab = (activeTabsData?.activeTabs ?? []).filter(
+              (t: { fromApp?: boolean; stage?: string; customer?: unknown }) => t.fromApp && t.customer
+            );
+            const pendingCount = appTab.filter((t: { stage?: string }) => (t.stage ?? 'RECEIVED') === 'RECEIVED').length;
+            if (appTab.length === 0) return null;
+            return (
+              <div
+                className="rounded-2xl border p-3 flex items-center gap-3 animate-pulse-slow"
+                style={{
+                  background: pendingCount > 0
+                    ? 'linear-gradient(135deg, rgba(233,30,99,0.18), rgba(10,5,12,0.7))'
+                    : 'rgba(255,255,255,0.04)',
+                  borderColor: pendingCount > 0 ? 'rgba(233,30,99,0.55)' : 'rgba(255,255,255,0.12)',
+                }}
+              >
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                  style={{ background: 'rgba(233,30,99,0.25)', border: '1px solid rgba(233,30,99,0.45)' }}>
+                  <Smartphone size={17} className="text-[#E91E63]" strokeWidth={2.5} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] font-black text-white m-0 leading-tight">
+                    {pendingCount > 0
+                      ? `🔔 ${pendingCount > 1 ? pendingCount + ' pedidos nuevos' : '1 pedido nuevo'} desde la app Rabbitty`
+                      : 'Pedidos desde la app en curso'}
+                  </p>
+                  <p className="text-[10px] text-gray-400 m-0 leading-tight mt-0.5">
+                    Sin asignar a mesa — toma la orden cuando puedas; el Rabbitter ve el estatus en su app
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
           <div className="flex items-center justify-between pb-2 border-b border-white/5">
             <p className="text-xs text-gray-400">
               Mesas y comandas abiertas en tiempo real con identificación de clientes.
@@ -3810,6 +3864,35 @@ export default function PosPage() {
                       ))}
                     </div>
                   )}
+
+                  {/* ── H-TRACK · etapa rápida para pedidos desde la app ── */}
+                  {tab.fromApp && (() => {
+                    const stageLabels: Record<string, { title: string; icon: ReturnType<typeof CheckCircle2> }> = {
+                      RECEIVED: { title: 'Pedido recibido', icon: <Smartphone className="h-3.5 w-3.5" /> },
+                      PREPARING: { title: 'En preparación', icon: <Flame className="h-3.5 w-3.5" /> },
+                      READY: { title: 'Listo para entrega', icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
+                      DONE: { title: 'Entregado', icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
+                    };
+                    const next = nextStageOf(String(tab.stage ?? 'RECEIVED'));
+                    return (
+                      <div className="pt-2 border-t border-white/5 flex items-center justify-between gap-2">
+                        <span className="inline-flex items-center gap-1.5 text-[10px] font-black text-pink-300 bg-pink-500/10 border border-pink-500/30 px-2 py-1 rounded-lg">
+                          {stageLabels[tab.stage ?? 'RECEIVED']?.icon}
+                          {stageLabels[tab.stage ?? 'RECEIVED']?.title ?? 'Recibido'}
+                        </span>
+                        {next && (
+                          <button
+                            type="button"
+                            onClick={() => stageMutation.mutate({ orderId: tab.orderId, stage: next })}
+                            disabled={stageMutation.isPending}
+                            className="text-[10px] font-black text-gray-950 bg-cyan-400 hover:bg-cyan-300 border-0 cursor-pointer px-3 py-1.5 rounded-lg active:scale-95 transition-transform flex items-center gap-1.5"
+                          >
+                            {next === 'PREPARING' ? '🔥 Empezar a preparar' : next === 'READY' ? '✅ Marcar listo' : '📦 Marcar entregado'}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               ))
             ) : (

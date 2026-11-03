@@ -148,3 +148,12 @@ export {
   cursorFromMessage,
   type ChatCursor,
 } from "./chatCursor";
+export {
+  deriveOrderStage,
+  orderStageStepIndex,
+  orderIsActive,
+  ORDER_FIRST_STEPS,
+  ORDER_STAGE_META,
+  type OrderStage,
+  type OrderStageInput,
+} from "./orderStages";

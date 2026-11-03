@@ -6,6 +6,7 @@ import { validateGratuity, parseGratuityPcts, GRATUITY_MAX_PCT } from "../servic
 import { TRPCError } from "@trpc/server";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
+import { deriveOrderStage, type OrderStage, orderStageStepIndex } from "@rabbitty/events";
 import { tables as tablesTable, tableSessions, branches, menuCategories, menuItems, orders, orderItems, payments, menuItemModifiers, restaurants, events as posEvents, paymentIntents, bunzReserves } from "@rabbitty/database-restaurant/schema";
 import { users as coreUsers, membershipSubscriptions as coreMembershipSubs, membershipEntitlements as coreMembershipEnts, entitlementUsages as coreEntUsages } from "@rabbitty/database-core/schema";
 /** Split DIVIDIDA activo? */
@@ -1890,7 +1891,7 @@ export const posRouter = router({
     // 4. Productos de las órdenes pendientes — la comanda del Rabbitter
     // (pedida desde la app) debe verse completa en el POS con lo que pidió.
     const orderIds = pendingOrders.map((o) => o.id);
-    const itemsByOrder = new Map<string, { name: string; quantity: number; unitPrice: number; notes: string | null }[]>();
+    const itemsByOrder = new Map<string, { name: string; quantity: number; unitPrice: number; notes: string | null; status: string | null }[]>();
     if (orderIds.length > 0) {
       const itemRows = await ctx.restaurantDb
         .select({
@@ -1899,13 +1900,14 @@ export const posRouter = router({
           quantity: orderItems.quantity,
           unitPrice: orderItems.unitPrice,
           notes: orderItems.notes,
+          status: orderItems.status,
         })
         .from(orderItems)
         .leftJoin(menuItems, eq(orderItems.menuItemId, menuItems.id))
         .where(and(inArray(orderItems.orderId, orderIds), sql`${orderItems.voidedAt} IS NULL`));
       for (const row of itemRows) {
         const list = itemsByOrder.get(row.orderId) ?? [];
-        list.push({ name: row.name ?? "Producto", quantity: row.quantity, unitPrice: Number(row.unitPrice), notes: row.notes });
+        list.push({ name: row.name ?? "Producto", quantity: row.quantity, unitPrice: Number(row.unitPrice), notes: row.notes, status: row.status });
         itemsByOrder.set(row.orderId, list);
       }
     }
@@ -1942,11 +1944,21 @@ export const posRouter = router({
     }
 
     // 6. Ensamblar lista de Tabs activos vinculando mesa, orden y cliente
+    // H-TRACK: además etapa derivada (contrato compartido con el móvil) y
+    // flag de origen (fromApp = pedido desde la app móvil sin mesa — la cola
+    // de toma de orden del POS).
     const activeTabs = pendingOrders.map((ord) => {
       const table = allTables.find((t) => t.id === ord.tableId);
       const session = openSessions.find((s) => s.tableId === ord.tableId);
       const resolvedCustomerId = ord.customerId || session?.customerId || null;
       const user = resolvedCustomerId ? usersMap.get(resolvedCustomerId) : null;
+
+      const items = itemsByOrder.get(ord.id) ?? [];
+      const stage = deriveOrderStage({
+        order: { status: ord.status },
+        items: items.map((it) => ({ status: it.status })),
+      });
+      const fromApp = Boolean(resolvedCustomerId && !ord.tableId);
 
       return {
         orderId: ord.id,
@@ -1958,7 +1970,9 @@ export const posRouter = router({
         cashRequested: ord.status === "CASH_PAYMENT_REQUESTED",
         total: Number(ord.total || 0),
         createdAt: ord.createdAt,
-        items: itemsByOrder.get(ord.id) ?? [],
+        items,
+        stage,
+        fromApp,
         customer: user
           ? {
               id: user.id,
@@ -1982,6 +1996,98 @@ export const posRouter = router({
       totalActiveCount: activeTabs.length,
     };
   }),
+
+  /**
+   * H-TRACK · setOrderStage — el personal mueve la ETAPA del pedido (y el
+   * móvil lo ve en su tarjeta de seguimiento). Mapea la etapa a estatus de
+   * order_items (lo que ya usa KDS/kitchen) — sin columnas nuevas:
+   *   RECEIVED   → items PENDING
+   *   PREPARING  → items IN_PROGRESS (mínimo el primero; si ya hay, no rompe)
+   *   READY      → todos los items READY
+   *   DONE       → items SERVED + orders.status COMPLETED (entrega confirmada
+   *                por el personal en el POS).
+   * Guard: la orden debe pertenecer a la sucursal de la sesión.
+   */
+  setOrderStage: protectedProcedure
+    .input(z.object({
+      orderId: z.string(),
+      stage: z.enum(["RECEIVED", "PREPARING", "READY", "DONE"]),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const [order] = await ctx.restaurantDb
+        .select({ id: orders.id, branchId: orders.branchId, status: orders.status, customerId: orders.customerId })
+        .from(orders)
+        .where(eq(orders.id, input.orderId))
+        .limit(1);
+      if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Orden no encontrada" });
+      if (order.branchId !== ctx.branchId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Orden de otra sucursal" });
+      }
+
+      const itemStatusByStage: Record<string, string> = {
+        RECEIVED: "PENDING",
+        PREPARING: "IN_PROGRESS",
+        READY: "READY",
+        DONE: "SERVED",
+      };
+      const itemStatus = itemStatusByStage[input.stage];
+
+      if (input.stage === "DONE") {
+        // Entrega confirmada por el personal: la orden se cierra operativamente.
+        await ctx.restaurantDb
+          .update(orders)
+          .set({ status: "COMPLETED", updatedAt: new Date() })
+          .where(eq(orders.id, input.orderId));
+      }
+      // Items: movimiento BULK de KDS en la etapa; PREPARING no pisa items
+      // READY previos (item-level fino lo hace la página de cocina).
+      if (input.stage === "PREPARING") {
+        await ctx.restaurantDb
+          .update(orderItems)
+          .set({ status: "IN_PROGRESS" })
+          .where(and(
+            eq(orderItems.orderId, input.orderId),
+            eq(orderItems.status, "PENDING"),
+          ));
+      } else {
+        await ctx.restaurantDb
+          .update(orderItems)
+          .set({ status: itemStatus })
+          .where(eq(orderItems.orderId, input.orderId));
+      }
+
+      try {
+        bus.emit(EventTypes.KDS_ITEM_UPDATED, { orderId: input.orderId, stage: input.stage });
+      } catch { /* best-effort */ }
+
+      // Notificar al cliente (si viene de la app): la etapa cambió — outbox de
+      // la miniapp vía S2S (idempotente por dedupeKey cuando el stage repite).
+      if (order.customerId && input.stage !== "RECEIVED") {
+        try {
+          const stageCopy: Record<string, { title: string; message: string }> = {
+            PREPARING: { title: "🔥 Tu pedido está en preparación", message: `Ya con marchas tu pedido #${input.orderId.slice(-6).toUpperCase()} — te iremos avisando.` },
+            READY: { title: "✅ ¡Pedido listo!", message: `Tu pedido #${input.orderId.slice(-6).toUpperCase()} del negocio ya está listo.` },
+            DONE: { title: "🎉 Pedido entregado", message: "¡Buen provecho! Tu cashback Bunz se acredita con la venta." },
+          };
+          const copy = stageCopy[input.stage];
+          if (copy) {
+            const stageKey = `order_stage:${input.orderId}:${input.stage}`;
+            await miniappClient.sendNotification({
+              userId: order.customerId,
+              title: copy.title,
+              message: copy.message,
+              type: "SYSTEM",
+              route: "/",
+              dedupeKey: stageKey,
+            });
+          }
+        } catch (noticeErr) {
+          console.warn('[setOrderStage] notify cliente falló (no fatal):', noticeErr);
+        }
+      }
+
+      return { success: true, stage: input.stage };
+    }),
 
   /**
    * Fase 3: Envío directo de la cuenta digital al móvil del Rabbitter.

@@ -20,6 +20,8 @@ import MembershipCard from '@/components/ui/MembershipCard';
 import ProfileDrawer from '@/components/ProfileDrawer';
 import { useTheme } from '@/contexts/ThemeContext';
 import RabbittyContourLoader from '@/components/ui/RabbittyContourLoader';
+import { useOrderTracking } from '@/lib/useOrderTracking';
+import { OrderTrackingCard } from '@/components/affiliate/OrderTrackingCard';
 import { openBunzy } from '@/lib/bunzyLaunch';
 import { MoodCheckInSheet } from '@/components/mood/MoodCheckInSheet';
 import { WelcomeRitual } from '@/components/ui/WelcomeRitual';
@@ -121,6 +123,17 @@ export default function FeedPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [purchasing, setPurchasing] = useState(false);
   const { showToast } = useToast();
+
+  // ── H-TRACK: pedidos en curso (tarjeta de seguimiento estilo paquetería) ──
+  // Bidireccional: el POS mueve la etapa, el móvil la ve aquí y puede pagar
+  // directo desde el sheet (mismo módulo de pago, InAppPaySheet).
+  const { orders: trackedOrders, loaded: trackingLoaded, refresh: refreshTracking } = useOrderTracking(
+    true,
+    () => {
+      PlatformBridge.hapticFeedback('success');
+      showToast('🎉 ¡Pedido completado!', 'success');
+    },
+  );
 
   const { user } = useAuth();
   const userAvatar = useUserAvatar(user, 'E91E63');
@@ -836,6 +849,11 @@ export default function FeedPage() {
             <div className="mb-2">
               <RabbittyContourLoader size={54} label="Actualizando..." />
             </div>
+          )}
+
+          {/* ── H-TRACK: tarjeta de seguimiento (top del feed, sobre el pass) ── */}
+          {activeTab === "bunz'in" && trackingLoaded && user?.id != null && (
+            <OrderTrackingCard orders={trackedOrders} onRefresh={() => void refreshTracking()} />
           )}
 
           {/* ── bunz'in tab ── */}
