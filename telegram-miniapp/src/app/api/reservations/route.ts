@@ -91,10 +91,22 @@ export async function POST(req: Request) {
       const isNewBusiness = !previousReservation;
 
       // Record spending
-      await tx
+      // D-13 · patrón condicional atómico (U8): la condición de saldo vive en el
+      // WHERE (además del FOR UPDATE), no en la comparación previa.
+      const debited = await tx
         .update(users)
         .set({ totalBunzSpent: sql`COALESCE(${users.totalBunzSpent}, 0) + ${bunzCost}` })
-        .where(eq(users.id, lockedUser.id));
+        .where(
+          and(
+            eq(users.id, lockedUser.id),
+            sql`COALESCE(${users.totalBunzEarned}, 0) - COALESCE(${users.totalBunzSpent}, 0) >= ${bunzCost}`
+          )
+        )
+        .returning({ id: users.id });
+
+      if (debited.length === 0) {
+        throw new Error('INSUFFICIENT_BUNZ');
+      }
 
       // Create reservation
       const [resRow] = await tx

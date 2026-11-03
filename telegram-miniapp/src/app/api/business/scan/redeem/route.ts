@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { users, ownedBusinesses, transactions } from '@/db/schema';
-import { eq, sql } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { parseTelegramUser, validateTelegramInitData } from '@/lib/telegramAuth';
 import { recordLedgerTransaction, findLedgerEntry } from '@/lib/ledgerHelper';
 import { sendEcosystemNotification } from '@/lib/push/notify';
@@ -88,10 +88,26 @@ export async function POST(req: NextRequest) {
       // H16-ECONOMIA (corrección 2026-11-02): la redención CONSUME el stock de
       // respaldo del negocio (inventario cumple la oferta que respaldó esos
       // Bunz) — ya NO se acredita (creaba disponibilidad sin respaldo nuevo = inflación)
-      await tx
+      //
+      // D-13 · Patrón condicional atómico (modelo §3): el respaldo se consume
+      // SOLO si alcanza. La condición vive en el WHERE (sin check-then-act) y si
+      // no devuelve fila la redención NO puede completarse → throw y se revierte
+      // toda la transacción (los Bunz del Rabbitter no se debitan).
+      // `GREATEST(0)` queda solo como protección secundaria de escritura.
+      const consumed = await tx
         .update(ownedBusinesses)
         .set({ bunzBalance: sql`GREATEST(0, COALESCE(${ownedBusinesses.bunzBalance}, 0) - ${bunzCost})` })
-        .where(eq(ownedBusinesses.id, businessId));
+        .where(
+          and(
+            eq(ownedBusinesses.id, businessId),
+            sql`COALESCE(${ownedBusinesses.bunzBalance}, 0) >= ${bunzCost}`
+          )
+        )
+        .returning({ remaining: ownedBusinesses.bunzBalance });
+
+      if (consumed.length === 0) {
+        throw new Error('BUSINESS_BACKING_INSUFFICIENT');
+      }
 
 
       // Record authoritative Ledger entry
@@ -170,6 +186,12 @@ export async function POST(req: NextRequest) {
     const errorMsg = error instanceof Error ? error.message : 'Internal server error';
     if (errorMsg === 'INSUFFICIENT_FUNDS') {
       return NextResponse.json({ error: 'Saldo insuficiente de Bunz' }, { status: 400 });
+    }
+    if (errorMsg === 'BUSINESS_BACKING_INSUFFICIENT') {
+      return NextResponse.json(
+        { error: 'Este negocio no tiene respaldo suficiente para este canje en este momento. Tus Bunz siguen intactos.' },
+        { status: 409 }
+      );
     }
     console.error('Redeem Error:', error);
     return NextResponse.json({ error: errorMsg }, { status: 500 });

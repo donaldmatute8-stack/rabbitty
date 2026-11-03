@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { users, ownedBusinesses, systemSettings } from '@/db/schema';
-import { eq, sql } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { recordTreasuryEntry } from '@/lib/treasury';
 import { recordLedgerTransaction, findLedgerEntry } from '@/lib/ledgerHelper';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
@@ -70,15 +70,24 @@ export async function POST(req: Request) {
         return;
       }
 
-      if ((business.bunzBalance || 0) < feeAmount) {
+      // D-13 · Patrón condicional atómico (modelo §3). La fila ya está bloqueada
+      // con FOR UPDATE, pero la autorización y el consumo del respaldo se
+      // ejecutan en la MISMA sentencia (nada de check-then-act): sin fila
+      // devuelta el fee no se cobra y la transacción se revierte completa.
+      const debited = await tx
+        .update(ownedBusinesses)
+        .set({ bunzBalance: sql`COALESCE(${ownedBusinesses.bunzBalance}, 0) - ${feeAmount}` })
+        .where(
+          and(
+            eq(ownedBusinesses.id, business.id),
+            sql`COALESCE(${ownedBusinesses.bunzBalance}, 0) >= ${feeAmount}`
+          )
+        )
+        .returning({ remaining: ownedBusinesses.bunzBalance });
+
+      if (debited.length === 0) {
         throw new Error('INSUFFICIENT_BUNZ_BALANCE');
       }
-
-      // Deduct from business bunz balance
-      await tx
-        .update(ownedBusinesses)
-        .set({ bunzBalance: sql`${ownedBusinesses.bunzBalance} - ${feeAmount}` })
-        .where(eq(ownedBusinesses.id, business.id));
 
       // Record in authoritative Ledger
       await recordLedgerTransaction(

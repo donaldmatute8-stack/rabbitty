@@ -757,8 +757,27 @@ export const paymentsRouter = router({
     .input(z.object({ intentId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const { PaymentIntentService } = await import("../services/paymentIntentDomain");
-      // El payer es la SESIÓN autenticada (identidad del que paga, inmutable server-side)
-      const intent = await PaymentIntentService.approveIntent(input.intentId, ctx.userId as string);
-      return intent;
+      try {
+        // El payer es la SESIÓN autenticada (identidad del que paga, inmutable server-side)
+        return await PaymentIntentService.approveIntent(input.intentId, ctx.userId as string);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        // D-13: el respaldo del afiliado es una regla ECONÓMICA, no un fallo técnico.
+        // Se devuelve un error de negocio legible en vez de un 500 opaco.
+        if (msg === "BUNZ_BACKING_INSUFFICIENT") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "El negocio no tiene respaldo suficiente para esta redención en este momento. El pago con Bunz no se completó y tus Bunz siguen intactos.",
+          });
+        }
+        if (msg === "BUNZ_BACKING_UNRESOLVED") {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "No se pudo resolver el negocio del cobro para consumir el respaldo Bunz.",
+          });
+        }
+        throw err;
+      }
     }),
 });

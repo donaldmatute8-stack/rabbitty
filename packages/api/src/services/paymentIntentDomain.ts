@@ -271,10 +271,23 @@ export class PaymentIntentService {
       const requiredBunzInt = Math.floor(intent.bunzAmount);
 
       // 3. Atomic Debit on users table (within SAME transaction)
-      await tx
+      // D-13 · patrón condicional atómico (U2/U10): la condición de saldo vive
+      // en el WHERE, no en la comparación previa. Sin fila devuelta el débito no
+      // se aplica y la transacción entera se revierte.
+      const debited = await tx
         .update(users)
         .set({ totalBunzSpent: sql`COALESCE(${users.totalBunzSpent}, 0) + ${requiredBunzInt}` })
-        .where(eq(users.id, payerUser.id));
+        .where(
+          and(
+            eq(users.id, payerUser.id),
+            sql`COALESCE(${users.totalBunzEarned}, 0) - COALESCE(${users.totalBunzSpent}, 0) >= ${requiredBunzInt}`
+          )
+        )
+        .returning({ id: users.id });
+
+      if (debited.length === 0) {
+        throw new Error("LEDGER_INSUFFICIENT_FUNDS");
+      }
 
       // 4. Insert Ledger Entry (within SAME transaction)
       const [insertedLedger] = await tx
@@ -400,33 +413,6 @@ export class PaymentIntentService {
           verificationMethod: "SYSTEM_VERIFIED",
         });
 
-        // D-13 RESUELTA (2026-11-02, modelo corregido por Marco): el stock
-        // (bunzBalance) es DISPONIBILIDAD DE REDENCIÓN del afiliado — al pagar
-        // con Bunz, la oferta se cumple y el stock SE REDUCE (los Bunz no
-        // "van" a una cuenta del negocio; emisión ≠ tesorería).
-        try {
-          const [bn] = await tx
-            .select({ restaurantId: branches.restaurantId })
-            .from(branches)
-            .where(eq(branches.id, intent.merchantId))
-            .limit(1);
-          if (bn?.restaurantId) {
-            const [rest] = await tx
-              .select({ businessId: restaurants.businessId })
-              .from(restaurants)
-              .where(eq(restaurants.id, bn.restaurantId))
-              .limit(1);
-            if (rest?.businessId) {
-              await tx
-                .update(ownedBusinesses)
-                .set({ bunzBalance: sql`GREATEST(0, COALESCE("bunzBalance", 0) - ${Number(intent.bunzAmount || 0)})` })
-                .where(eq(ownedBusinesses.id, rest.businessId));
-            }
-          }
-        } catch (creditErr) {
-          console.error("[BUNZ_SETTLE] credito bunzBalance falló (no fatal):", creditErr);
-        }
-
         // H16-2 partial set: la orden solo marca COMPLETED cuando el total pagado
         // (todas las payments COMPLETED de la orden) cubre el total de la orden.
         // Si quedó resto, la orden queda PENDING (como tab) y el POS cobra el
@@ -451,6 +437,54 @@ export class PaymentIntentService {
               : { bunzPaid: requiredBunzInt }
           )
           .where(eq(orders.id, intent.orderId));
+      }
+
+      // ── D-13 · Patrón condicional atómico (modelo §3) ──
+      // `bunzBalance` = capacidad de redención RESPALDADA y DISPONIBLE del
+      // afiliado. Al pagar con Bunz la oferta se cumple y el respaldo SE CONSUME
+      // (los Bunz no "van" a una cuenta del negocio; emisión ≠ tesorería).
+      //
+      // Regla económica: sin disponibilidad suficiente la redención NO puede
+      // completarse. La condición vive en el WHERE (atómico, sin check-then-act)
+      // y si no devuelve fila se revierte TODA la transacción — incluido el
+      // débito del Rabbitter y el SETTLED del intent. `GREATEST(0)` queda solo
+      // como protección secundaria de escritura, jamás como regla de negocio.
+      //
+      // Va fuera de `if (intent.orderId)` a propósito: un cobro con Bunz sin
+      // orden asociada (bill-bunz-pay) también consume respaldo.
+      const bunzToConsume = Math.floor(Number(intent.bunzAmount || 0));
+      if (bunzToConsume > 0) {
+        const [bn] = await tx
+          .select({ restaurantId: branches.restaurantId })
+          .from(branches)
+          .where(eq(branches.id, intent.merchantId))
+          .limit(1);
+        const [rest] = bn?.restaurantId
+          ? await tx
+              .select({ businessId: restaurants.businessId })
+              .from(restaurants)
+              .where(eq(restaurants.id, bn.restaurantId))
+              .limit(1)
+          : [];
+
+        if (!rest?.businessId) {
+          throw new Error("BUNZ_BACKING_UNRESOLVED");
+        }
+
+        const consumed = await tx
+          .update(ownedBusinesses)
+          .set({ bunzBalance: sql`GREATEST(0, COALESCE("bunzBalance", 0) - ${bunzToConsume})` })
+          .where(
+            and(
+              eq(ownedBusinesses.id, rest.businessId),
+              sql`COALESCE("bunzBalance", 0) >= ${bunzToConsume}`
+            )
+          )
+          .returning({ remaining: ownedBusinesses.bunzBalance });
+
+        if (consumed.length === 0) {
+          throw new Error("BUNZ_BACKING_INSUFFICIENT");
+        }
       }
 
       return {

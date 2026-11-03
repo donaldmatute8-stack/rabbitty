@@ -84,6 +84,31 @@ protección secundaria de escritura, no como regla económica. La transacción d
 atómica entre: débito del Rabbitter + ledger + reducción del respaldo + idempotencia
 por operación.
 
+### 3.1 Estado de aplicación del patrón (2026-11-03 — D-13 CERRADA en código)
+
+El patrón ya no es una intención: está aplicado en los **cinco puntos de dinero** que
+tocaban `bunzBalance` o el saldo del Rabbitter. En todos, la condición vive en el `WHERE`
+y la ausencia de fila devuelta lanza un error que **revierte la transacción completa**:
+
+| Punto | Archivo | Operación | Error al no haber disponibilidad |
+|---|---|---|---|
+| **W7** | `packages/api/src/services/paymentIntentDomain.ts` | Consumo de respaldo al liquidar un cobro con Bunz (fuera de `if (intent.orderId)`, cubre también bill-bunz-pay) | `BUNZ_BACKING_INSUFFICIENT` (si el negocio no se resuelve: `BUNZ_BACKING_UNRESOLVED`) |
+| **U2/U10** | `packages/api/src/services/paymentIntentDomain.ts` | Débito de `totalBunzSpent` del Rabbitter al liquidar | `LEDGER_INSUFFICIENT_FUNDS` |
+| **W6** | `telegram-miniapp/src/app/api/business/scan/redeem/route.ts` | Redención en local (canje escaneado) | `BUSINESS_BACKING_INSUFFICIENT` → HTTP 409 "Tus Bunz siguen intactos" |
+| **W5** | `telegram-miniapp/src/app/api/business/pay-fee/route.ts` | Fee de alta del afiliado | `INSUFFICIENT_BUNZ_BALANCE` (se eliminó el check-then-act previo) |
+| **U2** | `packages/api/src/services/paymentCore.ts` | Hold de Bunz al crear el intent (reserva) | `BUNZ_RESERVE_INSUFFICIENT_FUNDS` |
+| **U8** | `telegram-miniapp/src/app/api/reservations/route.ts` | Débito por reserva de oferta | `INSUFFICIENT_BUNZ` |
+
+Notas de implementación:
+- Los errores de respaldo del afiliado se mapean a `TRPCError` legibles en
+  `packages/api/src/routers/payments.ts` (`approveIntent`) — una regla económica no debe
+  salir como 500 opaco.
+- `GREATEST(0)` **permanece** en las expresiones de escritura, pero ya no decide nada:
+  es cinturón de seguridad, no la regla.
+- Lo que **sigue abierto** no es código sino **conciliación histórica** (D-14/D-17): los
+  saldos actuales en prod (Bull Box 5000, 626 Café 3550, Ka13 37) incluyen efectos de la
+  época en que la redención acreditaba en vez de consumir.
+
 ## 4. Pago mixto — contabilidad de la factura
 
 PaymentIntent/factura debe **mantener separados** en su registro (los estados de
@@ -100,12 +125,17 @@ la regla de valoración/elegibilidad define la parte cubierta por redención, y 
 (fiat) se calcula **solo** sobre la parte fiat elegible según D-10/reglas vigentes.
 Una misma operación **jamás** genera doble recompensa.
 
-## 5. Mapa de writers — requisitos de demostración (sin ✅ hasta verificar)
+## 5. Mapa de writers — requisitos de demostración
 
 Cada writer que incrementa `ownedBusinesses.bunzBalance` debe demostrar **qué capacidad
 de redención incorpora y qué respaldo la autoriza**; un retry no debe volver a sumar.
-Detalle por writer en `Docs/ECONOMIA-BUNZ-AUDIT-H17.md` (veredictos por ruta) — el dictamen
-es: no declarar los writers correctos hasta que la auditoría de correspondencia concluya.
+Detalle por writer en `Docs/ECONOMIA-BUNZ-AUDIT-H17.md` (veredictos por ruta).
+
+**Estado 2026-11-03:** los writers de **consumo** (W5, W6, W7, U2, U8) ya cumplen el
+patrón §3 y están marcados en la matriz. Lo que falta para declarar el mapa completo es
+la **metadata de origen** en los writers de **incremento** (de dónde salió cada Bunz:
+venta fiat o inventario comprometido) — es el insumo de D-17, no un cambio de código
+pendiente de dinero.
 
 ## 6..Future — Tesorería de afiliados y blockchain
 

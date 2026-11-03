@@ -245,12 +245,24 @@ export async function createOrGetPaymentIntent(
     let reserveId: string | undefined;
     if (bunzToReserve > 0 && input.payerUserId) {
       // Incrementar totalBunzSpent temporalmente para retener el saldo (Hold)
-      await tx
+      // D-13 · patrón condicional atómico (U2/U10): la condición de saldo vive
+      // en el WHERE, no solo en la lectura previa con FOR UPDATE.
+      const held = await tx
         .update(users)
         .set({
           totalBunzSpent: sql`COALESCE(${users.totalBunzSpent}, 0) + ${Math.round(bunzToReserve)}`,
         })
-        .where(eq(users.id, input.payerUserId));
+        .where(
+          and(
+            eq(users.id, input.payerUserId),
+            sql`COALESCE(${users.totalBunzEarned}, 0) - COALESCE(${users.totalBunzSpent}, 0) >= ${Math.round(bunzToReserve)}`
+          )
+        )
+        .returning({ id: users.id });
+
+      if (held.length === 0) {
+        throw new Error("BUNZ_RESERVE_INSUFFICIENT_FUNDS");
+      }
 
       const [res] = await tx
         .insert(bunzReserves)
