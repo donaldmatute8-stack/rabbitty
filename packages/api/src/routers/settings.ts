@@ -110,4 +110,77 @@ export const settingsRouter = router({
         .where(eq(ownedBusinesses.id, biz.id));
       return { success: true, chatReplyChannel: input.channel };
     }),
+
+  /**
+   * ── Perfil público del negocio (lo que ve el Rabbitter en la app) ──
+   * Fuente única: ownedBusinesses. Antes solo se podía tocar el canal de chat;
+   * horario, "Acerca de" y sitio web no tenían editor en ningún admin.
+   */
+  getBusinessProfile: protectedProcedure.query(async ({ ctx }) => {
+    const [biz] = await ctx.coreDb
+      .select({
+        id: ownedBusinesses.id,
+        name: ownedBusinesses.name,
+        category: ownedBusinesses.category,
+        description: ownedBusinesses.description,
+        address: ownedBusinesses.address,
+        website: ownedBusinesses.website,
+        activeDays: ownedBusinesses.activeDays,
+        startTime: ownedBusinesses.startTime,
+        endTime: ownedBusinesses.endTime,
+        timezone: ownedBusinesses.timezone,
+        rewardPercentage: ownedBusinesses.rewardPercentage,
+        gallery: ownedBusinesses.gallery,
+        logoUrl: ownedBusinesses.logoUrl,
+      })
+      .from(ownedBusinesses)
+      .where(eq(ownedBusinesses.ownerId, ctx.userId))
+      .limit(1);
+    if (!biz) return { business: null };
+    return { business: biz };
+  }),
+
+  updateBusinessProfile: protectedProcedure
+    .input(z.object({
+      name: z.string().min(2).max(80).optional(),
+      description: z.string().max(600).nullable().optional(),
+      address: z.string().min(3).max(200).optional(),
+      website: z.string().max(200).nullable().optional(),
+      /** Días activos ISO-8601: 1=lunes … 7=domingo */
+      activeDays: z.array(z.number().int().min(1).max(7)).min(1).max(7).optional(),
+      /** "HH:MM" 24h */
+      startTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+      endTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+      timezone: z.string().max(60).optional(),
+      rewardPercentage: z.number().int().min(1).max(100).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const [biz] = await ctx.coreDb
+        .select({ id: ownedBusinesses.id })
+        .from(ownedBusinesses)
+        .where(eq(ownedBusinesses.ownerId, ctx.userId))
+        .limit(1);
+      if (!biz) throw new TRPCError({ code: "NOT_FOUND", message: "No tienes un comercio asociado a esta cuenta" });
+
+      // Normaliza el sitio web: acepta "midominio.com" y guarda con protocolo.
+      let website: string | null | undefined = input.website;
+      if (typeof website === "string") {
+        const trimmed = website.trim();
+        website = trimmed.length === 0 ? null : (trimmed.startsWith("http") ? trimmed : `https://${trimmed}`);
+      }
+
+      const patch: Record<string, unknown> = { updatedAt: new Date() };
+      if (input.name !== undefined) patch.name = input.name.trim();
+      if (input.description !== undefined) patch.description = input.description?.trim() || null;
+      if (input.address !== undefined) patch.address = input.address.trim();
+      if (website !== undefined) patch.website = website;
+      if (input.activeDays !== undefined) patch.activeDays = JSON.stringify(Array.from(new Set(input.activeDays)).sort());
+      if (input.startTime !== undefined) patch.startTime = input.startTime;
+      if (input.endTime !== undefined) patch.endTime = input.endTime;
+      if (input.timezone !== undefined) patch.timezone = input.timezone;
+      if (input.rewardPercentage !== undefined) patch.rewardPercentage = input.rewardPercentage;
+
+      await ctx.coreDb.update(ownedBusinesses).set(patch).where(eq(ownedBusinesses.id, biz.id));
+      return { success: true };
+    }),
 });

@@ -38,6 +38,8 @@ export const ownedBusinesses = pgTable("ownedBusinesses", {
   lng: real("lng").notNull(),
   logoUrl: text("logoUrl"),
   gallery: text("gallery").default("[]").notNull(),
+  // Sitio web oficial (lo configura el afiliado en el admin). NULL = sin enlace.
+  website: text("website"),
   rewardPercentage: integer("rewardPercentage").default(10).notNull(),
   rarity: text("rarity").default("common").notNull(),
   givesBunz: boolean("givesBunz").default(true).notNull(),
