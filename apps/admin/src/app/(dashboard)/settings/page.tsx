@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { trpc } from "../../../lib/trpc-client";
 import { AccountBiometricsCard } from "../../../components/AccountBiometricsCard";
 import { Card, Badge, Button, Input, toast } from "@rabbitty/ui";
@@ -11,7 +12,7 @@ import {
   Coffee, UtensilsCrossed, Wine, Truck, ChefHat, Zap, Settings, 
   ToggleLeft, ToggleRight, Table2, Package, Users, CalendarCheck, 
   Sparkles, BookUser, Receipt, Lock, Hash, AlertTriangle, ShieldCheck,
-  MessageSquare, CreditCard
+  MessageSquare, CreditCard, ChevronRight
 } from "lucide-react";
 import { cn } from "@rabbitty/ui";
 import { ScannerPairModal } from "../../../components/ScannerPairModal";
@@ -559,7 +560,23 @@ export default function SettingsPage() {
           TAB: GENERAL
       ══════════════════════════════════════════════════════════════ */}
       {activeTab === "general" && (
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="space-y-4">
+          {/* Ahora hay UN lugar canónico para el negocio; esto queda como acceso rápido */}
+          <Link
+            href="/perfil-negocio"
+            className="flex items-center gap-3 rounded-2xl border border-pink-500/30 bg-pink-500/10 px-4 py-3 no-underline hover:bg-pink-500/15 transition-colors"
+          >
+            <Store className="h-5 w-5 text-pink-400 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] font-black text-white m-0">Configuración del negocio centralizada</p>
+              <p className="text-[11px] text-gray-400 m-0">
+                Perfil público, sucursal, operación del POS, Bunz y equipo viven ahora en <strong>Mi negocio</strong>.
+              </p>
+            </div>
+            <ChevronRight className="h-4 w-4 text-pink-300 shrink-0" />
+          </Link>
+
+          <div className="grid gap-6 lg:grid-cols-2">
           {/* Profile Card */}
           <Card className="p-6 border border-white/5 bg-white/5 backdrop-blur-md hover:border-white/10 transition-all duration-300">
             <div className="mb-5 flex items-center justify-between">
@@ -1073,6 +1090,7 @@ export default function SettingsPage() {
               })}
             </div>
           </Card>
+        </div>
         </div>
       )}
 

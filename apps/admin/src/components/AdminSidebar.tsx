@@ -244,7 +244,7 @@ const menuPillars: MenuPillar[] = [
     icon: Settings,
     items: [
       { href: "/restaurants", label: "Mis Sucursales & Afiliados", icon: Store },
-      { href: "/perfil-negocio", label: "Perfil del Negocio (app)", icon: Store },
+      { href: "/perfil-negocio", label: "Mi negocio (perfil · POS · Bunz)", icon: Store },
       { href: "/settings?tab=payments", label: "Pasarela & Stripe Connect", icon: CreditCard, badge: "Pay" },
       { href: "/staff", label: "Personal & Roles", icon: Users },
       { href: "/hardware", label: "Impresoras & Hardware", icon: Printer },
