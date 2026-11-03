@@ -12,9 +12,29 @@ import { recordLedgerTransaction, findLedgerEntry } from '@/lib/ledgerHelper';
 const TAX_RATE = 0.16;
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
+// H-ORDER-LOCAL: el cliente del perfil afiliado manda el id del NEGOCIO
+// (ownedBusinesses.id) en `branchId` — NO es un branches.id, y el INSERT en
+// orders reventaba con FK (error "Failed query: insert into \"orders\""
+// llegando crudo al usuario). Resolvemos ambos casos: branch id directo, o
+// business id → restaurante → sucursal.
+async function resolveBranchId(branchOrBusinessId: string): Promise<string | null> {
+  const [byId] = await restaurantDb
+    .select({ id: branches.id })
+    .from(branches)
+    .where(eq(branches.id, branchOrBusinessId))
+    .limit(1);
+  if (byId) return byId.id;
+  const byBusiness = await restaurantDb
+    .select({ id: branches.id })
+    .from(branches)
+    .innerJoin(restaurants, eq(branches.restaurantId, restaurants.id))
+    .where(eq(restaurants.businessId, branchOrBusinessId))
+    .limit(1);
+  return byBusiness?.[0]?.id ?? null;
+}
+
 export async function POST(req: Request) {
-  try {
-    const body = await req.json();
+  try {    const body = await req.json();
     const { tableId, items, paymentMethod, tip = 0, existingOrderId, splitPaymentAmount } = body;
 
     // Si pasaron existingOrderId, es un Split Bill.
@@ -42,7 +62,14 @@ export async function POST(req: Request) {
         [table] = await restaurantDb.select().from(tables).where(eq(tables.id, tableId));
         if (!table) return NextResponse.json({ success: false, error: 'Mesa no válida' }, { status: 404 });
       }
-      const orderBranchId = table?.branchId || body.branchId || null;
+      const rawBranchRef = table?.branchId || body.branchId || null;
+      const orderBranchId = rawBranchRef ? await resolveBranchId(String(rawBranchRef)) : null;
+      if (!orderBranchId) {
+        return NextResponse.json(
+          { success: false, error: 'Aún no hay sucursal configurada para este negocio en el sistema del local. Avisa al comercio.' },
+          { status: 422 }
+        );
+      }
       if (!orderBranchId) {
         return NextResponse.json({ success: false, error: 'Mesa no válida' }, { status: 404 });
       }
@@ -360,7 +387,17 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true, orderId: targetOrderId });
   } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : 'Error desconocido procesando pago';
-    return NextResponse.json({ success: false, error: errorMsg }, { status: 500 });
+    // H-ORDEN-UX: los errores de SQL/Drizzle (p. ej. el famoso
+    // `Failed query: insert into "orders"…` con la query completa) JAMÁS
+    // salen al usuario — el detalle queda solo en el log del server.
+    const raw = err instanceof Error ? err.message : String(err ?? 'Error desconocido');
+    let friendly = 'No pudimos registrar tu pedido. Revisa tu conexión e intenta de nuevo.';
+    if (raw.includes('SALDO_INSUFICIENTE_BUNZ')) {
+      friendly = 'No tienes Bunz suficientes para cubrir esta cuenta.';
+    } else if (raw.includes('23503') || raw.includes('foreign key')) {
+      friendly = 'No pudimos identificar el local de este pedido. Vuelve a entrar al negocio o escanea el QR del local.';
+    }
+    console.error('[POS_CHECKOUT]', raw);
+    return NextResponse.json({ success: false, error: friendly }, { status: 500 });
   }
 }

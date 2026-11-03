@@ -873,8 +873,15 @@ function AffiliateProfileContent() {
                   {totalCartCount}
                 </div>
                 <div className="text-left">
-                  <span className="block font-black text-sm leading-tight">Ver orden en mesa</span>
-                  <span className="text-[10px] text-white/80 font-medium">Revisa tus productos agregados</span>
+                  {/* H-ORDEN-LOCAL: etiqueta coherente con el destino del pedido */}
+                  <span className="block font-black text-sm leading-tight">
+                    {hasPresenceCheckedIn ? 'Tu orden · en el local' : 'Tu pedido'}
+                  </span>
+                  <span className="text-[10px] text-white/80 font-medium">
+                    {hasPresenceCheckedIn
+                      ? 'Se envía al local y se suma a tu comanda'
+                      : 'En Mesa o Para recoger'}
+                  </span>
                 </div>
               </div>
               <div className="flex items-center gap-1.5 bg-black/20 py-1.5 px-3 rounded-xl border border-white/10">
@@ -989,6 +996,8 @@ function AffiliateProfileContent() {
         tableNumber={tableNumber}
         rewardPercentage={affiliate.rewardPercentage}
         businessName={affiliate.name}
+        // H-ORDEN-LOCAL: check-in activo ⇒ pedido directo al local, sin picker.
+        checkedIn={hasPresenceCheckedIn}
       />
 
       {/* Map selector modal */}

@@ -27,6 +27,13 @@ interface OrderCartSheetProps {
   currency?: string;
   rewardPercentage?: number;
   businessName: string;
+  /**
+   * H-ORDEN-LOCAL: el Rabbitter tiene check-in activo en este local.
+   * No se duplica el selector "En Mesa / Para Recoger": el pedido va directo
+   * al local (DINE_IN) y se suma a su comanda — "se pide y ya" al estar
+   * presente. Sin check-in queda el picker para llevar/en mesa.
+   */
+  checkedIn?: boolean;
 }
 
 export function OrderCartSheet({
@@ -41,12 +48,18 @@ export function OrderCartSheet({
   currency = 'MXN',
   rewardPercentage = 10,
   businessName,
+  checkedIn = false,
 }: OrderCartSheetProps) {
   const [submitting, setSubmitting] = React.useState(false);
   const [orderSuccess, setOrderSuccess] = React.useState(false);
   const [orderType, setOrderType] = React.useState<'DINE_IN' | 'PICKUP'>(
     tableNumber ? 'DINE_IN' : 'PICKUP'
   );
+
+  // H-ORDEN-LOCAL: con check-in activo el destino es el local, sin excepción.
+  React.useEffect(() => {
+    if (checkedIn) setOrderType('DINE_IN');
+  }, [checkedIn]);
 
   const subtotal = cart.reduce((acc, item) => {
     const modsTotal = (item.modifiers || []).reduce((mAcc, m) => mAcc + (Number(m.priceAdjust) || 0), 0);
@@ -117,31 +130,43 @@ export function OrderCartSheet({
             </div>
           ) : (
             <>
-              {/* Order Mode Selector */}
-              <div className="grid grid-cols-2 gap-2 my-4 bg-white/5 p-1 rounded-2xl border border-white/5">
-                <button
-                  type="button"
-                  onClick={() => setOrderType('DINE_IN')}
-                  className={`py-2 text-xs font-black rounded-xl transition-all ${
-                    orderType === 'DINE_IN'
-                      ? 'bg-[#E91E63] text-white shadow-md'
-                      : 'text-white/60 hover:text-white'
-                  }`}
-                >
-                  En Mesa {tableNumber ? `(#${tableNumber})` : ''}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOrderType('PICKUP')}
-                  className={`py-2 text-xs font-black rounded-xl transition-all ${
-                    orderType === 'PICKUP'
-                      ? 'bg-[#E91E63] text-white shadow-md'
-                      : 'text-white/60 hover:text-white'
-                  }`}
-                >
-                  Para Recoger
-                </button>
-              </div>
+              {/* Order Mode Selector — solo cuando NO está en el local
+                  (H-ORDEN-LOCAL: con check-in el pedido va directo al local) */}
+              {checkedIn ? (
+                <div className="my-4 px-3 py-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center gap-2">
+                  <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
+                  <p className="text-[11px] font-bold text-emerald-300 m-0 leading-snug">
+                    {tableNumber
+                      ? `Va directo a tu comanda · Mesa #${tableNumber}`
+                      : 'Va directo al local — el personal lo puede llevar a tu mesa'}
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2 my-4 bg-white/5 p-1 rounded-2xl border border-white/5">
+                  <button
+                    type="button"
+                    onClick={() => setOrderType('DINE_IN')}
+                    className={`py-2 text-xs font-black rounded-xl transition-all ${
+                      orderType === 'DINE_IN'
+                        ? 'bg-[#E91E63] text-white shadow-md'
+                        : 'text-white/60 hover:text-white'
+                    }`}
+                  >
+                    En Mesa {tableNumber ? `#${tableNumber}` : ''}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOrderType('PICKUP')}
+                    className={`py-2 text-xs font-black rounded-xl transition-all ${
+                      orderType === 'PICKUP'
+                        ? 'bg-[#E91E63] text-white shadow-md'
+                        : 'text-white/60 hover:text-white'
+                    }`}
+                  >
+                    Para Recoger
+                  </button>
+                </div>
+              )}
 
               {/* Items List */}
               <div className="flex-1 overflow-y-auto space-y-3 py-2 pr-1">

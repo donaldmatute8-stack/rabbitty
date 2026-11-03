@@ -58,7 +58,9 @@ export function MoodCheckInSheet({
   const [freeText, setFreeText] = useState('');
   const [interpreting, setInterpreting] = useState(false);
   const [bunzyReply, setBunzyReply] = useState<string | null>(null);
-  const [activeMusicTab, setActiveMusicTab] = useState<'spotify' | 'apple' | 'youtube'>('spotify');
+  // H-MOOD-AUDIO: por ahora solo Spotify — Apple Music/YouTube fuera del alcance
+  // (los datos de playlists en types/mood.ts se conservan; solo los toggles se ocultan).
+  const [activeMusicTab] = useState<'spotify'>('spotify');
 
   // Cada vez que se abre el panel arranca limpio (evita mostrar el resultado de la vez anterior)
   const [prevOpen, setPrevOpen] = useState(isOpen);
@@ -71,7 +73,6 @@ export function MoodCheckInSheet({
       setCampaign(null);
       setFreeText('');
       setBunzyReply(null);
-      setActiveMusicTab('spotify');
     }
   }
 
@@ -526,46 +527,19 @@ export function MoodCheckInSheet({
                       <span>Banda Sonora Recomendada</span>
                     </div>
 
-                    {/* Platform Selector Buttons */}
+                    {/* Platform Selector — SOLO Spotify por ahora (H-MOOD-AUDIO):
+                        Apple Music/YouTube ocultos hasta tenerlos montados */}
                     <div className="flex items-center gap-1 p-0.5 rounded-lg bg-(--bg-subtle) border border-(--border-subtle)">
-                      <button
-                        onClick={() => setActiveMusicTab('spotify')}
-                        className={`px-2 py-0.5 text-[10px] font-bold rounded cursor-pointer border-none transition-all ${
-                          activeMusicTab === 'spotify' ? 'bg-[#1DB954] text-black shadow-xs' : 'bg-transparent text-(--text-muted)'
-                        }`}
-                      >
+                      <button className="px-2 py-0.5 text-[10px] font-bold rounded bg-[#1DB954] text-black shadow-xs border-none">
                         Spotify
-                      </button>
-                      <button
-                        onClick={() => setActiveMusicTab('apple')}
-                        className={`px-2 py-0.5 text-[10px] font-bold rounded cursor-pointer border-none transition-all ${
-                          activeMusicTab === 'apple' ? 'bg-[#FC3C44] text-white shadow-xs' : 'bg-transparent text-(--text-muted)'
-                        }`}
-                      >
-                        Apple
-                      </button>
-                      <button
-                        onClick={() => setActiveMusicTab('youtube')}
-                        className={`px-2 py-0.5 text-[10px] font-bold rounded cursor-pointer border-none transition-all ${
-                          activeMusicTab === 'youtube' ? 'bg-[#FF0000] text-white shadow-xs' : 'bg-transparent text-(--text-muted)'
-                        }`}
-                      >
-                        YouTube
                       </button>
                     </div>
                   </div>
 
                   {/* Album Cover & Track Preview */}
                   <div className="flex items-center gap-3.5 p-3 rounded-2xl bg-(--bg-subtle) border border-(--border-subtle)">
-                    <div 
-                      className="w-13 h-13 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-md relative overflow-hidden"
-                      style={{
-                        background: activeMusicTab === 'spotify' 
-                          ? 'linear-gradient(135deg, #1DB954 0%, #15883e 100%)' 
-                          : activeMusicTab === 'apple' 
-                          ? 'linear-gradient(135deg, #FC3C44 0%, #D6222A 100%)' 
-                          : 'linear-gradient(135deg, #FF0000 0%, #B30000 100%)'
-                      }}
+                    <div className="w-13 h-13 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-md relative overflow-hidden"
+                      style={{ background: 'linear-gradient(135deg, #1DB954 0%, #15883e 100%)' }}
                     >
                       <Disc3 className="h-7 w-7 animate-spin [animation-duration:6s] opacity-90" />
                       <div className="absolute inset-0 bg-black/10 flex items-center justify-center">
@@ -583,23 +557,13 @@ export function MoodCheckInSheet({
                     </div>
 
                     <a
-                      href={
-                        activeMusicTab === 'spotify' 
-                          ? activeExperience.music.spotifyUrl 
-                          : activeMusicTab === 'apple' 
-                          ? activeExperience.music.appleMusicUrl 
-                          : activeExperience.music.youtubeUrl
-                      }
+                      href={activeExperience.music.spotifyUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="px-3 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 no-underline active:scale-95 transition-transform"
                       style={{
-                        background: activeMusicTab === 'spotify' 
-                          ? '#1DB954' 
-                          : activeMusicTab === 'apple' 
-                          ? '#FC3C44' 
-                          : '#FF0000',
-                        color: activeMusicTab === 'spotify' ? '#000000' : '#FFFFFF',
+                        background: '#1DB954',
+                        color: '#000000',
                         boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                       }}
                     >
