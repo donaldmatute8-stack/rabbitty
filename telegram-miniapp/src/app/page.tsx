@@ -268,6 +268,23 @@ export default function FeedPage() {
     }
   };
 
+  // El usuario acaba de conceder ubicación (nudge) → tomarla de inmediato.
+  useEffect(() => {
+    const onGranted = () => { void requestLocation(); };
+    window.addEventListener('rabbitty:location-granted', onGranted);
+    return () => window.removeEventListener('rabbitty:location-granted', onGranted);
+  }, []);
+
+  // Freehands (mapa): si no tenemos ubicación, la pedimos sola al entrar.
+  const autoLocatedRef = useRef(false);
+  useEffect(() => {
+    if (activeTab !== 'Freehands') return;
+    if (autoLocatedRef.current) return;
+    if (userLat != null && userLng != null) return;
+    autoLocatedRef.current = true;
+    void requestLocation();
+  }, [activeTab, userLat, userLng]);
+
   useEffect(() => {
     // Si el permiso ya está concedido previamente o en entorno compatible, recupera silenciosamente
     if (typeof window !== 'undefined' && 'permissions' in navigator) {

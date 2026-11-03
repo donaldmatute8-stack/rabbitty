@@ -44,7 +44,12 @@ export default function LocationNudge() {
     setBusy(true);
     try {
       const { Geolocation } = await import('@capacitor/geolocation');
-      await Geolocation.requestPermissions();
+      const status = await Geolocation.requestPermissions();
+      // Permiso concedido → la app toma la ubicación YA (mapa y proximidad sin
+      // que el usuario tenga que volver a pedirla).
+      if (status.location === 'granted') {
+        window.dispatchEvent(new Event('rabbitty:location-granted'));
+      }
     } catch { /* noop */ }
     setVisible(false);
     setBusy(false);
