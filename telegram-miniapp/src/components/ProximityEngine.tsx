@@ -250,6 +250,63 @@ export default function ProximityEngine() {
           </div>
         </motion.div>
       )}
+      <LocationAlwaysNudge />
     </AnimatePresence>
+  );
+}
+
+// ── H20: nudge de permiso SIEMPRE (iOS Background) ──
+// El proximity push con app cerrada requiere permiso de ubicación "Siempre".
+// iOS no ofrece "Always" en el primer prompt; esta tarjeta lo invita con un
+// deep-link a Settings. Aparece UNA vez (dismiss persistido), solo nativo.
+function LocationAlwaysNudge() {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    if (!PlatformBridge.isNative()) return;
+    try {
+      if (localStorage.getItem('loc_always_nudge_ok') === '1') return;
+    } catch {}
+    setVisible(true);
+  }, []);
+  if (!visible) return null;
+  const dismiss = () => {
+    try { localStorage.setItem('loc_always_nudge_ok', '1'); } catch {}
+    setVisible(false);
+  };
+  return (
+    <div className="rounded-2xl border p-4 space-y-2" style={{ background: 'var(--bg-elevated)', borderColor: 'rgba(233,30,99,0.35)' }}>
+      <p className="text-[12px] font-black m-0" style={{ color: 'var(--text-primary)' }}>
+        ¿Recibir alertas de cercanía con la app cerrada?
+      </p>
+      <p className="text-[11px] m-0 leading-snug" style={{ color: 'var(--text-muted)' }}>
+        Activa <strong style={{ color: 'var(--text-primary)' }}>Permitir acceso a la ubicación</strong> en Ajustes de iOS y elige <strong style={{ color: 'var(--text-primary)' }}>Rabbitty → Ubicación → Siempre</strong>.
+      </p>
+      <div className="flex gap-2 pt-1">
+        <button
+          type="button"
+          onClick={() => {
+            PlatformBridge.hapticFeedback('light');
+            void (async () => {
+              try {
+                const { App } = await import('@capacitor/app');
+                // @ts-expect-error launchUrl está disponible en runtime del AppPlugin
+                await App.launchUrl({ url: 'app-settings:' });
+              } catch {
+                window.location.href = 'app-settings:';
+              }
+              dismiss();
+            })();
+          }}
+          className="flex-1 rounded-xl py-2.5 text-[11px] font-black cursor-pointer active:scale-[0.98] transition-transform"
+          style={{ background: '#E91E63', border: 'none', color: 'white' }}
+        >Abrir Ajustes de iOS</button>
+        <button
+          type="button"
+          onClick={dismiss}
+          className="rounded-xl px-3 py-2.5 text-[11px] font-black cursor-pointer active:scale-[0.98] transition-transform"
+          style={{ background: 'var(--bg-pressed)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}
+        >Ahora no</button>
+      </div>
+    </div>
   );
 }
