@@ -59,19 +59,9 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
   }, []);
   const [chatDrawerOpen, setChatDrawerOpen] = useState(false);
   const [drawerTab, setDrawerTab] = useState<"bunzy" | "customers">("bunzy");
-  const [activeCustomerChat, setActiveCustomerChatRaw] = useState<string | null>(null);
-  const setActiveCustomerChat = (conversationId: string | null) => {
-    setActiveCustomerChatRaw(conversationId);
-    if (conversationId) {
-      const conv = (conversations || []).find((c: any) => c.id === conversationId);
-      if (conv) {
-        const marker = (conv.lastMessageSenderId && conv.lastMessageSenderId !== conv.businessId)
-          ? 'from_' + String(conv.lastMessageAt || '')
-          : String(conv.lastMessageAt || '');
-        markConversationSeen(conv.id, marker);
-      }
-    }
-  };
+  // H-CHAT-TRUTH: la apertura ya NO escribe en localStorage — el visto bueno
+  // vive en la DB (mutation markRead del server).
+  const [activeCustomerChat, setActiveCustomerChat] = useState<string | null>(null);
   const [chatReply, setChatReply] = useState("");
 
   // Bunzy Co-Pilot conversation state
@@ -148,26 +138,28 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
     retry: false,
   });
 
-  // ── Badge de chat sin leer (por conversación, localStorage del navegador) ──
-  const [chatUnreadCount, setChatUnreadCount] = useState(0);
-  useEffect(() => {
-    try {
-      const seenMap: Record<string, string> = JSON.parse(localStorage.getItem("rabbitty_admin_chat_seen") || "{}");
-      const unread = (conversations || []).filter((c: any) =>
-        c.lastMessageSenderId && c.lastMessageSenderId !== c.businessId &&
-        c.lastMessageId !== seenMap[c.id]
-      ).length;
-      setChatUnreadCount(unread);
-    } catch { setChatUnreadCount(0); }
-  }, [conversations]);
+  // ── H-CHAT-TRUTH: badge por conversación desde DB (listConversations.unread) ──
+  // Antes: contadores en localStorage por dispositivo — no era fuente de verdad
+  // (una Mac y un iPad veían "vistos" distintos). El server ahora pondera
+  // los mensajes del cliente con readAt NULL.
+  const chatconvsWithUnread = (conversations || []).filter(
+    (c: any) => Number(c?.unread ?? 0) > 0
+  );
+  const chatUnreadCount = chatconvsWithUnread.length;
+  const totalChatUnread = chatconvsWithUnread.reduce(
+    (acc: number, c: any) => acc + Number(c.unread || 0),
+    0
+  );
 
-  const markConversationSeen = (conversationId: string, lastMessageId: string) => {
-    try {
-      const seenMap: Record<string, string> = JSON.parse(localStorage.getItem("rabbitty_admin_chat_seen") || "{}");
-      seenMap[conversationId] = lastMessageId;
-      localStorage.setItem("rabbitty_admin_chat_seen", JSON.stringify(seenMap));
-    } catch { /* noop */ }
-    setChatUnreadCount((n) => Math.max(0, n - 1));
+  const markChatRead = trpc.customerChat.markRead.useMutation({
+    onSuccess: () => {
+      refetchConversations();
+    },
+  });
+
+  const openChat = (c: { id: string; unread?: number }) => {
+    setActiveCustomerChat(c.id);
+    if (Number(c.unread ?? 0) > 0) markChatRead.mutate({ conversationId: c.id });
   };
 
   const {
@@ -182,6 +174,15 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
       retry: false,
     }
   );
+
+  // Mientras el drawer está abierto, cada hilo nuevo también se marca leído
+  // (readAt en DB) — el cliente móvil ve el ✓✓ del negocio al momento.
+  useEffect(() => {
+    if (!activeCustomerChat || !thread?.messages?.length) return;
+    const unseen = (thread.messages as Array<{ senderId?: string; readAt?: string | null }>)
+      .filter((m) => m.senderId !== thread.businessId && !m.readAt).length;
+    if (unseen > 0) markChatRead.mutate({ conversationId: activeCustomerChat });
+  }, [thread, activeCustomerChat]);
 
   const sendMessage = trpc.customerChat.sendMessage.useMutation({
     onSuccess: () => {
@@ -579,11 +580,18 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                         {conversations?.map((conv) => (
                           <div
                             key={conv.id}
-                            onClick={() => setActiveCustomerChat(conv.id)}
+                            onClick={() => openChat(conv)}
                             className="p-3.5 rounded-2xl bg-white/3 border border-white/10 hover:border-pink-500/40 transition-all cursor-pointer"
                           >
                             <div className="flex items-center justify-between mb-1.5">
-                              <span className="text-xs font-bold text-white">{conv.customerName}</span>
+                              <span className="text-xs font-bold text-white flex items-center gap-2">
+                                {conv.customerName}
+                                {Number((conv as any).unread ?? 0) > 0 && (
+                                  <span className="text-[9px] font-black text-white bg-[#E91E63] rounded-full px-1.5 py-0.5 min-w-4 text-center">
+                                    {Number((conv as any).unread)}
+                                  </span>
+                                )}
+                              </span>
                               <span className="text-[10px] text-gray-500">
                                 {conv.lastMessageAt ? new Date(conv.lastMessageAt).toLocaleString("es-MX", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}
                               </span>

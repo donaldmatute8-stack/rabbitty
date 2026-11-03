@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq, or, inArray, sql, asc, desc, type SQL } from "drizzle-orm";
+import { eq, ne, and, or, inArray, sql, asc, desc, type SQL } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { conversations, messages, ownedBusinesses, users } from "@rabbitty/database-core";
@@ -121,6 +121,23 @@ export const customerChatRouter = router({
         const customerId =
           businessId === conv.participant1 ? conv.participant2 : conv.participant1;
 
+        // H-CHAT-TRUTH: unread del negocio ponderado EN DB (mensajes del cliente
+        // con readAt NULL). Antes el contador vivía en localStorage del navegador
+        // — cada Mac/iPad veía su propio "visto" y eso no es fuente de verdad.
+        const [unseenRow] = await ctx.coreDb
+          .select({ n: sql<number>`COUNT(*)` })
+          .from(messages)
+          .where(and(
+            eq(messages.conversationId, conv.id),
+            eq(messages.senderId, customerId),
+            sql`"readAt" IS NULL`
+          ));
+
+        const [messageTotalRow] = await ctx.coreDb
+          .select({ n: sql<number>`COUNT(*)` })
+          .from(messages)
+          .where(eq(messages.conversationId, conv.id));
+
         const [customer] = await ctx.coreDb
           .select({
             firstName: users.firstName,
@@ -152,6 +169,9 @@ export const customerChatRouter = router({
           lastMessage: last?.content ?? "",
           lastMessageSenderId: last?.senderId ?? null,
           lastMessageAt: last?.createdAt ?? conv.updatedAt,
+          // H-CHAT-TRUTH: la UI deja de depender de localStorage para el badge.
+          unread: Number(unseenRow?.n ?? 0),
+          messageTotal: Number(messageTotalRow?.n ?? 0),
         };
       })
     );
@@ -190,6 +210,51 @@ export const customerChatRouter = router({
         .limit(200);
 
       return { businessId, messages: rows };
+    }),
+
+  /**
+   * H-CHAT-TRUTH · markRead — el NEGOCIO marca leídos en DB (readAt de los
+   * mensajes del cliente). Dos efectos con un solo comando:
+   *  1) badge de sin leer del admin persistente (adiós a la verdad por
+   *     localStorage por dispositivo);
+   *  2) recibos de lectura reales para el chat móvil del cliente (sus "✓✓"
+   *     dejan de depender de que Marco abra la miniapp).
+   * GET getMessages queda puro (regla: GET no muta estado).
+   */
+  markRead: protectedProcedure
+    .input(z.object({ conversationId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const biz = await resolveOwnerBusinesses(ctx);
+      const bizIds = biz.map((b) => b.id);
+
+      const [conv] = await ctx.coreDb
+        .select()
+        .from(conversations)
+        .where(eq(conversations.id, input.conversationId));
+
+      if (!conv) throw new TRPCError({ code: "NOT_FOUND", message: "Conversación no encontrada" });
+
+      const businessId = bizIds.includes(conv.participant1)
+        ? conv.participant1
+        : bizIds.includes(conv.participant2)
+          ? conv.participant2
+          : null;
+
+      if (!businessId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "No tienes acceso a esta conversación" });
+      }
+
+      const marked = await ctx.coreDb
+        .update(messages)
+        .set({ readAt: new Date() })
+        .where(and(
+          eq(messages.conversationId, input.conversationId),
+          ne(messages.senderId, businessId),
+          sql`"readAt" IS NULL`
+        ))
+        .returning({ id: messages.id });
+
+      return { ok: true, markedCount: marked.length };
     }),
 
   sendMessage: protectedProcedure
