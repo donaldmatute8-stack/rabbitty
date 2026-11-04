@@ -90,6 +90,7 @@ type Message = {
   deletedForAll?: boolean;
   reactions?: Array<{ emoji: string; count: number; mine: boolean }>;
   encrypted?: boolean;
+  e2eKeyVersion?: number | null;
 };
 
 interface ForwardConversation {
@@ -603,6 +604,7 @@ export default function ChatRoomPage() {
   const [chatAudience, setChatAudience] = useState<'BUSINESS' | 'PEER'>('BUSINESS');
   // ── E2E (solo DIRECT + PEER) ──
   const [e2eKey, setE2eKey] = useState<CryptoKey | null>(null);
+  const [e2eKeyMap, setE2eKeyMap] = useState<Map<number, CryptoKey>>(new Map());
   const [e2eVersion, setE2eVersion] = useState(1);
   const decryptedIds = useRef<Set<string>>(new Set());
   // Media E2E ya descifrada (msgId → blob URL)
@@ -1132,7 +1134,7 @@ export default function ChatRoomPage() {
           targetId,
           content: outgoing,
           encrypted: outgoingEncrypted,
-          ...(outgoingEncrypted ? { deviceId: getDeviceId() } : {}),
+          ...(outgoingEncrypted ? { deviceId: getDeviceId(), e2eKeyVersion: e2eVersion } : {}),
           type: isLoc ? 'LOCATION' : 'TEXT',
           lat: explicitCoords?.lat ?? coords?.lat ?? null,
           lng: explicitCoords?.lng ?? coords?.lng ?? null,
@@ -1635,8 +1637,11 @@ export default function ChatRoomPage() {
       try {
         const me = await ensureIdentity();
         if (!alive || !me) return;
-        const key = await ensureConversationKey(convId, me, myId, peers, e2eVersion);
-        if (alive && key) setE2eKey(key);
+        const res = await ensureConversationKey(convId, me, myId, peers, e2eVersion);
+        if (alive && res) {
+          setE2eKeyMap(res.keys);
+          setE2eKey(res.keys.get(res.currentVersion) ?? null);
+        }
       } catch { /* sin cifrado: se mantiene en claro */ }
     })();
     return () => { alive = false; };
@@ -1652,7 +1657,9 @@ export default function ChatRoomPage() {
       const updates = new Map<string, string>();
       for (const m of pending) {
         try {
-          updates.set(m.id, await decryptText(e2eKey, m.content));
+          const k = e2eKeyMap.get(m.e2eKeyVersion ?? e2eVersion) ?? e2eKey;
+          if (!k) continue;
+          updates.set(m.id, await decryptText(k, m.content));
           decryptedIds.current.add(m.id);
         } catch { /* mensaje de otra clave: se deja el marcador */ }
       }
@@ -1685,7 +1692,9 @@ export default function ChatRoomPage() {
           const proxy = `/api/chat/media/${String(meta.key).split('/').map(encodeURIComponent).join('/')}`;
           const res = await fetch(proxy, { headers });
           if (!res.ok) continue;
-          const plain = await decryptBytes(e2eKey, await res.arrayBuffer());
+          const mediaKey = e2eKeyMap.get(m.e2eKeyVersion ?? e2eVersion) ?? e2eKey;
+          if (!mediaKey) continue;
+          const plain = await decryptBytes(mediaKey, await res.arrayBuffer());
           const mime = meta.kind === 'VOICE' ? 'audio/webm' : 'image/webp';
           const url = URL.createObjectURL(new Blob([plain], { type: mime }));
           if (!alive) return;

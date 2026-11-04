@@ -70,17 +70,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Ningún sobre válido' }, { status: 400 });
     }
 
-    // Si es una re-clave (versión nueva), se reemplazan los sobres viejos.
-    if (keyVersion > (conv.e2eKeyVersion ?? 1)) {
-      await db.update(conversations).set({ e2eKeyVersion: keyVersion }).where(eq(conversations.id, conv.id));
-    }
+    // IMPORTANTE: se CONSERVA cada versión. Sobreescribir el sobre rompería la
+    // lectura del historial anterior tras una re-clave (auditado).
     await db
       .insert(conversationKeys)
       .values(clean.map((c) => ({ ...c, keyVersion })))
-      .onConflictDoUpdate({
-        target: [conversationKeys.conversationId, conversationKeys.recipientDeviceId],
-        set: { wrappedKey: sql`excluded."wrappedKey"`, keyVersion: sql`excluded."keyVersion"` },
-      });
+      .onConflictDoNothing();
 
     return NextResponse.json({ success: true, stored: clean.length, keyVersion });
   } catch (error) {
@@ -112,20 +107,19 @@ export async function GET(req: NextRequest) {
     const access = await resolveAccessForConversation(conv, caller.id, businessIds);
     if (!access) return NextResponse.json({ success: false, error: 'Sin acceso' }, { status: 403 });
 
-    const [row] = await db
+    const rows = await db
       .select({ wrappedKey: conversationKeys.wrappedKey, keyVersion: conversationKeys.keyVersion })
       .from(conversationKeys)
       .where(and(
         eq(conversationKeys.conversationId, conversationId),
         eq(conversationKeys.recipientDeviceId, deviceId),
         eq(conversationKeys.recipientUserId, access.myParticipantId),
-      ))
-      .limit(1);
+      ));
 
     return NextResponse.json({
       success: true,
-      wrappedKey: row?.wrappedKey ?? null,
-      keyVersion: row?.keyVersion ?? conv.e2eKeyVersion ?? 1,
+      // Todas las versiones: el historial se lee con la llave de SU versión.
+      keys: rows.map((r) => ({ keyVersion: r.keyVersion, wrappedKey: r.wrappedKey })),
       currentVersion: conv.e2eKeyVersion ?? 1,
     });
   } catch (error) {

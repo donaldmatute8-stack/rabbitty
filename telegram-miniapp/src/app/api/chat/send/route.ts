@@ -53,6 +53,8 @@ export async function POST(req: Request) {
       encrypted?: boolean;
       /** E2E: dispositivo del emisor (para validar la re-clave del grupo). */
       deviceId?: string;
+      /** E2E: versión de llave usada para cifrar este mensaje. */
+      e2eKeyVersion?: number;
     };
 
     // ── Guard de re-clave (grupos PEER) ──
@@ -176,6 +178,7 @@ export async function POST(req: Request) {
             : (body.metadata && typeof body.metadata === 'object' ? body.metadata : null),
           clientMessageId: body.clientMessageId?.trim() || null,
           encrypted: body.encrypted === true,
+          e2eKeyVersion: typeof body.e2eKeyVersion === 'number' ? body.e2eKeyVersion : null,
         })
         .onConflictDoNothing({ target: [messages.conversationId, messages.clientMessageId] })
         .returning();

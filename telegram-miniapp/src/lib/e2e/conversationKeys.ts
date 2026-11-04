@@ -15,7 +15,14 @@ import { generateConversationKey, unwrapConversationKey, wrapConversationKey } f
 import type { StoredIdentity } from './identity';
 import { PlatformBridge } from '@/lib/platform';
 
-const cache = new Map<string, CryptoKey>();
+const cacheMap = new Map<string, ConversationKeys>();
+
+export interface ConversationKeys {
+  /** Todas las versiones disponibles en este dispositivo. */
+  keys: Map<number, CryptoKey>;
+  /** Versión vigente (la que se usa para ENVIAR). */
+  currentVersion: number;
+}
 
 export async function ensureConversationKey(
   conversationId: string,
@@ -23,17 +30,15 @@ export async function ensureConversationKey(
   myUserId: string,
   peerUserIds: string[],
   keyVersion = 1,
-): Promise<CryptoKey | null> {
-  // La versión forma parte de la caché: al cambiar miembros se re-clavea y la
-  // entrada vieja deja de usarse.
-  const cacheKey = `${conversationId}:${keyVersion}`;
-  const hit = cache.get(cacheKey);
-  if (hit) return hit;
+): Promise<ConversationKeys | null> {
+  // Caché por conversación: guarda el mapa de versiones (no una sola llave).
+  const cached = cacheMap.get(conversationId);
+  if (cached && cached.currentVersion === keyVersion && cached.keys.has(keyVersion)) return cached;
 
   try {
     const headers = await PlatformBridge.getAuthHeaders();
 
-    // 1) ¿Ya tengo un sobre para este dispositivo?
+    // 1) Abrir TODAS mis versiones (el historial se lee con la suya).
     const mine = await fetch(
       `/api/chat/e2e/conversation-keys?conversationId=${encodeURIComponent(conversationId)}&deviceId=${encodeURIComponent(me.deviceId)}`,
       { headers, cache: 'no-store' },
@@ -41,10 +46,18 @@ export async function ensureConversationKey(
       .then((r) => r.json())
       .catch(() => null);
 
-    if (mine?.wrappedKey) {
-      const key = await unwrapConversationKey(String(mine.wrappedKey), me.privateKey);
-      cache.set(cacheKey, key);
-      return key;
+    const keys = new Map<number, CryptoKey>();
+    const sealed: Array<{ keyVersion: number; wrappedKey: string }> = Array.isArray(mine?.keys) ? mine.keys : [];
+    for (const s of sealed) {
+      try {
+        keys.set(Number(s.keyVersion) || 1, await unwrapConversationKey(String(s.wrappedKey), me.privateKey));
+      } catch { /* versión ilegible: se ignora */ }
+    }
+
+    if (keys.has(keyVersion)) {
+      const result = { keys, currentVersion: keyVersion };
+      cacheMap.set(conversationId, result);
+      return result;
     }
 
     // 2) Claves públicas de los demás dispositivos
@@ -87,8 +100,10 @@ export async function ensureConversationKey(
       body: JSON.stringify({ conversationId, entries, keyVersion }),
     });
 
-    cache.set(cacheKey, key);
-    return key;
+    keys.set(keyVersion, key);
+    const result = { keys, currentVersion: keyVersion };
+    cacheMap.set(conversationId, result);
+    return result;
   } catch (err) {
     console.warn('[E2E] no se pudo preparar la clave de conversación:', err);
     return null;
@@ -96,5 +111,5 @@ export async function ensureConversationKey(
 }
 
 export function forgetConversationKey(conversationId: string): void {
-  cache.delete(conversationId);
+  cacheMap.delete(conversationId);
 }

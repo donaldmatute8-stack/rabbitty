@@ -313,7 +313,7 @@ export const conversationKeys = pgTable("conversation_keys", {
   keyVersion: integer("keyVersion").default(1).notNull(),
   createdAt: timestamp("createdAt").defaultNow(),
 }, (table) => [
-  uniqueIndex("conversation_keys_uq").on(table.conversationId, table.recipientDeviceId),
+  uniqueIndex("conversation_keys_uq").on(table.conversationId, table.recipientDeviceId, table.keyVersion),
   index("conversation_keys_user_idx").on(table.recipientUserId),
 ]);
 
@@ -334,6 +334,8 @@ export const messages = pgTable("messages", {
   // conserva en la fila para auditoría pero la API no lo expone.
   // E2E: `content` guarda base64(iv||ciphertext) cuando encrypted = true.
   encrypted: boolean("encrypted").default(false).notNull(),
+  // Con qué versión de llave se cifró (para poder leer historial tras re-clave).
+  e2eKeyVersion: integer("e2eKeyVersion"),
   editedAt: timestamp("editedAt"),
   deletedAt: timestamp("deletedAt"),
   deletedForAll: boolean("deletedForAll").default(false).notNull(),
