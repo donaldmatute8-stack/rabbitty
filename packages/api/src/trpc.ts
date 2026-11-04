@@ -15,6 +15,19 @@ export interface Context {
   branchId: string;
   god2faVerified?: boolean; // cookie firmada de 2FA God Admin válida en esta sesión
   impersonating?: { businessId: string; branchId: string } | null; // Vista Tenant (God → afiliado)
+  /**
+   * Identidad del dispositivo POS cuando trae un token de terminal válido.
+   * Es "doble lectura": puede coexistir con la sesión de admin. Si existe,
+   * manda para el scoping de sucursal (el dispositivo está atado a una).
+   */
+  posAuth?: {
+    method: "admin" | "terminal" | "none";
+    terminalId?: string;
+    sessionId?: string;
+    branchId?: string;
+    businessId?: string | null;
+    terminalName?: string;
+  };
 }
 
 export const t = initTRPC.context<Context>().create();
@@ -22,7 +35,13 @@ export const router = t.router;
 export const publicProcedure = t.procedure;
 
 const rateLimitMiddleware = t.middleware(async ({ ctx, next }) => {
-  await rateLimit(ctx.userId);
+  // La terminal no tiene userId: se limita por sesión de terminal, no como
+  // "anonymous" (todas las terminales compartirían un solo cubo de 60/min).
+  const scope =
+    ctx.posAuth?.method === "terminal" && ctx.posAuth.sessionId
+      ? `terminal:${ctx.posAuth.sessionId}`
+      : null;
+  await rateLimit(ctx.userId, scope);
   return next();
 });
 
@@ -59,6 +78,44 @@ export const adminOnlyProcedure = protectedProcedure.use(({ ctx, next }) => {
   }
   return next({ ctx });
 });
+
+/**
+ * ── POS: terminal O admin (Fase 2 del ADR-014) ──
+ *
+ * - Con sesión de admin: idéntico a `protectedProcedure` (cero regresión).
+ * - Con token de terminal válido: solo habilita los namespaces del POS.
+ *
+ * La allowlist por `path` es defensa en profundidad: aunque alguien aplique
+ * `posProcedure` a un router administrativo, la terminal no podrá llamarlo.
+ */
+const TERMINAL_ALLOWED_PREFIXES = [
+  "pos.",
+  "payments.",
+  "memberships.",
+  "cashDrops.",
+  "printing.",
+] as const;
+const TERMINAL_ALLOWED_EXACT = new Set(["staff.verifyAdminPin"]);
+
+export function terminalCanCallPath(path: string): boolean {
+  return (
+    TERMINAL_ALLOWED_EXACT.has(path) ||
+    TERMINAL_ALLOWED_PREFIXES.some((prefix) => path.startsWith(prefix))
+  );
+}
+
+export const posProcedure = t.procedure
+  .use(rateLimitMiddleware)
+  .use(auditMiddleware)
+  .use(({ ctx, path, next }) => {
+    if (ctx.userId) {
+      return next({ ctx: { ...ctx, userId: ctx.userId } });
+    }
+    if (ctx.posAuth?.method === "terminal" && terminalCanCallPath(path)) {
+      return next({ ctx });
+    }
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  });
 
 // Platform-level functions: only owners (no staff role) may call.
 export const platformOnlyProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -99,6 +156,10 @@ export const godAdminProcedure = platformOnlyProcedure.use(async ({ ctx, next })
 // Owners (staffRole === null), ADMIN and MANAGER can switch between active branches of their own restaurant
 // (e.g. Production <-> Sandbox); any branchId outside their restaurant is rejected and falls back to ctx.branchId.
 export async function resolveBranchId(ctx: Context, inputBranchId?: string | null): Promise<string> {
+  // La terminal está físicamente atada a una sucursal: no puede cambiar de
+  // sucursal ni por header ni por input, aunque sea del mismo tenant.
+  if (ctx.posAuth?.method === "terminal") return ctx.branchId;
+
   const staffRole = ctx.staffRole ?? null;
   const isOperationalStaff = Boolean(
     staffRole && staffRole !== "ADMIN" && staffRole !== "MANAGER" && ctx.staffBranchId

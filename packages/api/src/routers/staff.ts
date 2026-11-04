@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import { router, protectedProcedure, publicProcedure, adminOnlyProcedure, resolveBranchId } from "../trpc";
+import { router, protectedProcedure, publicProcedure, adminOnlyProcedure, resolveBranchId, posProcedure } from "../trpc";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
 import { staff as staffTable, staffShifts } from "@rabbitty/database-restaurant/schema";
@@ -258,7 +258,10 @@ export const staffRouter = router({
       return { success: true, message: "PIN de Administrador creado con éxito" };
     }),
 
-  verifyAdminPin: protectedProcedure
+  // El POS en modo terminal no tiene usuario NextAuth, pero el PIN de
+  // gerente es una operación del POS (anular, autorizar). Sigue validando
+  // contra los PINs de la sucursal, con lockout por intentos.
+  verifyAdminPin: posProcedure
     .input(z.object({ pin: z.string().length(4, "El PIN debe ser de 4 dígitos") }))
     .mutation(async ({ ctx, input }) => {
       const scope = `pin:staff:${ctx.branchId}`;

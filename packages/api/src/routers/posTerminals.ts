@@ -1,7 +1,7 @@
 import { z } from "zod";
 import crypto from "crypto";
 import { and, desc, eq } from "drizzle-orm";
-import { router, protectedProcedure, adminOnlyProcedure } from "../trpc";
+import { router, protectedProcedure, adminOnlyProcedure, publicProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { branches, restaurants } from "@rabbitty/database-restaurant/schema";
 import {
@@ -61,7 +61,64 @@ async function resolveScope(ctx: { restaurantDb: any; branchId: string }) {
 
 export const posTerminalsRouter = router({
   /** ¿Está habilitado el modelo de terminal? (el POS decide si lo usa) */
-  featureEnabled: protectedProcedure.query(async () => ({ enabled: featureEnabled() })),
+  featureEnabled: publicProcedure.query(async () => ({ enabled: featureEnabled() })),
+
+  /**
+   * ── Contexto del POS (Fase 2) ──
+   * Devuelve quién está operando: `terminal` (token propio) o `admin`
+   * (NextAuth). El layout del POS lo usa como puerta de entrada cuando el flag
+   * está activo. Sin principal → UNAUTHORIZED.
+   *
+   * `branches`: la terminal solo ve SU sucursal; el admin conserva el
+   * comportamiento actual (null = que la UI siga usando admin.getBranches).
+   */
+  sessionContext: publicProcedure.query(async ({ ctx }) => {
+    const method = ctx.posAuth?.method ?? "none";
+
+    if (method === "terminal") {
+      const [branch] = await ctx.restaurantDb
+        .select({ id: branches.id, name: branches.name })
+        .from(branches)
+        .where(eq(branches.id, ctx.branchId))
+        .limit(1);
+
+      // Señal de adopción: una línea por arranque del POS (no por request).
+      console.info(
+        "[POS_AUTH]",
+        JSON.stringify({
+          method: "terminal",
+          terminalId: ctx.posAuth?.terminalId,
+          branchId: ctx.branchId,
+        }),
+      );
+
+      return {
+        mode: "terminal" as const,
+        role: "TERMINAL" as const,
+        branchId: ctx.branchId,
+        businessId: ctx.posAuth?.businessId ?? null,
+        terminalName: ctx.posAuth?.terminalName ?? null,
+        branches: branch ? [branch] : [],
+      };
+    }
+
+    if (ctx.userId) {
+      console.info(
+        "[POS_AUTH]",
+        JSON.stringify({ method: "admin", userId: ctx.userId, branchId: ctx.branchId }),
+      );
+      return {
+        mode: "admin" as const,
+        role: (ctx.staffRole ?? "OWNER") as "OWNER" | "WAITER" | "CASHIER" | "KITCHEN" | "MANAGER" | "ADMIN",
+        branchId: ctx.branchId,
+        businessId: null,
+        terminalName: null,
+        branches: null,
+      };
+    }
+
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "Sin sesión de POS" });
+  }),
 
   /** Terminales de MI sucursal (para la pantalla de administración). */
   list: protectedProcedure.query(async ({ ctx }) => {

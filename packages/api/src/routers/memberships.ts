@@ -2,7 +2,7 @@ import { z } from "zod";
 import { and, eq, desc, sql, lt, gt, inArray } from "drizzle-orm";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { TRPCError } from "@trpc/server";
-import { router, protectedProcedure } from "../trpc";
+import { router, posProcedure } from "../trpc";
 import {
   membershipPlans,
   membershipPlanVersions,
@@ -181,7 +181,7 @@ export const membershipsRouter = router({
    * por destinatario (NO altera el plan), revocable por el dueño. Origen COURTESY.
    * Atómico: suscripción + beneficios + auditoría en UNA transacción; notificación post-commit.
    */
-  grantCourtesy: protectedProcedure
+  grantCourtesy: posProcedure
     .input(z.object({
       businessId: z.string().optional(),
       targetUserId: z.string(),
@@ -300,7 +300,7 @@ export const membershipsRouter = router({
    * Revoca una cortesía: inmediata, server-side, auditada. El QR deja de funcionar
    * porque redeemAtPOS re-verifica el estado CON lock dentro de la transacción.
    */
-  revokeCourtesy: protectedProcedure
+  revokeCourtesy: posProcedure
     .input(z.object({ subscriptionId: z.string(), reason: z.string().max(300).optional() }))
     .mutation(async ({ ctx, input }) => {
       const result = await ctx.coreDb.transaction(async (tx: any) => {
@@ -351,7 +351,7 @@ export const membershipsRouter = router({
     }),
 
   /** Lista de cortesías del negocio (owner): estado, destinatario y consumo por beneficio. */
-  listCourtesies: protectedProcedure
+  listCourtesies: posProcedure
     .input(z.object({ businessId: z.string() }))
     .query(async ({ ctx, input }) => {
       const { resolveMerchantContext } = await import("../services/merchantContext");
@@ -393,7 +393,7 @@ export const membershipsRouter = router({
     }),
 
   /** ── GAP 7: revocación de membresías PAGADAS (owner/god) ── ── */
-  revokePaidMembership: protectedProcedure
+  revokePaidMembership: posProcedure
     .input(z.object({ subscriptionId: z.string(), reason: z.string().max(300).optional() }))
     .mutation(async ({ ctx, input }) => {
       const result = await ctx.coreDb.transaction(async (tx: any) => {
@@ -447,7 +447,7 @@ export const membershipsRouter = router({
 
   /** ── GAP 8: renovación manual de membresías de caja (CASH_POS/PROMO) ──
    *  Extiende el periodo del plan vendido y notifica al miembro. */
-  renewPaidMembership: protectedProcedure
+  renewPaidMembership: posProcedure
     .input(z.object({ subscriptionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const result = await ctx.coreDb.transaction(async (tx: any) => {
@@ -507,7 +507,7 @@ export const membershipsRouter = router({
 
 
   /** Negocios que administra el usuario autenticado. */
-  myBusinesses: protectedProcedure.query(async ({ ctx }) => {
+  myBusinesses: posProcedure.query(async ({ ctx }) => {
     const isGod = isGodAdminIdentity(ctx.user?.email, ctx.user?.name);
     if (isGod) {
       // God Admin: todos los negocios (gestión directa sin impersonación)
@@ -549,7 +549,7 @@ export const membershipsRouter = router({
   }),
 
   /** Planes publicados de un negocio (versión vigente). */
-  listPlans: protectedProcedure
+  listPlans: posProcedure
     .input(z.object({ businessId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const rows = await ctx.coreDb
@@ -565,7 +565,7 @@ export const membershipsRouter = router({
     }),
 
   /** Admin: todos los planes (incluye borradores) con su versión actual. */
-  listPlansAdmin: protectedProcedure
+  listPlansAdmin: posProcedure
     .input(z.object({ businessId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       await assertBusinessOwner(ctx, input.businessId);
@@ -592,7 +592,7 @@ export const membershipsRouter = router({
     }),
 
   /** Admin: crea plan + versión 1 (borrador). */
-  createPlan: protectedProcedure
+  createPlan: posProcedure
     .input(z.object({
       businessId: z.string().uuid(),
       name: z.string().min(2).max(80),
@@ -634,7 +634,7 @@ export const membershipsRouter = router({
     }),
 
   /** Admin: edita precio/beneficios → nueva versión (los miembros actuales no se afectan). */
-  updatePlan: protectedProcedure
+  updatePlan: posProcedure
     .input(z.object({
       planId: z.string().uuid(),
       name: z.string().min(2).max(80).optional(),
@@ -680,7 +680,7 @@ export const membershipsRouter = router({
     }),
 
   /** Admin: publica una versión y la marca como vigente del plan. */
-  publishPlanVersion: protectedProcedure
+  publishPlanVersion: posProcedure
     .input(z.object({ versionId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const [row] = await ctx.coreDb
@@ -734,7 +734,7 @@ export const membershipsRouter = router({
    * - Con targetUserId: el owner/staff vende la membresía a un cliente escaneado en caja.
    * Todos los checks (duplicado + cupo) corren DENTRO de la tx con lock del plan (anti-carrera).
    */
-  subscribe: protectedProcedure
+  subscribe: posProcedure
     .input(z.object({
       planVersionId: z.string().uuid(),
       paymentProvider: z.enum(["CASH_POS", "PROMO"]),
@@ -824,7 +824,7 @@ export const membershipsRouter = router({
     }),
 
   /** businessId del tenant actual (owner o staff) — el escáner del POS lo consulta antes de canjear. */
-  myBusinessForContext: protectedProcedure.query(async ({ ctx }) => {
+  myBusinessForContext: posProcedure.query(async ({ ctx }) => {
     return { businessId: await resolveBusinessForBranch(ctx) };
   }),
 
@@ -834,7 +834,7 @@ export const membershipsRouter = router({
    * DISCOUNT_PCT / CREDIT_BALANCE a la cuenta (consumo atómico aparte, en
    * directCheckout).
    */
-  getMembershipBenefits: protectedProcedure
+  getMembershipBenefits: posProcedure
     .input(z.object({ businessId: z.string().uuid(), customerId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const subs = await ctx.coreDb
@@ -872,7 +872,7 @@ export const membershipsRouter = router({
     }),
 
   /** Membresías del usuario con estado de derechos del ciclo actual. */
-  getMyMemberships: protectedProcedure.query(async ({ ctx }) => {
+  getMyMemberships: posProcedure.query(async ({ ctx }) => {
     const subs = await ctx.coreDb
       .select({ sub: membershipSubscriptions, version: membershipPlanVersions, plan: membershipPlans })
       .from(membershipSubscriptions)
@@ -897,7 +897,7 @@ export const membershipsRouter = router({
   }),
 
   /** Token QR dinámico (rota cada 30s) del Membership Pass. */
-  getMembershipPass: protectedProcedure
+  getMembershipPass: posProcedure
     .input(z.object({ subscriptionId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const [sub] = await ctx.coreDb
@@ -921,7 +921,7 @@ export const membershipsRouter = router({
    * POS: valida el QR y consume un derecho de forma atómica e idempotente.
    * El UPDATE condicional impide exceder la cuota aun con escaneos concurrentes.
    */
-  redeemAtPOS: protectedProcedure
+  redeemAtPOS: posProcedure
     .input(z.object({
       businessId: z.string().uuid(),
       qrToken: z.string().min(10),
@@ -1074,7 +1074,7 @@ return await ctx.coreDb.transaction(async (tx: any) => {
     }),
 
   /** Admin: lista de miembros del negocio con estado. */
-  listMembers: protectedProcedure
+  listMembers: posProcedure
     .input(z.object({ businessId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       await assertBusinessOwner(ctx, input.businessId);
@@ -1103,7 +1103,7 @@ return await ctx.coreDb.transaction(async (tx: any) => {
     }),
 
   /** Usuario: cancela al final del periodo (conserva beneficios hasta entonces). */
-  cancelSubscription: protectedProcedure
+  cancelSubscription: posProcedure
     .input(z.object({ subscriptionId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const res = await ctx.coreDb.update(membershipSubscriptions)

@@ -1,6 +1,6 @@
 # ADR-014 · POS con sesión propia, Admin protegido y onboarding por nicho
 
-**Fecha:** 2026-11-04 · **Estado:** cimentación aplicada (aditiva) · **Wiring pendiente**
+**Fecha:** 2026-11-04 · **Estado:** Fases 0, 1 y 2 implementadas (flag apagado) · deploy pendiente
 **Contexto:** en producción. Regla: **solo cambios aditivos + feature flag** hasta validar.
 
 ---
@@ -60,8 +60,8 @@ admin, no la operación diaria.
 | Fase | Qué | Riesgo | Cómo se protege |
 |---|---|---|---|
 **0** | Catálogo de nichos + `ownedBusinesses.niche` | **nulo** (aditivo) | ✅ ya aplicado |
-**1** | `pos_terminals` + `pos_terminal_sessions` + endpoints de activación/validación | bajo | flag `pos_terminal_sessions`; si está apagado, el POS sigue con la sesión de admin (comportamiento actual) |
-**2** | POS usa la sesión de terminal (layout/route handler) | **medio** | doble lectura: acepta terminal **o** admin; telemetría de cuál se usó |
+**1** | `pos_terminals` + `pos_terminal_sessions` + endpoints de activación/validación | bajo | ✅ aplicado · flag `POS_TERMINAL_SESSIONS`; apagado, el POS sigue con la sesión de admin |
+**2** | POS usa la sesión de terminal (layout/route handler) | **medio** | ✅ aplicado · doble lectura (terminal **o** admin), allowlist de routers y telemetría de uso |
 **3** | PIN del empleado al iniciar turno (`pos_operator_sessions`) | bajo | opcional por sucursal |
 **4** | Reautorización desde el móvil (`pos_auth_requests`) | bajo | solo recuperación |
 **5** | Pantalla de terminales (revocar, historial) | bajo | solo lectura + revocar |
@@ -106,8 +106,63 @@ Terminal vencida/revocada:
 
 ---
 
-## 8 · Siguiente paso
+## 8 · Fase 2 implementada (autorización del POS)
 
-Fase 1: endpoints `pos.activateTerminal` / `pos.terminalStatus` /
-`pos.issueTerminalSession` + flag, **sin tocar** el layout del POS todavía.
-Se valida con el POS actual y solo después se cambia la autorización (Fase 2).
+**Cómo se resuelve la identidad** (`apps/admin/src/app/api/trpc/[trpc]/route.ts`):
+
+1. Si `POS_TERMINAL_SESSIONS=1` y llega `x-pos-terminal-token`, se valida contra
+   `pos_terminal_sessions` + `pos_terminals` (sesión no revocada, terminal
+   ACTIVE, sin vencimientos) y se verifica que su sucursal exista y esté activa.
+2. Ese principal se expone como `ctx.posAuth = { method: 'terminal', … }` y fija
+   `ctx.branchId` a **su** sucursal.
+3. La sesión de admin se sigue leyendo igual. Si existe, se mantiene
+   (`ctx.userId`), pero la sucursal del POS es la de la terminal.
+4. Con el flag apagado, no se toca la DB ni el contexto: comportamiento actual.
+
+**Procedimientos**
+
+- `posProcedure` = admin (idéntico a `protectedProcedure`) **o** terminal.
+- La terminal solo puede llamar namespaces del POS: `pos.*`, `payments.*`,
+  `memberships.*`, `cashDrops.*`, `printing.*` y `staff.verifyAdminPin`.
+  Cualquier otro path (`admin.*`, `sandbox.*`, etc.) sigue siendo solo admin.
+- `resolveBranchId` devuelve siempre la sucursal de la terminal: no puede
+  cambiarla con `x-branch-id` ni con input, aunque sea del mismo tenant.
+- Rate limit por **sesión de terminal** (no cae en el cubo `anonymous`).
+
+**Entrada del POS**
+
+- `posTerminals.sessionContext` responde `{ mode: 'terminal' | 'admin', branchId,
+  businessId, role, branches }`. Es la puerta del layout.
+- `/pos/link` vincula el dispositivo: genera el secreto local, llama `activate`
+  (requiere admin), guarda la sesión y redirige al POS. Revocar borra la sesión
+  local y revoca en el servidor.
+- El header de terminal solo se envía en `/pos*` y `/kiosk` (nunca en el panel
+  admin), para que una terminal vinculada no cambie la sucursal del admin.
+
+**Telemetría**
+
+- `pos_terminal_sessions.useCount` / `lastUsedAt` (una escritura cada 5 min).
+- `console.info('[POS_AUTH]', …)` una vez por arranque del POS: dice si entró
+  como `terminal` o `admin`. Con eso se mide adopción sin escribir por request.
+
+**Pruebas hechas (local, flag ON)**
+
+- Token válido → `sessionContext` modo terminal y `pos.getCategories` 200.
+- Token válido → `admin.getProfile` 401 (allowlist funciona).
+- Sin token / token inválido / sesión revocada / terminal revocada → 401/403.
+- `useCount` y `lastUsedAt` se actualizan; log `[POS_AUTH] method=terminal`.
+
+**Límites conocidos de la Fase 2**
+
+- `apps/pos` (POS standalone) tiene su propio `api/trpc`: no se tocó.
+- El empleado aún no tiene identidad propia (Fase 3): el PIN de gerente se
+  valida contra la sucursal, pero no hay turno por empleado.
+- La administración de terminales (listar/revocar) sigue siendo Fase 5.
+
+---
+
+## 9 · Siguiente paso
+
+Fase 3: `pos_operator_sessions` — turno del empleado con `staff.pinCode` al
+iniciar la terminal, para que quede registrado quién cobró y no solo qué
+dispositivo lo hizo.

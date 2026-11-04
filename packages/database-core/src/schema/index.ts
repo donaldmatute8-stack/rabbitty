@@ -519,6 +519,9 @@ export const posTerminalSessions = pgTable("pos_terminal_sessions", {
   expiresAt: timestamp("expiresAt").notNull(),
   createdAt: timestamp("createdAt").defaultNow(),
   revokedAt: timestamp("revokedAt"),
+  /** Telemetría de adopción (Fase 2): usos y último uso de la sesión. */
+  useCount: integer("useCount").default(0).notNull(),
+  lastUsedAt: timestamp("lastUsedAt"),
 });
 
 /** Nivel B: turno del empleado sobre la terminal (usa staff.pinCode). */

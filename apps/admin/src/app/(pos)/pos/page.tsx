@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import { trpc } from "../../../lib/trpc-client";
+import { getPosTerminalToken } from "../../../lib/pos-terminal";
 import { PosOrderAlert } from "../../../components/PosOrderAlert";
 import { Button, Dialog, Input, toast, cn, useWakeLock } from "@rabbitty/ui";
 import { Clock, Search, Users, CreditCard, Banknote, QrCode, Split, Smartphone, Landmark, Table2, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, ClipboardCheck, Camera, History, RotateCw, ChefHat, Flame } from "lucide-react";
@@ -391,8 +392,19 @@ export default function PosPage() {
   const { data: ticketContext } = trpc.printing.getTicketData.useQuery(undefined, { retry: false });
   const { data: cashStatus } = trpc.cashDrops.getStatus.useQuery({}, { refetchInterval: 30000 });
   const { data: sandboxStatus } = trpc.sandbox.getSandboxStatus.useQuery(undefined, { retry: false });
-  const { data: branches } = trpc.admin.getBranches.useQuery(undefined, { retry: false });
-  const { data: userProfile } = trpc.admin.getProfile.useQuery(undefined, { retry: false });
+
+  // ── Fase 2: la terminal opera con su propia sesión y solo ve SU sucursal ──
+  // En modo admin se conserva el query de siempre, sin cambios.
+  const isTerminalDevice = typeof window !== "undefined" && !!getPosTerminalToken();
+  const { data: posSession } = trpc.posTerminals.sessionContext.useQuery(undefined, {
+    retry: false,
+    enabled: isTerminalDevice,
+  });
+  const { data: branchesAdmin } = trpc.admin.getBranches.useQuery(undefined, {
+    retry: false,
+    enabled: !isTerminalDevice,
+  });
+  const branches = isTerminalDevice ? posSession?.branches ?? [] : branchesAdmin;
 
   // Guardar en tiempo real ante cualquier cambio (si se apaga la tablet o sale, no se pierde)
   useEffect(() => {

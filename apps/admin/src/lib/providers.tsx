@@ -6,6 +6,7 @@ import { useState } from "react";
 import { trpc } from "./trpc-client";
 
 import { resolveApiUrl } from "./api-config";
+import { getPosTerminalToken } from "./pos-terminal";
 
 export function TRPCProvider({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
@@ -24,6 +25,16 @@ export function TRPCProvider({ children }: { children: React.ReactNode }) {
               const token = localStorage.getItem("rabbitty_auth_token");
               if (token) {
                 headers["Authorization"] = `Bearer ${token}`;
+              }
+              // ── Fase 2: sesión propia de la terminal POS ──
+              // Solo en las rutas del POS/Kiosk: así una terminal vinculada no
+              // condiciona la sucursal del admin en el resto del panel.
+              const path = window.location.pathname;
+              if (path.startsWith("/pos") || path.startsWith("/kiosk")) {
+                const terminalToken = getPosTerminalToken();
+                if (terminalToken) {
+                  headers["x-pos-terminal-token"] = terminalToken;
+                }
               }
               return headers;
             }

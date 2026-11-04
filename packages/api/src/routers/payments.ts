@@ -1,13 +1,13 @@
 import { z } from "zod";
 import { and, eq, inArray, gte, lt, sql, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import { router, protectedProcedure, publicLimitedProcedure, resolveBranchId } from "../trpc";
+import { router, posProcedure, publicLimitedProcedure, resolveBranchId } from "../trpc";
 import { orders, payments, tables, tableSessions, orderItems, menuItems } from "@rabbitty/database-restaurant/schema";
 import { bus, EventTypes } from "@rabbitty/events";
 import { assertOpenShiftForCash, findStaffByPin, CASHIER_ROLES } from "../services/cashShift";
 
 export const paymentsRouter = router({
-  refund: protectedProcedure
+  refund: posProcedure
     .input(z.object({
       paymentId: z.string(),
       amount: z.number(),
@@ -36,7 +36,7 @@ export const paymentsRouter = router({
       return refund;
     }),
 
-  processPayment: protectedProcedure
+  processPayment: posProcedure
     .input(
       z.object({
         orderId: z.string(),
@@ -65,7 +65,7 @@ export const paymentsRouter = router({
       return payment;
     }),
 
-  splitBill: protectedProcedure
+  splitBill: posProcedure
     .input(z.object({
       orderId: z.string(),
       splits: z.array(z.object({
@@ -101,7 +101,7 @@ export const paymentsRouter = router({
       return { success: true, payments: results };
     }),
 
-  addTip: protectedProcedure
+  addTip: posProcedure
     .input(z.object({
       orderId: z.string(),
       tip: z.number().min(0),
@@ -127,7 +127,7 @@ export const paymentsRouter = router({
       return payment;
     }),
 
-  list: protectedProcedure
+  list: posProcedure
     .input(z.object({
       branchId: z.string().optional(),
       limit: z.number().default(50),
@@ -154,13 +154,13 @@ export const paymentsRouter = router({
       return where ? await query.where(where) : await query;
     }),
 
-  getByOrder: protectedProcedure
+  getByOrder: posProcedure
     .input(z.object({ orderId: z.string() }))
     .query(async ({ ctx, input }) => {
       return await ctx.restaurantDb.select().from(payments).where(eq(payments.orderId, input.orderId));
     }),
 
-  getTotals: protectedProcedure
+  getTotals: posProcedure
     .input(z.object({ startDate: z.string(), endDate: z.string() }))
     .query(async ({ ctx, input }) => {
       const start = input.startDate ? new Date(input.startDate) : new Date(0);
@@ -267,7 +267,7 @@ export const paymentsRouter = router({
    * comensal pagó el intent regenerado (p.ej. vía link de cuenta / /pay).
    * Solo campos no-sensibles, scoping del staff por sucursal.
    */
-  latestIntentForOrder: protectedProcedure
+  latestIntentForOrder: posProcedure
     .input(z.object({ orderId: z.string() }))
     .query(async ({ ctx, input }) => {
       const { paymentIntents, orders } = await import("@rabbitty/database-restaurant/schema");
@@ -294,7 +294,7 @@ export const paymentsRouter = router({
    * El POS mira SIEMPRE (no solo con modal abierto): cuando el comensal paga
    * por otro lado (link de cuenta / re-cobro), el operador lo confirma al toque.
    */
-  recentSettledForBranch: protectedProcedure
+  recentSettledForBranch: posProcedure
     .input(z.object({ windowSec: z.number().int().min(60).max(3600).default(900) }))
     .query(async ({ ctx, input }) => {
       const { paymentIntents, orders } = await import("@rabbitty/database-restaurant/schema");
@@ -462,7 +462,7 @@ export const paymentsRouter = router({
       return { publishableKey: pk, ready: Boolean(pk), mode: isTest ? "test" : "live" };
     }),
 
-  getStripeAccountStatus: protectedProcedure
+  getStripeAccountStatus: posProcedure
     .input(z.object({
       branchId: z.string().optional(),
     }))
@@ -475,7 +475,7 @@ export const paymentsRouter = router({
       });
     }),
 
-  createStripeConnectLink: protectedProcedure
+  createStripeConnectLink: posProcedure
     .input(z.object({
       branchId: z.string().optional(),
       refreshUrl: z.string().url(),
@@ -551,7 +551,7 @@ export const paymentsRouter = router({
       return { success: true, status: "CASH_PAYMENT_REQUESTED" };
     }),
 
-  confirmCashPaymentWithPin: protectedProcedure
+  confirmCashPaymentWithPin: posProcedure
     .input(z.object({
       orderId: z.string(),
       pin: z.string().length(4),
@@ -627,7 +627,7 @@ export const paymentsRouter = router({
   // ==========================================
   // Rabbitty Pay Phase 4: Conciliación Financiera SaaS
   // ==========================================
-  getFinancialReconciliation: protectedProcedure
+  getFinancialReconciliation: posProcedure
     .input(z.object({
       branchId: z.string().optional(),
       startDate: z.string().optional(),
@@ -712,7 +712,7 @@ export const paymentsRouter = router({
   // ==========================================
 
   /** POS: crea un intent de pago BUNZ para la branch del contexto. */
-  createIntent: protectedProcedure
+  createIntent: posProcedure
     .input(z.object({
       amountMxn: z.number().positive(),
       tenantId: z.string().optional(),   // compat: se ignora — tenant = ctx.branchId
@@ -733,7 +733,7 @@ export const paymentsRouter = router({
     }),
 
   /** POS + Miniapp: lee el intent sin PII. */
-  getIntent: protectedProcedure
+  getIntent: posProcedure
     .input(z.object({ intentId: z.string() }))
     .query(async ({ input }) => {
       const { PaymentIntentService } = await import("../services/paymentIntentDomain");
@@ -753,7 +753,7 @@ export const paymentsRouter = router({
     }),
 
   /** Miniapp: el cliente aprueba el pago con SUS bunz (settles atómico con cashback real). */
-  approveIntent: protectedProcedure
+  approveIntent: posProcedure
     .input(z.object({ intentId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const { PaymentIntentService } = await import("../services/paymentIntentDomain");

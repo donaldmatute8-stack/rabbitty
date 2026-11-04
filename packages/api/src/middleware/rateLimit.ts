@@ -13,8 +13,13 @@ const WINDOW_S = 60;
 const WINDOW_MS = WINDOW_S * 1000;
 const MAX_REQUESTS = 60;
 
-export async function rateLimit(userId: string | null | undefined) {
-  const key = userId ?? "anonymous";
+/**
+ * @param scope clave explícita (p. ej. `terminal:<sessionId>`). Permite limitar
+ *              dispositivos POS sin identidad de usuario sin mezclarlos con el
+ *              cubo compartido de "anonymous".
+ */
+export async function rateLimit(userId: string | null | undefined, scope?: string | null) {
+  const key = scope ?? userId ?? "anonymous";
 
   if (redis) {
     try {

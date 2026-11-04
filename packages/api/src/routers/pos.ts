@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { and, asc, desc, eq, sql, inArray, or, ilike, gte, isNull } from "drizzle-orm";
 import crypto from "crypto";
-import { router, protectedProcedure } from "../trpc";
+import { router, posProcedure } from "../trpc";
 import { validateGratuity, parseGratuityPcts, GRATUITY_MAX_PCT } from "../services/gratuityRules";
 import { TRPCError } from "@trpc/server";
 import * as dbSchema from "@rabbitty/database-restaurant";
@@ -114,7 +114,7 @@ export const posRouter = router({
   /** Clientes con check-in activo en este negocio (últimas 2h) — presencia para el cajero. */
 
   /** Rabbitters que marcaron "Planeo ir" en las últimas 24h — el cajero los prepara. */
-  getPlannedVisits: protectedProcedure.query(async ({ ctx }) => {
+  getPlannedVisits: posProcedure.query(async ({ ctx }) => {
     const bizId = await resolveBusinessIdFromBranch(ctx.restaurantDb, ctx.branchId);
     if (!bizId) return [];
     const oneDayAgo = sql`(now() AT TIME ZONE 'UTC') - interval '24 hours'`;
@@ -137,7 +137,7 @@ export const posRouter = router({
     return out;
   }),
 
-  getActiveCheckIns: protectedProcedure.query(async ({ ctx }) => {
+  getActiveCheckIns: posProcedure.query(async ({ ctx }) => {
     const bizId = await resolveBusinessIdFromBranch(ctx.restaurantDb, ctx.branchId);
     if (!bizId) return [];
     // Presencia REAL: sesiones abiertas cuyo último ping esté fresco (GPS pings + escaneos las refrescan)
@@ -168,7 +168,7 @@ export const posRouter = router({
     return out;
   }),
 
-  lookupRabbitter: protectedProcedure
+  lookupRabbitter: posProcedure
     .input(z.object({ query: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
       let raw = input.query.trim();
@@ -273,12 +273,12 @@ export const posRouter = router({
       };
     }),
 
-  getTables: protectedProcedure.query(async ({ ctx }) => {
+  getTables: posProcedure.query(async ({ ctx }) => {
     const tables = await ctx.restaurantDb.select().from(tablesTable).where(eq(tablesTable.branchId, ctx.branchId));
     return tables;
   }),
 
-  getTable: protectedProcedure
+  getTable: posProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
       const table = await ctx.restaurantDb.select().from(tablesTable).where(
@@ -290,7 +290,7 @@ export const posRouter = router({
       return table;
     }),
 
-  getCategories: protectedProcedure.query(async ({ ctx }) => {
+  getCategories: posProcedure.query(async ({ ctx }) => {
     const categories = await ctx.restaurantDb.select().from(menuCategories).where(
       eq(menuCategories.branchId, ctx.branchId)
     ).orderBy(asc(menuCategories.sortOrder));
@@ -307,7 +307,7 @@ export const posRouter = router({
    * Vive en systemSettings (core) para no tocar el esquema del restaurante:
    * key `pos_order_sound:<restaurantId>` = "on" | "off" (default: on).
    */
-  getOrderAlertSettings: protectedProcedure.query(async ({ ctx }) => {
+  getOrderAlertSettings: posProcedure.query(async ({ ctx }) => {
     try {
       const [branch] = await ctx.restaurantDb
         .select({ restaurantId: branches.restaurantId })
@@ -326,7 +326,7 @@ export const posRouter = router({
     }
   }),
 
-  setOrderAlertSound: protectedProcedure
+  setOrderAlertSound: posProcedure
     .input(z.object({ enabled: z.boolean() }))
     .mutation(async ({ ctx, input }) => {
       const [branch] = await ctx.restaurantDb
@@ -346,7 +346,7 @@ export const posRouter = router({
       return { success: true, soundEnabled: input.enabled };
     }),
 
-  getGratuityConfig: protectedProcedure.query(async ({ ctx }) => {    let enabled = false;
+  getGratuityConfig: posProcedure.query(async ({ ctx }) => {    let enabled = false;
     let options: number[] = [];
     try {
       const [branch] = await ctx.restaurantDb
@@ -371,7 +371,7 @@ export const posRouter = router({
     return { enabled, options, maxPct: GRATUITY_MAX_PCT };
   }),
 
-  getMenuItems: protectedProcedure
+  getMenuItems: posProcedure
     .input(z.object({ categoryId: z.string().optional() }))
     .query(async ({ ctx, input }) => {
       const where = input.categoryId
@@ -390,7 +390,7 @@ export const posRouter = router({
    * y los marca como leídos. Incluye a VIPs y a quienes ya no llegan dentro de
    * la ventana de 4 horas (anti-spam del motor de proximidad).
    */
-  getRecentArrivals: protectedProcedure.query(async ({ ctx }) => {
+  getRecentArrivals: posProcedure.query(async ({ ctx }) => {
     const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
     const rows = await ctx.restaurantDb.select()
       .from(posEvents)
@@ -438,7 +438,7 @@ export const posRouter = router({
   // ── Feed del dashboard (1 roundtrip, sin N+1) ──
   // Órdenes activas (todas, limit 50 más recientes) + "ventas hoy" y count de
   // pagadas de hoy (día America/Mexico_City calculado en SQL — nunca en JS).
-  getDashboardFeed: protectedProcedure.query(async ({ ctx }) => {
+  getDashboardFeed: posProcedure.query(async ({ ctx }) => {
     // ── Auto-limpieza de tabs huérfanas ──
     // Órdenes PENDING/CASH_PAYMENT_REQUESTED más viejas que `staleOrderHours`
     // (config del restaurante, default 12h) se marcan EXPIRED: nunca fueron
@@ -487,7 +487,7 @@ export const posRouter = router({
     };
   }),
 
-  getOrders: protectedProcedure
+  getOrders: posProcedure
     .input(z.object({ tableId: z.string().optional(), status: z.string().optional() }))
     .query(async ({ ctx, input }) => {
       let where = input.tableId
@@ -520,7 +520,7 @@ export const posRouter = router({
    * Reutiliza comandas PENDING del cliente de las últimas 12h (mismo criterio
    * que el barrido de tabs huérfanas) para no acumular borradores.
    */
-  ensureCustomerTab: protectedProcedure
+  ensureCustomerTab: posProcedure
     .input(z.object({
       customerId: z.string(),
       customerName: z.string().optional(),
@@ -606,7 +606,7 @@ export const posRouter = router({
    * o cobros, NO se toca — se queda en Operación para cobrarse aparte.
    * Se marca EXPIRED + voidReason (auditable) en vez de borrar la fila.
    */
-  releaseCustomerTab: protectedProcedure
+  releaseCustomerTab: posProcedure
     .input(z.object({ orderId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const [order] = await ctx.restaurantDb
@@ -632,7 +632,7 @@ export const posRouter = router({
       return { released: true, reason: "RELEASED" as const };
     }),
 
-  createOrder: protectedProcedure
+  createOrder: posProcedure
     .input(
       z.object({
         tableId: z.string().optional(),
@@ -659,7 +659,7 @@ export const posRouter = router({
        return order;
      }),
 
-  addToCart: protectedProcedure
+  addToCart: posProcedure
     .input(
       z.object({
         orderId: z.string(),
@@ -696,7 +696,7 @@ export const posRouter = router({
       return orderItem;
     }),
 
-  removeFromCart: protectedProcedure
+  removeFromCart: posProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const [item] = await ctx.restaurantDb.select().from(orderItems).where(eq(orderItems.id, input.id));
@@ -717,7 +717,7 @@ export const posRouter = router({
       return null;
     }),
 
-  clearCart: protectedProcedure
+  clearCart: posProcedure
     .input(z.object({ orderId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const [cartOrd] = await ctx.restaurantDb.select({ branchId: orders.branchId }).from(orders).where(eq(orders.id, input.orderId)).limit(1);
@@ -736,7 +736,7 @@ export const posRouter = router({
     }),
 
   // Guard multi-tenant: la orden DEBE pertenecer a la branch del ctx (evita IDOR cross-tenant)
-  assertOrderInBranch: protectedProcedure
+  assertOrderInBranch: posProcedure
     .input(z.object({ orderId: z.string() }))
     .query(async ({ ctx, input }) => {
       const [o] = await ctx.restaurantDb.select({ id: orders.id, branchId: orders.branchId }).from(orders).where(eq(orders.id, input.orderId)).limit(1);
@@ -744,7 +744,7 @@ export const posRouter = router({
       return { ok: true };
     }),
 
-  voidItem: protectedProcedure
+  voidItem: posProcedure
     .input(z.object({
       id: z.string(),
       reason: z.string(),
@@ -797,7 +797,7 @@ export const posRouter = router({
       return { success: true };
     }),
 
-  payOrder: protectedProcedure
+  payOrder: posProcedure
     .input(
       z.object({
         orderId: z.string(),
@@ -1038,7 +1038,7 @@ export const posRouter = router({
       return { success: true, rewardQueued };
     }),
 
-  linkCustomerToOrder: protectedProcedure
+  linkCustomerToOrder: posProcedure
     .input(
       z.object({
         orderId: z.string(),
@@ -1105,7 +1105,7 @@ export const posRouter = router({
    * (Apple Pay / tarjeta). La liquidación llega por webhook confirmPaymentIntentSettled.
    * Cancelación → cancelPaymentIntent libera el hold.
    */
-  createStripeChargeIntent: protectedProcedure
+  createStripeChargeIntent: posProcedure
     .input(z.object({
       items: z.array(z.object({
         menuItemId: z.string(),
@@ -1178,7 +1178,7 @@ export const posRouter = router({
       });
     }),
 
-  voidOrder: protectedProcedure
+  voidOrder: posProcedure
     .input(z.object({ orderId: z.string(), reason: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const [orderRow] = await ctx.restaurantDb
@@ -1232,7 +1232,7 @@ export const posRouter = router({
       return { success: true };
     }),
 
-  generateQR: protectedProcedure
+  generateQR: posProcedure
     .input(z.object({ tableId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const [table] = await ctx.restaurantDb.select().from(tablesTable).where(eq(tablesTable.id, input.tableId));
@@ -1245,14 +1245,14 @@ export const posRouter = router({
       return { qrCode };
     }),
 
-  getTableQR: protectedProcedure
+  getTableQR: posProcedure
     .input(z.object({ tableId: z.string() }))
     .query(async ({ ctx, input }) => {
       const [table] = await ctx.restaurantDb.select().from(tablesTable).where(eq(tablesTable.id, input.tableId));
       return { qrCode: table?.qrCode ?? null };
     }),
 
-  verifyBunzBalance: protectedProcedure
+  verifyBunzBalance: posProcedure
     .input(z.object({ customerId: z.string() }))
     .query(async ({ ctx, input }) => {
       const [user] = await ctx.coreDb.select().from(coreUsers).where(eq(coreUsers.id, input.customerId));
@@ -1269,7 +1269,7 @@ export const posRouter = router({
    * Si ya hay una orden PENDING en esa mesa, le asigna el customerId y sus datos.
    * Si no, abre o actualiza una tableSessions activa.
    */
-  claimTableSession: protectedProcedure
+  claimTableSession: posProcedure
     .input(
       z.object({
         tableId: z.string(),
@@ -1399,14 +1399,14 @@ export const posRouter = router({
     }),
 
 
-  getModifiers: protectedProcedure
+  getModifiers: posProcedure
     .input(z.object({ itemId: z.string() }))
     .query(async ({ ctx, input }) => {
       const modifiers = await ctx.restaurantDb.select().from(menuItemModifiers).where(eq(menuItemModifiers.itemId, input.itemId));
       return modifiers;
     }),
 
-  createModifier: protectedProcedure
+  createModifier: posProcedure
     .input(
       z.object({
         itemId: z.string(),
@@ -1421,7 +1421,7 @@ export const posRouter = router({
       return modifier;
     }),
 
-  updateModifier: protectedProcedure
+  updateModifier: posProcedure
     .input(
       z.object({
         id: z.string(),
@@ -1436,7 +1436,7 @@ export const posRouter = router({
       return { success: true };
     }),
 
-  directCheckout: protectedProcedure
+  directCheckout: posProcedure
     .input(
       z.object({
         tableId: z.string().optional(),
@@ -1926,7 +1926,7 @@ export const posRouter = router({
       };
     }),
 
-  createPaymentIntent: protectedProcedure
+  createPaymentIntent: posProcedure
     .input(
       z.object({
         tableId: z.string().optional(),
@@ -2026,7 +2026,7 @@ export const posRouter = router({
       };
     }),
 
-  pollPaymentIntent: protectedProcedure
+  pollPaymentIntent: posProcedure
     .input(z.object({ paymentIntentId: z.string() }))
     .query(async ({ ctx, input }) => {
       const [intent] = await ctx.restaurantDb.select().from(dbSchema.paymentIntents)
@@ -2068,7 +2068,7 @@ export const posRouter = router({
    * Fase 3: Rabbitty Tabs & Comandas activas en tienda / mesa.
    * Obtiene todas las mesas ocupadas con órdenes abiertas y clientes identificados.
    */
-  getActiveTabs: protectedProcedure.query(async ({ ctx }) => {
+  getActiveTabs: posProcedure.query(async ({ ctx }) => {
     // Auto-limpieza: tabs huérfanas (nunca pagadas ni ejecutadas) fuera del feed
     const { expireStaleOrders } = await import("../services/tabsSweep");
     await expireStaleOrders(ctx.restaurantDb, ctx.branchId);
@@ -2216,7 +2216,7 @@ export const posRouter = router({
    *                por el personal en el POS).
    * Guard: la orden debe pertenecer a la sucursal de la sesión.
    */
-  setOrderStage: protectedProcedure
+  setOrderStage: posProcedure
     .input(z.object({
       orderId: z.string(),
       stage: z.enum(["RECEIVED", "PREPARING", "READY", "DONE"]),
@@ -2323,7 +2323,7 @@ export const posRouter = router({
    * Fase 3: Envío directo de la cuenta digital al móvil del Rabbitter.
    * Despacha enlace de pago (/pay/[orderId]) vía Push nativo (APNs/in-app) o WhatsApp deep-link.
    */
-  sendBillToCustomer: protectedProcedure
+  sendBillToCustomer: posProcedure
     .input(
       z.object({
         orderId: z.string(),

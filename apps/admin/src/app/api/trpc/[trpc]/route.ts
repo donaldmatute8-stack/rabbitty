@@ -8,6 +8,12 @@ import { staff, branches, restaurants } from "@rabbitty/database-restaurant/sche
 import { users, ownedBusinesses } from "@rabbitty/database-core/schema";
 import { eq, and } from "drizzle-orm";
 import { verifyGod2faCookieValue, verifyImpersonationCookieValue, GOD_IMP_COOKIE } from "@rabbitty/api/services/god2fa";
+import {
+  isTerminalSessionsEnabled,
+  readTerminalToken,
+  resolvePosTerminalSession,
+  touchTerminalSession,
+} from "@rabbitty/api/services/posTerminalAuth";
 
 function readGodImpCookie(req: Request): string | undefined {
   return req.headers
@@ -61,6 +67,27 @@ const handler = async (req: Request) => {
 
       const coreDb = getCoreDb();
       let effectiveUserId = session?.user?.id ?? null;
+
+      // ── Fase 2 · Terminal POS con sesión propia (doble lectura) ──
+      // Solo se intenta si el flag está activo y llega un token con forma
+      // válida. Si no hay token (o el flag está apagado) esto no toca la DB y
+      // el flujo del admin queda EXACTAMENTE como hoy.
+      let posTerminal = null;
+      if (isTerminalSessionsEnabled()) {
+        const terminalToken = readTerminalToken(req.headers);
+        if (terminalToken) {
+          posTerminal = await resolvePosTerminalSession(coreDb, terminalToken);
+          if (posTerminal) {
+            // La sucursal debe existir y estar activa; si no, el token no sirve.
+            const [terminalBranch] = await restaurantDb
+              .select({ id: branches.id })
+              .from(branches)
+              .where(and(eq(branches.id, posTerminal.branchId), eq(branches.isActive, true)))
+              .limit(1);
+            if (!terminalBranch) posTerminal = null;
+          }
+        }
+      }
 
       if (session?.user?.email) {
         // Mapear adminAuthUsers.email a core users.id para enlazar la propiedad de negocios y saldo de Bunz
@@ -119,6 +146,12 @@ const handler = async (req: Request) => {
         }
       }
 
+      // La terminal manda para su propia sucursal (salvo Vista Tenant explícita
+      // del God Admin, que es una acción administrativa deliberada).
+      if (!impersonating && posTerminal) {
+        activeBranchId = posTerminal.branchId;
+      }
+
       // Sin owner, sin staff y sin impersonación → sin tenancy.
       // Excepción: endpoints de pago (Rabbitty Pay) — el COMENSAL escanea el QR
       // y paga /pay/[orderId] SIN sesión del comercio. Esos endpoints son
@@ -131,6 +164,11 @@ const handler = async (req: Request) => {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sin sucursal asignada para esta sesión" });
       }
 
+      if (posTerminal) {
+        // Telemetría acotada (una escritura cada 5 min por sesión).
+        await touchTerminalSession(coreDb, posTerminal);
+      }
+
       return {
         userId: effectiveUserId,
         user: session?.user ? { ...session.user, id: effectiveUserId || session.user.id } : null,
@@ -139,6 +177,16 @@ const handler = async (req: Request) => {
         restaurantDb,
         coreDb,
         branchId: activeBranchId || env.BRANCH_ID,
+        posAuth: posTerminal
+          ? {
+              method: "terminal" as const,
+              terminalId: posTerminal.terminalId,
+              sessionId: posTerminal.sessionId,
+              branchId: posTerminal.branchId,
+              businessId: posTerminal.businessId,
+              terminalName: posTerminal.terminalName,
+            }
+          : { method: effectiveUserId ? ("admin" as const) : ("none" as const) },
         god2faVerified: verifyGod2faCookieValue(
           req.headers.get("cookie")?.split(";").map((c) => c.trim()).find((c) => c.startsWith("god2fa="))?.slice(7)
         ),

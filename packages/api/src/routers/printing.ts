@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { router, protectedProcedure } from "../trpc";
+import { router, posProcedure } from "../trpc";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { restaurants, branches, orders } from "@rabbitty/database-restaurant/schema";
 
 export const printingRouter = router({
-  getPrinters: protectedProcedure.query(async ({ ctx }) => {
+  getPrinters: posProcedure.query(async ({ ctx }) => {
     const [branch] = await ctx.restaurantDb.select().from(branches).where(eq(branches.id, ctx.branchId));
     if (!branch) return { printers: [] };
     const [restaurant] = await ctx.restaurantDb.select().from(restaurants).where(eq(restaurants.id, branch.restaurantId));
@@ -16,7 +16,7 @@ export const printingRouter = router({
     };
   }),
 
-  getTicketData: protectedProcedure
+  getTicketData: posProcedure
     .input(z.object({ orderId: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
       let [branch] = await ctx.restaurantDb.select().from(branches).where(eq(branches.id, ctx.branchId));
@@ -48,7 +48,7 @@ export const printingRouter = router({
       };
     }),
 
-  printOrder: protectedProcedure
+  printOrder: posProcedure
     .input(z.object({ orderId: z.string() }))
     .mutation(async ({ ctx, input }) => {
        const [order] = await ctx.restaurantDb.select().from(orders).where(eq(orders.id, input.orderId));

@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { router, protectedProcedure, resolveBranchId } from "../trpc";
+import { router, posProcedure, resolveBranchId } from "../trpc";
 import { eq, and, gte, sql } from "drizzle-orm";
 import { branches, cashDrops, payments, orders } from "@rabbitty/database-restaurant/schema";
 import { getOpenShift, computeShiftTotals } from "../services/cashShift";
 import { TRPCError } from "@trpc/server";
 
 export const cashDropsRouter = router({
-  getSettings: protectedProcedure
+  getSettings: posProcedure
     .input(z.object({ branchId: z.string().optional() }))
     .query(async ({ ctx, input }) => {
       const branchId = await resolveBranchId(ctx, input.branchId);
@@ -22,7 +22,7 @@ export const cashDropsRouter = router({
       return branch;
     }),
 
-  updateSettings: protectedProcedure
+  updateSettings: posProcedure
     .input(z.object({
       branchId: z.string().optional(),
       cashDropEnabled: z.boolean(),
@@ -42,7 +42,7 @@ export const cashDropsRouter = router({
       return { success: true };
     }),
 
-  getStatus: protectedProcedure
+  getStatus: posProcedure
     .input(z.object({ branchId: z.string().optional() }))
     .query(async ({ ctx, input }) => {
       const branchId = await resolveBranchId(ctx, input.branchId);
@@ -87,7 +87,7 @@ export const cashDropsRouter = router({
       };
     }),
 
-  listToday: protectedProcedure
+  listToday: posProcedure
     .input(z.object({ branchId: z.string().optional() }))
     .query(async ({ ctx, input }) => {
       const branchId = await resolveBranchId(ctx, input.branchId);
@@ -106,7 +106,7 @@ export const cashDropsRouter = router({
         .orderBy(cashDrops.createdAt);
     }),
 
-  createDrop: protectedProcedure
+  createDrop: posProcedure
     .input(z.object({
       branchId: z.string().optional(),
       amount: z.number().positive(),

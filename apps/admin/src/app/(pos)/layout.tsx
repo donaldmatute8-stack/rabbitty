@@ -1,29 +1,85 @@
 "use client";
-import React, { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import React, { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { trpc } from "../../lib/trpc-client";
 import { initAppLifecycleHandlers } from "../../lib/print-engine";
+import { getPosTerminalToken } from "../../lib/pos-terminal";
 
 export default function PosLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
 
-  // Enforce auth on client side for POS & Kiosk
-  const { data: profile, isLoading, error } = trpc.admin.getProfile.useQuery(undefined, {
+  // ── Fase 2: ¿este dispositivo es una terminal vinculada? ──
+  // El token vive en localStorage; se lee en efecto para no romper la hidratación.
+  const [terminalToken, setTerminalToken] = useState<string | null>(null);
+  useEffect(() => {
+    // Lectura de localStorage tras montar (evita mismatch de hidratación).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTerminalToken(getPosTerminalToken());
+  }, [pathname]);
+
+  const isLinkPage = pathname === "/pos/link";
+  const hasTerminalToken = !!terminalToken && !isLinkPage;
+
+  // El flag decide si el servidor acepta el token de terminal. Se consulta
+  // siempre, es público y barato; con el flag apagado el POS se comporta igual.
+  const { data: feature, isLoading: featureLoading } = trpc.posTerminals.featureEnabled.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+
+  const terminalMode = hasTerminalToken && feature?.enabled === true;
+
+  // Doble lectura: se usa el principal que corresponda. El admin conserva
+  // exactamente el query de siempre cuando no hay terminal.
+  const profileQuery = trpc.admin.getProfile.useQuery(undefined, {
     retry: false,
     staleTime: 5 * 60 * 1000,
+    enabled: !terminalMode,
   });
+  const sessionQuery = trpc.posTerminals.sessionContext.useQuery(undefined, {
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+    enabled: terminalMode,
+  });
+
+  // Doble lectura de verdad: si la terminal no es válida pero hay sesión de
+  // admin en el mismo equipo, el administrador NO queda bloqueado.
+  const adminFallbackQuery = trpc.admin.getProfile.useQuery(undefined, {
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+    enabled: terminalMode && !!sessionQuery.error,
+  });
+
+  const isLoading = hasTerminalToken
+    ? featureLoading ||
+      (terminalMode && (sessionQuery.isLoading || (sessionQuery.error && adminFallbackQuery.isLoading)))
+    : profileQuery.isLoading;
+
+  const authorized = terminalMode
+    ? !!sessionQuery.data || !!adminFallbackQuery.data
+    : !!profileQuery.data;
+  const error = terminalMode
+    ? adminFallbackQuery.data
+      ? null
+      : sessionQuery.error
+    : profileQuery.error;
 
   // Solo la falta REAL de sesión manda al login. Un error de negocio (p. ej.
   // "Sin sucursal asignada") NO debe expulsar al usuario a la pantalla de
   // credenciales: eso hacía que al volver al POS pidiera la clave otra vez.
   const errorCode = (error as { data?: { code?: string } } | null)?.data?.code;
-  const isAuthError = errorCode === "UNAUTHORIZED" || (!profile && !isLoading && !error);
+  const isAuthError = errorCode === "UNAUTHORIZED" || (!authorized && !isLoading && !error);
 
   useEffect(() => {
-    if (!isLoading && error && isAuthError) {
+    if (isLoading) return;
+    // Terminal con token que el servidor ya no acepta (revocada/vencida):
+    // no se borra sola; se ofrece re-vincular desde /pos/link tras login.
+    if (hasTerminalToken && !terminalMode && !featureLoading) return;
+    if (error && isAuthError && !hasTerminalToken) {
       router.replace("/login");
     }
-  }, [isLoading, error, isAuthError, router]);
+  }, [isLoading, error, isAuthError, hasTerminalToken, terminalMode, featureLoading, router]);
 
   useEffect(() => {
     const cleanup = initAppLifecycleHandlers();
@@ -31,6 +87,41 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
   }, []);
 
   if (isLoading) return <div className="h-[100dvh] w-screen bg-black" />;
+
+  // ── Token presente pero modo terminal apagado o rechazado ──
+  if (hasTerminalToken && !authorized) {
+    const disabled = !featureLoading && feature?.enabled !== true;
+    return (
+      <div className="h-[100dvh] w-screen bg-black text-white flex items-center justify-center p-6">
+        <div className="max-w-md w-full rounded-3xl border border-cyan-500/30 bg-cyan-500/10 p-6 space-y-3">
+          <p className="text-lg font-black m-0">
+            {disabled ? "Modo terminal desactivado" : "Esta terminal necesita autorización"}
+          </p>
+          <p className="text-sm text-gray-300 m-0">
+            {disabled
+              ? "El POS está operando con sesión de administrador. Entra con tu cuenta para continuar."
+              : "La autorización de esta terminal venció o fue revocada. Entra como administrador para vincularla de nuevo."}
+          </p>
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="flex-1 rounded-xl bg-white/10 hover:bg-white/20 px-4 py-2.5 text-xs font-black cursor-pointer"
+            >
+              Reintentar
+            </button>
+            <button
+              type="button"
+              onClick={() => router.replace("/login")}
+              className="flex-1 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-gray-950 px-4 py-2.5 text-xs font-black cursor-pointer"
+            >
+              Entrar como admin
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (error && !isAuthError) {
     return (
@@ -65,7 +156,7 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!profile) return null;
+  if (!authorized) return null;
 
   return (
     <div className="relative flex h-[100dvh] w-screen overflow-hidden bg-black text-white select-none">
