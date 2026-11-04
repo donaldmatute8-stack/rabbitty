@@ -28,6 +28,12 @@ export async function GET(req: NextRequest) {
         };
         req.signal?.addEventListener?.("abort", finish);
 
+        // ── Fix del loop: el tick releía TODAS las notificaciones > startedAt
+        // cada 3s y las reenviaba (el cliente hacía toast infinito y se
+        // insertaba una delivery OPENED por cada reenvío). Se lleva memoria de
+        // lo ya emitido en ESTA conexión.
+        const sentIds = new Set<string>();
+
         const tick = async () => {
           if (closed) return;
           try {
@@ -45,6 +51,8 @@ export async function GET(req: NextRequest) {
               .where(and(eq(notifications.userId, userId), gt(notifications.createdAt, startedAt)))
               .limit(20);
             for (const r of rows) {
+              if (sentIds.has(r.id)) continue;
+              sentIds.add(r.id);
               controller.enqueue(encoder.encode(`event: notification\ndata: ${JSON.stringify(r)}\n\n`));
               // Registro OPENED si llega por realtime (visibilidad de entrega parcial)
               await db
