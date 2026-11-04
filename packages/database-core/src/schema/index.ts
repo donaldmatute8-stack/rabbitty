@@ -260,6 +260,25 @@ export const conversations = pgTable("conversations", {
   index("conversations_last_message_idx").on(table.lastMessageAt),
 ]);
 
+/**
+ * ── Miembros de conversación (0035) ── base de los GRUPOS.
+ * Un DIRECT sigue usando participant1/2; un GROUP autoriza por aquí.
+ * El backfill creó los 2 miembros de cada conversación existente.
+ */
+export const conversationMembers = pgTable("conversation_members", {
+  id: id(),
+  conversationId: text("conversationId").notNull(),
+  // userId o businessId (mismo criterio que participant1/2)
+  userId: text("userId").notNull(),
+  role: text("role").default("MEMBER").notNull(), // ADMIN | MEMBER
+  joinedAt: timestamp("joinedAt").defaultNow(),
+  leftAt: timestamp("leftAt"),
+  lastReadAt: timestamp("lastReadAt"),
+}, (table) => [
+  uniqueIndex("conversation_members_uq").on(table.conversationId, table.userId),
+  index("conversation_members_user_idx").on(table.userId),
+]);
+
 export const messages = pgTable("messages", {
   id: id(),
   conversationId: fkId("conversationId").references(() => conversations.id, { onDelete: "cascade" }),
