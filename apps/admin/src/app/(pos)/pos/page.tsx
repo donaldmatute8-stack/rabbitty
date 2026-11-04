@@ -63,6 +63,20 @@ function PosQrCountdown({ expiresAt }: { expiresAt: Date }) {
   );
 }
 
+// ── Gracia al salir del POS ──
+// Antes había que capturar el PIN de administrador CADA VEZ que se iba al
+// dashboard (y al regresar había que pedírselo al encargado otra vez). Tras
+// autenticarse una vez, se concede una ventana corta para volver a salir sin
+// repetirlo. Se guarda por sesión de terminal (sessionStorage, no se comparte).
+const POS_EXIT_GRACE_MS = 15 * 60 * 1000;
+const POS_EXIT_KEY = "rabbitty_pos_exit_auth_until";
+function posExitAuthorized(): boolean {
+  try { return Number(sessionStorage.getItem(POS_EXIT_KEY) || 0) > Date.now(); } catch { return false; }
+}
+function markPosExitAuthorized(): void {
+  try { sessionStorage.setItem(POS_EXIT_KEY, String(Date.now() + POS_EXIT_GRACE_MS)); } catch { /* noop */ }
+}
+
 export default function PosPage() {
   const [activeCategory, setActiveCategory] = useState<string | null>("ALL");
   const [search, setSearch] = useState("");
@@ -861,6 +875,7 @@ export default function PosPage() {
           await setAdminPinMutation.mutateAsync({ pin: nextPin });
           setAdminPinModal(false);
           setExitPin("");
+          markPosExitAuthorized();
           toast.success("🐰 PIN de Administrador definido. Saliendo al Dashboard...");
           window.location.assign("/");
         } catch {
@@ -870,6 +885,7 @@ export default function PosPage() {
         // Validar PIN existente
         try {
           await verifyPinMutation.mutateAsync({ pin: nextPin });
+          markPosExitAuthorized();
           setAdminPinModal(false);
           setExitPin("");
           toast.success("PIN autorizado. Accediendo al Dashboard...");
@@ -1510,11 +1526,13 @@ export default function PosPage() {
           <button
             type="button"
             onClick={() => {
+              // Dentro de la ventana de gracia no se vuelve a pedir el PIN.
+              if (posExitAuthorized()) { window.location.assign("/"); return; }
               setExitPin("");
               setAdminPinModal(true);
             }}
             className="flex items-center gap-2 rounded-xl bg-white/5 hover:bg-white/10 px-3 py-2 border border-white/10 text-gray-200 hover:text-white text-xs font-bold transition-all cursor-pointer shadow-sm active:scale-95 group"
-            title="Terminal Protegida: Requiere PIN de Administrador para salir al Dashboard"
+            title="Terminal Protegida: PIN de Administrador para salir al Dashboard (se recuerda 15 min)"
           >
             <Lock className="h-3.5 w-3.5 text-amber-400 group-hover:text-amber-300" />
             <ChevronLeft className="h-4 w-4 text-cyan-400 -ml-1" />
