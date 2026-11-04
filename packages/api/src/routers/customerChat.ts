@@ -2,7 +2,7 @@ import { z } from "zod";
 import { eq, ne, and, or, inArray, sql, asc, desc, type SQL } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
-import { conversations, messages, ownedBusinesses, users } from "@rabbitty/database-core";
+import { conversations, messages, ownedBusinesses, users, chatEventOutbox } from "@rabbitty/database-core";
 import type { Context } from "../trpc";
 
 export interface BusinessRef {
@@ -293,6 +293,44 @@ export const customerChatRouter = router({
         .update(conversations)
         .set({ updatedAt: new Date() })
         .where(eq(conversations.id, conv.id));
+
+      // ── Fase 4: evento realtime ──
+      // El admin escribe en el MISMO Postgres que la app, así que basta con
+      // encolar el evento y pedirle a la miniapp que lo publique. Sin esto el
+      // cliente solo se enteraba por la campana/push, no en el hilo abierto.
+      if (msg) {
+        try {
+          await ctx.coreDb
+            .insert(chatEventOutbox)
+            .values({
+              conversationId: conv.id,
+              type: "message.created",
+              eventId: `msg:${msg.id}`,
+              payload: {
+                messageId: msg.id,
+                conversationId: conv.id,
+                senderId: businessId,
+                content: msg.content,
+                type: msg.type,
+                metadata: msg.metadata ?? null,
+                createdAt: msg.createdAt,
+              },
+            })
+            .onConflictDoNothing({ target: chatEventOutbox.eventId });
+
+          const url = process.env.RABBITTY_MINIAPP_URL;
+          const secret = process.env.RABBITTY_API_SECRET;
+          if (url && secret) {
+            // Piggyback del worker: no bloquea la respuesta del admin.
+            void fetch(`${url.replace(/\/$/, "")}/api/cron/chat-outbox`, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${secret}` },
+            }).catch(() => {});
+          }
+        } catch (rtErr) {
+          console.error("[customerChat] encolar realtime falló:", rtErr);
+        }
+      }
 
       // Notificar al cliente por el canal completo de la miniapp (in-app + APNs + Telegram)
       // — fuente única ida y vuelta: el admin responde Y el cliente se entera.

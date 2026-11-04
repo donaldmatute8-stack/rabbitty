@@ -59,8 +59,14 @@ export async function GET(req: Request) {
 
     const enrichedConversations = await Promise.all(
       userConversations.map(async (conv) => {
+        // Si YO soy participante directo, es MI chat como cliente — aunque el
+        // otro lado sea un negocio que también me pertenece (p. ej. el founder
+        // probando su propio local). Solo es "bandeja de negocio" cuando entro
+        // a través del negocio, no como persona.
+        const isDirectParticipant = conv.participant1 === caller.id || conv.participant2 === caller.id;
         const isBusinessContext =
-          myBusinessIds.includes(conv.participant1) || myBusinessIds.includes(conv.participant2);
+          !isDirectParticipant &&
+          (myBusinessIds.includes(conv.participant1) || myBusinessIds.includes(conv.participant2));
 
         let otherId = conv.participant1 === caller.id ? conv.participant2 : conv.participant1;
         let myActingBusinessName: string | null = null;

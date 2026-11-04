@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState, createContext, useContext, useEffect } from "react";
+import React, { useState, createContext, useContext, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { AdminSidebar } from "./AdminSidebar";
 import { BranchSelector } from "./BranchSelector";
 import { CommandMenu } from "./CommandMenu";
 import { SandboxBanner } from "./SandboxBanner";
 import { trpc } from "../lib/trpc-client";
+import { toast } from "@rabbitty/ui";
 import Link from "next/link";
 import { TerminalSquare, TabletSmartphone, Smartphone, MessageSquare, X, Bot, Sparkles, Send, RotateCw, CreditCard, Eye } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
@@ -134,7 +135,7 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
     isLoading: conversationsLoading,
     refetch: refetchConversations,
   } = trpc.customerChat.listConversations.useQuery(undefined, {
-    refetchInterval: chatDrawerOpen ? 8000 : 45000,
+    refetchInterval: chatDrawerOpen ? 8000 : 12000,
     retry: false,
   });
 
@@ -150,6 +151,50 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
     (acc: number, c: any) => acc + Number(c.unread || 0),
     0
   );
+
+  // ── Aviso de mensaje NUEVO de cliente ──
+  // El panel tenía badge pero sin aviso: si no lo mirabas, no te enterabas.
+  // Se dispara SOLO cuando el contador SUBE (no en cada poll) y una vez por
+  // ráfaga: toast + tono corto + notificación del sistema si hay permiso.
+  const prevChatUnreadRef = useRef(totalChatUnread);
+  useEffect(() => {
+    const prev = prevChatUnreadRef.current;
+    prevChatUnreadRef.current = totalChatUnread;
+    if (totalChatUnread <= prev) return;
+
+    const nuevos = totalChatUnread - prev;
+    toast.info(nuevos === 1 ? "💬 Nuevo mensaje de un cliente" : `💬 ${nuevos} mensajes nuevos de clientes`);
+
+    try {
+      const Ctor = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (Ctor) {
+        const ctx = new Ctor();
+        [880, 1180].forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.value = freq;
+          const start = ctx.currentTime + i * 0.14;
+          gain.gain.setValueAtTime(0.0001, start);
+          gain.gain.exponentialRampToValueAtTime(0.18, start + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.12);
+          osc.connect(gain).connect(ctx.destination);
+          osc.start(start);
+          osc.stop(start + 0.14);
+        });
+        setTimeout(() => ctx.close().catch(() => {}), 1200);
+      }
+    } catch { /* audio bloqueado */ }
+
+    try {
+      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+        new Notification("Rabbitty · Nuevo mensaje", {
+          body: nuevos === 1 ? "Un cliente te escribió" : `${nuevos} mensajes nuevos de clientes`,
+          tag: "rabbitty-chat",
+        });
+      }
+    } catch { /* sin permiso */ }
+  }, [totalChatUnread]);
 
   const markChatRead = trpc.customerChat.markRead.useMutation({
     onSuccess: () => {
@@ -339,15 +384,17 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                 >
                   <span className="text-sm">🐰</span>
                   <span className="font-extrabold tracking-wide">Bunzy</span>
-                  {chatUnreadCount > 0 && (
+                  {totalChatUnread > 0 && (
                     <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-pink-500 px-1 text-[10px] font-black text-white shadow-lg z-10">
-                      {chatUnreadCount}
+                      {totalChatUnread}
                     </span>
                   )}
-                  <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-pink-500"></span>
-                  </span>
+                  {totalChatUnread > 0 && (
+                    <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-pink-500"></span>
+                    </span>
+                  )}
                 </button>
                 <ReadinessBar />
                 {!isScannerPaired && (
