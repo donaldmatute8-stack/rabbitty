@@ -106,7 +106,11 @@ export default function RestaurantsPage() {
                           {b.status}
                         </Badge>
                       </div>
-                      <p className="text-xs text-gray-400 mt-1">{b.category} • {b.address}</p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {b.category}
+                        {b.niche ? <span className="ml-1 rounded-full bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-bold text-cyan-300">{b.niche}</span> : null}
+                        {" "}• {b.address}
+                      </p>
                       <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-gray-300">
                         <span>Reward: <strong>{b.rewardPercentage}%</strong></span>
                         {b.package && <span>Paquete: <strong>{b.package}</strong></span>}

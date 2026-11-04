@@ -508,3 +508,44 @@ Dedupe de solicitudes distinguía mayúsculas | comparación `ilike` |
 Tras reautorizar, el dispositivo podía guardar `terminalId` vacío | se consulta `status` y se guarda el id real |
 Catálogo de nichos cacheado indefinidamente en la miniapp | `cache: 'no-store'` |
 Bunzy con un nicho sin copy mostraba “undefined” | fallback de copy |
+
+
+---
+
+## 17 · Flujo desde la landing (rabbitty.me)
+
+**Antes**: el CTA de negocios abría el login del admin viejo y el formulario de
+solicitud de la landing (`/api/apply`) mandaba un lead que se aprobaba aparte.
+
+**Ahora**:
+
+```
+rabbitty.me
+  ├─ "Soy negocio" / "Crear mi negocio" / elegir paquete
+  │      → app.rabbitty.me/business?intent=affiliate&from=landing
+  │      → login/registro (teléfono) → onboarding por nicho + Bunzy
+  │
+  └─ "Ya tengo cuenta" → admin.rabbitty.me/login (solo tenants existentes)
+```
+
+- La intención se guarda en `localStorage` (`rabbitty_intent_affiliate`) y se
+  respeta después del login, del registro y del fast-login. Sin eso, un usuario
+  nuevo aterrizaba en el home de consumidor.
+- El onboarding **se consume** al crear el negocio o al abrir el dashboard de
+  afiliado (se limpia la intención).
+- La selección de paquete de la landing ya no abre el formulario viejo: manda
+  al onboarding (se conserva el evento `Lead` para analítica). El modal de
+  `/api/apply` queda retirado de la UI; el endpoint se conserva por
+  compatibilidad.
+
+**Aprobación (el flujo que ya existía)**
+
+- Las altas sin Google verificado nacen `PENDING`; el God Admin las aprueba en
+  `/restaurants`, que ahora muestra el **nicho**.
+- Al aprobar se aprovisiona **restaurante + sucursal** (idempotente) si el
+  negocio aún no los tiene. Sin esto, el negocio aprobado no podía entrar al
+  admin ni operar el POS.
+- El alta auto-aprobada (Google verificado) aprovisiona en el mismo momento.
+- El dueño recibe aviso por **app nativa** (push) y Telegram como respaldo, con
+  la URL del panel. Entra con su teléfono o correo (el login del admin soporta
+  ambos).

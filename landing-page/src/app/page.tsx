@@ -28,6 +28,10 @@ const fireConversion = (event: string, params: Record<string, unknown> = {}) => 
   w.fbq?.('track', event === 'Lead' ? 'Lead' : 'SubmitApplication', params);
 };
 
+// El alta de negocio vive en el onboarding nuevo (nichos + Bunzy + aprovisionamiento).
+const BUSINESS_ONBOARDING_URL = 'https://app.rabbitty.me/business?intent=affiliate&from=landing';
+const BUSINESS_LOGIN_URL = 'https://admin.rabbitty.me/login';
+
 const EMPTY_FORM = {
   negocio: '', tipo: '', paquete: '', periodicidad: 'yearly',
   nombre: '', telefono: '', email: '', ubicacion: '', como_supo: '', mensaje: '',
@@ -117,28 +121,17 @@ export default function LandingPage() {
   };
 
   const handleSelectPlan = (plan: PackagePlan, niche: NicheData, billingPeriod: 'monthly' | 'yearly') => {
-    setSelectedPlanInfo({
-      planName: plan.name,
-      setupBunz: plan.setupBunz,
-      billing: billingPeriod === 'yearly' ? 'Membresía Anual (48,000 BUNZ/año)' : 'Membresía Mensual (5,000 BUNZ/mes)',
+    // El alta ahora vive en el onboarding nuevo: nicho, Bunzy, recompensas y
+    // firma en un solo flujo. Conservamos el evento de conversión.
+    fireConversion('Lead', {
+      niche: niche.id,
+      package: plan.id,
+      value: plan.setupBunz,
+      billing: billingPeriod,
     });
-    setFormData(prev => ({
-      ...prev,
-      tipo: niche.name,
-      paquete: `${plan.name} (${plan.setupBunz.toLocaleString()} BUNZ)`,
-      periodicidad: billingPeriod,
-      packageCode: plan.id,
-      packageName: plan.name,
-      nicheId: niche.id,
-      nicheName: niche.name,
-      setupBunz: plan.setupBunz,
-      initialVaultBunz: plan.initialVaultBunz,
-      billingPeriod,
-      _ts: Date.now(),
-    }));
-    setFormStep(0);
-    setSubmitError('');
-    setShowApplyForm(true);
+    if (typeof window !== 'undefined') {
+      window.location.href = BUSINESS_ONBOARDING_URL;
+    }
   };
   // Typewriter effect state
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
@@ -272,7 +265,7 @@ export default function LandingPage() {
               {/* Mega Dropdown */}
               <div className="absolute top-full left-0 mt-2 w-64 p-2 bg-[#090912]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_16px_40px_rgba(0,0,0,0.6)] opacity-0 translate-y-2 pointer-events-none group-hover/biz:opacity-100 group-hover/biz:translate-y-0 group-hover/biz:pointer-events-auto transition-all duration-200 z-50">
                 <a 
-                  href="#affiliates" 
+                  href={BUSINESS_ONBOARDING_URL}
                   className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/6 transition-colors text-left"
                 >
                   <div className="w-8 h-8 rounded-lg bg-blue-500/15 border border-blue-500/30 flex items-center justify-center shrink-0">
@@ -327,13 +320,20 @@ export default function LandingPage() {
 
           {/* Action CTAs */}
           <div className="flex items-center gap-2.5 sm:gap-3">
-            <a 
-              href="https://admin.rabbitty.me/login" 
-              target="_blank" 
-              className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold text-white/80 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 px-3.5 py-2 rounded-full transition-all"
+            <a
+              href={BUSINESS_ONBOARDING_URL}
+              className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 px-3.5 py-2 rounded-full transition-all shadow-[0_0_18px_rgba(37,99,235,0.35)]"
             >
-              <Building2 size={13} className="text-blue-400" />
-              Portal Negocios
+              <Building2 size={13} className="text-white/90" />
+              Soy negocio
+            </a>
+            <a
+              href={BUSINESS_LOGIN_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden lg:inline-flex items-center gap-1.5 text-[11px] font-bold text-white/60 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-2 rounded-full transition-all"
+            >
+              Ya tengo cuenta
             </a>
             <OpenAppButton className="bg-white text-black px-4.5 sm:px-5 py-2 rounded-full font-bold text-xs sm:text-sm hover:scale-105 active:scale-95 transition-all shadow-[0_0_20px_rgba(255,255,255,0.25)] cursor-pointer flex items-center gap-1.5">
               <span>Abrir App</span>
@@ -481,7 +481,10 @@ export default function LandingPage() {
               ))}
             </div>
             <div className="flex flex-col sm:flex-row gap-4">
-              <a href="https://t.me/rabbittyhub/10" target="_blank" className="inline-block px-8 py-4 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-lg text-center transition-all shadow-[0_0_20px_rgba(37,99,235,0.4)]">
+              <a href={BUSINESS_ONBOARDING_URL} className="inline-block px-8 py-4 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-lg text-center transition-all shadow-[0_0_20px_rgba(37,99,235,0.4)]">
+                Crear mi negocio
+              </a>
+              <a href="https://t.me/rabbittyhub/10" target="_blank" className="inline-block px-8 py-4 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold text-lg text-center transition-all">
                 Reservar Deploy Demo
               </a>
             </div>

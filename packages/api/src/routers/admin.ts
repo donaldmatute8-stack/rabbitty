@@ -10,6 +10,30 @@ import { referrals, users, levels, ownedBusinesses, transactions, treasury, syst
 import { customers } from "@rabbitty/database-restaurant/schema";
 import { miniappClient } from "../services/miniapp-client";
 import * as cheerio from "cheerio";
+/** Push a la app nativa (mismo canal que usa el POS). Devuelve true si entregó. */
+async function sendOwnerPush(
+  userId: string,
+  title: string,
+  message: string,
+  route: string,
+): Promise<boolean> {
+  const base = process.env.RABBITTY_MINIAPP_URL;
+  const secret = process.env.PUSH_SEND_SECRET;
+  if (!base || !secret) return false;
+  try {
+    const res = await fetch(`${base.replace(/\/$/, "")}/api/notifications/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-push-secret": secret },
+      body: JSON.stringify({ userId, title, body: message, data: { type: "AFFILIATE", route } }),
+    });
+    if (!res.ok) return false;
+    const data = (await res.json().catch(() => ({}))) as { sent?: number };
+    return Number(data.sent ?? 0) > 0;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Resuelve el negocio del dueño para el re-onboarding: primero por la sucursal
  * en contexto (restaurante → businessId) y, si no, por ownerId. NUNCA usa datos
@@ -162,6 +186,7 @@ export const adminRouter = router({
         ownerId: ownedBusinesses.ownerId,
         name: ownedBusinesses.name,
         category: ownedBusinesses.category,
+        niche: ownedBusinesses.niche,
         description: ownedBusinesses.description,
         address: ownedBusinesses.address,
         rewardPercentage: ownedBusinesses.rewardPercentage,
@@ -190,28 +215,76 @@ export const adminRouter = router({
         .returning();
 
       if (updated && (input.status === "APPROVED" || input.status === "VERIFIED")) {
+        // ── Aprovisionar restaurante + sucursal (idempotente) ──
+        // Sin esto, el negocio aprobado no tiene tenancy y no puede entrar al
+        // admin ni operar el POS. Los tenants existentes ya lo tienen.
         try {
-          const [owner] = await ctx.coreDb.select().from(users).where(eq(users.id, updated.ownerId));
-          const botToken = process.env.TELEGRAM_BOT_TOKEN || process.env.AUTH_TELEGRAM_BOT_TOKEN;
-          if (owner?.telegramId && botToken) {
-            const message =
-              `🎉 *¡Felicidades! Tu negocio ${updated.name} ha sido aprobado.*\n\n` +
-              `Ya estás listo para operar en Rabbitty. Tus clientes ya pueden escanear y ganar Bunz en tu establecimiento.\n\n` +
-              `🐰 — Rabbitty Team`;
+          const [existingRest] = await ctx.restaurantDb
+            .select({ id: restaurants.id })
+            .from(restaurants)
+            .where(eq(restaurants.businessId, updated.id))
+            .limit(1);
 
+          if (!existingRest) {
+            const fallbackSlug = `biz-${updated.id.replace(/-/g, "").slice(0, 10)}`;
+            const [rest] = await ctx.restaurantDb
+              .insert(restaurants)
+              .values({
+                name: updated.name,
+                businessId: updated.id,
+                slug: updated.slug || fallbackSlug,
+                defaultRewardRate: updated.rewardPercentage ?? 10,
+              })
+              .returning({ id: restaurants.id });
+
+            if (rest) {
+              await ctx.restaurantDb.insert(branches).values({
+                name: `Sucursal ${updated.name}`,
+                restaurantId: rest.id,
+                address: updated.address || updated.name,
+                lat: updated.lat ?? 0,
+                lng: updated.lng ?? 0,
+                isActive: true,
+              });
+            }
+          }
+        } catch (provisionError) {
+          console.error("[APPROVE] no se pudo aprovisionar restaurante/sucursal:", provisionError);
+        }
+
+        // ── Aviso al dueño: push nativo primero, Telegram como respaldo ──
+        try {
+          const [owner] = await ctx.coreDb
+            .select({ id: users.id, telegramId: users.telegramId })
+            .from(users)
+            .where(eq(users.id, updated.ownerId))
+            .limit(1);
+
+          const adminUrl = process.env.NEXT_PUBLIC_APP_URL || "https://admin.rabbitty.me";
+          const title = "🎉 Tu negocio está aprobado";
+          const body = `${updated.name} ya está activo. Entra a tu panel con tu teléfono o correo.`;
+
+          let delivered = false;
+          if (owner?.id) {
+            delivered = await sendOwnerPush(owner.id, title, body, "/business");
+          }
+
+          const botToken = process.env.TELEGRAM_BOT_TOKEN || process.env.AUTH_TELEGRAM_BOT_TOKEN;
+          if (!delivered && owner?.telegramId && botToken) {
             await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 chat_id: owner.telegramId,
-                text: message,
-                parse_mode: "Markdown",
+                text:
+                  `🎉 Tu negocio ${updated.name} ha sido aprobado.\n\n` +
+                  `Entra a tu panel con tu teléfono o correo:\n${adminUrl}/login`,
                 disable_web_page_preview: true,
               }),
-            });
+            }).catch(() => undefined);
           }
         } catch (e) {
-          console.error("Error sending owner approval notification:", e);
+          console.error("Error notificando aprobación:", e);
         }
       }
 

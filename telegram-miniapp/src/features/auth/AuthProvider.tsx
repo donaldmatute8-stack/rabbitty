@@ -5,6 +5,8 @@ import { useRouter, usePathname } from 'next/navigation';
 import { PlatformBridge } from '@/lib/platform';
 import { readSettings, subscribeSettings } from '@/lib/userSettings';
 
+import { captureAffiliateIntent } from '@/lib/affiliateIntent';
+
 export interface UserProfile {
   id?: string;
   email?: string;
@@ -187,6 +189,10 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       router.replace('/onboarding');
     }
   };
+
+  useEffect(() => {
+    captureAffiliateIntent();
+  }, []);
 
   useEffect(() => {
     let active = true;

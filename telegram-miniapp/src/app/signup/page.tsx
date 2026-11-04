@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { PlatformBridge } from '@/lib/platform';
 import { useAuth } from '@/features/auth/AuthProvider';
 
+import { hasAffiliateIntent } from '@/lib/affiliateIntent';
 export default function SignupPage() {
   const router = useRouter();
   const { user, loading: authLoading, checkAuth } = useAuth();
@@ -102,7 +103,7 @@ export default function SignupPage() {
       if (data.success) {
         await PlatformBridge.hapticFeedback('success');
         await checkAuth();
-        router.replace('/');
+        router.replace(hasAffiliateIntent() ? '/business' : '/');
       } else {
         setError(data.error);
         if (res.status === 409 || res.status === 400) setStep(2);

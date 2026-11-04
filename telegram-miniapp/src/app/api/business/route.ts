@@ -3,7 +3,7 @@ import { db } from '@/db';
 import { users, ownedBusinesses, auditEntries, niches } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { restaurantDb } from '@/db/restaurant';
-import { restaurants } from '@rabbitty/database-restaurant/schema';
+import { restaurants, branches } from '@rabbitty/database-restaurant/schema';
 import { parseTelegramUser, validateTelegramInitData } from '@/lib/telegramAuth';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 import { sendEcosystemNotification } from '@/lib/push/notify';
@@ -330,6 +330,43 @@ export async function POST(req: Request) {
           contractSignature,
         }),
       });
+    }
+
+    // ── Si el alta nace APROBADA (Google verificado), provisionar tenancy ──
+    // restaurante + sucursal para que el negocio pueda entrar al admin y al POS.
+    if (isGoogleVerified) {
+      try {
+        const [existingRest] = await restaurantDb
+          .select({ id: restaurants.id })
+          .from(restaurants)
+          .where(eq(restaurants.businessId, business.id))
+          .limit(1);
+
+        if (!existingRest) {
+          const [rest] = await restaurantDb
+            .insert(restaurants)
+            .values({
+              name: business.name,
+              businessId: business.id,
+              slug: business.slug || `biz-${business.id.replace(/-/g, '').slice(0, 10)}`,
+              defaultRewardRate: business.rewardPercentage ?? 10,
+            })
+            .returning({ id: restaurants.id });
+
+          if (rest) {
+            await restaurantDb.insert(branches).values({
+              name: `Sucursal ${business.name}`,
+              restaurantId: rest.id,
+              address: business.address || business.name,
+              lat: business.lat ?? 0,
+              lng: business.lng ?? 0,
+              isActive: true,
+            });
+          }
+        }
+      } catch (provisionError) {
+        console.warn('[BUSINESS_PROVISION] no se pudo crear restaurante/sucursal:', provisionError);
+      }
     }
 
     // Notificación Push & in-app al dueño del negocio

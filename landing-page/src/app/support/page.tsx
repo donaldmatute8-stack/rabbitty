@@ -51,7 +51,7 @@ const EXTENDED_FAQS = [
   {
     category: 'Comercios & Afiliados',
     q: '¿Cómo afilio mi restaurante o cafetería?',
-    a: 'Puedes registrar tu negocio desde el portal de afiliados en https://rabbitty.me/affiliates o contactar al equipo en Telegram @rabbittyhub para recibir la terminal Rabbitty POS en iPad y tu kit de carteles impresos.',
+    a: 'Puedes registrar tu negocio en el onboarding oficial: https://app.rabbitty.me/business. Elige tu giro, firma tu alta y te avisamos al aprobarla. También puedes escribir al equipo en Telegram @rabbittyhub para recibir la terminal Rabbitty POS en iPad y tu kit de carteles impresos.',
     icon: Building2,
   },
   {

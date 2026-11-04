@@ -5,6 +5,7 @@ import BusinessSetupForm from '@/features/business/BusinessSetupForm';
 import MobileAffiliateDashboard from '@/features/business/MobileAffiliateDashboard';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { PlatformBridge } from '@/lib/platform';
+import { clearAffiliateIntent } from '@/lib/affiliateIntent';
 
 export default function BusinessPage() {
   const { user } = useAuth();
@@ -27,6 +28,10 @@ export default function BusinessPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (business) clearAffiliateIntent();
+  }, [business]);
 
   useEffect(() => {
     if (user) {
