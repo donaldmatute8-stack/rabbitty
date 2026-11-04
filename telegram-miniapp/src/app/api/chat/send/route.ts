@@ -127,7 +127,7 @@ export async function POST(req: Request) {
           conversationId: conversation.id,
           senderId,
           content,
-          type: isLocation ? 'LOCATION' : (body.type === 'VOICE' ? 'VOICE' : 'TEXT'),
+          type: isLocation ? 'LOCATION' : (body.type === 'VOICE' ? 'VOICE' : body.type === 'IMAGE' ? 'IMAGE' : 'TEXT'),
           metadata: isLocation
             ? { kind: 'LOCATION', lat: body.lat, lng: body.lng }
             : (body.metadata && typeof body.metadata === 'object' ? body.metadata : null),

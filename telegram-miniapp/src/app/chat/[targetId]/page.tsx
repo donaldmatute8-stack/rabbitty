@@ -1843,6 +1843,102 @@ export default function ChatRoomPage() {
     </div>
   );
 
+  // ── Fotos (con "ver una vez") ──
+  const [photoViewOnce, setPhotoViewOnce] = useState(false);
+  const [viewOnceUnlocked, setViewOnceUnlocked] = useState<Record<string, boolean>>({});
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
+
+  /** Comprime en el cliente (máx 1600px, WebP) para no gastar datos ni storage. */
+  const compressImage = async (file: File): Promise<Blob | null> => {
+    try {
+      const bitmap = await createImageBitmap(file);
+      const max = 1600;
+      const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
+      const w = Math.round(bitmap.width * scale);
+      const h = Math.round(bitmap.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return file;
+      ctx.drawImage(bitmap, 0, 0, w, h);
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob((b) => resolve(b), 'image/webp', 0.8),
+      );
+      return blob ?? file;
+    } catch {
+      return file;
+    }
+  };
+
+  const pickPhoto = async (file: File | null) => {
+    if (!file || !conversationId || sending) return;
+    const viewOnce = photoViewOnce;
+    setPhotoViewOnce(false);
+    PlatformBridge.hapticFeedback('medium');
+    setSending(true);
+    try {
+      const blob = (await compressImage(file)) ?? file;
+      if (blob.size > 5 * 1024 * 1024) {
+        showToast('La foto es muy grande (máx 5 MB)', 'error');
+        return;
+      }
+      const uploaded = await uploadChatMedia(blob, 0, 'image');
+      if (!uploaded) { showToast('No se pudo subir la foto', 'error'); return; }
+
+      tempCounterRef.current += 1;
+      const tempId = `temp-${tempCounterRef.current}`;
+      const meta = { kind: 'IMAGE', key: uploaded.key, viewOnce } as unknown as MessageMetadata;
+      const optimistic: Message = {
+        id: tempId,
+        senderId: myParticipantId || user?.id || '',
+        content: viewOnce ? '🔒 Foto (una vista)' : '📷 Foto',
+        createdAt: new Date().toISOString(),
+        type: 'IMAGE',
+        metadata: meta,
+      };
+      setMessages((prev) => [...prev, optimistic]);
+
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch('/api/chat/send', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId, targetId,
+          content: viewOnce ? '🔒 Foto (una vista)' : '📷 Foto',
+          type: 'IMAGE', metadata: meta,
+          clientMessageId: `img_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (data?.success && data.message) {
+        const real = data.message as Message;
+        setMessages((prev) => prev.map((m) => (m.id === tempId ? real : m)));
+      } else {
+        setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, content: '📷 Foto (no enviada)' } : m)));
+      }
+    } catch {
+      showToast('No se pudo enviar la foto', 'error');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  /** "Ver una vez": avisa al server, que marca viewedAt y BORRA el archivo. */
+  const openViewOnce = async (msgId: string, key: string) => {
+    PlatformBridge.hapticFeedback('medium');
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch('/api/chat/media/viewed', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key }),
+      });
+      const data = await res.json().catch(() => null);
+      if (data?.success) setViewOnceUnlocked((prev) => ({ ...prev, [msgId]: true }));
+      else showToast('Ya no está disponible', 'info');
+    } catch { /* noop */ }
+  };
+
   const renderContent = (msg: Message, isMe = false) => {
     const meta: MessageMetadata | null =
       msg.metadata && typeof msg.metadata === 'object' ? msg.metadata : null;
@@ -1869,6 +1965,56 @@ export default function ChatRoomPage() {
             read={Boolean(msg.readAt)}
             showTicks={isMe && !isBot}
           />
+        );
+      }
+      // ── Fotos (con "ver una vez") ──
+      if (m.kind === 'IMAGE' && typeof m.key === 'string') {
+        const key = m.key as string;
+        const src = `/api/chat/media/${key.split('/').map(encodeURIComponent).join('/')}`;
+        const viewOnce = Boolean(m.viewOnce);
+        const alreadyViewed = typeof m.viewedAt === 'string' && m.viewedAt.length > 0;
+        const unlocked = Boolean(viewOnceUnlocked[msg.id]) || alreadyViewed;
+
+        if (viewOnce && !unlocked) {
+          return (
+            <button
+              type="button"
+              onClick={() => void openViewOnce(msg.id, key)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px',
+                borderRadius: 14, border: '1px dashed rgba(255,255,255,0.28)',
+                background: 'rgba(0,0,0,0.22)', color: '#fff', cursor: 'pointer',
+                fontSize: 13, fontWeight: 700,
+              }}
+            >
+              <span style={{ fontSize: 18 }}>🔒</span>
+              <span>
+                Foto de una sola vista
+                <span style={{ display: 'block', fontSize: 10, opacity: 0.6, fontWeight: 600 }}>
+                  Toca para ver · se borra al abrirla
+                </span>
+              </span>
+            </button>
+          );
+        }
+
+        return (
+          <div style={{ position: 'relative', borderRadius: 14, overflow: 'hidden', maxWidth: 260 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={src}
+              alt="Foto"
+              style={{ display: 'block', width: '100%', height: 'auto', borderRadius: 14 }}
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = 'none';
+              }}
+            />
+            {viewOnce && alreadyViewed && (
+              <span style={{ position: 'absolute', bottom: 6, left: 8, fontSize: 10, fontWeight: 800, color: '#fff', background: 'rgba(0,0,0,0.55)', padding: '2px 6px', borderRadius: 6 }}>
+                Vista · ya no disponible
+              </span>
+            )}
+          </div>
         );
       }
     }
@@ -3088,6 +3234,53 @@ export default function ChatRoomPage() {
                 </svg>
               </button>
             ) : (
+              <>
+              {/* Fotos: normal y de una sola vista */}
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null;
+                  e.currentTarget.value = '';
+                  void pickPhoto(file);
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => { setPhotoViewOnce(false); photoInputRef.current?.click(); }}
+                disabled={sending}
+                title="Enviar foto"
+                aria-label="Enviar foto"
+                style={{
+                  width: 36, height: 36, background: 'rgba(28, 28, 34, 0.88)',
+                  color: 'rgba(255, 255, 255, 0.82)', borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  cursor: sending ? 'not-allowed' : 'pointer', flexShrink: 0,
+                  fontSize: 16,
+                }}
+              >
+                📷
+              </button>
+              <button
+                type="button"
+                onClick={() => { setPhotoViewOnce(true); photoInputRef.current?.click(); }}
+                disabled={sending}
+                title="Foto de una sola vista (se borra al abrirla)"
+                aria-label="Foto de una sola vista"
+                style={{
+                  width: 36, height: 36, background: photoViewOnce ? 'rgba(233,30,99,0.25)' : 'rgba(28, 28, 34, 0.88)',
+                  color: 'rgba(255, 255, 255, 0.82)', borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  cursor: sending ? 'not-allowed' : 'pointer', flexShrink: 0,
+                  fontSize: 15,
+                }}
+              >
+                🔒
+              </button>
               <button
                 type="button"
                 onClick={startRecording}
@@ -3114,6 +3307,7 @@ export default function ChatRoomPage() {
                   <line x1="12" y1="19" x2="12" y2="22" />
                 </svg>
               </button>
+              </>
             )}
           </form>
         )}
