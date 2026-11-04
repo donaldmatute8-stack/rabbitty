@@ -16,7 +16,7 @@ import { Bell, BellOff, Search, Ban, MoreHorizontal, Store, Bot, ExternalLink, Z
 import { useRealtimeChat } from '@/lib/realtime/useRealtimeChat';
 import { ensureIdentity } from '@/lib/e2e/identity';
 import { ensureConversationKey } from '@/lib/e2e/conversationKeys';
-import { decryptText, encryptText } from '@/lib/e2e/crypto';
+import { decryptBytes, decryptText, encryptBytes, encryptText } from '@/lib/e2e/crypto';
 interface BusinessCard {
   kind?: 'BUSINESS';
   businessId: string;
@@ -603,6 +603,9 @@ export default function ChatRoomPage() {
   // ── E2E (solo DIRECT + PEER) ──
   const [e2eKey, setE2eKey] = useState<CryptoKey | null>(null);
   const decryptedIds = useRef<Set<string>>(new Set());
+  // Media E2E ya descifrada (msgId → blob URL)
+  const [e2eMedia, setE2eMedia] = useState<Record<string, string>>({});
+  const e2eMediaPending = useRef<Set<string>>(new Set());
   const [groupInfo, setGroupInfo] = useState<{ name: string | null; members: Array<{ userId: string; name: string; role: string }> } | null>(null);
   const [groupSheetOpen, setGroupSheetOpen] = useState(false);
   const [groupAddQuery, setGroupAddQuery] = useState('');
@@ -1450,7 +1453,7 @@ export default function ChatRoomPage() {
           audioChunksRef.current = [];
           // Storage: el binario va al bucket privado (no a jsonb). El mensaje
           // guarda solo la key y se reproduce vía /api/chat/media/<key>.
-          const uploaded = await uploadChatMedia(blob, durationMs, 'voice');
+          const uploaded = await uploadChatMedia(blob, durationMs, 'voice', Boolean(e2eKey));
           if (!uploaded) {
             PlatformBridge.hapticFeedback('error');
             showToast('No se pudo subir la nota de voz', 'error');
@@ -1492,10 +1495,20 @@ export default function ChatRoomPage() {
     blob: Blob,
     durationMs: number,
     kind: 'voice' | 'image',
+    encrypt = false,
   ): Promise<{ key: string } | null> => {
     try {
       const id = conversationIdRef.current;
       if (!id) return null;
+      // E2E: el binario se cifra ANTES de salir del dispositivo.
+      let outgoing: Blob = blob;
+      if (encrypt && e2eKey) {
+        try {
+          const plain = await blob.arrayBuffer();
+          const ct = await encryptBytes(e2eKey, plain);
+          outgoing = new Blob([ct], { type: blob.type });
+        } catch { outgoing = blob; }
+      }
       const headers = await PlatformBridge.getAuthHeaders();
       // FormData: NO fijar Content-Type (el navegador pone el boundary).
       const clean: Record<string, string> = {};
@@ -1503,7 +1516,7 @@ export default function ChatRoomPage() {
         if (k.toLowerCase() !== 'content-type') clean[k] = String(v);
       }
       const form = new FormData();
-      form.append('file', blob, kind === 'voice' ? 'voice.webm' : 'image.webp');
+      form.append('file', outgoing, kind === 'voice' ? 'voice.webm' : 'image.webp');
       form.append('conversationId', id);
       form.append('durationMs', String(Math.round(durationMs || 0)));
       const res = await fetch('/api/chat/media', { method: 'POST', headers: clean, body: form });
@@ -1542,7 +1555,7 @@ export default function ChatRoomPage() {
     const mediaUrl = `/api/chat/media/${mediaKey.split('/').map(encodeURIComponent).join('/')}`;
     // Reproducción inmediata: la URL ya está autenticada por sesión.
     setVoiceSrcMap((prev) => ({ ...prev, [tempId]: mediaUrl }));
-    const meta = { kind: 'VOICE', key: mediaKey, durationMs } as unknown as MessageMetadata;
+    const meta = { kind: 'VOICE', key: mediaKey, durationMs, e2e: Boolean(e2eKey) } as unknown as MessageMetadata;
     const optimistic: Message = {
       id: tempId,
       senderId: myParticipantId || user?.id || '',
@@ -1626,6 +1639,40 @@ export default function ChatRoomPage() {
     })();
     return () => { alive = false; };
   }, [messages, e2eKey]);
+
+  // ── E2E: descifrar media (voz/foto) antes de mostrarla ──
+  useEffect(() => {
+    if (!e2eKey) return;
+    const pending = messages.filter((m) => {
+      const meta = m.metadata as Record<string, unknown> | null;
+      if (!meta || meta.e2e !== true || typeof meta.key !== 'string') return false;
+      if (e2eMediaPending.current.has(m.id)) return false;
+      if (meta.kind === 'IMAGE' && e2eMedia[m.id]) return false;
+      if (meta.kind === 'VOICE' && voiceSrcMap[m.id]) return false;
+      return true;
+    });
+    if (pending.length === 0) return;
+    let alive = true;
+    (async () => {
+      for (const m of pending) {
+        const meta = m.metadata as Record<string, unknown>;
+        e2eMediaPending.current.add(m.id);
+        try {
+          const headers = await PlatformBridge.getAuthHeaders();
+          const proxy = `/api/chat/media/${String(meta.key).split('/').map(encodeURIComponent).join('/')}`;
+          const res = await fetch(proxy, { headers });
+          if (!res.ok) continue;
+          const plain = await decryptBytes(e2eKey, await res.arrayBuffer());
+          const mime = meta.kind === 'VOICE' ? 'audio/webm' : 'image/webp';
+          const url = URL.createObjectURL(new Blob([plain], { type: mime }));
+          if (!alive) return;
+          if (meta.kind === 'VOICE') setVoiceSrcMap((prev) => (prev[m.id] ? prev : { ...prev, [m.id]: url }));
+          else setE2eMedia((prev) => ({ ...prev, [m.id]: url }));
+        } catch { /* queda el placeholder */ }
+      }
+    })();
+    return () => { alive = false; };
+  }, [messages, e2eKey, e2eMedia, voiceSrcMap]);
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1983,12 +2030,12 @@ export default function ChatRoomPage() {
         showToast('La foto es muy grande (máx 5 MB)', 'error');
         return;
       }
-      const uploaded = await uploadChatMedia(blob, 0, 'image');
+      const uploaded = await uploadChatMedia(blob, 0, 'image', Boolean(e2eKey));
       if (!uploaded) { showToast('No se pudo subir la foto', 'error'); return; }
 
       tempCounterRef.current += 1;
       const tempId = `temp-${tempCounterRef.current}`;
-      const meta = { kind: 'IMAGE', key: uploaded.key, viewOnce } as unknown as MessageMetadata;
+      const meta = { kind: 'IMAGE', key: uploaded.key, viewOnce, e2e: Boolean(e2eKey) } as unknown as MessageMetadata;
       const optimistic: Message = {
         id: tempId,
         senderId: myParticipantId || user?.id || '',
@@ -2105,6 +2152,20 @@ export default function ChatRoomPage() {
   /** "Ver una vez": avisa al server, que marca viewedAt y BORRA el archivo. */
   const openViewOnce = async (msgId: string, key: string) => {
     PlatformBridge.hapticFeedback('medium');
+    // E2E: el archivo se BORRA al marcarlo como visto, así que hay que
+    // descifrarlo antes (si no, ya no habría nada que abrir).
+    if (e2eKey && !e2eMedia[msgId]) {
+      try {
+        const headers = await PlatformBridge.getAuthHeaders();
+        const proxy = `/api/chat/media/${key.split('/').map(encodeURIComponent).join('/')}`;
+        const res = await fetch(proxy, { headers });
+        if (res.ok) {
+          const plain = await decryptBytes(e2eKey, await res.arrayBuffer());
+          const url = URL.createObjectURL(new Blob([plain], { type: 'image/webp' }));
+          setE2eMedia((prev) => ({ ...prev, [msgId]: url }));
+        }
+      } catch { /* si falla, se verá el placeholder */ }
+    }
     try {
       const headers = await PlatformBridge.getAuthHeaders();
       const res = await fetch('/api/chat/media/viewed', {
@@ -2152,7 +2213,9 @@ export default function ChatRoomPage() {
       // ── Fotos (con "ver una vez") ──
       if (m.kind === 'IMAGE' && typeof m.key === 'string') {
         const key = m.key as string;
-        const src = `/api/chat/media/${key.split('/').map(encodeURIComponent).join('/')}`;
+        const proxySrc = `/api/chat/media/${key.split('/').map(encodeURIComponent).join('/')}`;
+        const isE2E = m.e2e === true;
+        const src = isE2E ? (e2eMedia[msg.id] ?? '') : proxySrc;
         const viewOnce = Boolean(m.viewOnce);
         const alreadyViewed = typeof m.viewedAt === 'string' && m.viewedAt.length > 0;
         const unlocked = Boolean(viewOnceUnlocked[msg.id]) || alreadyViewed;
@@ -2177,6 +2240,14 @@ export default function ChatRoomPage() {
                 </span>
               </span>
             </button>
+          );
+        }
+
+        if (isE2E && !src) {
+          return (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '12px 14px', borderRadius: 14, background: 'rgba(0,0,0,0.22)', border: '1px dashed rgba(255,255,255,0.2)', fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.7)' }}>
+              🔒 Descifrando foto…
+            </div>
           );
         }
 
