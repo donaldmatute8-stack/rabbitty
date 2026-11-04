@@ -597,6 +597,14 @@ export default function ChatRoomPage() {
   const [chatKind, setChatKind] = useState<'DIRECT' | 'GROUP'>('DIRECT');
   const [groupInfo, setGroupInfo] = useState<{ name: string | null; members: Array<{ userId: string; name: string; role: string }> } | null>(null);
   const [groupSheetOpen, setGroupSheetOpen] = useState(false);
+  const [groupAddQuery, setGroupAddQuery] = useState('');
+  const [groupAddResults, setGroupAddResults] = useState<Array<{ id: string; name: string; username?: string | null }>>([]);
+  const [groupAddBusy, setGroupAddBusy] = useState(false);
+  // ── Búsqueda en el historial (solo BUSINESS, ver ADR-013) ──
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchHits, setSearchHits] = useState<Array<{ id: string; content: string; createdAt: string; senderName?: string }>>([]);
+  const [searchBusy, setSearchBusy] = useState(false);
   const [targetAvatar, setTargetAvatar] = useState<string | null>(null);
   const [targetRole, setTargetRole] = useState<'BOT' | 'AFFILIATE' | 'RABBITTER'>('RABBITTER');
   const [targetUsername, setTargetUsername] = useState<string | null>(null);
@@ -2358,6 +2366,15 @@ export default function ChatRoomPage() {
           </button>
         </div>
         <button
+          type="button"
+          onClick={() => { PlatformBridge.hapticFeedback('light'); setSearchOpen(true); }}
+          aria-label="Buscar en la conversación"
+          title="Buscar en el historial"
+          style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 6, fontSize: 16, position: 'relative', zIndex: 2, pointerEvents: 'auto' }}
+        >
+          🔍
+        </button>
+        <button
           onClick={() => { PlatformBridge.hapticFeedback('light'); setTargetInfoOpen(true); }}
           aria-label={`Perfil de ${targetName}`}
           style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, position: 'relative', zIndex: 2, pointerEvents: 'auto' }}
@@ -3260,6 +3277,72 @@ export default function ChatRoomPage() {
           </div>
         )}
 
+        {/* Búsqueda en el historial */}
+        {searchOpen && (
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 79, background: 'rgba(0,0,0,0.7)' }}
+            onClick={() => setSearchOpen(false)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                position: 'absolute', left: 0, right: 0, top: 0,
+                maxHeight: '80vh', background: '#141418',
+                borderBottomLeftRadius: 22, borderBottomRightRadius: 22,
+                borderBottom: '1px solid rgba(255,255,255,0.12)',
+                padding: 'calc(12px + env(safe-area-inset-top, 0px)) 14px 16px',
+                display: 'flex', flexDirection: 'column',
+              }}
+            >
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  autoFocus
+                  value={searchTerm}
+                  onChange={async (e) => {
+                    const q = e.target.value;
+                    setSearchTerm(q);
+                    if (q.trim().length < 2) { setSearchHits([]); return; }
+                    setSearchBusy(true);
+                    try {
+                      const headers = await PlatformBridge.getAuthHeaders();
+                      const url = `/api/chat/search?q=${encodeURIComponent(q)}${conversationId ? `&conversationId=${encodeURIComponent(conversationId)}` : ''}`;
+                      const res = await fetch(url, { headers });
+                      const data = await res.json().catch(() => null);
+                      if (data?.success) setSearchHits(data.results ?? []);
+                    } catch { /* noop */ } finally { setSearchBusy(false); }
+                  }}
+                  placeholder="Buscar en el historial…"
+                  style={{ flex: 1, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, color: '#fff', fontSize: 14, padding: '11px 12px', outline: 'none' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setSearchOpen(false)}
+                  style={{ padding: '10px 12px', borderRadius: 12, background: 'rgba(255,255,255,0.08)', border: 'none', color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}
+                >
+                  Cerrar
+                </button>
+              </div>
+
+              <div style={{ marginTop: 10, overflowY: 'auto' }}>
+                {searchBusy && <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', textAlign: 'center', padding: 10 }}>Buscando…</p>}
+                {!searchBusy && searchTerm.trim().length >= 2 && searchHits.length === 0 && (
+                  <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', textAlign: 'center', padding: 12 }}>
+                    Sin resultados (la búsqueda server-side aplica a chats de negocio)
+                  </p>
+                )}
+                {searchHits.map((h) => (
+                  <div key={h.id} style={{ padding: '10px 4px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                    <p style={{ margin: 0, fontSize: 13, color: '#fff', lineHeight: 1.35 }}>{h.content}</p>
+                    <p style={{ margin: '3px 0 0', fontSize: 10.5, color: 'rgba(255,255,255,0.4)' }}>
+                      {h.senderName ? `${h.senderName} · ` : ''}{new Date(h.createdAt).toLocaleString('es-MX')}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Hoja del grupo: miembros + salir */}
         {groupSheetOpen && groupInfo && (
           <div
@@ -3298,6 +3381,74 @@ export default function ChatRoomPage() {
                   )}
                 </div>
               ))}
+
+              {(() => {
+                const myRole = groupInfo.members.find((m) => m.userId === myParticipantId)?.role;
+                if (myRole !== 'ADMIN') return null;
+                const existing = new Set(groupInfo.members.map((m) => m.userId));
+                return (
+                  <div style={{ marginTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 12 }}>
+                    <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'rgba(255,255,255,0.45)' }}>
+                      Añadir personas
+                    </p>
+                    <input
+                      value={groupAddQuery}
+                      onChange={async (e) => {
+                        const q = e.target.value;
+                        setGroupAddQuery(q);
+                        if (q.trim().length < 2) { setGroupAddResults([]); return; }
+                        try {
+                          const headers = await PlatformBridge.getAuthHeaders();
+                          const res = await fetch(`/api/contacts?q=${encodeURIComponent(q)}`, { headers });
+                          const data = await res.json().catch(() => null);
+                          if (data?.success) {
+                            const list = (data.users || data.contacts || [])
+                              .filter((u: { id: string; role?: string }) => (u.role ?? '') !== 'AFFILIATE' && !existing.has(u.id))
+                              .slice(0, 8);
+                            setGroupAddResults(list);
+                          }
+                        } catch { /* noop */ }
+                      }}
+                      placeholder="Nombre, @usuario o teléfono"
+                      style={{ width: '100%', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, color: '#fff', fontSize: 13, padding: '10px 12px', outline: 'none' }}
+                    />
+                    {groupAddResults.map((c) => (
+                      <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 2px' }}>
+                        <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {c.name}{c.username ? ` · @${c.username}` : ''}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={groupAddBusy}
+                          onClick={async () => {
+                            if (!conversationId) return;
+                            setGroupAddBusy(true);
+                            try {
+                              const headers = await PlatformBridge.getAuthHeaders();
+                              const res = await fetch(`/api/chat/groups/${conversationId}`, {
+                                method: 'PATCH',
+                                headers: { ...headers, 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ add: [c.id] }),
+                              });
+                              const data = await res.json().catch(() => null);
+                              if (data?.success) {
+                                showToast(`${c.name} añadido`, 'success');
+                                setGroupInfo((prev) => prev ? { ...prev, members: [...prev.members, { userId: c.id, name: c.name, role: 'MEMBER' }] } : prev);
+                                setGroupAddResults((prev) => prev.filter((x) => x.id !== c.id));
+                              } else {
+                                showToast(data?.error || 'No se pudo añadir', 'error');
+                              }
+                            } catch { showToast('No se pudo añadir', 'error'); } finally { setGroupAddBusy(false); }
+                          }}
+                          style={{ padding: '7px 14px', borderRadius: 999, border: 'none', background: 'rgba(255,46,147,0.2)', color: '#FF4D9E', fontSize: 12, fontWeight: 900, cursor: 'pointer' }}
+                        >
+                          Añadir
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
 
               <button
                 type="button"
