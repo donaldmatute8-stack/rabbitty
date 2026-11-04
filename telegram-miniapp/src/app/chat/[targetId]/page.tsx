@@ -706,6 +706,12 @@ export default function ChatRoomPage() {
       const meta = msg.metadata && typeof msg.metadata === 'object' ? (msg.metadata as Record<string, unknown>) : null;
       if (!meta || meta.kind !== 'VOICE') continue;
       if (typeof meta.voiceUrl === 'string' && meta.voiceUrl) continue;
+      // Media en bucket: la URL se arma con la key (proxy autenticado).
+      if (typeof meta.key === 'string' && meta.key) {
+        const src = `/api/chat/media/${meta.key.split('/').map(encodeURIComponent).join('/')}`;
+        setVoiceSrcMap((prev) => (prev[msg.id] ? prev : { ...prev, [msg.id]: src }));
+        continue;
+      }
       const data = typeof meta.voiceDataUrl === 'string' && meta.voiceDataUrl ? meta.voiceDataUrl : null;
       if (!data) continue;
       const key = msg.id || `${data.length}:${data.slice(-48)}`;
@@ -1399,18 +1405,15 @@ export default function ChatRoomPage() {
           if (cancelled || !audioChunksRef.current.length) return;
           const blob = new Blob(audioChunksRef.current, { type: mr.mimeType || mime || 'audio/webm' });
           audioChunksRef.current = [];
-          const dataUrl = await new Promise<string>((resolve, reject) => {
-            const fr = new FileReader();
-            fr.onload = () => resolve(String(fr.result));
-            fr.onerror = () => reject(new Error('read-failed'));
-            fr.readAsDataURL(blob);
-          });
-          if (!dataUrl || dataUrl.length > 600_000) {
+          // Storage: el binario va al bucket privado (no a jsonb). El mensaje
+          // guarda solo la key y se reproduce vía /api/chat/media/<key>.
+          const uploaded = await uploadChatMedia(blob, durationMs, 'voice');
+          if (!uploaded) {
             PlatformBridge.hapticFeedback('error');
-            showToast('Nota de voz demasiado larga', 'error');
+            showToast('No se pudo subir la nota de voz', 'error');
             return;
           }
-          sendVoiceNote(dataUrl, durationMs);
+          sendVoiceNote(uploaded.key, durationMs);
         } catch {
           mediaRecorderRef.current = null;
           setRecording(false);
@@ -1441,6 +1444,38 @@ export default function ChatRoomPage() {
     }
   };
 
+  /** Sube un binario (voz/foto) al bucket privado. Devuelve la key o null. */
+  const uploadChatMedia = async (
+    blob: Blob,
+    durationMs: number,
+    kind: 'voice' | 'image',
+  ): Promise<{ key: string } | null> => {
+    try {
+      const id = conversationIdRef.current;
+      if (!id) return null;
+      const headers = await PlatformBridge.getAuthHeaders();
+      // FormData: NO fijar Content-Type (el navegador pone el boundary).
+      const clean: Record<string, string> = {};
+      for (const [k, v] of Object.entries(headers || {})) {
+        if (k.toLowerCase() !== 'content-type') clean[k] = String(v);
+      }
+      const form = new FormData();
+      form.append('file', blob, kind === 'voice' ? 'voice.webm' : 'image.webp');
+      form.append('conversationId', id);
+      form.append('durationMs', String(Math.round(durationMs || 0)));
+      const res = await fetch('/api/chat/media', { method: 'POST', headers: clean, body: form });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success || !data.key) {
+        console.warn('[chat] media upload falló:', res.status, data?.error);
+        return null;
+      }
+      return { key: String(data.key) };
+    } catch (err) {
+      console.warn('[chat] media upload error:', err);
+      return null;
+    }
+  };
+
   const stopRecording = (cancel: boolean) => {
     recordingCancelledRef.current = cancel;
     if (recordIntervalRef.current) {
@@ -1457,13 +1492,14 @@ export default function ChatRoomPage() {
     PlatformBridge.hapticFeedback('light');
   };
 
-  const sendVoiceNote = (voiceDataUrl: string, durationMs: number) => {
+  const sendVoiceNote = (mediaKey: string, durationMs: number) => {
     if (!conversationId || sending) return;
     tempCounterRef.current += 1;
     const tempId = `temp-${tempCounterRef.current}`;
-    // Registrar de inmediato en el mapa local para reproducción instantánea sin parpadeo
-    setVoiceSrcMap((prev) => ({ ...prev, [tempId]: voiceDataUrl }));
-    const meta = { kind: 'VOICE', voiceDataUrl, durationMs } as unknown as MessageMetadata;
+    const mediaUrl = `/api/chat/media/${mediaKey.split('/').map(encodeURIComponent).join('/')}`;
+    // Reproducción inmediata: la URL ya está autenticada por sesión.
+    setVoiceSrcMap((prev) => ({ ...prev, [tempId]: mediaUrl }));
+    const meta = { kind: 'VOICE', key: mediaKey, durationMs } as unknown as MessageMetadata;
     const optimistic: Message = {
       id: tempId,
       senderId: myParticipantId || user?.id || '',
@@ -1490,7 +1526,7 @@ export default function ChatRoomPage() {
         if (data?.success && data.message) {
           const realId = (data.message as Message).id;
           if (realId) {
-            setVoiceSrcMap((prev) => ({ ...prev, [realId]: prev[tempId] || voiceDataUrl }));
+            setVoiceSrcMap((prev) => ({ ...prev, [realId]: prev[tempId] || mediaUrl }));
           }
           setMessages((prev) => prev.map((m) => (m.id === tempId ? (data.message as Message) : m)));
         } else {

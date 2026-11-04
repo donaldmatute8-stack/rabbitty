@@ -15,6 +15,7 @@ import { generateBunzyReply } from '@/lib/bunzy';
 import { chatRateLimit } from '@/lib/chatRateLimit';
 
 import { enqueueChatEvent, kickChatOutbox } from '@/lib/realtime/chatOutbox';
+import { keyBelongsToConversation } from '@/lib/media/storage';
 const AUTO_REPLY_WINDOW_MS = 6 * 60 * 60 * 1000;
 
 export async function POST(req: Request) {
@@ -59,15 +60,27 @@ export async function POST(req: Request) {
     // Texto, ubicación y tipos transaccionales siguen; las notas de voz nuevas
     // quedan CAPADAS — la solución real (storage de objetos) es el workstream
     // de media del plan, no un jsonb más grande.
-    if (body.type === 'VOICE') {
-      const meta = body.metadata as Record<string, unknown> | null;
-      const voiceLen = typeof meta?.voiceDataUrl === 'string' ? meta.voiceDataUrl.length : 0;
+    // La voz/foto ya NO viaja en jsonb: si trae `metadata.key` del bucket, se
+    // acepta sin tope (el límite real es 5 MB en /api/chat/media). El cap viejo
+    // queda solo como red de seguridad para clientes que aún manden dataURL.
+    const mediaMeta = body.metadata as Record<string, unknown> | null;
+    const storedKey = typeof mediaMeta?.key === 'string' ? mediaMeta.key : null;
+    const hasStoredMedia = Boolean(
+      storedKey && body.conversationId && keyBelongsToConversation(storedKey, body.conversationId)
+    );
+
+    if (body.type === 'VOICE' && !hasStoredMedia) {
+      const voiceLen = typeof mediaMeta?.voiceDataUrl === 'string' ? mediaMeta.voiceDataUrl.length : 0;
       if (voiceLen > 200_000) {
         return NextResponse.json(
-          { error: 'Esta nota de voz es muy larga para enviarse por ahora — cuéntalo con texto 🐰' },
+          { error: 'Esta nota de voz es muy larga para enviarse por ahora — actualiza la app 🐰' },
           { status: 413 }
         );
       }
+    }
+
+    if (storedKey && !hasStoredMedia) {
+      return NextResponse.json({ error: 'Archivo adjunto inválido' }, { status: 400 });
     }
 
     const conversation = await db.query.conversations.findFirst({
