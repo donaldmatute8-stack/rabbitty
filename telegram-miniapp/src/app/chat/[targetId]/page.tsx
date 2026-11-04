@@ -3454,11 +3454,32 @@ export default function ChatRoomPage() {
                   onChange={async (e) => {
                     const q = e.target.value;
                     setSearchTerm(q);
-                    if (q.trim().length < 2) { setSearchHits([]); return; }
+                    const term = q.trim();
+                    if (term.length < 2) { setSearchHits([]); return; }
+
+                    // ── Chats cifrados (PEER): se busca en el cliente ──
+                    // El servidor no puede indexar contenido cifrado, así que se
+                    // filtra lo que ya está descargado y descifrado en pantalla.
+                    if (chatAudience === 'PEER') {
+                      const lower = term.toLowerCase();
+                      const hits = messages
+                        .filter((m) => !m.encrypted && typeof m.content === 'string' && m.content.toLowerCase().includes(lower))
+                        .slice(-60)
+                        .reverse()
+                        .map((m) => ({
+                          id: m.id,
+                          content: m.content,
+                          createdAt: m.createdAt,
+                          senderName: m.senderId === myParticipantId ? 'Tú' : undefined,
+                        }));
+                      setSearchHits(hits);
+                      return;
+                    }
+
                     setSearchBusy(true);
                     try {
                       const headers = await PlatformBridge.getAuthHeaders();
-                      const url = `/api/chat/search?q=${encodeURIComponent(q)}${conversationId ? `&conversationId=${encodeURIComponent(conversationId)}` : ''}`;
+                      const url = `/api/chat/search?q=${encodeURIComponent(term)}${conversationId ? `&conversationId=${encodeURIComponent(conversationId)}` : ''}`;
                       const res = await fetch(url, { headers });
                       const data = await res.json().catch(() => null);
                       if (data?.success) setSearchHits(data.results ?? []);
@@ -3476,11 +3497,19 @@ export default function ChatRoomPage() {
                 </button>
               </div>
 
+              {chatAudience === 'PEER' && (
+                <p style={{ margin: '8px 2px 0', fontSize: 10.5, color: 'rgba(255,255,255,0.4)' }}>
+                  🔒 Chat cifrado: la búsqueda revisa los mensajes ya cargados en este dispositivo.
+                </p>
+              )}
+
               <div style={{ marginTop: 10, overflowY: 'auto' }}>
                 {searchBusy && <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', textAlign: 'center', padding: 10 }}>Buscando…</p>}
                 {!searchBusy && searchTerm.trim().length >= 2 && searchHits.length === 0 && (
                   <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', textAlign: 'center', padding: 12 }}>
-                    Sin resultados (la búsqueda server-side aplica a chats de negocio)
+                    {chatAudience === 'PEER'
+                      ? 'Sin coincidencias en los mensajes cargados'
+                      : 'Sin resultados'}
                   </p>
                 )}
                 {searchHits.map((h) => (
