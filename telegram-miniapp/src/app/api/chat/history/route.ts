@@ -260,9 +260,33 @@ export async function GET(req: Request) {
       reactions: reactionsByMsg.get(m.id) ?? [],
     }));
 
+    // ── Si es GRUPO: nombre + miembros (para autor por mensaje y gestión) ──
+    let groupInfo: { name: string | null; members: Array<{ userId: string; name: string; role: string }> } | null = null;
+    if (conversation.kind === 'GROUP') {
+      try {
+        const rows = await db
+          .select({ userId: conversationMembers.userId, role: conversationMembers.role })
+          .from(conversationMembers)
+          .where(and(eq(conversationMembers.conversationId, conversation.id), isNull(conversationMembers.leftAt)));
+        const ids = rows.map((r) => r.userId);
+        const people = ids.length
+          ? await db.select({ id: users.id, firstName: users.firstName, lastName: users.lastName, username: users.username })
+              .from(users).where(inArray(users.id, ids.filter((id) => /^[0-9a-f-]{36}$/i.test(id))))
+          : [];
+        const nameById = new Map(people.map((u) => [u.id, `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim() || u.username || 'Rabbitter']));
+        groupInfo = {
+          name: conversation.name ?? null,
+          members: rows.map((r) => ({ userId: r.userId, name: nameById.get(r.userId) ?? 'Rabbitter', role: r.role })),
+        };
+      } catch { groupInfo = null; }
+    }
+
     return NextResponse.json({
       success: true,
       conversationId: conversation.id,
+      kind: conversation.kind ?? 'DIRECT',
+      audience: conversation.audience ?? 'BUSINESS',
+      group: groupInfo,
       myParticipantId: access.myParticipantId,
       isBusinessInbox: access.isBusinessInbox,
       targetName,

@@ -100,6 +100,9 @@ interface HistoryResponse {
   partnerOnline?: boolean | null;
   success?: boolean;
   conversationId?: string;
+  kind?: 'DIRECT' | 'GROUP';
+  audience?: 'BUSINESS' | 'PEER';
+  group?: { name: string | null; members: Array<{ userId: string; name: string; role: string }> } | null;
   myParticipantId?: string;
   isBusinessInbox?: boolean;
   targetName?: string;
@@ -590,6 +593,10 @@ export default function ChatRoomPage() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [targetName, setTargetName] = useState('...');
+  // ── Grupo: tipo, nombre y miembros ──
+  const [chatKind, setChatKind] = useState<'DIRECT' | 'GROUP'>('DIRECT');
+  const [groupInfo, setGroupInfo] = useState<{ name: string | null; members: Array<{ userId: string; name: string; role: string }> } | null>(null);
+  const [groupSheetOpen, setGroupSheetOpen] = useState(false);
   const [targetAvatar, setTargetAvatar] = useState<string | null>(null);
   const [targetRole, setTargetRole] = useState<'BOT' | 'AFFILIATE' | 'RABBITTER'>('RABBITTER');
   const [targetUsername, setTargetUsername] = useState<string | null>(null);
@@ -828,6 +835,11 @@ export default function ChatRoomPage() {
       if (data.myParticipantId) setMyParticipantId(data.myParticipantId);
       if (typeof data.isBusinessInbox === 'boolean') setIsBusinessInbox(data.isBusinessInbox);
       if (data.targetName) setTargetName(data.targetName);
+      if (data.kind === 'GROUP' || data.kind === 'DIRECT') setChatKind(data.kind);
+      if (data.group !== undefined) {
+        setGroupInfo(data.group ?? null);
+        if (data.group?.name) setTargetName(data.group.name);
+      }
       if (data.targetAvatar !== undefined) setTargetAvatar(data.targetAvatar);
       if (data.targetRole) setTargetRole(data.targetRole);
       if (data.targetUsername !== undefined) setTargetUsername(data.targetUsername);
@@ -2226,7 +2238,9 @@ export default function ChatRoomPage() {
   const isTypingActive = (isBot && (sending || animatingBotMessageIds.length > 0)) || showTyping;
   // H21: 'online' real — no decorativo. La API de mensajes regresa partnerOnline
   // (presenciaSession abierta del par en los últimos 5 min); cae a Fuera de línea.
-  const headerStatus = isTypingActive
+  const headerStatus = chatKind === 'GROUP'
+    ? `${groupInfo?.members.length ?? 0} miembro${(groupInfo?.members.length ?? 0) === 1 ? '' : 's'} · privado`
+    : isTypingActive
     ? 'escribiendo…'
     : isBot
       ? 'Bunzy IA en línea'
@@ -2311,7 +2325,12 @@ export default function ChatRoomPage() {
         </button>
         <div style={{ position: 'absolute', left: 0, right: 0, display: 'flex', justifyContent: 'center', zIndex: 1, pointerEvents: 'none' }}>
           <button
-            onClick={() => { PlatformBridge.hapticFeedback('light'); setTargetInfoOpen(true); }}
+            onClick={() => {
+              PlatformBridge.hapticFeedback('light');
+              // En un grupo el header abre miembros/salir, no el perfil.
+              if (chatKind === 'GROUP') setGroupSheetOpen(true);
+              else setTargetInfoOpen(true);
+            }}
             style={{
               pointerEvents: 'auto',
               display: 'flex',
@@ -2987,6 +3006,11 @@ export default function ChatRoomPage() {
                       onTouchMove={() => { if (pressTimerRef.current) { clearTimeout(pressTimerRef.current); pressTimerRef.current = null; } }}
                       onContextMenu={(e) => { if (isBot) return; e.preventDefault(); setMsgMenu(msg); }}
                     >
+                    {chatKind === 'GROUP' && !isMe && msg.senderId !== myParticipantId && (
+                      <span style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#FF4D9E', marginBottom: 2 }}>
+                        {groupInfo?.members.find((m) => m.userId === msg.senderId)?.name ?? 'Rabbitty'}
+                      </span>
+                    )}
                     {renderContent(msg, isMe)}
                     {Array.isArray(msg.reactions) && msg.reactions.length > 0 && (
                       <span style={{ display: 'inline-flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
@@ -3233,6 +3257,69 @@ export default function ChatRoomPage() {
             >
               ➤
             </button>
+          </div>
+        )}
+
+        {/* Hoja del grupo: miembros + salir */}
+        {groupSheetOpen && groupInfo && (
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 78, background: 'rgba(0,0,0,0.65)' }}
+            onClick={() => setGroupSheetOpen(false)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                position: 'absolute', left: 0, right: 0, bottom: 0,
+                background: '#141418', borderTopLeftRadius: 22, borderTopRightRadius: 22,
+                borderTop: '1px solid rgba(255,255,255,0.12)',
+                padding: '16px 16px calc(20px + env(safe-area-inset-bottom, 0px))',
+                maxHeight: '72vh', overflowY: 'auto',
+              }}
+            >
+              <p style={{ margin: '0 0 2px', fontSize: 16, fontWeight: 900, color: '#fff' }}>
+                {groupInfo.name || 'Grupo'}
+              </p>
+              <p style={{ margin: '0 0 12px', fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>
+                {groupInfo.members.length} miembro{groupInfo.members.length === 1 ? '' : 's'} · privado entre Rabbitters
+              </p>
+
+              {groupInfo.members.map((m) => (
+                <div key={m.userId} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 2px' }}>
+                  <div style={{ width: 34, height: 34, borderRadius: 999, background: 'rgba(255,46,147,0.18)', border: '1px solid rgba(255,46,147,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 900, color: '#FF4D9E' }}>
+                    {(m.name || 'R').charAt(0).toUpperCase()}
+                  </div>
+                  <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {m.name}{m.userId === myParticipantId ? ' (tú)' : ''}
+                  </span>
+                  {m.role === 'ADMIN' && (
+                    <span style={{ fontSize: 9, fontWeight: 900, color: '#FFD166', background: 'rgba(255,209,102,0.12)', border: '1px solid rgba(255,209,102,0.3)', borderRadius: 999, padding: '2px 7px' }}>
+                      ADMIN
+                    </span>
+                  )}
+                </div>
+              ))}
+
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!conversationId) return;
+                  try {
+                    const headers = await PlatformBridge.getAuthHeaders();
+                    const res = await fetch(`/api/chat/groups/${conversationId}`, { method: 'DELETE', headers });
+                    const data = await res.json().catch(() => null);
+                    if (data?.success) {
+                      showToast('Saliste del grupo', 'success');
+                      router.push('/chat');
+                    } else {
+                      showToast('No se pudo salir del grupo', 'error');
+                    }
+                  } catch { showToast('No se pudo salir del grupo', 'error'); }
+                }}
+                style={{ marginTop: 14, width: '100%', padding: '13px', borderRadius: 14, border: 'none', background: 'rgba(255,107,129,0.14)', color: '#FF6B81', fontSize: 13, fontWeight: 900, cursor: 'pointer' }}
+              >
+                Salir del grupo
+              </button>
+            </div>
           </div>
         )}
 
