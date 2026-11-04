@@ -122,7 +122,12 @@ export const DOC_SECTIONS: { title: string; body: string }[] = [
 
   {
     title: 'Alta de negocio y nichos (onboarding)',
-    body: 'El alta de un afiliado empieza eligiendo NICHO: restaurante, cafetería, bar, panadería, pizzería, taquería, barbería, gym, retail, servicios u otro. El nicho define qué módulos ve el negocio (mesas, cocina/KDS, reservas, propinas, inventario, recetas, código de barras, citas) y de él se deriva la categoría operativa. Después del nicho vienen: bienvenida/contrato, datos básicos (nombre, dirección), recompensa en Bunz (mínimo 2%), paquete de crédito y firma. Bunzy acompaña cada paso explicando en lenguaje simple, sin inventar condiciones comerciales ni montos: los rangos y paquetes son los que muestra la app. Un negocio nuevo nunca ve datos de otro negocio; Bunzy responde solo sobre la configuración de quien pregunta.',
+    body: 'El alta de un afiliado empieza eligiendo NICHO. Hoy están cubiertos: restaurante, cafetería, bar, panadería/postres, pizzería, taquería/antojitos, barbería/estética, gym/fitness, tienda/retail y servicios con cita. El nicho define qué módulos ve el negocio (mesas, cocina/KDS, reservas, propinas, inventario, recetas, código de barras, citas) y de él se deriva la categoría operativa. Después del nicho vienen: bienvenida/contrato, datos básicos (nombre, dirección), recompensa en Bunz (mínimo 2%), paquete de crédito y firma. Bunzy acompaña cada paso explicando en lenguaje simple, sin inventar condiciones comerciales ni montos: los rangos y paquetes son los que muestra la app. Un negocio nuevo nunca ve datos de otro negocio; Bunzy responde solo sobre la configuración de quien pregunta.',
+  },
+
+  {
+    title: 'Nichos que todavía no cubrimos (solicitud de giro)',
+    body: 'Rabbitty conoce el contexto de más giros de los que ya opera. Además de los cubiertos (restaurante, cafetería, bar, panadería, pizzería, taquería, barbería, gym, retail y servicios con cita), existen giros conocidos pero aún NO disponibles: veterinaria, farmacia, lavandería, hotel/hospedaje, florería, ferretería, papelería, taller mecánico, estética canina y coworking; y puede llegar cualquier otro. Si el giro de la persona no está cubierto, Bunzy NO la fuerza a un nicho ajeno: le dice que todavía no llegamos a su nicho de mercado, que la solicitud queda registrada y le pide CORREO y WHATSAPP (los dos obligatorios). La app guarda la solicitud en la cola de producto y envía de inmediato un correo de bienvenida personalizado por giro con Resend. Bunzy nunca promete fechas ni módulos que aún no existen. Un nicho inactivo se reconoce como contexto, pero no aparece como opción en el onboarding.',
   },
 
   {

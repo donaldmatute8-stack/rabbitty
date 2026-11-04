@@ -15,7 +15,7 @@
  * nicho elegido, descartable y recuperable con la carita.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, X } from 'lucide-react';
 
@@ -26,6 +26,8 @@ export interface BunzyOnboardingProps {
   step?: number;
   /** Nombre del negocio cuando ya lo escribió (opcional). */
   businessName?: string | null;
+  /** Mensaje puntual (p. ej. al abrir la captura de un giro no cubierto). */
+  customMessage?: string | null;
 }
 
 const NICHE_LINE: Record<string, string> = {
@@ -50,36 +52,47 @@ const STEP_LINE: Record<number, string> = {
   4: 'Último paso: firma y listo. Yo me quedo pendiente de tu operación.',
 };
 
-/** Efecto máquina de escribir con caret. */
-function useTypewriter(text: string, speed = 18) {
-  const [shown, setShown] = useState('');
-  const idx = useRef(0);
+/**
+ * Efecto máquina de escribir con caret.
+ * El estado vive en un componente con `key={text}`: al cambiar el mensaje se
+ * remonta y reinicia, sin setState sincrónico dentro del efecto.
+ */
+function TypewriterText({ text, speed = 18 }: { text: string; speed?: number }) {
+  const [count, setCount] = useState(0);
+
   useEffect(() => {
-    setShown('');
-    idx.current = 0;
     if (!text) return;
+    let i = 0;
     const timer = setInterval(() => {
-      idx.current += 1;
-      setShown(text.slice(0, idx.current));
-      if (idx.current >= text.length) clearInterval(timer);
+      i += 1;
+      setCount(i);
+      if (i >= text.length) clearInterval(timer);
     }, speed);
     return () => clearInterval(timer);
   }, [text, speed]);
-  return shown;
+
+  const shown = text.slice(0, count);
+  return (
+    <>
+      {shown}
+      {count < text.length && (
+        <span className="ml-0.5 inline-block animate-pulse" style={{ color: '#FF4D9E' }}>▍</span>
+      )}
+    </>
+  );
 }
 
-export function BunzyOnboarding({ niche, step = 0, businessName }: BunzyOnboardingProps) {
+export function BunzyOnboarding({ niche, step = 0, businessName, customMessage }: BunzyOnboardingProps) {
   const [hidden, setHidden] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
   const message = useMemo(() => {
+    if (customMessage) return customMessage;
     const base = niche ? NICHE_LINE[niche] : 'Soy Bunzy, tu copiloto. Empecemos por el tipo de negocio.';
     const tail = STEP_LINE[step] ?? '';
     const greet = businessName ? `${businessName}: ` : '';
     return `${greet}${base}${tail ? ` ${tail}` : ''}`;
-  }, [niche, step, businessName]);
-
-  const typed = useTypewriter(message);
+  }, [niche, step, businessName, customMessage]);
 
   if (hidden) {
     return (
@@ -87,17 +100,17 @@ export function BunzyOnboarding({ niche, step = 0, businessName }: BunzyOnboardi
         type="button"
         onClick={() => setHidden(false)}
         aria-label="Mostrar a Bunzy"
-        className="fixed z-40 flex h-10 w-10 items-center justify-center rounded-full shadow-lg"
+        className="fixed z-40 flex h-11 w-11 items-center justify-center overflow-hidden rounded-full shadow-lg"
         style={{
           right: 14,
           bottom: 'calc(env(safe-area-inset-bottom, 0px) + 92px)',
-          background: 'linear-gradient(135deg,#FF2E93,#E11D74)',
-          border: 'none',
+          background: 'linear-gradient(135deg,#2A0A1C,#160510)',
+          border: '1.5px solid rgba(255,46,147,0.6)',
           cursor: 'pointer',
         }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo_conejo.png" alt="Bunzy" style={{ width: 18, height: 22, objectFit: 'contain', filter: 'brightness(0) invert(1)' }} />
+        <img src="/bunzy-avatar.png" alt="Bunzy" style={{ width: 34, height: 34, objectFit: 'contain' }} />
       </button>
     );
   }
@@ -127,11 +140,11 @@ export function BunzyOnboarding({ niche, step = 0, businessName }: BunzyOnboardi
         >
           {/* Avatar */}
           <div
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
-            style={{ background: 'rgba(233,30,99,0.2)', border: '1px solid rgba(233,30,99,0.45)' }}
+            className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl"
+            style={{ background: 'rgba(233,30,99,0.16)', border: '1px solid rgba(233,30,99,0.45)' }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo_conejo.png" alt="Bunzy" style={{ width: 15, height: 18, objectFit: 'contain' }} />
+            <img src="/bunzy-avatar.png" alt="Bunzy" style={{ width: 34, height: 34, objectFit: 'contain' }} />
           </div>
 
           <div className="min-w-0 flex-1">
@@ -139,10 +152,7 @@ export function BunzyOnboarding({ niche, step = 0, businessName }: BunzyOnboardi
               <Sparkles size={10} /> Bunzy
             </p>
             <p className="m-0 mt-0.5 text-[12.5px] leading-snug" style={{ color: 'rgba(255,255,255,0.92)' }}>
-              {collapsed ? message : typed}
-              {!collapsed && typed.length < message.length && (
-                <span className="ml-0.5 inline-block animate-pulse" style={{ color: '#FF4D9E' }}>▍</span>
-              )}
+              {collapsed ? message : <TypewriterText key={message} text={message} />}
             </p>
           </div>
 

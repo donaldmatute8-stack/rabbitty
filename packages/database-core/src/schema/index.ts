@@ -463,7 +463,32 @@ export const niches = pgTable("niches", {
   order: integer("order").default(0).notNull(),
   isActive: boolean("isActive").default(true).notNull(),
   capabilities: jsonb("capabilities").default({}).notNull(),
+  /** Qué necesita este giro (contexto para Bunzy y para el email de bienvenida). */
+  description: text("description"),
   createdAt: timestamp("createdAt").defaultNow(),
+});
+
+/**
+ * ── Solicitudes de nicho ── giros que todavía NO cubrimos.
+ * El onboarding las captura con email + WhatsApp obligatorios y dispara un
+ * correo de bienvenida personalizado. `isActive` del catálogo manda: si el
+ * nicho no está activo, se registra aquí en vez de forzarlo a un nicho ajeno.
+ */
+export const nicheRequests = pgTable("niche_requests", {
+  id: id(),
+  niche: text("niche"),
+  nicheLabel: text("nicheLabel").notNull(),
+  businessName: text("businessName"),
+  contactName: text("contactName"),
+  email: text("email").notNull(),
+  phone: text("phone").notNull(), // E.164 sin '+'
+  message: text("message"),
+  source: text("source").default("onboarding").notNull(),
+  status: text("status").default("PENDING").notNull(), // PENDING | CONTACTED | LAUNCHED | DISCARDED
+  userId: uuid("userId"),
+  createdAt: timestamp("createdAt").defaultNow(),
+  notifiedAt: timestamp("notifiedAt"),
+  emailId: text("emailId"),
 });
 
 /**

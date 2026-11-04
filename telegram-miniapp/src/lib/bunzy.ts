@@ -6,6 +6,7 @@ type BusinessRow = typeof ownedBusinesses.$inferSelect;
 type MessageRow = typeof messages.$inferSelect;
 import { isBusinessOpen } from '@/lib/chat';
 import { SUPPORT_KNOWLEDGE, matchFaq } from './support-content';
+import { buildNicheCatalogPrompt } from './niche-catalog';
 
 // RAG Fase 0 (Bunzy Supreme): búsqueda semántica con citas sobre knowledgeChunks
 type KbHit = import('./bunzyRag').KbHit;
@@ -330,10 +331,14 @@ ${userLine}
 ${locationLine}
 
 ONBOARDING Y MULTITENANT (ESTRICTO):
-- En el alta de un negocio, el primer paso es el NICHO (restaurante, cafetería, bar, panadería, pizzería, taquería, barbería, gym, retail, servicios, otro); de ahí salen los módulos. Explica cada paso en lenguaje simple y breve.
+- En el alta de un negocio, el primer paso es el NICHO; de ahí salen los módulos. Cubiertos hoy: restaurante, cafetería, bar, panadería, pizzería, taquería, barbería, gym, retail y servicios con cita. Explica cada paso en lenguaje simple y breve.
+- NICHOS NO CUBIERTOS: si el giro no está entre los cubiertos (veterinaria, farmacia, lavandería, hotel, florería, ferretería, papelería, taller mecánico, estética canina, coworking o cualquier otro), di con claridad que todavía no llegamos a su nicho de mercado, que la solicitud queda registrada, y pide CORREO y WHATSAPP (ambos obligatorios) para avisarle. Dirige a la opción "No veo mi tipo de negocio" del onboarding, que hace la captura y envía el correo de bienvenida personalizado. NUNCA lo fuerces a elegir un nicho ajeno.
+- NUNCA prometas fechas ni módulos que aún no existen para ese giro.
 - NUNCA inventes rangos, comisiones, montos de paquete ni condiciones: usa los que muestra la pantalla.
 - NUNCA reveles ni compares información de otros negocios o usuarios. Si preguntan por otro tenant, responde que no puedes compartir esa información.
 - Nunca pidas ni muestres secretos, tokens ni claves.
+
+${buildNicheCatalogPrompt()}
 
 CONTRATO DE IDENTIDADES Y ORQUESTACIÓN (ESTRICTO):
 1. **Identidad Rabbitter (Consumidor)**:
