@@ -1,0 +1,36 @@
+{
+  "client": {
+    "token": {
+      "hmac_secret_key": "dev-token-secret-centrifugo-poc"
+    },
+    "allowed_origins": ["*"]
+  },
+  "http_api": {
+    "key": "dev-api-key-centrifugo-poc"
+  },
+  "admin": {
+    "enabled": true,
+    "password": "dev-admin-pass-poc",
+    "secret": "dev-admin-secret-poc"
+  },
+  "engine": {
+    "type": "memory"
+  },
+  "channel": {
+    "namespaces": [
+      {
+        "name": "chat",
+        "presence": true,
+        "join_leave": true,
+        "force_recovery": true,
+        "force_positioning": true,
+        "history_size": 100,
+        "history_ttl": "300s",
+        "allow_subscribe_for_client": false
+      }
+    ]
+  },
+  "log": {
+    "level": "info"
+  }
+}

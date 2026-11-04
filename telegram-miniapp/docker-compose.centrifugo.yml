@@ -1,0 +1,23 @@
+# ── PoC Centrifugo (mensajería) ──
+# Aislada del chat real: solo canales chat:demo y los que el backend autorice.
+# Uso:
+#   docker compose -f docker-compose.centrifugo.yml up -d
+#   curl -sf http://localhost:8000/health && echo OK
+#   docker compose -f docker-compose.centrifugo.yml down
+services:
+  centrifugo:
+    image: centrifugo/centrifugo:v6
+    container_name: rabbitty-centrifugo-poc
+    command: ["centrifugo", "-c", "/centrifugo/config.json"]
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./docker/centrifugo/config.json:/centrifugo/config.json:ro
+    restart: unless-stopped
+    healthcheck:
+      # Centrifugo v6 no expone /health: "/" responde 200 cuando el server está arriba.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8000/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
