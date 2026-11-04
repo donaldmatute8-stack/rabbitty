@@ -8,6 +8,7 @@ import { PlatformBridge } from '@/lib/platform';
 
 
 
+import { openInviteChannel, shareInvite } from '@/lib/invite';
 type TelegramWebApp = { openTelegramLink?: (url: string) => void };
 
 const getTelegram = (): TelegramWebApp | null => {
@@ -57,6 +58,16 @@ export default function ReferralPage() {
       navigator.clipboard.writeText(referralLink);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  // Primario: hoja de compartir del sistema (incluye WhatsApp, Telegram, Mensajes…)
+  const shareNative = async () => {
+    PlatformBridge.hapticFeedback('medium');
+    const ok = await shareInvite({ username: profile?.username, telegramId: profile?.telegramId ? String(profile.telegramId) : null, id: profile?.id });
+    if (!ok) {
+      // Sin hoja nativa (o canceló): abrimos WhatsApp como plan B.
+      openInviteChannel('whatsapp', { username: profile?.username, telegramId: profile?.telegramId ? String(profile.telegramId) : null, id: profile?.id });
     }
   };
 

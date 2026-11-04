@@ -43,6 +43,8 @@ import { GROUPS } from '@/components/groups/GroupsStrip';
 import { setStoredAvatar } from '@/lib/avatar';
 import { useToast } from '@/contexts/ToastContext';
 
+import { openInviteChannel, shareInvite } from '@/lib/invite';
+import { Share2 } from 'lucide-react';
 type Conversation = {
   id: string;
   targetId: string;
@@ -1805,6 +1807,31 @@ export default function ChatInboxPage() {
         title="Contactos & Comunidad"
       >
         <div className="flex flex-col gap-4 text-(--text-primary) pb-6">
+          {/* Invitar: hoja nativa (WhatsApp/Telegram incluidos) sin plugin de agenda */}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => { void shareInvite({ username: user?.username ?? null, id: user?.id ?? null }); }}
+              className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-[#0088CC]/15 border border-[#0088CC]/35 px-3 py-2.5 text-[13px] font-black text-[#4FC3F7] cursor-pointer active:scale-95 transition-transform"
+            >
+              <Share2 size={15} /> Invitar
+            </button>
+            <button
+              type="button"
+              onClick={() => openInviteChannel('whatsapp', { username: user?.username ?? null, id: user?.id ?? null })}
+              className="flex-1 rounded-2xl bg-emerald-500/15 border border-emerald-500/35 px-3 py-2.5 text-[13px] font-black text-emerald-300 cursor-pointer active:scale-95 transition-transform"
+            >
+              WhatsApp
+            </button>
+            <button
+              type="button"
+              onClick={() => openInviteChannel('telegram', { username: user?.username ?? null, id: user?.id ?? null })}
+              className="flex-1 rounded-2xl bg-sky-500/15 border border-sky-500/35 px-3 py-2.5 text-[13px] font-black text-sky-300 cursor-pointer active:scale-95 transition-transform"
+            >
+              Telegram
+            </button>
+          </div>
+
           {/* Live Search bar for registered Rabbitters & Contacts */}
           <div className="flex items-center gap-2 bg-(--bg-subtle) border border-(--border-subtle) rounded-2xl px-3.5 py-2.5 focus-within:border-[#0088CC] transition-colors">
             <Search size={18} className="text-(--text-muted)" />
