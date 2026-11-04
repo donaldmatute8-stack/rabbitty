@@ -121,6 +121,11 @@ export const DOC_SECTIONS: { title: string; body: string }[] = [
   },
 
   {
+    title: 'Alta de negocio y nichos (onboarding)',
+    body: 'El alta de un afiliado empieza eligiendo NICHO: restaurante, cafetería, bar, panadería, pizzería, taquería, barbería, gym, retail, servicios u otro. El nicho define qué módulos ve el negocio (mesas, cocina/KDS, reservas, propinas, inventario, recetas, código de barras, citas) y de él se deriva la categoría operativa. Después del nicho vienen: bienvenida/contrato, datos básicos (nombre, dirección), recompensa en Bunz (mínimo 2%), paquete de crédito y firma. Bunzy acompaña cada paso explicando en lenguaje simple, sin inventar condiciones comerciales ni montos: los rangos y paquetes son los que muestra la app. Un negocio nuevo nunca ve datos de otro negocio; Bunzy responde solo sobre la configuración de quien pregunta.',
+  },
+
+  {
     title: 'Dónde configuro mi negocio (Admin)',
     body: 'Toda la configuración del negocio vive en UN solo lugar: menú Configuración → "Mi negocio" (/perfil-negocio), con 5 pestañas. (1) Perfil público: nombre, "Acerca de", dirección, sitio web, portada y logo, días y horario, % de cashback, y el canal de atención del chat. Es lo que ve el Rabbitter en la app. (2) Sucursal: nombre en el ticket, slug para QR y links, teléfono, email, pie del ticket y datos fiscales (razón social, RFC, régimen, moneda, IVA, zona horaria). (3) Operación POS: Happy Hour, tipo de cambio USD (automático o manual), horas antes de expirar una comanda sin pagar, sonido y alerta de pedidos nuevos, mostrar USD en el ticket, propinas de tarjeta pagables en caja y gratificación voluntaria (opciones 5/10/15%). (4) Bunz: aceptar Bunz como pago, disponibilidad, mínimos/máximos, % máximo de la cuenta pagable en Bunz y límite diario. (5) Equipo & Hardware: accesos directos. Lo operativo sigue en su propia pantalla: Menú & productos (/menu), Personal y PIN (/staff), Impresoras (/hardware), POS (/pos), Sucursales y afiliados (/restaurants). La seguridad de la cuenta (2FA, Face ID, dispositivos) está en Ajustes → Seguridad.',
   },

@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import BunzGuide from './BunzGuide';
 
 import { NichePicker } from './NichePicker';
+import { BunzyOnboarding } from './BunzyOnboarding';
 /** Paso 0: el nicho define la categoría operativa (y por tanto los rangos). */
 const NICHE_TO_CATEGORY: Record<string, string> = {
   restaurant: 'Restaurante',
@@ -223,6 +224,8 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
   return (
     <div style={{ position: 'fixed', inset: 0, backgroundColor: '#111', color: '#fff', zIndex: 100, display: 'flex', flexDirection: 'column', fontFamily: "var(--font-family-base)", overflowY: 'auto' }}>
       
+      <BunzyOnboarding niche={niche} step={step} businessName={name || null} />
+
       {/* Dynamic Header for steps > 0 */}
       {step > 0 && (
         <div style={{ padding: 'calc(max(var(--safe-top, 0px), 50px) + 56px) 20px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 10 }}>

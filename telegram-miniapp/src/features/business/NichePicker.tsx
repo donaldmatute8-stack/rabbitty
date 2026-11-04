@@ -17,6 +17,7 @@ import {
   ShoppingBag, Calendar, Store, Check, ChevronRight, ArrowLeft,
 } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
+import { BunzyOnboarding } from './BunzyOnboarding';
 
 export interface NicheOption {
   id: string;
@@ -209,6 +210,9 @@ export function NichePicker({
           </p>
         )}
       </div>
+
+      {/* Bunzy guía desde el primer segundo */}
+      <BunzyOnboarding niche={value} step={0} />
     </div>
   );
 }
