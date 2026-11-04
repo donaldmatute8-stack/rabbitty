@@ -52,7 +52,37 @@ export default function GodHubPage() {
   };
 
   useEffect(() => {
-    void fetchMetrics();
+    let isMounted = true;
+    (async () => {
+      try {
+        const [ecoRes, reconRes] = await Promise.all([
+          fetch("/api/trpc/god.getEcosystemMetrics?batch=1&input=" + encodeURIComponent(JSON.stringify({ "0": { json: null } }))).then(r => r.json()),
+          fetch("/api/trpc/god.getLedgerReconciliation?batch=1&input=" + encodeURIComponent(JSON.stringify({ "0": { json: null } }))).then(r => r.json()).catch(() => null),
+        ]);
+
+        const eco = ecoRes?.[0]?.result?.data?.json;
+        const recon = reconRes?.[0]?.result?.data?.json;
+
+        if (isMounted && eco) {
+          setSummary({
+            totalBusinesses: eco.businesses?.total ?? 0,
+            activeBusinesses: eco.businesses?.active ?? 0,
+            totalRabbitters: eco.rabbitters?.total ?? 0,
+            circulatingBunz: eco.rabbitters?.circulatingSupply ?? 0,
+            monthlyTxns: eco.monthlyTxns ?? 0,
+            ledgerBalanced: recon?.status === "HEALTHY",
+          });
+        }
+      } catch {
+        // Fallback gracioso
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const modules = [

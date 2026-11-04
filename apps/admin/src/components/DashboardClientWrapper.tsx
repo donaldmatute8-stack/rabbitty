@@ -9,7 +9,7 @@ import { SandboxBanner } from "./SandboxBanner";
 import { trpc } from "../lib/trpc-client";
 import { toast } from "@rabbitty/ui";
 import Link from "next/link";
-import { TerminalSquare, TabletSmartphone, Smartphone, MessageSquare, X, Bot, Sparkles, Send, RotateCw, CreditCard, Eye } from "lucide-react";
+import { TerminalSquare, TabletSmartphone, Smartphone, MessageSquare, X, Sparkles, RotateCw, CreditCard, Eye } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
 import { ScannerPairModal } from "./ScannerPairModal";
 import ReadinessBar from "./ReadinessBar";
@@ -33,7 +33,14 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
   const pathname = usePathname();
   // On tablet (<lg), sidebar starts collapsed (hidden). On desktop, expanded.
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isNativeApp, setIsNativeApp] = useState(false);
+  const [isNativeApp, setIsNativeApp] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const isCapNative = Capacitor.isNativePlatform();
+    const isStandalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (window.navigator as unknown as { standalone?: boolean }).standalone === true;
+    return Boolean(isCapNative || isStandalone);
+  });
   const [pairModalOpen, setPairModalOpen] = useState(false);
 
   const createStripeLink = trpc.payments.createStripeConnectLink.useMutation({
@@ -50,15 +57,6 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
     },
   });
 
-  useEffect(() => {
-    // Si corre en Capacitor nativo (iOS / Android / Desktop nativo) o standalone PWA
-    const isCapNative = Capacitor.isNativePlatform();
-    const isStandalone = typeof window !== "undefined" && (
-      window.matchMedia("(display-mode: standalone)").matches ||
-      (window.navigator as any).standalone === true
-    );
-    setIsNativeApp(isCapNative || isStandalone);
-  }, []);
   const [chatDrawerOpen, setChatDrawerOpen] = useState(false);
   const [drawerTab, setDrawerTab] = useState<"bunzy" | "customers">("bunzy");
   // H-CHAT-TRUTH: la apertura ya NO escribe en localStorage — el visto bueno
@@ -96,7 +94,7 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
 
   // Auto-close drawer on navigation (tablet)
   useEffect(() => {
-    if (isTablet) setIsCollapsed(true);
+    if (isTablet) setIsCollapsed((prev) => (prev ? prev : true));
   }, [pathname, isTablet]);
 
   const { data: twoFa, isFetched } = trpc.totp.checkRequirement.useQuery(undefined, {
@@ -118,12 +116,20 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
     retry: false,
     staleTime: 30 * 1000,
   });
-  const [localScannerPaired, setLocalScannerPaired] = useState(false);
+  const [localScannerPaired, setLocalScannerPaired] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return localStorage.getItem("rabbitty_scanner_paired_b1") === "1";
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem(`rabbitty_scanner_paired_${branchId}`);
-      setLocalScannerPaired(saved === "1");
+      const isPaired = saved === "1";
+      setLocalScannerPaired((prev) => (prev === isPaired ? prev : isPaired));
     } catch {
       setLocalScannerPaired(false);
     }
@@ -145,11 +151,10 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
   // (una Mac y un iPad veían "vistos" distintos). El server ahora pondera
   // los mensajes del cliente con readAt NULL.
   const chatconvsWithUnread = (conversations || []).filter(
-    (c: any) => Number(c?.unread ?? 0) > 0
+    (c: { unread?: number | null }) => Number(c?.unread ?? 0) > 0
   );
-  const chatUnreadCount = chatconvsWithUnread.length;
   const totalChatUnread = chatconvsWithUnread.reduce(
-    (acc: number, c: any) => acc + Number(c.unread || 0),
+    (acc: number, c: { unread?: number | null }) => acc + Number(c.unread || 0),
     0
   );
 
@@ -228,7 +233,7 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
     const unseen = (thread.messages as Array<{ senderId?: string; readAt?: string | null }>)
       .filter((m) => m.senderId !== thread.businessId && !m.readAt).length;
     if (unseen > 0) markChatRead.mutate({ conversationId: activeCustomerChat });
-  }, [thread, activeCustomerChat]);
+  }, [thread, activeCustomerChat, markChatRead]);
 
   const sendMessage = trpc.customerChat.sendMessage.useMutation({
     onSuccess: () => {
@@ -269,7 +274,7 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
       const savedBranch = saved ? branches.find((b) => b.id === saved) : null;
 
       if (branchId === "b1" && savedBranch) {
-        setBranchId(savedBranch.id);
+        setBranchId((prev) => (prev === savedBranch.id ? prev : savedBranch.id));
         return;
       }
 
@@ -281,7 +286,7 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
               !b.name.toLowerCase().includes("sandbox") &&
               !b.name.toLowerCase().includes("entrenamiento")
           ) || branches[0]!;
-        setBranchId(prodBranch.id);
+        setBranchId((prev) => (prev === prodBranch.id ? prev : prodBranch.id));
         if (typeof window !== "undefined") {
           localStorage.setItem("activeBranchId", prodBranch.id);
         }
@@ -294,7 +299,7 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
       if (twoFa?.requireTotpForLogin) {
         router.replace("/auth/2fa");
       }
-      setTwoFaChecked(true);
+      setTwoFaChecked((prev) => (prev ? prev : true));
     }
   }, [isFetched, twoFa, twoFaChecked, router]);
 
@@ -595,7 +600,7 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                               onClick={() => setChatDrawerOpen(false)}
                               className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white border border-white/10 text-xs font-bold transition-all flex items-center justify-between no-underline"
                             >
-                              <span>📍 Radar de Proximidad & Bunz'in</span>
+                              <span>📍 Radar de Proximidad & Bunz&apos;in</span>
                               <span className="text-[10px] text-emerald-400 font-mono">Abrir →</span>
                             </Link>
                             <Link
@@ -626,29 +631,33 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                             </p>
                           </div>
                         )}
-                        {conversations?.map((conv) => (
-                          <div
-                            key={conv.id}
-                            onClick={() => openChat(conv)}
-                            className="p-3.5 rounded-2xl bg-white/3 border border-white/10 hover:border-pink-500/40 transition-all cursor-pointer"
-                          >
-                            <div className="flex items-center justify-between mb-1.5">
-                              <span className="text-xs font-bold text-white flex items-center gap-2">
-                                {conv.customerName}
-                                {Number((conv as any).unread ?? 0) > 0 && (
-                                  <span className="text-[9px] font-black text-white bg-[#E91E63] rounded-full px-1.5 py-0.5 min-w-4 text-center">
-                                    {Number((conv as any).unread)}
-                                  </span>
-                                )}
-                              </span>
-                              <span className="text-[10px] text-gray-500">
-                                {conv.lastMessageAt ? new Date(conv.lastMessageAt).toLocaleString("es-MX", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}
-                              </span>
+                        {conversations?.map((conv) => {
+                          const convWithUnread = conv as { id: string; customerName?: string; unread?: number | null; lastMessageAt?: string | null; businessName?: string; lastMessage?: string | null };
+                          const unreadCount = Number(convWithUnread.unread ?? 0);
+                          return (
+                            <div
+                              key={conv.id}
+                              onClick={() => openChat(conv)}
+                              className="p-3.5 rounded-2xl bg-white/3 border border-white/10 hover:border-pink-500/40 transition-all cursor-pointer"
+                            >
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-xs font-bold text-white flex items-center gap-2">
+                                  {conv.customerName}
+                                  {unreadCount > 0 && (
+                                    <span className="text-[9px] font-black text-white bg-[#E91E63] rounded-full px-1.5 py-0.5 min-w-4 text-center">
+                                      {unreadCount}
+                                    </span>
+                                  )}
+                                </span>
+                                <span className="text-[10px] text-gray-500">
+                                  {conv.lastMessageAt ? new Date(conv.lastMessageAt).toLocaleString("es-MX", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-pink-400 mb-1 m-0">{conv.businessName}</p>
+                              <p className="text-xs text-gray-300 m-0 line-clamp-2">{conv.lastMessage || "Sin mensajes"}</p>
                             </div>
-                            <p className="text-[10px] text-pink-400 mb-1 m-0">{conv.businessName}</p>
-                            <p className="text-xs text-gray-300 m-0 line-clamp-2">{conv.lastMessage || "Sin mensajes"}</p>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </>
                     )}
 

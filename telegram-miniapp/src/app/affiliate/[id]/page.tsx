@@ -480,20 +480,36 @@ function AffiliateProfileContent() {
           <ChevronLeft size={20} />
         </button>
 
-        {/* Central Floating Pill */}
-        <motion.div
-          initial={{ opacity: 0, y: -6 }}
-          animate={{ opacity: isScrolled ? 1 : 0, y: isScrolled ? 0 : -6 }}
-          transition={{ duration: 0.2 }}
-          className="bg-white/5 border border-white/10 px-4 py-1 rounded-full flex flex-col items-center justify-center max-w-[65%] pointer-events-auto"
-        >
-          <span className="font-black text-xs text-white leading-tight truncate w-full text-center">
+        {/* Central Floating Pill (Header Top) */}
+        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/15 bg-[#14141A]/85 backdrop-blur-xl shadow-xl pointer-events-auto max-w-[62%] sm:max-w-none">
+          <h1 className="text-xs sm:text-sm font-black tracking-tight text-white truncate m-0 max-w-[28vw] sm:max-w-[200px]">
             {affiliate.name}
+          </h1>
+          {affiliate.category && (
+            <>
+              <span className="w-1 h-1 rounded-full bg-white/30 shrink-0" />
+              <span className="text-[9px] sm:text-[10px] font-black text-[#E91E63] uppercase tracking-wider truncate max-w-[18vw] sm:max-w-[120px]">
+                {affiliate.category}
+              </span>
+            </>
+          )}
+          {affiliate.startTime && affiliate.endTime && (
+            <>
+              <span className="w-1 h-1 rounded-full bg-white/30 shrink-0" />
+              <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-bold text-gray-300 shrink-0">
+                <Clock size={10} className="text-gray-400" />
+                <span>{affiliate.startTime}–{affiliate.endTime}</span>
+              </span>
+            </>
+          )}
+          <span className={`shrink-0 text-[8px] sm:text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+            openNow
+              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+              : 'bg-red-500/15 text-red-400 border border-red-500/30'
+          }`}>
+            {openNow ? 'Abierto' : 'Cerrado'}
           </span>
-          <span className="text-[9px] font-bold text-[#E91E63] uppercase tracking-wider">
-            {affiliate.category || 'Negocio'}
-          </span>
-        </motion.div>
+        </div>
 
         {/* Top Right Quick Actions (Share + Favorite) */}
         <div className="flex items-center gap-2 pointer-events-auto shrink-0">
@@ -643,31 +659,6 @@ function AffiliateProfileContent() {
 
       {/* Content Container (Card Overlap) */}
       <div className="relative bg-[#0D0D15] rounded-t-[36px] -mt-8 px-5 pt-6 pb-20 border-t border-white/10 shadow-2xl space-y-5">
-        {/* Pill central: nombre · tipo de negocio · horario · estado (H-UI-PILL) */}
-        <div className="flex justify-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full border border-white/12 bg-white/[0.04] backdrop-blur-xl max-w-full shadow-lg">
-            <h1 className="text-base font-black tracking-tight text-white truncate m-0 max-w-[42vw]">
-              {affiliate.name}
-            </h1>
-            <span className="w-1 h-1 rounded-full bg-white/25 shrink-0" />
-            <span className="text-[10px] font-black text-[#E91E63] uppercase tracking-wider truncate max-w-[26vw]">
-              {affiliate.category}
-            </span>
-            <span className="w-1 h-1 rounded-full bg-white/25 shrink-0" />
-            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-gray-300 shrink-0">
-              <Clock size={11} className="text-gray-400" />
-              <span>{affiliate.startTime}–{affiliate.endTime}</span>
-            </span>
-            <span className={`shrink-0 text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
-              openNow
-                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                : 'bg-red-500/15 text-red-400 border border-red-500/30'
-            }`}>
-              {openNow ? 'Abierto' : 'Cerrado'}
-            </span>
-          </div>
-        </div>
-
         {/* Action Quick Links (Llegar, Mood, Mesa, Mensaje) Rediseñados */}
         <div className="grid grid-cols-4 gap-2 py-2 px-2 bg-white/[0.03] border border-white/10 rounded-2xl backdrop-blur-xl shadow-lg">
           <motion.button

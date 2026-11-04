@@ -124,7 +124,7 @@ export function DigitalMenuCatalog({
             className={`h-10 w-10 shrink-0 rounded-2xl border flex items-center justify-center transition-all cursor-pointer active:scale-95 ${
               showCategoryFilters
                 ? 'bg-[#E91E63]/15 border-[#E91E63]/40 text-[#FF2E93] shadow-[0_0_15px_rgba(233,30,99,0.25)]'
-                : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white'
+                : 'bg-white/4 border-white/10 text-white/60 hover:text-white'
             }`}
             title={showCategoryFilters ? "Ocultar filtros de categorías" : "Mostrar filtros de categorías"}
           >
@@ -147,7 +147,7 @@ export function DigitalMenuCatalog({
                   onClick={() => setSelectedCategoryId('all')}
                   className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-black tracking-wide transition-all border cursor-pointer ${
                     selectedCategoryId === 'all'
-                      ? 'bg-gradient-to-r from-[#FF2E93] to-[#E91E63] text-white border-transparent shadow-md shadow-[#E91E63]/30 scale-[1.02]'
+                      ? 'bg-linear-to-r from-[#FF2E93] to-[#E91E63] text-white border-transparent shadow-md shadow-[#E91E63]/30 scale-[1.02]'
                       : 'bg-[#161622] text-white/70 border-white/10 hover:bg-white/10'
                   }`}
                 >
@@ -159,7 +159,7 @@ export function DigitalMenuCatalog({
                   onClick={() => setSelectedCategoryId(cat.id)}
                   className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-black tracking-wide transition-all border cursor-pointer ${
                     selectedCategoryId === cat.id
-                      ? 'bg-gradient-to-r from-[#FF2E93] to-[#E91E63] text-white border-transparent shadow-md shadow-[#E91E63]/30 scale-[1.02]'
+                      ? 'bg-linear-to-r from-[#FF2E93] to-[#E91E63] text-white border-transparent shadow-md shadow-[#E91E63]/30 scale-[1.02]'
                       : 'bg-[#161622] text-white/70 border-white/10 hover:bg-white/10'
                   }`}
                 >
@@ -184,7 +184,7 @@ export function DigitalMenuCatalog({
                 </h3>
               </div>
               {cat.description && (
-                <span className="text-[11px] text-white/40 line-clamp-1 max-w-[200px]">
+                <span className="text-[11px] text-white/40 line-clamp-1 max-w-50">
                   {cat.description}
                 </span>
               )}
@@ -203,7 +203,7 @@ export function DigitalMenuCatalog({
                     key={item.id}
                     whileTap={{ scale: 0.985 }}
                     onClick={() => setActiveItem(item)}
-                    className="group relative bg-gradient-to-b from-white/[0.05] to-white/[0.02] hover:from-white/[0.08] hover:to-white/[0.04] border border-white/10 hover:border-[#E91E63]/30 rounded-2xl p-3.5 flex gap-3.5 items-center cursor-pointer transition-all shadow-md hover:shadow-[#E91E63]/10 overflow-hidden"
+                    className="group relative bg-linear-to-b from-white/5 to-white/2 hover:from-white/8 hover:to-white/4 border border-white/10 hover:border-[#E91E63]/30 rounded-2xl p-3.5 flex gap-3.5 items-center cursor-pointer transition-all shadow-md hover:shadow-[#E91E63]/10 overflow-hidden"
                   >
                     {/* Item Thumbnail */}
                     {itemImg ? (
@@ -223,7 +223,7 @@ export function DigitalMenuCatalog({
                         )}
                       </div>
                     ) : (
-                      <div className="relative w-22 h-22 rounded-xl bg-gradient-to-br from-white/5 to-white/10 border border-white/10 flex flex-col items-center justify-center text-pink-400 shrink-0">
+                      <div className="relative w-22 h-22 rounded-xl bg-linear-to-br from-white/5 to-white/10 border border-white/10 flex flex-col items-center justify-center text-pink-400 shrink-0">
                         {isDrink ? <Coffee size={24} className="text-pink-400 mb-1" /> : <Utensils size={24} className="text-pink-400 mb-1" />}
                         <span className="text-[9px] font-black uppercase tracking-wider text-white/50">
                           {isDrink ? 'Bebida' : 'Especial'}
@@ -260,7 +260,7 @@ export function DigitalMenuCatalog({
                           <span>+{estimatedBunz} Bunz</span>
                         </span>
 
-                        <div className="flex items-center gap-1 text-xs font-black text-white bg-gradient-to-r from-[#FF2E93] to-[#E91E63] group-hover:brightness-110 px-3 py-1 rounded-xl transition-all shadow-sm shadow-pink-500/20">
+                        <div className="flex items-center gap-1 text-xs font-black text-white bg-linear-to-r from-[#FF2E93] to-[#E91E63] group-hover:brightness-110 px-3 py-1 rounded-xl transition-all shadow-sm shadow-pink-500/20">
                           <Plus size={13} className="shrink-0" />
                           <span>{digitalOrderingEnabled ? 'Pedir' : 'Ver'}</span>
                         </div>

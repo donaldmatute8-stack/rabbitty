@@ -2,6 +2,7 @@
 
 import { signIn } from "next-auth/react";
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { Mail, Phone, QrCode, Sparkles, UserCheck, Clock, ChevronDown, Check, Compass, ScanFace } from "lucide-react";
 import QRDiscovery from "@/components/QRDiscovery";
@@ -83,8 +84,9 @@ export default function LoginPage() {
       const result = await signIn('email-token', { token: verData.token, email: verData.email, redirect: false });
       if (result?.error) throw new Error('No se pudo crear la sesión');
       window.location.href = '/';
-    } catch (err: any) {
-      const m = err?.message || err?.name || 'Error';
+    } catch (err: unknown) {
+      const errorObj = err as { message?: string; name?: string } | undefined;
+      const m = errorObj?.message || errorObj?.name || 'Error';
       if (m.includes('NotAllowed')) {
         console.warn('[PasskeyLogin] cancelado');
       } else if (m.includes('No passkey') || m.includes('Sin passkeys')) {
@@ -116,22 +118,28 @@ export default function LoginPage() {
   // Autodetectar país si el usuario escribe prefijo internacional
   useEffect(() => {
     const trimmed = inputVal.trim();
-    if (trimmed.startsWith("+52")) setSelectedCountry(COUNTRIES.find((c) => c.code === "MX")!);
-    else if (trimmed.startsWith("+1")) setSelectedCountry(COUNTRIES.find((c) => c.code === "US")!);
-    else if (trimmed.startsWith("+34")) setSelectedCountry(COUNTRIES.find((c) => c.code === "ES")!);
-    else if (trimmed.startsWith("+57")) setSelectedCountry(COUNTRIES.find((c) => c.code === "CO")!);
-    else if (trimmed.startsWith("+54")) setSelectedCountry(COUNTRIES.find((c) => c.code === "AR")!);
-    else if (trimmed.startsWith("+56")) setSelectedCountry(COUNTRIES.find((c) => c.code === "CL")!);
-    else if (trimmed.startsWith("+51")) setSelectedCountry(COUNTRIES.find((c) => c.code === "PE")!);
+    let matched: CountryCode | undefined;
+    if (trimmed.startsWith("+52")) matched = COUNTRIES.find((c) => c.code === "MX");
+    else if (trimmed.startsWith("+1")) matched = COUNTRIES.find((c) => c.code === "US");
+    else if (trimmed.startsWith("+34")) matched = COUNTRIES.find((c) => c.code === "ES");
+    else if (trimmed.startsWith("+57")) matched = COUNTRIES.find((c) => c.code === "CO");
+    else if (trimmed.startsWith("+54")) matched = COUNTRIES.find((c) => c.code === "AR");
+    else if (trimmed.startsWith("+56")) matched = COUNTRIES.find((c) => c.code === "CL");
+    else if (trimmed.startsWith("+51")) matched = COUNTRIES.find((c) => c.code === "PE");
+
+    if (matched) {
+      setSelectedCountry((prev) => (prev.code === matched!.code ? prev : matched!));
+    }
   }, [inputVal]);
 
   useEffect(() => {
     // Solo activar bypass en desarrollo local (nunca en producción ni en Vercel)
     if (
       process.env.NODE_ENV === "development" &&
+      typeof window !== "undefined" &&
       (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
     ) {
-      setIsLocalDev(true);
+      setIsLocalDev((prev) => (prev ? prev : true));
     }
 
     // Generar sesión QR para login
@@ -443,9 +451,12 @@ export default function LoginPage() {
         {/* LADO DERECHO: FORMULARIO CORREO / TELÉFONO Y OTP */}
         <div className="flex flex-col justify-center space-y-6 p-2">
           <div className="text-center md:text-left space-y-2">
-            <img
+            <Image
               src="/Ra.png"
               alt="Rabbitty Logo"
+              width={112}
+              height={112}
+              priority
               className="h-28 w-28 object-contain drop-shadow-[0_0_20px_rgba(236,72,153,0.5)] mx-auto md:mx-0"
             />
             <h1 className="text-2xl font-black tracking-tight text-white">
