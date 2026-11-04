@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { users, ownedBusinesses, auditEntries } from '@/db/schema';
+import { users, ownedBusinesses, auditEntries, niches } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { restaurantDb } from '@/db/restaurant';
 import { restaurants } from '@rabbitty/database-restaurant/schema';
@@ -246,12 +246,34 @@ export async function POST(req: Request) {
     };
 
     const slug = await buildUniqueSlug(name);
+    // ── Paso 0: nicho ──
+    // El nicho define módulos del POS (mesas, cocina, citas…). Si el cliente no
+    // lo manda, se deriva de la categoría; si tampoco, 'other'.
+    let niche = typeof body.niche === 'string' ? body.niche.trim() : '';
+    if (niche) {
+      const [valid] = await db.query.niches.findMany({ where: eq(niches.id, niche), limit: 1 });
+      if (!valid) niche = '';
+    }
+    if (!niche) {
+      const cat = String(category || '').toLowerCase();
+      niche =
+        cat.includes('caf') ? 'cafe'
+        : cat.includes('bar') ? 'bar'
+        : cat.includes('pizz') ? 'pizza'
+        : cat.includes('taco') || cat.includes('mexic') ? 'tacos'
+        : cat.includes('barber') || cat.includes('est') ? 'barbershop'
+        : cat.includes('fit') || cat.includes('gym') ? 'fitness'
+        : cat.includes('restaur') ? 'restaurant'
+        : 'other';
+    }
+
     const [business] = await db.insert(ownedBusinesses).values({
       ownerId: owner.id,
       name,
       slug,
       description,
       category,
+      niche,
       address,
       lat,
       lng,
