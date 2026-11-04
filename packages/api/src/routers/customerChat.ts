@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq, ne, and, or, inArray, sql, asc, desc, type SQL } from "drizzle-orm";
+import { eq, ne, and, or, not, inArray, sql, asc, desc, type SQL } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { conversations, messages, ownedBusinesses, users, chatEventOutbox } from "@rabbitty/database-core";
@@ -101,6 +101,12 @@ export const customerChatRouter = router({
     const bizIds = biz.map((b) => b.id);
     const nameById = new Map(biz.map((b) => [b.id, b.name]));
 
+    // Guard del caso mixto: excluir donde el propio dueño es participante.
+    const ownerId = typeof ctx.userId === 'string' && ctx.userId ? ctx.userId : null;
+    const selfParticipantGuard = ownerId
+      ? sql`NOT (${conversations.participant1} = ${ownerId} OR ${conversations.participant2} = ${ownerId})`
+      : undefined;
+
     const convs = await ctx.coreDb
       .select()
       .from(conversations)
@@ -112,7 +118,11 @@ export const customerChatRouter = router({
           or(
             inArray(conversations.participant1, bizIds),
             inArray(conversations.participant2, bizIds)
-          )
+          ),
+          // Caso mixto (afiliado Y rabbitter): si el DUEÑO es participante
+          // directo, es su chat como cliente — no es un cliente escribiéndole
+          // al negocio, así que no debe aparecer en el inbox.
+          ...(selfParticipantGuard ? [selfParticipantGuard] : [])
         )
       )
       .orderBy(desc(conversations.updatedAt))
