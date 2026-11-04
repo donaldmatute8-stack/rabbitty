@@ -208,6 +208,7 @@ const menuPillars: MenuPillar[] = [
       { href: "/ratings", label: "Reputación de Servicio", icon: Star },
       { href: "/reports/audit", label: "Cuadre & Auditoría", icon: ReceiptText, badge: "PDF" },
       { href: "/cash-shifts", label: "Turnos de Caja", icon: Banknote },
+      { href: "/settings/terminals", label: "Terminales POS", icon: TabletSmartphone },
       { href: "/refunds", label: "Reembolsos & Pagos", icon: Repeat },
     ],
   },

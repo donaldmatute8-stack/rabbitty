@@ -1,13 +1,14 @@
 import { z } from "zod";
 import crypto from "crypto";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { router, protectedProcedure, adminOnlyProcedure, publicProcedure, posPermissionsOf, resolvePosRole } from "../trpc";
 import { TRPCError } from "@trpc/server";
-import { branches, restaurants } from "@rabbitty/database-restaurant/schema";
+import { branches, restaurants, staff as staffTable } from "@rabbitty/database-restaurant/schema";
 import {
   posTerminals,
   posTerminalSessions,
   posAuthRequests,
+  posOperatorSessions,
 } from "@rabbitty/database-core/schema";
 
 /**
@@ -296,6 +297,11 @@ export const posTerminalsRouter = router({
         .update(posTerminalSessions)
         .set({ revokedAt: new Date() })
         .where(eq(posTerminalSessions.terminalId, row.id));
+      // Un turno abierto en una terminal revocada no debe seguir contando.
+      await ctx.coreDb
+        .update(posOperatorSessions)
+        .set({ endedAt: new Date() })
+        .where(and(eq(posOperatorSessions.terminalId, row.id), isNull(posOperatorSessions.endedAt)));
       return { success: true };
     }),
 
@@ -448,6 +454,113 @@ export const posTerminalsRouter = router({
     const now = Date.now();
     return rows.filter((r) => new Date(r.expiresAt).getTime() > now);
   }),
+
+  /**
+   * ── Vista de administración (Fase 5) ──
+   * Terminales de la sucursal + turno activo de cada una + solicitudes vivas.
+   * Solo lectura de gestión: no toca sesiones ni tokens.
+   */
+  overview: adminOnlyProcedure.query(async ({ ctx }) => {
+    const scope = await resolveScope(ctx);
+    const terminals = await ctx.coreDb
+      .select({
+        id: posTerminals.id,
+        name: posTerminals.name,
+        platform: posTerminals.platform,
+        status: posTerminals.status,
+        authorizedAt: posTerminals.authorizedAt,
+        expiresAt: posTerminals.expiresAt,
+        lastSeenAt: posTerminals.lastSeenAt,
+        revokedAt: posTerminals.revokedAt,
+      })
+      .from(posTerminals)
+      .where(eq(posTerminals.branchId, scope.branchId))
+      .orderBy(desc(posTerminals.authorizedAt));
+
+    const ids = terminals.map((t) => t.id);
+    const openSessions = ids.length
+      ? await ctx.coreDb
+          .select({
+            id: posOperatorSessions.id,
+            terminalId: posOperatorSessions.terminalId,
+            staffId: posOperatorSessions.staffId,
+            startedAt: posOperatorSessions.startedAt,
+            lastSeenAt: posOperatorSessions.lastSeenAt,
+            expiresAt: posOperatorSessions.expiresAt,
+          })
+          .from(posOperatorSessions)
+          .where(and(inArray(posOperatorSessions.terminalId, ids), isNull(posOperatorSessions.endedAt)))
+      : [];
+
+    const staffIds = Array.from(new Set(openSessions.map((s) => s.staffId)));
+    const members = staffIds.length
+      ? await ctx.restaurantDb
+          .select({ id: staffTable.id, name: staffTable.name, role: staffTable.role })
+          .from(staffTable)
+          .where(inArray(staffTable.id, staffIds))
+      : [];
+    const memberById = new Map(members.map((m) => [m.id, m]));
+
+    const pendingRaw = await ctx.coreDb
+      .select({
+        code: posAuthRequests.code,
+        terminalId: posAuthRequests.terminalId,
+        terminalName: posTerminals.name,
+        requestedHours: posAuthRequests.requestedHours,
+        expiresAt: posAuthRequests.expiresAt,
+        createdAt: posAuthRequests.requestedAt,
+      })
+      .from(posAuthRequests)
+      .innerJoin(posTerminals, eq(posAuthRequests.terminalId, posTerminals.id))
+      .where(and(eq(posTerminals.branchId, scope.branchId), eq(posAuthRequests.status, "PENDING")))
+      .orderBy(desc(posAuthRequests.requestedAt))
+      .limit(20);
+
+    const now = Date.now();
+
+    return {
+      terminals: terminals.map((t) => {
+        const session = openSessions.find((s) => s.terminalId === t.id);
+        const member = session ? memberById.get(session.staffId) : null;
+        return {
+          ...t,
+          activeOperator: session
+            ? {
+                sessionId: session.id,
+                staffId: session.staffId,
+                name: member?.name ?? "Empleado",
+                role: member?.role ?? null,
+                startedAt: session.startedAt,
+                lastSeenAt: session.lastSeenAt,
+                expiresAt: session.expiresAt,
+              }
+            : null,
+        };
+      }),
+      pendingRequests: pendingRaw.filter((r) => new Date(r.expiresAt).getTime() > now),
+    };
+  }),
+
+  /** Cierra el turno de una terminal sin revocarla (relevo de personal). */
+  forceEndShift: adminOnlyProcedure
+    .input(z.object({ terminalId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const scope = await resolveScope(ctx);
+      const [row] = await ctx.coreDb
+        .select({ id: posTerminals.id, branchId: posTerminals.branchId })
+        .from(posTerminals)
+        .where(eq(posTerminals.id, input.terminalId))
+        .limit(1);
+      if (!row || row.branchId !== scope.branchId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Terminal no encontrada en esta sucursal" });
+      }
+      const closed = await ctx.coreDb
+        .update(posOperatorSessions)
+        .set({ endedAt: new Date() })
+        .where(and(eq(posOperatorSessions.terminalId, row.id), isNull(posOperatorSessions.endedAt)))
+        .returning({ id: posOperatorSessions.id });
+      return { closed: closed.length };
+    }),
 
   /** Aprobación (la hace el administrador; aquí valida que sea su sucursal). */
   resolveAuthRequest: adminOnlyProcedure

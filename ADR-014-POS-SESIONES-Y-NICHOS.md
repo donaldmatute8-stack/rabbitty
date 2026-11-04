@@ -1,6 +1,6 @@
 # ADR-014 · POS con sesión propia, Admin protegido y onboarding por nicho
 
-**Fecha:** 2026-11-04 · **Estado:** Fases 0–4 implementadas (flags apagados) · deploy pendiente
+**Fecha:** 2026-11-04 · **Estado:** Fases 0–5 implementadas (flags apagados) · deploy pendiente
 **Contexto:** en producción. Regla: **solo cambios aditivos + feature flag** hasta validar.
 
 ---
@@ -65,7 +65,7 @@ admin, no la operación diaria.
 **3** | PIN del empleado al iniciar turno (`pos_operator_sessions`) | bajo | ✅ aplicado · flag `POS_OPERATOR_SESSIONS`; el PIN es `staff.pinCode` con lockout |
 **3.5** | Permisos por rol (matriz única servidor + UI) | bajo | ✅ aplicado · terminal con turno siempre; panel admin con `POS_ROLE_ENFORCEMENT=1` |
 **4** | Reautorización desde el móvil (`pos_auth_requests`) | bajo | ✅ aplicado · código de 6 dígitos + QR, aprobación con sesión de admin |
-**5** | Pantalla de terminales (revocar, historial) | bajo | solo lectura + revocar |
+**5** | Pantalla de terminales (revocar, historial) | bajo | ✅ aplicado · `/settings/terminals`: listar, ver turno, cerrarlo y revocar |
 
 ---
 
@@ -355,8 +355,50 @@ tenancy y se validan por dentro con el `deviceKey`.
 
 ---
 
-## 12 · Siguiente paso
+## 12 · Fase 5 implementada (gestión de terminales)
 
-Fase 4: reautorización desde el móvil (`pos_auth_requests`) — el POS muestra un
-código corto y el admin lo aprueba desde su teléfono, sin escribir la clave en
-la terminal. Backend ya existe; falta la pantalla de aprobación.
+**Backend**
+
+- `posTerminals.overview` (admin/manager): terminales de la sucursal con su
+  turno abierto (nombre y rol del empleado), última conexión, vencimiento y
+  solicitudes de reautorización vivas.
+- `posTerminals.forceEndShift`: cierra el turno de una terminal sin revocarla
+  (relevo de personal). Valida que la terminal sea de su sucursal.
+- `revoke`: además de anular sesiones, cierra cualquier turno abierto.
+
+**UI** (`/settings/terminals`, en el sidebar como “Terminales POS”)
+
+- Estado del modo terminal (activo/apagado) con la variable que lo controla.
+- Tarjeta por terminal: estado (`Activa / Vencida / Revocada`), plataforma,
+  alta, última conexión, vencimiento y **turno abierto**.
+- Acciones: “Cerrar turno” y “Revocar” (con confirmación y refresh inmediato).
+- Bloque de solicitudes pendientes con enlace directo a `/pos/auth?code=…`.
+- Estado vacío con la instrucción correcta: vincular desde `/pos/link` en el
+  dispositivo (el secreto nunca viaja al panel).
+
+**Límites**
+
+- No se vincula desde el panel: sigue siendo un acto del dispositivo.
+- No hay historial paginado de sesiones; se muestran última conexión y turno
+  actual. Un historial completo puede colgarse de `pos_terminal_sessions`.
+
+---
+
+## 13 · Siguiente paso (operación)
+
+El circuito completo (nichos → terminal → turno → roles → reautorización →
+gestión) está implementado con **todos los flags apagados**. Para llevarlo a
+producción sin sorpresas:
+
+1. **Deploy del código** con los flags apagados. El POS se comporta igual que hoy.
+2. Verificar POS/Admin normales (cobro, caja, turnos).
+3. Activar `POS_TERMINAL_SESSIONS=1` y vincular UNA terminal real desde
+   `/pos/link`; validar cobro y revocación desde `/settings/terminals`.
+4. Activar `POS_OPERATOR_SESSIONS=1`; validar PIN de cada rol y permisos.
+5. Activar `POS_ROLE_ENFORCEMENT=1` para aplicar la matriz también al panel
+   admin (opcional; la UI ya la respeta).
+6. Re-ingestar el RAG de Bunzy (script del ADR-015).
+
+Mejoras posteriores (no bloquean): aprobación de anulación con token firmado
+para que el PIN del gerente no dependa del cliente, push al admin cuando entra
+una solicitud de terminal, e historial paginado de sesiones/turnos.
