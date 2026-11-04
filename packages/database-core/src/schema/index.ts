@@ -85,6 +85,8 @@ export const ownedBusinesses = pgTable("ownedBusinesses", {
   ownerId: fkId("ownerId").references(() => users.id),
   name: text("name").notNull(),
   category: text("category").notNull(),
+  // Paso 0: nicho del negocio (restaurant, cafe, barber, fitness…).
+  niche: text("niche"),
   description: text("description"),
   address: text("address").notNull(),
   lat: real("lat").notNull(),
@@ -447,6 +449,76 @@ export const chatEventOutbox = pgTable("chat_event_outbox", {
   lockedUntil: timestamp("lockedUntil"),
   createdAt: timestamp("createdAt").defaultNow(),
   updatedAt: timestamp("updatedAt").defaultNow(),
+});
+
+/**
+ * ── Paso 0 · Nichos ── catálogo de tipos de negocio con sus capacidades.
+ * Permite onboarding por nicho sin refactors: cada uno declara qué módulos
+ * necesita (mesas, cocina, citas, inventario…).
+ */
+export const niches = pgTable("niches", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  icon: text("icon"),
+  order: integer("order").default(0).notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  capabilities: jsonb("capabilities").default({}).notNull(),
+  createdAt: timestamp("createdAt").defaultNow(),
+});
+
+/**
+ * ── Terminal POS autorizada (Nivel A) ──
+ * El dispositivo se registra UNA vez; el POS obtiene su propia sesión, separada
+ * del admin. `deviceKeyHash` = hash del secreto del dispositivo (nunca en claro).
+ */
+export const posTerminals = pgTable("pos_terminals", {
+  id: id(),
+  businessId: uuid("businessId"),
+  branchId: text("branchId"),
+  name: text("name").notNull(),
+  platform: text("platform"),
+  deviceKeyHash: text("deviceKeyHash").notNull(),
+  status: text("status").default("ACTIVE").notNull(), // ACTIVE | REVOKED
+  authorizedBy: uuid("authorizedBy"),
+  authorizedAt: timestamp("authorizedAt").defaultNow(),
+  expiresAt: timestamp("expiresAt"),
+  lastSeenAt: timestamp("lastSeenAt"),
+  revokedAt: timestamp("revokedAt"),
+  revokedBy: uuid("revokedBy"),
+});
+
+export const posTerminalSessions = pgTable("pos_terminal_sessions", {
+  id: id(),
+  terminalId: uuid("terminalId").notNull(),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  createdAt: timestamp("createdAt").defaultNow(),
+  revokedAt: timestamp("revokedAt"),
+});
+
+/** Nivel B: turno del empleado sobre la terminal (usa staff.pinCode). */
+export const posOperatorSessions = pgTable("pos_operator_sessions", {
+  id: id(),
+  terminalId: uuid("terminalId").notNull(),
+  staffId: text("staffId").notNull(),
+  token: text("token").notNull().unique(),
+  startedAt: timestamp("startedAt").defaultNow(),
+  lastSeenAt: timestamp("lastSeenAt").defaultNow(),
+  endedAt: timestamp("endedAt"),
+});
+
+/** Nivel C (recuperación): solicitud de reautorización aprobada desde el móvil. */
+export const posAuthRequests = pgTable("pos_auth_requests", {
+  id: id(),
+  terminalId: uuid("terminalId").notNull(),
+  code: text("code").notNull().unique(),
+  requestedById: text("requestedById"),
+  status: text("status").default("PENDING").notNull(), // PENDING | APPROVED | DENIED | EXPIRED
+  requestedHours: integer("requestedHours").default(12).notNull(),
+  requestedAt: timestamp("requestedAt").defaultNow(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  resolvedAt: timestamp("resolvedAt"),
+  resolvedBy: uuid("resolvedBy"),
 });
 
 export const treasury = pgTable("treasury", {
