@@ -91,6 +91,10 @@
 		<string>remote-notification</string>
 		<string>location</string>
 	</array>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Rabbitty usa tus fotos solo cuando eliges una para enviarla en un chat.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Rabbitty puede guardar en tu galería las fotos que decidas descargar.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>NSSupportsLiveActivitiesFrequentUpdates</key>

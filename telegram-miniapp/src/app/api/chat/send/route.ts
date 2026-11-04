@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { messages, conversations, ownedBusinesses, notificationsOutbox } from '@/db/schema';
-import { and, eq } from 'drizzle-orm';
+import { messages, conversations, ownedBusinesses, notificationsOutbox, conversationMembers } from '@/db/schema';
+import { and, eq, isNull } from 'drizzle-orm';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 import {
   getOwnedBusinessIds,
@@ -166,7 +166,7 @@ export async function POST(req: Request) {
             userId: recipientForOutbox.userId,
             type: 'CHAT',
             title: '💬 Nuevo mensaje',
-            message: content.slice(0, 140),
+            message: (body as { encrypted?: boolean }).encrypted ? '🔒 Nuevo mensaje' : content.slice(0, 140),
             route: `/chat/${senderId}`,
             dedupeKey: lastMessage.id ? `chat_msg:${lastMessage.id}` : null,
             priority: 'high',
@@ -191,6 +191,31 @@ export async function POST(req: Request) {
           createdAt: lastMessage.createdAt,
         },
       });
+
+      // ── GRUPO: avisar a TODOS los miembros (menos a mí) ──
+      // Sin esto, un mensaje de grupo no generaba campana ni push: el aviso
+      // normal se resolvía contra "el otro participante", que en un grupo no existe.
+      if (conversation.kind === 'GROUP' && lastMessage.id) {
+        const members = await tx
+          .select({ userId: conversationMembers.userId })
+          .from(conversationMembers)
+          .where(and(eq(conversationMembers.conversationId, conversation.id), isNull(conversationMembers.leftAt)));
+        const rows = members
+          .map((m) => m.userId)
+          .filter((uid) => uid !== senderId && /^[0-9a-f-]{36}$/i.test(uid))
+          .map((uid) => ({
+            userId: uid,
+            type: 'CHAT',
+            title: `💬 ${conversation.name || 'Grupo'}`,
+            message: content.slice(0, 140),
+            route: `/chat/${conversation.id}`,
+            dedupeKey: `chat_msg:${lastMessage.id}:${uid}`,
+            priority: 'high' as const,
+          }));
+        if (rows.length > 0) {
+          await tx.insert(notificationsOutbox).values(rows).onConflictDoNothing({ target: notificationsOutbox.dedupeKey });
+        }
+      }
 
       return { userMessage: lastMessage, replayed: false };
     });
