@@ -13,6 +13,7 @@ import { TerminalSquare, TabletSmartphone, Smartphone, MessageSquare, X, Bot, Sp
 import { Capacitor } from "@capacitor/core";
 import { ScannerPairModal } from "./ScannerPairModal";
 import ReadinessBar from "./ReadinessBar";
+import { EnableNotificationsBanner } from "./EnableNotificationsBanner";
 
 const SidebarContext = createContext<{
   isCollapsed: boolean;
@@ -451,6 +452,7 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
             {/* Scrollable Content View */}
             <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-5 lg:p-8">
               <div className="mx-auto max-w-7xl w-full min-w-0">
+                <EnableNotificationsBanner />
                 {children}
               </div>
             </main>
