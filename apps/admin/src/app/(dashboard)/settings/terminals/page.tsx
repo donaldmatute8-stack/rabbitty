@@ -19,6 +19,7 @@ import {
   Ban,
   CheckCircle2,
   Clock,
+  History,
   KeyRound,
   Loader2,
   MonitorSmartphone,
@@ -35,8 +36,7 @@ function fmt(value?: string | Date | null) {
   return d.toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" });
 }
 
-function statusBadge(status: string, expiresAt?: string | Date | null) {
-  const expired = expiresAt ? new Date(expiresAt).getTime() <= Date.now() : false;
+function statusBadge(status: string, expired: boolean) {
   if (status === "REVOKED") return <Badge variant="danger">Revocada</Badge>;
   if (expired) return <Badge variant="warning">Vencida</Badge>;
   return <Badge variant="success">Activa</Badge>;
@@ -68,7 +68,13 @@ export default function PosTerminalsPage() {
     onSettled: () => setBusyId(null),
   });
 
+  const history = trpc.posTerminals.shiftHistory.useInfiniteQuery(
+    { limit: 20 },
+    { getNextPageParam: (last) => last.nextCursor ?? undefined, retry: false },
+  );
+
   const terminals = overview.data?.terminals ?? [];
+  const shifts = history.data?.pages.flatMap((p) => p.items) ?? [];
   const pending = overview.data?.pendingRequests ?? [];
   const enabled = feature.data?.enabled === true;
 
@@ -160,7 +166,7 @@ export default function PosTerminalsPage() {
         <div className="grid gap-3 lg:grid-cols-2">
           {terminals.map((t) => {
             const busy = busyId === t.id;
-            const isActive = t.status === "ACTIVE" && (!t.expiresAt || new Date(t.expiresAt).getTime() > Date.now());
+            const isActive = t.status === "ACTIVE" && !t.expired;
             return (
               <Card key={t.id} className="p-4">
                 <div className="flex items-start justify-between gap-2">
@@ -175,7 +181,7 @@ export default function PosTerminalsPage() {
                       </p>
                     </div>
                   </div>
-                  {statusBadge(t.status, t.expiresAt)}
+                  {statusBadge(t.status, t.expired)}
                 </div>
 
                 <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
@@ -242,6 +248,69 @@ export default function PosTerminalsPage() {
           })}
         </div>
       )}
+
+      {/* Historial de turnos */}
+      <Card className="p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <History className="h-4 w-4 text-pink-500" />
+            <p className="m-0 text-sm font-black">Historial de turnos</p>
+          </div>
+          <span className="text-[11px] text-gray-400">{shifts.length} recientes</span>
+        </div>
+
+        {history.isLoading ? (
+          <p className="m-0 flex items-center gap-2 text-xs text-gray-500">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Cargando…
+          </p>
+        ) : shifts.length === 0 ? (
+          <p className="m-0 text-xs text-gray-500">Todavía no hay turnos registrados en esta sucursal.</p>
+        ) : (
+          <div className="divide-y divide-gray-100 dark:divide-white/5">
+            {shifts.map((sh) => {
+              const open = !sh.endedAt;
+              return (
+                <div key={sh.id} className="flex items-center justify-between gap-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="m-0 truncate text-xs font-bold">
+                      {sh.staffName}
+                      {sh.staffRole ? <span className="ml-1 font-normal text-gray-400">· {sh.staffRole}</span> : null}
+                    </p>
+                    <p className="m-0 truncate text-[10.5px] text-gray-500">
+                      {sh.terminalName} · {fmt(sh.startedAt)}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    {open ? (
+                      <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-black text-emerald-600 dark:text-emerald-400">
+                        Abierto
+                      </span>
+                    ) : (
+                      <span className="text-[10.5px] font-bold text-gray-500">
+                        {sh.durationMinutes != null ? `${sh.durationMinutes} min` : "—"}
+                      </span>
+                    )}
+                    {!open && <p className="m-0 text-[10px] text-gray-400">cerró {fmt(sh.endedAt)}</p>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {history.hasNextPage && (
+          <div className="mt-3 text-center">
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={history.isFetchingNextPage}
+              onClick={() => history.fetchNextPage()}
+            >
+              {history.isFetchingNextPage ? "Cargando…" : "Cargar más"}
+            </Button>
+          </div>
+        )}
+      </Card>
 
       <Card className="p-4">
         <div className="flex items-start gap-2">

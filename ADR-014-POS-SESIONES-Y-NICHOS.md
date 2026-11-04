@@ -278,9 +278,8 @@ allowlist de la Fase 2).
 
 **Límites**
 
-- `voidItem` sigue protegido por el **PIN de gerente** en la UI (permite que un
-  mesero llame al gerente). Endurecerlo con un token de aprobación firmado es
-  una mejora posterior, no un cambio de rol.
+- `voidItem` valida el **PIN de gerente en el servidor** (no solo en la UI), así
+  que un mesero puede pedir autorización sin que el rol habilite la anulación.
 - Cocina (KITCHEN) no opera el POS: su pantalla es `/kitchen`.
 
 ---
@@ -364,6 +363,11 @@ tenancy y se validan por dentro con el `deviceKey`.
   solicitudes de reautorización vivas.
 - `posTerminals.forceEndShift`: cierra el turno de una terminal sin revocarla
   (relevo de personal). Valida que la terminal sea de su sucursal.
+- `posTerminals.shiftHistory`: historial paginado por cursor (quién, en qué
+  terminal, inicio, fin y duración).
+- `createAuthRequest` avisa al dueño por **Telegram** con el código y el enlace
+  de aprobación (si `TELEGRAM_BOT_TOKEN` está configurado). No bloquea la
+  solicitud si el aviso falla.
 - `revoke`: además de anular sesiones, cierra cualquier turno abierto.
 
 **UI** (`/settings/terminals`, en el sidebar como “Terminales POS”)
@@ -373,6 +377,7 @@ tenancy y se validan por dentro con el `deviceKey`.
   alta, última conexión, vencimiento y **turno abierto**.
 - Acciones: “Cerrar turno” y “Revocar” (con confirmación y refresh inmediato).
 - Bloque de solicitudes pendientes con enlace directo a `/pos/auth?code=…`.
+- **Historial de turnos** con carga incremental.
 - Estado vacío con la instrucción correcta: vincular desde `/pos/link` en el
   dispositivo (el secreto nunca viaja al panel).
 
@@ -399,6 +404,24 @@ producción sin sorpresas:
    admin (opcional; la UI ya la respeta).
 6. Re-ingestar el RAG de Bunzy (script del ADR-015).
 
-Mejoras posteriores (no bloquean): aprobación de anulación con token firmado
-para que el PIN del gerente no dependa del cliente, push al admin cuando entra
-una solicitud de terminal, e historial paginado de sesiones/turnos.
+Mejoras posteriores (no bloquean): push nativo/web al admin (hoy el aviso es
+Telegram + la lista de pendientes), `apps/pos` standalone (tiene su propio
+`api/trpc` y auth), y exportar el historial de turnos a CSV.
+
+
+---
+
+## 14 · Configuración (flags) y multitenant
+
+Los flags son **globales por entorno**, no por tenant. Activar el modo terminal
+no obliga a nadie a usarlo: solo habilita la capacidad; cada negocio decide qué
+dispositivos vincula. **No hay que agregar variables por cada tenant nuevo.**
+
+| Necesidad futura | Dónde va |
+|---|---|
+¿Este negocio usa PIN de turno? | preferencia en DB por negocio/sucursal, no env |
+¿Este nicho necesita mesas/KDS? | `niches.capabilities` (ya existe) |
+¿Esta terminal está activa? | `pos_terminals` (datos) |
+
+`POS_TERMINAL_PEPPER` es opcional pero recomendable en producción **antes** de
+vincular terminales: cambiarlo después obliga a revincular los dispositivos.

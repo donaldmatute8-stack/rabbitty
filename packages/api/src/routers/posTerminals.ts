@@ -1,6 +1,6 @@
 import { z } from "zod";
 import crypto from "crypto";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt } from "drizzle-orm";
 import { router, protectedProcedure, adminOnlyProcedure, publicProcedure, posPermissionsOf, resolvePosRole } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { branches, restaurants, staff as staffTable } from "@rabbitty/database-restaurant/schema";
@@ -9,6 +9,8 @@ import {
   posTerminalSessions,
   posAuthRequests,
   posOperatorSessions,
+  ownedBusinesses,
+  users as coreUsers,
 } from "@rabbitty/database-core/schema";
 
 /**
@@ -354,6 +356,54 @@ export const posTerminalsRouter = router({
 
       console.info("[POS_AUTH_REQUEST]", JSON.stringify({ event: "created", terminalId: row.id }));
 
+      // Aviso inmediato al dueño por Telegram (canal que ya usa el ecosistema).
+      // Nunca bloquea ni rompe la solicitud si falla.
+      try {
+        const botToken = process.env.TELEGRAM_BOT_TOKEN || process.env.AUTH_TELEGRAM_BOT_TOKEN;
+        if (botToken) {
+          const [info] = await ctx.coreDb
+            .select({ name: posTerminals.name, businessId: posTerminals.businessId })
+            .from(posTerminals)
+            .where(eq(posTerminals.id, row.id))
+            .limit(1);
+          if (info?.businessId) {
+            const [biz] = await ctx.coreDb
+              .select({ ownerId: ownedBusinesses.ownerId })
+              .from(ownedBusinesses)
+              .where(eq(ownedBusinesses.id, info.businessId))
+              .limit(1);
+            const [owner] = biz?.ownerId
+              ? await ctx.coreDb
+                  .select({ telegramId: coreUsers.telegramId })
+                  .from(coreUsers)
+                  .where(eq(coreUsers.id, biz.ownerId))
+                  .limit(1)
+              : [];
+            if (owner?.telegramId) {
+              const base = process.env.NEXT_PUBLIC_APP_URL || "https://admin.rabbitty.me";
+              const url = `${base.replace(/\/$/, "")}/pos/auth?code=${code}`;
+              await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: owner.telegramId,
+                  // Texto plano a propósito: el nombre de la terminal puede traer
+                  // caracteres que rompan Markdown.
+                  text:
+                    `🔐 Solicitud de terminal POS\n\n` +
+                    `${info.name} pidió reautorización.\n` +
+                    `Código: ${code} (vence en ${AUTH_REQUEST_MINUTES} min)\n\n` +
+                    `Aprueba aquí: ${url}`,
+                  disable_web_page_preview: true,
+                }),
+              }).catch(() => undefined);
+            }
+          }
+        }
+      } catch (error) {
+        console.warn("[POS_AUTH_REQUEST] no se pudo avisar por Telegram:", error);
+      }
+
       return { code, expiresAt, reused: false };
     }),
 
@@ -524,6 +574,7 @@ export const posTerminalsRouter = router({
         const member = session ? memberById.get(session.staffId) : null;
         return {
           ...t,
+          expired: t.expiresAt ? new Date(t.expiresAt).getTime() <= now : false,
           activeOperator: session
             ? {
                 sessionId: session.id,
@@ -560,6 +611,77 @@ export const posTerminalsRouter = router({
         .where(and(eq(posOperatorSessions.terminalId, row.id), isNull(posOperatorSessions.endedAt)))
         .returning({ id: posOperatorSessions.id });
       return { closed: closed.length };
+    }),
+
+  /**
+   * Historial de turnos de la sucursal (Fase 5, paginado por cursor).
+   * Solo lectura: sirve para saber quién cobró, cuándo y en qué terminal.
+   */
+  shiftHistory: adminOnlyProcedure
+    .input(
+      z.object({
+        limit: z.number().int().min(1).max(100).optional(),
+        cursor: z.string().optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const scope = await resolveScope(ctx);
+      const limit = input.limit ?? 20;
+      const cursorDate = input.cursor ? new Date(input.cursor) : null;
+
+      const rows = await ctx.coreDb
+        .select({
+          id: posOperatorSessions.id,
+          terminalId: posOperatorSessions.terminalId,
+          terminalName: posTerminals.name,
+          staffId: posOperatorSessions.staffId,
+          startedAt: posOperatorSessions.startedAt,
+          endedAt: posOperatorSessions.endedAt,
+          expiresAt: posOperatorSessions.expiresAt,
+          lastSeenAt: posOperatorSessions.lastSeenAt,
+        })
+        .from(posOperatorSessions)
+        .innerJoin(posTerminals, eq(posOperatorSessions.terminalId, posTerminals.id))
+        .where(
+          and(
+            eq(posTerminals.branchId, scope.branchId),
+            cursorDate && !Number.isNaN(cursorDate.getTime())
+              ? lt(posOperatorSessions.startedAt, cursorDate)
+              : undefined,
+          ),
+        )
+        .orderBy(desc(posOperatorSessions.startedAt))
+        .limit(limit + 1);
+
+      const hasMore = rows.length > limit;
+      const page = hasMore ? rows.slice(0, limit) : rows;
+
+      const staffIds = Array.from(new Set(page.map((r) => r.staffId)));
+      const members = staffIds.length
+        ? await ctx.restaurantDb
+            .select({ id: staffTable.id, name: staffTable.name, role: staffTable.role })
+            .from(staffTable)
+            .where(inArray(staffTable.id, staffIds))
+        : [];
+      const memberById = new Map(members.map((m) => [m.id, m]));
+
+      const items = page.map((r) => {
+        const member = memberById.get(r.staffId);
+        const start = r.startedAt ? new Date(r.startedAt).getTime() : null;
+        const end = r.endedAt ? new Date(r.endedAt).getTime() : Date.now();
+        return {
+          ...r,
+          staffName: member?.name ?? "Empleado",
+          staffRole: member?.role ?? null,
+          durationMinutes: start ? Math.max(0, Math.round((end - start) / 60_000)) : null,
+        };
+      });
+
+      const last = page[page.length - 1];
+      return {
+        items,
+        nextCursor: hasMore && last?.startedAt ? new Date(last.startedAt).toISOString() : null,
+      };
     }),
 
   /** Aprobación (la hace el administrador; aquí valida que sea su sucursal). */
