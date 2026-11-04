@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import { trpc } from "../../../lib/trpc-client";
-import { getPosTerminalToken } from "../../../lib/pos-terminal";
+import { clearPosOperator, getPosTerminalToken } from "../../../lib/pos-terminal";
 import { PosOrderAlert } from "../../../components/PosOrderAlert";
 import { Button, Dialog, Input, toast, cn, useWakeLock } from "@rabbitty/ui";
 import { Clock, Search, Users, CreditCard, Banknote, QrCode, Split, Smartphone, Landmark, Table2, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, ClipboardCheck, Camera, History, RotateCw, ChefHat, Flame } from "lucide-react";
@@ -405,6 +405,20 @@ export default function PosPage() {
     enabled: !isTerminalDevice,
   });
   const branches = isTerminalDevice ? posSession?.branches ?? [] : branchesAdmin;
+
+  // ── Fase 3: turno del empleado ──
+  // Con turno activo, "Salir" cierra el turno (la terminal sigue autorizada).
+  const { data: operatorStatus } = trpc.posOperators.status.useQuery(undefined, {
+    retry: false,
+    enabled: isTerminalDevice,
+  });
+  const endShiftMutation = trpc.posOperators.endShift.useMutation({
+    onSettled: () => {
+      clearPosOperator();
+      toast.success("Turno cerrado. La terminal sigue autorizada.");
+      window.location.assign("/pos");
+    },
+  });
 
   // Guardar en tiempo real ante cualquier cambio (si se apaga la tablet o sale, no se pierde)
   useEffect(() => {
@@ -1538,17 +1552,24 @@ export default function PosPage() {
           <button
             type="button"
             onClick={() => {
+              // Turno abierto en terminal → salir cierra el turno, no la terminal.
+              if (operatorStatus?.active) {
+                endShiftMutation.mutate();
+                return;
+              }
               // Dentro de la ventana de gracia no se vuelve a pedir el PIN.
               if (posExitAuthorized()) { window.location.assign("/"); return; }
               setExitPin("");
               setAdminPinModal(true);
             }}
             className="flex items-center gap-2 rounded-xl bg-white/5 hover:bg-white/10 px-3 py-2 border border-white/10 text-gray-200 hover:text-white text-xs font-bold transition-all cursor-pointer shadow-sm active:scale-95 group"
-            title="Terminal Protegida: PIN de Administrador para salir al Dashboard (se recuerda 15 min)"
+            title={operatorStatus?.active
+              ? "Cerrar el turno del empleado (la terminal sigue autorizada)"
+              : "Terminal Protegida: PIN de Administrador para salir al Dashboard (se recuerda 15 min)"}
           >
             <Lock className="h-3.5 w-3.5 text-amber-400 group-hover:text-amber-300" />
             <ChevronLeft className="h-4 w-4 text-cyan-400 -ml-1" />
-            <span>Dashboard</span>
+            <span>{operatorStatus?.active ? "Terminar turno" : "Dashboard"}</span>
           </button>
 
           {/* Business & Status Pill */}

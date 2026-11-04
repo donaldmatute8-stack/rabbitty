@@ -1,6 +1,6 @@
 # ADR-014 · POS con sesión propia, Admin protegido y onboarding por nicho
 
-**Fecha:** 2026-11-04 · **Estado:** Fases 0, 1 y 2 implementadas (flag apagado) · deploy pendiente
+**Fecha:** 2026-11-04 · **Estado:** Fases 0–3 implementadas (flags apagados) · deploy pendiente
 **Contexto:** en producción. Regla: **solo cambios aditivos + feature flag** hasta validar.
 
 ---
@@ -62,7 +62,7 @@ admin, no la operación diaria.
 **0** | Catálogo de nichos + `ownedBusinesses.niche` | **nulo** (aditivo) | ✅ ya aplicado |
 **1** | `pos_terminals` + `pos_terminal_sessions` + endpoints de activación/validación | bajo | ✅ aplicado · flag `POS_TERMINAL_SESSIONS`; apagado, el POS sigue con la sesión de admin |
 **2** | POS usa la sesión de terminal (layout/route handler) | **medio** | ✅ aplicado · doble lectura (terminal **o** admin), allowlist de routers y telemetría de uso |
-**3** | PIN del empleado al iniciar turno (`pos_operator_sessions`) | bajo | opcional por sucursal |
+**3** | PIN del empleado al iniciar turno (`pos_operator_sessions`) | bajo | ✅ aplicado · flag `POS_OPERATOR_SESSIONS`; el PIN es `staff.pinCode` con lockout |
 **4** | Reautorización desde el móvil (`pos_auth_requests`) | bajo | solo recuperación |
 **5** | Pantalla de terminales (revocar, historial) | bajo | solo lectura + revocar |
 
@@ -161,8 +161,79 @@ Terminal vencida/revocada:
 
 ---
 
-## 9 · Siguiente paso
+## 9 · Fase 3 implementada (turno del empleado)
 
-Fase 3: `pos_operator_sessions` — turno del empleado con `staff.pinCode` al
-iniciar la terminal, para que quede registrado quién cobró y no solo qué
-dispositivo lo hizo.
+**Identidad en dos capas**
+
+| Capa | Qué identifica | Token |
+|---|---|---|
+Terminal | El **dispositivo** | `x-pos-terminal-token` (Fase 2) |
+Turno | La **persona** | `x-pos-operator-token` |
+
+El token de turno **solo se resuelve si antes hay terminal válida**. Robarlo no
+sirve sin el dispositivo.
+
+**Flujo**
+
+```
+/pos (terminal autorizada)
+   │  flag POS_OPERATOR_SESSIONS=1 y sin turno
+   ▼
+PosShiftGate · "Inicia tu turno" (PIN de 4 dígitos)
+   │  POST posOperators.startShift { pin }
+   ▼
+pos_operator_sessions (token 64 hex, 16 h) → POS opera
+   │
+   └─ "Terminar turno" → cierra el turno y vuelve al PIN (la terminal sigue)
+```
+
+**Endpoints** (`terminalProcedure`, solo terminal — el admin no inicia turnos)
+
+- `posOperators.status` — `required`, `active`, `operator`, `terminalName`.
+- `posOperators.staffList` — nombres/roles con PIN; nunca el hash.
+- `posOperators.startShift` — valida PIN contra `staff.pinCode` de la sucursal.
+- `posOperators.endShift` — cierra el turno (y huérfanos de esa terminal).
+
+**Seguridad**
+
+- PIN con scrypt + `timingSafeEqual` (el mismo `verifyPin` de caja).
+- Lockout por sucursal: 5 fallos → 5 minutos (`pin_attempts`).
+- Un turno abierto por terminal; al iniciar se cierran los huérfanos.
+- Turno atado a `terminalId` y a la sucursal; si el empleado se desactiva o
+  cambia de sucursal, el turno deja de resolver.
+- Vence a las 16 h (se renueva volviendo a meter el PIN).
+- `endShift` / revocación de terminal no requieren admin: el dispositivo manda.
+- Auditoría: las mutaciones con turno guardan `staffId`, `staffRole`, `terminalId`.
+- Telemetría: `lastSeenAt` (cada 5 min) y `[POS_OPERATOR] start|end`.
+
+**UI**
+
+- `PosShiftGate`: teclado numérico, puntos, mensaje de lockout, aviso si no hay
+  empleados con PIN. Se monta en el layout solo en `/pos*` (no `/kiosk`, no
+  `/pos/link`).
+- El botón "Dashboard" se convierte en "Terminar turno" cuando hay turno activo.
+
+**Pruebas hechas (local, ambos flags ON)**
+
+- `status` sin turno → `required:true, active:false`.
+- PIN incorrecto → 401; 5 fallos → 429 con mensaje de lockout.
+- PIN correcto → token + operador (nombre/rol) y `status.active:true`.
+- `pos.*` con terminal + turno → 200.
+- Token de turno **sin** terminal → 403.
+- `startShift` sin terminal → 403.
+- `endShift` → `closed:true` y `status.active:false`.
+- Logs `[POS_OPERATOR] start/end` correctos.
+
+**Límites**
+
+- El turno no cambia permisos por rol: todos los empleados con PIN operan el POS.
+  Restringir acciones por rol (mesero vs cajero) es una fase posterior.
+- `apps/pos` standalone sigue fuera de este circuito.
+
+---
+
+## 10 · Siguiente paso
+
+Fase 4: reautorización desde el móvil (`pos_auth_requests`) — el POS muestra un
+código corto y el admin lo aprueba desde su teléfono, sin escribir la clave en
+la terminal. Backend ya existe; falta la pantalla de aprobación.

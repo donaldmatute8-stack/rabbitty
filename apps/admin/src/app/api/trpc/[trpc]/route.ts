@@ -14,6 +14,12 @@ import {
   resolvePosTerminalSession,
   touchTerminalSession,
 } from "@rabbitty/api/services/posTerminalAuth";
+import {
+  isOperatorSessionsEnabled,
+  readOperatorToken,
+  resolvePosOperatorSession,
+  touchOperatorSession,
+} from "@rabbitty/api/services/posOperatorAuth";
 
 function readGodImpCookie(req: Request): string | undefined {
   return req.headers
@@ -86,6 +92,17 @@ const handler = async (req: Request) => {
               .limit(1);
             if (!terminalBranch) posTerminal = null;
           }
+        }
+      }
+
+      // ── Fase 3 · Turno del empleado (PIN) ──
+      // Solo se resuelve si YA hay terminal válida: el token de turno no sirve
+      // por sí solo (robar el turno no basta sin el dispositivo).
+      let posOperator = null;
+      if (posTerminal && isOperatorSessionsEnabled()) {
+        const operatorToken = readOperatorToken(req.headers);
+        if (operatorToken) {
+          posOperator = await resolvePosOperatorSession(coreDb, restaurantDb, operatorToken, posTerminal);
         }
       }
 
@@ -168,6 +185,9 @@ const handler = async (req: Request) => {
         // Telemetría acotada (una escritura cada 5 min por sesión).
         await touchTerminalSession(coreDb, posTerminal);
       }
+      if (posOperator) {
+        await touchOperatorSession(coreDb, posOperator);
+      }
 
       return {
         userId: effectiveUserId,
@@ -177,6 +197,14 @@ const handler = async (req: Request) => {
         restaurantDb,
         coreDb,
         branchId: activeBranchId || env.BRANCH_ID,
+        posOperator: posOperator
+          ? {
+              sessionId: posOperator.sessionId,
+              staffId: posOperator.staffId,
+              name: posOperator.name,
+              role: posOperator.role,
+            }
+          : null,
         posAuth: posTerminal
           ? {
               method: "terminal" as const,

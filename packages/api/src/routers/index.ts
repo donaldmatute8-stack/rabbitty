@@ -1,6 +1,7 @@
 import { router } from "../trpc";
 import { posRouter } from "./pos";
 import { posTerminalsRouter } from "./posTerminals";
+import { posOperatorsRouter } from "./posOperators";
 import { kdsRouter } from "./kds";
 import { adminRouter } from "./admin";
 import { staffRouter } from "./staff";
@@ -45,6 +46,7 @@ import "../services/queue";
 export const appRouter = router({
   pos: posRouter,
   posTerminals: posTerminalsRouter,
+  posOperators: posOperatorsRouter,
   kds: kdsRouter,
   admin: adminRouter,
   staff: staffRouter,

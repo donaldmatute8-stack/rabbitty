@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { trpc } from "../../lib/trpc-client";
 import { initAppLifecycleHandlers } from "../../lib/print-engine";
 import { getPosTerminalToken } from "../../lib/pos-terminal";
+import { PosShiftGate } from "../../components/PosShiftGate";
 
 export default function PosLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -49,6 +50,16 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
     retry: false,
     staleTime: 5 * 60 * 1000,
     enabled: terminalMode && !!sessionQuery.error,
+  });
+
+  // ── Fase 3: turno del empleado (solo terminal, nunca kiosk ni /pos/link) ──
+  const isKiosk = pathname.startsWith("/kiosk");
+  const operatorGate = terminalMode && !isLinkPage && !isKiosk;
+  const { data: operatorStatus, refetch: refetchOperator } = trpc.posOperators.status.useQuery(undefined, {
+    enabled: operatorGate,
+    retry: false,
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: true,
   });
 
   const isLoading = hasTerminalToken
@@ -157,6 +168,19 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
   }
 
   if (!authorized) return null;
+
+  // La terminal está autorizada pero falta identificar al empleado.
+  if (operatorGate && operatorStatus?.required === true && !operatorStatus.active) {
+    return (
+      <PosShiftGate
+        terminalName={sessionQuery.data?.terminalName ?? null}
+        branchName={sessionQuery.data?.branches?.[0]?.name ?? null}
+        onStarted={() => {
+          void refetchOperator();
+        }}
+      />
+    );
+  }
 
   return (
     <div className="relative flex h-[100dvh] w-screen overflow-hidden bg-black text-white select-none">

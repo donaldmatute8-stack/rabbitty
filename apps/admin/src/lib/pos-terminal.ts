@@ -17,6 +17,8 @@
 const TOKEN_KEY = "rabbitty_pos_terminal_token";
 const DEVICE_KEY = "rabbitty_pos_device_key";
 const INFO_KEY = "rabbitty_pos_terminal_info";
+const OPERATOR_TOKEN_KEY = "rabbitty_pos_operator_token";
+const OPERATOR_INFO_KEY = "rabbitty_pos_operator_info";
 
 export interface PosTerminalInfo {
   terminalId: string;
@@ -89,4 +91,43 @@ export function getOrCreateDeviceKey(): string {
   }
   safeSet(DEVICE_KEY, key);
   return key;
+}
+
+// ── Turno del empleado (Fase 3) ─────────────────────────────────────────────
+
+export interface PosOperatorInfo {
+  staffId: string;
+  name: string;
+  role: string;
+  expiresAt?: string | null;
+}
+
+export function getPosOperatorToken(): string | null {
+  const token = safeGet(OPERATOR_TOKEN_KEY);
+  return token && /^[a-f0-9]{64}$/i.test(token) ? token : null;
+}
+
+export function getPosOperatorInfo(): PosOperatorInfo | null {
+  const raw = safeGet(OPERATOR_INFO_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as PosOperatorInfo;
+  } catch {
+    return null;
+  }
+}
+
+export function savePosOperator(token: string, info: PosOperatorInfo): void {
+  safeSet(OPERATOR_TOKEN_KEY, token);
+  safeSet(OPERATOR_INFO_KEY, JSON.stringify(info));
+}
+
+export function clearPosOperator(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(OPERATOR_TOKEN_KEY);
+    window.localStorage.removeItem(OPERATOR_INFO_KEY);
+  } catch {
+    /* nada que limpiar */
+  }
 }

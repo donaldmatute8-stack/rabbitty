@@ -533,6 +533,8 @@ export const posOperatorSessions = pgTable("pos_operator_sessions", {
   startedAt: timestamp("startedAt").defaultNow(),
   lastSeenAt: timestamp("lastSeenAt").defaultNow(),
   endedAt: timestamp("endedAt"),
+  /** Fin máximo del turno (se renueva al volver a meter el PIN). */
+  expiresAt: timestamp("expiresAt"),
 });
 
 /** Nivel C (recuperación): solicitud de reautorización aprobada desde el móvil. */

@@ -28,6 +28,16 @@ export interface Context {
     businessId?: string | null;
     terminalName?: string;
   };
+  /**
+   * Turno del empleado sobre la terminal (Fase 3). Solo existe si hay terminal
+   * válida y un token de turno vigente; identifica a la PERSONA que opera.
+   */
+  posOperator?: {
+    sessionId: string;
+    staffId: string;
+    name: string;
+    role: string;
+  } | null;
 }
 
 export const t = initTRPC.context<Context>().create();
@@ -53,7 +63,16 @@ const auditMiddleware = t.middleware(async ({ ctx, path, type, next }) => {
       action: path,
       resource: path.split(".")[0] ?? "unknown",
       resourceId: null,
-      details: null,
+      // Con turno de empleado, la auditoría dice QUIÉN operó, no solo qué
+      // dispositivo lo hizo. Sin turno se conserva el detalle actual (null).
+      details: ctx.posOperator
+        ? {
+            staffId: ctx.posOperator.staffId,
+            staffRole: ctx.posOperator.role,
+            terminalId: ctx.posAuth?.terminalId ?? null,
+            via: "pos_operator",
+          }
+        : null,
     });
   }
   return result;
@@ -115,6 +134,24 @@ export const posProcedure = t.procedure
       return next({ ctx });
     }
     throw new TRPCError({ code: "UNAUTHORIZED" });
+  });
+
+/**
+ * ── Solo terminal POS (Fase 3) ──
+ * Para operaciones que exigen un dispositivo vinculado (turno del empleado).
+ * El admin no puede iniciar turnos desde el panel.
+ */
+export const terminalProcedure = t.procedure
+  .use(rateLimitMiddleware)
+  .use(auditMiddleware)
+  .use(({ ctx, next }) => {
+    if (ctx.posAuth?.method !== "terminal") {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "Se requiere una terminal POS autorizada",
+      });
+    }
+    return next({ ctx });
   });
 
 // Platform-level functions: only owners (no staff role) may call.
