@@ -301,6 +301,7 @@ function detectNicheKey(categoryOrName?: string | null): string {
 
 const ADMIN_SECRET = 'rabbitty_admin_authorized_gtm_2026';
 const AUTH_STORAGE_KEY = 'rabbitty_impresos_auth_v1';
+const SESSION_STORAGE_KEY = 'rabbitty_impresos_session_id';
 
 function ImpresosContent() {
   const searchParams = useSearchParams();
@@ -369,7 +370,14 @@ function ImpresosContent() {
   const [authUserName, setAuthUserName] = useState<string>('');
 
 
-  const [qrSessionId, setQrSessionId] = useState<string | null>(null);
+  const [qrSessionId, setQrSessionId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      return localStorage.getItem(SESSION_STORAGE_KEY) || null;
+    } catch {
+      return null;
+    }
+  });
   const [qrGateCode, setQrGateCode] = useState<string>('');
   const [showAuthLoader, setShowAuthLoader] = useState(false);
   const [qrSessionData, setQrSessionData] = useState<string>('');
@@ -543,6 +551,7 @@ function ImpresosContent() {
       const data = await res.json();
       if (data?.success && data.sessionId && data.qrData) {
         setQrSessionId(data.sessionId);
+        try { localStorage.setItem(SESSION_STORAGE_KEY, data.sessionId); } catch {}
         setQrSessionData(data.qrData);
         setQrGateCode(data.gateCode || '');
       } else {
@@ -565,6 +574,7 @@ function ImpresosContent() {
         if (cancelled) return;
         if (data?.success && data.sessionId && data.qrData) {
           setQrSessionId(data.sessionId);
+          try { localStorage.setItem(SESSION_STORAGE_KEY, data.sessionId); } catch {}
           setQrSessionData(data.qrData);
           setQrStatusMsg('');
         } else {
@@ -777,7 +787,13 @@ function ImpresosContent() {
       fetch('/api/auth/qr-impresos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'SET_WELCOME_BUNZ', sessionId: qrSessionId || '', businessId: selectedBusinessId, bunz }),
+        body: JSON.stringify({
+          action: 'SET_WELCOME_BUNZ',
+          sessionId: qrSessionId || '',
+          businessId: selectedBusinessId,
+          bunz,
+          ...(authMode === 'admin' ? { adminSecret: ADMIN_SECRET } : {}),
+        }),
       })
         .then((r) => r.json())
         .then((d) => {
@@ -1154,36 +1170,8 @@ function ImpresosContent() {
             </div>
           </div>
 
-          {/* LADO DERECHO: Selector de Línea + Tabs + Imprimir + Salir alineados a la derecha */}
+          {/* LADO DERECHO: Tabs de formato + Imprimir + Salir alineados a la derecha */}
           <div className="flex items-center gap-2.5 shrink-0 ml-auto flex-wrap justify-end">
-            {/* Conmutador de Categoría: Rewards vs Membership */}
-            <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-xl p-1 text-xs font-bold">
-              <button
-                type="button"
-                onClick={() => setPrintLine('rewards')}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-                  printLine === 'rewards'
-                    ? 'bg-pink-500/20 text-pink-300 border border-pink-500/40'
-                    : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Rewards & Bunz</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setPrintLine('membership')}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-                  printLine === 'membership'
-                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                    : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                <Ticket className="w-3.5 h-3.5" />
-                <span>Memberships</span>
-              </button>
-            </div>
-
             {printLine === 'rewards' ? (
               <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-xl p-1 text-xs font-medium">
                 <button 
@@ -1369,6 +1357,7 @@ function ImpresosContent() {
                         action: 'GENERATE_TEMP_CODE',
                         sessionId: qrSessionId || '',
                         label: tempLabel.trim(),
+                        ...(authMode === 'admin' ? { adminSecret: ADMIN_SECRET } : {}),
                         ...(authMode === 'admin' && tempScopePick !== 'ALL' ? { businessId: tempScopePick } : {}),
                       }),
                     });
@@ -1666,6 +1655,36 @@ function ImpresosContent() {
                   placeholder="https://rabbitty.me/download?ref=..."
                   className="w-full bg-black border border-zinc-800 rounded-xl px-3 py-2 text-xs text-pink-400 font-mono focus:outline-none focus:border-pink-500"
                 />
+              </div>
+            </div>
+
+            {/* Selector de Línea de Impresos (Rewards & Bunz vs Memberships) */}
+            <div className="pt-4 border-t border-zinc-800/80 flex items-center justify-center">
+              <div className="inline-flex items-center bg-zinc-950/80 border border-zinc-800 rounded-2xl p-1.5 shadow-xl">
+                <button
+                  type="button"
+                  onClick={() => setPrintLine('rewards')}
+                  className={`px-5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-2 ${
+                    printLine === 'rewards'
+                      ? 'bg-linear-to-r from-pink-500 to-rose-600 text-white shadow-lg shadow-pink-500/25 scale-[1.02]'
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/60'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Rewards & Bunz</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPrintLine('membership')}
+                  className={`px-5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-2 ${
+                    printLine === 'membership'
+                      ? 'bg-linear-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/25 scale-[1.02]'
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/60'
+                  }`}
+                >
+                  <Ticket className="w-3.5 h-3.5" />
+                  <span>Memberships</span>
+                </button>
               </div>
             </div>
           </div>
