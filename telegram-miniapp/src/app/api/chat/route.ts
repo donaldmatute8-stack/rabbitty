@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { conversations, messages, users, ownedBusinesses } from '@/db/schema';
+import { conversations, messages, users, ownedBusinesses, conversationMembers } from '@/db/schema';
 import { eq, or, desc, and, inArray, isNull, notInArray } from 'drizzle-orm';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 
@@ -19,6 +19,17 @@ export async function GET(req: Request) {
 
     const myBusinessIds = myBusinesses.map((b) => b.id);
 
+    // ── Grupos donde participo (yo o uno de mis negocios) ──
+    const myIdentities = [userId, ...myBusinessIds];
+    let myGroupIds: string[] = [];
+    try {
+      const rows = await db
+        .select({ conversationId: conversationMembers.conversationId })
+        .from(conversationMembers)
+        .where(and(inArray(conversationMembers.userId, myIdentities), isNull(conversationMembers.leftAt)));
+      myGroupIds = rows.map((r) => r.conversationId);
+    } catch { myGroupIds = []; }
+
     const userConversations = await db.query.conversations.findMany({
       where: or(
         eq(conversations.participant1, userId),
@@ -26,6 +37,7 @@ export async function GET(req: Request) {
         ...(myBusinessIds.length > 0
           ? [or(...myBusinessIds.map((bId) => or(eq(conversations.participant1, bId), eq(conversations.participant2, bId))))]
           : []),
+        ...(myGroupIds.length > 0 ? [inArray(conversations.id, myGroupIds)] : []),
       ),
       with: {
         messages: {
@@ -85,6 +97,10 @@ export async function GET(req: Request) {
         let otherName = 'Usuario';
         let otherAvatar: string | null = null;
         let isBot = false;
+
+        if ((conv.kind ?? 'DIRECT') === 'GROUP') {
+          otherName = conv.name || 'Grupo';
+        }
 
         if (otherId === 'bot') {
           otherName = 'Bunzy 🐰';

@@ -3,7 +3,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { conversations, messages, messageReactions, messageHides } from '@/db/schema';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
-import { getOwnedBusinessIds, resolveConversationAccess } from '@/lib/chat';
+import { getOwnedBusinessIds, resolveAccessForConversation } from '@/lib/chat';
 import { enqueueChatEvent, kickChatOutbox } from '@/lib/realtime/chatOutbox';
 
 export const runtime = 'nodejs';
@@ -22,7 +22,7 @@ async function loadMessage(id: string, callerId: string) {
   const [conv] = await db.select().from(conversations).where(eq(conversations.id, msg.conversationId)).limit(1);
   if (!conv) return { error: 'NOT_FOUND' as const };
   const businessIds = await getOwnedBusinessIds(callerId);
-  const access = resolveConversationAccess(conv, callerId, businessIds);
+  const access = await resolveAccessForConversation(conv, callerId, businessIds);
   if (!access) return { error: 'FORBIDDEN' as const };
   return { msg, access };
 }

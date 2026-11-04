@@ -3,7 +3,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { conversations, messages } from '@/db/schema';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
-import { getOwnedBusinessIds, resolveConversationAccess } from '@/lib/chat';
+import { getOwnedBusinessIds, resolveAccessForConversation } from '@/lib/chat';
 import { deleteObject, keyBelongsToConversation } from '@/lib/media/storage';
 
 export const runtime = 'nodejs';
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     if (!conv) return NextResponse.json({ success: false, error: 'No encontrado' }, { status: 404 });
 
     const businessIds = await getOwnedBusinessIds(caller.id);
-    const access = resolveConversationAccess(conv, caller.id, businessIds);
+    const access = await resolveAccessForConversation(conv, caller.id, businessIds);
     if (!access) return NextResponse.json({ success: false, error: 'Sin acceso' }, { status: 403 });
 
     // Marca viewedAt en el mensaje (jsonb) — solo si aún no estaba vista.

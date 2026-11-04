@@ -244,6 +244,9 @@ export const conversations = pgTable("conversations", {
   // PEER     = entre Rabbitters (privacidad primero: E2E en fase posterior).
   kind: text("kind").default("DIRECT").notNull(),
   audience: text("audience").default("BUSINESS").notNull(),
+  // Solo para GROUP: nombre y avatar del grupo (NULL en DIRECT).
+  name: text("name"),
+  avatarUrl: text("avatarUrl"),
   id: id(),
   participant1: text("participant1").notNull(),
   participant2: text("participant2").notNull(),

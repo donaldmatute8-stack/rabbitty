@@ -11,6 +11,7 @@ import useSWR from 'swr';
 import { BusinessCardSkeleton } from '@/components/ui/Skeleton';
 import PullToRefresh from '@/components/ui/PullToRefresh';
 import { PlatformBridge } from '@/lib/platform';
+import { CreateGroupSheet } from '@/components/chat/CreateGroupSheet';
 import { useConvPrefs, setPref, setOrder, type ConvPref } from '@/lib/convPrefs';
 import {
   SquarePen,
@@ -147,6 +148,13 @@ export default function ChatInboxPage() {
   );
 
   const [activeTab, setActiveTab] = useState<BottomDockTab>('chats');
+  // ── Crear grupo (Rabbiter ↔ Rabbitter) ──
+  const [groupOpen, setGroupOpen] = useState(false);
+  const [groupName, setGroupName] = useState('');
+  const [groupQuery, setGroupQuery] = useState('');
+  const [groupCandidates, setGroupCandidates] = useState<Array<{ id: string; name: string; username?: string | null }>>([]);
+  const [groupMembers, setGroupMembers] = useState<string[]>([]);
+  const [creatingGroup, setCreatingGroup] = useState(false);
   const [archived, setArchived] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [revealed, setRevealed] = useState<string | null>(null);
@@ -605,6 +613,17 @@ export default function ChatInboxPage() {
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-(--bg-primary) text-(--text-primary) select-none">
+      <CreateGroupSheet open={groupOpen} onClose={() => setGroupOpen(false)} />
+      <button
+        type="button"
+        onClick={() => { PlatformBridge.hapticFeedback('medium'); setGroupOpen(true); }}
+        aria-label="Crear grupo"
+        title="Nuevo grupo de Rabbitters"
+        className="fixed right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full text-white shadow-lg active:scale-95 transition-transform"
+        style={{ bottom: 'calc(env(safe-area-inset-bottom,0px) + 86px)', background: 'linear-gradient(135deg,#FF2E93,#E11D74)' }}
+      >
+        <span style={{ fontSize: 22, lineHeight: 1 }}>＋</span>
+      </button>
       {/* 1. Lateral Vertical Docker (Empuja contenido) */}
       <AnimatePresence>
         {drawerOpen && dockerOrientation === 'vertical' && (

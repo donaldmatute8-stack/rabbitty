@@ -1,6 +1,6 @@
 import { db } from '@/db';
-import { users, ownedBusinesses } from '@/db/schema';
-import { eq, or } from 'drizzle-orm';
+import { users, ownedBusinesses, conversationMembers } from '@/db/schema';
+import { and, eq, inArray, isNull, or } from 'drizzle-orm';
 import { sendEcosystemNotification } from '@/lib/push/notify';
 
 export type TypingColumn = 'participant1TypingAt' | 'participant2TypingAt';
@@ -62,6 +62,52 @@ export function resolveConversationAccess(
     };
   }
   return null;
+}
+
+/**
+ * ── Acceso a una conversación (soporta GRUPOS) ──
+ *
+ * DIRECT: delega en `resolveConversationAccess` (misma lógica de siempre).
+ * GROUP:  autoriza por `conversation_members` (el userId o uno de sus negocios
+ *         debe ser miembro activo). `myParticipantId` es la identidad usada.
+ *
+ * Es async a propósito: solo los grupos pagan la consulta extra.
+ */
+export async function resolveAccessForConversation(
+  conv: { id: string; participant1: string; participant2: string; kind?: string | null; audience?: string | null },
+  userId: string,
+  businessIds: string[],
+): Promise<ConversationAccess | null> {
+  if ((conv.kind ?? 'DIRECT') !== 'GROUP') {
+    return resolveConversationAccess(conv, userId, businessIds);
+  }
+
+  const identities = [userId, ...businessIds.filter(Boolean)];
+  if (identities.length === 0) return null;
+
+  try {
+    const [member] = await db
+      .select({ userId: conversationMembers.userId })
+      .from(conversationMembers)
+      .where(and(
+        eq(conversationMembers.conversationId, conv.id),
+        inArray(conversationMembers.userId, identities),
+        isNull(conversationMembers.leftAt),
+      ))
+      .limit(1);
+    if (!member) return null;
+
+    return {
+      myParticipantId: member.userId,
+      // En un grupo no hay "el otro": el consumidor debe usar la lista de miembros.
+      otherParticipantId: '',
+      myTypingColumn: 'participant1TypingAt',
+      otherTypingColumn: 'participant2TypingAt',
+      isBusinessInbox: conv.audience === 'BUSINESS' && businessIds.includes(member.userId),
+    };
+  } catch {
+    return null;
+  }
 }
 
 export function typingPatch(access: ConversationAccess): Partial<Record<TypingColumn, Date>> {

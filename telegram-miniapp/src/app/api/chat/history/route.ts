@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { messageReactions, messageHides } from '@/db/schema';
+import { messageReactions, messageHides, conversationMembers } from '@/db/schema';
 import { conversations, messages, users, ownedBusinesses } from '@/db/schema';
 import { and, eq, inArray, isNull, ne, or, asc, desc, sql, type SQL } from 'drizzle-orm';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
-import { getOwnedBusinessIds, resolveConversationAccess, isBusinessOpen } from '@/lib/chat';
+import { getOwnedBusinessIds, resolveAccessForConversation, isBusinessOpen } from '@/lib/chat';
 import { decodeChatCursor, encodeChatCursor } from '@/lib/chatCursor';
 
 export async function GET(req: Request) {
@@ -39,7 +39,31 @@ export async function GET(req: Request) {
       });
     }
 
-    let access = conversation ? resolveConversationAccess(conversation, userId, businessIds) : null;
+    // ── Grupos: el cliente navega a /chat/<groupId>. Si el target ES un grupo
+    // del que soy miembro, se usa esa conversación (nunca crear un DM consigo).
+    if (!conversation && targetId) {
+      try {
+        const [grp] = await db
+          .select()
+          .from(conversations)
+          .where(and(eq(conversations.id, targetId), eq(conversations.kind, 'GROUP')))
+          .limit(1);
+        if (grp) {
+          const [member] = await db
+            .select({ id: conversationMembers.id })
+            .from(conversationMembers)
+            .where(and(
+              eq(conversationMembers.conversationId, grp.id),
+              inArray(conversationMembers.userId, myIds),
+              isNull(conversationMembers.leftAt),
+            ))
+            .limit(1);
+          if (member) conversation = grp;
+        }
+      } catch { /* sin grupos */ }
+    }
+
+    let access = conversation ? await resolveAccessForConversation(conversation, userId, businessIds) : null;
 
     if (conversation && !access) {
       return NextResponse.json({ error: 'Sin acceso a esta conversación' }, { status: 403 });
@@ -55,7 +79,7 @@ export async function GET(req: Request) {
         .values({ participant1: userId, participant2: targetId })
         .returning();
       conversation = newConversation;
-      access = resolveConversationAccess(newConversation, userId, businessIds);
+      access = await resolveAccessForConversation(newConversation, userId, businessIds);
       createdNow = true;
     }
 

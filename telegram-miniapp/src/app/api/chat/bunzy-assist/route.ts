@@ -3,7 +3,7 @@ import { db } from '@/db';
 import { messages, conversations } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
-import { getOwnedBusinessIds, resolveConversationAccess, resolveTelegramRecipient } from '@/lib/chat';
+import { getOwnedBusinessIds, resolveAccessForConversation, resolveTelegramRecipient } from '@/lib/chat';
 import { generateBunzyAssist } from '@/lib/bunzy';
 import { checkRateLimit } from '@/lib/rateLimit';
 
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
     }
 
     const businessIds = await getOwnedBusinessIds(caller.id);
-    const access = resolveConversationAccess(conversation, caller.id, businessIds);
+    const access = await resolveAccessForConversation(conversation, caller.id, businessIds);
     if (!access) {
       return NextResponse.json({ error: 'Sin acceso a esta conversación' }, { status: 403 });
     }

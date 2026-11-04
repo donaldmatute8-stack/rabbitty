@@ -4,7 +4,7 @@ import { conversations, messages, notifications } from '@/db/schema';
 import { and, eq, isNull, ne, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
-import { getOwnedBusinessIds, resolveConversationAccess } from '@/lib/chat';
+import { getOwnedBusinessIds, resolveAccessForConversation } from '@/lib/chat';
 
 export const runtime = 'nodejs';
 
@@ -104,7 +104,7 @@ async function resolveConversationAuth({
   }
   if (!conversation) return null;
 
-  const access = resolveConversationAccess(conversation, userId, businessIds);
+  const access = await resolveAccessForConversation(conversation, userId, businessIds);
   if (!access) return null;
 
   const otherId = access.otherParticipantId;

@@ -3,7 +3,7 @@ import { db } from '@/db';
 import { conversations } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
-import { getOwnedBusinessIds, resolveConversationAccess, typingPatch } from '@/lib/chat';
+import { getOwnedBusinessIds, resolveAccessForConversation, typingPatch } from '@/lib/chat';
 import { isRealtimePublishConfigured, publishTyping } from '@/lib/realtime/chatOutbox';
 
 export async function POST(req: Request) {
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
     }
 
     const businessIds = await getOwnedBusinessIds(caller.id);
-    const access = resolveConversationAccess(conversation, caller.id, businessIds);
+    const access = await resolveAccessForConversation(conversation, caller.id, businessIds);
     if (!access) {
       return NextResponse.json({ error: 'Sin acceso' }, { status: 403 });
     }
