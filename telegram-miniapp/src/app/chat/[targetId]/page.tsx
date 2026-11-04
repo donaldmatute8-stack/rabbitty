@@ -1844,7 +1844,9 @@ export default function ChatRoomPage() {
   );
 
   // ── Fotos (con "ver una vez") ──
-  const [photoViewOnce, setPhotoViewOnce] = useState(false);
+  // Borrador de foto: se elige, se previsualiza y AHÍ se decide "una vez".
+  // Por defecto va normal (como WhatsApp).
+  const [photoDraft, setPhotoDraft] = useState<{ file: File; url: string; viewOnce: boolean } | null>(null);
   const [viewOnceUnlocked, setViewOnceUnlocked] = useState<Record<string, boolean>>({});
   const photoInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -1870,10 +1872,22 @@ export default function ChatRoomPage() {
     }
   };
 
-  const pickPhoto = async (file: File | null) => {
-    if (!file || !conversationId || sending) return;
-    const viewOnce = photoViewOnce;
-    setPhotoViewOnce(false);
+  const pickPhoto = (file: File | null) => {
+    if (!file || !conversationId) return;
+    PlatformBridge.hapticFeedback('light');
+    setPhotoDraft({ file, url: URL.createObjectURL(file), viewOnce: false });
+  };
+
+  const discardPhotoDraft = () => {
+    if (photoDraft?.url) { try { URL.revokeObjectURL(photoDraft.url); } catch { /* noop */ } }
+    setPhotoDraft(null);
+  };
+
+  const sendPhotoDraft = async () => {
+    if (!photoDraft || !conversationId || sending) return;
+    const viewOnce = photoDraft.viewOnce;
+    const file = photoDraft.file;
+    discardPhotoDraft();
     PlatformBridge.hapticFeedback('medium');
     setSending(true);
     try {
@@ -3101,6 +3115,72 @@ export default function ChatRoomPage() {
           </div>
         )}
 
+        {/* Vista previa de la foto: aquí se elige "una vez" (por defecto normal) */}
+        {photoDraft && (
+          <div
+            style={{
+              position: 'fixed', inset: 0, zIndex: 70,
+              background: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(6px)',
+              display: 'flex', flexDirection: 'column',
+            }}
+          >
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18, minHeight: 0 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={photoDraft.url}
+                alt="Vista previa"
+                style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 18, objectFit: 'contain' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 14px calc(14px + env(safe-area-inset-bottom, 0px))', borderTop: '1px solid rgba(255,255,255,0.1)', background: 'rgba(10,10,12,0.9)' }}>
+              <button
+                type="button"
+                onClick={() => setPhotoDraft({ ...photoDraft, viewOnce: !photoDraft.viewOnce })}
+                title="Ver una sola vez"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, height: 40, padding: '0 12px',
+                  borderRadius: 999, cursor: 'pointer', fontSize: 12, fontWeight: 800,
+                  color: '#fff',
+                  border: photoDraft.viewOnce ? '1px solid rgba(255,46,147,0.8)' : '1px solid rgba(255,255,255,0.2)',
+                  background: photoDraft.viewOnce ? 'rgba(233,30,99,0.28)' : 'rgba(255,255,255,0.06)',
+                }}
+              >
+                <span style={{ fontSize: 14 }}>{photoDraft.viewOnce ? '🔒' : '1'}</span>
+                {photoDraft.viewOnce ? 'Una vez' : 'Ver una vez'}
+              </button>
+
+              <div style={{ flex: 1 }} />
+
+              <button
+                type="button"
+                onClick={discardPhotoDraft}
+                style={{
+                  height: 40, padding: '0 16px', borderRadius: 999, cursor: 'pointer',
+                  fontSize: 13, fontWeight: 800, color: 'rgba(255,255,255,0.8)',
+                  background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void sendPhotoDraft()}
+                disabled={sending}
+                style={{
+                  height: 40, padding: '0 20px', borderRadius: 999,
+                  cursor: sending ? 'not-allowed' : 'pointer',
+                  fontSize: 13, fontWeight: 900, color: '#fff',
+                  background: sending ? 'rgba(28,28,34,0.9)' : 'linear-gradient(135deg,#FF2E93,#E11D74)',
+                  border: 'none', boxShadow: sending ? 'none' : '0 4px 14px rgba(233,30,99,0.4)',
+                }}
+              >
+                {sending ? 'Enviando…' : 'Enviar'}
+              </button>
+            </div>
+          </div>
+        )}
+
         {!selectMode && !recording && (
           <form onSubmit={handleSend} style={{ display: 'flex', gap: '7px', alignItems: 'center' }}>
             {/* Botón asistente Bunzy integrado en la fila de Telegram (píldora sin teclado, círculo con teclado) */}
@@ -3235,7 +3315,7 @@ export default function ChatRoomPage() {
               </button>
             ) : (
               <>
-              {/* Fotos: normal y de una sola vista */}
+              {/* Fotos: un botón; el "una vez" se elige en la vista previa */}
               <input
                 ref={photoInputRef}
                 type="file"
@@ -3244,12 +3324,12 @@ export default function ChatRoomPage() {
                 onChange={(e) => {
                   const file = e.target.files?.[0] ?? null;
                   e.currentTarget.value = '';
-                  void pickPhoto(file);
+                  pickPhoto(file);
                 }}
               />
               <button
                 type="button"
-                onClick={() => { setPhotoViewOnce(false); photoInputRef.current?.click(); }}
+                onClick={() => photoInputRef.current?.click()}
                 disabled={sending}
                 title="Enviar foto"
                 aria-label="Enviar foto"
@@ -3263,23 +3343,6 @@ export default function ChatRoomPage() {
                 }}
               >
                 📷
-              </button>
-              <button
-                type="button"
-                onClick={() => { setPhotoViewOnce(true); photoInputRef.current?.click(); }}
-                disabled={sending}
-                title="Foto de una sola vista (se borra al abrirla)"
-                aria-label="Foto de una sola vista"
-                style={{
-                  width: 36, height: 36, background: photoViewOnce ? 'rgba(233,30,99,0.25)' : 'rgba(28, 28, 34, 0.88)',
-                  color: 'rgba(255, 255, 255, 0.82)', borderRadius: '50%',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  cursor: sending ? 'not-allowed' : 'pointer', flexShrink: 0,
-                  fontSize: 15,
-                }}
-              >
-                🔒
               </button>
               <button
                 type="button"
