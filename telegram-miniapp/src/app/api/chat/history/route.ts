@@ -285,6 +285,7 @@ export async function GET(req: Request) {
       success: true,
       conversationId: conversation.id,
       kind: conversation.kind ?? 'DIRECT',
+      e2eKeyVersion: conversation.e2eKeyVersion ?? 1,
       audience: conversation.audience ?? 'BUSINESS',
       group: groupInfo,
       myParticipantId: access.myParticipantId,

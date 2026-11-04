@@ -22,8 +22,12 @@ export async function ensureConversationKey(
   me: StoredIdentity,
   myUserId: string,
   peerUserIds: string[],
+  keyVersion = 1,
 ): Promise<CryptoKey | null> {
-  const hit = cache.get(conversationId);
+  // La versión forma parte de la caché: al cambiar miembros se re-clavea y la
+  // entrada vieja deja de usarse.
+  const cacheKey = `${conversationId}:${keyVersion}`;
+  const hit = cache.get(cacheKey);
   if (hit) return hit;
 
   try {
@@ -39,7 +43,7 @@ export async function ensureConversationKey(
 
     if (mine?.wrappedKey) {
       const key = await unwrapConversationKey(String(mine.wrappedKey), me.privateKey);
-      cache.set(conversationId, key);
+      cache.set(cacheKey, key);
       return key;
     }
 
@@ -80,10 +84,10 @@ export async function ensureConversationKey(
     await fetch('/api/chat/e2e/conversation-keys', {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ conversationId, entries }),
+      body: JSON.stringify({ conversationId, entries, keyVersion }),
     });
 
-    cache.set(conversationId, key);
+    cache.set(cacheKey, key);
     return key;
   } catch (err) {
     console.warn('[E2E] no se pudo preparar la clave de conversación:', err);

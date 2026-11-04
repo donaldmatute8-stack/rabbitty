@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { conversations, conversationMembers } from '@/db/schema';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
@@ -93,6 +93,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         .update(conversationMembers)
         .set({ leftAt: new Date() })
         .where(and(eq(conversationMembers.conversationId, id), inArray(conversationMembers.userId, remove)));
+      // Re-clave: quien sale no debe poder leer lo NUEVO aunque guarde la clave vieja.
+      await db
+        .update(conversations)
+        .set({ e2eKeyVersion: sql`coalesce(${conversations.e2eKeyVersion}, 1) + 1` })
+        .where(eq(conversations.id, id));
     }
 
     return NextResponse.json({ success: true, added: add.length, removed: remove.length });
@@ -111,11 +116,15 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const me = await membershipOf(id, caller.id);
     if (!me) return NextResponse.json({ success: false, error: 'Sin acceso' }, { status: 403 });
 
-    // Salir = marcar leftAt (el historial de los demás no se toca).
+    // Salir = marcar leftAt (el historial de los demás no se toca) + re-clave.
     await db
       .update(conversationMembers)
       .set({ leftAt: new Date() })
       .where(and(eq(conversationMembers.conversationId, id), eq(conversationMembers.userId, caller.id)));
+    await db
+      .update(conversations)
+      .set({ e2eKeyVersion: sql`coalesce(${conversations.e2eKeyVersion}, 1) + 1` })
+      .where(eq(conversations.id, id));
 
     return NextResponse.json({ success: true, left: true });
   } catch (error) {

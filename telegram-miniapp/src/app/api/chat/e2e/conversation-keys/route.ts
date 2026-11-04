@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { conversations, conversationKeys, ownedBusinesses } from '@/db/schema';
+import { conversations, conversationKeys, conversationMembers } from '@/db/schema';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 import { getOwnedBusinessIds, resolveAccessForConversation } from '@/lib/chat';
 
 export const runtime = 'nodejs';
+
+function conv_keyVersionFallback(conv: { e2eKeyVersion?: number | null }): number {
+  return Number(conv.e2eKeyVersion ?? 1) || 1;
+}
 
 const MAX_ENTRIES = 40;
 
@@ -36,12 +40,21 @@ export async function POST(req: NextRequest) {
     const [conv] = await db.select().from(conversations).where(eq(conversations.id, conversationId)).limit(1);
     if (!conv) return NextResponse.json({ success: false, error: 'Conversación no encontrada' }, { status: 404 });
 
+    const keyVersion = Number((body as { keyVersion?: number } | null)?.keyVersion) || conv_keyVersionFallback(conv);
+
     const businessIds = await getOwnedBusinessIds(caller.id);
     const access = await resolveAccessForConversation(conv, caller.id, businessIds);
     if (!access) return NextResponse.json({ success: false, error: 'Sin acceso' }, { status: 403 });
 
-    // Solo se aceptan sobre para participantes reales del chat.
+    // Destinatarios válidos: participantes del 1:1 o MIEMBROS ACTIVOS del grupo.
     const participants = new Set([conv.participant1, conv.participant2].filter(Boolean));
+    if (conv.kind === 'GROUP') {
+      const members = await db
+        .select({ userId: conversationMembers.userId })
+        .from(conversationMembers)
+        .where(and(eq(conversationMembers.conversationId, conv.id), isNull(conversationMembers.leftAt)));
+      for (const m of members) participants.add(m.userId);
+    }
     const clean = entries
       .filter((e) => typeof e?.recipientDeviceId === 'string' && e.recipientDeviceId.length > 0 && e.recipientDeviceId.length <= 80)
       .filter((e) => typeof e?.wrappedKey === 'string' && e.wrappedKey.length > 0 && e.wrappedKey.length <= 2000)
@@ -57,9 +70,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Ningún sobre válido' }, { status: 400 });
     }
 
-    await db.insert(conversationKeys).values(clean).onConflictDoNothing();
+    // Si es una re-clave (versión nueva), se reemplazan los sobres viejos.
+    if (keyVersion > (conv.e2eKeyVersion ?? 1)) {
+      await db.update(conversations).set({ e2eKeyVersion: keyVersion }).where(eq(conversations.id, conv.id));
+    }
+    await db
+      .insert(conversationKeys)
+      .values(clean.map((c) => ({ ...c, keyVersion })))
+      .onConflictDoUpdate({
+        target: [conversationKeys.conversationId, conversationKeys.recipientDeviceId],
+        set: { wrappedKey: sql`excluded."wrappedKey"`, keyVersion: sql`excluded."keyVersion"` },
+      });
 
-    return NextResponse.json({ success: true, stored: clean.length });
+    return NextResponse.json({ success: true, stored: clean.length, keyVersion });
   } catch (error) {
     console.error('[E2E CONV KEYS POST]', error);
     return NextResponse.json({ success: false, error: 'No se pudieron guardar las claves' }, { status: 500 });
@@ -90,7 +113,7 @@ export async function GET(req: NextRequest) {
     if (!access) return NextResponse.json({ success: false, error: 'Sin acceso' }, { status: 403 });
 
     const [row] = await db
-      .select({ wrappedKey: conversationKeys.wrappedKey })
+      .select({ wrappedKey: conversationKeys.wrappedKey, keyVersion: conversationKeys.keyVersion })
       .from(conversationKeys)
       .where(and(
         eq(conversationKeys.conversationId, conversationId),
@@ -99,7 +122,12 @@ export async function GET(req: NextRequest) {
       ))
       .limit(1);
 
-    return NextResponse.json({ success: true, wrappedKey: row?.wrappedKey ?? null });
+    return NextResponse.json({
+      success: true,
+      wrappedKey: row?.wrappedKey ?? null,
+      keyVersion: row?.keyVersion ?? conv.e2eKeyVersion ?? 1,
+      currentVersion: conv.e2eKeyVersion ?? 1,
+    });
   } catch (error) {
     console.error('[E2E CONV KEYS GET]', error);
     return NextResponse.json({ success: false, error: 'No se pudo leer la clave' }, { status: 500 });

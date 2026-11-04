@@ -107,6 +107,7 @@ interface HistoryResponse {
   kind?: 'DIRECT' | 'GROUP';
   audience?: 'BUSINESS' | 'PEER';
   group?: { name: string | null; members: Array<{ userId: string; name: string; role: string }> } | null;
+  e2eKeyVersion?: number;
   myParticipantId?: string;
   isBusinessInbox?: boolean;
   targetName?: string;
@@ -602,6 +603,7 @@ export default function ChatRoomPage() {
   const [chatAudience, setChatAudience] = useState<'BUSINESS' | 'PEER'>('BUSINESS');
   // ── E2E (solo DIRECT + PEER) ──
   const [e2eKey, setE2eKey] = useState<CryptoKey | null>(null);
+  const [e2eVersion, setE2eVersion] = useState(1);
   const decryptedIds = useRef<Set<string>>(new Set());
   // Media E2E ya descifrada (msgId → blob URL)
   const [e2eMedia, setE2eMedia] = useState<Record<string, string>>({});
@@ -856,6 +858,7 @@ export default function ChatRoomPage() {
       if (data.targetName) setTargetName(data.targetName);
       if (data.kind === 'GROUP' || data.kind === 'DIRECT') setChatKind(data.kind);
       if (data.audience === 'PEER' || data.audience === 'BUSINESS') setChatAudience(data.audience);
+      if (typeof data.e2eKeyVersion === 'number') setE2eVersion(data.e2eKeyVersion);
       if (data.group !== undefined) {
         setGroupInfo(data.group ?? null);
         if (data.group?.name) setTargetName(data.group.name);
@@ -1602,22 +1605,37 @@ export default function ChatRoomPage() {
 
   // ── E2E: preparar identidad + clave de conversación (solo DIRECT + PEER) ──
   useEffect(() => {
-    if (chatKind !== 'DIRECT' || chatAudience !== 'PEER') { setE2eKey(null); return; }
+    if (chatAudience !== 'PEER') { setE2eKey(null); return; }
+    if (chatKind !== 'DIRECT' && chatKind !== 'GROUP') { setE2eKey(null); return; }
+
     const convId = typeof conversationId === 'string' ? conversationId : null;
-    const peer = typeof targetId === 'string' ? targetId : null;
     const myId = user?.id;
-    if (!convId || !peer || !myId || !/^[0-9a-f-]{36}$/i.test(peer)) return;
+    if (!convId || !myId) return;
+
+    // DIRECT → el otro usuario. GROUP → todos los miembros activos.
+    let peers: string[] = [];
+    if (chatKind === 'DIRECT') {
+      const peer = typeof targetId === 'string' ? targetId : null;
+      if (!peer || !/^[0-9a-f-]{36}$/i.test(peer)) return;
+      peers = [peer];
+    } else {
+      peers = (groupInfo?.members ?? [])
+        .map((m) => m.userId)
+        .filter((id) => id !== myId && /^[0-9a-f-]{36}$/i.test(id));
+      if (peers.length === 0) return;
+    }
+
     let alive = true;
     (async () => {
       try {
         const me = await ensureIdentity();
         if (!alive || !me) return;
-        const key = await ensureConversationKey(convId, me, myId, [peer]);
+        const key = await ensureConversationKey(convId, me, myId, peers, e2eVersion);
         if (alive && key) setE2eKey(key);
       } catch { /* sin cifrado: se mantiene en claro */ }
     })();
     return () => { alive = false; };
-  }, [chatKind, chatAudience, conversationId, targetId, user?.id]);
+  }, [chatKind, chatAudience, conversationId, targetId, user?.id, groupInfo, e2eVersion]);
 
   // ── E2E: descifrar lo que llega cifrado (una vez por mensaje) ──
   useEffect(() => {

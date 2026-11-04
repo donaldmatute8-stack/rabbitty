@@ -247,6 +247,8 @@ export const conversations = pgTable("conversations", {
   // Solo para GROUP: nombre y avatar del grupo (NULL en DIRECT).
   name: text("name"),
   avatarUrl: text("avatarUrl"),
+  // Versión de la clave E2E: sube al cambiar miembros ⇒ se regenera la clave.
+  e2eKeyVersion: integer("e2eKeyVersion").default(1).notNull(),
   id: id(),
   participant1: text("participant1").notNull(),
   participant2: text("participant2").notNull(),
@@ -307,6 +309,8 @@ export const conversationKeys = pgTable("conversation_keys", {
   recipientUserId: uuid("recipientUserId").notNull(),
   recipientDeviceId: text("recipientDeviceId").notNull(),
   wrappedKey: text("wrappedKey").notNull(),
+  // Versión del sobre: al cambiar miembros del grupo se re-clavea.
+  keyVersion: integer("keyVersion").default(1).notNull(),
   createdAt: timestamp("createdAt").defaultNow(),
 }, (table) => [
   uniqueIndex("conversation_keys_uq").on(table.conversationId, table.recipientDeviceId),
