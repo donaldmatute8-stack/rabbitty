@@ -6,6 +6,22 @@ import { Store, MapPin, Percent, UploadCloud, ChevronRight, ChevronLeft, HelpCir
 import { useRouter } from 'next/navigation';
 import BunzGuide from './BunzGuide';
 
+import { NichePicker } from './NichePicker';
+/** Paso 0: el nicho define la categoría operativa (y por tanto los rangos). */
+const NICHE_TO_CATEGORY: Record<string, string> = {
+  restaurant: 'Restaurante',
+  cafe: 'Cafetería',
+  bar: 'Bar',
+  bakery: 'Cafetería',
+  pizza: 'Restaurante',
+  tacos: 'Restaurante',
+  barbershop: 'Belleza y Spa',
+  fitness: 'Gimnasio',
+  retail: 'Tienda de Ropa',
+  services: 'Servicios de Salud',
+  other: 'Restaurante',
+};
+
 const NICHE_WELCOME_RANGES: Record<string, { label: string; min: number; max: number }> = {
   'Cafetería': { label: 'Cafetería / Specialty Coffee', min: 25, max: 35 },
   'Restaurante': { label: 'Restaurante Casual / Bistró', min: 25, max: 50 },
@@ -55,6 +71,9 @@ const PACKAGES = [
 export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetupFormProps) {
   const router = useRouter();
   const [step, setStep] = useState(0); // 0 = Welcome, 1 = Basic Info, 2 = Rewards, 3 = Package, 4 = Confirm
+  // ── Paso 0: nicho (obligatorio antes de todo) ──
+  const [niche, setNiche] = useState<string | null>(null);
+  const [nicheDraft, setNicheDraft] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   // Step 1
@@ -153,6 +172,7 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
     onSubmit({
       name,
       category,
+      niche,
       address: isVirtual ? 'Negocio Virtual' : address,
       rewardPercentage,
       gallery: logoBase64 ? [logoBase64] : [],
@@ -181,6 +201,24 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
       },
     });
   };
+
+  // ── PASO 0: elegir nicho antes de cualquier otra cosa ──
+  // Define los módulos del negocio (mesas, cocina, citas…) y la categoría
+  // operativa. Añadir un nicho nuevo NO requiere tocar este formulario.
+  if (!niche) {
+    return (
+      <NichePicker
+        value={nicheDraft}
+        onSelect={setNicheDraft}
+        onContinue={() => {
+          if (!nicheDraft) return;
+          setNiche(nicheDraft);
+          setCategory(NICHE_TO_CATEGORY[nicheDraft] ?? 'Restaurante');
+        }}
+        submitLabel="Continuar"
+      />
+    );
+  }
 
   return (
     <div style={{ position: 'fixed', inset: 0, backgroundColor: '#111', color: '#fff', zIndex: 100, display: 'flex', flexDirection: 'column', fontFamily: "var(--font-family-base)", overflowY: 'auto' }}>
