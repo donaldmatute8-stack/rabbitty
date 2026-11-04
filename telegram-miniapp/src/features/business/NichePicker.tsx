@@ -119,14 +119,14 @@ export function NichePicker({
 
   useEffect(() => {
     let alive = true;
-    fetch('/api/niches', { cache: 'force-cache' })
+    fetch('/api/niches', { cache: 'no-store' })
       .then((r) => r.json())
       .then((d) => { if (alive && d?.success && Array.isArray(d.niches)) setOptions(d.niches.filter((n: NicheOption) => n.id !== 'other')); })
       .catch(() => { /* sin catálogo: se ve el estado vacío */ })
       .finally(() => { if (alive) setLoading(false); });
 
     // Nichos conocidos pero aún no soportados: solo para sugerir en el formulario.
-    fetch('/api/niches?all=1', { cache: 'force-cache' })
+    fetch('/api/niches?all=1', { cache: 'no-store' })
       .then((r) => r.json())
       .then((d) => {
         if (alive && d?.success && Array.isArray(d.niches)) {

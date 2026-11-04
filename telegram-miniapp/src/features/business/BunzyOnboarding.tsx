@@ -88,7 +88,9 @@ export function BunzyOnboarding({ niche, step = 0, businessName, customMessage }
 
   const message = useMemo(() => {
     if (customMessage) return customMessage;
-    const base = niche ? NICHE_LINE[niche] : 'Soy Bunzy, tu copiloto. Empecemos por el tipo de negocio.';
+    const base = niche
+      ? (NICHE_LINE[niche] ?? 'Vamos a configurar tu negocio paso a paso.')
+      : 'Soy Bunzy, tu copiloto. Empecemos por el tipo de negocio.';
     const tail = STEP_LINE[step] ?? '';
     const greet = businessName ? `${businessName}: ` : '';
     return `${greet}${base}${tail ? ` ${tail}` : ''}`;

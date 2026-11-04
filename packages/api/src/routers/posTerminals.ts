@@ -746,12 +746,29 @@ export const posTerminalsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const scope = await resolveScope(ctx);
       const [req] = await ctx.coreDb
-        .select({ id: posAuthRequests.id, terminalId: posAuthRequests.terminalId, status: posAuthRequests.status, hours: posAuthRequests.requestedHours })
+        .select({
+          id: posAuthRequests.id,
+          terminalId: posAuthRequests.terminalId,
+          status: posAuthRequests.status,
+          hours: posAuthRequests.requestedHours,
+          expiresAt: posAuthRequests.expiresAt,
+        })
         .from(posAuthRequests)
         .where(eq(posAuthRequests.code, input.code))
         .limit(1);
       if (!req) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitud no encontrada" });
       if (req.status !== "PENDING") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "La solicitud ya fue resuelta" });
+      // Un código vencido no puede aprobarse: la terminal ya dejó de esperar.
+      if (new Date(req.expiresAt).getTime() <= Date.now()) {
+        await ctx.coreDb
+          .update(posAuthRequests)
+          .set({ status: "EXPIRED" })
+          .where(eq(posAuthRequests.id, req.id));
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "El código venció. La terminal debe generar uno nuevo.",
+        });
+      }
 
       const [terminal] = await ctx.coreDb
         .select({ id: posTerminals.id, branchId: posTerminals.branchId })

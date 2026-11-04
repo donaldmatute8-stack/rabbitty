@@ -24,6 +24,8 @@ export function PosReauthPanel({ terminalName }: { terminalName?: string | null 
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [error, setError] = useState("");
 
+  const utils = trpc.useUtils();
+
   const createRequest = trpc.posTerminals.createAuthRequest.useMutation({
     onSuccess: (data) => {
       setCode(data.code);
@@ -41,8 +43,23 @@ export function PosReauthPanel({ terminalName }: { terminalName?: string | null 
   );
 
   const issueSession = trpc.posTerminals.issueSession.useMutation({
-    onSuccess: (data) => {
-      const info = getPosTerminalInfo();
+    onSuccess: async (data) => {
+      // Tras aprobar, `status` ya devuelve la terminal con su id real. Sin esto,
+      // una revinculación podía guardar terminalId vacío y romper la revocación.
+      let info = getPosTerminalInfo();
+      try {
+        const current = await utils.posTerminals.status.fetch({ deviceKey });
+        if (current.authorized) {
+          info = {
+            terminalId: current.terminalId,
+            name: current.name,
+            branchId: current.branchId ?? null,
+          };
+        }
+      } catch {
+        /* si falla, conservamos la info local */
+      }
+
       savePosTerminal(data.sessionToken, {
         terminalId: info?.terminalId ?? "",
         name: info?.name ?? terminalName ?? "Terminal",

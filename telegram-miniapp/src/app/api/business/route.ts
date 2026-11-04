@@ -63,6 +63,17 @@ export async function PATCH(req: Request) {
     if (description !== undefined) updateFields.description = String(description).trim();
     if (address !== undefined) updateFields.address = String(address).trim();
     if (category !== undefined) updateFields.category = String(category).trim();
+    if (body.niche !== undefined) {
+      const nextNiche = String(body.niche || '').trim();
+      if (nextNiche) {
+        const [validNiche] = await db
+          .select({ id: niches.id })
+          .from(niches)
+          .where(eq(niches.id, nextNiche))
+          .limit(1);
+        if (validNiche) updateFields.niche = nextNiche;
+      }
+    }
     if (logoUrl !== undefined) updateFields.logoUrl = String(logoUrl).trim();
     if (creditLimit !== undefined && caller.role === 'ADMIN') updateFields.creditLimit = parseInt(creditLimit);
     if (creditUsed !== undefined && caller.role === 'ADMIN') updateFields.creditUsed = parseInt(creditUsed);
@@ -251,20 +262,31 @@ export async function POST(req: Request) {
     // lo manda, se deriva de la categoría; si tampoco, 'other'.
     let niche = typeof body.niche === 'string' ? body.niche.trim() : '';
     if (niche) {
-      const [valid] = await db.query.niches.findMany({ where: eq(niches.id, niche), limit: 1 });
+      const [valid] = await db
+        .select({ id: niches.id })
+        .from(niches)
+        .where(eq(niches.id, niche))
+        .limit(1);
       if (!valid) niche = '';
     }
     if (!niche) {
+      // Derivación conservadora por categoría. OJO: el orden importa.
+      // Antes "barbería" caía en 'bar' y "restaurante" en 'barbershop' por el
+      // includes('est'); ahora se usan patrones específicos.
       const cat = String(category || '').toLowerCase();
-      niche =
-        cat.includes('caf') ? 'cafe'
-        : cat.includes('bar') ? 'bar'
-        : cat.includes('pizz') ? 'pizza'
-        : cat.includes('taco') || cat.includes('mexic') ? 'tacos'
-        : cat.includes('barber') || cat.includes('est') ? 'barbershop'
-        : cat.includes('fit') || cat.includes('gym') ? 'fitness'
-        : cat.includes('restaur') ? 'restaurant'
-        : 'other';
+      const rules: Array<[RegExp, string]> = [
+        [/caf|coffee/, 'cafe'],
+        [/barber|est[eé]tic|spa|sal[oó]n/, 'barbershop'],
+        [/pizz/, 'pizza'],
+        [/taco|antojit|mexic/, 'tacos'],
+        [/panader|pasteler|postre|bakery/, 'bakery'],
+        [/bar|cantina|mixolog|taproom/, 'bar'],
+        [/fit|gym|gimnasio|crossfit/, 'fitness'],
+        [/restaurant|restaurante|bistr/, 'restaurant'],
+        [/tienda|retail|boutique|ropa/, 'retail'],
+        [/servic|salud|cl[ií]nic|consultor/, 'services'],
+      ];
+      niche = rules.find(([re]) => re.test(cat))?.[1] ?? 'other';
     }
 
     const [business] = await db.insert(ownedBusinesses).values({
@@ -274,6 +296,8 @@ export async function POST(req: Request) {
       description,
       category,
       niche,
+      // El alta desde la miniapp ya ES el onboarding: no se repite en el admin.
+      onboardingCompletedAt: new Date(),
       address,
       lat,
       lng,

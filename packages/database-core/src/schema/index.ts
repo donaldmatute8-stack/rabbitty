@@ -87,6 +87,8 @@ export const ownedBusinesses = pgTable("ownedBusinesses", {
   category: text("category").notNull(),
   // Paso 0: nicho del negocio (restaurant, cafe, barber, fitness…).
   niche: text("niche"),
+  /** Re-onboarding de tenants existentes (NULL = pendiente de revisar). */
+  onboardingCompletedAt: timestamp("onboardingCompletedAt"),
   description: text("description"),
   address: text("address").notNull(),
   lat: real("lat").notNull(),

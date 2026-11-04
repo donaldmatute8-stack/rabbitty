@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@rabbitty/auth";
 import { DashboardClientWrapper } from "../../components/DashboardClientWrapper";
+import { OnboardingGate } from "../../components/OnboardingGate";
 import { getEnv } from "@/env";
 import { isGodAdminIdentity, verifyGod2faCookieValue, GOD_2FA_COOKIE } from "@rabbitty/api/services/god2fa";
 
@@ -26,7 +27,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <DashboardClientWrapper>
-      {children}
+      <OnboardingGate>{children}</OnboardingGate>
     </DashboardClientWrapper>
   );
 }

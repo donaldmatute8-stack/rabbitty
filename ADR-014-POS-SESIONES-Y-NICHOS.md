@@ -1,6 +1,6 @@
 # ADR-014 · POS con sesión propia, Admin protegido y onboarding por nicho
 
-**Fecha:** 2026-11-04 · **Estado:** Fases 0–5 implementadas (flags apagados) · deploy pendiente
+**Fecha:** 2026-11-04 · **Estado:** Fases 0–5 + re-onboarding (flags apagados) · deploy pendiente
 **Contexto:** en producción. Regla: **solo cambios aditivos + feature flag** hasta validar.
 
 ---
@@ -443,3 +443,68 @@ vincular terminales: cambiarlo después obliga a revincular los dispositivos.
 |---|---|
 `RABBITTY_MINIAPP_URL` | `https://app.rabbitty.me` |
 `PUSH_SEND_SECRET` | **el mismo** que tiene el proyecto mobile en Vercel |
+
+
+---
+
+## 15 · Re-onboarding de tenants existentes
+
+Los negocios que ya operan no pasaron por el onboarding nuevo (nicho, copy de
+Bunzy, módulos). En lugar de pedirles datos otra vez, se les muestra **una vez**
+una pantalla con lo que YA tienen inyectado.
+
+**Modelo**
+
+- `ownedBusinesses.onboardingCompletedAt` (migración `0044`, nullable).
+- `NULL` + `status` `APPROVED`/`VERIFIED` → pendiente de revisar.
+- Las altas nuevas desde la miniapp se marcan completas al crear el negocio
+  (ya hicieron su onboarding).
+- El staff no se redirige; el God Admin sin negocio tampoco.
+
+**Flujo**
+
+```
+Login al admin (dueño)
+   │  OnboardingGate consulta admin.onboardingStatus
+   ▼
+/onboarding
+   · "Tu negocio ya está listo"
+   · resumen: sucursales, personal y platillos detectados
+   · confirma el giro (prellenado con su nicho actual)
+   · "Confirmar y entrar" / "Saltar por ahora"
+   ▼
+completeOnboarding → guarda nicho (si cambió) + timestamp
+   ▼
+Dashboard (y checklist de Preparación reiniciado, con pasos ya detectados)
+```
+
+**Endpoints**
+
+| Endpoint | Qué hace |
+|---|---|
+`admin.onboardingStatus` | `pending` + negocio + conteos de lo inyectado |
+`admin.onboardingNiches` | catálogo activo de nichos |
+`admin.completeOnboarding` | valida el nicho, actualiza y marca completado |
+
+**Repetirlo a propósito** (solo el negocio que quieras):
+
+```sql
+UPDATE "ownedBusinesses"
+SET "onboardingCompletedAt" = NULL
+WHERE id = '<businessId>';
+```
+
+---
+
+## 16 · Auditoría final (gaps cerrados)
+
+| Gap | Corrección |
+|---|---|
+Solicitud de reautorización vencida podía aprobarse | `resolveAuthRequest` la marca `EXPIRED` y rechaza |
+Derivación de nicho por categoría: “Barbería” → `bar` y “Restaurante” → `barbershop` | reglas regex específicas y orden correcto |
+`PATCH /api/business` no aceptaba `niche` | validado contra el catálogo y actualizado |
+Solicitud de un giro **activo** | se rechaza con “ya está disponible, selecciónalo en la lista” |
+Dedupe de solicitudes distinguía mayúsculas | comparación `ilike` |
+Tras reautorizar, el dispositivo podía guardar `terminalId` vacío | se consulta `status` y se guarda el id real |
+Catálogo de nichos cacheado indefinidamente en la miniapp | `cache: 'no-store'` |
+Bunzy con un nicho sin copy mostraba “undefined” | fallback de copy |

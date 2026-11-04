@@ -1,15 +1,61 @@
 import { z } from "zod";
-import { and, eq, inArray, gte, lt, sql, desc } from "drizzle-orm";
-import { router, protectedProcedure, adminOnlyProcedure, platformOnlyProcedure, godAdminProcedure, resolveBranchId, resolveRestaurantId } from "../trpc";
+import { and, asc, eq, inArray, gte, lt, sql, desc } from "drizzle-orm";
+import { router, protectedProcedure, adminOnlyProcedure, platformOnlyProcedure, godAdminProcedure, resolveBranchId, resolveRestaurantId, type Context } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { ledgerEntries as ledgerEntries2, branches as dbSchemaBranches, restaurants as dbSchemaRestaurants } from "@rabbitty/database-restaurant/schema";
 import { bus, EventTypes } from "@rabbitty/events";
 import { restaurants, branches, orders, tables, staff, ledgerEntries, menuCategories, menuItems } from "@rabbitty/database-restaurant/schema";
-import { referrals, users, levels, ownedBusinesses, transactions, treasury, systemSettings, auditEntries, webSessions } from "@rabbitty/database-core";
+import { referrals, users, levels, ownedBusinesses, transactions, treasury, systemSettings, auditEntries, webSessions, niches } from "@rabbitty/database-core";
 import { customers } from "@rabbitty/database-restaurant/schema";
 import { miniappClient } from "../services/miniapp-client";
 import * as cheerio from "cheerio";
+/**
+ * Resuelve el negocio del dueño para el re-onboarding: primero por la sucursal
+ * en contexto (restaurante → businessId) y, si no, por ownerId. NUNCA usa datos
+ * de otro tenant.
+ */
+async function resolveOwnerBusinessForOnboarding(ctx: Context) {
+  let restaurantId: string | null = null;
+  let businessId: string | null = null;
+
+  const [branch] = await ctx.restaurantDb
+    .select({ restaurantId: branches.restaurantId })
+    .from(branches)
+    .where(eq(branches.id, ctx.branchId))
+    .limit(1);
+  restaurantId = branch?.restaurantId ?? null;
+
+  if (restaurantId) {
+    const [rest] = await ctx.restaurantDb
+      .select({ businessId: restaurants.businessId })
+      .from(restaurants)
+      .where(eq(restaurants.id, restaurantId))
+      .limit(1);
+    businessId = rest?.businessId ?? null;
+  }
+
+  if (!businessId && ctx.userId) {
+    const [own] = await ctx.coreDb
+      .select({ id: ownedBusinesses.id })
+      .from(ownedBusinesses)
+      .where(eq(ownedBusinesses.ownerId, ctx.userId))
+      .limit(1);
+    businessId = own?.id ?? null;
+  }
+
+  if (!businessId) return null;
+
+  const [business] = await ctx.coreDb
+    .select()
+    .from(ownedBusinesses)
+    .where(eq(ownedBusinesses.id, businessId))
+    .limit(1);
+  if (!business) return null;
+
+  return { business, restaurantId };
+}
+
 export const adminRouter = router({
   getProfile: protectedProcedure.query(async ({ ctx }) => {
     return {
@@ -18,6 +64,96 @@ export const adminRouter = router({
       branchId: ctx.staffBranchId,
     };
   }),
+
+  /**
+   * ── Re-onboarding de tenants existentes ──
+   * Devuelve si el dueño debe revisar su alta y un resumen de lo que YA tiene
+   * inyectado (sucursales, personal, menú). No expone datos de otros negocios.
+   */
+  onboardingStatus: protectedProcedure.query(async ({ ctx }) => {
+    // El staff no re-hace el onboarding del dueño.
+    if (ctx.staffRole) return { pending: false as const, business: null, counts: null };
+
+    const found = await resolveOwnerBusinessForOnboarding(ctx);
+    if (!found) return { pending: false as const, business: null, counts: null };
+
+    const status = String(found.business.status);
+    const eligible = status === "APPROVED" || status === "VERIFIED";
+    const pending = eligible && !found.business.onboardingCompletedAt;
+
+    let counts: { branches: number; staff: number; menu: number } | null = null;
+    if (pending) {
+      const [branchRows, staffRows, menuRows] = await Promise.all([
+        found.restaurantId
+          ? ctx.restaurantDb
+              .select({ id: branches.id })
+              .from(branches)
+              .where(and(eq(branches.restaurantId, found.restaurantId), eq(branches.isActive, true)))
+          : Promise.resolve([]),
+        ctx.restaurantDb.select({ id: staff.id }).from(staff).where(eq(staff.branchId, ctx.branchId)),
+        ctx.restaurantDb.select({ id: menuItems.id }).from(menuItems).where(eq(menuItems.branchId, ctx.branchId)),
+      ]);
+      counts = { branches: branchRows.length, staff: staffRows.length, menu: menuRows.length };
+    }
+
+    return {
+      pending,
+      business: {
+        id: found.business.id,
+        name: found.business.name,
+        niche: found.business.niche,
+        category: found.business.category,
+        status,
+      },
+      counts,
+    };
+  }),
+
+  /** Catálogo de nichos activos para confirmar el giro en el re-onboarding. */
+  onboardingNiches: protectedProcedure.query(async ({ ctx }) =>
+    ctx.coreDb
+      .select({
+        id: niches.id,
+        name: niches.name,
+        icon: niches.icon,
+        description: niches.description,
+      })
+      .from(niches)
+      .where(eq(niches.isActive, true))
+      .orderBy(asc(niches.order)),
+  ),
+
+  /** Marca el re-onboarding como completado (opcionalmente actualiza el nicho). */
+  completeOnboarding: protectedProcedure
+    .input(z.object({ niche: z.string().max(40).optional() }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.staffRole) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Solo el propietario puede completar el onboarding" });
+      }
+      const found = await resolveOwnerBusinessForOnboarding(ctx);
+      if (!found) throw new TRPCError({ code: "NOT_FOUND", message: "No encontramos tu negocio" });
+
+      const nextNiche = input.niche?.trim() || null;
+      if (nextNiche) {
+        const [valid] = await ctx.coreDb
+          .select({ id: niches.id })
+          .from(niches)
+          .where(and(eq(niches.id, nextNiche), eq(niches.isActive, true)))
+          .limit(1);
+        if (!valid) throw new TRPCError({ code: "BAD_REQUEST", message: "Elige un giro válido" });
+      }
+
+      await ctx.coreDb
+        .update(ownedBusinesses)
+        .set({
+          ...(nextNiche ? { niche: nextNiche } : {}),
+          onboardingCompletedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(ownedBusinesses.id, found.business.id));
+
+      return { success: true, niche: nextNiche ?? found.business.niche };
+    }),
 
   getPendingBusinesses: godAdminProcedure.query(async ({ ctx }) => {
     const list = await ctx.coreDb

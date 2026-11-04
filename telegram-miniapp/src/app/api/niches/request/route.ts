@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { and, eq, gte } from 'drizzle-orm';
+import { and, eq, gte, ilike } from 'drizzle-orm';
 import { db } from '@/db';
 import { nicheRequests, niches } from '@/db/schema';
 import { sendEmail } from '@/lib/email';
@@ -95,11 +95,15 @@ export async function POST(request: Request) {
     let nicheLabel = providedLabel;
     if (providedId) {
       const [row] = await db
-        .select({ id: niches.id, name: niches.name })
+        .select({ id: niches.id, name: niches.name, isActive: niches.isActive })
         .from(niches)
         .where(eq(niches.id, providedId))
         .limit(1);
       if (row) {
+        // Si el giro ya está disponible no es una solicitud: es un error de UI.
+        if (row.isActive) {
+          return bad('Ese giro ya está disponible. Selecciónalo en la lista.');
+        }
         nicheLabel = row.name;
       } else {
         nicheId = null;
@@ -123,7 +127,7 @@ export async function POST(request: Request) {
       .where(
         and(
           eq(nicheRequests.email, email),
-          eq(nicheRequests.nicheLabel, nicheLabel),
+          ilike(nicheRequests.nicheLabel, nicheLabel),
           gte(nicheRequests.createdAt, since),
         ),
       )
