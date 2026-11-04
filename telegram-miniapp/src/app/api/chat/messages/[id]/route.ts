@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { conversations, messages, messageReactions } from '@/db/schema';
+import { conversations, messages, messageReactions, messageHides } from '@/db/schema';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 import { getOwnedBusinessIds, resolveConversationAccess } from '@/lib/chat';
 import { enqueueChatEvent, kickChatOutbox } from '@/lib/realtime/chatOutbox';
@@ -9,6 +9,10 @@ import { enqueueChatEvent, kickChatOutbox } from '@/lib/realtime/chatOutbox';
 export const runtime = 'nodejs';
 
 const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 h, igual que las reseñas
+// "Eliminar para todos" solo dentro de esta ventana (tipo WhatsApp). Después de
+// esto solo queda "eliminar para mí". 1 hora: en un chat de negocio el mensaje
+// ya se leyó y borrarlo para el otro pierde contexto.
+const DELETE_FOR_ALL_WINDOW_MS = 60 * 60 * 1000;
 const MAX_LEN = 4000;
 
 /** Carga el mensaje + valida que el caller pertenezca a la conversación. */
@@ -101,8 +105,25 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     }
     const { msg, access } = loaded;
 
-    if (forEveryone && msg.senderId !== access.myParticipantId) {
+    // ── "Eliminar para mí": oculta solo para quien lo pide ──
+    if (!forEveryone) {
+      await db
+        .insert(messageHides)
+        .values({ messageId: id, userId: access.myParticipantId })
+        .onConflictDoNothing({ target: [messageHides.messageId, messageHides.userId] });
+      return NextResponse.json({ success: true, forEveryone: false });
+    }
+
+    // ── "Eliminar para todos": autor + dentro de la ventana ──
+    if (msg.senderId !== access.myParticipantId) {
       return NextResponse.json({ success: false, error: 'Solo puedes eliminar para todos tus propios mensajes' }, { status: 403 });
+    }
+    const createdAtMs = msg.createdAt ? new Date(msg.createdAt).getTime() : 0;
+    if (!createdAtMs || Date.now() - createdAtMs > DELETE_FOR_ALL_WINDOW_MS) {
+      return NextResponse.json(
+        { success: false, code: 'WINDOW_CLOSED', error: 'Ya pasó la hora: solo puedes eliminarlo para ti' },
+        { status: 400 },
+      );
     }
 
     await db

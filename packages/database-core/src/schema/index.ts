@@ -222,6 +222,21 @@ export const messageReactions = pgTable("message_reactions", {
   index("message_reactions_msg_idx").on(table.messageId),
 ]);
 
+/**
+ * ── "Eliminar para mí" ── ocultamiento por usuario.
+ * No borra ni modifica el mensaje del otro lado: solo lo esconde para quien lo
+ * pide (o cuando ya pasó la ventana de "eliminar para todos").
+ */
+export const messageHides = pgTable("message_hides", {
+  id: id(),
+  messageId: uuid("messageId").notNull(),
+  userId: uuid("userId").notNull(),
+  hiddenAt: timestamp("hiddenAt").defaultNow(),
+}, (table) => [
+  uniqueIndex("message_hides_uq").on(table.messageId, table.userId),
+  index("message_hides_user_idx").on(table.userId),
+]);
+
 export const conversations = pgTable("conversations", {
   id: id(),
   participant1: text("participant1").notNull(),

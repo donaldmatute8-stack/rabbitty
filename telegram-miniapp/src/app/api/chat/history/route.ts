@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { messageReactions } from '@/db/schema';
+import { messageReactions, messageHides } from '@/db/schema';
 import { conversations, messages, users, ownedBusinesses } from '@/db/schema';
 import { and, eq, inArray, isNull, ne, or, asc, desc, sql, type SQL } from 'drizzle-orm';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
@@ -165,6 +165,21 @@ export async function GET(req: Request) {
       hasMore = rows.length > LIMIT;
       history = rows.slice(0, LIMIT).reverse();
     }
+
+    // ── "Eliminar para mí": esos mensajes no existen para este usuario ──
+    try {
+      const idsForHides = history.map((m) => m.id);
+      if (idsForHides.length > 0) {
+        const hideRows = await db
+          .select({ messageId: messageHides.messageId })
+          .from(messageHides)
+          .where(and(inArray(messageHides.messageId, idsForHides), eq(messageHides.userId, access.myParticipantId)));
+        if (hideRows.length > 0) {
+          const hidden = new Set(hideRows.map((r) => r.messageId));
+          history = history.filter((m) => !hidden.has(m.id));
+        }
+      }
+    } catch { /* si falla, se muestran (mejor que perder mensajes) */ }
 
     const latestMessage = history.length > 0 ? history[history.length - 1] : null;
     const nextCursor = latestMessage

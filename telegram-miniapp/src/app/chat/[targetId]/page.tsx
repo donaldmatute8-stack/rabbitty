@@ -1853,6 +1853,7 @@ export default function ChatRoomPage() {
   const [photoDraft, setPhotoDraft] = useState<{ file: File; url: string; viewOnce: boolean } | null>(null);
   // Menú de acciones por mensaje (reaccionar / editar / eliminar)
   const [msgMenu, setMsgMenu] = useState<Message | null>(null);
+  const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [editingMsg, setEditingMsg] = useState<{ id: string; content: string } | null>(null);
   const [viewOnceUnlocked, setViewOnceUnlocked] = useState<Record<string, boolean>>({});
   const photoInputRef = useRef<HTMLInputElement | null>(null);
@@ -1988,18 +1989,33 @@ export default function ChatRoomPage() {
     setEditingMsg(null);
   };
 
-  const deleteMessage = async (msg: Message) => {
+  // Ventana para eliminar "para todos" (1 h). Después solo "para mí".
+  const DELETE_FOR_ALL_MS = 60 * 60 * 1000;
+  const canDeleteForAll = (msg: Message) => {
+    if (msg.senderId !== (myParticipantId || user?.id)) return false;
+    const ts = msg.createdAt ? Date.parse(msg.createdAt) : NaN;
+    if (!Number.isFinite(ts)) return false;
+    return Date.now() - ts <= DELETE_FOR_ALL_MS;
+  };
+
+  const deleteMessage = async (msg: Message, forEveryone: boolean) => {
     try {
       const headers = await PlatformBridge.getAuthHeaders();
       const res = await fetch(`/api/chat/messages/${msg.id}`, {
         method: 'DELETE',
         headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ forEveryone: true }),
+        body: JSON.stringify({ forEveryone }),
       });
       const data = await res.json().catch(() => null);
       if (data?.success) {
-        setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, content: '', type: 'DELETED', metadata: null } : m)));
-        showToast('Mensaje eliminado', 'success');
+        setMessages((prev) =>
+          forEveryone
+            // "Para todos": el mensaje queda visible como eliminado.
+            ? prev.map((m) => (m.id === msg.id ? { ...m, content: '', type: 'DELETED', metadata: null } : m))
+            // "Para mí": desaparece de MI vista (el otro no se entera).
+            : prev.filter((m) => m.id !== msg.id),
+        );
+        showToast(forEveryone ? 'Mensaje eliminado para todos' : 'Eliminado solo para ti', 'success');
       } else {
         showToast(data?.error || 'No se pudo eliminar', 'error');
       }
@@ -2957,6 +2973,20 @@ export default function ChatRoomPage() {
                     return null;
                   })()}
                   <div style={{ fontSize: '16px', lineHeight: '1.34', wordBreak: 'break-word' }}>
+                    <div
+                      onTouchStart={() => {
+                        if (isBot) return;
+                        if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
+                        pressTimerRef.current = setTimeout(() => {
+                          pressTimerRef.current = null;
+                          PlatformBridge.hapticFeedback('medium');
+                          setMsgMenu(msg);
+                        }, 450);
+                      }}
+                      onTouchEnd={() => { if (pressTimerRef.current) { clearTimeout(pressTimerRef.current); pressTimerRef.current = null; } }}
+                      onTouchMove={() => { if (pressTimerRef.current) { clearTimeout(pressTimerRef.current); pressTimerRef.current = null; } }}
+                      onContextMenu={(e) => { if (isBot) return; e.preventDefault(); setMsgMenu(msg); }}
+                    >
                     {renderContent(msg, isMe)}
                     {Array.isArray(msg.reactions) && msg.reactions.length > 0 && (
                       <span style={{ display: 'inline-flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
@@ -2994,22 +3024,10 @@ export default function ChatRoomPage() {
                       >
                         {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         {isMe && !isBot && <CheckTicks read={Boolean(msg.readAt)} />}
-                        {!isBot && (
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); setMsgMenu(msg); }}
-                            aria-label="Acciones del mensaje"
-                            style={{
-                              background: 'transparent', border: 'none', cursor: 'pointer',
-                              color: isMe ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.45)',
-                              padding: '0 2px', fontSize: 14, lineHeight: 1,
-                            }}
-                          >
-                            ⋯
-                          </button>
-                        )}
+
                       </span>
                     )}
+                    </div>
                   </div>
                   {msgReactions[msg.id] && (
                     <div style={{ position: 'absolute', bottom: -12, [isMe ? 'left' : 'right']: 8, background: 'rgba(28, 28, 34, 0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 999, padding: '2px 7px', fontSize: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.35)', lineHeight: 1.2 } as React.CSSProperties}>
@@ -3259,12 +3277,22 @@ export default function ChatRoomPage() {
                 </button>
               )}
 
+              {canDeleteForAll(msgMenu) && (
+                <button
+                  type="button"
+                  onClick={() => void deleteMessage(msgMenu, true)}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '14px 6px', fontSize: 14, fontWeight: 700, color: '#FF6B81', background: 'transparent', border: 'none', cursor: 'pointer' }}
+                >
+                  🗑️ Eliminar para todos
+                </button>
+              )}
+
               <button
                 type="button"
-                onClick={() => void deleteMessage(msgMenu)}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '14px 6px', fontSize: 14, fontWeight: 700, color: '#FF6B81', background: 'transparent', border: 'none', cursor: 'pointer' }}
+                onClick={() => void deleteMessage(msgMenu, false)}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '14px 6px', fontSize: 14, fontWeight: 700, color: 'rgba(255,255,255,0.85)', background: 'transparent', border: 'none', cursor: 'pointer' }}
               >
-                🗑️ Eliminar para todos
+                🙈 Eliminar para mí
               </button>
 
               <button
