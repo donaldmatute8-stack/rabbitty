@@ -4,6 +4,7 @@ import { conversations } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 import { getOwnedBusinessIds, resolveConversationAccess, typingPatch } from '@/lib/chat';
+import { isRealtimePublishConfigured, publishTyping } from '@/lib/realtime/chatOutbox';
 
 export async function POST(req: Request) {
   try {
@@ -30,9 +31,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Sin acceso' }, { status: 403 });
     }
 
+    // ── Typing por realtime: transient, SIN escritura en Postgres ──
+    // (plan Fase 3.5: cero writes de typing cuando realtime está activo).
+    if (isRealtimePublishConfigured()) {
+      await publishTyping(conversation.id, caller.id);
+      return NextResponse.json({ success: true, transport: 'realtime' });
+    }
+
+    // Fallback (canary / sin Centrifugo): columnas legacy.
     await db.update(conversations).set(typingPatch(access)).where(eq(conversations.id, conversationId));
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, transport: 'db' });
   } catch (error) {
     console.error('Chat typing error:', error);
     return NextResponse.json({ error: 'Error interno' }, { status: 500 });

@@ -14,6 +14,7 @@ import {
 import { generateBunzyReply } from '@/lib/bunzy';
 import { chatRateLimit } from '@/lib/chatRateLimit';
 
+import { enqueueChatEvent, kickChatOutbox } from '@/lib/realtime/chatOutbox';
 const AUTO_REPLY_WINDOW_MS = 6 * 60 * 60 * 1000;
 
 export async function POST(req: Request) {
@@ -160,11 +161,33 @@ export async function POST(req: Request) {
           .onConflictDoNothing({ target: notificationsOutbox.dedupeKey });
       }
 
+      // ── Fase 4: evento realtime EN LA MISMA TX ──
+      // El mensaje y su evento son atómicos: si el INSERT del mensaje commitea,
+      // el aviso existe en el outbox y el worker lo publicará (at-least-once).
+      await enqueueChatEvent(tx, {
+        conversationId: conversation.id,
+        type: 'message.created',
+        eventId: `msg:${lastMessage.id}`,
+        payload: {
+          messageId: lastMessage.id,
+          conversationId: conversation.id,
+          senderId,
+          content: lastMessage.content,
+          type: lastMessage.type,
+          metadata: lastMessage.metadata ?? null,
+          createdAt: lastMessage.createdAt,
+        },
+      });
+
       return { userMessage: lastMessage, replayed: false };
     });
 
     userMessage = txResult.userMessage;
     replayed = Boolean(txResult.replayed);
+
+    // Publicación best-effort del evento (no bloquea la respuesta). Si falla,
+    // el cron del outbox lo reintenta: el mensaje ya está persistido.
+    if (!replayed) kickChatOutbox();
 
     // ── Respuesta del bot (Bunzy) — sin clientMessageId del usuario, con
     // clave propia derivada del mensaje (reintentos → mismo bot reply).

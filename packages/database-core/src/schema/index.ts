@@ -310,6 +310,42 @@ export const liveActivityTokens = pgTable("live_activity_tokens", {
   updatedAt: timestamp("updatedAt").defaultNow(),
 });
 
+/**
+ * ── Presencia de app por SESIÓN (mensajería) ──
+ * "En línea" responde a la conectividad de la app, NO al GPS del local. Un
+ * usuario puede tener varias sesiones (iPhone + iPad); la presencia agregada se
+ * deriva de las sesiones activas con TTL, así un device que cae no apaga al otro.
+ */
+export const chatConnections = pgTable("chat_connections", {
+  id: id(),
+  userId: fkId("userId"),
+  sessionId: text("sessionId").notNull(),
+  platform: text("platform"),
+  connectedAt: timestamp("connectedAt").defaultNow(),
+  lastSeenAt: timestamp("lastSeenAt").defaultNow(),
+  disconnectedAt: timestamp("disconnectedAt"),
+});
+
+/**
+ * ── Outbox de eventos de chat ──
+ * Se escribe en la MISMA transacción del INSERT del mensaje. El worker publica
+ * a Centrifugo (at-least-once); el cliente dedupe por `eventId`/`messageId`.
+ * Garantiza que nada quede "guardado y nunca avisado".
+ */
+export const chatEventOutbox = pgTable("chat_event_outbox", {
+  id: id(),
+  conversationId: text("conversationId").notNull(),
+  type: text("type").notNull(), // message.created | message.read | typing
+  eventId: text("eventId").notNull().unique(),
+  payload: jsonb("payload").notNull(),
+  status: text("status").default("QUEUED").notNull(),
+  attempts: integer("attempts").default(0).notNull(),
+  runAfter: timestamp("runAfter").defaultNow().notNull(),
+  lockedUntil: timestamp("lockedUntil"),
+  createdAt: timestamp("createdAt").defaultNow(),
+  updatedAt: timestamp("updatedAt").defaultNow(),
+});
+
 export const treasury = pgTable("treasury", {
   id: id(),
   concept: text("concept").notNull(),

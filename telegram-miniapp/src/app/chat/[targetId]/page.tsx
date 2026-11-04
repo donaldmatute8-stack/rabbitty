@@ -13,6 +13,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useToast } from '@/contexts/ToastContext';
 import { Bell, BellOff, Search, Ban, MoreHorizontal, Store, Bot, ExternalLink, Zap } from 'lucide-react';
 
+import { useRealtimeChat } from '@/lib/realtime/useRealtimeChat';
 interface BusinessCard {
   kind?: 'BUSINESS';
   businessId: string;
@@ -575,6 +576,8 @@ export default function ChatRoomPage() {
   const [hasOlder, setHasOlder] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [partnerOnline, setPartnerOnline] = useState<boolean | null>(null);
+  // Presencia REAL de app (realtime). Cuando llega, manda sobre la de GPS.
+  const [realtimePresenceActive, setRealtimePresenceActive] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [myParticipantId, setMyParticipantId] = useState<string | null>(null);
   const [isBusinessInbox, setIsBusinessInbox] = useState(false);
@@ -595,6 +598,22 @@ export default function ChatRoomPage() {
   const [targetMuted, setTargetMuted] = useState(false);
   const [targetBlocked, setTargetBlocked] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  // ── Fase 3/4: realtime (Centrifugo) ──────────────────────────────────────
+  // Si el backend no lo habilita, el hook no hace nada y el chat sigue con su
+  // polling. Los mensajes se deduplican por id (el worker es at-least-once).
+  useRealtimeChat({
+    conversationId,
+    enabled: Boolean(conversationId) && targetId !== 'bot',
+    onMessage: (m) => {
+      if (!m?.id) return;
+      setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m as unknown as Message]));
+    },
+    onPeerPresence: (online) => {
+      setRealtimePresenceActive(true);
+      setPartnerOnline(online);
+    },
+  });
+
   // Ownership del negocio destino: el GET de campaigns exige ownership
   // server-side (200 = dueño, 403 = no) — usado para mostrar "⚡ Dar un
   // Flash Boost" SOLO a su dueño; un Rabbitter no debe verlo.
@@ -806,7 +825,9 @@ export default function ChatRoomPage() {
       if (data.targetCategory !== undefined) setTargetCategory(data.targetCategory);
       if (data.targetBusinessId !== undefined) setTargetBusinessId(data.targetBusinessId);
       if (data.businessOpen !== undefined) setBusinessOpen(data.businessOpen);
-      if (typeof data.partnerOnline === 'boolean') setPartnerOnline(data.partnerOnline);
+      // H21-bis: si el transporte realtime está activo, su presencia (conectividad
+      // de app) manda; el dato de GPS solo se usa como fallback.
+      if (typeof data.partnerOnline === 'boolean' && !realtimePresenceActive) setPartnerOnline(data.partnerOnline);
       otherTypingAtRef.current = data.otherTypingAt ?? null;
       if (data.messages) {
         if (mode === 'older') {

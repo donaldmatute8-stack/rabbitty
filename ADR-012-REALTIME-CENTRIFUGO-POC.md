@@ -101,3 +101,57 @@ REALTIME_POC_ENABLED=1
    (nunca por GPS) según Fase 3 del plan.
 4. **Worker del outbox** publicando a Centrifugo (Fase 4) — el mensaje se
    persiste en Postgres primero; Centrifugo es solo el aviso.
+
+---
+
+## Fase 3 · Presencia por sesiones (implementada)
+
+**Tabla `chat_connections`** (migración `0031`): `userId`, `sessionId`, `platform`,
+`connectedAt`, `lastSeenAt`, `disconnectedAt` + índice único `(userId, sessionId)`.
+
+Reglas:
+- "En línea" = **la app está conectada**, nunca GPS ni estar en el local
+  (`presenceSessions` sigue siendo de analytics y no se reutiliza).
+- **Multi-device**: la presencia se deriva de las sesiones activas
+  (`BOOL_OR(disconnectedAt IS NULL AND lastSeenAt > now() - 90s)`); si un device
+  cae, el otro mantiene online al usuario.
+- **TTL 90 s** para desconexión abrupta + cierre limpio por `DELETE`.
+- **Typing sin DB**: si realtime está activo, `/api/chat/typing` publica un evento
+  transient y **no escribe** en Postgres (columnas legacy solo como fallback).
+
+Archivos: `src/lib/realtime/presence.ts`, `src/app/api/chat/presence/route.ts`
+(POST heartbeat + DELETE cierre), `src/app/api/chat/typing/route.ts`.
+
+## Fase 4 · Outbox de eventos de chat (implementada)
+
+**Tabla `chat_event_outbox`** (misma migración): el evento se inserta **en la
+misma transacción** del `INSERT` del mensaje → nunca hay mensaje sin aviso.
+
+- `enqueueChatEvent(tx, …)` dentro de la tx de `/api/chat/send`.
+- Worker `processChatOutboxBatch()`: reclama con `FOR UPDATE SKIP LOCKED`,
+  publica a Centrifugo (`X-API-Key`), reintenta con backoff exponencial (máx 8)
+  y marca `PROCESSED` / `FAILED`. Piggyback tras el envío + cron de piso
+  (`POST /api/cron/chat-outbox`, `Authorization: Bearer CRON_SECRET`).
+- Cliente `useRealtimeChat`: pide tokens, se suscribe a `chat:conv_<id>`,
+  entrega mensajes (el caller deduplica por `id`), typing, y heartbeat de
+  presencia. **Si el backend no lo habilita, no hace nada** y el chat sigue con
+  su polling: degradación limpia.
+- Contrato del evento: `{ eventId, eventType: 'message.created' | 'typing',
+  messageId, conversationId, senderId, content, type, metadata, createdAt }`.
+  `eventType` identifica el evento; `type` es el tipo de mensaje (TEXT/VOICE).
+
+## Validaciones ejecutadas (2026-11-04)
+
+| Prueba | Resultado |
+|---|---|
+| `scripts/centrifugo-poc.mjs` (seguridad + latencia + recovery) | ✅ 7/7 · p95 15 ms |
+| `scripts/chat-realtime-e2e.mjs` (contrato worker↔cliente) | ✅ 5/5 · tercero no entra · cliente no publica (103) |
+| Worker real contra Postgres (dev server + cron) | ✅ `processed:1 published:1` y el cliente recibió el evento |
+
+## Antes de activarlo en producción
+
+1. Desplegar Centrifugo (Railway) y definir `CENTRIFUGO_*` + `NEXT_PUBLIC_CENTRIFUGO_URL`.
+2. Configurar el cron `chat-outbox` cada 1–2 min.
+3. Probar en device: mensaje con la app abierta (<500 ms), recepción con la app
+   en segundo plano, reconexión tras modo avión, y "En línea" multi-device.
+4. Canary: primero interno, luego % de usuarios.
