@@ -2,7 +2,7 @@ import crypto from "crypto";
 import { z } from "zod";
 import { and, eq, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import { router, terminalProcedure } from "../trpc";
+import { router, terminalProcedure, posPermissionsOf, resolvePosRole } from "../trpc";
 import { posOperatorSessions } from "@rabbitty/database-core/schema";
 import { staff as staffTable } from "@rabbitty/database-restaurant/schema";
 import { verifyPin } from "../services/crypto";
@@ -33,6 +33,8 @@ export const posOperatorsRouter = router({
   status: terminalProcedure.query(async ({ ctx }) => ({
     required: isOperatorSessionsEnabled(),
     active: Boolean(ctx.posOperator),
+    role: resolvePosRole(ctx),
+    permissions: posPermissionsOf(ctx),
     operator: ctx.posOperator
       ? {
           staffId: ctx.posOperator.staffId,

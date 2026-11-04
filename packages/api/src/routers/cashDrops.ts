@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, posProcedure, resolveBranchId } from "../trpc";
+import { router, posProcedure, posPermission, resolveBranchId } from "../trpc";
 import { eq, and, gte, sql } from "drizzle-orm";
 import { branches, cashDrops, payments, orders } from "@rabbitty/database-restaurant/schema";
 import { getOpenShift, computeShiftTotals } from "../services/cashShift";
@@ -22,7 +22,7 @@ export const cashDropsRouter = router({
       return branch;
     }),
 
-  updateSettings: posProcedure
+  updateSettings: posPermission("POS_CASH")
     .input(z.object({
       branchId: z.string().optional(),
       cashDropEnabled: z.boolean(),
@@ -106,7 +106,7 @@ export const cashDropsRouter = router({
         .orderBy(cashDrops.createdAt);
     }),
 
-  createDrop: posProcedure
+  createDrop: posPermission("POS_CASH")
     .input(z.object({
       branchId: z.string().optional(),
       amount: z.number().positive(),

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { and, eq, desc, sql, lt, gt, inArray } from "drizzle-orm";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { TRPCError } from "@trpc/server";
-import { router, posProcedure } from "../trpc";
+import { router, posProcedure, posPermission } from "../trpc";
 import {
   membershipPlans,
   membershipPlanVersions,
@@ -181,7 +181,7 @@ export const membershipsRouter = router({
    * por destinatario (NO altera el plan), revocable por el dueño. Origen COURTESY.
    * Atómico: suscripción + beneficios + auditoría en UNA transacción; notificación post-commit.
    */
-  grantCourtesy: posProcedure
+  grantCourtesy: posPermission("POS_DISCOUNT")
     .input(z.object({
       businessId: z.string().optional(),
       targetUserId: z.string(),
@@ -300,7 +300,7 @@ export const membershipsRouter = router({
    * Revoca una cortesía: inmediata, server-side, auditada. El QR deja de funcionar
    * porque redeemAtPOS re-verifica el estado CON lock dentro de la transacción.
    */
-  revokeCourtesy: posProcedure
+  revokeCourtesy: posPermission("POS_DISCOUNT")
     .input(z.object({ subscriptionId: z.string(), reason: z.string().max(300).optional() }))
     .mutation(async ({ ctx, input }) => {
       const result = await ctx.coreDb.transaction(async (tx: any) => {
@@ -393,7 +393,7 @@ export const membershipsRouter = router({
     }),
 
   /** ── GAP 7: revocación de membresías PAGADAS (owner/god) ── ── */
-  revokePaidMembership: posProcedure
+  revokePaidMembership: posPermission("POS_DISCOUNT")
     .input(z.object({ subscriptionId: z.string(), reason: z.string().max(300).optional() }))
     .mutation(async ({ ctx, input }) => {
       const result = await ctx.coreDb.transaction(async (tx: any) => {
@@ -447,7 +447,7 @@ export const membershipsRouter = router({
 
   /** ── GAP 8: renovación manual de membresías de caja (CASH_POS/PROMO) ──
    *  Extiende el periodo del plan vendido y notifica al miembro. */
-  renewPaidMembership: posProcedure
+  renewPaidMembership: posPermission("POS_DISCOUNT")
     .input(z.object({ subscriptionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const result = await ctx.coreDb.transaction(async (tx: any) => {

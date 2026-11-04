@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import { router, protectedProcedure, adminOnlyProcedure, resolveBranchId } from "../trpc";
+import { router, posProcedure, posPermission, adminOnlyProcedure, resolveBranchId } from "../trpc";
 import { branches, cashDrops, cashShiftEvents, cashShifts, staff } from "@rabbitty/database-restaurant/schema";
 import {
   CASHIER_ROLES,
@@ -20,7 +20,7 @@ const branchInput = { branchId: z.string().optional() };
 
 export const cashShiftsRouter = router({
   /** Estado actual: turno abierto (si existe), totales y bitácora. Sin PIN (solo lectura). */
-  current: protectedProcedure.input(z.object(branchInput)).query(async ({ ctx, input }) => {
+  current: posProcedure.input(z.object(branchInput)).query(async ({ ctx, input }) => {
     const branchId = await resolveBranchId(ctx, input.branchId);
     const [branch] = await ctx.restaurantDb
       .select({
@@ -55,7 +55,7 @@ export const cashShiftsRouter = router({
   }),
 
   /** Apertura: PIN del cajero + fondo inicial. Un solo turno OPEN por caja (índice único). */
-  open: protectedProcedure
+  open: posPermission("POS_CASH")
     .input(z.object({ ...branchInput, pin, openingFloat: money, registerId: z.string().default("MAIN") }))
     .mutation(async ({ ctx, input }) => {
       const branchId = await resolveBranchId(ctx, input.branchId);
@@ -99,7 +99,7 @@ export const cashShiftsRouter = router({
     }),
 
   /** Retiro: PIN del cajero del turno. Sobre el umbral configurable exige PIN de manager/admin. */
-  withdraw: protectedProcedure
+  withdraw: posPermission("POS_CASH")
     .input(
       z.object({
         ...branchInput,
@@ -174,7 +174,7 @@ export const cashShiftsRouter = router({
     }),
 
   /** Cierre parcial (Ticket X): reporte previo o arqueo, el turno sigue abierto. */
-  partialClose: protectedProcedure
+  partialClose: posPermission("POS_CASH")
     .input(z.object({ ...branchInput, pin, countedCash: money.optional(), notes: z.string().max(300).optional() }))
     .mutation(async ({ ctx, input }) => {
       const branchId = await resolveBranchId(ctx, input.branchId);
@@ -213,7 +213,7 @@ export const cashShiftsRouter = router({
     }),
 
   /** Traspaso: saliente cuenta con su PIN, entrante recibe con el suyo. Si hay descuadre exige manager. */
-  handover: protectedProcedure
+  handover: posPermission("POS_CASH")
     .input(
       z.object({
         ...branchInput,
@@ -286,7 +286,7 @@ export const cashShiftsRouter = router({
     }),
 
   /** Cierre Z: arqueo ciego + PIN manager/admin siempre. Descuadre exige nota. */
-  close: protectedProcedure
+  close: posPermission("POS_CASH")
     .input(
       z.object({
         ...branchInput,

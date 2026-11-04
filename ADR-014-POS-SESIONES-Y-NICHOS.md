@@ -1,6 +1,6 @@
 # ADR-014 · POS con sesión propia, Admin protegido y onboarding por nicho
 
-**Fecha:** 2026-11-04 · **Estado:** Fases 0–3 implementadas (flags apagados) · deploy pendiente
+**Fecha:** 2026-11-04 · **Estado:** Fases 0–3.5 implementadas (flags apagados) · deploy pendiente
 **Contexto:** en producción. Regla: **solo cambios aditivos + feature flag** hasta validar.
 
 ---
@@ -63,6 +63,7 @@ admin, no la operación diaria.
 **1** | `pos_terminals` + `pos_terminal_sessions` + endpoints de activación/validación | bajo | ✅ aplicado · flag `POS_TERMINAL_SESSIONS`; apagado, el POS sigue con la sesión de admin |
 **2** | POS usa la sesión de terminal (layout/route handler) | **medio** | ✅ aplicado · doble lectura (terminal **o** admin), allowlist de routers y telemetría de uso |
 **3** | PIN del empleado al iniciar turno (`pos_operator_sessions`) | bajo | ✅ aplicado · flag `POS_OPERATOR_SESSIONS`; el PIN es `staff.pinCode` con lockout |
+**3.5** | Permisos por rol (matriz única servidor + UI) | bajo | ✅ aplicado · terminal con turno siempre; panel admin con `POS_ROLE_ENFORCEMENT=1` |
 **4** | Reautorización desde el móvil (`pos_auth_requests`) | bajo | solo recuperación |
 **5** | Pantalla de terminales (revocar, historial) | bajo | solo lectura + revocar |
 
@@ -232,7 +233,59 @@ pos_operator_sessions (token 64 hex, 16 h) → POS opera
 
 ---
 
-## 10 · Siguiente paso
+## 10 · Permisos por rol (Fase 3.5)
+
+Una sola matriz en `packages/api/src/services/posPermissions.ts`, usada por el
+servidor y por la UI. El rol **nunca** amplía el alcance de sucursal.
+
+| Rol | Pedidos | Cobrar | Caja | Descuentos/Cortesías | Reembolsos | Config | Reportes |
+|---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+Propietario / Admin | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+Gerente | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+Cajero | ✅ | ✅ | ✅ | — | — | — | — |
+Mesero | ✅ | ✅ | — | — | — | — | — |
+Cocina | — | — | — | — | — | — | — |
+
+**Enforcement**
+
+- Terminal con turno: **siempre** se aplica (camino nuevo).
+- Terminal sin turno (flag de turnos encendido): sin rol → acciones sensibles
+  bloqueadas; lecturas permitidas.
+- Panel admin: se aplica solo con `POS_ROLE_ENFORCEMENT=1`. La UI ya respeta la
+  matriz en ambos casos, así que se puede activar sin tocar código.
+
+**Endpoints anotados**
+
+| Permiso | Endpoints |
+|---|---|
+`POS_CASH` | `cashShifts.open/withdraw/partialClose/handover/close`, `cashDrops.createDrop/updateSettings` |
+`POS_CHARGE` | `pos.directCheckout`, `pos.createStripeChargeIntent`, `pos.releaseCustomerTab`, `payments.processPayment/splitBill/addTip` |
+`POS_DISCOUNT` | `memberships.grantCourtesy/revokeCourtesy/revokePaidMembership/renewPaidMembership` |
+`POS_REFUND` | `payments.refund` |
+`POS_SETTINGS` | `payments.createStripeConnectLink` |
+
+`posProcedure` y `cashShifts.*` ya aceptan terminal (se añadió `cashShifts.` a la
+allowlist de la Fase 2).
+
+**UI**
+
+- Badge del rol + nombre del empleado en el header del POS.
+- `openCashShift` y los cobros pasan por la matriz: si el rol no puede, toast
+  explicativo (“Tu rol (Mesero) no permite abrir, cerrar y mover caja”).
+- El aviso de “retiro requerido” solo aparece si el rol puede operar caja.
+- Si la caja está cerrada y el rol no puede abrirla, se le pide llamar a un
+  cajero/gerente en vez de abrir un modal inútil.
+
+**Límites**
+
+- `voidItem` sigue protegido por el **PIN de gerente** en la UI (permite que un
+  mesero llame al gerente). Endurecerlo con un token de aprobación firmado es
+  una mejora posterior, no un cambio de rol.
+- Cocina (KITCHEN) no opera el POS: su pantalla es `/kitchen`.
+
+---
+
+## 11 · Siguiente paso
 
 Fase 4: reautorización desde el móvil (`pos_auth_requests`) — el POS muestra un
 código corto y el admin lo aprueba desde su teléfono, sin escribir la clave en

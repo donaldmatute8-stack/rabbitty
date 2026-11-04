@@ -3,9 +3,14 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { clearPosOperator, getPosTerminalToken } from "../../../lib/pos-terminal";
+import {
+  posPermissionLabel,
+  posRoleLabel,
+  type PosPermission,
+} from "@rabbitty/api/services/posPermissions";
 import { PosOrderAlert } from "../../../components/PosOrderAlert";
 import { Button, Dialog, Input, toast, cn, useWakeLock } from "@rabbitty/ui";
-import { Clock, Search, Users, CreditCard, Banknote, QrCode, Split, Smartphone, Landmark, Table2, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, ClipboardCheck, Camera, History, RotateCw, ChefHat, Flame } from "lucide-react";
+import { Clock, Search, Users, CreditCard, Banknote, QrCode, Split, Smartphone, Landmark, Table2, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, ClipboardCheck, Camera, History, RotateCw, ChefHat, Flame, UserRound } from "lucide-react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import QRDiscovery from "@/components/QRDiscovery";
@@ -398,7 +403,6 @@ export default function PosPage() {
   const isTerminalDevice = typeof window !== "undefined" && !!getPosTerminalToken();
   const { data: posSession } = trpc.posTerminals.sessionContext.useQuery(undefined, {
     retry: false,
-    enabled: isTerminalDevice,
   });
   const { data: branchesAdmin } = trpc.admin.getBranches.useQuery(undefined, {
     retry: false,
@@ -412,6 +416,21 @@ export default function PosPage() {
     retry: false,
     enabled: isTerminalDevice,
   });
+
+  // ── Permisos por rol (servidor y UI comparten la misma matriz) ──
+  const posRole = operatorStatus?.role ?? posSession?.role ?? null;
+  const posPermissions = (operatorStatus?.permissions ?? posSession?.permissions ?? []) as PosPermission[];
+  const can = (permission: PosPermission) => posPermissions.includes(permission);
+  const requirePermission = (permission: PosPermission): boolean => {
+    if (can(permission)) return true;
+    toast.error(`Tu rol (${posRoleLabel(posRole)}) no permite ${posPermissionLabel(permission)}.`);
+    return false;
+  };
+  // Abrir caja (apertura, corte X/Z, retiros) exige POS_CASH.
+  const openCashShift = () => {
+    if (!requirePermission("POS_CASH")) return;
+    setCorteModalOpen(true);
+  };
   const endShiftMutation = trpc.posOperators.endShift.useMutation({
     onSettled: () => {
       clearPosOperator();
@@ -810,6 +829,7 @@ export default function PosPage() {
     }
   };
   const chargeOpenTab = async (tab: { orderId: string; total: number; status?: string }) => {
+    if (!requirePermission("POS_CHARGE")) return;
     if (!tab?.orderId) return;
     try {
       const intent = await tabChargeMutation.mutateAsync({
@@ -1310,6 +1330,7 @@ export default function PosPage() {
   };
 
   const requestCheckout = (method: string) => {
+    if (!requirePermission("POS_CHARGE")) return;
     if (cart.length === 0 || isCharging) return;
     setPendingMethod(method);    // Para pagos en efectivo, inicializar con el total exacto o vacío para facilitar la captura
     if (method === "EFECTIVO" || method === "VENTA DIRECTA" || method === "DIVIDIDA") {
@@ -1362,6 +1383,8 @@ export default function PosPage() {
 
   const handleCheckout = async (method: string = "EFECTIVO", cashGiven?: number) => {
     if (cart.length === 0) return;
+    // Defensa en profundidad: el servidor también valida POS_CHARGE.
+    if (!requirePermission("POS_CHARGE")) return;
 
     // Map payment method string to schema enum
     let mappedMethod: "CASH" | "CREDIT_CARD" | "DEBIT_CARD" | "BUNZ" = "CASH";
@@ -1476,8 +1499,12 @@ export default function PosPage() {
     } catch (err: any) {
       const msg = String(err?.message || "");
       if (msg.includes("TURNO_CERRADO")) {
-        toast.error("La caja está cerrada. Abre turno para cobrar en efectivo.");
-        setCorteModalOpen(true);
+        if (can("POS_CASH")) {
+          toast.error("La caja está cerrada. Abre turno para cobrar en efectivo.");
+          setCorteModalOpen(true);
+        } else {
+          toast.error("La caja está cerrada. Pide a un cajero o gerente que abra el turno.");
+        }
         return;
       }
       if (mappedMethod === "BUNZ") return; // If createIntent fails, stop
@@ -1496,7 +1523,7 @@ export default function PosPage() {
   return (
     <div className="flex h-dvh w-full flex-col bg-gray-950 text-white overflow-hidden select-none font-sans">
       
-      {cashStatus?.requiresDrop && !corteModalOpen && (
+      {cashStatus?.requiresDrop && !corteModalOpen && can("POS_CASH") && (
         <div className="fixed inset-0 z-100 flex items-center justify-center bg-gray-900/95 p-4 backdrop-blur-md">
           <div className="w-full max-w-md bg-gray-800 rounded-2xl shadow-[0_0_50px_rgba(239,68,68,0.3)] border border-red-500/50 p-8 text-center">
             <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-500/20 mb-4">
@@ -1508,7 +1535,7 @@ export default function PosPage() {
             </p>
             <button
               id="cash-forced-withdraw"
-              onClick={() => setCorteModalOpen(true)}
+              onClick={openCashShift}
               className="w-full bg-linear-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-bold py-4 rounded-xl text-xl shadow-lg shadow-red-500/20 transition-all active:scale-95"
             >
               Hacer retiro con PIN
@@ -1583,20 +1610,38 @@ export default function PosPage() {
               <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Online</span>
             </div>
           </div>
+
+          {/* Rol del turno: la UI y el servidor comparten la misma matriz */}
+          {posRole && (
+            <div
+              className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-cyan-500/10 border border-cyan-500/25 shrink-0"
+              title={`Turno: ${posRoleLabel(posRole)}${operatorStatus?.operator?.name ? ` · ${operatorStatus.operator.name}` : ""}`}
+            >
+              <UserRound className="h-3.5 w-3.5 text-cyan-300" />
+              <span className="text-[10px] font-black uppercase tracking-wider text-cyan-200">
+                {posRoleLabel(posRole)}
+              </span>
+              {operatorStatus?.operator?.name && (
+                <span className="max-w-[120px] truncate text-[10px] font-bold text-gray-300">
+                  {operatorStatus.operator.name}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Center: Operation & Customer Tools in Sleek Clusters */}
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
           {/* Shift / Drawer Control */}
           <div className="flex items-center shrink-0">
-            <CashShiftBadge onClick={() => setCorteModalOpen(true)} />
+            <CashShiftBadge onClick={openCashShift} />
             {cashStatus?.shiftOpen && (
               <button
                 id="pos-quick-corte-x"
                 type="button"
                 onClick={() => {
                   setCorteInitialMode("partial");
-                  setCorteModalOpen(true);
+                  openCashShift();
                 }}
                 className="ml-1.5 flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white/5 border border-white/10 text-cyan-300 hover:bg-cyan-500/15 text-xs font-bold transition-all active:scale-95 cursor-pointer whitespace-nowrap"
                 title="Corte X de supervisión"

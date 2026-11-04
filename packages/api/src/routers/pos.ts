@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { and, asc, desc, eq, sql, inArray, or, ilike, gte, isNull } from "drizzle-orm";
 import crypto from "crypto";
-import { router, posProcedure } from "../trpc";
+import { router, posProcedure, posPermission } from "../trpc";
 import { validateGratuity, parseGratuityPcts, GRATUITY_MAX_PCT } from "../services/gratuityRules";
 import { TRPCError } from "@trpc/server";
 import * as dbSchema from "@rabbitty/database-restaurant";
@@ -606,7 +606,7 @@ export const posRouter = router({
    * o cobros, NO se toca — se queda en Operación para cobrarse aparte.
    * Se marca EXPIRED + voidReason (auditable) en vez de borrar la fila.
    */
-  releaseCustomerTab: posProcedure
+  releaseCustomerTab: posPermission("POS_CHARGE")
     .input(z.object({ orderId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const [order] = await ctx.restaurantDb
@@ -1105,7 +1105,7 @@ export const posRouter = router({
    * (Apple Pay / tarjeta). La liquidación llega por webhook confirmPaymentIntentSettled.
    * Cancelación → cancelPaymentIntent libera el hold.
    */
-  createStripeChargeIntent: posProcedure
+  createStripeChargeIntent: posPermission("POS_CHARGE")
     .input(z.object({
       items: z.array(z.object({
         menuItemId: z.string(),
@@ -1436,7 +1436,7 @@ export const posRouter = router({
       return { success: true };
     }),
 
-  directCheckout: posProcedure
+  directCheckout: posPermission("POS_CHARGE")
     .input(
       z.object({
         tableId: z.string().optional(),

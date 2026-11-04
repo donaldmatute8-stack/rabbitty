@@ -4,6 +4,16 @@ import type { getRestaurantDb, getCoreDb } from "./db";
 import { rateLimit } from "./middleware/rateLimit";
 import { logAudit } from "./middleware/auditLog";
 import { users as usersCore } from "@rabbitty/database-core";
+import {
+  hasPosPermission,
+  normalizePosRole,
+  permissionsForRole,
+  posPermissionLabel,
+  posRoleLabel,
+  type PosPermission,
+  type PosRole,
+} from "./services/posPermissions";
+import { isOperatorSessionsEnabled } from "./services/posOperatorAuth";
 
 export interface Context {
   userId?: string | null;
@@ -112,6 +122,7 @@ const TERMINAL_ALLOWED_PREFIXES = [
   "payments.",
   "memberships.",
   "cashDrops.",
+  "cashShifts.",
   "printing.",
 ] as const;
 const TERMINAL_ALLOWED_EXACT = new Set(["staff.verifyAdminPin"]);
@@ -135,6 +146,52 @@ export const posProcedure = t.procedure
     }
     throw new TRPCError({ code: "UNAUTHORIZED" });
   });
+
+/**
+ * ── Permisos por rol (Fase 3.5) ──
+ * La terminal aporta el dispositivo y el turno aporta a la persona; de su rol
+ * salen las acciones permitidas. Un admin del panel conserva su rol de staff.
+ */
+export function resolvePosRole(ctx: Context): PosRole | null {
+  if (ctx.posAuth?.method === "terminal") {
+    if (ctx.posOperator) return normalizePosRole(ctx.posOperator.role);
+    // Terminal de Fase 2 sin turno: si el flag de turnos está apagado, se
+    // mantiene el acceso completo anterior. Si está encendido y no hay turno,
+    // no hay rol → las acciones sensibles quedan bloqueadas.
+    return isOperatorSessionsEnabled() ? null : "OWNER";
+  }
+  if (ctx.userId) return ctx.staffRole ? normalizePosRole(ctx.staffRole) : "OWNER";
+  return null;
+}
+
+export function posPermissionsOf(ctx: Context): PosPermission[] {
+  return permissionsForRole(resolvePosRole(ctx));
+}
+
+/**
+ * Exige un permiso POS. Se aplica sobre `posProcedure` (admin o terminal).
+ *
+ * · Terminal con turno: SIEMPRE se aplica (es el camino nuevo y seguro).
+ * · Panel admin: se aplica solo con `POS_ROLE_ENFORCEMENT=1`, para no cambiar
+ *   el comportamiento existente de un día para otro. La UI ya respeta la
+ *   matriz en ambos casos.
+ */
+export function posPermission(permission: PosPermission) {
+  return posProcedure.use(({ ctx, next }) => {
+    const isTerminalPrincipal = ctx.posAuth?.method === "terminal";
+    const enforce = isTerminalPrincipal || process.env.POS_ROLE_ENFORCEMENT === "1";
+    if (!enforce) return next({ ctx });
+
+    const role = resolvePosRole(ctx);
+    if (!role || !hasPosPermission(role, permission)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: `Tu rol${role ? ` (${posRoleLabel(role)})` : ""} no permite ${posPermissionLabel(permission)}.`,
+      });
+    }
+    return next({ ctx });
+  });
+}
 
 /**
  * ── Solo terminal POS (Fase 3) ──

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import crypto from "crypto";
 import { and, desc, eq } from "drizzle-orm";
-import { router, protectedProcedure, adminOnlyProcedure, publicProcedure } from "../trpc";
+import { router, protectedProcedure, adminOnlyProcedure, publicProcedure, posPermissionsOf, resolvePosRole } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { branches, restaurants } from "@rabbitty/database-restaurant/schema";
 import {
@@ -94,7 +94,9 @@ export const posTerminalsRouter = router({
 
       return {
         mode: "terminal" as const,
-        role: "TERMINAL" as const,
+        // Rol del empleado en turno. Sin turno no hay rol (la UI muestra el gate).
+        role: resolvePosRole(ctx),
+        permissions: posPermissionsOf(ctx),
         branchId: ctx.branchId,
         businessId: ctx.posAuth?.businessId ?? null,
         terminalName: ctx.posAuth?.terminalName ?? null,
@@ -109,7 +111,8 @@ export const posTerminalsRouter = router({
       );
       return {
         mode: "admin" as const,
-        role: (ctx.staffRole ?? "OWNER") as "OWNER" | "WAITER" | "CASHIER" | "KITCHEN" | "MANAGER" | "ADMIN",
+        role: resolvePosRole(ctx),
+        permissions: posPermissionsOf(ctx),
         branchId: ctx.branchId,
         businessId: null,
         terminalName: null,

@@ -1,13 +1,13 @@
 import { z } from "zod";
 import { and, eq, inArray, gte, lt, sql, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import { router, posProcedure, publicLimitedProcedure, resolveBranchId } from "../trpc";
+import { router, posProcedure, posPermission, publicLimitedProcedure, resolveBranchId } from "../trpc";
 import { orders, payments, tables, tableSessions, orderItems, menuItems } from "@rabbitty/database-restaurant/schema";
 import { bus, EventTypes } from "@rabbitty/events";
 import { assertOpenShiftForCash, findStaffByPin, CASHIER_ROLES } from "../services/cashShift";
 
 export const paymentsRouter = router({
-  refund: posProcedure
+  refund: posPermission("POS_REFUND")
     .input(z.object({
       paymentId: z.string(),
       amount: z.number(),
@@ -36,7 +36,7 @@ export const paymentsRouter = router({
       return refund;
     }),
 
-  processPayment: posProcedure
+  processPayment: posPermission("POS_CHARGE")
     .input(
       z.object({
         orderId: z.string(),
@@ -65,7 +65,7 @@ export const paymentsRouter = router({
       return payment;
     }),
 
-  splitBill: posProcedure
+  splitBill: posPermission("POS_CHARGE")
     .input(z.object({
       orderId: z.string(),
       splits: z.array(z.object({
@@ -101,7 +101,7 @@ export const paymentsRouter = router({
       return { success: true, payments: results };
     }),
 
-  addTip: posProcedure
+  addTip: posPermission("POS_CHARGE")
     .input(z.object({
       orderId: z.string(),
       tip: z.number().min(0),
@@ -475,7 +475,7 @@ export const paymentsRouter = router({
       });
     }),
 
-  createStripeConnectLink: posProcedure
+  createStripeConnectLink: posPermission("POS_SETTINGS")
     .input(z.object({
       branchId: z.string().optional(),
       refreshUrl: z.string().url(),
