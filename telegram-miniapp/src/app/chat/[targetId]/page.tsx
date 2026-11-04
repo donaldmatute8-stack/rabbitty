@@ -1949,9 +1949,13 @@ export default function ChatRoomPage() {
         ? 'Fuera de horario'
         : partnerOnline === true
           ? 'En línea'
-          : partnerOnline === false
-            ? 'Sin conexión'
-            : 'Rabbitty';
+          // Negocio: su presencia real es "abierto/cerrado". "Sin conexión" era
+          // engañoso porque el local contesta desde el POS o el admin.
+          : businessOpen !== null
+            ? (businessOpen ? 'Abierto' : 'Fuera de horario')
+            : partnerOnline === false
+              ? 'Sin conexión'
+              : 'Rabbitty';
   const headerColor = isTypingActive ? 'var(--rabbitty-pink)' : isBot || businessOpen !== false ? '#4CAF50' : '#9E9E9E';
 
   return (

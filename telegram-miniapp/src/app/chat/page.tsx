@@ -337,7 +337,9 @@ export default function ChatInboxPage() {
       const p = prefs[c.id] || {};
       if (!!p.archived !== archived) return false;
       if (activeTab === 'business') return !!c.isBusinessInbox;
-      return true;
+      // Una conversación donde YO actúo como negocio solo vive en la pestaña
+      // Negocio; si no, aparecía duplicada en ambos lados.
+      return !c.isBusinessInbox;
     });
     return [...list].sort((a, b) => {
       const pa = prefs[a.id]?.pinned ? 1 : 0;
