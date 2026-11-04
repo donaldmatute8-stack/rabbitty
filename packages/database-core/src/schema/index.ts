@@ -282,6 +282,37 @@ export const conversationMembers = pgTable("conversation_members", {
   index("conversation_members_user_idx").on(table.userId),
 ]);
 
+/**
+ * ── E2E del chat (PEER) ── identidad pública por DISPOSITIVO (0037).
+ * Solo material público: la clave privada nunca sale del dispositivo.
+ */
+export const userDeviceKeys = pgTable("user_device_keys", {
+  id: id(),
+  userId: uuid("userId").notNull(),
+  deviceId: text("deviceId").notNull(),
+  publicKey: text("publicKey").notNull(),
+  createdAt: timestamp("createdAt").defaultNow(),
+  lastSeenAt: timestamp("lastSeenAt").defaultNow(),
+}, (table) => [
+  uniqueIndex("user_device_keys_uq").on(table.userId, table.deviceId),
+]);
+
+/**
+ * ── Sobres de la clave de conversación (uno por dispositivo) ──
+ * Formato: ephPub(65) || iv(12) || ct — opaco para el servidor.
+ */
+export const conversationKeys = pgTable("conversation_keys", {
+  id: id(),
+  conversationId: text("conversationId").notNull(),
+  recipientUserId: uuid("recipientUserId").notNull(),
+  recipientDeviceId: text("recipientDeviceId").notNull(),
+  wrappedKey: text("wrappedKey").notNull(),
+  createdAt: timestamp("createdAt").defaultNow(),
+}, (table) => [
+  uniqueIndex("conversation_keys_uq").on(table.conversationId, table.recipientDeviceId),
+  index("conversation_keys_user_idx").on(table.recipientUserId),
+]);
+
 export const messages = pgTable("messages", {
   id: id(),
   conversationId: fkId("conversationId").references(() => conversations.id, { onDelete: "cascade" }),
@@ -297,6 +328,8 @@ export const messages = pgTable("messages", {
   createdAt: timestamp("createdAt").defaultNow(),
   // Editar / borrar (0032). `deletedForAll` oculta para ambos; el contenido se
   // conserva en la fila para auditoría pero la API no lo expone.
+  // E2E: `content` guarda base64(iv||ciphertext) cuando encrypted = true.
+  encrypted: boolean("encrypted").default(false).notNull(),
   editedAt: timestamp("editedAt"),
   deletedAt: timestamp("deletedAt"),
   deletedForAll: boolean("deletedForAll").default(false).notNull(),
