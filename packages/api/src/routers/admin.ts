@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { and, eq, inArray, gte, lt, sql, desc } from "drizzle-orm";
-import { router, protectedProcedure, adminOnlyProcedure, platformOnlyProcedure, godAdminProcedure, resolveBranchId } from "../trpc";
+import { router, protectedProcedure, adminOnlyProcedure, platformOnlyProcedure, godAdminProcedure, resolveBranchId, resolveRestaurantId } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { ledgerEntries as ledgerEntries2, branches as dbSchemaBranches, restaurants as dbSchemaRestaurants } from "@rabbitty/database-restaurant/schema";
@@ -84,16 +84,20 @@ export const adminRouter = router({
 
   // Owners ven todos; ADMIN/MANAGER (staff con PIN) solo el restaurante de su sucursal.
   getRestaurants: adminOnlyProcedure.query(async ({ ctx }) => {
-    if (ctx.staffRole && ctx.staffBranchId) {
-      const [branch] = await ctx.restaurantDb
-        .select({ restaurantId: branches.restaurantId })
-        .from(branches)
-        .where(eq(branches.id, ctx.staffBranchId));
-      if (!branch?.restaurantId) return [];
-      return ctx.restaurantDb.select().from(restaurants).where(eq(restaurants.id, branch.restaurantId));
-    }
-    const result = await ctx.restaurantDb.select().from(restaurants);
-    return result;
+    // ── AISLAMIENTO DE TENANT (fix de fuga) ──
+    // Antes, para un dueño esto devolvía TODOS los restaurantes de la plataforma:
+    // 626 Café podía leer/editar datos de Ka13. Ahora SIEMPRE se resuelve el
+    // restaurante desde la sucursal del contexto (que ya viene validada por
+    // tenancy en el route handler, incluida la impersonación de God).
+    const branchId = ctx.staffRole && ctx.staffBranchId ? ctx.staffBranchId : ctx.branchId;
+    if (!branchId) return [];
+    const [branch] = await ctx.restaurantDb
+      .select({ restaurantId: branches.restaurantId })
+      .from(branches)
+      .where(eq(branches.id, branchId))
+      .limit(1);
+    if (!branch?.restaurantId) return [];
+    return ctx.restaurantDb.select().from(restaurants).where(eq(restaurants.id, branch.restaurantId));
   }),
 
   updateRestaurant: adminOnlyProcedure
@@ -645,7 +649,11 @@ export const adminRouter = router({
         return [];
       }
     }
-    return await ctx.restaurantDb.select().from(branches).where(eq(branches.isActive, true));
+    // Sin owner y sin staff: SOLO las sucursales del restaurante en contexto.
+    // Antes devolvía TODAS las sucursales de la plataforma (fuga de tenants).
+    const restaurantId = await resolveRestaurantId(ctx);
+    if (!restaurantId) return [];
+    return await ctx.restaurantDb.select().from(branches).where(and(eq(branches.restaurantId, restaurantId), eq(branches.isActive, true)));
   }),
 
   getCrossStoreKpis: protectedProcedure.query(async ({ ctx }) => {
@@ -703,7 +711,7 @@ export const adminRouter = router({
     return { referrals: allReferrals, totalInviters, totalInvited };
   }),
 
-  getLoyaltyStats: protectedProcedure.query(async ({ ctx }) => {
+  getLoyaltyStats: godAdminProcedure.query(async ({ ctx }) => {
     try {
       const allUsers = await ctx.coreDb.select().from(users);
       const allLevels = await ctx.coreDb.select().from(levels);
@@ -739,7 +747,9 @@ export const adminRouter = router({
   }),
 
   getBirthdaySettings: protectedProcedure.query(async ({ ctx }) => {
-    const [restaurant] = await ctx.restaurantDb.select().from(restaurants).limit(1);
+    const restaurantId = await resolveRestaurantId(ctx);
+    if (!restaurantId) throw new TRPCError({ code: "FORBIDDEN", message: "Sin sucursal asignada" });
+    const [restaurant] = await ctx.restaurantDb.select().from(restaurants).where(eq(restaurants.id, restaurantId)).limit(1);
     return {
       birthdayBonusBunz: (restaurant as any)?.birthdayBonusBunz ?? 100,
       birthdayMessageTemplate: "¡Feliz cumpleaños {name}! 🎂 Como regalo, te hemos acreditado {bonus} Bunz. ¡Disfruta tu día!",
@@ -754,19 +764,21 @@ export const adminRouter = router({
       isActive: z.boolean().default(true),
     }))
     .mutation(async ({ ctx, input }) => {
-      const [restaurant] = await ctx.restaurantDb.select().from(restaurants).limit(1);
+      const restaurantId = await resolveRestaurantId(ctx);
+      if (!restaurantId) throw new TRPCError({ code: "FORBIDDEN", message: "Sin sucursal asignada" });
+      const [restaurant] = await ctx.restaurantDb.select().from(restaurants).where(eq(restaurants.id, restaurantId)).limit(1);
       if (!restaurant) throw new TRPCError({ code: "NOT_FOUND", message: "No restaurant found" });
       await ctx.restaurantDb.update(restaurants).set(input as any).where(eq(restaurants.id, restaurant.id));
       return { success: true };
     }),
 
   getUpcomingBirthdays: protectedProcedure.query(async ({ ctx }) => {
-    const [restaurant] = await ctx.restaurantDb.select().from(restaurants).limit(1);
-    if (!restaurant) return [];
+    const restaurantId = await resolveRestaurantId(ctx);
+    if (!restaurantId) return [];
     const allCustomers = await ctx.restaurantDb
       .select()
       .from(customers)
-      .where(sql`${customers.birthDate} IS NOT NULL`)
+      .where(and(eq(customers.restaurantId, restaurantId), sql`${customers.birthDate} IS NOT NULL`))
       .orderBy(customers.birthDate)
       .limit(50);
     const today = new Date();

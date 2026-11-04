@@ -141,4 +141,26 @@ export async function resolveBranchId(ctx: Context, inputBranchId?: string | nul
   return chosen;
 }
 
+
+/**
+ * ── Restaurante del contexto (aislamiento de tenant) ──
+ * Deriva el restaurantId de la sucursal en contexto (staff-lock incluido).
+ * Debe usarse en TODO lo que necesite "el restaurante de esta sesión".
+ *
+ * Nunca usar `select().from(restaurants).limit(1)`: eso toma un restaurante
+ * arbitrario de la plataforma y filtraba datos entre negocios (626 Café veía
+ * clientes/reportes de Ka13).
+ */
+export async function resolveRestaurantId(ctx: Context): Promise<string | null> {
+  const branchId = ctx.staffRole && ctx.staffBranchId ? ctx.staffBranchId : ctx.branchId;
+  if (!branchId) return null;
+  const { branches } = await import("@rabbitty/database-restaurant/schema");
+  const [branch] = await ctx.restaurantDb
+    .select({ restaurantId: branches.restaurantId })
+    .from(branches)
+    .where(eq(branches.id, branchId))
+    .limit(1);
+  return branch?.restaurantId ?? null;
+}
+
 export const publicLimitedProcedure = t.procedure.use(rateLimitMiddleware);

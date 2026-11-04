@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { and, eq, desc, sql, gte, inArray } from "drizzle-orm";
-import { router, protectedProcedure, adminOnlyProcedure } from "../trpc";
+import { router, protectedProcedure, adminOnlyProcedure, resolveRestaurantId } from "../trpc";
 import { campaigns, customers, restaurants } from "@rabbitty/database-restaurant";
 import { TRPCError } from "@trpc/server";
 import { enqueueCampaignDelivery } from "../services/queue";
@@ -61,7 +61,10 @@ export const campaignsRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "Campaign already sent" });
       }
 
-      const [restaurant] = await ctx.restaurantDb.select().from(restaurants).limit(1);
+      // Aislamiento de tenant: el restaurante SIEMPRE sale de la sucursal en contexto
+      const restaurantId = await resolveRestaurantId(ctx);
+      if (!restaurantId) throw new TRPCError({ code: "FORBIDDEN", message: "Sin sucursal asignada" });
+      const [restaurant] = await ctx.restaurantDb.select().from(restaurants).where(eq(restaurants.id, restaurantId)).limit(1);
       if (!restaurant) throw new TRPCError({ code: "NOT_FOUND", message: "No restaurant found" });
 
       let targetCustomers: any[];
