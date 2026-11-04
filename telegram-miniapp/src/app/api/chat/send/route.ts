@@ -49,6 +49,8 @@ export async function POST(req: Request) {
       metadata?: Record<string, unknown> | null;
       /** H-FASE0 · idempotencia: uuid por MENSAJE generado en el cliente. */
       clientMessageId?: string;
+      /** E2E: el contenido viene cifrado (base64url iv||ct). */
+      encrypted?: boolean;
     };
 
     const content = (body.content || '').trim();
@@ -132,6 +134,7 @@ export async function POST(req: Request) {
             ? { kind: 'LOCATION', lat: body.lat, lng: body.lng }
             : (body.metadata && typeof body.metadata === 'object' ? body.metadata : null),
           clientMessageId: body.clientMessageId?.trim() || null,
+          encrypted: body.encrypted === true,
         })
         .onConflictDoNothing({ target: [messages.conversationId, messages.clientMessageId] })
         .returning();

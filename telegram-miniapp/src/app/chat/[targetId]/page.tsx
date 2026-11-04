@@ -14,6 +14,9 @@ import { useToast } from '@/contexts/ToastContext';
 import { Bell, BellOff, Search, Ban, MoreHorizontal, Store, Bot, ExternalLink, Zap } from 'lucide-react';
 
 import { useRealtimeChat } from '@/lib/realtime/useRealtimeChat';
+import { ensureIdentity } from '@/lib/e2e/identity';
+import { ensureConversationKey } from '@/lib/e2e/conversationKeys';
+import { decryptText, encryptText } from '@/lib/e2e/crypto';
 interface BusinessCard {
   kind?: 'BUSINESS';
   businessId: string;
@@ -86,6 +89,7 @@ type Message = {
   deletedAt?: string | null;
   deletedForAll?: boolean;
   reactions?: Array<{ emoji: string; count: number; mine: boolean }>;
+  encrypted?: boolean;
 };
 
 interface ForwardConversation {
@@ -595,6 +599,10 @@ export default function ChatRoomPage() {
   const [targetName, setTargetName] = useState('...');
   // ── Grupo: tipo, nombre y miembros ──
   const [chatKind, setChatKind] = useState<'DIRECT' | 'GROUP'>('DIRECT');
+  const [chatAudience, setChatAudience] = useState<'BUSINESS' | 'PEER'>('BUSINESS');
+  // ── E2E (solo DIRECT + PEER) ──
+  const [e2eKey, setE2eKey] = useState<CryptoKey | null>(null);
+  const decryptedIds = useRef<Set<string>>(new Set());
   const [groupInfo, setGroupInfo] = useState<{ name: string | null; members: Array<{ userId: string; name: string; role: string }> } | null>(null);
   const [groupSheetOpen, setGroupSheetOpen] = useState(false);
   const [groupAddQuery, setGroupAddQuery] = useState('');
@@ -844,6 +852,7 @@ export default function ChatRoomPage() {
       if (typeof data.isBusinessInbox === 'boolean') setIsBusinessInbox(data.isBusinessInbox);
       if (data.targetName) setTargetName(data.targetName);
       if (data.kind === 'GROUP' || data.kind === 'DIRECT') setChatKind(data.kind);
+      if (data.audience === 'PEER' || data.audience === 'BUSINESS') setChatAudience(data.audience);
       if (data.group !== undefined) {
         setGroupInfo(data.group ?? null);
         if (data.group?.name) setTargetName(data.group.name);
@@ -1100,13 +1109,23 @@ export default function ChatRoomPage() {
 
     try {
       const headers = await PlatformBridge.getAuthHeaders();
+      // E2E: si hay clave de conversación, el servidor recibe SOLO el cifrado.
+      let outgoing = content;
+      let outgoingEncrypted = false;
+      if (e2eKey && !isLoc) {
+        try {
+          outgoing = await encryptText(e2eKey, content);
+          outgoingEncrypted = true;
+        } catch { outgoing = content; outgoingEncrypted = false; }
+      }
       const res = await fetch('/api/chat/send', {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           conversationId,
           targetId,
-          content,
+          content: outgoing,
+          encrypted: outgoingEncrypted,
           type: isLoc ? 'LOCATION' : 'TEXT',
           lat: explicitCoords?.lat ?? coords?.lat ?? null,
           lng: explicitCoords?.lng ?? coords?.lng ?? null,
@@ -1567,6 +1586,46 @@ export default function ChatRoomPage() {
     setSelectMode(false);
     setSelectedIds([]);
   };
+
+  // ── E2E: preparar identidad + clave de conversación (solo DIRECT + PEER) ──
+  useEffect(() => {
+    if (chatKind !== 'DIRECT' || chatAudience !== 'PEER') { setE2eKey(null); return; }
+    const convId = typeof conversationId === 'string' ? conversationId : null;
+    const peer = typeof targetId === 'string' ? targetId : null;
+    const myId = user?.id;
+    if (!convId || !peer || !myId || !/^[0-9a-f-]{36}$/i.test(peer)) return;
+    let alive = true;
+    (async () => {
+      try {
+        const me = await ensureIdentity();
+        if (!alive || !me) return;
+        const key = await ensureConversationKey(convId, me, myId, [peer]);
+        if (alive && key) setE2eKey(key);
+      } catch { /* sin cifrado: se mantiene en claro */ }
+    })();
+    return () => { alive = false; };
+  }, [chatKind, chatAudience, conversationId, targetId, user?.id]);
+
+  // ── E2E: descifrar lo que llega cifrado (una vez por mensaje) ──
+  useEffect(() => {
+    if (!e2eKey) return;
+    const pending = messages.filter((m) => m.encrypted && !decryptedIds.current.has(m.id));
+    if (pending.length === 0) return;
+    let alive = true;
+    (async () => {
+      const updates = new Map<string, string>();
+      for (const m of pending) {
+        try {
+          updates.set(m.id, await decryptText(e2eKey, m.content));
+          decryptedIds.current.add(m.id);
+        } catch { /* mensaje de otra clave: se deja el marcador */ }
+      }
+      if (alive && updates.size > 0) {
+        setMessages((prev) => prev.map((m) => (updates.has(m.id) ? { ...m, content: updates.get(m.id)!, encrypted: false } : m)));
+      }
+    })();
+    return () => { alive = false; };
+  }, [messages, e2eKey]);
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
@@ -2361,7 +2420,7 @@ export default function ChatRoomPage() {
               {targetName}
             </span>
             <span style={{ fontSize: 11.5, color: headerColor, fontWeight: 500, lineHeight: 1.1 }}>
-              {headerStatus}
+              {e2eKey ? '🔒 ' : ''}{headerStatus}
             </span>
           </button>
         </div>
