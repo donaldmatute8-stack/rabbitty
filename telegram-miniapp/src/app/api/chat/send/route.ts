@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { messages, conversations, ownedBusinesses, notificationsOutbox, conversationMembers } from '@/db/schema';
+import { messages, conversations, ownedBusinesses, notificationsOutbox, conversationMembers, conversationKeys } from '@/db/schema';
 import { and, eq, isNull } from 'drizzle-orm';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 import {
@@ -51,7 +51,48 @@ export async function POST(req: Request) {
       clientMessageId?: string;
       /** E2E: el contenido viene cifrado (base64url iv||ct). */
       encrypted?: boolean;
+      /** E2E: dispositivo del emisor (para validar la re-clave del grupo). */
+      deviceId?: string;
     };
+
+    // ── Guard de re-clave (grupos PEER) ──
+    // Si el grupo cambió de miembros, la clave sube de versión. Quien todavía no
+    // tiene su sobre de la versión actual NO debe enviar: su mensaje quedaría
+    // ilegible para los demás. Mejor pedirle que espere un momento.
+    if (body.encrypted === true) {
+      try {
+        const [convRow] = await db
+          .select({ id: conversations.id, kind: conversations.kind, audience: conversations.audience, version: conversations.e2eKeyVersion })
+          .from(conversations)
+          .where(eq(conversations.id, body.conversationId as string))
+          .limit(1);
+        if (convRow?.kind === 'GROUP' && convRow.audience === 'PEER') {
+          const deviceId = (body.deviceId || '').trim();
+          const currentVersion = Number(convRow.version ?? 1);
+          const [sealed] = deviceId
+            ? await db
+                .select({ id: conversationKeys.id })
+                .from(conversationKeys)
+                .where(and(
+                  eq(conversationKeys.conversationId, convRow.id),
+                  eq(conversationKeys.recipientDeviceId, deviceId),
+                  eq(conversationKeys.keyVersion, currentVersion),
+                ))
+                .limit(1)
+            : [];
+          if (!sealed) {
+            return NextResponse.json(
+              {
+                success: false,
+                code: 'REKEY_REQUIRED',
+                error: 'Estamos actualizando la llave de este grupo para cuidar lo que sigue 🐰. Espera unos segundos y vuelve a enviar.',
+              },
+              { status: 409 },
+            );
+          }
+        }
+      } catch { /* si falla la verificación, no bloqueamos el envío */ }
+    }
 
     const content = (body.content || '').trim();
     if (!body.conversationId || !content) {

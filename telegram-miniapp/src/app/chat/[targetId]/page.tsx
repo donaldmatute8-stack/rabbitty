@@ -14,7 +14,7 @@ import { useToast } from '@/contexts/ToastContext';
 import { Bell, BellOff, Search, Ban, MoreHorizontal, Store, Bot, ExternalLink, Zap } from 'lucide-react';
 
 import { useRealtimeChat } from '@/lib/realtime/useRealtimeChat';
-import { ensureIdentity } from '@/lib/e2e/identity';
+import { ensureIdentity, getDeviceId } from '@/lib/e2e/identity';
 import { ensureConversationKey } from '@/lib/e2e/conversationKeys';
 import { decryptBytes, decryptText, encryptBytes, encryptText } from '@/lib/e2e/crypto';
 interface BusinessCard {
@@ -1132,6 +1132,7 @@ export default function ChatRoomPage() {
           targetId,
           content: outgoing,
           encrypted: outgoingEncrypted,
+          ...(outgoingEncrypted ? { deviceId: getDeviceId() } : {}),
           type: isLoc ? 'LOCATION' : 'TEXT',
           lat: explicitCoords?.lat ?? coords?.lat ?? null,
           lng: explicitCoords?.lng ?? coords?.lng ?? null,
@@ -1139,7 +1140,11 @@ export default function ChatRoomPage() {
           clientMessageId,
         }),
       });
-      const data: SendResponse = await res.json();
+      const data: SendResponse & { code?: string; error?: string } = await res.json();
+      if (!data.success && data.error) {
+        // p. ej. REKEY_REQUIRED: el grupo está cambiando de llave.
+        showToast(data.error, data.code === 'REKEY_REQUIRED' ? 'info' : 'error');
+      }
       if (data.success) {
         if (replyTo) setReplyTo(null);
         setMessages((prev) => {
