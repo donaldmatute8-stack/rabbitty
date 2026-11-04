@@ -75,6 +75,12 @@ export function clearPosTerminal(): void {
   }
 }
 
+/** ¿Este dispositivo ya fue vinculado alguna vez? (sin generar uno nuevo) */
+export function hasPosDeviceKey(): boolean {
+  const existing = safeGet(DEVICE_KEY);
+  return !!existing && /^[a-f0-9]{64}$/i.test(existing);
+}
+
 /** Secreto local de 64 hex. Estable por dispositivo. */
 export function getOrCreateDeviceKey(): string {
   const existing = safeGet(DEVICE_KEY);

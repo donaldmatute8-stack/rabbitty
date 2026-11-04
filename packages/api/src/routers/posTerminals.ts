@@ -43,6 +43,24 @@ function newToken(): string {
   return crypto.randomBytes(32).toString("hex");
 }
 
+/**
+ * Límite por dispositivo para pedir autorización: 3 cada 10 minutos.
+ * En memoria (mejor esfuerzo en serverless); la idempotencia evita el spam real.
+ */
+const createHits = new Map<string, number[]>();
+function deviceCreateAllowed(terminalId: string): boolean {
+  const now = Date.now();
+  const recent = (createHits.get(terminalId) ?? []).filter((t) => now - t < 10 * 60_000);
+  recent.push(now);
+  createHits.set(terminalId, recent);
+  if (createHits.size > 2000) {
+    for (const [key, value] of createHits) {
+      if (!value.some((t) => now - t < 10 * 60_000)) createHits.delete(key);
+    }
+  }
+  return recent.length <= 3;
+}
+
 /** Sucursal + negocio del contexto (el POS siempre opera en su sucursal). */
 async function resolveScope(ctx: { restaurantDb: any; branchId: string }) {
   const [branch] = await ctx.restaurantDb
@@ -209,8 +227,8 @@ export const posTerminalsRouter = router({
       return { enabled: featureEnabled(), terminalId, sessionToken: token, expiresAt };
     }),
 
-  /** Estado de ESTE dispositivo (sin crear sesión). */
-  status: protectedProcedure
+  /** Estado de ESTE dispositivo (sin crear sesión). Solo requiere su deviceKey. */
+  status: publicProcedure
     .input(z.object({ deviceKey: z.string().min(32).max(200) }))
     .query(async ({ ctx, input }) => {
       const [row] = await ctx.coreDb
@@ -233,8 +251,8 @@ export const posTerminalsRouter = router({
       return { authorized: true as const, name: row.name, branchId: row.branchId, expiresAt: row.expiresAt, terminalId: row.id };
     }),
 
-  /** Emite una sesión de terminal si el dispositivo sigue autorizado. */
-  issueSession: protectedProcedure
+  /** Emite una sesión si el dispositivo sigue autorizado (reapertura incluida). */
+  issueSession: publicProcedure
     .input(z.object({ deviceKey: z.string().min(32).max(200) }))
     .mutation(async ({ ctx, input }) => {
       const [row] = await ctx.coreDb
@@ -285,32 +303,69 @@ export const posTerminalsRouter = router({
    * Crea una solicitud de reautorización (la aprueba el admin desde el móvil).
    * Devuelve un código corto de un solo uso con expiración de minutos.
    */
-  createAuthRequest: protectedProcedure
+  createAuthRequest: publicProcedure
     .input(z.object({ deviceKey: z.string().min(32).max(200), hours: z.number().int().min(1).max(720).optional() }))
     .mutation(async ({ ctx, input }) => {
+      // Solo el dispositivo (que tiene el deviceKey) puede pedir autorización.
       const [row] = await ctx.coreDb
-        .select({ id: posTerminals.id })
+        .select({ id: posTerminals.id, name: posTerminals.name, status: posTerminals.status })
         .from(posTerminals)
         .where(eq(posTerminals.deviceKeyHash, hashDeviceKey(input.deviceKey)))
         .limit(1);
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Terminal no registrada" });
+      if (row.status === "REVOKED") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Esta terminal fue revocada. Pide que la vinculen de nuevo." });
+      }
+
+      // Idempotente: si ya hay una solicitud viva, se reutiliza el mismo código
+      // (evita llenar de avisos al administrador).
+      const [pending] = await ctx.coreDb
+        .select({ code: posAuthRequests.code, expiresAt: posAuthRequests.expiresAt })
+        .from(posAuthRequests)
+        .where(and(eq(posAuthRequests.terminalId, row.id), eq(posAuthRequests.status, "PENDING")))
+        .orderBy(desc(posAuthRequests.requestedAt))
+        .limit(1);
+      if (pending && new Date(pending.expiresAt).getTime() > Date.now()) {
+        return { code: pending.code, expiresAt: pending.expiresAt, reused: true };
+      }
+
+      if (!deviceCreateAllowed(row.id)) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "Demasiadas solicitudes seguidas. Espera un minuto.",
+        });
+      }
 
       const code = String(crypto.randomInt(100000, 999999));
       const expiresAt = new Date(Date.now() + AUTH_REQUEST_MINUTES * 60_000);
       await ctx.coreDb.insert(posAuthRequests).values({
         terminalId: row.id,
         code,
-        requestedById: ctx.userId ?? null,
+        requestedById: null,
         requestedHours: input.hours ?? TERMINAL_SESSION_HOURS,
         expiresAt,
       });
-      return { code, expiresAt };
+
+      console.info("[POS_AUTH_REQUEST]", JSON.stringify({ event: "created", terminalId: row.id }));
+
+      return { code, expiresAt, reused: false };
     }),
 
-  /** Estado de una solicitud (el POS hace polling mientras espera). */
-  authRequestStatus: protectedProcedure
-    .input(z.object({ code: z.string().length(6) }))
+  /**
+   * Estado de una solicitud (el POS hace polling mientras espera).
+   * Exige el `deviceKey` del mismo dispositivo: el código de 6 dígitos NO se
+   * puede consultar desde fuera (evita enumeración).
+   */
+  authRequestStatus: publicProcedure
+    .input(z.object({ code: z.string().length(6), deviceKey: z.string().min(32).max(200) }))
     .query(async ({ ctx, input }) => {
+      const [terminal] = await ctx.coreDb
+        .select({ id: posTerminals.id })
+        .from(posTerminals)
+        .where(eq(posTerminals.deviceKeyHash, hashDeviceKey(input.deviceKey)))
+        .limit(1);
+      if (!terminal) return { status: "NOT_FOUND" as const };
+
       const [row] = await ctx.coreDb
         .select({
           status: posAuthRequests.status,
@@ -320,12 +375,79 @@ export const posTerminalsRouter = router({
         .from(posAuthRequests)
         .where(eq(posAuthRequests.code, input.code))
         .limit(1);
-      if (!row) return { status: "NOT_FOUND" as const };
+
+      if (!row || row.terminalId !== terminal.id) return { status: "NOT_FOUND" as const };
       if (row.status === "PENDING" && new Date(row.expiresAt).getTime() < Date.now()) {
-        return { status: "EXPIRED" as const };
+        return { status: "EXPIRED" as const, expiresAt: row.expiresAt };
       }
-      return { status: row.status as "PENDING" | "APPROVED" | "DENIED" | "EXPIRED", terminalId: row.terminalId };
+      return {
+        status: row.status as "PENDING" | "APPROVED" | "DENIED" | "EXPIRED",
+        expiresAt: row.expiresAt,
+      };
     }),
+
+  /** Detalle para el administrador (solo su sucursal). */
+  authRequestDetail: adminOnlyProcedure
+    .input(z.object({ code: z.string().length(6) }))
+    .query(async ({ ctx, input }) => {
+      const scope = await resolveScope(ctx);
+      const [row] = await ctx.coreDb
+        .select({
+          status: posAuthRequests.status,
+          expiresAt: posAuthRequests.expiresAt,
+          requestedHours: posAuthRequests.requestedHours,
+          createdAt: posAuthRequests.requestedAt,
+          terminalId: posAuthRequests.terminalId,
+          terminalName: posTerminals.name,
+          branchId: posTerminals.branchId,
+        })
+        .from(posAuthRequests)
+        .innerJoin(posTerminals, eq(posAuthRequests.terminalId, posTerminals.id))
+        .where(eq(posAuthRequests.code, input.code))
+        .limit(1);
+
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitud no encontrada" });
+      if (row.branchId !== scope.branchId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Esa terminal no es de tu sucursal" });
+      }
+      return {
+        code: input.code,
+        status:
+          row.status === "PENDING" && new Date(row.expiresAt).getTime() < Date.now()
+            ? ("EXPIRED" as const)
+            : (row.status as "PENDING" | "APPROVED" | "DENIED" | "EXPIRED"),
+        terminalName: row.terminalName,
+        requestedHours: row.requestedHours,
+        expiresAt: row.expiresAt,
+        createdAt: row.createdAt,
+      };
+    }),
+
+  /** Solicitudes pendientes de mi sucursal (para el panel del admin). */
+  pendingAuthRequests: adminOnlyProcedure.query(async ({ ctx }) => {
+    const scope = await resolveScope(ctx);
+    const rows = await ctx.coreDb
+      .select({
+        code: posAuthRequests.code,
+        terminalName: posTerminals.name,
+        requestedHours: posAuthRequests.requestedHours,
+        expiresAt: posAuthRequests.expiresAt,
+        createdAt: posAuthRequests.requestedAt,
+      })
+      .from(posAuthRequests)
+      .innerJoin(posTerminals, eq(posAuthRequests.terminalId, posTerminals.id))
+      .where(
+        and(
+          eq(posTerminals.branchId, scope.branchId),
+          eq(posAuthRequests.status, "PENDING"),
+        ),
+      )
+      .orderBy(desc(posAuthRequests.requestedAt))
+      .limit(10);
+
+    const now = Date.now();
+    return rows.filter((r) => new Date(r.expiresAt).getTime() > now);
+  }),
 
   /** Aprobación (la hace el administrador; aquí valida que sea su sucursal). */
   resolveAuthRequest: adminOnlyProcedure

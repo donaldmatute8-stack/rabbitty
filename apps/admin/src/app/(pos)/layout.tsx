@@ -3,8 +3,9 @@ import React, { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { trpc } from "../../lib/trpc-client";
 import { initAppLifecycleHandlers } from "../../lib/print-engine";
-import { getPosTerminalToken } from "../../lib/pos-terminal";
+import { getPosTerminalInfo, getPosTerminalToken, hasPosDeviceKey } from "../../lib/pos-terminal";
 import { PosShiftGate } from "../../components/PosShiftGate";
+import { PosReauthPanel } from "../../components/PosReauthPanel";
 
 export default function PosLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -13,10 +14,12 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
   // ── Fase 2: ¿este dispositivo es una terminal vinculada? ──
   // El token vive en localStorage; se lee en efecto para no romper la hidratación.
   const [terminalToken, setTerminalToken] = useState<string | null>(null);
+  const [hasDeviceKey, setHasDeviceKey] = useState(false);
   useEffect(() => {
     // Lectura de localStorage tras montar (evita mismatch de hidratación).
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setTerminalToken(getPosTerminalToken());
+    setHasDeviceKey(hasPosDeviceKey());
   }, [pathname]);
 
   const isLinkPage = pathname === "/pos/link";
@@ -76,6 +79,12 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
       : sessionQuery.error
     : profileQuery.error;
 
+  const featureOn = feature?.enabled === true;
+  // Hay dispositivo conocido (token o deviceKey) pero no sesión válida →
+  // se ofrece reautorización móvil en vez de mandarlo a login.
+  const canReauth =
+    !isLinkPage && featureOn && !authorized && (hasTerminalToken || hasDeviceKey);
+
   // Solo la falta REAL de sesión manda al login. Un error de negocio (p. ej.
   // "Sin sucursal asignada") NO debe expulsar al usuario a la pantalla de
   // credenciales: eso hacía que al volver al POS pidiera la clave otra vez.
@@ -87,10 +96,10 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
     // Terminal con token que el servidor ya no acepta (revocada/vencida):
     // no se borra sola; se ofrece re-vincular desde /pos/link tras login.
     if (hasTerminalToken && !terminalMode && !featureLoading) return;
-    if (error && isAuthError && !hasTerminalToken) {
+    if (error && isAuthError && !hasTerminalToken && !canReauth) {
       router.replace("/login");
     }
-  }, [isLoading, error, isAuthError, hasTerminalToken, terminalMode, featureLoading, router]);
+  }, [isLoading, error, isAuthError, hasTerminalToken, terminalMode, featureLoading, canReauth, router]);
 
   useEffect(() => {
     const cleanup = initAppLifecycleHandlers();
@@ -99,7 +108,12 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
 
   if (isLoading) return <div className="h-[100dvh] w-screen bg-black" />;
 
-  // ── Token presente pero modo terminal apagado o rechazado ──
+  // ── Reautorización desde el móvil (Fase 4) ──
+  if (canReauth) {
+    return <PosReauthPanel terminalName={getPosTerminalInfo()?.name ?? null} />;
+  }
+
+  // ── Token presente pero modo terminal apagado ──
   if (hasTerminalToken && !authorized) {
     const disabled = !featureLoading && feature?.enabled !== true;
     return (

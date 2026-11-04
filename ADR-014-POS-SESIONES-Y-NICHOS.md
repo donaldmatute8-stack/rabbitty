@@ -1,6 +1,6 @@
 # ADR-014 · POS con sesión propia, Admin protegido y onboarding por nicho
 
-**Fecha:** 2026-11-04 · **Estado:** Fases 0–3.5 implementadas (flags apagados) · deploy pendiente
+**Fecha:** 2026-11-04 · **Estado:** Fases 0–4 implementadas (flags apagados) · deploy pendiente
 **Contexto:** en producción. Regla: **solo cambios aditivos + feature flag** hasta validar.
 
 ---
@@ -64,7 +64,7 @@ admin, no la operación diaria.
 **2** | POS usa la sesión de terminal (layout/route handler) | **medio** | ✅ aplicado · doble lectura (terminal **o** admin), allowlist de routers y telemetría de uso |
 **3** | PIN del empleado al iniciar turno (`pos_operator_sessions`) | bajo | ✅ aplicado · flag `POS_OPERATOR_SESSIONS`; el PIN es `staff.pinCode` con lockout |
 **3.5** | Permisos por rol (matriz única servidor + UI) | bajo | ✅ aplicado · terminal con turno siempre; panel admin con `POS_ROLE_ENFORCEMENT=1` |
-**4** | Reautorización desde el móvil (`pos_auth_requests`) | bajo | solo recuperación |
+**4** | Reautorización desde el móvil (`pos_auth_requests`) | bajo | ✅ aplicado · código de 6 dígitos + QR, aprobación con sesión de admin |
 **5** | Pantalla de terminales (revocar, historial) | bajo | solo lectura + revocar |
 
 ---
@@ -285,7 +285,77 @@ allowlist de la Fase 2).
 
 ---
 
-## 11 · Siguiente paso
+## 11 · Fase 4 implementada (reautorización móvil)
+
+**Flujo**
+
+```
+Terminal con sesión inválida/vencida
+   │  "Solicitar autorización"
+   ▼
+POST posTerminals.createAuthRequest { deviceKey }
+   │  código de 6 dígitos (10 min) + QR
+   ▼
+Admin escanea el QR → /pos/auth?code=XXXXXX (su teléfono, su sesión)
+   │  authRequestDetail → Aprobar / Rechazar
+   ▼
+Terminal hace polling (3 s) → APPROVED → issueSession { deviceKey }
+   │
+   ▼
+Nueva sesión guardada → POS abre (turno por PIN si aplica)
+```
+
+**Endpoints**
+
+| Endpoint | Quién | Nota |
+|---|---|---|
+`createAuthRequest` | público + `deviceKey` | idempotente: reutiliza el código vivo; máx. 3 cada 10 min por terminal |
+`authRequestStatus` | público + `deviceKey` | el código **no** se puede consultar sin el dispositivo |
+`issueSession` | público + `deviceKey` | solo si la terminal sigue ACTIVE y autorizada |
+`authRequestDetail` | admin/manager | valida que la terminal sea de su sucursal |
+`pendingAuthRequests` | admin/manager | lista de solicitudes vivas de la sucursal |
+`resolveAuthRequest` | admin/manager | aprueba/deniega; al aprobar extiende la autorización |
+
+**Contexto**: una terminal sin sesión no tiene sucursal, así que los endpoints
+públicos de recuperación (`featureEnabled`, `status`, `issueSession`,
+`createAuthRequest`, `authRequestStatus`) se permiten explícitamente sin
+tenancy y se validan por dentro con el `deviceKey`.
+
+**Seguridad**
+
+- Código de 6 dígitos + `deviceKey`: sin el dispositivo no se puede consultar
+  ni canjear.
+- Expira en 10 minutos; un solo uso (`PENDING` → `APPROVED/DENIED`).
+- La aprobación exige sesión de admin/manager y terminal de su sucursal.
+- Reutilizar el código vivo evita spamear al administrador.
+- Telemetría: `[POS_AUTH_REQUEST] created`.
+
+**UI**
+
+- `PosReauthPanel` (terminal): código grande, QR, cuenta regresiva, polling y
+  canje automático de la sesión. Si la terminal fue revocada, pide revincular.
+- `/pos/auth` (móvil del admin): detalle, aprobar/rechazar, entrada manual del
+  código y lista de solicitudes pendientes de la sucursal.
+
+**Pruebas hechas (local)**
+
+- `status` sin sesión y sin sucursal → `EXPIRED` (endpoint público OK).
+- `createAuthRequest` sin sesión → código; segunda llamada → mismo código (`reused`).
+- `authRequestStatus` con otro `deviceKey` → `NOT_FOUND`.
+- Aprobación simulada → `APPROVED` → `issueSession` → `pos.getCategories` 200.
+- `authRequestDetail` sin admin → denegado.
+- `/pos`, `/pos/auth`, `/pos/link` compilan.
+
+**Límites**
+
+- El QR usa el dominio del admin; en la app nativa se puede abrir con el mismo
+  enlace (pendiente de deep link si se quiere 1 toque).
+- La aprobación aún no manda push al admin; el aviso es el código/QR en la
+  terminal y la lista de pendientes.
+
+---
+
+## 12 · Siguiente paso
 
 Fase 4: reautorización desde el móvil (`pos_auth_requests`) — el POS muestra un
 código corto y el admin lo aprueba desde su teléfono, sin escribir la clave en

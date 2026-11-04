@@ -177,7 +177,17 @@ const handler = async (req: Request) => {
         try { return new URL(req.url).pathname.replace(/^\/api\/trpc\//, ""); } catch { return ""; }
       })();
       const isPublicPaymentPath = reqPath.startsWith("payments.");
-      if (!impersonating && !activeBranchId && !isPublicPaymentPath) {
+      // Endpoints de recuperación del POS: una terminal vencida/revocada no
+      // tiene sucursal en contexto, pero sí deviceKey. Se validan por dentro.
+      const PUBLIC_POS_PATHS = new Set([
+        "posTerminals.featureEnabled",
+        "posTerminals.status",
+        "posTerminals.issueSession",
+        "posTerminals.createAuthRequest",
+        "posTerminals.authRequestStatus",
+      ]);
+      const isPublicPosPath = PUBLIC_POS_PATHS.has(reqPath);
+      if (!impersonating && !activeBranchId && !isPublicPaymentPath && !isPublicPosPath) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sin sucursal asignada para esta sesión" });
       }
 
