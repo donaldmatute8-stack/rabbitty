@@ -207,6 +207,21 @@ export const notifications = pgTable("notifications", {
   createdAt: timestamp("createdAt").defaultNow(),
 });
 
+/**
+ * ── Reacciones a mensajes ── 1 por usuario/emoji/mensaje.
+ * Tocar la misma reacción la quita (toggle en el endpoint).
+ */
+export const messageReactions = pgTable("message_reactions", {
+  id: id(),
+  messageId: uuid("messageId").notNull(),
+  userId: uuid("userId").notNull(),
+  emoji: text("emoji").notNull(),
+  createdAt: timestamp("createdAt").defaultNow(),
+}, (table) => [
+  uniqueIndex("message_reactions_uq").on(table.messageId, table.userId, table.emoji),
+  index("message_reactions_msg_idx").on(table.messageId),
+]);
+
 export const conversations = pgTable("conversations", {
   id: id(),
   participant1: text("participant1").notNull(),
@@ -237,6 +252,12 @@ export const messages = pgTable("messages", {
   clientMessageId: text("clientMessageId"),
   readAt: timestamp("readAt"),
   createdAt: timestamp("createdAt").defaultNow(),
+  // Editar / borrar (0032). `deletedForAll` oculta para ambos; el contenido se
+  // conserva en la fila para auditoría pero la API no lo expone.
+  editedAt: timestamp("editedAt"),
+  deletedAt: timestamp("deletedAt"),
+  deletedForAll: boolean("deletedForAll").default(false).notNull(),
+  deletedBy: uuid("deletedBy"),
 }, (table) => [
   // Cursor compuesto (createdAt, id) + cobertura del scan de unread.
   index("messages_conv_created_idx").on(table.conversationId, table.createdAt, table.id),

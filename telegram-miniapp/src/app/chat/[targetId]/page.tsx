@@ -82,6 +82,10 @@ type Message = {
   type?: string;
   metadata?: MessageMetadata | null;
   readAt?: string | null;
+  editedAt?: string | null;
+  deletedAt?: string | null;
+  deletedForAll?: boolean;
+  reactions?: Array<{ emoji: string; count: number; mine: boolean }>;
 };
 
 interface ForwardConversation {
@@ -1847,6 +1851,9 @@ export default function ChatRoomPage() {
   // Borrador de foto: se elige, se previsualiza y AHÍ se decide "una vez".
   // Por defecto va normal (como WhatsApp).
   const [photoDraft, setPhotoDraft] = useState<{ file: File; url: string; viewOnce: boolean } | null>(null);
+  // Menú de acciones por mensaje (reaccionar / editar / eliminar)
+  const [msgMenu, setMsgMenu] = useState<Message | null>(null);
+  const [editingMsg, setEditingMsg] = useState<{ id: string; content: string } | null>(null);
   const [viewOnceUnlocked, setViewOnceUnlocked] = useState<Record<string, boolean>>({});
   const photoInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -1937,6 +1944,69 @@ export default function ChatRoomPage() {
     }
   };
 
+  // ── Reaccionar / editar / eliminar ──
+  const reactTo = async (msgId: string, emoji: string) => {
+    PlatformBridge.hapticFeedback('light');
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch(`/api/chat/messages/${msgId}`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emoji }),
+      });
+      const data = await res.json().catch(() => null);
+      if (data?.success) {
+        const counts = (data.counts ?? {}) as Record<string, number>;
+        const mine = (data.myReactions ?? []) as string[];
+        setMessages((prev) => prev.map((m) => (m.id === msgId
+          ? { ...m, reactions: Object.entries(counts).map(([e, count]) => ({ emoji: e, count: Number(count), mine: mine.includes(e) })) }
+          : m)));
+      }
+    } catch { /* noop */ }
+    setMsgMenu(null);
+  };
+
+  const saveEdit = async () => {
+    if (!editingMsg) return;
+    const content = editingMsg.content.trim();
+    if (!content) return;
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch(`/api/chat/messages/${editingMsg.id}`, {
+        method: 'PATCH',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      });
+      const data = await res.json().catch(() => null);
+      if (data?.success) {
+        setMessages((prev) => prev.map((m) => (m.id === editingMsg.id ? { ...m, content, editedAt: new Date().toISOString() } : m)));
+        showToast('Mensaje editado', 'success');
+      } else {
+        showToast(data?.error || 'No se pudo editar', 'error');
+      }
+    } catch { showToast('No se pudo editar', 'error'); }
+    setEditingMsg(null);
+  };
+
+  const deleteMessage = async (msg: Message) => {
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch(`/api/chat/messages/${msg.id}`, {
+        method: 'DELETE',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ forEveryone: true }),
+      });
+      const data = await res.json().catch(() => null);
+      if (data?.success) {
+        setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, content: '', type: 'DELETED', metadata: null } : m)));
+        showToast('Mensaje eliminado', 'success');
+      } else {
+        showToast(data?.error || 'No se pudo eliminar', 'error');
+      }
+    } catch { showToast('No se pudo eliminar', 'error'); }
+    setMsgMenu(null);
+  };
+
   /** "Ver una vez": avisa al server, que marca viewedAt y BORRA el archivo. */
   const openViewOnce = async (msgId: string, key: string) => {
     PlatformBridge.hapticFeedback('medium');
@@ -1954,6 +2024,9 @@ export default function ChatRoomPage() {
   };
 
   const renderContent = (msg: Message, isMe = false) => {
+    if (msg.type === 'DELETED') {
+      return <span style={{ fontStyle: 'italic', opacity: 0.6 }}>🚫 Mensaje eliminado</span>;
+    }
     const meta: MessageMetadata | null =
       msg.metadata && typeof msg.metadata === 'object' ? msg.metadata : null;
 
@@ -2885,6 +2958,22 @@ export default function ChatRoomPage() {
                   })()}
                   <div style={{ fontSize: '16px', lineHeight: '1.34', wordBreak: 'break-word' }}>
                     {renderContent(msg, isMe)}
+                    {Array.isArray(msg.reactions) && msg.reactions.length > 0 && (
+                      <span style={{ display: 'inline-flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
+                        {msg.reactions.map((r) => (
+                          <span
+                            key={r.emoji}
+                            style={{
+                              fontSize: 11, padding: '1px 6px', borderRadius: 999,
+                              background: r.mine ? 'rgba(255,255,255,0.28)' : 'rgba(0,0,0,0.25)',
+                              border: '1px solid rgba(255,255,255,0.18)', lineHeight: 1.5,
+                            }}
+                          >
+                            {r.emoji}{r.count > 1 ? ` ${r.count}` : ''}
+                          </span>
+                        ))}
+                      </span>
+                    )}
                     {!(msg.type === 'VOICE' || (msg.metadata && typeof msg.metadata === 'object' && (msg.metadata as Record<string, unknown>).kind === 'VOICE')) && (
                       <span
                         style={{
@@ -2905,6 +2994,20 @@ export default function ChatRoomPage() {
                       >
                         {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         {isMe && !isBot && <CheckTicks read={Boolean(msg.readAt)} />}
+                        {!isBot && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setMsgMenu(msg); }}
+                            aria-label="Acciones del mensaje"
+                            style={{
+                              background: 'transparent', border: 'none', cursor: 'pointer',
+                              color: isMe ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.45)',
+                              padding: '0 2px', fontSize: 14, lineHeight: 1,
+                            }}
+                          >
+                            ⋯
+                          </button>
+                        )}
                       </span>
                     )}
                   </div>
@@ -3112,6 +3215,89 @@ export default function ChatRoomPage() {
             >
               ➤
             </button>
+          </div>
+        )}
+
+        {/* Menú de acciones del mensaje: reaccionar / editar / eliminar */}
+        {msgMenu && (
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 75, background: 'rgba(0,0,0,0.6)' }}
+            onClick={() => setMsgMenu(null)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                position: 'absolute', left: 0, right: 0,
+                bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0px)',
+                background: '#141418', borderTop: '1px solid rgba(255,255,255,0.12)',
+                borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: '14px 14px 20px',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-around', marginBottom: 14 }}>
+                {['👍', '❤️', '😂', '😮', '😢', '🙏'].map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => void reactTo(msgMenu.id, emoji)}
+                    style={{
+                      fontSize: 24, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: 999, width: 46, height: 46, cursor: 'pointer',
+                    }}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+
+              {msgMenu.senderId === (myParticipantId || user?.id) && msgMenu.type === 'TEXT' && !msgMenu.deletedAt && (
+                <button
+                  type="button"
+                  onClick={() => { setEditingMsg({ id: msgMenu.id, content: msgMenu.content }); setMsgMenu(null); }}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '14px 6px', fontSize: 14, fontWeight: 700, color: '#fff', background: 'transparent', border: 'none', cursor: 'pointer' }}
+                >
+                  ✏️ Editar mensaje
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => void deleteMessage(msgMenu)}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '14px 6px', fontSize: 14, fontWeight: 700, color: '#FF6B81', background: 'transparent', border: 'none', cursor: 'pointer' }}
+              >
+                🗑️ Eliminar para todos
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMsgMenu(null)}
+                style={{ display: 'block', width: '100%', marginTop: 6, padding: '12px 6px', fontSize: 13, fontWeight: 800, color: 'rgba(255,255,255,0.6)', background: 'rgba(255,255,255,0.06)', border: 'none', borderRadius: 12, cursor: 'pointer' }}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Editar mensaje */}
+        {editingMsg && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18 }}>
+            <div style={{ width: '100%', maxWidth: 420, background: '#141418', borderRadius: 18, border: '1px solid rgba(255,255,255,0.12)', padding: 16 }}>
+              <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 800, color: '#fff' }}>Editar mensaje</p>
+              <textarea
+                value={editingMsg.content}
+                onChange={(e) => setEditingMsg({ ...editingMsg, content: e.target.value })}
+                rows={3}
+                style={{ width: '100%', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, color: '#fff', fontSize: 14, padding: 10, resize: 'none', outline: 'none' }}
+              />
+              <div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end' }}>
+                <button type="button" onClick={() => setEditingMsg(null)} style={{ padding: '10px 16px', borderRadius: 999, background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.12)', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
+                  Cancelar
+                </button>
+                <button type="button" onClick={() => void saveEdit()} style={{ padding: '10px 18px', borderRadius: 999, background: 'linear-gradient(135deg,#FF2E93,#E11D74)', color: '#fff', border: 'none', fontSize: 13, fontWeight: 900, cursor: 'pointer' }}>
+                  Guardar
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

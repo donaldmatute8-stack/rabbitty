@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
+import { messageReactions } from '@/db/schema';
 import { conversations, messages, users, ownedBusinesses } from '@/db/schema';
 import { and, eq, inArray, isNull, ne, or, asc, desc, sql, type SQL } from 'drizzle-orm';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
@@ -187,6 +188,39 @@ export async function GET(req: Request) {
       } catch { partnerOnline = null; }
     }
 
+    // ── Reacciones + borrado "para todos" ──
+    const ids = history.map((m) => m.id);
+    const reactionsByMsg = new Map<string, Array<{ emoji: string; count: number; mine: boolean }>>();
+    if (ids.length > 0) {
+      try {
+        const rows = await db
+          .select({ messageId: messageReactions.messageId, emoji: messageReactions.emoji, userId: messageReactions.userId })
+          .from(messageReactions)
+          .where(inArray(messageReactions.messageId, ids));
+        const acc = new Map<string, Map<string, { count: number; mine: boolean }>>();
+        for (const r of rows) {
+          const perMsg = acc.get(r.messageId) ?? new Map();
+          const cur = perMsg.get(r.emoji) ?? { count: 0, mine: false };
+          cur.count += 1;
+          if (r.userId === access.myParticipantId) cur.mine = true;
+          perMsg.set(r.emoji, cur);
+          acc.set(r.messageId, perMsg);
+        }
+        for (const [msgId, perMsg] of acc) {
+          reactionsByMsg.set(msgId, Array.from(perMsg.entries()).map(([emoji, v]) => ({ emoji, count: v.count, mine: v.mine })));
+        }
+      } catch { /* sin reacciones */ }
+    }
+
+    // Un mensaje borrado "para todos" no expone contenido ni metadata.
+    const messagesOut = history.map((m) => ({
+      ...m,
+      content: m.deletedForAll ? '' : m.content,
+      type: m.deletedForAll ? 'DELETED' : m.type,
+      metadata: m.deletedForAll ? null : m.metadata,
+      reactions: reactionsByMsg.get(m.id) ?? [],
+    }));
+
     return NextResponse.json({
       success: true,
       conversationId: conversation.id,
@@ -202,7 +236,7 @@ export async function GET(req: Request) {
       businessOpen,
       partnerOnline,
       otherTypingAt: conversation[access.otherTypingColumn],
-      messages: history,
+      messages: messagesOut,
       // H-FASE0: contratos de la paginación/delta
       hasMore,
       nextCursor,
