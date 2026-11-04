@@ -64,9 +64,10 @@ export async function GET(req: Request) {
         // probando su propio local). Solo es "bandeja de negocio" cuando entro
         // a través del negocio, no como persona.
         const isDirectParticipant = conv.participant1 === caller.id || conv.participant2 === caller.id;
-        const isBusinessContext =
-          !isDirectParticipant &&
-          (myBusinessIds.includes(conv.participant1) || myBusinessIds.includes(conv.participant2));
+        // Audiencia EXPLÍCITA (0034): BUSINESS = chat con negocio.
+        // Solo es "bandeja de negocio" si entro a través del negocio, no como
+        // persona (el founder es dueño de su propio local y escribe como cliente).
+        const isBusinessContext = conv.audience === 'BUSINESS' && !isDirectParticipant;
 
         let otherId = conv.participant1 === caller.id ? conv.participant2 : conv.participant1;
         let myActingBusinessName: string | null = null;
@@ -117,6 +118,8 @@ export async function GET(req: Request) {
           targetAvatar: otherAvatar,
           isBot,
           isBusinessInbox: isBusinessContext,
+          kind: conv.kind ?? 'DIRECT',
+          audience: conv.audience ?? 'BUSINESS',
           businessName: myActingBusinessName,
           lastMessage: last?.content || '',
           lastMessageTime: last?.createdAt || conv.lastMessageAt || conv.updatedAt,

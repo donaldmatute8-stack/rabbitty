@@ -105,9 +105,14 @@ export const customerChatRouter = router({
       .select()
       .from(conversations)
       .where(
-        or(
-          inArray(conversations.participant1, bizIds),
-          inArray(conversations.participant2, bizIds)
+        and(
+          // Solo conversaciones de NEGOCIO: los chats entre Rabbitters (PEER)
+          // no pertenecen a la bandeja del admin.
+          eq(conversations.audience, 'BUSINESS'),
+          or(
+            inArray(conversations.participant1, bizIds),
+            inArray(conversations.participant2, bizIds)
+          )
         )
       )
       .orderBy(desc(conversations.updatedAt))

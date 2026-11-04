@@ -238,6 +238,12 @@ export const messageHides = pgTable("message_hides", {
 ]);
 
 export const conversations = pgTable("conversations", {
+  // ── Tipo y audiencia (0034) ──
+  // kind: DIRECT | GROUP · audience: BUSINESS | PEER
+  // BUSINESS = chat con un negocio (server-readable: métricas, disputas).
+  // PEER     = entre Rabbitters (privacidad primero: E2E en fase posterior).
+  kind: text("kind").default("DIRECT").notNull(),
+  audience: text("audience").default("BUSINESS").notNull(),
   id: id(),
   participant1: text("participant1").notNull(),
   participant2: text("participant2").notNull(),
