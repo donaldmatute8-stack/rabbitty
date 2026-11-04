@@ -329,6 +329,17 @@ tenancy y se validan por dentro con el `deviceKey`.
 - Reutilizar el código vivo evita spamear al administrador.
 - Telemetría: `[POS_AUTH_REQUEST] created`.
 
+**Aviso al dueño**
+
+- Canal principal: **app nativa**. El admin llama a
+  `POST {RABBITTY_MINIAPP_URL}/api/notifications/send` con
+  `x-push-secret: PUSH_SEND_SECRET`; el proyecto mobile encola en outbox y
+  entrega por APNs. La notificación abre `/pos/auth?code=…`.
+- `telegram-miniapp/src/app/pos/auth` es un **puente**: muestra el código y abre
+  `admin.rabbitty.me/pos/auth?code=…` (la aprobación real requiere sesión de
+  admin). Así el deep link funciona dentro de la app nativa.
+- Respaldo: Telegram, solo si el push no registró ninguna entrega.
+
 **UI**
 
 - `PosReauthPanel` (terminal): código grande, QR, cuenta regresiva, polling y
@@ -347,8 +358,8 @@ tenancy y se validan por dentro con el `deviceKey`.
 
 **Límites**
 
-- El QR usa el dominio del admin; en la app nativa se puede abrir con el mismo
-  enlace (pendiente de deep link si se quiere 1 toque).
+- La notificación nativa depende de que APNs esté configurado en el proyecto
+  mobile; sin APNs no hay entrega y entra el respaldo de Telegram.
 - La aprobación aún no manda push al admin; el aviso es el código/QR en la
   terminal y la lista de pendientes.
 
@@ -365,9 +376,9 @@ tenancy y se validan por dentro con el `deviceKey`.
   (relevo de personal). Valida que la terminal sea de su sucursal.
 - `posTerminals.shiftHistory`: historial paginado por cursor (quién, en qué
   terminal, inicio, fin y duración).
-- `createAuthRequest` avisa al dueño por **Telegram** con el código y el enlace
-  de aprobación (si `TELEGRAM_BOT_TOKEN` está configurado). No bloquea la
-  solicitud si el aviso falla.
+- `createAuthRequest` avisa al dueño por la **app nativa** (endpoint interno de
+  push del proyecto mobile → outbox + APNs). Si no hay entrega, cae a
+  **Telegram** como respaldo. No bloquea la solicitud si el aviso falla.
 - `revoke`: además de anular sesiones, cierra cualquier turno abierto.
 
 **UI** (`/settings/terminals`, en el sidebar como “Terminales POS”)
@@ -404,9 +415,9 @@ producción sin sorpresas:
    admin (opcional; la UI ya la respeta).
 6. Re-ingestar el RAG de Bunzy (script del ADR-015).
 
-Mejoras posteriores (no bloquean): push nativo/web al admin (hoy el aviso es
-Telegram + la lista de pendientes), `apps/pos` standalone (tiene su propio
-`api/trpc` y auth), y exportar el historial de turnos a CSV.
+Mejoras posteriores (no bloquean): `apps/pos` standalone (tiene su propio
+`api/trpc` y auth), exportar el historial de turnos a CSV, y aprobación inline
+en la app sin salir a admin (requiere sesión de admin en el móvil).
 
 
 ---
@@ -425,3 +436,10 @@ dispositivos vincula. **No hay que agregar variables por cada tenant nuevo.**
 
 `POS_TERMINAL_PEPPER` es opcional pero recomendable en producción **antes** de
 vincular terminales: cambiarlo después obliga a revincular los dispositivos.
+
+### Variables para el aviso nativo (solo en el admin de Railway)
+
+| Variable | Valor |
+|---|---|
+`RABBITTY_MINIAPP_URL` | `https://app.rabbitty.me` |
+`PUSH_SEND_SECRET` | **el mismo** que tiene el proyecto mobile en Vercel |

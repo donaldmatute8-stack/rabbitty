@@ -47,6 +47,69 @@ function newToken(): string {
 }
 
 /**
+ * Aviso por la app nativa: usa el endpoint interno del proyecto mobile, que
+ * encola en outbox y entrega por APNs. Devuelve true solo si el proveedor
+ * aceptó al menos una entrega (así el respaldo de Telegram solo entra cuando
+ * de verdad no llegó nada).
+ */
+async function sendNativeAuthPush(userId: string, terminalName: string, code: string): Promise<boolean> {
+  const base = process.env.RABBITTY_MINIAPP_URL;
+  const secret = process.env.PUSH_SEND_SECRET;
+  if (!base || !secret) return false;
+  try {
+    const res = await fetch(`${base.replace(/\/$/, "")}/api/notifications/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-push-secret": secret },
+      body: JSON.stringify({
+        userId,
+        title: "Autoriza tu terminal POS",
+        body: `${terminalName} pide autorización. Código ${code} (vence en ${AUTH_REQUEST_MINUTES} min).`,
+        data: {
+          type: "POS_AUTH_REQUEST",
+          route: `/pos/auth?code=${code}`,
+          code,
+        },
+      }),
+    });
+    if (!res.ok) return false;
+    const data = (await res.json().catch(() => ({}))) as { sent?: number };
+    return Number(data.sent ?? 0) > 0;
+  } catch {
+    return false;
+  }
+}
+
+/** Respaldo: Telegram del dueño (se conserva, pero ya no es el canal principal). */
+async function sendTelegramAuthMessage(
+  telegramId: string | null,
+  terminalName: string,
+  code: string,
+): Promise<boolean> {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN || process.env.AUTH_TELEGRAM_BOT_TOKEN;
+  if (!botToken || !telegramId) return false;
+  const base = process.env.NEXT_PUBLIC_APP_URL || "https://admin.rabbitty.me";
+  const url = `${base.replace(/\/$/, "")}/pos/auth?code=${code}`;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: telegramId,
+        text:
+          `🔐 Solicitud de terminal POS\n\n` +
+          `${terminalName} pidió reautorización.\n` +
+          `Código: ${code} (vence en ${AUTH_REQUEST_MINUTES} min)\n\n` +
+          `Aprueba aquí: ${url}`,
+        disable_web_page_preview: true,
+      }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Límite por dispositivo para pedir autorización: 3 cada 10 minutos.
  * En memoria (mejor esfuerzo en serverless); la idempotencia evita el spam real.
  */
@@ -356,52 +419,45 @@ export const posTerminalsRouter = router({
 
       console.info("[POS_AUTH_REQUEST]", JSON.stringify({ event: "created", terminalId: row.id }));
 
-      // Aviso inmediato al dueño por Telegram (canal que ya usa el ecosistema).
-      // Nunca bloquea ni rompe la solicitud si falla.
+      // Aviso inmediato al dueño: APP NATIVA primero; Telegram solo si el push
+      // no se pudo entregar. Nunca bloquea ni rompe la solicitud.
       try {
-        const botToken = process.env.TELEGRAM_BOT_TOKEN || process.env.AUTH_TELEGRAM_BOT_TOKEN;
-        if (botToken) {
-          const [info] = await ctx.coreDb
-            .select({ name: posTerminals.name, businessId: posTerminals.businessId })
-            .from(posTerminals)
-            .where(eq(posTerminals.id, row.id))
+        const [info] = await ctx.coreDb
+          .select({ name: posTerminals.name, businessId: posTerminals.businessId })
+          .from(posTerminals)
+          .where(eq(posTerminals.id, row.id))
+          .limit(1);
+
+        if (info?.businessId) {
+          const [biz] = await ctx.coreDb
+            .select({ ownerId: ownedBusinesses.ownerId })
+            .from(ownedBusinesses)
+            .where(eq(ownedBusinesses.id, info.businessId))
             .limit(1);
-          if (info?.businessId) {
-            const [biz] = await ctx.coreDb
-              .select({ ownerId: ownedBusinesses.ownerId })
-              .from(ownedBusinesses)
-              .where(eq(ownedBusinesses.id, info.businessId))
+
+          if (biz?.ownerId) {
+            const [owner] = await ctx.coreDb
+              .select({ id: coreUsers.id, telegramId: coreUsers.telegramId })
+              .from(coreUsers)
+              .where(eq(coreUsers.id, biz.ownerId))
               .limit(1);
-            const [owner] = biz?.ownerId
-              ? await ctx.coreDb
-                  .select({ telegramId: coreUsers.telegramId })
-                  .from(coreUsers)
-                  .where(eq(coreUsers.id, biz.ownerId))
-                  .limit(1)
-              : [];
-            if (owner?.telegramId) {
-              const base = process.env.NEXT_PUBLIC_APP_URL || "https://admin.rabbitty.me";
-              const url = `${base.replace(/\/$/, "")}/pos/auth?code=${code}`;
-              await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  chat_id: owner.telegramId,
-                  // Texto plano a propósito: el nombre de la terminal puede traer
-                  // caracteres que rompan Markdown.
-                  text:
-                    `🔐 Solicitud de terminal POS\n\n` +
-                    `${info.name} pidió reautorización.\n` +
-                    `Código: ${code} (vence en ${AUTH_REQUEST_MINUTES} min)\n\n` +
-                    `Aprueba aquí: ${url}`,
-                  disable_web_page_preview: true,
-                }),
-              }).catch(() => undefined);
+
+            if (owner?.id) {
+              let channel: "native" | "telegram" | "none" = "none";
+              if (await sendNativeAuthPush(owner.id, info.name, code)) {
+                channel = "native";
+              } else if (await sendTelegramAuthMessage(owner.telegramId, info.name, code)) {
+                channel = "telegram";
+              }
+              console.info(
+                "[POS_AUTH_REQUEST]",
+                JSON.stringify({ event: "notified", channel, terminalId: row.id }),
+              );
             }
           }
         }
       } catch (error) {
-        console.warn("[POS_AUTH_REQUEST] no se pudo avisar por Telegram:", error);
+        console.warn("[POS_AUTH_REQUEST] no se pudo avisar al dueño:", error);
       }
 
       return { code, expiresAt, reused: false };
