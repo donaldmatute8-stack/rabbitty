@@ -85,7 +85,7 @@ const APPROVED_STATUSES = ["APPROVED", "VERIFIED"] as const;
 /** Ventana mínima entre mensajes de la misma categoría (días). */
 const FREQUENCY_DAYS: Record<BunzyCategory, number> = {
   PRODUCT: 0,
-  TIP: 7,
+  TIP: 6,
   NEWS: 15,
   SYSTEM: 0,
 };
@@ -553,6 +553,78 @@ export async function publishScheduledBroadcasts(db: CoreDb, limit = 10) {
     }
   }
   return { due: due.length, results };
+}
+
+/**
+ * ── Borrador asistido (C3) ──
+ * La IA redacta; un humano edita y publica. Nunca publica sola y nunca inventa
+ * funcionalidades: el prompt lo prohíbe explícitamente.
+ */
+export async function draftBroadcast(
+  brief: string,
+  category: BunzyCategory,
+): Promise<{ title: string; body: string; provider: string }> {
+  const system = [
+    "Eres Bunzy, el asistente oficial de Rabbitty para negocios afiliados.",
+    "Redacta un mensaje institucional breve en español de México.",
+    "Devuelve SOLO JSON válido: {\"title\": string, \"body\": string}.",
+    "title: máximo 80 caracteres. body: máximo 700 caracteres, texto plano con saltos de línea.",
+    "Tono cercano, claro y profesional. No prometas ingresos ni funciones que el brief no mencione.",
+    "No inventes montos, fechas ni beneficios. No uses HTML ni Markdown.",
+    `Categoría: ${category}.`,
+  ].join(" ");
+  const user = `Brief del equipo: ${brief}`;
+
+  const openaiKey = process.env.OPENAI_API_KEY;
+  if (openaiKey) {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${openaiKey}` },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        temperature: 0.4,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+      }),
+    });
+    if (!res.ok) throw new Error(`OpenAI ${res.status}`);
+    const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const parsed = JSON.parse(data.choices?.[0]?.message?.content || "{}") as { title?: string; body?: string };
+    return clampDraft(parsed, "openai");
+  }
+
+  const base = process.env.OLLAMA_BASE_URL;
+  if (base) {
+    const res = await fetch(`${base.replace(/\/$/, "")}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: process.env.OLLAMA_MODEL || "qwen2.5:7b",
+        stream: false,
+        format: "json",
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+      }),
+    });
+    if (!res.ok) throw new Error(`Ollama ${res.status}`);
+    const data = (await res.json()) as { message?: { content?: string } };
+    const parsed = JSON.parse(data.message?.content || "{}") as { title?: string; body?: string };
+    return clampDraft(parsed, "ollama");
+  }
+
+  throw new Error("Sin proveedor de IA configurado (OPENAI_API_KEY u OLLAMA_BASE_URL)");
+}
+
+function clampDraft(parsed: { title?: string; body?: string }, provider: string) {
+  const title = (parsed.title || "").trim().slice(0, 80);
+  const body = (parsed.body || "").trim().slice(0, 700);
+  if (title.length < 3 || body.length < 10) throw new Error("El borrador salió vacío; intenta de nuevo");
+  return { title, body, provider };
 }
 
 /** Metadata de entorno para que el CLI muestre el destino real. */

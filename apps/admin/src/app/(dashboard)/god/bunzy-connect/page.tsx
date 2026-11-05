@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Copy, Megaphone, RefreshCw, Send, Sparkles } from "lucide-react";
+import { ArrowLeft, Copy, GraduationCap, Megaphone, RefreshCw, Send, Sparkles } from "lucide-react";
 import { Button, Card, Input, cn, toast } from "@rabbitty/ui";
 import { trpc } from "../../../../lib/trpc-client";
 import { BunzyUpdateCard } from "../../../../components/BunzyUpdateCard";
@@ -53,6 +53,7 @@ export default function BunzyConnectPage() {
   const [businessId, setBusinessId] = useState("");
   const [scope, setScope] = useState<"BUSINESS" | "ALL_AFFILIATES">("BUSINESS");
   const [scheduledAt, setScheduledAt] = useState("");
+  const [brief, setBrief] = useState("");
   const [requestKey, setRequestKey] = useState("");
   const [preview, setPreview] = useState<PreviewData | null>(null);
   const [result, setResult] = useState<PublishResult | null>(null);
@@ -74,6 +75,23 @@ export default function BunzyConnectPage() {
 
   const previewMutation = trpc.bunzyConnect.preview.useMutation({
     onSuccess: (data) => setPreview(data as PreviewData),
+    onError: (err) => toast.error(err.message),
+  });
+
+  const draftMutation = trpc.bunzyConnect.draft.useMutation({
+    onSuccess: (data) => {
+      setTitle(data.title);
+      setBody(data.body);
+      toast.success("Borrador listo. Revísalo antes de publicar.");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const academyMutation = trpc.bunzyConnect.scheduleAcademy.useMutation({
+    onSuccess: (data) => {
+      toast.success(`${data.scheduled} tips programados`);
+      void list.refetch();
+    },
     onError: (err) => toast.error(err.message),
   });
 
@@ -226,6 +244,30 @@ export default function BunzyConnectPage() {
             </div>
           )}
 
+          <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+            <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">
+              Redactar con Bunzy (borrador)
+            </span>
+            <div className="flex gap-2">
+              <Input
+                value={brief}
+                onChange={(e) => setBrief(e.target.value.slice(0, 1000))}
+                placeholder="Ej. explicar la nueva función de menú digital a los afiliados"
+              />
+              <Button
+                variant="secondary"
+                onClick={() => draftMutation.mutate({ brief: brief.trim(), category })}
+                disabled={brief.trim().length < 5 || draftMutation.isPending}
+                className="shrink-0 gap-2"
+              >
+                <Sparkles size={14} /> {draftMutation.isPending ? "Redactando…" : "Redactar"}
+              </Button>
+            </div>
+            <p className="m-0 text-[10.5px] leading-relaxed text-gray-500">
+              La IA solo redacta. Tú revisas, editas y publicas; nunca inventa funciones.
+            </p>
+          </div>
+
           <label className="block space-y-1">
             <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">Título</span>
             <Input value={title} onChange={(e) => setTitle(e.target.value.slice(0, 120))} placeholder="Ej. Tu menú digital, más claro" />
@@ -351,6 +393,34 @@ export default function BunzyConnectPage() {
               </ul>
             </Card>
           )}
+
+          <Card className="p-5">
+            <div className="flex items-center gap-2">
+              <GraduationCap className="h-4 w-4 text-pink-300" />
+              <p className="m-0 text-sm font-black text-white">Bunzy Academy</p>
+            </div>
+            <p className="m-0 mt-1.5 text-xs leading-relaxed text-gray-400">
+              Programa una serie de 4 tips semanales para {selectedBusiness?.name ?? "el negocio"}: menú digital,
+              productos populares, recompensas Bunz y revisión de actividad.
+            </p>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                if (scope !== "BUSINESS" || !businessId) {
+                  toast.error("Elige un negocio para programar la Academia");
+                  return;
+                }
+                academyMutation.mutate({ businessId });
+              }}
+              disabled={academyMutation.isPending}
+              className="mt-3 gap-2"
+            >
+              <GraduationCap size={14} /> {academyMutation.isPending ? "Programando…" : "Programar 4 semanas"}
+            </Button>
+            <p className="m-0 mt-2 text-[10.5px] leading-relaxed text-gray-500">
+              Se crean como TIP programados; el cron los publica cada semana.
+            </p>
+          </Card>
 
           <Card className="p-5">
             <button

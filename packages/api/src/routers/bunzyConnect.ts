@@ -5,11 +5,35 @@ import { router, godAdminProcedure } from "../trpc";
 import { bunzyBroadcasts, bunzyDeliveries, ownedBusinesses } from "@rabbitty/database-core";
 import {
   BUNZY_CATEGORIES,
+  draftBroadcast,
   getBroadcastEvidence,
   getConnectMeta,
   previewBroadcast,
   publishBroadcast,
 } from "../services/bunzyConnect";
+
+const ACADEMY_SERIES = [
+  {
+    title: "Cómo aprovechar tu menú digital",
+    body:
+      "Tu menú digital es la primera impresión que se llevan tus clientes. Revisa que las fotos estén actualizadas, que los nombres sean claros y que los precios coincidan con el local. Un menú ordenado reduce dudas y prepara la visita.",
+  },
+  {
+    title: "Cómo destacar tus productos populares",
+    body:
+      "Identifica los 3 productos que más vendes y dales prioridad en tu menú. Una foto cuidada y una descripción corta ayudan a que el cliente se decida antes de llegar. Cambia el destacado cada mes para mantenerlo fresco.",
+  },
+  {
+    title: "Cómo aprovechar las recompensas Bunz",
+    body:
+      "Explica a tu equipo cómo funciona el cashback en Bunz y recuérdale al cliente que puede recibirlo al pagar. Una recompensa bien comunicada en caja se convierte en una razón para volver.",
+  },
+  {
+    title: "Cómo revisar la actividad de tu negocio",
+    body:
+      "Dedica 5 minutos al día a revisar ventas, tickets promedio y canjes de Bunz. Detecta los días flojos y prueba una promoción pequeña. Lo que se mide se puede mejorar.",
+  },
+] as const;
 
 const audienceSchema = z.object({
   scope: z.enum(["BUSINESS", "ALL_AFFILIATES", "USER"]),
@@ -121,6 +145,45 @@ export const bunzyConnectRouter = router({
       failed: byId.get(r.id)?.failed ?? 0,
     }));
   }),
+
+  draft: godAdminProcedure
+    .input(
+      z.object({
+        brief: z.string().min(5).max(1000),
+        category: z.enum(BUNZY_CATEGORIES),
+      }),
+    )
+    .mutation(async ({ input }) => draftBroadcast(input.brief, input.category)),
+
+  scheduleAcademy: godAdminProcedure
+    .input(
+      z.object({
+        businessId: z.string().min(1),
+        startAt: z.string().datetime().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const start = input.startAt ? new Date(input.startAt) : new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const results = [];
+      for (let i = 0; i < ACADEMY_SERIES.length; i += 1) {
+        const item = ACADEMY_SERIES[i]!;
+        const scheduledAt = new Date(start.getTime() + i * 7 * 24 * 60 * 60 * 1000).toISOString();
+        results.push(
+          await publishBroadcast(ctx.coreDb, {
+            category: "TIP",
+            title: item.title,
+            body: item.body,
+            ctaLabel: "Ver en Rabbitty",
+            ctaUrl: "https://rabbitty.me",
+            audience: { scope: "BUSINESS", businessId: input.businessId },
+            requestKey: `academy:${input.businessId}:w${i + 1}`,
+            createdBy: String(ctx.userId || "god"),
+            scheduledAt,
+          }),
+        );
+      }
+      return { scheduled: results.length, results };
+    }),
 
   evidence: godAdminProcedure
     .input(z.object({ broadcastId: z.string().uuid() }))

@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { toast } from '@rabbitty/ui';
-import { ArrowLeft, Bell, BellRing, Smartphone, Mail, ShieldCheck, HelpCircle, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Bell, BellRing, Smartphone, Mail, ShieldCheck, HelpCircle, ChevronRight, Megaphone } from 'lucide-react';
 import BottomNav from '@/components/BottomNav';
 import { PlatformBridge } from '@/lib/platform';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -211,6 +211,8 @@ export default function SettingsPage() {
             <PushDiagnosticsRow />
           </div>
 
+          <BunzyConnectRows />
+
           {/* ── Accesos rápidos ── */}
           <div className="rounded-2xl p-2" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
             <LinkRow icon={ShieldCheck} label="Seguridad y Privacidad" href="/security" />
@@ -222,6 +224,103 @@ export default function SettingsPage() {
       )}
 
       <BottomNav isDark={!user} />
+    </div>
+  );
+}
+
+/**
+ * ── BunzyConnectRows ── Preferencias del canal oficial de Bunzy.
+ * Los avisos de sistema siempre llegan; producto/tips/novedades se pueden apagar.
+ */
+function BunzyConnectRows() {
+  const [prefs, setPrefs] = useState({ product: true, tips: true, news: true });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const headers = await PlatformBridge.getAuthHeaders();
+        const res = await fetch('/api/bunzy/preferences', { headers: headers || {}, cache: 'no-store' });
+        const data = await res.json();
+        if (data?.success) {
+          setPrefs({
+            product: data.product !== false,
+            tips: data.tips !== false,
+            news: data.news !== false,
+          });
+        }
+      } catch {
+        /* best-effort */
+      }
+    })();
+  }, []);
+
+  const toggle = (key: 'product' | 'tips' | 'news') => {
+    const next = { ...prefs, [key]: !prefs[key] };
+    setPrefs(next);
+    void (async () => {
+      setSaving(true);
+      try {
+        const headers = await PlatformBridge.getAuthHeaders();
+        await fetch('/api/bunzy/preferences', {
+          method: 'POST',
+          headers: { ...(headers || {}), 'Content-Type': 'application/json' },
+          body: JSON.stringify(next),
+        });
+      } catch {
+        toast.error('No se pudo guardar la preferencia');
+      } finally {
+        setSaving(false);
+      }
+    })();
+  };
+
+  const rows: Array<{ key: 'product' | 'tips' | 'news'; label: string; desc: string }> = [
+    { key: 'product', label: 'Actualizaciones de producto', desc: 'Nuevas funciones y mejoras de Rabbitty.' },
+    { key: 'tips', label: 'Tips y acompañamiento', desc: 'Consejos prácticos, máximo 1 por semana.' },
+    { key: 'news', label: 'Novedades de Rabbitty', desc: 'Campañas y eventos, 1–2 al mes.' },
+  ];
+
+  return (
+    <div
+      className="rounded-2xl p-4"
+      style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' }}
+    >
+      <div className="flex items-center gap-2 mb-3 px-1">
+        <Megaphone size={15} className="text-[#E91E63]" />
+        <span className="text-[10px] font-black uppercase tracking-[1.5px]" style={{ color: 'var(--text-muted)' }}>
+          Bunzy Connect · actualizaciones
+        </span>
+        {saving && <span className="ml-auto text-[9px]" style={{ color: 'var(--text-muted)' }}>Guardando…</span>}
+      </div>
+
+      <div className="flex flex-col gap-1">
+        {rows.map((row) => (
+          <div
+            key={row.key}
+            role="button"
+            tabIndex={0}
+            onClick={() => toggle(row.key)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') toggle(row.key);
+            }}
+            className="flex items-start gap-3 px-3 py-3 rounded-xl cursor-pointer transition-colors hover:bg-(--bg-pressed)"
+          >
+            <div className="w-9 h-9 rounded-xl shrink-0 flex items-center justify-center" style={{ background: 'var(--bg-pressed)' }}>
+              <Megaphone size={16} className={prefs[row.key] ? 'text-[#E91E63]' : 'text-(--text-muted)'} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold m-0 leading-tight">{row.label}</p>
+              <p className="text-[11px] m-0 mt-0.5" style={{ color: 'var(--text-muted)' }}>{row.desc}</p>
+            </div>
+            <Switch on={prefs[row.key]} onChange={() => toggle(row.key)} />
+          </div>
+        ))}
+      </div>
+
+      <p className="text-[10.5px] leading-relaxed m-0 mt-2 px-2" style={{ color: 'var(--text-muted)' }}>
+        Los avisos de servicio (mantenimiento, seguridad) siempre llegan.
+      </p>
     </div>
   );
 }
