@@ -768,3 +768,66 @@ Reglas:
   - `BUNZY_CONNECT_TRACKING_BASE` (o `RABBITTY_MINIAPP_URL`) para el CTA con tracking.
 - El producto se anuncia manualmente: no se programa por serie.
 
+---
+
+# 20. C5 — Estrategia asistida por datos (planificado, no implementado)
+
+> **Estado:** diseño aprobado para después de C4. **No se implementa todavía.**
+> **Depende de:** C4 (§19), MAG M0/M1 (§14) y al menos 30 días de analítica real.
+> **Enlaces:** catálogo de acciones (§13), MAG 2.0 (§14), estrategias C4 (§19).
+
+## 20.1 Objetivo
+
+Que Bunzy deje de ser un compositor con presets y pase a **proponer “estrategias de ataque”** por audiencia, categoría y nicho, usando la analítica real y la memoria del negocio. La IA **propone**; el humano aprueba y publica. Nunca decide dinero ni publica sola.
+
+## 20.2 Señales que usará
+
+| Señal | Fuente | Uso |
+|---|---|---|
+| Lectura por categoría | `bunzyDeliveries.readAt` | Ajustar cadencia y formato |
+| Clics por CTA | `clickedAt` | Elegir CTA y tema |
+| Opt-out por categoría | `bunzyPreferences` | Pausar o cambiar tono/frecuencia |
+| Omitidos | `SKIPPED` (preferencia/tope) | Detectar fatiga |
+| Nicho y paquete | `ownedBusinesses` | Estrategia por segmento |
+| Actividad del negocio | POS, campañas, conciliación | Winback, tips operativos |
+| Resultados de campañas | `businessLearningInsights` | Playbook del negocio |
+| MAG | `userMemories` / `businessLearningInsights` | Preferencias y qué funcionó |
+
+## 20.3 Capacidades propuestas
+
+1. **Next-best-send**: recomienda categoría, día y hora por audiencia (afiliados/Rabbitters) y por nicho.
+2. **Rotación de temas**: evita repetir el mismo tip; propone el siguiente según historial.
+3. **Detección de fatiga**: si el opt-out o los omitidos suben, sugiere pausar la serie y cambiar ángulo.
+4. **CTA recomendado**: mide qué CTA convierte mejor por categoría y lo propone.
+5. **Playbook por negocio**: “en este negocio funcionó X”; con evidencia y fecha.
+6. **A/B testing**: dos variantes de asunto/cuerpo/CTA con muestra y ganador.
+7. **Borradores con citas**: la IA redacta y cita la fuente/estrategia; el humano edita.
+8. **Reactivación**: detecta negocios inactivos y propone una secuencia de winback (con aprobación).
+9. **Benchmark k-anónimo**: compara con el nicho sin exponer datos de otros tenants.
+
+## 20.4 Fases
+
+| Fase | Alcance | Gate | Métrica |
+|---|---|---|---|
+| **C5.1 — Recomendador read-only** | Endpoint que devuelve estrategia sugerida (categoría, cadencia, día/hora, CTA) con explicación y citas | 30 días de analítica + MAG M0 | Aceptación humana > 50% |
+| **C5.2 — A/B y fatiga** | Variantes, muestra, pausa automática sugerida; nunca automática | C5.1 estable | Lift de lectura/clic; opt-out ≤ 2% |
+| **C5.3 — Playbook MAG** | Memoria por negocio de qué funcionó; recomendaciones por nicho con k-anonimato | MAG M1/M2 | ≥ 1 insight accionable/mes por negocio |
+| **C5.4 — Proactividad multicanal** | WhatsApp, email digest, push inteligente | C5.2 + canal listo | Retención D30 |
+
+## 20.5 Guardrails
+
+- La IA **no publica**: solo propone y redacta.
+- Nada de promesas de ingresos, fechas o funciones no lanzadas.
+- Máximo un CTA por mensaje; 3 bullets o 3 párrafos.
+- Respetar preferencias y topes; SISTEMA siempre, PRODUCTO manual.
+- Toda recomendación debe mostrar **por qué** (señales) y permitir descartarla.
+- Datos de otros tenants jamás; benchmarks solo con k ≥ 5.
+- Revisar legal/consentimiento antes de C5.4.
+
+## 20.6 Qué falta antes de C5
+
+- Cerrar los P0 de la sección 19 (masivo E2E, lectura en app, lock/retry de cola, cron, clic/push, preferencias, Rabbitters de prueba, revisión legal).
+- Acumular 30 días de analítica con mensajes reales.
+- Implementar MAG M0/M1 y el reflection loop.
+- Definir el formato de “recomendación” (JSON + explicación + citas) para que la UI lo muestre y el humano apruebe.
+
