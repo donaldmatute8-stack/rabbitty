@@ -10,7 +10,7 @@ import { SandboxBanner } from "./SandboxBanner";
 import { trpc } from "../lib/trpc-client";
 import { toast } from "@rabbitty/ui";
 import Link from "next/link";
-import { TerminalSquare, TabletSmartphone, Smartphone, MessageSquare, X, Sparkles, RotateCw, CreditCard, Eye } from "lucide-react";
+import { TerminalSquare, TabletSmartphone, Smartphone, MessageSquare, X, Sparkles, RotateCw, CreditCard, Eye, Megaphone } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
 import { ScannerPairModal } from "./ScannerPairModal";
 import ReadinessBar from "./ReadinessBar";
@@ -59,7 +59,7 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
   });
 
   const [chatDrawerOpen, setChatDrawerOpen] = useState(false);
-  const [drawerTab, setDrawerTab] = useState<"bunzy" | "customers">("bunzy");
+  const [drawerTab, setDrawerTab] = useState<"bunzy" | "official" | "customers">("bunzy");
   // H-CHAT-TRUTH: la apertura ya NO escribe en localStorage — el visto bueno
   // vive en la DB (mutation markRead del server).
   const [activeCustomerChat, setActiveCustomerChat] = useState<string | null>(null);
@@ -158,6 +158,23 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
     (acc: number, c: { unread?: number | null }) => acc + Number(c.unread || 0),
     0
   );
+
+  // ── Canal oficial Bunzy vs clientes ──
+  const officialConversations = (conversations || []).filter(
+    (c: { isOfficial?: boolean }) => c.isOfficial === true,
+  );
+  const customerConversations = (conversations || []).filter(
+    (c: { isOfficial?: boolean }) => c.isOfficial !== true,
+  );
+  const officialUnread = officialConversations.reduce(
+    (acc: number, c: { unread?: number | null }) => acc + Number(c.unread || 0),
+    0,
+  );
+  const customerUnread = customerConversations.reduce(
+    (acc: number, c: { unread?: number | null }) => acc + Number(c.unread || 0),
+    0,
+  );
+  const activeIsOfficial = officialConversations.some((c) => c.id === activeCustomerChat);
 
   // ── Aviso de mensaje NUEVO de cliente ──
   // El panel tenía badge pero sin aviso: si no lo mirabas, no te enterabas.
@@ -483,7 +500,7 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                         </div>
                         <div>
                           <h3 className="text-sm font-black text-white m-0">Bunzy Workspace</h3>
-                          <p className="text-[11px] text-gray-400 m-0">Co-Pilot Operativo & Mensajería B2C</p>
+                          <p className="text-[11px] text-gray-400 m-0">Co-Pilot, canal oficial y mensajería B2C</p>
                         </div>
                       </div>
                       <button
@@ -495,29 +512,55 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                     </div>
 
                     {/* Sub-tabs Bunzy Co-Pilot vs Chats Clientes */}
-                    <div className="grid grid-cols-2 p-1 bg-black/60 rounded-xl border border-white/10">
+                    <div className="grid grid-cols-3 p-1 bg-black/60 rounded-xl border border-white/10 gap-1">
                       <button
                         onClick={() => {
                           setDrawerTab("bunzy");
                           setActiveCustomerChat(null);
                         }}
-                        className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                        className={`py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
                           drawerTab === "bunzy"
                             ? "bg-pink-500 text-white shadow-md shadow-pink-500/25"
                             : "text-gray-400 hover:text-white"
                         }`}
                       >
-                        <Sparkles size={13} /> Bunzy Co-Pilot
+                        <Sparkles size={12} /> Co-Pilot
                       </button>
                       <button
-                        onClick={() => setDrawerTab("customers")}
-                        className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                        onClick={() => {
+                          setDrawerTab("official");
+                          setActiveCustomerChat(null);
+                        }}
+                        className={`relative py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                          drawerTab === "official"
+                            ? "bg-pink-500 text-white shadow-md shadow-pink-500/25"
+                            : "text-gray-400 hover:text-white"
+                        }`}
+                      >
+                        <Megaphone size={12} /> Bunzy
+                        {officialUnread > 0 && (
+                          <span className="absolute -right-0.5 -top-1 rounded-full bg-[#E91E63] px-1.5 py-0.5 text-[8px] font-black text-white">
+                            {officialUnread}
+                          </span>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setDrawerTab("customers");
+                          setActiveCustomerChat(null);
+                        }}
+                        className={`relative py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
                           drawerTab === "customers"
                             ? "bg-pink-500 text-white shadow-md shadow-pink-500/25"
                             : "text-gray-400 hover:text-white"
                         }`}
                       >
-                        <MessageSquare size={13} /> Chats Clientes
+                        <MessageSquare size={12} /> Clientes
+                        {customerUnread > 0 && (
+                          <span className="absolute -right-0.5 -top-1 rounded-full bg-[#E91E63] px-1.5 py-0.5 text-[8px] font-black text-white">
+                            {customerUnread}
+                          </span>
+                        )}
                       </button>
                     </div>
                   </div>
@@ -625,12 +668,69 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                       </div>
                     )}
 
+                    {drawerTab === "official" && !activeCustomerChat && (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-400 text-sm">
+                              🐰
+                            </div>
+                            <div>
+                              <p className="m-0 text-xs font-black text-white">Bunzy</p>
+                              <p className="m-0 text-[9px] font-bold uppercase tracking-wider text-pink-300">Canal oficial</p>
+                            </div>
+                          </div>
+                          <Link href="/settings/bunzy" className="text-[10px] font-bold text-pink-300 hover:text-pink-200">
+                            Preferencias →
+                          </Link>
+                        </div>
+
+                        {conversationsLoading && (
+                          <p className="text-xs text-gray-400 text-center py-6">Cargando actualizaciones…</p>
+                        )}
+                        {!conversationsLoading && officialConversations.length === 0 && (
+                          <div className="text-center py-10 px-4">
+                            <p className="text-xs text-gray-400 m-0">Aún no tienes actualizaciones de Bunzy.</p>
+                            <p className="text-[11px] text-gray-500 mt-2 m-0">
+                              Aquí llegarán las novedades, tips y avisos de Rabbitty para tu negocio.
+                            </p>
+                          </div>
+                        )}
+                        {officialConversations.map((conv) => {
+                          const convWithUnread = conv as { id: string; unread?: number | null; lastMessageAt?: string | null; lastMessage?: string | null };
+                          const unreadCount = Number(convWithUnread.unread ?? 0);
+                          return (
+                            <div
+                              key={conv.id}
+                              onClick={() => openChat(conv)}
+                              className="p-3.5 rounded-2xl bg-pink-500/5 border border-pink-500/25 hover:border-pink-500/50 transition-all cursor-pointer"
+                            >
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-xs font-bold text-white flex items-center gap-2">
+                                  Bunzy · Oficial
+                                  {unreadCount > 0 && (
+                                    <span className="text-[9px] font-black text-white bg-[#E91E63] rounded-full px-1.5 py-0.5 min-w-4 text-center">
+                                      {unreadCount}
+                                    </span>
+                                  )}
+                                </span>
+                                <span className="text-[10px] text-gray-500">
+                                  {conv.lastMessageAt ? new Date(conv.lastMessageAt).toLocaleString("es-MX", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}
+                                </span>
+                              </div>
+                              <p className="text-xs text-gray-300 m-0 line-clamp-2">{conv.lastMessage || "Sin mensajes"}</p>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
+
                     {drawerTab === "customers" && !activeCustomerChat && (
                       <>
                         {conversationsLoading && (
                           <p className="text-xs text-gray-400 text-center py-6">Cargando conversaciones…</p>
                         )}
-                        {!conversationsLoading && (!conversations || conversations.length === 0) && (
+                        {!conversationsLoading && customerConversations.length === 0 && (
                           <div className="text-center py-10 px-4">
                             <p className="text-xs text-gray-400 m-0">
                               Aún no hay mensajes de clientes.
@@ -640,7 +740,7 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                             </p>
                           </div>
                         )}
-                        {conversations?.map((conv) => {
+                        {customerConversations.map((conv) => {
                           const convWithUnread = conv as { id: string; customerName?: string; unread?: number | null; lastMessageAt?: string | null; businessName?: string; lastMessage?: string | null };
                           const unreadCount = Number(convWithUnread.unread ?? 0);
                           return (
@@ -681,6 +781,20 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                         >
                           ← Volver a conversaciones
                         </button>
+
+                        {activeIsOfficial && (
+                          <div className="mb-3 rounded-2xl border border-pink-500/25 bg-pink-500/10 p-3">
+                            <p className="m-0 text-[10px] font-black uppercase tracking-wider text-pink-300">
+                              Bunzy · Canal oficial
+                            </p>
+                            <p className="m-0 mt-0.5 text-[11px] leading-relaxed text-gray-300">
+                              Actualizaciones, tips y avisos de Rabbitty para tu negocio.
+                            </p>
+                            <Link href="/settings/bunzy" className="mt-1 inline-block text-[10px] font-bold text-pink-300 hover:text-pink-200">
+                              Preferencias →
+                            </Link>
+                          </div>
+                        )}
 
                         {threadLoading && (
                           <p className="text-xs text-gray-400 text-center py-6">Cargando mensajes…</p>

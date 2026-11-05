@@ -268,6 +268,49 @@ function trackingBase(): string {
   ).replace(/\/$/, "");
 }
 
+/**
+ * Push best-effort al dueño/usuario cuando el mensaje ya está persistido.
+ * Respeta preferencias (el filtro ocurrió antes) y falla en silencio.
+ */
+async function pushRecipient(
+  db: CoreDb,
+  recipient: BunzyRecipient,
+  broadcast: typeof bunzyBroadcasts.$inferSelect,
+) {
+  const base = process.env.RABBITTY_MINIAPP_URL;
+  const secret = process.env.PUSH_SEND_SECRET;
+  if (!base || !secret) return;
+
+  let userId: string | null = null;
+  if (recipient.type === "USER") {
+    userId = recipient.id;
+  } else {
+    const [business] = await db
+      .select({ ownerId: ownedBusinesses.ownerId })
+      .from(ownedBusinesses)
+      .where(eq(ownedBusinesses.id, recipient.id))
+      .limit(1);
+    userId = business?.ownerId ?? null;
+  }
+  if (!userId) return;
+
+  try {
+    await fetch(`${base.replace(/\/$/, "")}/api/notifications/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-push-secret": secret },
+      signal: AbortSignal.timeout(6000),
+      body: JSON.stringify({
+        userId,
+        title: `Bunzy · ${broadcast.title}`.slice(0, 90),
+        body: broadcast.body.replace(/\s+/g, " ").slice(0, 140),
+        data: { type: "BUNZY_UPDATE", route: "/chat/bunzy" },
+      }),
+    });
+  } catch {
+    /* push best-effort */
+  }
+}
+
 /** Entrega un broadcast ya creado a su audiencia. */
 async function deliverBroadcast(
   db: CoreDb,
@@ -440,6 +483,20 @@ async function deliverBroadcast(
           },
         })
         .catch(() => undefined);
+    }
+  }
+
+  // Push solo a entregas nuevas (un reintento no vuelve a notificar).
+  const fresh = deliveries.filter((d) => d.status === "PUBLISHED" && !d.replayed);
+  if (fresh.length > 0) {
+    const byId = new Map(audience.map((r) => [r.id, r]));
+    for (let i = 0; i < fresh.length; i += 10) {
+      await Promise.allSettled(
+        fresh.slice(i, i + 10).map((d) => {
+          const recipient = byId.get(d.recipientId);
+          return recipient ? pushRecipient(db, recipient, broadcast) : Promise.resolve();
+        }),
+      );
     }
   }
 
