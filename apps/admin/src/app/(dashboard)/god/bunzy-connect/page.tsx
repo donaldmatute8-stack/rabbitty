@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, BarChart3, Copy, GraduationCap, Megaphone, RefreshCw, Repeat, Send, Sparkles } from "lucide-react";
-import { Button, Card, Input, cn, toast } from "@rabbitty/ui";
+import { AlertTriangle, ArrowLeft, BarChart3, Building2, CalendarClock, Copy, GraduationCap, Megaphone, RefreshCw, Repeat, Send, Sparkles, Users } from "lucide-react";
+import { Button, Card, Dialog, Input, cn, toast } from "@rabbitty/ui";
 import { trpc } from "../../../../lib/trpc-client";
 import { BunzyUpdateCard } from "../../../../components/BunzyUpdateCard";
 
@@ -103,6 +103,7 @@ export default function BunzyConnectPage() {
   const [preview, setPreview] = useState<PreviewData | null>(null);
   const [result, setResult] = useState<PublishResult | null>(null);
   const [showTerminal, setShowTerminal] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const businesses = trpc.bunzyConnect.businesses.useQuery();
   const list = trpc.bunzyConnect.list.useQuery(undefined, { refetchInterval: 15_000 });
@@ -192,20 +193,20 @@ export default function BunzyConnectPage() {
     previewMutation.mutate(payload);
   };
 
+  // Antes era un window.confirm del sistema. Ahora abre un modal con la
+  // identidad de Rabbitty, el destinatario y la tarjeta exacta que se enviará.
   const handlePublish = () => {
     if (!canSubmit) return toast.error("Completa título, cuerpo y negocio");
-    const target =
-      scope === "ALL_AFFILIATES"
-        ? "TODOS los afiliados aprobados"
-        : scope === "ALL_RABBITTERS"
-          ? "TODOS los Rabbitters"
-          : selectedBusiness?.name ?? businessId;
-    const ok = window.confirm(
-      `¿Publicar “${title.trim()}” para ${target}? Se escribirá en la DB real.` +
-        (scope !== "BUSINESS" ? "\n\nEs un envío MASIVO." : ""),
-    );
-    if (!ok) return;
-    publishMutation.mutate(payload);
+    setConfirmOpen(true);
+    // Audiencia real y fresca para este envío (el preview del panel puede ser viejo).
+    setPreview(null);
+    previewMutation.mutate(payload);
+  };
+
+  const confirmPublish = () => {
+    publishMutation.mutate(payload, {
+      onSuccess: () => setConfirmOpen(false),
+    });
   };
 
   const targetFlag =
@@ -395,13 +396,13 @@ export default function BunzyConnectPage() {
               <Sparkles size={14} /> {previewMutation.isPending ? "Previsualizando…" : "Previsualizar"}
             </Button>
             <Button onClick={handlePublish} disabled={!canSubmit || publishMutation.isPending} className="gap-2">
-              <Send size={14} /> {publishMutation.isPending ? "Publicando…" : "Publicar"}
+              <Send size={14} /> {publishMutation.isPending ? "Publicando…" : "Revisar y publicar"}
             </Button>
           </div>
 
           <p className="m-0 text-[11px] leading-relaxed text-gray-500">
-            C1 publica a <strong className="text-gray-300">un negocio</strong>. El envío masivo sigue bloqueado por
-            diseño. Cada reintento con el mismo <code>requestKey</code> no duplica.
+            Publicar abre una confirmación con la tarjeta exacta y la audiencia. El envío masivo se encola y exige
+            confirmación explícita. Cada reintento con el mismo <code>requestKey</code> no duplica.
           </p>
         </Card>
 
@@ -669,6 +670,115 @@ export default function BunzyConnectPage() {
           </table>
         </div>
       </Card>
+
+      <Dialog
+        open={confirmOpen}
+        onClose={() => {
+          if (!publishMutation.isPending) setConfirmOpen(false);
+        }}
+        hideClose={publishMutation.isPending}
+        kicker="Bunzy Connect"
+        title="Confirmar publicación"
+        className="max-w-lg"
+      >
+        <div className="space-y-3.5">
+          {/* Identidad Rabbitty */}
+          <div className="flex items-center gap-3 rounded-2xl border border-pink-500/25 bg-gradient-to-r from-pink-500/12 to-violet-500/10 p-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#FF2E93] to-[#8B5CF6] text-lg shadow-[0_6px_18px_rgba(233,30,99,0.35)]">
+              🐰
+            </div>
+            <div className="min-w-0">
+              <p className="m-0 text-[9px] font-black uppercase tracking-[0.22em] text-pink-300/80 leading-none">
+                Rabbitty
+              </p>
+              <p className="m-0 mt-1 text-sm font-black text-white">Mensaje oficial de Bunzy</p>
+            </div>
+          </div>
+
+          {/* Destinatarios */}
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+            <p className="m-0 text-[9px] font-black uppercase tracking-[0.18em] text-gray-400">Destinatarios</p>
+            <div className="mt-1.5 flex items-center gap-2 text-sm font-bold text-white">
+              {scope === "BUSINESS" ? (
+                <Building2 size={15} className="shrink-0 text-pink-300" />
+              ) : (
+                <Users size={15} className="shrink-0 text-amber-300" />
+              )}
+              <span className="truncate">
+                {scope === "BUSINESS"
+                  ? selectedBusiness?.name ?? businessId ?? "Negocio sin seleccionar"
+                  : scope === "ALL_RABBITTERS"
+                    ? "Todos los Rabbitters"
+                    : "Todos los afiliados aprobados"}
+              </span>
+            </div>
+            <p className="m-0 mt-1 text-[11px] text-gray-400">
+              {previewMutation.isPending ? (
+                "Calculando audiencia…"
+              ) : preview ? (
+                <>
+                  Audiencia: <strong className="text-gray-200">{preview.audienceCount}</strong>
+                  {preview.sample.length > 0 && <> · {preview.sample.map((s) => s.name).join(" · ")}</>}
+                </>
+              ) : (
+                "Audiencia sin calcular"
+              )}
+            </p>
+            {scheduledAt && (
+              <p className="m-0 mt-1.5 flex items-center gap-1.5 text-[11px] text-violet-300">
+                <CalendarClock size={12} /> Programado: {new Date(scheduledAt).toLocaleString("es-MX")}
+              </p>
+            )}
+          </div>
+
+          {/* Tarjeta exacta que recibirá */}
+          <div className="rounded-2xl border border-white/10 bg-[#08080C] p-3">
+            <p className="m-0 mb-1 text-[9px] font-black uppercase tracking-[0.18em] text-gray-400">
+              Lo que recibirá
+            </p>
+            <BunzyUpdateCard
+              message={{
+                id: "confirm",
+                content: body.trim(),
+                createdAt: new Date(),
+                metadata: {
+                  category,
+                  title: title.trim(),
+                  ctaLabel: ctaLabel.trim() || null,
+                  ctaUrl: ctaUrl.trim() || null,
+                },
+              }}
+            />
+          </div>
+
+          {scope !== "BUSINESS" && (
+            <div className="flex items-start gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-200">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+              <span>
+                Envío masivo: se escribe en la DB real y se encola para el cron. Esta acción no se puede deshacer.
+              </span>
+            </div>
+          )}
+
+          <div className="flex gap-2 pt-1">
+            <Button
+              variant="secondary"
+              className="flex-1"
+              onClick={() => setConfirmOpen(false)}
+              disabled={publishMutation.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              className="flex-1 gap-2"
+              onClick={confirmPublish}
+              disabled={!canSubmit || publishMutation.isPending || previewMutation.isPending}
+            >
+              <Send size={14} /> {publishMutation.isPending ? "Publicando…" : "Publicar ahora"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }
