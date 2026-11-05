@@ -115,7 +115,7 @@ function suggestPackage(niche?: string | null): string {
 const CONTRACT_VERSION = '2026-11-04';
 
 /** El ritual se muestra una vez por dispositivo tras enviar el alta. */
-const AFFILIATE_RITUAL_KEY = 'rabbitty_affiliate_welcome_ritual_seen_v1';
+const AFFILIATE_RITUAL_KEY = 'rabbitty_affiliate_welcome_ritual_seen_v2';
 
 const CONTRACT_POINTS = [
   {
@@ -486,7 +486,7 @@ export default function NegociosPage() {
         {showRitual && (
           <WelcomeRitual
             storageKey={AFFILIATE_RITUAL_KEY}
-            audioSrc="/assets/lugares-por-descubrir.mp3"
+            audioSrc="/assets/afiliados-bienvenida.mp3"
             onComplete={() => setShowRitual(false)}
           />
         )}
@@ -580,7 +580,7 @@ export default function NegociosPage() {
           storageKey={
             ritualPreview ? 'rabbitty_affiliate_ritual_preview' : AFFILIATE_RITUAL_KEY
           }
-          audioSrc="/assets/lugares-por-descubrir.mp3"
+          audioSrc="/assets/afiliados-bienvenida.mp3"
           onComplete={() => setShowRitual(false)}
         />
       )}

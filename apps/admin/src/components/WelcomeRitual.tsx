@@ -15,73 +15,70 @@ interface WelcomeRitualProps {
   onComplete?: () => void;
   storageKey?: string;
   forceOpen?: boolean;
-  /** Frases a mostrar. Por defecto usa el mensaje oficial de la app. */
+  /** Frases a mostrar. Por defecto usa el guion de afiliados. */
   phrases?: WelcomeRitualPhrase[];
   audioSrc?: string;
+  logoSrc?: string;
   signalLabel?: string;
   skipLabel?: string;
 }
 
+/** Cuándo el logo toma el escenario y las frases se desvanecen. */
+const OUTRO_AT = 18.2;
+/** Duración real del track de afiliados (~19.99 s). */
+const TOTAL_SECONDS = 19.9;
+
+/**
+ * Guion de afiliados (activo).
+ *
+ * Track: /assets/afiliados-bienvenida.mp3 (~20 s)
+ * Voz:
+ *  4–6 s   «Tu negocio tiene un nuevo lugar.»
+ *  8–11 s  «Cada visita deja ganas de volver.»
+ *  13–14 s «Tú haces la magia.»
+ *  16–17 s «Nosotros la cuenta.»
+ */
 const DEFAULT_PHRASES: WelcomeRitualPhrase[] = [
   {
     id: 1,
-    start: 5.0,
-    end: 9.0, // Permanece hasta que entra la frase 2 en el segundo 9
-    subtitle: 'Bienvenido al universo Rabbitty',
-    words: ['«El', 'mundo', 'está', 'lleno', 'de', 'lugares', 'por', 'descubrir.»'],
-  },
-  {
-    id: 2,
-    start: 9.0,
-    end: 13.0, // Permanece hasta que entra la frase 3 en el segundo 13
-    subtitle: 'Explora con identidad propia',
-    words: ['«Encuentra', 'tu', 'próximo', 'favorito.»'],
-  },
-  {
-    id: 3,
-    start: 13.0,
-    end: 14.8, // Permanece hasta que finaliza el audio
-    subtitle: 'Recompensas reales en cada visita',
-    words: ['«Disfruta', 'más', 'cada', 'visita.»'],
-  },
-];
-
-/**
- * Mensaje propuesto para la versión exclusiva de afiliados.
- * NO está activo: el onboarding usa por ahora el mensaje oficial de la app.
- * Se activa pasando `phrases={AFFILIATE_RITUAL_PHRASES}` al componente.
- * Racional y guion completo en DOCS/WELCOME-RITUAL-AFILIADOS.md.
- */
-export const AFFILIATE_RITUAL_PHRASES: WelcomeRitualPhrase[] = [
-  {
-    id: 1,
-    start: 5.0,
-    end: 9.0,
+    start: 3.4,
+    end: 7.4,
     subtitle: 'Tu negocio entra a la red',
     words: ['«Tu', 'negocio', 'tiene', 'un', 'nuevo', 'lugar.»'],
   },
   {
     id: 2,
-    start: 9.0,
-    end: 13.0,
+    start: 7.4,
+    end: 12.3,
     subtitle: 'Cada visita se convierte en regreso',
     words: ['«Cada', 'visita', 'deja', 'ganas', 'de', 'volver.»'],
   },
   {
     id: 3,
-    start: 13.0,
-    end: 14.8,
-    subtitle: 'Tú operas. Nosotros medimos.',
-    words: ['«Tú', 'haces', 'la', 'magia.', 'Nosotros', 'la', 'cuenta.»'],
+    start: 12.3,
+    end: 15.3,
+    subtitle: 'Tú operas',
+    words: ['«Tú', 'haces', 'la', 'magia.»'],
+  },
+  {
+    id: 4,
+    start: 15.3,
+    end: OUTRO_AT,
+    subtitle: 'Nosotros medimos',
+    words: ['«Nosotros', 'la', 'cuenta.»'],
   },
 ];
 
+/** Alias histórico: el guion de afiliados ya es el mensaje activo. */
+export const AFFILIATE_RITUAL_PHRASES = DEFAULT_PHRASES;
+
 export function WelcomeRitual({
   onComplete,
-  storageKey = 'rabbitty_welcome_ritual_seen_v2',
+  storageKey = 'rabbitty_affiliate_welcome_ritual_seen_v1',
   forceOpen = false,
   phrases = DEFAULT_PHRASES,
-  audioSrc = '/assets/lugares-por-descubrir.mp3',
+  audioSrc = '/assets/afiliados-bienvenida.mp3',
+  logoSrc = '/Ra.png',
   signalLabel = 'The Rabbitty Signal',
   skipLabel = 'Omitir',
 }: WelcomeRitualProps) {
@@ -111,7 +108,7 @@ export function WelcomeRitual({
     if (hasFinishedRef.current) return;
     hasFinishedRef.current = true;
 
-    // Iniciar fade out conjunto hacia la app
+    // Iniciar fade out conjunto hacia la página
     setIsFinalClosing(true);
 
     if (audioRef.current) {
@@ -150,14 +147,14 @@ export function WelcomeRitual({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [isOpen, handleFinish]);
 
-  // Red de seguridad: nunca dejar el overlay abierto más de 17.5s
+  // Red de seguridad: nunca dejar el overlay abierto más de lo que dura el track.
   useEffect(() => {
     if (!isOpen) return;
     const safetyTimer = setTimeout(() => {
       if (!hasFinishedRef.current) {
         handleFinish();
       }
-    }, 17500);
+    }, (TOTAL_SECONDS + 2.5) * 1000);
     return () => clearTimeout(safetyTimer);
   }, [isOpen, handleFinish]);
 
@@ -175,7 +172,7 @@ export function WelcomeRitual({
         setCurrentTime(t);
         const pct = (t / audio.duration) * 100;
         setProgress(pct);
-        if (t >= 15.5 && !hasFinishedRef.current) {
+        if (t >= TOTAL_SECONDS - 0.6 && !hasFinishedRef.current) {
           handleFinish();
         }
       }
@@ -200,19 +197,19 @@ export function WelcomeRitual({
     }
 
     // Fallback: si el navegador bloquea el audio o no dispara timeupdate,
-    // un reloj interno avanza los subtítulos y cierra a los ~15.8s.
+    // un reloj interno avanza los subtítulos y cierra al final del track.
     const fallbackTicker = setInterval(() => {
       const aud = audioRef.current;
       if (!aud || aud.paused || aud.ended) {
         setCurrentTime((prev: number) => {
-          if (prev >= 15.8) {
+          if (prev >= TOTAL_SECONDS) {
             clearInterval(fallbackTicker);
             handleFinish();
-            return 15.8;
+            return TOTAL_SECONDS;
           }
           const next = prev + 0.25;
-          setProgress(Math.min(100, (next / 15.8) * 100));
-          if (next >= 15.8) {
+          setProgress(Math.min(100, (next / TOTAL_SECONDS) * 100));
+          if (next >= TOTAL_SECONDS) {
             clearInterval(fallbackTicker);
             handleFinish();
           }
@@ -253,6 +250,8 @@ export function WelcomeRitual({
   };
 
   if (!isOpen) return null;
+
+  const introAt = phrases[0]?.start ?? 3.4;
 
   return (
     <div
@@ -301,17 +300,17 @@ export function WelcomeRitual({
       <main className="relative z-10 mx-auto my-auto flex w-full max-w-2xl flex-col items-center justify-center space-y-10 px-6 text-center">
         <div
           className={`relative inline-block transform transition-all duration-1000 ease-out ${
-            currentTime >= 14.8 ? 'z-30 scale-150 sm:scale-[1.75]' : 'scale-100'
+            currentTime >= OUTRO_AT ? 'z-30 scale-150 sm:scale-[1.75]' : 'scale-100'
           }`}
         >
           <div
-            className={`pointer-events-none absolute inset-0 animate-pulse rounded-full bg-pink-500/30 blur-3xl transition-all duration-1000 ${
-              currentTime >= 14.8 ? 'scale-150 opacity-80' : 'scale-150'
+            className={`pointer-events-none absolute inset-0 animate-pulse rounded-full bg-pink-500/25 blur-3xl transition-all duration-1000 ${
+              currentTime >= OUTRO_AT ? 'scale-150 opacity-80' : 'scale-150'
             }`}
           />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/logo_conejo.png"
+            src={logoSrc}
             alt="Rabbitty"
             className="mx-auto h-24 w-24 object-contain drop-shadow-[0_0_30px_rgba(233,30,99,0.9)] transition-all duration-700 sm:h-32 sm:w-32"
           />
@@ -355,8 +354,8 @@ export function WelcomeRitual({
             );
           })}
 
-          {/* Estado inicial mientras arranca el audio (0 a 5s) */}
-          {currentTime < 5.0 && (
+          {/* Estado inicial mientras arranca el audio */}
+          {currentTime < introAt && (
             <div className="animate-pulse space-y-2 opacity-50 transition-opacity duration-1000 ease-out">
               <span className="block text-[11px] font-mono uppercase tracking-[0.4em] text-zinc-400">
                 Sintonizando frecuencia

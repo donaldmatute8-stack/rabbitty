@@ -19,7 +19,7 @@ export function RitualPreviewClient() {
         </p>
         <h1 className="m-0 mt-2 text-2xl font-black tracking-tight">Ritual de bienvenida</h1>
         <p className="m-0 mt-2 text-sm leading-relaxed text-white/55">
-          Es el mismo ritual de la app y del alta: audio, tres frases, logo y barra de progreso.
+          El ritual de afiliados: audio propio de ~20 s, cuatro frases, logo Ra y barra de progreso.
           Se puede omitir en cualquier momento y se repite las veces que quieras.
         </p>
 
@@ -44,7 +44,7 @@ export function RitualPreviewClient() {
           key={runId}
           forceOpen
           storageKey="rabbitty_affiliate_ritual_preview"
-          audioSrc="/assets/lugares-por-descubrir.mp3"
+          audioSrc="/assets/afiliados-bienvenida.mp3"
           onComplete={() => setOpen(false)}
         />
       )}

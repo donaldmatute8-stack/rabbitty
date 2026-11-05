@@ -40,7 +40,7 @@ import { NicheSearch } from '../../../components/NicheSearch';
 import { WelcomeRitual } from '../../../components/WelcomeRitual';
 
 /** El ritual de bienvenida se muestra una vez por dispositivo en el re-onboarding. */
-const AFFILIATE_RITUAL_KEY = 'rabbitty_affiliate_ritual_admin_seen_v1';
+const AFFILIATE_RITUAL_KEY = 'rabbitty_affiliate_ritual_admin_seen_v2';
 
 const STEP_META = [
   {
@@ -190,7 +190,7 @@ export default function OnboardingPage() {
       {showRitual && (
         <WelcomeRitual
           storageKey={AFFILIATE_RITUAL_KEY}
-          audioSrc="/assets/lugares-por-descubrir.mp3"
+          audioSrc="/assets/afiliados-bienvenida.mp3"
           onComplete={() => setShowRitual(false)}
         />
       )}
