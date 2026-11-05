@@ -4,7 +4,7 @@ import { useState, useEffect, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { MoreHorizontal, Bookmark, Share2, X, Check, Heart, ExternalLink } from 'lucide-react';
+import { MoreHorizontal, Bookmark, Share2, X, Check, Heart, ExternalLink, MessageCircle } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
 import { useToast } from '@/contexts/ToastContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -235,11 +235,19 @@ export default function FeedCard({
               gap: 6,
               boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
               zIndex: 10,
+              cursor: label === 'Cerca' ? 'pointer' : 'default',
             }}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (label === 'Cerca') {
+                PlatformBridge.hapticFeedback('light');
+                window.dispatchEvent(new Event('rabbitty:request-location'));
+              }
+            }}
+            title={label === 'Cerca' ? 'Activar ubicación para ver distancias' : undefined}
           >
             <span style={{ fontSize: 11, fontWeight: 800, color: '#FFFFFF', letterSpacing: '-0.2px' }}>
-              📍 {label}
+              📍 {label === 'Cerca' ? 'Activar ubicación' : label}
             </span>
 
             {/* Separador vertical tenue */}
@@ -282,24 +290,49 @@ export default function FeedCard({
               </p>
               <p style={{ color: 'var(--text-muted)', fontSize: 13, fontWeight: 500 }}>{device}</p>
             </div>
-            <button 
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                router.push(`/affiliate/${id}`);
-              }}
-              style={{
-                flexShrink: 0,
-                background: 'var(--rabbitty-pink)', color: '#fff',
-                fontSize: 12, fontWeight: 700,
-                padding: '9px 16px', borderRadius: 999,
-                border: 'none', cursor: 'pointer',
-                boxShadow: '0 2px 10px rgba(233,30,99,0.3)',
-              }}
-              className="active:scale-95 transition-transform"
-            >
-              Ver oferta
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  router.push(`/chat/${id}`);
+                }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  background: 'transparent',
+                  color: 'var(--text-primary)',
+                  border: '1px solid var(--border-subtle)',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  padding: '9px 12px',
+                  borderRadius: 999,
+                  cursor: 'pointer',
+                }}
+                className="active:scale-95 transition-transform"
+                aria-label={`Enviar mensaje a ${user}`}
+              >
+                <MessageCircle size={14} /> Mensaje
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  router.push(`/affiliate/${id}`);
+                }}
+                style={{
+                  background: 'var(--rabbitty-pink)', color: '#fff',
+                  fontSize: 12, fontWeight: 700,
+                  padding: '9px 16px', borderRadius: 999,
+                  border: 'none', cursor: 'pointer',
+                  boxShadow: '0 2px 10px rgba(233,30,99,0.3)',
+                }}
+                className="active:scale-95 transition-transform"
+              >
+                Abrir
+              </button>
+            </div>
           </div>
 
           {/* Barra de Acciones Seamless de Red Social Rabbitty */}

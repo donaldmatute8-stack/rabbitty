@@ -3,7 +3,7 @@
 import { useState, useEffect, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { QrCode, Sparkles, ChevronRight, X, ShieldCheck } from 'lucide-react';
+import { QrCode, ChevronRight, X, ShieldCheck } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
 import RabbittyCode from '@/components/ui/RabbittyCode';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -102,27 +102,27 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
           style={{ background: 'radial-gradient(circle, #E91E63 0%, transparent 70%)' }}
         />
 
+        {/* App icon de fondo: grande y tenue, anclado al borde inferior */}
+        <Image
+          src="/app_icon.png"
+          alt=""
+          width={220}
+          height={220}
+          aria-hidden
+          className="pointer-events-none select-none absolute -bottom-10 left-1/2 -translate-x-1/2 opacity-[0.07] object-contain"
+        />
+
         {/* Top Header inside Card (Only when expanded) */}
         {!isCollapsed && (
           <div className="flex items-center justify-between relative z-10 mb-4">
-            <div className="flex items-center gap-2.5">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center p-1 backdrop-blur-md relative ${isDark ? 'bg-black/40 border border-white/10' : 'bg-pink-500/10 border border-pink-500/20'}`}>
-                <Image src="/logo_conejo.png" alt="Rabbitty" width={24} height={24} priority className="object-contain filter drop-shadow-[0_0_8px_rgba(233,30,99,0.8)]" />
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-black uppercase tracking-[1.5px] text-[#E91E63]">RABBITTY PASS</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${isDark ? 'bg-white/10 text-white/80 border border-white/10' : 'bg-slate-900/5 text-slate-800 border border-slate-900/10'}`}>
+                  Lvl. {levelName}
+                </span>
               </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-black uppercase tracking-[1.5px] text-[#E91E63]">RABBITTY PASS</span>
-                  <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${isDark ? 'bg-white/10 text-white/80 border border-white/10' : 'bg-slate-900/5 text-slate-800 border border-slate-900/10'}`}>
-                    Lvl. {levelName}
-                  </span>
-                </div>
-                <p className={`text-xs font-bold m-0 leading-tight ${isDark ? 'text-white/50' : 'text-slate-500'}`}>{username}</p>
-              </div>
-            </div>
-
-            <div className={`flex items-center gap-1 text-[11px] font-extrabold text-[#E91E63] px-2.5 py-1 rounded-full border ${isDark ? 'bg-[#E91E63]/10 border-[#E91E63]/25' : 'bg-[#E91E63]/15 border-[#E91E63]/30'}`}>
-              <Sparkles size={12} />
-              <span>Digital Club</span>
+              <p className={`text-xs font-bold m-0 leading-tight ${isDark ? 'text-white/50' : 'text-slate-500'}`}>{username}</p>
             </div>
           </div>
         )}
@@ -132,9 +132,6 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
           <div className="flex items-center justify-between relative z-10">
             {/* Left: Brand + Level + Username */}
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center p-1 backdrop-blur-md shrink-0 relative ${isDark ? 'bg-black/40 border border-white/10' : 'bg-pink-500/10 border border-pink-500/20'}`}>
-                <Image src="/logo_conejo.png" alt="Rabbitty" width={22} height={22} priority className="object-contain filter drop-shadow-[0_0_8px_rgba(233,30,99,0.8)]" />
-              </div>
               <div className="min-w-0 truncate">
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] font-black uppercase tracking-wider text-[#E91E63]">RABBITTY PASS</span>
@@ -179,7 +176,7 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
             <div className={`flex items-center justify-between pt-3 border-t relative z-10 mt-3 ${isDark ? 'border-white/10' : 'border-slate-200'}`}>
               <div className="truncate max-w-50">
                 <p className={`text-[13px] font-extrabold truncate m-0 ${isDark ? 'text-white' : 'text-slate-900'}`}>{memberName}</p>
-                <p className={`text-[10px] font-mono m-0 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>ID: {String(qrIdentifier).slice(0, 14)}...</p>
+
               </div>
 
               <button

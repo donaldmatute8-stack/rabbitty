@@ -61,7 +61,7 @@ export default function B2BLogin() {
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-white p-10 rounded-[32px] shadow-2xl max-w-md w-full text-center border border-gray-100"
+        className="w-full max-w-md overflow-hidden rounded-[32px] border border-gray-100 bg-white p-6 text-center shadow-2xl sm:p-10"
       >
         <div className="w-16 h-16 bg-pink-100 text-pink-600 rounded-2xl flex items-center justify-center mx-auto mb-6 text-3xl">
           🐰
@@ -72,16 +72,17 @@ export default function B2BLogin() {
           Abre la Mini App en tu celular y escanea este código para entrar a tu panel de negocios.
         </p>
 
-        <div className="flex justify-center mb-8 relative">
+        <div className="relative mb-8 flex w-full justify-center">
           {loading ? (
             <div className="w-64 h-64 bg-gray-100 rounded-2xl animate-pulse flex items-center justify-center">
               <span className="text-gray-400 font-bold">Generando QR...</span>
             </div>
           ) : qrToken ? (
-            <div className="p-4 bg-white rounded-2xl shadow-[0_0_40px_rgba(0,0,0,0.05)] border border-gray-100">
+            <div className="w-full max-w-[220px] rounded-2xl border border-gray-100 bg-white p-3 shadow-[0_0_40px_rgba(0,0,0,0.05)]">
               <QRCodeSVG 
                 value={`https://t.me/Rabbittyme_bot/app?startapp=qrlogin_${qrToken}`} 
-                size={220}
+                size={200}
+                className="h-auto w-full max-w-full"
                 bgColor={"#ffffff"}
                 fgColor={"#0D0D1A"}
                 level={"H"}

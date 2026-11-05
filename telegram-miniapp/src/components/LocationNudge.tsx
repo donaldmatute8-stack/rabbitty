@@ -39,6 +39,21 @@ export default function LocationNudge() {
     return () => { cancelled = true; };
   }, []);
 
+  // El tag "Activar ubicación" del feed pide el permiso nativo directamente.
+  useEffect(() => {
+    const onRequest = async () => {
+      try {
+        const { Geolocation } = await import('@capacitor/geolocation');
+        const status = await Geolocation.requestPermissions();
+        if (status.location === 'granted') {
+          window.dispatchEvent(new Event('rabbitty:location-granted'));
+        }
+      } catch { /* web/Telegram: el home usa navigator.geolocation */ }
+    };
+    window.addEventListener('rabbitty:request-location', onRequest);
+    return () => window.removeEventListener('rabbitty:request-location', onRequest);
+  }, []);
+
   const enable = async () => {
     PlatformBridge.hapticFeedback('medium');
     setBusy(true);

@@ -9,6 +9,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
+import { useTheme } from '@/contexts/ThemeContext';
 
 const THRESHOLD = 64; // px de jalón que activa el refresh
 const MAX_PULL = 110;
@@ -22,6 +23,7 @@ interface PullToRefreshProps {
 
 export default function PullToRefresh({ onRefresh, children, enabled = true }: PullToRefreshProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
+  const { isDark } = useTheme();
   const [pullPx, setPullPx] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const startY = useRef<number | null>(null);
@@ -118,13 +120,13 @@ export default function PullToRefresh({ onRefresh, children, enabled = true }: P
           style={{ scale: 0.9 + progress * 0.1 }}
           className="flex items-center gap-2.5"
         >
-          <motion.span
+          <motion.img
+            src={isDark ? '/logo_conejo.png' : '/logo_conejo_blk.png'}
+            alt=""
             animate={{ rotate: refreshing ? [0, -12, 12, 0] : pullPx > 10 ? [0, -8, 8, 0] : 0 }}
             transition={{ repeat: Infinity, duration: 1.1, ease: 'easeInOut' }}
-            className="text-lg"
-          >
-            🐰
-          </motion.span>
+            className="h-5 w-5 object-contain drop-shadow-[0_0_8px_rgba(233,30,99,0.45)]"
+          />
           {/* Barras onduladas — mini RabbittyCode */}
           <div className="flex items-center gap-[3px] h-4">
             {[0, 1, 2, 3, 4, 5].map((i) => (
@@ -136,9 +138,7 @@ export default function PullToRefresh({ onRefresh, children, enabled = true }: P
               />
             ))}
           </div>
-          <span className="text-[10px] font-black text-white/70 uppercase tracking-[1.5px]">
-            {refreshing ? 'Actualizando…' : 'Suelta para actualizar'}
-          </span>
+
         </motion.div>
       </div>
       {children}

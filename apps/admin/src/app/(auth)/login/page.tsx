@@ -40,6 +40,15 @@ export default function LoginPage() {
 
   const handlePasskeyLogin = async () => {
     if (passkeyBusy) return;
+    // WKWebView / Mac Catalyst pueden no exponer WebAuthn.
+    if (
+      typeof window === "undefined" ||
+      !("PublicKeyCredential" in window) ||
+      !navigator.credentials?.get
+    ) {
+      alert("Este dispositivo no soporta passkeys. Entra con tu código OTP.");
+      return;
+    }
     setPasskeyBusy(true);
     try {
       const b64urlToBytes = (s2: string) => Uint8Array.from(atob(s2.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));

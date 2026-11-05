@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface RabbittyContourLoaderProps {
   size?: number;
@@ -9,8 +10,9 @@ interface RabbittyContourLoaderProps {
 
 export default function RabbittyContourLoader({
   size = 56,
-  label = 'Actualizando...',
+  label = '',
 }: RabbittyContourLoaderProps) {
+  const { isDark } = useTheme();
   return (
     <div className="flex flex-col items-center justify-center gap-2 py-3 select-none">
       <div
@@ -25,9 +27,9 @@ export default function RabbittyContourLoader({
 
         {/* Silueta Fija Base del Conejo */}
         <img
-          src="/logo_conejo.png"
+          src={isDark ? '/logo_conejo.png' : '/logo_conejo_blk.png'}
           alt="Rabbitty"
-          className="w-full h-full object-contain opacity-25 filter grayscale invert"
+          className="w-full h-full object-contain opacity-90"
           style={{ transform: 'scale(0.85)' }}
         />
 

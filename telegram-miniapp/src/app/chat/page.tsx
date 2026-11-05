@@ -12,6 +12,7 @@ import { BusinessCardSkeleton } from '@/components/ui/Skeleton';
 import PullToRefresh from '@/components/ui/PullToRefresh';
 import { PlatformBridge } from '@/lib/platform';
 import { CreateGroupSheet } from '@/components/chat/CreateGroupSheet';
+import { NewChatHub } from '@/components/chat/NewChatHub';
 import { useConvPrefs, setPref, setOrder, type ConvPref } from '@/lib/convPrefs';
 import {
   SquarePen,
@@ -162,6 +163,7 @@ export default function ChatInboxPage() {
   const [revealed, setRevealed] = useState<string | null>(null);
   const [revealedRight, setRevealedRight] = useState<string | null>(null);
   const [newOpen, setNewOpen] = useState(false);
+  const [newChatOpen, setNewChatOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [dockerOrientation, setDockerOrientation] = useState<'vertical' | 'horizontal'>(() => {
     if (typeof window !== 'undefined') {
@@ -616,16 +618,13 @@ export default function ChatInboxPage() {
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-(--bg-primary) text-(--text-primary) select-none">
       <CreateGroupSheet open={groupOpen} onClose={() => setGroupOpen(false)} />
-      <button
-        type="button"
-        onClick={() => { PlatformBridge.hapticFeedback('medium'); setGroupOpen(true); }}
-        aria-label="Crear grupo"
-        title="Nuevo grupo de Rabbitters"
-        className="fixed right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full text-white shadow-lg active:scale-95 transition-transform"
-        style={{ bottom: 'calc(env(safe-area-inset-bottom,0px) + 86px)', background: 'linear-gradient(135deg,#FF2E93,#E11D74)' }}
-      >
-        <span style={{ fontSize: 22, lineHeight: 1 }}>＋</span>
-      </button>
+      <NewChatHub
+        open={newChatOpen}
+        ownerId={user?.id || 'anon'}
+        onClose={() => setNewChatOpen(false)}
+        onOpenGroup={() => { setNewChatOpen(false); setGroupOpen(true); }}
+      />
+
       {/* 1. Lateral Vertical Docker (Empuja contenido) */}
       <AnimatePresence>
         {drawerOpen && dockerOrientation === 'vertical' && (
@@ -708,14 +707,14 @@ export default function ChatInboxPage() {
                       } else if (item.id === 'support') {
                         router.push('/support');
                       } else {
-                        // Abrir directamente la conversación in-app sin pantallas intermedias
-                        router.push(`/chat/${item.id}`);
+                        // Comunidades SIEMPRE internas: no crear conversación.
+                        setCommunity(item.id);
                       }
                     }}
                     title={item.fullName || item.label}
                     style={{
-                      width: 44,
-                      height: 44,
+                      width: 46,
+                      height: 52,
                       borderRadius: 14,
                       background: active
                         ? 'rgba(0, 136, 204, 0.18)'
@@ -735,8 +734,23 @@ export default function ChatInboxPage() {
                     }}
                     className="active:scale-95 transition-all"
                   >
-                    <span style={{ fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item.icon}</span>
-                    <span style={{ fontSize: 7.5, fontWeight: 600, letterSpacing: -0.1, opacity: 0.9 }}>{item.label}</span>
+                    <span
+                      style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: 10,
+                        background: item.gradient,
+                        color: '#fff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: `0 4px 12px ${item.borderGlow}`,
+                        border: '1px solid rgba(255,255,255,0.18)',
+                      }}
+                    >
+                      {item.icon}
+                    </span>
+                    <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: -0.1, opacity: 0.95 }}>{item.label}</span>
                   </button>
                 </div>
               );
@@ -800,9 +814,9 @@ export default function ChatInboxPage() {
                 type="button"
                 onClick={() => {
                   PlatformBridge.hapticFeedback('medium');
-                  setNewOpen(true);
+                  setNewChatOpen(true);
                 }}
-                aria-label="Nuevo mensaje"
+                aria-label="Nuevo chat"
                 className="w-9 h-9 rounded-full bg-(--bg-elevated) border border-(--border-subtle) text-(--text-primary) flex items-center justify-center active:scale-95 transition-transform shadow-xs"
               >
                 <SquarePen size={18} />
@@ -911,10 +925,10 @@ export default function ChatInboxPage() {
                   PlatformBridge.hapticFeedback('light');
                   setSearchOverlayOpen(true);
                 }}
-                className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-(--bg-elevated) border border-(--border-subtle) cursor-pointer active:opacity-80 transition-opacity shadow-xs"
+                className="flex items-center justify-start gap-2.5 py-2.5 px-3.5 rounded-xl bg-(--bg-elevated) border border-(--border-subtle) cursor-pointer active:opacity-80 transition-opacity shadow-xs"
               >
-                <Search size={16} className="text-(--text-muted)" />
-                <span className="text-[16px] text-(--text-muted)">Search</span>
+                <Search size={16} className="shrink-0 text-(--text-muted)" />
+                <span className="flex-1 text-left text-[16px] text-(--text-muted)">Search</span>
               </div>
 
               {/* Filtro archivados */}
@@ -1076,16 +1090,10 @@ export default function ChatInboxPage() {
                 </div>
 
                 <div className="w-full max-w-xs flex flex-col gap-2.5 mt-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      PlatformBridge.hapticFeedback('medium');
-                      router.push(`/chat/${g.id}`);
-                    }}
-                    className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm bg-linear-to-r from-[#E91E63] to-[#FF4081] text-white cursor-pointer shadow-lg active:scale-98 transition-all"
-                  >
-                    <MessageCircle size={18} /> Entrar a la conversación
-                  </button>
+                  <p className="m-0 text-center text-[11px] leading-relaxed text-white/40 px-4">
+                    Esta comunidad vive dentro de Rabbitty. Aquí verás sus novedades; no se abre un chat
+                    con ella.
+                  </p>
                   <button
                     type="button"
                     onClick={() => { PlatformBridge.hapticFeedback('light'); setCommunity('chats'); }}

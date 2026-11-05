@@ -2280,10 +2280,45 @@ export const posRouter = router({
       // la miniapp vía S2S (idempotente por dedupeKey cuando el stage repite).
       if (order.customerId && input.stage !== "RECEIVED") {
         try {
+          // Contexto legible: negocio + qué incluye (sin los dígitos del id).
+          const [branchRow] = await ctx.restaurantDb
+            .select({ restaurantId: branches.restaurantId })
+            .from(branches)
+            .where(eq(branches.id, order.branchId))
+            .limit(1);
+          const [restaurantRow] = branchRow
+            ? await ctx.restaurantDb
+                .select({ name: restaurants.name })
+                .from(restaurants)
+                .where(eq(restaurants.id, branchRow.restaurantId))
+                .limit(1)
+            : [];
+          const businessName = restaurantRow?.name || "tu negocio";
+
+          const orderedItems = await ctx.restaurantDb
+            .select({ name: menuItems.name, qty: orderItems.quantity })
+            .from(orderItems)
+            .innerJoin(menuItems, eq(orderItems.menuItemId, menuItems.id))
+            .where(eq(orderItems.orderId, input.orderId))
+            .limit(6);
+          const itemsSummary = orderedItems
+            .map((it) => `${it.qty}× ${it.name}`)
+            .join(" · ");
+          const detail = itemsSummary ? `: ${itemsSummary}` : "";
+
           const stageCopy: Record<string, { title: string; message: string }> = {
-            PREPARING: { title: "🔥 Tu pedido está en preparación", message: `Ya con marchas tu pedido #${input.orderId.slice(-6).toUpperCase()} — te iremos avisando.` },
-            READY: { title: "✅ ¡Pedido listo!", message: `Tu pedido #${input.orderId.slice(-6).toUpperCase()} del negocio ya está listo.` },
-            DONE: { title: "🎉 Pedido entregado", message: "¡Buen provecho! Tu cashback Bunz se acredita con la venta." },
+            PREPARING: {
+              title: "🔥 Tu pedido está en preparación",
+              message: `Ya estamos preparando tu pedido en ${businessName}${detail}. Te avisamos cuando esté listo.`,
+            },
+            READY: {
+              title: "✅ ¡Pedido listo!",
+              message: `Tu pedido en ${businessName} está listo${detail}.`,
+            },
+            DONE: {
+              title: "🎉 Pedido entregado",
+              message: `¡Buen provecho! Tu pedido en ${businessName} se entregó y tu cashback Bunz se acredita con la venta.`,
+            },
           };
           const copy = stageCopy[input.stage];
           if (copy) {

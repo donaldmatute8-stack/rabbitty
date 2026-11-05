@@ -275,6 +275,14 @@ export default function FeedPage() {
     return () => window.removeEventListener('rabbitty:location-granted', onGranted);
   }, []);
 
+  // El usuario tocó "Activar ubicación" en el tag Cerca del feed.
+  useEffect(() => {
+    const onRequest = () => { void requestLocation(); };
+    window.addEventListener('rabbitty:request-location', onRequest);
+    return () => window.removeEventListener('rabbitty:request-location', onRequest);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Freehands (mapa): si no tenemos ubicación, la pedimos sola al entrar.
   const autoLocatedRef = useRef(false);
   useEffect(() => {
@@ -864,13 +872,13 @@ export default function FeedPage() {
             aria-hidden={!refreshingFeed && pullDist <= 4}
           >
             <div className="flex items-center gap-2.5">
-              <motion.span
+              <motion.img
+                src={isDark ? '/logo_conejo.png' : '/logo_conejo_blk.png'}
+                alt=""
                 animate={{ rotate: [0, -12, 12, 0] }}
                 transition={{ repeat: Infinity, duration: 1.1, ease: 'easeInOut' }}
-                className="text-lg"
-              >
-                🐰
-              </motion.span>
+                className="h-5 w-5 object-contain drop-shadow-[0_0_8px_rgba(233,30,99,0.45)]"
+              />
               <div className="flex items-center gap-[3px] h-4">
                 {[0, 1, 2, 3, 4, 5].map((i) => (
                   <motion.div
@@ -881,16 +889,14 @@ export default function FeedPage() {
                   />
                 ))}
               </div>
-              <span className="text-[10px] font-black text-white/70 uppercase tracking-[1.5px]">
-                {refreshingFeed ? 'Actualizando…' : 'Suelta para actualizar'}
-              </span>
+
             </div>
           </div>
 
           {/* Loader del conejo (global, se muestra al actualizar desde cualquier pestaña) */}
           {loading && !(activeTab === "bunz'in") && (
             <div className="mb-2">
-              <RabbittyContourLoader size={54} label="Actualizando..." />
+              <RabbittyContourLoader size={54} />
             </div>
           )}
 
