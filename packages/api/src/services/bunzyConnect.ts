@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import {
   bunzyBroadcasts,
   bunzyDeliveries,
@@ -368,7 +368,7 @@ async function deliverOne(
       })
       .onConflictDoUpdate({
         target: [bunzyDeliveries.broadcastId, bunzyDeliveries.recipientType, bunzyDeliveries.recipientId],
-        set: { status: "SKIPPED", error: reason, updatedAt: new Date() },
+        set: { status: "SKIPPED", error: reason, lockedUntil: null, updatedAt: new Date() },
       })
       .catch(() => undefined);
     return {
@@ -474,7 +474,7 @@ async function deliverOne(
 
       await tx
         .update(bunzyDeliveries)
-        .set({ status: "PUBLISHED", deliveredAt: new Date(), updatedAt: new Date() })
+        .set({ status: "PUBLISHED", deliveredAt: new Date(), lockedUntil: null, updatedAt: new Date() })
         .where(
           and(
             eq(bunzyDeliveries.broadcastId, broadcast.id),
@@ -511,6 +511,7 @@ async function deliverOne(
         set: {
           status: "FAILED",
           error: err instanceof Error ? err.message.slice(0, 300) : "error",
+          lockedUntil: null,
           updatedAt: new Date(),
         },
       })
@@ -618,11 +619,30 @@ async function deliverBroadcast(
 
 /** Worker: procesa deliveries PENDING de envíos masivos. */
 export async function processBunzyQueue(db: CoreDb, limit = 100) {
-  const pending = await db
-    .select()
-    .from(bunzyDeliveries)
-    .where(eq(bunzyDeliveries.status, "PENDING"))
-    .limit(limit);
+  // Claim atómico: SKIP LOCKED + lock de 60s. Si el worker cae, el lock
+  // expira y otra corrida retoma la fila.
+  const pending = await db.transaction(async (tx) => {
+    const rows = await tx
+      .select()
+      .from(bunzyDeliveries)
+      .where(
+        and(
+          eq(bunzyDeliveries.status, "PENDING"),
+          or(isNull(bunzyDeliveries.lockedUntil), lte(bunzyDeliveries.lockedUntil, new Date())),
+        ),
+      )
+      .orderBy(bunzyDeliveries.createdAt)
+      .limit(limit)
+      .for("update", { skipLocked: true });
+
+    if (rows.length > 0) {
+      await tx
+        .update(bunzyDeliveries)
+        .set({ lockedUntil: new Date(Date.now() + 60_000) })
+        .where(inArray(bunzyDeliveries.id, rows.map((r) => r.id)));
+    }
+    return rows;
+  });
 
   const touched = new Set<string>();
   const results: Array<BunzyDeliveryResult & { broadcastId: string }> = [];
@@ -648,6 +668,29 @@ export async function processBunzyQueue(db: CoreDb, limit = 100) {
     const result = await deliverOne(db, broadcast, recipient);
     results.push({ ...result, broadcastId: broadcast.id });
     touched.add(broadcast.id);
+
+    if (result.status === "FAILED") {
+      const attempts = Number(row.attempts ?? 0) + 1;
+      if (attempts < 3) {
+        // Backoff: 30s, 90s. Vuelve a PENDING y otro cron lo retoma.
+        await db
+          .update(bunzyDeliveries)
+          .set({
+            status: "PENDING",
+            attempts,
+            lockedUntil: new Date(Date.now() + attempts * 30_000),
+            updatedAt: new Date(),
+          })
+          .where(eq(bunzyDeliveries.id, row.id))
+          .catch(() => undefined);
+      } else {
+        await db
+          .update(bunzyDeliveries)
+          .set({ status: "FAILED", attempts, lockedUntil: null, updatedAt: new Date() })
+          .where(eq(bunzyDeliveries.id, row.id))
+          .catch(() => undefined);
+      }
+    }
   }
 
   for (const broadcastId of touched) {

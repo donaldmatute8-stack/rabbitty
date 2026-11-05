@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Sparkles, ArrowUpRight } from 'lucide-react';
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -56,11 +57,18 @@ export function BunzyUpdateCard({ message }: { message: BunzyUpdateMessage }) {
             {meta.ctaLabel} <ArrowUpRight size={12} />
           </a>
         )}
-        {message.createdAt && (
-          <span className="mt-2 block text-[9.5px] text-gray-500">
-            {new Date(message.createdAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
-          </span>
-        )}
+        <div className="mt-2 flex items-center justify-between gap-2">
+          {message.createdAt ? (
+            <span className="text-[9.5px] text-gray-500">
+              {new Date(message.createdAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          ) : (
+            <span />
+          )}
+          <Link href="/settings/bunzy" className="text-[9.5px] font-bold text-pink-300 underline hover:text-pink-200">
+            Gestionar preferencias
+          </Link>
+        </div>
       </div>
     </div>
   );

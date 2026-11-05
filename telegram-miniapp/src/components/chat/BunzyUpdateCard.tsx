@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Sparkles, ArrowUpRight } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
 
@@ -129,11 +130,21 @@ export function BunzyUpdateCard({ message }: { message: BunzyUpdateMessage }) {
           </button>
         )}
 
-        {message.createdAt && (
-          <span style={{ display: 'block', marginTop: 8, fontSize: 9.5, color: 'var(--text-muted, rgba(255,255,255,0.4))' }}>
-            {new Date(message.createdAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
-          </span>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 8 }}>
+          {message.createdAt ? (
+            <span style={{ fontSize: 9.5, color: 'var(--text-muted, rgba(255,255,255,0.4))' }}>
+              {new Date(message.createdAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          ) : (
+            <span />
+          )}
+          <Link
+            href="/settings"
+            style={{ fontSize: 9.5, fontWeight: 700, color: 'rgba(255,143,184,0.85)', textDecoration: 'underline' }}
+          >
+            Gestionar preferencias
+          </Link>
+        </div>
       </div>
     </div>
   );

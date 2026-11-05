@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { conversations, messages, notifications } from '@/db/schema';
+import { bunzyDeliveries, conversations, messages, notifications } from '@/db/schema';
 import { and, eq, isNull, ne, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
@@ -55,6 +55,20 @@ export async function POST(req: Request) {
         ),
       )
       .returning({ id: messages.id });
+
+    // 1.5) Bunzy Connect: la lectura REAL desde la app también cierra el
+    // delivery oficial (antes solo lo hacía el admin).
+    try {
+      await db
+        .update(bunzyDeliveries)
+        .set({ status: 'READ', readAt: new Date(), updatedAt: new Date() })
+        .where(
+          and(
+            eq(bunzyDeliveries.conversationId, convAuth.conversation.id),
+            isNull(bunzyDeliveries.readAt),
+          ),
+        );
+    } catch { /* best-effort: no romper el mark-read del chat */ }
 
     // 2) campana in-app del hilo ya vista
     try {

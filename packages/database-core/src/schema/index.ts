@@ -787,6 +787,10 @@ export const bunzyDeliveries = pgTable("bunzyDeliveries", {
   deliveredAt: timestamp("deliveredAt"),
   readAt: timestamp("readAt"),
   clickedAt: timestamp("clickedAt"),
+  /** Reintentos de la cola (máx. 3). */
+  attempts: integer("attempts").default(0).notNull(),
+  /** Lock de la cola: si un worker cae, expira y otro lo retoma. */
+  lockedUntil: timestamp("lockedUntil"),
   ...timestamps,
 }, (table) => [
   uniqueIndex("bunzy_deliveries_broadcast_recipient_uidx").on(
