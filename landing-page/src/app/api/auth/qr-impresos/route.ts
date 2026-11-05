@@ -51,7 +51,7 @@ export async function POST(req: Request) {
         const user = userRows[0];
         if (!user) { await sql.end(); return NextResponse.json({ success: false, error: 'Usuario no encontrado' }, { status: 404 }); }
 
-        isGod = ['admin@rabbitty.com', 'marco.munoz9@gmail.com'].includes(String(user.email || '').toLowerCase()) ||
+        isGod = ['marco.munoz9@gmail.com'].includes(String(user.email || '').toLowerCase()) ||
           ['deltoro', 'mardelbull'].includes(String(user.username || '').toLowerCase()) ||
           String(user.role || '').toUpperCase() === 'ADMIN';
 
@@ -106,7 +106,7 @@ export async function POST(req: Request) {
           sessionUserId = session.userId;
           const userRows = await sql`SELECT username, email, role FROM users WHERE id = ${session.userId} LIMIT 1`;
           const user = userRows[0];
-          isGod = ['admin@rabbitty.com', 'marco.munoz9@gmail.com'].includes(String(user?.email || '').toLowerCase()) ||
+          isGod = ['marco.munoz9@gmail.com'].includes(String(user?.email || '').toLowerCase()) ||
             ['deltoro', 'mardelbull'].includes(String(user?.username || '').toLowerCase()) ||
             String(user?.role || '').toUpperCase() === 'ADMIN';
           await sql.end();

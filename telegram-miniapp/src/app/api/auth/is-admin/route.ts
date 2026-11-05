@@ -3,7 +3,7 @@ import { getAuthenticatedUser } from '@/lib/serverAuth';
 
 const ADMIN_TELEGRAM_IDS = (process.env.ADMIN_TELEGRAM_IDS || '798431743').split(',').map((id) => id.trim());
 const ADMIN_USERNAMES = ['deltoro', 'mardelbull'];
-const ADMIN_EMAILS = ['marco.munoz9@gmail.com', 'admin@rabbitty.com'];
+const ADMIN_EMAILS = ['marco.munoz9@gmail.com'];
 
 export async function GET(req: Request) {
   const caller = await getAuthenticatedUser(req);

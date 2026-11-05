@@ -8,7 +8,7 @@ import crypto from "crypto";
  * administra las variables de entorno del deploy.
  */
 
-export const GOD_ADMIN_EMAILS = ["marco.munoz9@gmail.com", "admin@rabbitty.com"];
+export const GOD_ADMIN_EMAILS = ["marco.munoz9@gmail.com"];
 
 /**
  * Identidad God Admin: SOLO por correo allowlist.

@@ -10,7 +10,7 @@ const ALLOWLIST = (process.env.ADMIN_TELEGRAM_IDS || '')
   .filter(Boolean);
 
 const ADMIN_USERNAMES = ['deltoro', 'mardelbull'];
-const ADMIN_EMAILS = ['marco.munoz9@gmail.com', 'admin@rabbitty.com'];
+const ADMIN_EMAILS = ['marco.munoz9@gmail.com'];
 
 /**
  * Obtiene el telegramId verificado del admin.
