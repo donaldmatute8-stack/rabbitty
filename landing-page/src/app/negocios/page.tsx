@@ -37,6 +37,7 @@ import {
 import { BunzyVideoStage } from '@/components/BunzyVideoStage';
 import { BunzyTypingBubble } from '@/components/BunzyTypingBubble';
 import { NicheSearch } from '@/components/NicheSearch';
+import { WelcomeRitual } from '@/components/WelcomeRitual';
 
 interface Niche {
   id: string;
@@ -112,6 +113,9 @@ function suggestPackage(niche?: string | null): string {
 }
 
 const CONTRACT_VERSION = '2026-11-04';
+
+/** El ritual se muestra una vez por dispositivo tras enviar el alta. */
+const AFFILIATE_RITUAL_KEY = 'rabbitty_affiliate_welcome_ritual_seen_v1';
 
 const CONTRACT_POINTS = [
   {
@@ -217,6 +221,7 @@ export default function NegociosPage() {
   const [packageTouched, setPackageTouched] = useState(false);
   const [data, setData] = useState<FormData>(EMPTY);
   const [submitted, setSubmitted] = useState(false);
+  const [showRitual, setShowRitual] = useState(false);
   const [existing, setExisting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -446,6 +451,11 @@ export default function NegociosPage() {
 
       setExisting(Boolean(json.existing));
       setSubmitted(true);
+      try {
+        if (!localStorage.getItem(AFFILIATE_RITUAL_KEY)) setShowRitual(true);
+      } catch {
+        // Sin localStorage (modo privado estricto): no interrumpimos el alta.
+      }
     } catch {
       setError('Error de conexión. Revisa tu internet e inténtalo de nuevo.');
     } finally {
@@ -458,6 +468,14 @@ export default function NegociosPage() {
   if (submitted) {
     return (
       <div className="min-h-[100dvh] bg-[#07070F] text-white">
+        {showRitual && (
+          <WelcomeRitual
+            storageKey={AFFILIATE_RITUAL_KEY}
+            audioSrc="/assets/lugares-por-descubrir.mp3"
+            onComplete={() => setShowRitual(false)}
+          />
+        )}
+
         <header className="border-b border-white/10">
           <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-4 sm:px-6">
             <Link href="/" className="flex items-center gap-2.5">
