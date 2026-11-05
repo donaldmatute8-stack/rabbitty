@@ -39,6 +39,7 @@ import { cashShiftsRouter } from "./cashShifts";
 import { customerChatRouter } from "./customerChat";
 import { moodRouter } from "./mood";
 import { bunzyRouter } from "./bunzy";
+import { bunzyConnectRouter } from "./bunzyConnect";
 import { godRouter } from "./god";
 import { ratingsRouter } from "./ratings";
 import "../services/queue";
@@ -84,6 +85,7 @@ export const appRouter = router({
   customerChat: customerChatRouter,
   mood: moodRouter,
   bunzy: bunzyRouter,
+  bunzyConnect: bunzyConnectRouter,
   god: godRouter,
   ratings: ratingsRouter,
 });

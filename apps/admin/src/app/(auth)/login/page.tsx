@@ -106,6 +106,16 @@ export default function LoginPage() {
   const [recentEmails, setRecentEmails] = useState<string[]>([]);
   const [isLocalDev, setIsLocalDev] = useState(false);
 
+  // En local, si el endpoint devuelve el OTP de prueba, lo dejamos listo para
+  // que el usuario solo pulse Entrar.
+  useEffect(() => {
+    if (!isLocalDev || !devOtpHint) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setOtpCode(devOtpHint);
+  }, [isLocalDev, devOtpHint]);
+
+
+
   // Determinar si lo que el usuario está escribiendo parece un número de teléfono
   const isPhoneNumber = (() => {
     const trimmed = inputVal.trim();
@@ -269,20 +279,21 @@ export default function LoginPage() {
   };
 
   const handleQuickLogin = async () => {
-    // Solo dev local: entra como el tenant demo para probar el re-onboarding
-    // (Demo Replay Café) sin pasar por el correo. Si falla, cae al e2e.
+    // Solo dev local: entra como el dueño del tenant de prueba (Ka13) sin pasar
+    // por el correo. Configurable con NEXT_PUBLIC_DEV_LOGIN_EMAIL.
+    const email = process.env.NEXT_PUBLIC_DEV_LOGIN_EMAIL || "marco.munoz9@gmail.com";
     try {
       const res = await fetch(resolveApiUrl("/api/auth/otp/send"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input: "tester@rabbitty.me" }),
+        body: JSON.stringify({ input: email }),
       });
       const data = await res.json();
       if (data?.success) {
         await signIn("email-token", {
-          email: "tester@rabbitty.me",
+          email,
           token: data.otpCode || "123456",
-          callbackUrl: "/onboarding",
+          callbackUrl: "/",
         });
         return;
       }
@@ -367,7 +378,7 @@ export default function LoginPage() {
 
             {/* Hint en desarrollo local para pruebas rápidas */}
             {isLocalDev && devOtpHint && (
-              <div className="pt-2">
+              <div className="pt-2 space-y-2">
                 <button
                   type="button"
                   onClick={() => setOtpCode(devOtpHint)}
@@ -376,6 +387,15 @@ export default function LoginPage() {
                   <Sparkles className="w-3 h-3 text-pink-400" />
                   Auto-llenar OTP de prueba: {devOtpHint}
                 </button>
+                <div>
+                  <button
+                    type="button"
+                    onClick={handleQuickLogin}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/5 border border-white/15 text-gray-300 text-[11px] font-bold hover:bg-white/10 transition-all cursor-pointer"
+                  >
+                    Entrar como Marco / Ka13 (dev)
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -638,7 +658,7 @@ export default function LoginPage() {
                 onClick={handleQuickLogin}
                 className="flex h-10 w-full items-center justify-center rounded-xl border border-pink-500/20 bg-pink-500/10 text-pink-400 font-bold hover:bg-pink-500/20 hover:text-white transition-all cursor-pointer text-xs shadow-[0_0_15px_rgba(236,72,153,0.05)]"
               >
-                Acceso Rápido · tester@rabbitty.me
+                Acceso Rápido · Marco / Ka13
               </button>
             </div>
           )}

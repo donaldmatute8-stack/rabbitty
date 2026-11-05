@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import { 
   Crown, Store, Scale, Activity, Rocket, Gamepad2, Award, 
   LayoutDashboard, Settings, ArrowRight, ShieldCheck, RefreshCw, 
-  CheckCircle2, AlertTriangle, Users, Coins, Sparkles
+  CheckCircle2, AlertTriangle, Users, Coins, Sparkles, Megaphone
 } from "lucide-react";
 import { Card, Button, cn } from "@rabbitty/ui";
 
@@ -86,6 +86,16 @@ export default function GodHubPage() {
   }, []);
 
   const modules = [
+    {
+      title: "Bunzy Connect",
+      description: "Comunicación institucional dentro del chat: actualizaciones, tips y avisos con identidad de Bunzy, preview y métricas de lectura.",
+      href: "/god/bunzy-connect",
+      icon: Megaphone,
+      badge: "Comunicación",
+      color: "from-pink-500/20 to-fuchsia-600/20",
+      border: "border-pink-500/30",
+      iconColor: "text-pink-400",
+    },
     {
       title: "Tenants & Vista Prueba",
       description: "Crea afiliados de prueba con menú, sucursal y mesas listos, e impersona su panel con 1 clic sin credenciales.",
