@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -92,6 +92,16 @@ const STEP_META = [
   },
 ];
 
+const DATA_BUBBLES = [
+  'Empecemos por el nombre. Es lo primero que verán los Rabbitters.',
+  '¿Quién es el responsable? Así sabemos con quién hablar.',
+  'Tu correo, para avisarte cuando esté aprobado.',
+  'Tu WhatsApp, el canal más rápido para avisarte.',
+  '¿Dónde estás? Con esto te ubicamos en el mapa.',
+  '¿Cómo nos conociste? Nos ayuda a mejorar.',
+  'Activa tu ubicación o continúa sin ella; es opcional.',
+];
+
 const BUSINESS_LOGIN_URL =
   process.env.NEXT_PUBLIC_BUSINESS_LOGIN_URL || 'https://admin.rabbitty.me/login';
 const APP_URL =
@@ -146,6 +156,7 @@ export default function NegociosPage() {
   const [niches, setNiches] = useState<Niche[]>([]);
   const [loadingNiches, setLoadingNiches] = useState(true);
   const [step, setStep] = useState(0);
+  const [dataStep, setDataStep] = useState(0);
   const [data, setData] = useState<FormData>(EMPTY);
   const [submitted, setSubmitted] = useState(false);
   const [existing, setExisting] = useState(false);
@@ -229,6 +240,17 @@ export default function NegociosPage() {
     data.signature.trim().length >= 3 && data.acceptedTerms,
   ];
 
+  const dataStepValid = [
+    data.businessName.trim().length >= 2,
+    data.contactName.trim().length >= 2,
+    emailOk,
+    phoneOk,
+    data.address.trim().length >= 4,
+    // Opcionales: cómo nos conoció y ubicación.
+    true,
+    true,
+  ];
+
   const update = <K extends keyof FormData>(key: K, value: FormData[K]) => {
     setData((prev) => ({ ...prev, [key]: value }));
     setError('');
@@ -252,6 +274,7 @@ export default function NegociosPage() {
 
   const next = () => {
     if (!stepValid[step]) return;
+    if (step === 0) setDataStep(0);
     setStep((s) => Math.min(4, s + 1));
   };
 
@@ -261,6 +284,40 @@ export default function NegociosPage() {
       return;
     }
     setStep((s) => Math.max(0, s - 1));
+  };
+
+  // Paso 2 son 7 sub-pasos internos (6 datos + ubicación), sin cambiar de pantalla.
+  const handleContinue = () => {
+    if (step === 1) {
+      if (!dataStepValid[dataStep]) return;
+      if (dataStep < 6) {
+        setDataStep((d) => d + 1);
+        return;
+      }
+      if (!stepValid[1]) return;
+      setStep(2);
+      return;
+    }
+    next();
+  };
+
+  const handleBack = () => {
+    if (step === 1) {
+      if (dataStep > 0) {
+        setDataStep((d) => d - 1);
+        return;
+      }
+      setStep(0);
+      return;
+    }
+    back();
+  };
+
+  const handleEnter = (e: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleContinue();
+    }
   };
 
   const submit = async () => {
@@ -469,12 +526,17 @@ export default function NegociosPage() {
           stepLabel={meta.label}
           title={meta.title}
           description={meta.description}
-          videoHeightClass={step === 0 ? 'h-48 sm:h-56' : 'h-36 sm:h-44'}
-          layout={step === 0 ? 'horizontal' : 'stacked'}
+          videoHeightClass={
+            step === 0 ? 'h-48 sm:h-56' : step === 1 ? 'h-32 sm:h-40' : 'h-36 sm:h-44'
+          }
+          layout={step === 0 || step === 1 ? 'horizontal' : 'stacked'}
           loop
         />
 
-        <BunzyTypingBubble message={meta.bubble} className="mt-4" />
+        <BunzyTypingBubble
+          message={step === 1 ? DATA_BUBBLES[dataStep] : meta.bubble}
+          className="mt-4"
+        />
 
         <AnimatePresence mode="wait">
           <motion.div
@@ -498,89 +560,200 @@ export default function NegociosPage() {
               </div>
             )}
 
-            {/* Paso 2: datos */}
+            {/* Paso 2: datos · wizard interno de 7 sub-pasos */}
             {step === 1 && (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Nombre del negocio" icon={<Store className="h-3.5 w-3.5" />}>
-                  <input
-                    value={data.businessName}
-                    onChange={(e) => update('businessName', e.target.value.slice(0, 80))}
-                    placeholder="Ej. Taquería El Compa"
-                    autoComplete="organization"
-                    className={inputClass}
-                  />
-                </Field>
-                <Field label="Tu nombre" icon={<User className="h-3.5 w-3.5" />}>
-                  <input
-                    value={data.contactName}
-                    onChange={(e) => update('contactName', e.target.value.slice(0, 60))}
-                    placeholder="Nombre del responsable"
-                    autoComplete="name"
-                    className={inputClass}
-                  />
-                </Field>
-                <Field label="Correo" icon={<Mail className="h-3.5 w-3.5" />} hint={data.email && !emailOk ? 'Revisa el correo' : undefined}>
-                  <input
-                    value={data.email}
-                    onChange={(e) => update('email', e.target.value.slice(0, 160))}
-                    placeholder="tu@correo.com"
-                    type="email"
-                    inputMode="email"
-                    autoComplete="email"
-                    className={inputClass}
-                  />
-                </Field>
-                <Field label="WhatsApp" icon={<Phone className="h-3.5 w-3.5" />} hint={data.phone && !phoneOk ? '10 dígitos' : undefined}>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-white/50">+52</span>
-                    <input
-                      value={data.phone}
-                      onChange={(e) => update('phone', formatPhone(e.target.value))}
-                      placeholder="322 123 4567"
-                      type="tel"
-                      inputMode="tel"
-                      autoComplete="tel-national"
-                      className={inputClass}
-                    />
-                  </div>
-                </Field>
-                <div className="sm:col-span-2">
-                  <Field label="Ciudad y dirección" icon={<MapPin className="h-3.5 w-3.5" />}>
-                    <input
-                      value={data.address}
-                      onChange={(e) => update('address', e.target.value.slice(0, 160))}
-                      placeholder="Ej. Av. Insurgentes 123, Guadalajara, Jalisco"
-                      autoComplete="street-address"
-                      className={inputClass}
-                    />
-                  </Field>
+              <div className="rounded-3xl border border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.03] sm:p-5">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="m-0 text-[10px] font-black uppercase tracking-[0.2em] text-pink-500">
+                    Paso 2 · Tus datos
+                  </p>
+                  <span className="text-[10px] font-bold text-gray-400 dark:text-white/40">
+                    {dataStep + 1} de 7
+                  </span>
                 </div>
-                <div className="sm:col-span-2">
-                  <button
-                    type="button"
-                    onClick={requestGeo}
-                    disabled={geo === 'asking'}
-                    className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-xs font-bold text-white/60 transition-colors hover:bg-white/[0.06] disabled:opacity-50"
+
+                <div className="mb-4 flex gap-1">
+                  {Array.from({ length: 7 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className={`h-1 flex-1 rounded-full transition-colors ${
+                        i <= dataStep ? 'bg-pink-500' : 'bg-gray-200 dark:bg-white/10'
+                      }`}
+                    />
+                  ))}
+                </div>
+
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={dataStep}
+                    initial={{ opacity: 0, x: 14 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -14 }}
+                    transition={{ duration: 0.18 }}
+                    className="flex min-h-[136px] flex-col justify-center"
                   >
-                    {geo === 'ok'
-                      ? '✅ Ubicación exacta capturada'
-                      : geo === 'asking'
-                        ? 'Obteniendo ubicación…'
-                        : geo === 'denied'
-                          ? '📍 No se pudo obtener (puedes continuar)'
-                          : '📍 Usar mi ubicación exacta (opcional)'}
-                  </button>
-                </div>
-                <div className="sm:col-span-2">
-                  <Field label="¿Cómo nos conociste? (opcional)">
-                    <input
-                      value={data.referral}
-                      onChange={(e) => update('referral', e.target.value.slice(0, 120))}
-                      placeholder="Instagram, un amigo, Google…"
-                      className={inputClass}
-                    />
-                  </Field>
-                </div>
+                    {dataStep === 0 && (
+                      <Field
+                        label="Nombre del negocio"
+                        icon={<Store className="h-3.5 w-3.5" />}
+                        hint={
+                          data.businessName && data.businessName.trim().length < 2
+                            ? 'Mínimo 2 caracteres'
+                            : undefined
+                        }
+                      >
+                        <input
+                          autoFocus
+                          value={data.businessName}
+                          onChange={(e) => update('businessName', e.target.value.slice(0, 80))}
+                          onKeyDown={handleEnter}
+                          placeholder="Ej. Taquería El Compa"
+                          autoComplete="organization"
+                          className={inputClass}
+                        />
+                      </Field>
+                    )}
+
+                    {dataStep === 1 && (
+                      <Field
+                        label="Tu nombre"
+                        icon={<User className="h-3.5 w-3.5" />}
+                        hint={
+                          data.contactName && data.contactName.trim().length < 2
+                            ? 'Mínimo 2 caracteres'
+                            : undefined
+                        }
+                      >
+                        <input
+                          autoFocus
+                          value={data.contactName}
+                          onChange={(e) => update('contactName', e.target.value.slice(0, 60))}
+                          onKeyDown={handleEnter}
+                          placeholder="Nombre del responsable"
+                          autoComplete="name"
+                          className={inputClass}
+                        />
+                      </Field>
+                    )}
+
+                    {dataStep === 2 && (
+                      <Field
+                        label="Correo"
+                        icon={<Mail className="h-3.5 w-3.5" />}
+                        hint={data.email && !emailOk ? 'Revisa el correo' : undefined}
+                      >
+                        <input
+                          autoFocus
+                          value={data.email}
+                          onChange={(e) => update('email', e.target.value.slice(0, 160))}
+                          onKeyDown={handleEnter}
+                          placeholder="tu@correo.com"
+                          type="email"
+                          inputMode="email"
+                          autoComplete="email"
+                          className={inputClass}
+                        />
+                      </Field>
+                    )}
+
+                    {dataStep === 3 && (
+                      <Field
+                        label="WhatsApp"
+                        icon={<Phone className="h-3.5 w-3.5" />}
+                        hint={data.phone && !phoneOk ? '10 dígitos' : undefined}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-gray-500 dark:text-white/50">+52</span>
+                          <input
+                            autoFocus
+                            value={data.phone}
+                            onChange={(e) => update('phone', formatPhone(e.target.value))}
+                            onKeyDown={handleEnter}
+                            placeholder="322 123 4567"
+                            type="tel"
+                            inputMode="tel"
+                            autoComplete="tel-national"
+                            className={`${inputClass} flex-1`}
+                          />
+                        </div>
+                      </Field>
+                    )}
+
+                    {dataStep === 4 && (
+                      <Field
+                        label="Ciudad y dirección"
+                        icon={<MapPin className="h-3.5 w-3.5" />}
+                        hint={
+                          data.address && data.address.trim().length < 4
+                            ? 'Escribe calle y ciudad'
+                            : undefined
+                        }
+                      >
+                        <input
+                          autoFocus
+                          value={data.address}
+                          onChange={(e) => update('address', e.target.value.slice(0, 160))}
+                          onKeyDown={handleEnter}
+                          placeholder="Ej. Av. Insurgentes 123, Guadalajara, Jalisco"
+                          autoComplete="street-address"
+                          className={inputClass}
+                        />
+                      </Field>
+                    )}
+
+                    {dataStep === 5 && (
+                      <Field label="¿Cómo nos conociste?" hint="Opcional">
+                        <input
+                          autoFocus
+                          value={data.referral}
+                          onChange={(e) => update('referral', e.target.value.slice(0, 120))}
+                          onKeyDown={handleEnter}
+                          placeholder="Instagram, un amigo, Google…"
+                          className={inputClass}
+                        />
+                      </Field>
+                    )}
+
+                    {dataStep === 6 && (
+                      <div className="text-center">
+                        <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-pink-500/10 text-pink-500">
+                          <MapPin className="h-5 w-5" />
+                        </div>
+                        <p className="m-0 mt-2 text-sm font-black text-gray-900 dark:text-white">
+                          Activa tu ubicación
+                        </p>
+                        <p className="m-0 mx-auto mt-1 max-w-xs text-[11px] leading-relaxed text-gray-500 dark:text-white/45">
+                          Nos ayuda a ponerte en el mapa y a que los Rabbitters te encuentren. Es opcional.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={requestGeo}
+                          disabled={geo === 'asking'}
+                          className="mt-3 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-xs font-bold text-gray-600 transition-colors hover:bg-gray-100 disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.03] dark:text-white/60 dark:hover:bg-white/[0.06]"
+                        >
+                          {geo === 'ok'
+                            ? '✅ Ubicación capturada'
+                            : geo === 'asking'
+                              ? 'Obteniendo ubicación…'
+                              : geo === 'denied'
+                                ? '📍 No se pudo obtener (puedes continuar)'
+                                : '📍 Usar mi ubicación exacta'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleContinue}
+                          className="mt-2 text-[11px] font-bold text-gray-400 hover:text-pink-500 dark:text-white/35 dark:hover:text-pink-400"
+                        >
+                          Ahora no, continuar
+                        </button>
+                      </div>
+                    )}
+                  </motion.div>
+                </AnimatePresence>
+
+                <p className="m-0 mt-3 text-center text-[10px] text-gray-400 dark:text-white/30">
+                  {dataStep < 6 ? 'Presiona Enter para continuar' : 'La ubicación es opcional'}
+                </p>
               </div>
             )}
 
@@ -746,7 +919,7 @@ export default function NegociosPage() {
         <div className="mx-auto flex max-w-3xl items-center gap-2 px-4 pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+12px)] sm:px-6">
           <button
             type="button"
-            onClick={back}
+            onClick={handleBack}
             className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-xs font-bold text-white/70 transition-colors hover:bg-white/10"
           >
             <ArrowLeft className="mr-1 inline h-4 w-4" /> Atrás
@@ -755,8 +928,8 @@ export default function NegociosPage() {
           {step < 4 ? (
             <button
               type="button"
-              onClick={next}
-              disabled={!stepValid[step]}
+              onClick={handleContinue}
+              disabled={step === 1 ? !dataStepValid[dataStep] : !stepValid[step]}
               className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-gradient-to-r from-pink-500 to-rose-600 px-5 py-3.5 text-sm font-black text-white shadow-[0_0_24px_rgba(255,46,147,0.25)] transition-transform active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40"
             >
               Continuar <ArrowRight className="h-4 w-4" />
