@@ -65,6 +65,30 @@ export default function ScanPage() {
   const [isNativeApp, setIsNativeApp] = useState(false);
   const [nativeSession, setNativeSession] = useState(0);
   const [nativeUnavailable, setNativeUnavailable] = useState(false);
+  const nativeSessionRef = useRef(0);
+  const nativeBusyRef = useRef(false);
+
+  // Abrir/cerrar con refs evita que un reintento asíncrono remonte la sesión
+  // mientras la cámara sigue activa. "Reiniciar" con la sesión viva es no-op:
+  // el escáner sigue escaneando en lugar de apagarse y volver a encenderse.
+  const openNativeScanner = useCallback(() => {
+    if (nativeBusyRef.current) return;
+    nativeBusyRef.current = true;
+    const next = Math.max(1, nativeSessionRef.current + 1);
+    nativeSessionRef.current = next;
+    setNativeSession(next);
+  }, []);
+  const closeNativeScanner = useCallback(() => {
+    nativeBusyRef.current = false;
+    nativeSessionRef.current = 0;
+    setNativeSession(0);
+  }, []);
+  // Payload aceptado: la cámara ya se detuvo. La sesión sigue montada (así
+  // los modales de confirmación y el aviso de presencia la reutilizan al
+  // cerrarse), pero un próximo inicio puede remontarla si hace falta.
+  const handleNativeConsumed = useCallback(() => {
+    nativeBusyRef.current = false;
+  }, []);
 
   useEffect(() => {
     const native = PlatformBridge.isNative();
@@ -305,10 +329,14 @@ export default function ScanPage() {
     isTransitioningRef.current = false;
   }, []);
 
-  const handleDispatchPayload = useCallback(async (rawPayload: string | number) => {
+  const handleDispatchPayload = useCallback(async (rawPayload: string | number): Promise<boolean> => {
     PlatformBridge.hapticFeedback('success');
-    setScanLoader('Leyendo tu código…');
-    if (typeof rawPayload === 'string') setScanLoaderCode(rawPayload);
+    // En nativo NO reemplazamos la pantalla: el overlay del escáner sigue montado
+    // y, si el payload no es reconocible, la sesión continúa sin apagar la cámara.
+    if (!PlatformBridge.isNative()) {
+      setScanLoader('Leyendo tu código…');
+      if (typeof rawPayload === 'string') setScanLoaderCode(rawPayload);
+    }
 
     const res = await resolveScannedPayload(rawPayload);
     if (!res.success) {
@@ -316,14 +344,14 @@ export default function ScanPage() {
       setScanLoaderCode(null);
       if (res.error) alert(res.error);
       startScanningRef.current();
-      return;
+      return false;
     }
 
     // 1. Magic Link (terminal iPad / caja)
     if (res.type === 'magic_link' && res.magicLink) {
       await stopScanning();
       router.push(`/magic-link?token=${encodeURIComponent(res.magicLink.token)}&sid=${encodeURIComponent(res.magicLink.sid)}`);
-      return;
+      return true;
     }
 
     // 2. Ticket Claim (claimToken)
@@ -341,23 +369,23 @@ export default function ScanPage() {
           alert(`🐰 ¡Felicidades! Se han acreditado +${claimData.bunzAwarded} Bunz a tu cuenta por el ticket #${claimData.orderNumber}.`);
           setScanLoader(null);
           router.push('/profile/wallet');
-          return;
+          return true;
         } else {
           setScanLoader(null);
           if (claimData?.alreadyClaimed && claimData?.ticket) {
             // Ticket ya acreditado (p. ej. pago Rabbitty Pay con cashback
             // automático) → mostrar el ticket digital para compartir/imprimir.
             setClaimedTicket(claimData.ticket);
-            return;
+            return true;
           }
           alert(claimData.error || 'No se pudo reclamar este ticket.');
           startScanningRef.current();
-          return;
+          return false;
         }
       } catch {
         alert('Error al conectar con el servidor para reclamar el ticket.');
         startScanningRef.current();
-        return;
+        return false;
       }
     }
 
@@ -375,16 +403,16 @@ export default function ScanPage() {
         if (tableData.success) {
           alert(`🐰 ¡Conectado a la Mesa #${tableData.table.number}! Tu comanda está abierta en caja y acumularás Bunz.`);
           router.push(`/pos-menu/${res.table.tableId}`);
-          return;
+          return true;
         } else {
           alert(tableData.error || 'No se pudo vincular a la mesa.');
           startScanningRef.current();
-          return;
+          return false;
         }
       } catch {
         alert('Error al conectar con el servidor para vincular a la mesa.');
         startScanningRef.current();
-        return;
+        return false;
       }
     }
 
@@ -421,24 +449,24 @@ export default function ScanPage() {
               already: d2?.checkIn === 'already',
               logoUrl,
             });
-            return;
+            return true;
           }
         } catch { /* cae a navegación */ }
         // Sin sesión o si falló el check-in: limpiar loader y navegar al perfil
         setScanLoader(null);
         setScanLoaderCode(null);
         router.push(`/affiliate/${res.business.id}`);
-        return;
+        return true;
       }
       router.push(`/affiliate/${res.business.id}`);
-      return;
+      return true;
     }
 
     // 5. Usuario (@handle / id)
     if (res.type === 'user' && res.user) {
       await stopScanning();
       router.push(`/profile/wallet?to=${encodeURIComponent(res.user.handle || res.user.id)}`);
-      return;
+      return true;
     }
 
     // 6. QR Login (/impresos o PC)
@@ -450,7 +478,7 @@ export default function ScanPage() {
       setScanLoader(null);
       setScanLoaderCode(null);
       setQrConfirm({ qrToken: res.qrLogin.qrToken, origin: 'www.rabbitty.me' });
-      return;
+      return true;
     }
 
     // 6.5. Fase D: link de pago del comensal (admin /pay/[orderId]) → pagar IN-APP
@@ -460,7 +488,7 @@ export default function ScanPage() {
       setScanLoader(null);
       setScanLoaderCode(null);
       setInAppPayOrderId((res.url || '').split('/pay/')[1].split(/[?&#]/)[0]);
-      return;
+      return true;
     }
 
     // 7. URL externa
@@ -473,49 +501,57 @@ export default function ScanPage() {
       } else {
         window.open(res.url, '_blank');
       }
-      return;
+      return true;
     }
 
     // 8. POS Payment Intent
-    let intentId = res.intent || (typeof rawPayload === 'string' ? rawPayload.trim() : '');
+    // Solo si el payload ES una intención de pago. Antes cualquier texto crudo
+    // entraba aquí y terminaba en "Intención de pago no encontrada", cerrando
+    // el escáner por un código desconocido.
+    const rawText = typeof rawPayload === 'string' ? rawPayload.trim() : String(rawPayload);
+    const looksLikeIntent = Boolean(res.intent) || /(?:^|[^a-z0-9])(pay_|pi_)/i.test(rawText);
+    let intentId = res.intent || (looksLikeIntent ? rawText : '');
     if (intentId.includes('pay_')) {
       intentId = intentId.split('pay_')[1].split(/[&?#\s]/)[0];
     } else if (intentId.includes('pi_')) {
       intentId = 'pi_' + intentId.split('pi_')[1].split(/[&?#\s]/)[0];
     }
 
-    if (intentId) {
+    if (looksLikeIntent && intentId) {
       await stopScanning();
-      const authHeader = await getAuthHeader();
-      const inputStr = encodeURIComponent(JSON.stringify({ "0": { intentId } }));
-      fetch(`${API_SERVER_URL}/payments.getIntent?batch=1&input=${inputStr}`, {
-        headers: { "Authorization": authHeader }
-      })
-      .then(r => r.json())
-      .then(data => {
+      try {
+        const authHeader = await getAuthHeader();
+        const inputStr = encodeURIComponent(JSON.stringify({ "0": { intentId } }));
+        const response = await fetch(`${API_SERVER_URL}/payments.getIntent?batch=1&input=${inputStr}`, {
+          headers: { "Authorization": authHeader }
+        });
+        const data = await response.json();
         if (data[0] && data[0].result && data[0].result.data) {
           setResult(data[0].result.data);
-        } else {
-          alert("Intención de pago no encontrada o inválida.");
-          setResult(null);
-          startScanningRef.current();
+          return true;
         }
-      })
-      .catch(() => {
+        alert("Intención de pago no encontrada o inválida.");
+        setResult(null);
+        startScanningRef.current();
+        return false;
+      } catch {
         alert("Error al contactar el servidor.");
         setResult(null);
         startScanningRef.current();
-      });
-      return;
+        return false;
+      }
     }
 
-    // Fallback no reconocido
+    // Fallback no reconocido: la sesión de escaneo sigue activa (no se cierra).
+    setScanLoader(null);
+    setScanLoaderCode(null);
     startScanningRef.current();
+    return false;
   }, [API_SERVER_URL, router, stopScanning]);
 
   const startScanning = useCallback(async () => {
     if (PlatformBridge.isNative() && !nativeUnavailable) {
-      setNativeSession((s) => s + 1);
+      openNativeScanner();
       return;
     }
     if (isTransitioningRef.current || scannerRef.current?.isScanning) return;
@@ -541,7 +577,13 @@ export default function ScanPage() {
     } finally {
       isTransitioningRef.current = false;
     }
-  }, [handleDispatchPayload]);
+  }, [handleDispatchPayload, openNativeScanner]);
+
+  // El escáner nativo recibe un callback estable (si cambia, se reinicia la cámara).
+  const handleNativeScan = useCallback(
+    (raw: string) => handleDispatchPayload(raw),
+    [handleDispatchPayload],
+  );
 
   useEffect(() => {
     startScanningRef.current = startScanning;
@@ -785,13 +827,14 @@ export default function ScanPage() {
       {isNativeApp && !nativeUnavailable && nativeSession > 0 && activeTab === 'scan' && !showManualInput && !result && !scanLoader && (
         <NativeQrScanner
           key={nativeSession}
-          onScan={handleDispatchPayload}
+          onScan={handleNativeScan}
+          onConsumed={handleNativeConsumed}
           onClose={() => {
-            setNativeSession(0);
+            closeNativeScanner();
             setShowManualInput(true);
           }}
           onFallback={() => {
-            setNativeSession(0);
+            closeNativeScanner();
             setNativeUnavailable(true);
             setShowManualInput(false);
             window.setTimeout(() => startScanningRef.current(), 80);

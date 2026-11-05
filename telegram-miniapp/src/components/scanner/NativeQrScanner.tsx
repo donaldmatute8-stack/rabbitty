@@ -10,9 +10,15 @@ import { useToast } from '@/contexts/ToastContext';
 type CornerPoint = [number, number];
 
 interface NativeQrScannerProps {
-  onScan: (value: string) => void | Promise<void>;
+  /**
+   * Devuelve `false` cuando el payload no se pudo reconocer: la sesión sigue
+   * activa y la cámara NO se apaga. Cualquier otro valor (o `void`) cierra.
+   */
+  onScan: (value: string) => boolean | void | Promise<boolean | void>;
   onClose: () => void;
   onFallback?: () => void;
+  /** Payload aceptado y cámara ya detenida (el padre puede liberar el overlay). */
+  onConsumed?: () => void;
 }
 
 const DEFAULT_SIZE = 280;
@@ -26,7 +32,7 @@ const MIN_SIZE = 132;
  *  - linterna, zoom y foto de galería
  *  - multiframe: acepta tras 2 lecturas coherentes
  */
-export function NativeQrScanner({ onScan, onClose, onFallback }: NativeQrScannerProps) {
+export function NativeQrScanner({ onScan, onClose, onFallback, onConsumed }: NativeQrScannerProps) {
   const { showToast } = useToast();
   const [frame, setFrame] = useState({ left: 0, top: 0, size: DEFAULT_SIZE });
   const [found, setFound] = useState(false);
@@ -35,7 +41,11 @@ export function NativeQrScanner({ onScan, onClose, onFallback }: NativeQrScanner
   const [zoom, setZoom] = useState(1);
   const [zoomMax, setZoomMax] = useState(1);
   const [error, setError] = useState<string | null>(null);
+  const [hint, setHint] = useState<string | null>(null);
   const stoppedRef = useRef(false);
+  const busyRef = useRef(false);
+  const scanningRef = useRef(false);
+  const rejectedRef = useRef<{ raw: string; until: number }>({ raw: '', until: 0 });
   const lastRawRef = useRef('');
   const firstSeenRef = useRef(0);
 
@@ -48,6 +58,13 @@ export function NativeQrScanner({ onScan, onClose, onFallback }: NativeQrScanner
       size,
     });
   }, []);
+
+  // El aviso de "código no reconocido" no debe quedarse pegado.
+  useEffect(() => {
+    if (hint !== 'Ese código no es de Rabbitty') return;
+    const timer = window.setTimeout(() => setHint(null), 2600);
+    return () => window.clearTimeout(timer);
+  }, [hint]);
 
   const updateFrame = useCallback((points: CornerPoint[]) => {
     if (!points || points.length !== 4) return;
@@ -72,6 +89,7 @@ export function NativeQrScanner({ onScan, onClose, onFallback }: NativeQrScanner
   }, []);
 
   const stopNative = useCallback(async () => {
+    scanningRef.current = false;
     try {
       const { BarcodeScanner } = await import('@capacitor-mlkit/barcode-scanning');
       await BarcodeScanner.disableTorch().catch(() => undefined);
@@ -83,23 +101,94 @@ export function NativeQrScanner({ onScan, onClose, onFallback }: NativeQrScanner
     document.documentElement.style.background = '';
   }, []);
 
+  /**
+   * Reanuda la sesión de cámara si algo la pausó (p. ej. abrir la galería).
+   * No hace nada si la sesión ya se cerró o no hay cámara nativa.
+   */
+  const resumeScanning = useCallback(async () => {
+    if (stoppedRef.current) return;
+    try {
+      const { BarcodeScanner, BarcodeFormat, LensFacing, Resolution } = await import(
+        '@capacitor-mlkit/barcode-scanning'
+      );
+      document.body.classList.add('barcode-scanner-active');
+      document.documentElement.style.background = 'transparent';
+      await BarcodeScanner.startScan({
+        formats: [BarcodeFormat.QrCode],
+        lensFacing: LensFacing.Back,
+        resolution: Resolution['1920x1080'],
+      });
+      scanningRef.current = true;
+    } catch (err) {
+      // "already scanning" es benigno; solo reportamos fallos reales.
+      if (!stoppedRef.current && !/already|active/i.test(String(err))) {
+        setError(err instanceof Error ? err.message : 'No se pudo reanudar la cámara.');
+      }
+    }
+  }, []);
+
+  /**
+   * Valida ANTES de cerrar: si `onScan` devuelve `false`, el código no es de
+   * Rabbitty y la sesión sigue escaneando (no se apaga la cámara).
+   */
   const finish = useCallback(
     async (raw: string) => {
-      if (stoppedRef.current) return;
-      stoppedRef.current = true;
+      if (stoppedRef.current || busyRef.current) return;
+      busyRef.current = true;
       setFound(true);
+      setHint('Leyendo…');
       PlatformBridge.hapticFeedback('success');
+
+      let accepted = true;
+      try {
+        accepted = (await onScan(raw)) !== false;
+      } catch {
+        accepted = false;
+      }
+
+      // Si se cerró durante la validación, no hay nada que hacer.
+      if (stoppedRef.current) {
+        busyRef.current = false;
+        return;
+      }
+
+      if (!accepted) {
+        // Payload no reconocible: mantener la cámara y evitar reintentos en bucle
+        // con el mismo código durante unos segundos.
+        rejectedRef.current = { raw, until: Date.now() + 4000 };
+        lastRawRef.current = '';
+        firstSeenRef.current = 0;
+        setFound(false);
+        setHint('Ese código no es de Rabbitty');
+        showToast('Ese código no es de Rabbitty', 'info');
+        busyRef.current = false;
+        return;
+      }
+
+      stoppedRef.current = true;
+      setFound(false);
+      setHint(null);
       await stopNative();
-      window.setTimeout(() => {
-        void onScan(raw);
-      }, 220);
+      busyRef.current = false;
+      onConsumed?.();
     },
-    [onScan, stopNative],
+    [onConsumed, onScan, showToast, stopNative],
   );
 
   useEffect(() => {
     let listener: { remove: () => Promise<void> } | null = null;
     let cancelled = false;
+
+    // Teardown idempotente: se usa tanto en el cleanup como en las salidas
+    // tempranas del arranque asíncrono.
+    const teardown = async () => {
+      if (listener) {
+        const current = listener;
+        listener = null;
+        await current.remove().catch(() => undefined);
+      }
+      await stopNative();
+    };
 
     (async () => {
       try {
@@ -111,14 +200,12 @@ export function NativeQrScanner({ onScan, onClose, onFallback }: NativeQrScanner
         if (permission.camera !== 'granted') {
           const requested = await BarcodeScanner.requestPermissions();
           if (requested.camera !== 'granted') {
-            setError('Necesitamos la cámara para escanear el QR. Actívala en Ajustes.');
+            if (!cancelled) setError('Necesitamos la cámara para escanear el QR. Actívala en Ajustes.');
             return;
           }
         }
+        // El usuario pudo cerrar o navegar durante el permiso.
         if (cancelled) return;
-
-        document.body.classList.add('barcode-scanner-active');
-        document.documentElement.style.background = 'transparent';
 
         listener = await BarcodeScanner.addListener('barcodesScanned', (event) => {
           const barcode = event.barcodes?.[0];
@@ -128,6 +215,9 @@ export function NativeQrScanner({ onScan, onClose, onFallback }: NativeQrScanner
           }
           const raw = barcode.rawValue || barcode.displayValue || '';
           if (!raw) return;
+          if (busyRef.current) return;
+          const rejected = rejectedRef.current;
+          if (rejected.raw === raw && Date.now() < rejected.until) return;
 
           const now = Date.now();
           if (raw !== lastRawRef.current) {
@@ -141,11 +231,33 @@ export function NativeQrScanner({ onScan, onClose, onFallback }: NativeQrScanner
           }
         });
 
-        await BarcodeScanner.startScan({
-          formats: [BarcodeFormat.QrCode],
-          lensFacing: LensFacing.Back,
-          resolution: Resolution['1920x1080'],
-        });
+        // El listener pudo quedar huérfano si se cerró durante el await.
+        if (cancelled) {
+          await teardown();
+          return;
+        }
+
+        document.body.classList.add('barcode-scanner-active');
+        document.documentElement.style.background = 'transparent';
+
+        try {
+          await BarcodeScanner.startScan({
+            formats: [BarcodeFormat.QrCode],
+            lensFacing: LensFacing.Back,
+            resolution: Resolution['1920x1080'],
+          });
+          scanningRef.current = true;
+        } catch (err) {
+          // Si la cámara ya estaba activa seguimos; otro fallo se reporta abajo.
+          if (!/already|active/i.test(String(err))) throw err;
+        }
+
+        // Cierre durante el arranque: apagar la cámara aunque startScan haya
+        // ganado la carrera contra el cleanup.
+        if (cancelled) {
+          await teardown();
+          return;
+        }
 
         const torch = await BarcodeScanner.isTorchAvailable().catch(() => ({ available: false }));
         if (!cancelled) setTorchAvailable(Boolean(torch.available));
@@ -155,14 +267,15 @@ export function NativeQrScanner({ onScan, onClose, onFallback }: NativeQrScanner
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'No se pudo iniciar la cámara.');
         }
+        await teardown();
       }
     })();
 
     return () => {
       cancelled = true;
+      busyRef.current = false;
       stoppedRef.current = true;
-      if (listener) void listener.remove().catch(() => undefined);
-      void stopNative();
+      void teardown();
     };
   }, [finish, stopNative, updateFrame]);
 
@@ -190,6 +303,7 @@ export function NativeQrScanner({ onScan, onClose, onFallback }: NativeQrScanner
   };
 
   const pickPhoto = async () => {
+    if (busyRef.current || stoppedRef.current) return;
     try {
       const { Camera, CameraResultType, CameraSource } = await import('@capacitor/camera');
       const photo = await Camera.getPhoto({
@@ -205,11 +319,18 @@ export function NativeQrScanner({ onScan, onClose, onFallback }: NativeQrScanner
         formats: [BarcodeFormat.QrCode],
       });
       const raw = result.barcodes?.[0]?.rawValue;
-      if (raw) await finish(raw);
-      else showToast('No encontramos un QR en esa foto', 'info');
+      if (raw) {
+        await finish(raw);
+        return;
+      }
+      showToast('No encontramos un QR en esa foto', 'info');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'No se pudo abrir la foto';
       if (!/cancel|canceled|cancelled/i.test(message)) showToast(message, 'error');
+    } finally {
+      // Abrir la galería puede pausar la cámara: reanudar explícitamente la sesión
+      // (también cuando la foto no tenía QR o el usuario canceló).
+      await resumeScanning();
     }
   };
 
@@ -280,6 +401,9 @@ export function NativeQrScanner({ onScan, onClose, onFallback }: NativeQrScanner
           type="button"
           onClick={() => {
             PlatformBridge.hapticFeedback('light');
+            // Marca el cierre antes del unmount: el arranque async aborta y
+            // no vuelve a encender la cámara.
+            stoppedRef.current = true;
             void stopNative();
             onClose();
           }}
@@ -296,9 +420,13 @@ export function NativeQrScanner({ onScan, onClose, onFallback }: NativeQrScanner
       </div>
 
       {/* Hint */}
-      <div className="absolute inset-x-0" style={{ top: frame.top + frame.size + 22 }}>
-        <p className="m-0 text-center text-[11px] font-bold text-white/75">
-          Apunta al QR; el recuadro lo sigue y se detecta solo
+      <div className="absolute inset-x-0 px-6" style={{ top: frame.top + frame.size + 22 }}>
+        <p
+          className={`m-0 text-center text-[11px] font-bold ${
+            hint === 'Ese código no es de Rabbitty' ? 'text-amber-300' : 'text-white/75'
+          }`}
+        >
+          {hint ?? 'Apunta al QR; el recuadro lo sigue y se detecta solo'}
         </p>
       </div>
 
@@ -360,6 +488,7 @@ export function NativeQrScanner({ onScan, onClose, onFallback }: NativeQrScanner
               <button
                 type="button"
                 onClick={() => {
+                  stoppedRef.current = true;
                   void stopNative();
                   onFallback();
                 }}
@@ -370,7 +499,10 @@ export function NativeQrScanner({ onScan, onClose, onFallback }: NativeQrScanner
             )}
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => {
+                stoppedRef.current = true;
+                onClose();
+              }}
               className="mt-2 w-full rounded-2xl border border-white/15 bg-white/5 py-3 text-sm font-black text-white/80"
             >
               Cerrar
