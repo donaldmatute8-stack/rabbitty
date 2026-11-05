@@ -7,6 +7,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Html5Qrcode } from 'html5-qrcode';
 import RabbittyCode from '@/components/ui/RabbittyCode';
 import QRDiscovery from '@/components/QRDiscovery';
+import RabbittyCodeSimple from '@/components/ui/RabbittyCodeSimple';
+import { RABBITTY_CODE_STYLE } from '@/lib/rabbittyCodeStyle';
 import { NativeQrScanner } from '@/components/scanner/NativeQrScanner';
 import RabbittyLoader from '@/components/RabbittyLoader';
 import BottomNav from '@/components/BottomNav';
@@ -63,8 +65,7 @@ export default function ScanPage() {
   };
   const [hasCamera, setHasCamera] = useState(() => typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices));
   const [isNativeApp, setIsNativeApp] = useState(false);
-  // En iOS el plugin de ML Kit no está implementado (solo CocoaPods): se usa el
-  // escáner web con getUserMedia en vez de mostrar un error.
+  // Escáner nativo: ML Kit en Android y plugin SPM propio en iOS.
   const [nativeScannerSupported, setNativeScannerSupported] = useState(false);
   const [nativeSession, setNativeSession] = useState(0);
   const [nativeUnavailable, setNativeUnavailable] = useState(false);
@@ -96,7 +97,7 @@ export default function ScanPage() {
   useEffect(() => {
     const native = PlatformBridge.isNative();
     setIsNativeApp(native);
-    setNativeScannerSupported(native && !PlatformBridge.isIos());
+    setNativeScannerSupported(native);
     if (native) setHasCamera(true);
   }, []);
   const [result, setResult] = useState<PaymentIntentData | null>(null);
@@ -276,16 +277,8 @@ export default function ScanPage() {
 
   const requestCameraAccess = async () => {
     if (PlatformBridge.isNative()) {
+      // El plugin nativo pide el permiso de cámara al iniciar.
       setHasCamera(true);
-      // iOS no tiene plugin nativo: sigue al getUserMedia del WebView.
-      if (PlatformBridge.isIos()) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-          stream.getTracks().forEach((t) => t.stop());
-        } catch {
-          setHasCamera(false);
-        }
-      }
       return;
     }
     if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
@@ -563,7 +556,7 @@ export default function ScanPage() {
   }, [API_SERVER_URL, router, stopScanning]);
 
   const startScanning = useCallback(async () => {
-    if (PlatformBridge.isNative() && !PlatformBridge.isIos() && !nativeUnavailable) {
+    if (PlatformBridge.isNative() && !nativeUnavailable) {
       openNativeScanner();
       return;
     }
@@ -911,22 +904,53 @@ export default function ScanPage() {
               <p className="text-(--text-muted) text-xs leading-relaxed m-0">Muestra este código en caja para acumular Bunz o autorizar consumo.</p>
             </div>
             
-            <div className="flex flex-col items-center justify-center pt-8">
-              <QRDiscovery
-                value={myScanCode ? `rabbitty://pay?to=${encodeURIComponent(user?.username ? `@${user.username}` : String(qrValue || ''))}` : String(qrValue || 'rabbitty_guest')}
-                variant="rabbitter"
-                size={210}
-                revealMode="discovery"
-                surfaceKey="my-code"
-              />
-              <div className="mt-5 text-center">
-                <span className="text-sm font-black tracking-[1.5px] text-(--text-primary) uppercase block">
-                  {user?.firstName ? user.firstName : 'Miembro Rabbitty'}
-                </span>
-                <span className="text-[11px] text-(--text-muted) font-mono tracking-wider block mt-0.5">
-                  ID: {String(qrValue || '').slice(0, 16)}
-                </span>
-              </div>
+            <div className="flex w-full flex-col items-center justify-center pt-8">
+              {RABBITTY_CODE_STYLE === 'simple' ? (
+                <RabbittyCodeSimple
+                  value={`https://app.rabbitty.me/u/${encodeURIComponent(
+                    user?.username || String(qrValue || ''),
+                  )}`}
+                  handle={user?.username || null}
+                  name={user?.firstName ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}` : null}
+                  size={236}
+                  theme="violet"
+                  onShare={async () => {
+                    const handle = user?.username ? `@${user.username}` : String(qrValue || '');
+                    try {
+                      if (typeof navigator !== 'undefined' && navigator.share) {
+                        await navigator.share({ title: 'Mi Rabbitty Code', text: `Mi Rabbitty Code: ${handle}` });
+                      } else {
+                        await navigator.clipboard.writeText(handle);
+                        showToast('Código copiado', 'success');
+                      }
+                    } catch {
+                      /* cancelado */
+                    }
+                  }}
+                  onScan={() => {
+                    PlatformBridge.hapticFeedback('light');
+                    setActiveTab('scan');
+                  }}
+                />
+              ) : (
+                <>
+                  <QRDiscovery
+                    value={myScanCode ? `rabbitty://pay?to=${encodeURIComponent(user?.username ? `@${user.username}` : String(qrValue || ''))}` : String(qrValue || 'rabbitty_guest')}
+                    variant="rabbitter"
+                    size={210}
+                    revealMode="discovery"
+                    surfaceKey="my-code"
+                  />
+                  <div className="mt-5 text-center">
+                    <span className="text-sm font-black tracking-[1.5px] text-(--text-primary) uppercase block">
+                      {user?.firstName ? user.firstName : 'Miembro Rabbitty'}
+                    </span>
+                    <span className="text-[11px] text-(--text-muted) font-mono tracking-wider block mt-0.5">
+                      ID: {String(qrValue || '').slice(0, 16)}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}

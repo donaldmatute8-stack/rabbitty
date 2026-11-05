@@ -1,0 +1,23 @@
+{
+  "name": "@rabbitty/capacitor-scanner",
+  "version": "0.1.0",
+  "description": "Rabbitty native scanner (AVFoundation + Vision) for iOS — overlay behind the WebView with QR tracking, torch and zoom.",
+  "main": "index.js",
+  "module": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "web.js",
+    "ios/Sources",
+    "Package.swift"
+  ],
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    }
+  },
+  "peerDependencies": {
+    "@capacitor/core": ">=8.0.0"
+  }
+}

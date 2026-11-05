@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import { Flashlight, FlashlightOff, Images, ScanLine, X } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
+import { createNativeScanner, type NativeScannerApi } from '@/lib/nativeScanner';
 import { useToast } from '@/contexts/ToastContext';
 
 type CornerPoint = [number, number];
@@ -42,6 +43,7 @@ export function NativeQrScanner({ onScan, onClose, onFallback, onConsumed }: Nat
   const [zoomMax, setZoomMax] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
+  const scannerRef = useRef<NativeScannerApi | null>(null);
   const stoppedRef = useRef(false);
   const busyRef = useRef(false);
   const scanningRef = useRef(false);
@@ -91,11 +93,14 @@ export function NativeQrScanner({ onScan, onClose, onFallback, onConsumed }: Nat
   const stopNative = useCallback(async () => {
     scanningRef.current = false;
     try {
-      const { BarcodeScanner } = await import('@capacitor-mlkit/barcode-scanning');
-      await BarcodeScanner.disableTorch().catch(() => undefined);
-      await BarcodeScanner.stopScan().catch(() => undefined);
+      await scannerRef.current?.disableTorch();
     } catch {
-      /* no nativo */
+      /* sin linterna */
+    }
+    try {
+      await scannerRef.current?.stop();
+    } catch {
+      /* sin cámara */
     }
     document.body.classList.remove('barcode-scanner-active');
     document.documentElement.style.background = '';
@@ -108,16 +113,9 @@ export function NativeQrScanner({ onScan, onClose, onFallback, onConsumed }: Nat
   const resumeScanning = useCallback(async () => {
     if (stoppedRef.current) return;
     try {
-      const { BarcodeScanner, BarcodeFormat, LensFacing, Resolution } = await import(
-        '@capacitor-mlkit/barcode-scanning'
-      );
       document.body.classList.add('barcode-scanner-active');
       document.documentElement.style.background = 'transparent';
-      await BarcodeScanner.startScan({
-        formats: [BarcodeFormat.QrCode],
-        lensFacing: LensFacing.Back,
-        resolution: Resolution['1920x1080'],
-      });
+      await scannerRef.current?.start();
       scanningRef.current = true;
     } catch (err) {
       // "already scanning" es benigno; solo reportamos fallos reales.
@@ -190,30 +188,37 @@ export function NativeQrScanner({ onScan, onClose, onFallback, onConsumed }: Nat
       await stopNative();
     };
 
+    const api = createNativeScanner();
+    if (!api) {
+      setError('El escáner nativo no está disponible en esta plataforma.');
+      return;
+    }
+    scannerRef.current = api;
+
     (async () => {
       try {
-        const { BarcodeScanner, BarcodeFormat, LensFacing, Resolution } = await import(
-          '@capacitor-mlkit/barcode-scanning'
-        );
-
-        const permission = await BarcodeScanner.checkPermissions();
-        if (permission.camera !== 'granted') {
-          const requested = await BarcodeScanner.requestPermissions();
-          if (requested.camera !== 'granted') {
-            if (!cancelled) setError('Necesitamos la cámara para escanear el QR. Actívala en Ajustes.');
-            return;
+        // Android: ML Kit expone permisos. iOS: el plugin los pide al iniciar.
+        if (api.platform === 'android') {
+          const { BarcodeScanner } = await import('@capacitor-mlkit/barcode-scanning');
+          const permission = await BarcodeScanner.checkPermissions();
+          if (permission.camera !== 'granted') {
+            const requested = await BarcodeScanner.requestPermissions();
+            if (requested.camera !== 'granted') {
+              if (!cancelled) setError('Necesitamos la cámara para escanear el QR. Actívala en Ajustes.');
+              return;
+            }
           }
         }
         // El usuario pudo cerrar o navegar durante el permiso.
         if (cancelled) return;
 
-        listener = await BarcodeScanner.addListener('barcodesScanned', (event) => {
-          const barcode = event.barcodes?.[0];
+        listener = await api.onBarcodes((barcodes) => {
+          const barcode = barcodes?.[0];
           if (!barcode) return;
           if (barcode.cornerPoints && barcode.cornerPoints.length === 4) {
             updateFrame(barcode.cornerPoints as CornerPoint[]);
           }
-          const raw = barcode.rawValue || barcode.displayValue || '';
+          const raw = barcode.rawValue || '';
           if (!raw) return;
           if (busyRef.current) return;
           const rejected = rejectedRef.current;
@@ -241,11 +246,7 @@ export function NativeQrScanner({ onScan, onClose, onFallback, onConsumed }: Nat
         document.documentElement.style.background = 'transparent';
 
         try {
-          await BarcodeScanner.startScan({
-            formats: [BarcodeFormat.QrCode],
-            lensFacing: LensFacing.Back,
-            resolution: Resolution['1920x1080'],
-          });
+          await api.start();
           scanningRef.current = true;
         } catch (err) {
           // Si la cámara ya estaba activa seguimos; otro fallo se reporta abajo.
@@ -259,10 +260,10 @@ export function NativeQrScanner({ onScan, onClose, onFallback, onConsumed }: Nat
           return;
         }
 
-        const torch = await BarcodeScanner.isTorchAvailable().catch(() => ({ available: false }));
-        if (!cancelled) setTorchAvailable(Boolean(torch.available));
-        const max = await BarcodeScanner.getMaxZoomRatio().catch(() => ({ zoomRatio: 1 }));
-        if (!cancelled) setZoomMax(Math.max(1, Number(max.zoomRatio) || 1));
+        const torch = await api.isTorchAvailable().catch(() => false);
+        if (!cancelled) setTorchAvailable(Boolean(torch));
+        const max = await api.getMaxZoom().catch(() => 1);
+        if (!cancelled) setZoomMax(Math.max(1, Number(max) || 1));
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'No se pudo iniciar la cámara.');
@@ -281,9 +282,8 @@ export function NativeQrScanner({ onScan, onClose, onFallback, onConsumed }: Nat
 
   const toggleTorch = async () => {
     try {
-      const { BarcodeScanner } = await import('@capacitor-mlkit/barcode-scanning');
-      if (torchOn) await BarcodeScanner.disableTorch();
-      else await BarcodeScanner.enableTorch();
+      if (torchOn) await scannerRef.current?.disableTorch();
+      else await scannerRef.current?.enableTorch();
       setTorchOn((v) => !v);
       PlatformBridge.hapticFeedback('light');
     } catch {
@@ -293,8 +293,7 @@ export function NativeQrScanner({ onScan, onClose, onFallback, onConsumed }: Nat
 
   const applyZoom = async (value: number) => {
     try {
-      const { BarcodeScanner } = await import('@capacitor-mlkit/barcode-scanning');
-      await BarcodeScanner.setZoomRatio({ zoomRatio: value });
+      await scannerRef.current?.setZoom(value);
       setZoom(value);
       PlatformBridge.hapticFeedback('light');
     } catch {
@@ -313,12 +312,7 @@ export function NativeQrScanner({ onScan, onClose, onFallback, onConsumed }: Nat
       });
       const path = photo.path || photo.webPath;
       if (!path) throw new Error('No se pudo leer la foto');
-      const { BarcodeScanner, BarcodeFormat } = await import('@capacitor-mlkit/barcode-scanning');
-      const result = await BarcodeScanner.readBarcodesFromImage({
-        path,
-        formats: [BarcodeFormat.QrCode],
-      });
-      const raw = result.barcodes?.[0]?.rawValue;
+      const raw = await scannerRef.current?.scanImage(path);
       if (raw) {
         await finish(raw);
         return;

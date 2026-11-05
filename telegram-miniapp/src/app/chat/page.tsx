@@ -15,6 +15,7 @@ import { CreateGroupSheet } from '@/components/chat/CreateGroupSheet';
 import { NewChatHub } from '@/components/chat/NewChatHub';
 import { useConvPrefs, setPref, setOrder, type ConvPref } from '@/lib/convPrefs';
 import {
+  ArrowRight,
   SquarePen,
   BellOff,
   Bell,
@@ -486,9 +487,9 @@ export default function ChatInboxPage() {
     const list = allConversations.filter((c) => {
       const p = prefs[c.id] || {};
       if (!!p.archived !== archived) return false;
-      // El hilo "Bunzy · Oficial" vive dentro del chat del agente: no se
-      // muestra como conversación aparte. El agente ('bot') sí está visible.
-      if (c.targetId === 'bunzy') return false;
+      // Bunzy ya no vive en la lista: hay acceso directo con el avatar del
+      // buscador. Se ocultan tanto el hilo oficial como el del agente.
+      if (c.isBot || c.targetId === 'bunzy') return false;
       if (activeTab === 'business') return !!c.isBusinessInbox;
       // Una conversación donde YO actúo como negocio solo vive en la pestaña
       // Negocio; si no, aparecía duplicada en ambos lados.
@@ -512,7 +513,7 @@ export default function ChatInboxPage() {
   const contacts = useMemo(() => {
     const seen = new Set<string>();
     return allConversations.filter((c) => {
-      if (c.targetId === 'bunzy') return false;
+      if (c.targetId === 'bunzy' || c.isBot) return false;
       if (seen.has(c.targetId)) return false;
       seen.add(c.targetId);
       return true;
@@ -1085,6 +1086,21 @@ export default function ChatInboxPage() {
                   <Search size={16} className="shrink-0 text-(--text-muted)" />
                   <span className="flex-1 text-left text-[16px] text-(--text-muted)">Search</span>
                 </div>
+                <motion.span
+                  aria-hidden
+                  initial={{ opacity: 0, x: 8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.45, duration: 0.35, ease: 'easeOut' }}
+                  className="pointer-events-none absolute right-[54px] top-1/2 z-10 -translate-y-1/2 rounded-full border border-pink-500/35 bg-(--bg-elevated) p-1 text-pink-400 shadow-sm"
+                >
+                  <motion.span
+                    animate={{ x: [0, 3, 0] }}
+                    transition={{ duration: 1.6, repeat: 3, ease: 'easeInOut', delay: 0.9 }}
+                    className="flex"
+                  >
+                    <ArrowRight size={12} strokeWidth={2.6} />
+                  </motion.span>
+                </motion.span>
                 <button
                   type="button"
                   onClick={() => {

@@ -176,6 +176,32 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ success: true, type: "url", url: rawText });
         }
 
+        // 1.2.b Perfil público /u/<handle|id> — Rabbitty Code Simple.
+        // Permite que CUALQUIER cámara (no solo la app) lea el código y abra
+        // el perfil; el escáner interno lo resuelve como usuario.
+        const uPathMatch = urlObj ? urlObj.pathname.match(/^\/u\/([^/?#]+)/i) : null;
+        if (uPathMatch) {
+          const target = decodeURIComponent(uPathMatch[1]).replace(/^@/, "").trim();
+          const isTargetUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(target);
+          if (target) {
+            const [u] = await db
+              .select({ id: users.id, username: users.username, firstName: users.firstName, lastName: users.lastName })
+              .from(users)
+              .where(isTargetUuid ? eq(users.id, target) : ilike(users.username, target))
+              .limit(1);
+            if (u) {
+              const handle = u.username ? `@${u.username}` : u.id;
+              const fullName = [u.firstName, u.lastName].filter(Boolean).join(" ") || u.username || "Rabbitter";
+              return NextResponse.json({
+                success: true,
+                type: "user",
+                user: { id: u.id, username: u.username, name: fullName, handle },
+              });
+            }
+          }
+          return NextResponse.json({ success: false, error: "Perfil no encontrado" }, { status: 404 });
+        }
+
         // 1.3 URLs de afiliados o landing
         if (urlObj && (urlObj.host.includes("rabbitty.me") || urlObj.host.includes("rabbitty"))) {
           const path = urlObj.pathname;
