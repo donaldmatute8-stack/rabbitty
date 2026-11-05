@@ -48,7 +48,7 @@ export function BunzyTypingBubble({
         <p className="m-0 flex items-center gap-1 text-[9px] font-black uppercase tracking-[0.2em] text-pink-300">
           <Sparkles className="h-2.5 w-2.5" /> Bunzy
         </p>
-        <p className="m-0 mt-0.5 text-[11.5px] leading-snug text-white/75">
+        <p className="m-0 mt-0.5 text-sm leading-snug text-white/80">
           {shown}
           {shown.length < message.length && (
             <span className="ml-0.5 inline-block animate-pulse text-pink-400">▍</span>

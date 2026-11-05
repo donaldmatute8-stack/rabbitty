@@ -26,6 +26,7 @@ import {
   Loader2,
   Mail,
   MapPin,
+  PenLine,
   Percent,
   Phone,
   ShieldCheck,
@@ -93,6 +94,61 @@ const STEP_META = [
   },
 ];
 
+const PACKAGE_BY_NICHE: Record<string, string> = {
+  cafe: 'Starter',
+  bakery: 'Starter',
+  barbershop: 'Starter',
+  restaurant: 'Growth',
+  tacos: 'Growth',
+  pizza: 'Growth',
+  bar: 'Growth',
+  fitness: 'Growth',
+  services: 'Growth',
+  retail: 'Pro',
+};
+
+function suggestPackage(niche?: string | null): string {
+  return PACKAGE_BY_NICHE[niche ?? ''] ?? 'Starter';
+}
+
+const CONTRACT_VERSION = '2026-11-04';
+
+const CONTRACT_POINTS = [
+  {
+    title: 'Bunz no es dinero',
+    text: 'Son puntos de lealtad. No son moneda, valores ni inversión, y no se convierten a efectivo.',
+  },
+  {
+    title: 'Tus obligaciones',
+    text: 'Datos veraces, respetar las recompensas ofrecidas, cumplir tus obligaciones fiscales y laborales y atender a tus clientes.',
+  },
+  {
+    title: 'Nuestras obligaciones',
+    text: 'Mantener la plataforma y el soporte, proteger tus datos y avisarte de cambios relevantes.',
+  },
+  {
+    title: 'Límite de responsabilidad',
+    text: 'No respondemos por daños indirectos, lucro cesante, caídas de terceros o fuerza mayor.',
+  },
+  {
+    title: 'Terminación',
+    text: 'Puedes cancelar cuando quieras. Podemos suspender la cuenta por fraude o incumplimiento.',
+  },
+  {
+    title: 'Firma electrónica',
+    text: 'Tu aceptación queda registrada con fecha, versión y firma; tiene validez como consentimiento.',
+  },
+];
+
+const CONTRACT_PARAGRAPHS = [
+  'Contrato de adhesión para negocios afiliados. Al aceptar, celebras un acuerdo con Rabbitty para operar como comercio afiliado, emitir recompensas Bunz y usar el POS.',
+  'Los Bunz son puntos promocionales de lealtad: no son dinero, no generan rendimientos y no son canjeables por efectivo. El negocio es responsable de las recompensas que ofrece y de su respaldo.',
+  'El negocio se obliga a proporcionar información veraz, cumplir la legislación aplicable (incluidas obligaciones fiscales y de consumo), no realizar fraudes y mantener un canal de atención.',
+  'Rabbitty presta la plataforma, el soporte y las herramientas de operación con esfuerzo razonable, sin garantizar disponibilidad ininterrumpida. La responsabilidad total se limita a los montos efectivamente pagados por el paquete en los últimos 3 meses.',
+  'Cualquiera de las partes puede terminar el acuerdo. Rabbitty puede suspender el servicio ante fraude, riesgo o incumplimiento. Las obligaciones de confidencialidad, propiedad intelectual e indemnización sobreviven.',
+  'La aceptación electrónica, la firma capturada, la fecha, la versión del contrato y los datos de conexión constituyen evidencia del consentimiento. Se rige por las leyes de México.',
+];
+
 const DATA_BUBBLES = [
   'Empecemos por el nombre. Es lo primero que verán los Rabbitters.',
   '¿Quién es el responsable? Así sabemos con quién hablar.',
@@ -133,7 +189,7 @@ const EMPTY: FormData = {
   address: '',
   lat: null,
   lng: null,
-  reward: 10,
+  reward: 30,
   packageId: 'Starter',
   signature: '',
   acceptedTerms: false,
@@ -158,6 +214,7 @@ export default function NegociosPage() {
   const [loadingNiches, setLoadingNiches] = useState(true);
   const [step, setStep] = useState(0);
   const [dataStep, setDataStep] = useState(0);
+  const [packageTouched, setPackageTouched] = useState(false);
   const [data, setData] = useState<FormData>(EMPTY);
   const [submitted, setSubmitted] = useState(false);
   const [existing, setExisting] = useState(false);
@@ -196,12 +253,13 @@ export default function NegociosPage() {
     };
     const rawPackage = params.get('package') || '';
     const validPackage = PACKAGES.some((p) => p.id === rawPackage) ? rawPackage : '';
+    const prefilledNiche = nicheMap[rawNiche] || rawNiche;
     // Prefill desde el query string al montar (no hay render alternativo).
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setData((prev) => ({
       ...prev,
-      niche: nicheMap[rawNiche] || rawNiche,
-      ...(validPackage ? { packageId: validPackage } : {}),
+      niche: prefilledNiche,
+      packageId: validPackage || suggestPackage(prefilledNiche),
     }));
     setUtm({
       source: params.get('utm_source') || '',
@@ -224,6 +282,10 @@ export default function NegociosPage() {
     () => PACKAGES.find((p) => p.id === data.packageId) ?? PACKAGES[0],
     [data.packageId],
   );
+  const suggestedPackage = useMemo(
+    () => PACKAGES.find((p) => p.id === suggestPackage(data.niche)) ?? PACKAGES[0],
+    [data.niche],
+  );
 
   const phoneDigits = data.phone.replace(/\D/g, '').slice(-10);
   const emailOk = EMAIL_RE.test(data.email.trim());
@@ -236,10 +298,12 @@ export default function NegociosPage() {
       emailOk &&
       phoneOk &&
       data.address.trim().length >= 4,
-    data.reward >= 2 && data.reward <= 50,
+    data.reward >= 10 && data.reward <= 50,
     Boolean(data.packageId),
     data.signature.trim().length >= 3 && data.acceptedTerms,
   ];
+
+  const dataComplete = dataStep === 6 && stepValid[1];
 
   const dataStepValid = [
     data.businessName.trim().length >= 2,
@@ -255,6 +319,12 @@ export default function NegociosPage() {
   const update = <K extends keyof FormData>(key: K, value: FormData[K]) => {
     setData((prev) => ({ ...prev, [key]: value }));
     setError('');
+  };
+
+  const selectNiche = (id: string) => {
+    update('niche', id);
+    // Si el usuario no ha tocado el paquete, Bunzy sugiere el del nicho.
+    if (!packageTouched) update('packageId', suggestPackage(id));
   };
 
   const requestGeo = () => {
@@ -341,6 +411,7 @@ export default function NegociosPage() {
           creditLimit: selectedPackage.credit,
           signature: data.signature.trim(),
           acceptedTerms: data.acceptedTerms,
+          contractVersion: CONTRACT_VERSION,
           signatureDate: new Date().toISOString(),
           billingPeriod: 'yearly',
           source: 'web_onboarding',
@@ -521,14 +592,26 @@ export default function NegociosPage() {
           title={meta.title}
           description={meta.description}
           videoHeightClass={
-            step === 0 ? 'h-48 sm:h-56' : step === 1 ? 'h-32 sm:h-40' : 'h-36 sm:h-44'
+            step === 0
+              ? 'h-48 sm:h-56'
+              : step === 1
+                ? 'h-32 sm:h-40'
+                : step === 3
+                  ? 'h-28 sm:h-36'
+                  : 'h-36 sm:h-44'
           }
-          layout={step === 0 || step === 1 ? 'horizontal' : 'stacked'}
+          layout={step === 0 || step === 1 || step === 3 ? 'horizontal' : 'stacked'}
           loop
         />
 
         <BunzyTypingBubble
-          message={step === 1 ? DATA_BUBBLES[dataStep] : meta.bubble}
+          message={
+            step === 1
+              ? DATA_BUBBLES[dataStep]
+              : step === 3
+                ? `Para un ${selectedNiche?.name ?? 'negocio'}, te sugiero el paquete ${suggestedPackage.label}. Puedes cambiarlo.`
+                : meta.bubble
+          }
           className="mt-4"
         />
 
@@ -547,7 +630,7 @@ export default function NegociosPage() {
                 <NicheSearch
                   niches={niches}
                   value={data.niche}
-                  onChange={(id) => update('niche', id)}
+                  onChange={selectNiche}
                   loading={loadingNiches}
                   supportHref="/support"
                 />
@@ -756,7 +839,7 @@ export default function NegociosPage() {
 
             {/* Paso 3: recompensa */}
             {step === 2 && (
-              <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 text-center">
                   <p className="m-0 text-[10px] font-black uppercase tracking-[0.2em] text-white/40">
                     Recompensa para tus clientes
@@ -764,12 +847,15 @@ export default function NegociosPage() {
                   <div className="mt-2 flex items-center justify-center gap-1">
                     <input
                       type="number"
-                      min={2}
+                      min={10}
                       max={50}
                       value={data.reward}
                       onChange={(e) => {
                         const value = Number(e.target.value);
-                        update('reward', Number.isFinite(value) ? value : 2);
+                        update(
+                          'reward',
+                          Number.isFinite(value) ? Math.min(50, Math.max(10, value)) : 30,
+                        );
                       }}
                       className="w-24 border-0 bg-transparent text-center text-5xl font-black text-pink-400 outline-none"
                     />
@@ -777,15 +863,15 @@ export default function NegociosPage() {
                   </div>
                   <input
                     type="range"
-                    min={2}
+                    min={10}
                     max={50}
                     step={1}
                     value={data.reward}
                     onChange={(e) => update('reward', Number(e.target.value))}
                     className="mt-3 w-full accent-pink-500"
                   />
-                  <div className="mt-3 flex justify-center gap-2">
-                    {[5, 10, 15, 20, 30].map((v) => (
+                  <div className="mt-3 flex flex-wrap justify-center gap-2">
+                    {[10, 15, 20, 30, 40].map((v) => (
                       <button
                         key={v}
                         type="button"
@@ -800,13 +886,21 @@ export default function NegociosPage() {
                       </button>
                     ))}
                   </div>
+                  <p className="m-0 mt-3 text-[10px] font-bold uppercase tracking-wider text-white/35">
+                    Mínimo 10%
+                  </p>
                 </div>
 
-                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4">
-                  <p className="m-0 text-xs leading-relaxed text-white/70">
-                    Ejemplo: en un ticket de <strong className="text-white">$100</strong>, tu cliente recibe{' '}
-                    <strong className="text-emerald-400">${data.reward.toFixed(2)} en Bunz</strong>. Tú decides;
-                    el mínimo es 2% y puedes cambiarlo después.
+                <div className="flex flex-col justify-center rounded-3xl border border-emerald-500/20 bg-emerald-500/[0.06] p-5">
+                  <p className="m-0 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-400">
+                    Ejemplo
+                  </p>
+                  <p className="m-0 mt-2 text-sm leading-relaxed text-white/70">
+                    En un ticket de <strong className="text-white">$100</strong>, tu cliente recibe{' '}
+                    <strong className="text-emerald-400">${data.reward.toFixed(2)} en Bunz</strong>.
+                  </p>
+                  <p className="m-0 mt-2 text-[11px] leading-relaxed text-white/45">
+                    Tú decides; el mínimo es 10% y puedes cambiarlo después.
                   </p>
                 </div>
               </div>
@@ -814,41 +908,60 @@ export default function NegociosPage() {
 
             {/* Paso 4: paquete */}
             {step === 3 && (
-              <div className="space-y-2.5">
-                {PACKAGES.map((pkg) => {
-                  const active = data.packageId === pkg.id;
-                  return (
-                    <button
-                      key={pkg.id}
-                      type="button"
-                      onClick={() => update('packageId', pkg.id)}
-                      aria-pressed={active}
-                      className={`flex w-full items-center gap-4 rounded-2xl border p-4 text-left transition-all ${
-                        active
-                          ? 'border-pink-500/60 bg-pink-500/10'
-                          : 'border-white/10 bg-white/[0.03] hover:border-pink-500/30'
-                      }`}
-                    >
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/5 text-xl">
-                        {pkg.icon}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-2">
-                          <span className="text-sm font-black">{pkg.label}</span>
-                          <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] font-bold text-white/50">
-                            {pkg.credit.toLocaleString('es-MX')} Bunz
+              <div className="space-y-3">
+                <div className="flex items-start gap-2 rounded-2xl border border-pink-500/20 bg-pink-500/[0.06] p-3">
+                  <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-pink-400" />
+                  <p className="m-0 text-[11px] leading-relaxed text-white/70">
+                    Para un <strong className="text-white">{selectedNiche?.name ?? 'negocio'}</strong>,
+                    te sugiero el paquete{' '}
+                    <strong className="text-pink-300">{suggestedPackage.label}</strong>. Puedes
+                    cambiarlo.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                  {PACKAGES.map((pkg) => {
+                    const active = data.packageId === pkg.id;
+                    const suggested = suggestedPackage.id === pkg.id;
+                    return (
+                      <button
+                        key={pkg.id}
+                        type="button"
+                        onClick={() => {
+                          update('packageId', pkg.id);
+                          setPackageTouched(true);
+                        }}
+                        aria-pressed={active}
+                        className={`relative rounded-2xl border p-3.5 text-left transition-all ${
+                          active
+                            ? 'border-pink-500/60 bg-pink-500/10'
+                            : 'border-white/10 bg-white/[0.03] hover:border-pink-500/30'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xl">{pkg.icon}</span>
+                          <span className="flex items-center gap-1.5">
+                            {suggested && (
+                              <span className="rounded-full bg-pink-500/15 px-2 py-0.5 text-[8.5px] font-black uppercase tracking-wide text-pink-300">
+                                Sugerido
+                              </span>
+                            )}
+                            {active && <Check className="h-4 w-4 text-pink-400" />}
                           </span>
-                        </span>
-                        <span className="mt-0.5 block text-[11px] text-white/45">{pkg.desc}</span>
-                      </span>
-                      <span className="shrink-0 text-right">
-                        <span className="block text-sm font-black text-white">{pkg.price}</span>
-                        {active && <Check className="ml-auto mt-1 h-4 w-4 text-pink-400" />}
-                      </span>
-                    </button>
-                  );
-                })}
-                <p className="m-0 pt-1 text-center text-[11px] text-white/35">
+                        </div>
+                        <p className="m-0 mt-2 text-sm font-black text-white">{pkg.label}</p>
+                        <p className="m-0 text-[10px] font-bold text-white/45">
+                          {pkg.credit.toLocaleString('es-MX')} Bunz · {pkg.price}
+                        </p>
+                        <p className="m-0 mt-1 text-[10.5px] leading-snug text-white/40">
+                          {pkg.desc}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <p className="m-0 text-center text-[11px] text-white/35">
                   El crédito respalda los Bunz que puedes emitir. Puedes empezar chico y subir después.
                 </p>
               </div>
@@ -875,30 +988,102 @@ export default function NegociosPage() {
                   </p>
                 </div>
 
-                <Field label="Firma con tu nombre completo" icon={<ShieldCheck className="h-3.5 w-3.5" />}>
-                  <input
-                    value={data.signature}
-                    onChange={(e) => update('signature', e.target.value.slice(0, 80))}
-                    placeholder="Ej. María Fernanda López"
-                    className={`${inputClass} italic`}
-                  />
-                </Field>
+                <div className="space-y-4">
+                  <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+                    <p className="m-0 mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-pink-400">
+                      Antes de firmar
+                    </p>
 
-                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                  <input
-                    type="checkbox"
-                    checked={data.acceptedTerms}
-                    onChange={(e) => update('acceptedTerms', e.target.checked)}
-                    className="mt-0.5 h-4 w-4 accent-pink-500"
-                  />
-                  <span className="text-[11px] leading-relaxed text-white/55">
-                    Acepto el{' '}
-                    <Link href="/privacy" className="text-pink-400 underline underline-offset-2" target="_blank">
-                      contrato de adhesión y aviso de privacidad
-                    </Link>{' '}
-                    de Rabbitty. Confirmo que los datos de mi negocio son correctos.
-                  </span>
-                </label>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {CONTRACT_POINTS.map((point) => (
+                        <div
+                          key={point.title}
+                          className="rounded-2xl border border-white/10 bg-black/20 p-3"
+                        >
+                          <p className="m-0 text-[11px] font-black text-white">{point.title}</p>
+                          <p className="m-0 mt-1 text-[10.5px] leading-relaxed text-white/55">
+                            {point.text}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <details className="mt-3 rounded-2xl border border-white/10 bg-black/20 p-3">
+                      <summary className="cursor-pointer text-[11px] font-bold text-pink-300">
+                        Leer resumen del contrato
+                      </summary>
+                      <div className="mt-2 max-h-56 space-y-2 overflow-y-auto pr-1 text-[10.5px] leading-relaxed text-white/55">
+                        {CONTRACT_PARAGRAPHS.map((paragraph) => (
+                          <p key={paragraph.slice(0, 24)} className="m-0">
+                            {paragraph}
+                          </p>
+                        ))}
+                      </div>
+                    </details>
+
+                    <p className="m-0 mt-3 text-[10px] leading-relaxed text-white/35">
+                      Versión {CONTRACT_VERSION} ·{' '}
+                      <Link
+                        href="/contrato"
+                        target="_blank"
+                        className="text-pink-400 underline underline-offset-2"
+                      >
+                        Ver contrato completo
+                      </Link>{' '}
+                      ·{' '}
+                      <Link
+                        href="/privacy"
+                        target="_blank"
+                        className="text-pink-400 underline underline-offset-2"
+                      >
+                        Aviso de privacidad
+                      </Link>
+                    </p>
+                  </div>
+
+                  <div id="firma" className="scroll-mt-24 space-y-4">
+                  <Field
+                    label="Firma electrónica (nombre completo)"
+                    icon={<ShieldCheck className="h-3.5 w-3.5" />}
+                  >
+                    <input
+                      value={data.signature}
+                      onChange={(e) => update('signature', e.target.value.slice(0, 80))}
+                      placeholder="Ej. María Fernanda López"
+                      className={`${inputClass} italic`}
+                    />
+                  </Field>
+
+                  <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <input
+                      type="checkbox"
+                      checked={data.acceptedTerms}
+                      onChange={(e) => update('acceptedTerms', e.target.checked)}
+                      className="mt-0.5 h-4 w-4 accent-pink-500"
+                    />
+                    <span className="text-[11px] leading-relaxed text-white/55">
+                      He leído y acepto el{' '}
+                      <Link
+                        href="/contrato"
+                        target="_blank"
+                        className="text-pink-400 underline underline-offset-2"
+                      >
+                        Contrato de Adhesión
+                      </Link>{' '}
+                      (v. {CONTRACT_VERSION}), el{' '}
+                      <Link
+                        href="/privacy"
+                        target="_blank"
+                        className="text-pink-400 underline underline-offset-2"
+                      >
+                        Aviso de Privacidad
+                      </Link>{' '}
+                      y la Política de Bunz. Declaro ser el representante legal del negocio y que la
+                      información es correcta.
+                    </span>
+                  </label>
+                  </div>
+                </div>
               </div>
             )}
           </motion.div>
@@ -910,6 +1095,18 @@ export default function NegociosPage() {
           </div>
         )}
       </main>
+
+      {step === 4 && (
+        <button
+          type="button"
+          onClick={() =>
+            document.getElementById('firma')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }
+          className="fixed bottom-24 right-4 z-30 flex items-center gap-2 rounded-full bg-pink-500 px-4 py-2.5 text-xs font-black text-white shadow-[0_10px_30px_rgba(233,30,99,0.45)] transition-transform active:scale-95"
+        >
+          <PenLine className="h-4 w-4" /> Firmar
+        </button>
+      )}
 
       {/* CTA fijo */}
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-[#07070F]/95 backdrop-blur-xl">
@@ -926,10 +1123,11 @@ export default function NegociosPage() {
             <button
               type="button"
               onClick={handleContinue}
-              disabled={step === 1 ? !dataStepValid[dataStep] : !stepValid[step]}
+              disabled={step === 1 ? !dataComplete : !stepValid[step]}
               className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-gradient-to-r from-pink-500 to-rose-600 px-5 py-3.5 text-sm font-black text-white shadow-[0_0_24px_rgba(255,46,147,0.25)] transition-transform active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40"
             >
-              Continuar <ArrowRight className="h-4 w-4" />
+              {step === 1 && !dataComplete ? 'Completa tus datos' : 'Continuar'}{' '}
+              <ArrowRight className="h-4 w-4" />
             </button>
           ) : (
             <button

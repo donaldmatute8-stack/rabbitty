@@ -130,7 +130,7 @@ export async function POST(req: Request) {
 
     const rewardRaw = Number(data.rewardPercentage);
     const rewardPercentage = Number.isFinite(rewardRaw)
-      ? Math.min(50, Math.max(2, Math.round(rewardRaw)))
+      ? Math.min(50, Math.max(10, Math.round(rewardRaw)))
       : 10;
 
     const packageInput = str(data.package) || str(data.packageCode);
@@ -226,6 +226,9 @@ export async function POST(req: Request) {
       signature,
       acceptedTerms,
       signatureDate,
+      contractVersion: str(data.contractVersion) || '2026-11-04',
+      acceptedIp: ip,
+      acceptedUserAgent: req.headers.get('user-agent') || null,
       contactName: nombre,
       phone: telefono,
       email,

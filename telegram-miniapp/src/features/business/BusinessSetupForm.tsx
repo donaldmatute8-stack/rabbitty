@@ -84,7 +84,7 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
   const [address, setAddress] = useState('');
 
   // Step 2
-  const [rewardPercentage, setRewardPercentage] = useState(15);
+  const [rewardPercentage, setRewardPercentage] = useState(30);
   const [logoBase64, setLogoBase64] = useState('');
 
   // Step 3
@@ -154,8 +154,8 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
       setError("Por favor completa todos los campos requeridos.");
       return;
     }
-    if (step === 2 && rewardPercentage < 2) {
-      setError("La recompensa mínima es 2%.");
+    if (step === 2 && rewardPercentage < 10) {
+      setError("La recompensa mínima es 10%.");
       return;
     }
     if (step === 3) {
@@ -405,7 +405,7 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
                 })()}
                 
                 <input 
-                  type="range" min="2" max="50" step="1" value={rewardPercentage} onChange={e => setRewardPercentage(Number(e.target.value))}
+                  type="range" min="10" max="50" step="1" value={rewardPercentage} onChange={e => setRewardPercentage(Number(e.target.value))}
                   style={{ width: '100%', marginTop: 24, accentColor: THEME_COLOR }}
                 />
               </div>

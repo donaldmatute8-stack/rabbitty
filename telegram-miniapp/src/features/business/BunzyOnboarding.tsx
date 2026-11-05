@@ -153,7 +153,7 @@ export function BunzyOnboarding({ niche, step = 0, businessName, customMessage }
             <p className="m-0 flex items-center gap-1 text-[10px] font-black uppercase tracking-wider" style={{ color: '#FF4D9E' }}>
               <Sparkles size={10} /> Bunzy
             </p>
-            <p className="m-0 mt-0.5 text-[12.5px] leading-snug" style={{ color: 'rgba(255,255,255,0.92)' }}>
+            <p className="m-0 mt-0.5 text-[14px] leading-snug" style={{ color: 'rgba(255,255,255,0.92)' }}>
               {collapsed ? message : <TypewriterText key={message} text={message} />}
             </p>
           </div>

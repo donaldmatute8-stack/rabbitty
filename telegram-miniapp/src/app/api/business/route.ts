@@ -241,7 +241,7 @@ export async function POST(req: Request) {
     const lat = manualLat ?? (19.4326 + (Math.random() - 0.5) * 0.05);
     const lng = manualLng ?? (-99.1332 + (Math.random() - 0.5) * 0.05);
 
-    const parsedReward = parseInt(rewardPercentage);
+    const parsedReward = Math.max(10, parseInt(rewardPercentage) || 30);
     let rarity = "common";
     if (parsedReward >= 15) rarity = "legendary";
     else if (parsedReward >= 10) rarity = "epic";
