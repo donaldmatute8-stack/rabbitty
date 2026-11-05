@@ -2,6 +2,7 @@ import { z } from "zod";
 import { router, protectedProcedure, resolveBranchId } from "../trpc";
 import { aiStrategies } from "@rabbitty/database-restaurant/schema";
 import { eq, desc, and } from "drizzle-orm";
+import { ollamaEndpoint, ollamaHeaders } from "../services/ollama";
 
 export const aiRouter = router({
   getStrategy: protectedProcedure
@@ -60,9 +61,9 @@ export const aiRouter = router({
       `;
 
       try {
-        const response = await fetch(`${ollamaUrl}/api/generate`, {
+        const response = await fetch(ollamaEndpoint(ollamaUrl, "/api/generate")!, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: ollamaHeaders(),
           body: JSON.stringify({
             model: ollamaModel,
             prompt: `Sistema: ${systemPrompt}\nUsuario: ${input.prompt}\nHermes:`,

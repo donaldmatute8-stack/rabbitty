@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure, resolveBranchId } from "../trpc";
 import { TRPCError } from "@trpc/server";
+import { ollamaEndpoint, ollamaHeaders } from "../services/ollama";
 import {
   campaigns,
   cashShifts,
@@ -54,20 +55,17 @@ async function callInferenceEngine(messages: LLMMessage[]): Promise<InferenceRes
   // Modelos reales disponibles en el nodo Ollama local:
   // default: qwen2.5-coder:14b o dolphin-llama3:8b (o deepseek/gemma si configurado)
   const ollamaModel = process.env.OLLAMA_MODEL || "qwen2.5-coder:14b";
-  const ollamaApiKey = process.env.OLLAMA_API_KEY;
+  const endpoint = ollamaEndpoint(ollamaUrl, "/api/chat");
 
   // 1. Intentar Ollama si está configurado
-  if (ollamaUrl) {
+  if (endpoint) {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 12000); // 12s timeout
 
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (ollamaApiKey) headers["Authorization"] = `Bearer ${ollamaApiKey}`;
-
-      const res = await fetch(`${ollamaUrl}/api/chat`, {
+      const res = await fetch(endpoint, {
         method: "POST",
-        headers,
+        headers: ollamaHeaders(),
         signal: controller.signal,
         body: JSON.stringify({
           model: ollamaModel,

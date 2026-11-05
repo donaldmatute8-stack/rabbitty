@@ -2494,49 +2494,71 @@ export default function ChatRoomPage() {
             <path d="M9 1L1 9L9 17" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
-        <div style={{ position: 'absolute', left: 0, right: 0, display: 'flex', justifyContent: 'center', zIndex: 1, pointerEvents: 'none' }}>
-          <button
-            onClick={() => {
-              PlatformBridge.hapticFeedback('light');
-              // En un grupo el header abre miembros/salir, no el perfil.
-              if (chatKind === 'GROUP') setGroupSheetOpen(true);
-              else setTargetInfoOpen(true);
-            }}
+        <div style={{ position: 'absolute', left: 0, right: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1, pointerEvents: 'none' }}>
+          {/* Pill central: nombre + pestaña de búsqueda cortada a la derecha */}
+          <div
             style={{
               pointerEvents: 'auto',
               display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 1,
+              alignItems: 'stretch',
+              maxWidth: '72vw',
+              borderRadius: 999,
+              overflow: 'hidden',
               background: 'rgba(28, 28, 34, 0.78)',
               backdropFilter: 'blur(20px)',
               WebkitBackdropFilter: 'blur(20px)',
               border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: 999,
-              padding: '5px 22px',
-              minWidth: 132,
-              maxWidth: '62vw',
               boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
-              cursor: 'pointer',
             }}
           >
-            <span style={{ fontSize: 15, fontWeight: 700, color: '#FFFFFF', letterSpacing: '-0.2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', lineHeight: 1.15 }}>
-              {targetName}
-            </span>
-            <span style={{ fontSize: 11.5, color: headerColor, fontWeight: 500, lineHeight: 1.1 }}>
-              {e2eKey ? '🔒 ' : ''}{headerStatus}
-            </span>
-          </button>
+            <button
+              onClick={() => {
+                PlatformBridge.hapticFeedback('light');
+                // En un grupo el header abre miembros/salir, no el perfil.
+                if (chatKind === 'GROUP') setGroupSheetOpen(true);
+                else setTargetInfoOpen(true);
+              }}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 1,
+                minWidth: 0,
+                background: 'transparent',
+                border: 'none',
+                padding: '5px 14px 5px 18px',
+                cursor: 'pointer',
+              }}
+            >
+              <span style={{ fontSize: 15, fontWeight: 700, color: '#FFFFFF', letterSpacing: '-0.2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', lineHeight: 1.15 }}>
+                {targetName}
+              </span>
+              <span style={{ fontSize: 11.5, color: headerColor, fontWeight: 500, lineHeight: 1.1 }}>
+                {e2eKey ? '🔒 ' : ''}{headerStatus}
+              </span>
+            </button>
+            <div aria-hidden style={{ width: 1, margin: '6px 0', background: 'rgba(255, 255, 255, 0.12)' }} />
+            <button
+              type="button"
+              onClick={() => { PlatformBridge.hapticFeedback('light'); setSearchOpen(true); }}
+              aria-label="Buscar en la conversación"
+              title="Buscar en el historial"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 36,
+                padding: 0,
+                background: 'transparent',
+                border: 'none',
+                color: 'rgba(255, 255, 255, 0.72)',
+                cursor: 'pointer',
+              }}
+            >
+              <Search size={15} strokeWidth={2.4} />
+            </button>
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={() => { PlatformBridge.hapticFeedback('light'); setSearchOpen(true); }}
-          aria-label="Buscar en la conversación"
-          title="Buscar en el historial"
-          style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 6, fontSize: 16, position: 'relative', zIndex: 2, pointerEvents: 'auto' }}
-        >
-          🔍
-        </button>
         <button
           onClick={() => { PlatformBridge.hapticFeedback('light'); setTargetInfoOpen(true); }}
           aria-label={`Perfil de ${targetName}`}
@@ -2544,7 +2566,7 @@ export default function ChatRoomPage() {
         >
           <div style={{ width: 40, height: 40, borderRadius: '50%', background: isBot ? 'var(--rabbitty-pink)' : 'rgba(28, 28, 34, 0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, boxShadow: '0 4px 16px rgba(0,0,0,0.35)', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.12)' }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            {isBot ? '🐰' : targetAvatar ? <img src={targetAvatar} alt={targetName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '💬'}
+            {isBot ? <img src="/bunzy-avatar.png" alt="Bunzy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : targetAvatar ? <img src={targetAvatar} alt={targetName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '💬'}
           </div>
         </button>
         {selectMode && (
@@ -2619,7 +2641,7 @@ export default function ChatRoomPage() {
             boxShadow: '0 8px 24px rgba(0,0,0,0.18)'
           }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            {isBot ? '🐰' : targetAvatar ? <img src={targetAvatar} alt={targetName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '💬'}
+            {isBot ? <img src="/bunzy-avatar.png" alt="Bunzy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : targetAvatar ? <img src={targetAvatar} alt={targetName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '💬'}
           </div>
 
           {/* Name & Subtitle / Role Badge */}
@@ -2949,7 +2971,7 @@ export default function ChatRoomPage() {
         {!loading && messages.length === 0 && (
           <div style={{ margin: 'auto', textAlign: 'center', padding: '40px 20px', maxWidth: '320px' }}>
             <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(233,30,99,0.1)', color: 'var(--rabbitty-pink)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', margin: '0 auto 16px' }}>
-              {isBot ? '🐰' : '💬'}
+              {isBot ? <img src="/bunzy-avatar.png" alt="Bunzy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '💬'}
             </div>
             <h3 style={{ margin: '0 0 8px', fontSize: '16px', fontWeight: 900, color: 'var(--text-primary)' }}>
               {isBot ? '¡Hola, soy Bunzy!' : 'Conversación iniciada'}
@@ -4183,7 +4205,7 @@ export default function ChatRoomPage() {
                 >
                   <div style={{ width: 36, height: 36, borderRadius: '50%', background: c.isBot ? 'var(--rabbitty-pink)' : 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, fontSize: 15 }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    {c.isBot ? '🐰' : c.targetAvatar ? <img src={c.targetAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '💬'}
+                    {c.isBot ? <img src="/bunzy-avatar.png" alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : c.targetAvatar ? <img src={c.targetAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '💬'}
                   </div>
                   <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.targetName}</span>
                 </button>

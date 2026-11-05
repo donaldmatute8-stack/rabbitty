@@ -1255,7 +1255,7 @@ export default function ChatInboxPage() {
                         className="flex items-center gap-3 py-2.5 cursor-pointer active:opacity-75 transition-opacity"
                       >
                         <div className="w-11 h-11 rounded-full bg-[#1C1C1E] border border-white/10 flex items-center justify-center text-lg overflow-hidden shrink-0">
-                          {item.isBot ? '🐰' : item.avatar ? (
+                          {item.isBot ? <img src="/bunzy-avatar.png" alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 999 }} /> : item.avatar ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img src={item.avatar} alt={item.name} className="w-full h-full object-cover" />
                           ) : (
@@ -1296,7 +1296,7 @@ export default function ChatInboxPage() {
                           className="flex items-center gap-3 py-2.5 border-b border-white/5 cursor-pointer active:opacity-75 transition-opacity"
                         >
                           <div className="w-11 h-11 rounded-full bg-[#1C1C1E] border border-white/10 flex items-center justify-center text-lg overflow-hidden shrink-0">
-                            {conv.isBot ? '🐰' : conv.targetAvatar ? (
+                            {conv.isBot ? <img src="/bunzy-avatar.png" alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 999 }} /> : conv.targetAvatar ? (
                               // eslint-disable-next-line @next/next/no-img-element
                               <img src={conv.targetAvatar} alt={conv.targetName} className="w-full h-full object-cover" />
                             ) : (
@@ -2097,7 +2097,7 @@ export default function ChatInboxPage() {
                     className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-(--bg-subtle) cursor-pointer active:opacity-75 transition-colors"
                   >
                     <div className="w-10 h-10 rounded-full bg-(--bg-subtle) border border-(--border-subtle) flex items-center justify-center text-base overflow-hidden shrink-0">
-                      {c.isBot ? '🐰' : c.targetAvatar ? (
+                      {c.isBot ? <img src="/bunzy-avatar.png" alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 999 }} /> : c.targetAvatar ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={c.targetAvatar} alt={c.targetName} className="w-full h-full object-cover" />
                       ) : (

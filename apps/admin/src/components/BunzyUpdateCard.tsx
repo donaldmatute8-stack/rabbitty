@@ -30,8 +30,9 @@ export function BunzyUpdateCard({ message }: { message: BunzyUpdateMessage }) {
 
   return (
     <div className="my-2 flex w-full items-start gap-2.5">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-rose-400 text-base shadow-[0_4px_14px_rgba(233,30,99,0.35)]">
-        🐰
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-pink-500 to-rose-400 text-base shadow-[0_4px_14px_rgba(233,30,99,0.35)]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/bunzy-avatar.png" alt="" className="h-full w-full object-cover" />
       </div>
       <div className="min-w-0 flex-1 rounded-2xl border border-pink-500/30 bg-gradient-to-b from-pink-500/10 to-white/[0.03] p-3.5">
         <div className="mb-1.5 flex items-center gap-1.5">

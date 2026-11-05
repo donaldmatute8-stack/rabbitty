@@ -12,6 +12,7 @@ import {
   users,
 } from "@rabbitty/database-core";
 import { getCoreDb } from "../db";
+import { ollamaEndpoint, ollamaHeaders, ollamaErrorDetail } from "./ollama";
 
 /**
  * ── Bunzy Connect (C0 + C2) ──
@@ -856,12 +857,14 @@ export async function draftBroadcast(
   }
 
   const base = process.env.OLLAMA_BASE_URL;
-  if (base) {
-    const res = await fetch(`${base.replace(/\/$/, "")}/api/chat`, {
+  const endpoint = ollamaEndpoint(base, "/api/chat");
+  if (endpoint) {
+    const model = process.env.OLLAMA_MODEL || "qwen2.5:7b";
+    const res = await fetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: ollamaHeaders(),
       body: JSON.stringify({
-        model: process.env.OLLAMA_MODEL || "qwen2.5:7b",
+        model,
         stream: false,
         format: "json",
         messages: [
@@ -870,7 +873,10 @@ export async function draftBroadcast(
         ],
       }),
     });
-    if (!res.ok) throw new Error(`Ollama ${res.status}`);
+    if (!res.ok) {
+      // 404 suele ser "modelo no instalado"; 401, falta OLLAMA_API_KEY.
+      throw new Error(`Ollama ${res.status} (modelo ${model})${await ollamaErrorDetail(res)}`);
+    }
     const data = (await res.json()) as { message?: { content?: string } };
     const parsed = JSON.parse(data.message?.content || "{}") as { title?: string; body?: string };
     return clampDraft(parsed, "ollama");

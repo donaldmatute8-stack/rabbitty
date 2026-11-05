@@ -50,11 +50,13 @@ export function BunzyUpdateCard({ message }: { message: BunzyUpdateMessage }) {
           alignItems: 'center',
           justifyContent: 'center',
           fontSize: 17,
+          overflow: 'hidden',
           boxShadow: '0 4px 14px rgba(233,30,99,0.35)',
         }}
         aria-hidden
       >
-        🐰
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/bunzy-avatar.png" alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
       </div>
 
       <div

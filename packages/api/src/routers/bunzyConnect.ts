@@ -158,7 +158,18 @@ export const bunzyConnectRouter = router({
         category: z.enum(BUNZY_CATEGORIES),
       }),
     )
-    .mutation(async ({ input }) => draftBroadcast(input.brief, input.category)),
+    .mutation(async ({ input }) => {
+      try {
+        return await draftBroadcast(input.brief, input.category);
+      } catch (err) {
+        // El panel muestra este mensaje tal cual: debe decir QUÉ falló del
+        // proveedor (modelo no instalado, falta API key, timeout…).
+        throw new TRPCError({
+          code: "BAD_GATEWAY",
+          message: err instanceof Error ? `No se pudo redactar: ${err.message}` : "No se pudo redactar el borrador",
+        });
+      }
+    }),
 
   scheduleAcademy: godAdminProcedure
     .input(
