@@ -139,6 +139,17 @@ export function WelcomeRitual({
     }, 900);
   }, [storageKey, onComplete]);
 
+  // Escape cierra el ritual: nadie queda atrapado si su sesión caducó o ya
+  // tiene cuenta y solo quiere entrar a su panel.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleFinish();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, handleFinish]);
+
   // Red de seguridad: nunca dejar el overlay abierto más de 17.5s
   useEffect(() => {
     if (!isOpen) return;
@@ -279,7 +290,8 @@ export function WelcomeRitual({
         <button
           type="button"
           onClick={handleFinish}
-          className="cursor-pointer rounded-full px-3 py-2 text-xs font-mono uppercase tracking-widest text-zinc-400 transition-colors hover:bg-white/5 hover:text-white active:scale-95"
+          aria-label="Omitir el ritual y continuar"
+          className="cursor-pointer rounded-full border border-white/15 bg-white/5 px-3.5 py-2 text-xs font-mono uppercase tracking-widest text-zinc-200 transition-colors hover:bg-white/10 hover:text-white active:scale-95"
         >
           {skipLabel}
         </button>

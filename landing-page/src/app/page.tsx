@@ -3,14 +3,13 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { motion, Variants } from 'framer-motion';
-import { ArrowRight, Store, UserCircle2, Zap, Shield, Smartphone, QrCode, X, Clock, Salad, Truck, Receipt, Bell, Building2, DollarSign, Monitor, Gift, Award, Megaphone, Cake, BookOpen, HelpCircle, Sparkles, Compass, Headphones, Activity, Utensils, Globe, ChevronDown, Coins } from 'lucide-react';
+import { motion, Variants, AnimatePresence } from 'framer-motion';
+import { ArrowRight, ArrowUp, Store, UserCircle2, Zap, Shield, Smartphone, QrCode, X, Clock, Salad, Truck, Receipt, Bell, Building2, DollarSign, Monitor, Gift, Award, Megaphone, Cake, BookOpen, HelpCircle, Sparkles, Compass, Headphones, Activity, Utensils, Globe, ChevronDown, Coins } from 'lucide-react';
 import BunzGuide from '@/components/BunzGuide';
 import OpenAppButton from '@/components/OpenAppButton';
 import PricingPackagesSection, { PackagePlan, NicheData } from '@/components/PricingPackagesSection';
 
 const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || '5213312345678';
-const TELEGRAM_BOT_USERNAME = process.env.NEXT_PUBLIC_BOT_USERNAME || 'Rabbittyme_bot';
 const BUSINESS_TYPES = ['restaurante', 'cafetería', 'barbería', 'gimnasio', 'tienda'];
 
 type TrackingWindow = Window & {
@@ -937,18 +936,14 @@ export default function LandingPage() {
                   Tu negocio <strong>{`"${formData.negocio}"`}</strong> y paquete <strong>{`"${formData.packageName || formData.paquete || 'Personalizado'}"`}</strong> han sido registrados en la red Rabbitty.
                 </p>
                 <div className="pt-2 flex flex-col gap-3">
-                  <a
-                    href={`https://t.me/${TELEGRAM_BOT_USERNAME}?start=${encodeURIComponent(
-                      `solicitud_${(formData.negocio || 'negocio').toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 30)}`
-                    )}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => fireConversion('Contact', { niche: formData.nicheId, package: formData.packageCode, channel: 'telegram' })}
-                    className="w-full py-4 rounded-2xl bg-sky-500 hover:bg-sky-400 text-white font-black text-sm transition-all shadow-lg shadow-sky-500/30 flex items-center justify-center gap-2 no-underline cursor-pointer"
+                  <Link
+                    href="/negocios?utm_source=home&utm_medium=lead_form"
+                    onClick={() => fireConversion('Contact', { niche: formData.nicheId, package: formData.packageCode, channel: 'web_onboarding' })}
+                    className="w-full py-4 rounded-2xl bg-pink-600 hover:bg-pink-500 text-white font-black text-sm transition-all shadow-lg shadow-pink-600/30 flex items-center justify-center gap-2 no-underline cursor-pointer"
                   >
-                    <span>✈️</span>
-                    <span>Agilizar por Telegram Bot</span>
-                  </a>
+                    <span>🏪</span>
+                    <span>Completar mi alta en la web</span>
+                  </Link>
 
                   {/* Configuración de WhatsApp preservada para activación futura cuando se adquiera número comercial */}
                   {WHATSAPP_NUMBER && WHATSAPP_NUMBER !== '5213312345678' && (

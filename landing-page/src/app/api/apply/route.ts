@@ -349,12 +349,12 @@ export async function POST(req: Request) {
       try {
         const businessName = negocio || 'Tu negocio';
         const applicantName = nombre || 'Emprendedor';
-        const botUsername = process.env.NEXT_PUBLIC_BOT_USERNAME || 'Rabbittyme_bot';
         const adminLoginUrl =
           process.env.NEXT_PUBLIC_BUSINESS_LOGIN_URL || 'https://admin.rabbitty.me/login';
-        const magicLink = newBusinessId
-          ? `https://t.me/${botUsername}/app?startapp=claim_${newBusinessId.replace(/-/g, '')}`
-          : `https://t.me/${botUsername}/app`;
+        // Canal principal: app nativa (TestFlight mientras no haya App Store).
+        // Telegram queda solo como respaldo, no como ruta de entrada.
+        const appDownloadUrl =
+          process.env.NEXT_PUBLIC_APP_DOWNLOAD_URL || 'https://rabbitty.me/download';
 
         const emailHtml = `
           <!DOCTYPE html>
@@ -385,15 +385,15 @@ export async function POST(req: Request) {
                     <h3 style="margin: 0 0 8px 0; color: #FFF; font-size: 16px; font-weight: 800;">🔗 Tu solicitud está en revisión</h3>
                     <p style="margin: 0 0 16px 0; color: #E2E8F0; font-size: 13px; line-height: 1.5;">Te avisamos en cuanto esté aprobada. Entonces podrás entrar a tu panel con tu correo o teléfono.</p>
                     <a href="${adminLoginUrl}" style="display: inline-block; background: #F43F5E; color: #FFF; font-weight: 800; font-size: 14px; padding: 14px 28px; border-radius: 12px; text-decoration: none; box-shadow: 0 0 15px rgba(244,63,94,0.4);">Portal de negocios</a>
-                    <p style="margin: 12px 0 0 0; color: #94A3B8; font-size: 11px;">¿Prefieres la app? <a href="${magicLink}" style="color: #F43F5E; text-decoration: underline;">Abre Rabbitty en Telegram</a>.</p>
+                    <p style="margin: 12px 0 0 0; color: #94A3B8; font-size: 11px;">¿Prefieres la app? <a href="${appDownloadUrl}" style="color: #F43F5E; text-decoration: underline;">Descarga Rabbitty</a>.</p>
                   </div>
                 </div>
                 <div style="background: rgba(0, 0, 0, 0.4); padding: 24px; text-align: center; border-top: 1px solid rgba(255, 255, 255, 0.06); font-size: 11px; color: #94A3B8;">
                   <p style="margin: 0 0 10px 0; font-weight: 700; color: #CBD5E1;">Rabbitty Inc. — Red de Fidelización y Economía Bunz</p>
-                  <p style="margin: 0 0 14px 0; color: #64748B;">¿Tienes dudas? Responde directamente a este correo o háblanos por Telegram.</p>
+                  <p style="margin: 0 0 14px 0; color: #64748B;">¿Tienes dudas? Responde directamente a este correo y te ayuda nuestro equipo.</p>
                   <div style="margin-bottom: 12px;">
                     <a href="https://rabbitty.me" style="color: #F43F5E; text-decoration: none; margin: 0 10px; font-weight: 700;">Sitio Web</a> ·
-                    <a href="https://t.me/Rabbittyme_bot/app" style="color: #F43F5E; text-decoration: none; margin: 0 10px; font-weight: 700;">MiniApp Telegram</a> ·
+                    <a href="${appDownloadUrl}" style="color: #F43F5E; text-decoration: none; margin: 0 10px; font-weight: 700;">Descargar App</a> ·
                     <a href="${adminLoginUrl}" style="color: #F43F5E; text-decoration: none; margin: 0 10px; font-weight: 700;">Portal Comercio</a>
                   </div>
                   <p style="margin: 0; color: #475569; font-size: 10px;">Recibiste este mensaje transaccional como comercio/usuario registrado en Rabbitty.</p>

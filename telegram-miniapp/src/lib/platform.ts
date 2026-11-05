@@ -242,12 +242,25 @@ export const PlatformBridge = {
   async openExternalUrl(url: string) {
     if (typeof window === 'undefined') return;
 
+    // App nativa: abre el navegador del sistema (Safari/Chrome), no un webview
+    // embebido. Así el alta web se siente como un paso externo y se puede volver.
+    if (this.isNative()) {
+      try {
+        const { Browser } = await import('@capacitor/browser');
+        await Browser.open({ url });
+        return;
+      } catch (e) {
+        console.warn('[Platform] Browser.open falló, usando fallback:', e);
+      }
+    }
+
     const tg = (window as WindowWithTelegram).Telegram?.WebApp;
     if (tg?.openLink) {
       tg.openLink(url);
-    } else {
-      window.open(url, '_blank', 'noopener,noreferrer');
+      return;
     }
+
+    window.open(url, '_blank', 'noopener,noreferrer');
   },
 
   /**

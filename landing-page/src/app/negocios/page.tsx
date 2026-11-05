@@ -449,10 +449,14 @@ export default function NegociosPage() {
 
       setExisting(Boolean(json.existing));
       setSubmitted(true);
-      try {
-        if (!localStorage.getItem(AFFILIATE_RITUAL_KEY)) setShowRitual(true);
-      } catch {
-        // Sin localStorage (modo privado estricto): no interrumpimos el alta.
+      // El ritual es para negocios nuevos. Si el contacto ya tenía cuenta, no
+      // lo obligamos a verlo: entra directo a su pantalla de confirmación.
+      if (!json.existing) {
+        try {
+          if (!localStorage.getItem(AFFILIATE_RITUAL_KEY)) setShowRitual(true);
+        } catch {
+          // Sin localStorage (modo privado estricto): no interrumpimos el alta.
+        }
       }
     } catch {
       setError('Error de conexión. Revisa tu internet e inténtalo de nuevo.');
