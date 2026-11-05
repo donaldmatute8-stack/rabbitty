@@ -98,11 +98,11 @@ export const adminRouter = router({
     // El staff no re-hace el onboarding del dueño; el God en impersonación
     // tampoco (está revisando el tenant, no es el dueño).
     if (ctx.staffRole || ctx.impersonating) {
-      return { pending: false as const, business: null, counts: null };
+      return { pending: false as const, business: null, owner: null, counts: null };
     }
 
     const found = await resolveOwnerBusinessForOnboarding(ctx);
-    if (!found) return { pending: false as const, business: null, counts: null };
+    if (!found) return { pending: false as const, business: null, owner: null, counts: null };
 
     const status = String(found.business.status);
     const eligible = status === "APPROVED" || status === "VERIFIED";
@@ -123,6 +123,16 @@ export const adminRouter = router({
       counts = { branches: branchRows.length, staff: staffRows.length, menu: menuRows.length };
     }
 
+    const [owner] = await ctx.coreDb
+      .select({
+        firstName: users.firstName,
+        email: users.email,
+        phoneNumber: users.phoneNumber,
+      })
+      .from(users)
+      .where(eq(users.id, found.business.ownerId))
+      .limit(1);
+
     return {
       pending,
       business: {
@@ -131,7 +141,12 @@ export const adminRouter = router({
         niche: found.business.niche,
         category: found.business.category,
         status,
+        address: found.business.address,
+        rewardPercentage: found.business.rewardPercentage,
+        package: found.business.package,
+        creditLimit: found.business.creditLimit,
       },
+      owner: owner ?? null,
       counts,
     };
   }),

@@ -467,16 +467,21 @@ una pantalla con lo que YA tienen inyectado.
 Login al admin (dueño)
    │  OnboardingGate consulta admin.onboardingStatus
    ▼
-/onboarding
-   · "Tu negocio ya está listo"
-   · resumen: sucursales, personal y platillos detectados
-   · confirma el giro (prellenado con su nicho actual)
-   · "Confirmar y entrar" / "Saltar por ahora"
+/onboarding · MISMO flujo de 5 pasos que el alta web
+   1. Nicho (prellenado con el actual)
+   2. Datos actuales (solo lectura; "Editar en Ajustes")
+   3. Recompensa actual
+   4. Paquete y crédito actuales
+   5. Confirmación (checkbox + Confirmar / Saltar)
+   · Bunzy: video por paso + burbuja de typing
    ▼
 completeOnboarding → guarda nicho (si cambió) + timestamp
    ▼
 Dashboard (y checklist de Preparación reiniciado, con pasos ya detectados)
 ```
+
+No hay aprobación ni cambios de estado: el negocio ya está APPROVED. Solo se
+revisa la información inyectada y se confirma.
 
 **Endpoints**
 
@@ -588,6 +593,12 @@ rabbitty.me
 - Como `onboardingCompletedAt` se marcó al crear, **no** pasa por el
   re-onboarding de tenants existentes; entra directo a su panel.
 
+**Bunzy en web**
+
+El onboarding web (alta y re-onboarding) incluye la **burbuja de Bunzy con
+typing** además del video por paso. Así el flujo no se siente como un formulario
+y mantiene el mismo lenguaje que la app móvil.
+
 **Aviso no bloqueante en el POS**
 
 Si el negocio tiene el re-onboarding pendiente, el POS muestra un **banner
@@ -610,6 +621,8 @@ WHERE id = 'fb7f4847-920f-4482-8ae3-c810a20e75ad';
 | Archivo | Rol |
 |---|---|
 `landing-page/src/app/negocios/page.tsx` | Onboarding web (5 pasos + éxito) |
+`landing-page/src/components/BunzyTypingBubble.tsx` | Burbuja de Bunzy con typing en web |
+`apps/admin/src/components/BunzyTypingBubble.tsx` | Misma burbuja en el re-onboarding |
 `landing-page/src/app/negocios/layout.tsx` | Metadata / SEO |
 `landing-page/src/app/api/niches/route.ts` | Catálogo activo desde DB |
 `landing-page/src/app/api/apply/route.ts` | Alta: validación, DB, email, Telegram |

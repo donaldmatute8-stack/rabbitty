@@ -33,6 +33,7 @@ import {
   User,
 } from 'lucide-react';
 import { BunzyVideoStage } from '@/components/BunzyVideoStage';
+import { BunzyTypingBubble } from '@/components/BunzyTypingBubble';
 
 interface Niche {
   id: string;
@@ -54,6 +55,7 @@ const STEP_META = [
     label: 'Paso 1 · Tu giro',
     title: 'Atrae clientes con Rabbitty',
     description: 'Cuéntanos qué tipo de negocio eres. De ahí salen tus módulos: mesas, cocina, citas o inventario.',
+    bubble: 'Elige tu giro y yo te digo qué módulos se activan. Sin compromiso todavía.'
   },
   {
     video: '/videos/bunzy/bunzy-2-show.mp4',
@@ -61,6 +63,7 @@ const STEP_META = [
     label: 'Paso 2 · Tu perfil',
     title: '¿Cómo te conocerán?',
     description: 'Nombre, contacto y ubicación para que los Rabbitters te encuentren y puedan visitarte.',
+    bubble: 'Estos datos quedan solo en tu negocio. Nada de spam ni de mezclar con otros tenants.'
   },
   {
     video: '/videos/bunzy/bunzy-3-conexion.mp4',
@@ -68,6 +71,7 @@ const STEP_META = [
     label: 'Paso 3 · Recompensas',
     title: 'Tus recompensas en Bunz',
     description: 'Tú decides cuánto devolver a tus clientes. Más Bunz, más recurrencia y clientes felices.',
+    bubble: 'Tú decides el porcentaje. El mínimo es 2% y puedes cambiarlo cuando quieras.'
   },
   {
     video: '/videos/bunzy/bunzy-4-descubrimiento.mp4',
@@ -75,6 +79,7 @@ const STEP_META = [
     label: 'Paso 4 · Paquete',
     title: 'Respaldo y crédito',
     description: 'Elige el paquete inicial de Bunz que respalda las recompensas de tu negocio.',
+    bubble: 'El paquete es el respaldo de los Bunz que puedes emitir. Puedes empezar chico.'
   },
   {
     video: '/videos/bunzy/bunzy-5-celebra.mp4',
@@ -82,6 +87,7 @@ const STEP_META = [
     label: 'Paso 5 · Firma',
     title: 'Firma y activa tu negocio',
     description: 'Revisa tu resumen, firma tu adhesión y envía tu solicitud. Te avisamos al aprobarla.',
+    bubble: 'Último paso. Firma y te aviso por correo y WhatsApp cuando esté aprobado.'
   },
 ];
 
@@ -435,7 +441,7 @@ export default function NegociosPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-4 pb-28 pt-6 sm:px-6">
+      <main className="mx-auto max-w-2xl px-4 pb-36 pt-6 sm:px-6">
         {/* Progreso */}
         <div className="mb-6">
           <div className="mb-2 flex items-center justify-between">
@@ -464,6 +470,8 @@ export default function NegociosPage() {
           description={meta.description}
           videoHeightClass={step === 0 ? 'h-48 sm:h-56' : 'h-36 sm:h-44'}
         />
+
+        <BunzyTypingBubble message={meta.bubble} className="mt-4" />
 
         <AnimatePresence mode="wait">
           <motion.div
