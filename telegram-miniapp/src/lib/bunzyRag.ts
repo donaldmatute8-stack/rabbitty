@@ -19,7 +19,8 @@ import { knowledgeChunks } from "@/db/schema";
 import { sql } from "drizzle-orm";
 import { FAQS, DOC_SECTIONS } from "@/lib/support-content";
 
-const EMBED_MODEL = "text-embedding-3-small";
+export const EMBED_MODEL =
+  process.env.OLLAMA_EMBED_MODEL || process.env.OLLAMA_MODEL || "text-embedding-3-small";
 /** Distancia coseno máxima para considerar un chunk relevante (0=idéntico). */
 const MAX_COSINE_DISTANCE = 0.75;
 

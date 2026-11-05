@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ingestSupportKnowledge, knowledgeStats, searchKnowledge, lastEmbedError } from '@/lib/bunzyRag';
+import { EMBED_MODEL, ingestSupportKnowledge, knowledgeStats, searchKnowledge, lastEmbedError } from '@/lib/bunzyRag';
 
 /**
  * ── Bunzy KB (Fase 0 RAG) ── Ingesta y salud del knowledge base semántico.
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
   const stats = await knowledgeStats();
   return NextResponse.json({
     ok: true,
-    embedModel: 'text-embedding-3-small',
+    embedModel: EMBED_MODEL,
     ...stats,
     ready: stats.withEmbedding > 0,
   });

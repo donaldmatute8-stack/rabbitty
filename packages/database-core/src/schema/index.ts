@@ -644,10 +644,25 @@ export const vibePassportStamps = pgTable("vibePassportStamps", {
   stampedAt: timestamp("stampedAt").defaultNow().notNull(),
 });
 
-// Custom pgvector type compatible with Neon PostgreSQL
-const vectorType = customType<{ data: number[] }>({
+// Custom pgvector type compatible with Neon PostgreSQL.
+// pgvector exige el literal `[a,b,c]`; sin toDriver el driver manda un arreglo
+// de Postgres `{a,b,c}` y Postgres responde 22P02 "Vector contents must start
+// with '['".
+const vectorType = customType<{ data: number[]; driverData: string }>({
   dataType() {
     return "vector(1536)";
+  },
+  toDriver(value: number[]): string {
+    return `[${value.join(",")}]`;
+  },
+  fromDriver(value: unknown): number[] {
+    if (Array.isArray(value)) return value as number[];
+    if (typeof value === "string") {
+      const s = value.trim();
+      const inner = s.startsWith("[") ? s.slice(1, -1) : s.replace(/^\{|\}$/g, "");
+      return inner ? inner.split(",").map(Number) : [];
+    }
+    return [];
   },
 });
 
