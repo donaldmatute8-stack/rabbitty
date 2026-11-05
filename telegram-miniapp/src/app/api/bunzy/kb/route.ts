@@ -49,12 +49,13 @@ export async function POST(req: NextRequest) {
     if (result.skipped) {
       return NextResponse.json({
         ok: false,
-        error: 'Sin proveedor de embeddings — configura OLLAMA_API_URL (+OLLAMA_EMBED_MODEL u OLLAMA_MODEL) o OPENAI_API_KEY en este entorno',
+        error: 'Sin proveedor de embeddings — configura OLLAMA_EMBED_URL (u OLLAMA_API_URL) + OLLAMA_EMBED_MODEL, o OPENAI_API_KEY en este entorno',
         envStatus: {
           ollamaHost: (() => {
-            try { return new URL(String(process.env.OLLAMA_API_URL)).host; } catch { return 'URL-INVÁLIDA'; }
+            try { return new URL(String(process.env.OLLAMA_EMBED_URL || process.env.OLLAMA_API_URL)).host; } catch { return 'URL-INVÁLIDA'; }
           })(),
           embedModel: process.env.OLLAMA_EMBED_MODEL || process.env.OLLAMA_MODEL || '(sin OLLAMA_EMBED_MODEL)',
+          OLLAMA_EMBED_URL: Boolean(process.env.OLLAMA_EMBED_URL),
           OLLAMA_API_URL: Boolean(process.env.OLLAMA_API_URL),
           OLLAMA_API_KEY: Boolean(process.env.OLLAMA_API_KEY),
           OLLAMA_MODEL: Boolean(process.env.OLLAMA_MODEL),

@@ -48,7 +48,8 @@ function openAiKey(): string | null {
  * 1536, error explícito (la columna requeriría migración de dimensión).
  */
 function ollamaEmbedBase(): string | null {
-  const raw = process.env.OLLAMA_API_URL;
+  // Endpoint dedicado para embeddings; si no existe, usa el de chat.
+  const raw = process.env.OLLAMA_EMBED_URL || process.env.OLLAMA_API_URL;
   if (!raw) return null;
   for (const suffix of ["/api/chat", "/v1/chat/completions", "/chat/completions", "/chat", "/v1/messages"]) {
     if (raw.endsWith(suffix)) return raw.slice(0, -suffix.length);
