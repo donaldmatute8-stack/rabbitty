@@ -453,7 +453,9 @@ export default function NegociosPage() {
       // lo obligamos a verlo: entra directo a su pantalla de confirmación.
       if (!json.existing) {
         try {
-          if (!localStorage.getItem(AFFILIATE_RITUAL_KEY)) setShowRitual(true);
+          const forced =
+            new URLSearchParams(window.location.search).get('ritual') === '1';
+          if (forced || !localStorage.getItem(AFFILIATE_RITUAL_KEY)) setShowRitual(true);
         } catch {
           // Sin localStorage (modo privado estricto): no interrumpimos el alta.
         }
