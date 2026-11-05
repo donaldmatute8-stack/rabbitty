@@ -495,6 +495,9 @@ export const paymentsRouter = router({
 
       const isPlatformStaff = Boolean(ctx.staffRole);
       if (!isPlatformStaff) {
+        if (!ctx.userId) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "Se requiere una sesión de usuario." });
+        }
         const [owned] = await ctx.coreDb.select({ id: coreOwned.id }).from(coreOwned).where(eq(coreOwned.ownerId, ctx.userId)).limit(1);
         if (!owned || owned.id !== restaurantRow.businessId) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Esta sucursal no pertenece a tu negocio." });
@@ -720,10 +723,18 @@ export const paymentsRouter = router({
       idempotencyKey: z.string(),
     }))
     .mutation(async ({ ctx, input }) => {
+      // En terminal no hay userId: el intent queda a nombre del empleado en
+      // turno o del propio dispositivo (es solo trazabilidad del creador).
+      const creatorSubjectId =
+        ctx.userId ?? ctx.posOperator?.staffId ?? ctx.posAuth?.terminalId ?? null;
+      if (!creatorSubjectId) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "No se pudo identificar quién crea el cobro." });
+      }
+
       const { PaymentIntentService } = await import("../services/paymentIntentDomain");
       const intent = await PaymentIntentService.createIntent({
         tenantId: ctx.branchId,
-        creatorSubjectId: ctx.userId,
+        creatorSubjectId,
         amountMxn: input.amountMxn,
         orderId: input.orderId,
         idempotencyKey: input.idempotencyKey,

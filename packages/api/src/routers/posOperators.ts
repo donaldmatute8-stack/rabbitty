@@ -35,6 +35,7 @@ export const posOperatorsRouter = router({
     active: Boolean(ctx.posOperator),
     role: resolvePosRole(ctx),
     permissions: posPermissionsOf(ctx),
+    enforceRole: true,
     operator: ctx.posOperator
       ? {
           staffId: ctx.posOperator.staffId,

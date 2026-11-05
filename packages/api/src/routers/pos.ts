@@ -1282,6 +1282,14 @@ export const posRouter = router({
     .mutation(async ({ ctx, input }) => {
       const isCallerStaff = Boolean(ctx.staffRole);
       const effectiveCustomerId = isCallerStaff ? input.customerId : ctx.userId;
+      // Sin Rabbitter no se puede vincular la mesa. Además fija el tipo para
+      // todas las consultas siguientes (evita un `undefined` silencioso).
+      if (!effectiveCustomerId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Falta el Rabbitter para vincular la mesa.",
+        });
+      }
 
       // 1. Validar que la mesa exista
       const [table] = await ctx.restaurantDb

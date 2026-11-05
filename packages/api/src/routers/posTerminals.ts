@@ -181,6 +181,8 @@ export const posTerminalsRouter = router({
         // Rol del empleado en turno. Sin turno no hay rol (la UI muestra el gate).
         role: resolvePosRole(ctx),
         permissions: posPermissionsOf(ctx),
+        // La terminal SIEMPRE aplica la matriz; el panel admin solo con el flag.
+        enforceRole: true,
         branchId: ctx.branchId,
         businessId: ctx.posAuth?.businessId ?? null,
         terminalName: ctx.posAuth?.terminalName ?? null,
@@ -197,6 +199,7 @@ export const posTerminalsRouter = router({
         mode: "admin" as const,
         role: resolvePosRole(ctx),
         permissions: posPermissionsOf(ctx),
+        enforceRole: process.env.POS_ROLE_ENFORCEMENT === "1",
         branchId: ctx.branchId,
         businessId: null,
         terminalName: null,

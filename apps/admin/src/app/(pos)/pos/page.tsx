@@ -420,7 +420,10 @@ export default function PosPage() {
   // ── Permisos por rol (servidor y UI comparten la misma matriz) ──
   const posRole = operatorStatus?.role ?? posSession?.role ?? null;
   const posPermissions = (operatorStatus?.permissions ?? posSession?.permissions ?? []) as PosPermission[];
-  const can = (permission: PosPermission) => posPermissions.includes(permission);
+  // La terminal siempre aplica la matriz; el panel admin solo con
+  // POS_ROLE_ENFORCEMENT=1. Así no se ocultan botones a admins actuales.
+  const enforcePermissions = operatorStatus?.enforceRole ?? posSession?.enforceRole ?? false;
+  const can = (permission: PosPermission) => !enforcePermissions || posPermissions.includes(permission);
   const requirePermission = (permission: PosPermission): boolean => {
     if (can(permission)) return true;
     toast.error(`Tu rol (${posRoleLabel(posRole)}) no permite ${posPermissionLabel(permission)}.`);

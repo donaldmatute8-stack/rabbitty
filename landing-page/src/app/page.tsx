@@ -29,8 +29,12 @@ const fireConversion = (event: string, params: Record<string, unknown> = {}) => 
 };
 
 // El alta de negocio vive en el onboarding nuevo (nichos + Bunzy + aprovisionamiento).
-const BUSINESS_ONBOARDING_URL = 'https://app.rabbitty.me/business?intent=affiliate&from=landing';
-const BUSINESS_LOGIN_URL = 'https://admin.rabbitty.me/login';
+// Configurable para probar en local sin tocar el código.
+const BUSINESS_ONBOARDING_URL =
+  process.env.NEXT_PUBLIC_BUSINESS_ONBOARDING_URL ||
+  'https://app.rabbitty.me/business?intent=affiliate&from=landing';
+const BUSINESS_LOGIN_URL =
+  process.env.NEXT_PUBLIC_BUSINESS_LOGIN_URL || 'https://admin.rabbitty.me/login';
 
 const EMPTY_FORM = {
   negocio: '', tipo: '', paquete: '', periodicidad: 'yearly',

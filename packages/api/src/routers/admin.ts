@@ -95,8 +95,11 @@ export const adminRouter = router({
    * inyectado (sucursales, personal, menú). No expone datos de otros negocios.
    */
   onboardingStatus: protectedProcedure.query(async ({ ctx }) => {
-    // El staff no re-hace el onboarding del dueño.
-    if (ctx.staffRole) return { pending: false as const, business: null, counts: null };
+    // El staff no re-hace el onboarding del dueño; el God en impersonación
+    // tampoco (está revisando el tenant, no es el dueño).
+    if (ctx.staffRole || ctx.impersonating) {
+      return { pending: false as const, business: null, counts: null };
+    }
 
     const found = await resolveOwnerBusinessForOnboarding(ctx);
     if (!found) return { pending: false as const, business: null, counts: null };

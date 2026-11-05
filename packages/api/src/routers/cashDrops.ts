@@ -161,11 +161,15 @@ export const cashDropsRouter = router({
 
       // We need to resolve the staffId for the user creating the drop
       const { staff } = await import("@rabbitty/database-restaurant/schema");
-      const [userStaff] = await ctx.restaurantDb
-        .select({ id: staff.id })
-        .from(staff)
-        .where(and(eq(staff.userId, ctx.userId), eq(staff.branchId, branchId)))
-        .limit(1);
+      // La terminal no tiene userId: el retiro queda a nombre del turno, no de
+      // un usuario core. Si hay sesión de usuario, se resuelve su staff.
+      const [userStaff] = ctx.userId
+        ? await ctx.restaurantDb
+            .select({ id: staff.id })
+            .from(staff)
+            .where(and(eq(staff.userId, ctx.userId), eq(staff.branchId, branchId)))
+            .limit(1)
+        : [];
 
       const [drop] = await ctx.restaurantDb.insert(cashDrops).values({
         branchId,

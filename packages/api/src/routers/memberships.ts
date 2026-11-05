@@ -516,11 +516,13 @@ export const membershipsRouter = router({
         .from(ownedBusinesses)
         .orderBy(ownedBusinesses.name);
     }
-    const mine = await ctx.coreDb
-      .select({ id: ownedBusinesses.id, name: ownedBusinesses.name, isGod: sql<boolean>`false` })
-      .from(ownedBusinesses)
-      .where(eq(ownedBusinesses.ownerId, ctx.userId));
-    if (mine.length > 0) return mine;
+    if (ctx.userId) {
+      const mine = await ctx.coreDb
+        .select({ id: ownedBusinesses.id, name: ownedBusinesses.name, isGod: sql<boolean>`false` })
+        .from(ownedBusinesses)
+        .where(eq(ownedBusinesses.ownerId, ctx.userId));
+      if (mine.length > 0) return mine;
+    }
     // Staff/cajero sin ownership: el negocio de SU branch (venta en caja) — mismo criterio
     // que assertCanRedeem, para que el botón "Nuevo plan" funcione en el tenant del staff.
     if (ctx.branchId) {
@@ -545,7 +547,7 @@ export const membershipsRouter = router({
         }
       }
     }
-    return mine;
+    return [];
   }),
 
   /** Planes publicados de un negocio (versión vigente). */
@@ -754,6 +756,9 @@ export const membershipsRouter = router({
       // Pagos fuera de línea / promo solo los autoriza el dueño del negocio.
       await assertBusinessOwner(ctx, row.plan.businessId);
       const targetUserId = input.targetUserId ?? ctx.userId;
+      if (!targetUserId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Falta el cliente de la membresía." });
+      }
 
       const now = new Date();
       const periodEnd = addInterval(now, row.version.billingInterval as z.infer<typeof intervalSchema>);
@@ -873,6 +878,9 @@ export const membershipsRouter = router({
 
   /** Membresías del usuario con estado de derechos del ciclo actual. */
   getMyMemberships: posProcedure.query(async ({ ctx }) => {
+    // La terminal no tiene membresías personales.
+    if (!ctx.userId) return [];
+
     const subs = await ctx.coreDb
       .select({ sub: membershipSubscriptions, version: membershipPlanVersions, plan: membershipPlans })
       .from(membershipSubscriptions)
@@ -900,6 +908,8 @@ export const membershipsRouter = router({
   getMembershipPass: posProcedure
     .input(z.object({ subscriptionId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
+      if (!ctx.userId) throw new TRPCError({ code: "UNAUTHORIZED" });
+
       const [sub] = await ctx.coreDb
         .select()
         .from(membershipSubscriptions)
@@ -1106,6 +1116,8 @@ return await ctx.coreDb.transaction(async (tx: any) => {
   cancelSubscription: posProcedure
     .input(z.object({ subscriptionId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
+      if (!ctx.userId) throw new TRPCError({ code: "UNAUTHORIZED" });
+
       const res = await ctx.coreDb.update(membershipSubscriptions)
         .set({ cancelAtPeriodEnd: true, updatedAt: new Date() })
         .where(and(eq(membershipSubscriptions.id, input.subscriptionId), eq(membershipSubscriptions.userId, ctx.userId)))
