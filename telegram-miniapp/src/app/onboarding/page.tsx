@@ -5,8 +5,7 @@ import { motion } from "framer-motion";
 import { useRouter } from 'next/navigation';
 import { useAuth } from "@/features/auth/AuthProvider";
 import PhoneAuthFlow from "@/features/auth/PhoneAuthFlow";
-
-import { DottedGlowBackground } from "@/components/ui/dotted-glow-background";
+import { BunzyVideoStage } from "@/components/onboarding/BunzyVideoStage";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -33,70 +32,46 @@ export default function OnboardingPage() {
 
   return (
     <div
-      className="min-h-[100dvh] flex flex-col overflow-hidden"
+      className="min-h-[100dvh] flex flex-col justify-between overflow-x-hidden overflow-y-auto px-5 pt-8 pb-10"
       style={{
         fontFamily: "var(--font-family-base)",
-        backgroundColor: "var(--bg-primary)",
+        backgroundColor: "var(--bg-primary, #0B0B0E)",
       }}
     >
-      <div className="pt-[72px] pl-[28px]">
-        <motion.h1
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="text-[40px] font-extrabold leading-[1.2] tracking-[-0.5px]"
-          style={{ color: "var(--text-primary)" }}
-        >
-          Awake 'n'
-          <br />
-          bunz it
-        </motion.h1>
+      {/* Header sutil Rabbitty */}
+      <div className="flex items-center justify-between w-full max-w-md mx-auto pt-2">
+        <span className="text-[11px] font-black uppercase tracking-[0.22em] text-pink-400">
+          RABBITTY 2026
+        </span>
+        <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-pink-500/10 text-pink-300 border border-pink-500/25">
+          Ecosistema Bunz
+        </span>
       </div>
 
-      <div className="flex-1 relative flex items-center justify-center w-full overflow-hidden">
-        <DottedGlowBackground
-          className="pointer-events-none mask-radial-to-90% mask-radial-at-center"
-          opacity={1}
-          gap={10}
-          radius={2}
-          colorLightVar="--rabbitty-pink"
-          glowColorLightVar="--rabbitty-pink"
-          colorDarkVar="--rabbitty-pink-muted"
-          glowColorDarkVar="--rabbitty-pink"
-          backgroundOpacity={0}
-          speedMin={0.3}
-          speedMax={1.6}
-          speedScale={1}
+      {/* Hero central con video de Bunzy saludando */}
+      <div className="flex-1 flex items-center justify-center py-6">
+        <BunzyVideoStage
+          videoSrc="/videos/bunzy/bunzy-1-hi.mp4"
+          poster="/videos/bunzy/bunzy-1-hi.jpg"
+          stepLabel="¡Hola, Rabbitter!"
+          title="Awake 'n' bunz it"
+          description="Gana Bunz en cada consumo, desbloquea recompensas reales y accede a beneficios exclusivos en tus lugares favoritos."
+          videoHeightClass="h-52 sm:h-60"
         />
-
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.8, ease: "easeOut" }}
-          className="relative z-20 w-[220px] h-[220px]"
-        >
-          <img
-            src="/logo_conejo.png"
-            alt="Rabbitty Logo"
-            className="w-full h-full object-contain drop-shadow-[0_0_20px_rgba(255,255,255,0.15)]"
-          />
-        </motion.div>
       </div>
 
-      <div
-        className="rounded-t-[28px] pt-[28px] px-6 pb-10"
-        style={{ backgroundColor: "var(--bg-subtle)" }}
-      >
+      {/* Controles de Entrada */}
+      <div className="w-full max-w-md mx-auto space-y-4">
         <motion.button
           onClick={() => setFlow('register')}
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.95 }}
-          transition={{ delay: 0.5 }}
-          className="relative overflow-hidden group w-full transition-transform text-white text-[16px] font-semibold py-[17px] rounded-full border-none cursor-pointer shadow-[0_4px_15px_rgba(233,30,99,0.3)]"
+          whileTap={{ scale: 0.96 }}
+          transition={{ delay: 0.3 }}
+          className="relative overflow-hidden group w-full text-white text-[16px] font-black py-[18px] rounded-full border-none cursor-pointer shadow-[0_6px_25px_rgba(233,30,99,0.35)] flex items-center justify-center tracking-wide"
           style={{
-            background: 'linear-gradient(135deg, var(--rabbitty-pink) 0%, #E91E63 100%)',
+            background: 'linear-gradient(135deg, #FF2E93 0%, #E91E63 100%)',
             fontFamily: "var(--font-family-base)",
           }}
         >
@@ -107,23 +82,23 @@ export default function OnboardingPage() {
             animate={{ x: '200%' }}
             transition={{ repeat: Infinity, duration: 2.5, ease: "linear", repeatDelay: 1 }}
           />
-          <span className="relative z-10">Start bunz'in</span>
+          <span className="relative z-10">Comenzar Ahora</span>
         </motion.button>
 
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.7 }}
-          className="text-center mt-5 text-[14px] text-[#888]"
+          transition={{ delay: 0.4 }}
+          className="text-center text-[14px] text-zinc-400"
         >
-          Already have an account?{" "}
-          <span
+          ¿Ya tienes cuenta activa?{" "}
+          <button
+            type="button"
             onClick={() => setFlow('login')}
-            className="active:opacity-70 transition-opacity font-medium cursor-pointer"
-            style={{ color: "var(--rabbitty-pink)" }}
+            className="text-pink-400 font-bold hover:underline cursor-pointer bg-transparent border-none p-0 inline"
           >
-            Login.
-          </span>
+            Inicia sesión
+          </button>
         </motion.p>
       </div>
     </div>

@@ -16,6 +16,7 @@ import { useRouter } from "next/navigation";
 import { trpc } from "../../../lib/trpc-client";
 import { Button, Card, toast } from "@rabbitty/ui";
 import { ArrowRight, CheckCircle2, Loader2, Sparkles, Store, Users, Utensils, GitBranch } from "lucide-react";
+import { BunzyVideoStage } from "../../../components/BunzyVideoStage";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -87,35 +88,39 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6">
-      {/* Bienvenida */}
-      <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-linear-to-br from-gray-900 via-black to-gray-900 p-6">
-        <div className="absolute -top-10 -right-10 h-48 w-48 rounded-full bg-pink-500/15 blur-[90px]" />
-        <div className="relative">
-          <p className="m-0 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.25em] text-pink-400">
-            <Sparkles className="h-3 w-3" /> Bienvenido de nuevo
-          </p>
-          <h1 className="m-0 mt-2 text-2xl font-black text-white sm:text-3xl">
-            {business.name} ya está listo
-          </h1>
-          <p className="m-0 mt-1 max-w-xl text-sm text-gray-400">
-            Actualizamos la experiencia de Rabbitty: confirma tu tipo de negocio y entra. No tienes que volver a
-            capturar nada de lo que ya tienes.
-          </p>
+    <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6">
+      {/* Bunzy Video Stage - Re-onboarding & Bienvenida */}
+      <BunzyVideoStage
+        videoSrc="/videos/bunzy/bunzy-1-hi.mp4"
+        poster="/videos/bunzy/bunzy-1-hi.jpg"
+        stepLabel="Paso 1 · Bienvenida"
+        title={`${business.name} está listo`}
+        description="Confirma tu tipo de negocio para habilitar tus módulos de mesas, cocina o caja. Tu historial, personal y productos siguen intactos."
+      />
 
-          <div className="mt-5 grid grid-cols-3 gap-2">
-            {[
-              { icon: GitBranch, label: "Sucursales", value: counts?.branches ?? "—" },
-              { icon: Users, label: "Personal", value: counts?.staff ?? "—" },
-              { icon: Utensils, label: "Platillos", value: counts?.menu ?? "—" },
-            ].map((item) => (
-              <div key={item.label} className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                <item.icon className="h-4 w-4 text-cyan-300" />
-                <p className="m-0 mt-1 text-lg font-black text-white">{item.value}</p>
-                <p className="m-0 text-[10px] font-bold uppercase tracking-wider text-gray-500">{item.label}</p>
-              </div>
-            ))}
-          </div>
+      {/* Resumen de infraestructura inyectada */}
+      <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-linear-to-br from-gray-900 via-black to-gray-900 p-5">
+        <div className="flex items-center justify-between mb-3">
+          <p className="m-0 flex items-center gap-1.5 text-[11px] font-black uppercase tracking-[0.2em] text-pink-400">
+            <Sparkles className="h-3.5 w-3.5" /> Tu configuración actual
+          </p>
+          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+            En vivo
+          </span>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { icon: GitBranch, label: "Sucursales", value: counts?.branches ?? "—" },
+            { icon: Users, label: "Personal", value: counts?.staff ?? "—" },
+            { icon: Utensils, label: "Platillos", value: counts?.menu ?? "—" },
+          ].map((item) => (
+            <div key={item.label} className="rounded-2xl border border-white/10 bg-white/5 p-3.5 text-center sm:text-left">
+              <item.icon className="h-4 w-4 text-cyan-300 mx-auto sm:mx-0" />
+              <p className="m-0 mt-1.5 text-xl font-black text-white">{item.value}</p>
+              <p className="m-0 text-[10px] font-bold uppercase tracking-wider text-gray-400">{item.label}</p>
+            </div>
+          ))}
         </div>
       </div>
 

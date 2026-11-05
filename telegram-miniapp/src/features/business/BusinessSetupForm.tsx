@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Store, MapPin, Percent, UploadCloud, ChevronRight, ChevronLeft, HelpCircle, ShieldCheck, FileText } from 'lucide-react';
+import { MapPin, Percent, UploadCloud, ChevronRight, ChevronLeft, HelpCircle, ShieldCheck, FileText } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import BunzGuide from './BunzGuide';
 
 import { NichePicker } from './NichePicker';
 import { BunzyOnboarding } from './BunzyOnboarding';
+import { BunzyVideoStage } from '@/components/onboarding/BunzyVideoStage';
 /** Paso 0: el nicho define la categoría operativa (y por tanto los rangos). */
 const NICHE_TO_CATEGORY: Record<string, string> = {
   restaurant: 'Restaurante',
@@ -248,30 +249,32 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
             <motion.div key="step0" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} style={{ textAlign: 'center', position: 'relative', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               <button 
                 onClick={() => router.back()} 
-                style={{ position: 'absolute', top: 'calc(max(var(--safe-top, 0px), 50px) + 48px)', left: 0, background: 'rgba(255,255,255,0.1)', border: 'none', width: 40, height: 40, borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                style={{ position: 'absolute', top: 'calc(max(var(--safe-top, 0px), 50px) + 24px)', left: 0, background: 'rgba(255,255,255,0.1)', border: 'none', width: 40, height: 40, borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
               >
                 <ChevronLeft size={20} />
               </button>
 
               <button
                 onClick={() => setShowBunzGuide(true)}
-                style={{ position: 'absolute', top: 'calc(max(var(--safe-top, 0px), 50px) + 48px)', right: 0, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', padding: '6px 14px', borderRadius: 999, color: 'rgba(255,255,255,0.6)', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
+                style={{ position: 'absolute', top: 'calc(max(var(--safe-top, 0px), 50px) + 24px)', right: 0, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', padding: '6px 14px', borderRadius: 999, color: 'rgba(255,255,255,0.6)', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
               >
                 <HelpCircle size={14} /> ¿Cómo funciona?
               </button>
               
-              <div style={{ width: 100, height: 100, background: 'rgba(233,30,99,0.1)', borderRadius: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 32px', border: '1px solid rgba(233,30,99,0.3)' }}>
-                <Store size={48} color={THEME_COLOR} />
+              <div style={{ margin: '0 auto 20px', width: '100%' }}>
+                <BunzyVideoStage
+                  videoSrc="/videos/bunzy/bunzy-1-hi.mp4"
+                  poster="/videos/bunzy/bunzy-1-hi.jpg"
+                  stepLabel="AFILIACIÓN DE NEGOCIO"
+                  title="Atrae clientes con Rabbitty"
+                  description="Afilia tu negocio, ofrece recompensas en Bunz y aumenta tus ventas diarias con tu propio programa de lealtad."
+                  videoHeightClass="h-48 sm:h-56"
+                />
               </div>
-              <h1 style={{ fontSize: 36, fontWeight: 900, marginBottom: 16, lineHeight: 1.1, letterSpacing: '-1px' }}>
-                Atrae clientes<br/>con <span style={{ color: THEME_COLOR }}>Rabbitty</span>
-              </h1>
-              <p style={{ fontSize: 16, color: 'rgba(255,255,255,0.6)', marginBottom: 48, lineHeight: 1.5 }}>
-                Afilia tu negocio, ofrece recompensas en Bunz y aumenta tus ventas diarias. Sin comisiones ocultas.
-              </p>
+
               <button 
                 onClick={nextStep}
-                style={{ width: '100%', padding: '18px', background: THEME_GRADIENT, color: '#fff', border: 'none', borderRadius: 999, fontSize: 18, fontWeight: 900, boxShadow: '0 8px 32px rgba(249,115,22,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                style={{ width: '100%', padding: '18px', background: THEME_GRADIENT, color: '#fff', border: 'none', borderRadius: 999, fontSize: 17, fontWeight: 900, boxShadow: '0 8px 32px rgba(233,30,99,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer', marginTop: 12 }}
               >
                 Comenzar Registro <ChevronRight size={20} />
               </button>
@@ -280,8 +283,16 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
 
           {step === 1 && (
             <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-              <h2 style={{ fontSize: 28, fontWeight: 900, marginBottom: 8 }}>Datos del Negocio</h2>
-              <p style={{ color: 'rgba(255,255,255,0.5)', marginBottom: 32 }}>¿Cómo te van a encontrar los clientes?</p>
+              <div style={{ marginBottom: 20 }}>
+                <BunzyVideoStage
+                  videoSrc="/videos/bunzy/bunzy-2-show.mp4"
+                  poster="/videos/bunzy/bunzy-2-show.jpg"
+                  stepLabel="PASO 1 · PERFIL COMERCIAL"
+                  title="¿Cómo te conocerán?"
+                  description="Indica el nombre y dirección de tu local para que los Rabbitters te visiten y consuman."
+                  videoHeightClass="h-40 sm:h-48"
+                />
+              </div>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                 <div>
@@ -363,8 +374,16 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
 
           {step === 2 && (
             <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-              <h2 style={{ fontSize: 28, fontWeight: 900, marginBottom: 8 }}>Recompensas</h2>
-              <p style={{ color: 'rgba(255,255,255,0.5)', marginBottom: 32 }}>Configura cuánto valor retornarás a tus clientes.</p>
+              <div style={{ marginBottom: 20 }}>
+                <BunzyVideoStage
+                  videoSrc="/videos/bunzy/bunzy-3-conexion.mp4"
+                  poster="/videos/bunzy/bunzy-3-conexion.jpg"
+                  stepLabel="PASO 2 · CONFIANZA & VALOR"
+                  title="Tus Recompensas en Bunz"
+                  description="Define el porcentaje que recibirán tus clientes. Más Bunz significa mayor recurrencia y comensales fieles."
+                  videoHeightClass="h-40 sm:h-48"
+                />
+              </div>
               
               <div style={{ background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.2)', borderRadius: 24, padding: 24, marginBottom: 32, textAlign: 'center' }}>
                 <Percent size={32} color={THEME_COLOR} style={{ margin: '0 auto 12px' }} />
@@ -417,8 +436,16 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
 
           {step === 3 && (
             <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-              <h2 style={{ fontSize: 28, fontWeight: 900, marginBottom: 8 }}>Elige tu Paquete</h2>
-              <p style={{ color: 'rgba(255,255,255,0.5)', marginBottom: 32 }}>Define el crédito de minting para tu negocio.</p>
+              <div style={{ marginBottom: 20 }}>
+                <BunzyVideoStage
+                  videoSrc="/videos/bunzy/bunzy-4-descubrimiento.mp4"
+                  poster="/videos/bunzy/bunzy-4-descubrimiento.jpg"
+                  stepLabel="PASO 3 · CAPACIDAD DE EMISIÓN"
+                  title="Respaldo & Crédito"
+                  description="Escoge tu paquete inicial de Bunz para respaldar las recompensas de tu negocio."
+                  videoHeightClass="h-40 sm:h-48"
+                />
+              </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <button
@@ -487,6 +514,17 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
 
           {step === 4 && (
             <motion.div key="step4" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} style={{ textAlign: 'left', paddingTop: 12 }}>
+              <div style={{ marginBottom: 20 }}>
+                <BunzyVideoStage
+                  videoSrc="/videos/bunzy/bunzy-5-celebra.mp4"
+                  poster="/videos/bunzy/bunzy-5-celebra.jpg"
+                  stepLabel="PASO 4 · FINALIZACIÓN & FIRMA"
+                  title="Firma y activa tu negocio"
+                  description="Estás a un paso: firma digitalmente tu adhesión y comienza a operar con Rabbitty."
+                  videoHeightClass="h-40 sm:h-48"
+                />
+              </div>
+
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
                 <div style={{ width: 48, height: 48, background: 'rgba(16,185,129,0.1)', borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <ShieldCheck size={26} color="#10B981" />
