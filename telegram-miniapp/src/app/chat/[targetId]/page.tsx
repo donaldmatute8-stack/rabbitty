@@ -12,7 +12,7 @@ import { BottomSheet } from '@/components/ui/BottomSheet';
 import { BunzyUpdateCard } from '@/components/chat/BunzyUpdateCard';
 import { QRCodeSVG } from 'qrcode.react';
 import { useToast } from '@/contexts/ToastContext';
-import { Bell, BellOff, Search, Ban, MoreHorizontal, Store, Bot, ExternalLink, Zap } from 'lucide-react';
+import { Bell, BellOff, Search, Ban, MoreHorizontal, Store, Bot, ExternalLink, Zap, Megaphone } from 'lucide-react';
 
 import { useRealtimeChat } from '@/lib/realtime/useRealtimeChat';
 import { ensureIdentity, getDeviceId } from '@/lib/e2e/identity';
@@ -710,6 +710,39 @@ export default function ChatRoomPage() {
   const recordIntervalRef = useRef<number | null>(null);
   const [replyTo, setReplyTo] = useState<{ id: string; text: string; sender?: 'user' | 'assistant' | 'bot' } | null>(null);
   const { showToast } = useToast();
+
+  /**
+   * Bunzy Connect · "Entendido".
+   * El comunicado deja de estar destacado y pasa al archivo del destinatario
+   * (bunzyDeliveries.archivedAt). No borra el mensaje del hilo.
+   */
+  const acknowledgeComunicado = async (messageId: string, deliveryId: string) => {
+    const patchMetadata = (archivedAt: string | null) =>
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? { ...m, metadata: { ...((m.metadata as Record<string, unknown>) || {}), archivedAt } }
+            : m,
+        ),
+      );
+    patchMetadata(new Date().toISOString());
+    PlatformBridge.hapticFeedback('light');
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch('/api/chat/bunzy-comunicados', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deliveryId }),
+      });
+      if (!res.ok) throw new Error('archive failed');
+      PlatformBridge.hapticFeedback('success');
+      showToast('Comunicado archivado', 'success');
+    } catch {
+      patchMetadata(null);
+      showToast('No se pudo archivar el comunicado', 'error');
+    }
+  };
+
   const [contextMsg, setContextMsg] = useState<string | null>(null);
   const voiceBlobCacheRef = useRef<Record<string, string>>({});
   const [voiceSrcMap, setVoiceSrcMap] = useState<Record<string, string>>({});
@@ -2662,6 +2695,38 @@ export default function ChatRoomPage() {
             </span>
           </div>
 
+          {/* Bunzy Connect: acceso al archivo de comunicados oficiales */}
+          {isBot && (
+            <button
+              type="button"
+              onClick={() => {
+                PlatformBridge.hapticFeedback('light');
+                setTargetInfoOpen(false);
+                router.push('/comunicados');
+              }}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                border: '1px solid rgba(233,30,99,0.28)',
+                borderRadius: 14,
+                background: 'rgba(233,30,99,0.10)',
+                padding: '11px 14px',
+                cursor: 'pointer',
+                color: 'var(--text-primary)',
+                fontSize: 13,
+                fontWeight: 800,
+              }}
+            >
+              <Megaphone size={15} style={{ color: '#FF8FB8' }} />
+              Comunicados oficiales
+              <span style={{ marginLeft: 'auto', color: 'var(--text-muted)', fontWeight: 700, fontSize: 11 }}>
+                Ver archivo
+              </span>
+            </button>
+          )}
+
           {/* Action Row: Mute, Search, Block, More (Telegram screenshot 4) */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, width: '100%', marginTop: 6 }}>
             {/* Mute */}
@@ -3047,7 +3112,23 @@ export default function ChatRoomPage() {
           )}
           {messages.map((msg, idx) => {
             if (msg.type === 'BUNZY_UPDATE') {
-              return <BunzyUpdateCard key={msg.id || idx} message={msg} />;
+              const bunzyMeta = (msg.metadata ?? {}) as {
+                deliveryId?: string;
+                archivedAt?: string | null;
+              };
+              const deliveryId = bunzyMeta.deliveryId;
+              return (
+                <BunzyUpdateCard
+                  key={msg.id || idx}
+                  message={msg}
+                  archived={Boolean(bunzyMeta.archivedAt)}
+                  onAcknowledge={
+                    deliveryId && !bunzyMeta.archivedAt
+                      ? () => acknowledgeComunicado(msg.id, deliveryId)
+                      : undefined
+                  }
+                />
+              );
             }
             const isMe = msg.senderId === myParticipantId;
             const isSelected = selectedIds.includes(msg.id);

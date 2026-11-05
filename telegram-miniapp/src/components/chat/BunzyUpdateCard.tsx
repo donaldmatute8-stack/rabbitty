@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Sparkles, ArrowUpRight } from 'lucide-react';
+import { Sparkles, ArrowUpRight, Check } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -23,13 +23,22 @@ interface BunzyUpdateMessage {
  * Se renderiza cuando `messages.type === 'BUNZY_UPDATE'`. No es una respuesta
  * de IA: es contenido editorial oficial con identidad de Bunzy.
  */
-export function BunzyUpdateCard({ message }: { message: BunzyUpdateMessage }) {
+interface BunzyUpdateCardProps {
+  message: BunzyUpdateMessage;
+  /** El destinatario ya pulsó "Entendido": el comunicado vive en el archivo. */
+  archived?: boolean;
+  /** Confirma la lectura y archiva el comunicado para esta persona. */
+  onAcknowledge?: () => void | Promise<void>;
+}
+
+export function BunzyUpdateCard({ message, archived = false, onAcknowledge }: BunzyUpdateCardProps) {
   const meta = (message.metadata ?? {}) as {
     category?: string;
     title?: string;
     ctaLabel?: string | null;
     ctaUrl?: string | null;
     official?: boolean;
+    broadcastId?: string;
   };
   const category = meta.category || 'PRODUCT';
   const title = meta.title || 'Actualización de Rabbitty';
@@ -64,8 +73,10 @@ export function BunzyUpdateCard({ message }: { message: BunzyUpdateMessage }) {
           flex: 1,
           minWidth: 0,
           borderRadius: 18,
-          border: '1px solid rgba(233,30,99,0.28)',
-          background: 'linear-gradient(180deg, rgba(233,30,99,0.10), rgba(255,255,255,0.03))',
+          border: archived ? '1px solid rgba(255,255,255,0.10)' : '1px solid rgba(233,30,99,0.28)',
+          background: archived
+            ? 'rgba(255,255,255,0.03)'
+            : 'linear-gradient(180deg, rgba(233,30,99,0.10), rgba(255,255,255,0.03))',
           padding: '12px 14px',
           color: 'var(--text-primary, #fff)',
         }}
@@ -84,7 +95,7 @@ export function BunzyUpdateCard({ message }: { message: BunzyUpdateMessage }) {
               padding: '1px 6px',
             }}
           >
-            Oficial
+            {archived ? 'Archivado' : 'Oficial'}
           </span>
         </div>
 
@@ -130,6 +141,49 @@ export function BunzyUpdateCard({ message }: { message: BunzyUpdateMessage }) {
           >
             {ctaLabel} <ArrowUpRight size={13} />
           </button>
+        )}
+
+        {!archived && onAcknowledge && (
+          <button
+            type="button"
+            onClick={() => void onAcknowledge()}
+            style={{
+              marginTop: 12,
+              width: '100%',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              border: '1px solid rgba(255,255,255,0.16)',
+              borderRadius: 12,
+              background: 'rgba(255,255,255,0.08)',
+              color: 'var(--text-primary, #fff)',
+              fontSize: 12.5,
+              fontWeight: 900,
+              padding: '9px 12px',
+              cursor: 'pointer',
+            }}
+          >
+            <Check size={13} /> Entendido
+          </button>
+        )}
+
+        {archived && (
+          <Link
+            href="/comunicados"
+            style={{
+              marginTop: 10,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              fontSize: 10.5,
+              fontWeight: 800,
+              color: 'rgba(255,143,184,0.9)',
+              textDecoration: 'none',
+            }}
+          >
+            En tus comunicados <ArrowUpRight size={11} />
+          </Link>
         )}
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 8 }}>

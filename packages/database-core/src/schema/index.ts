@@ -787,6 +787,8 @@ export const bunzyDeliveries = pgTable("bunzyDeliveries", {
   deliveredAt: timestamp("deliveredAt"),
   readAt: timestamp("readAt"),
   clickedAt: timestamp("clickedAt"),
+  /** El destinatario pulsó "Entendido": el comunicado pasa al archivo. */
+  archivedAt: timestamp("archivedAt"),
   /** Reintentos de la cola (máx. 3). */
   attempts: integer("attempts").default(0).notNull(),
   /** Lock de la cola: si un worker cae, expira y otro lo retoma. */

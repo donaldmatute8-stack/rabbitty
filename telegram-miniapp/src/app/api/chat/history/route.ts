@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { messageReactions, messageHides, conversationMembers } from '@/db/schema';
-import { conversations, messages, users, ownedBusinesses } from '@/db/schema';
+import { conversations, messages, users, ownedBusinesses, bunzyDeliveries } from '@/db/schema';
 import { and, eq, inArray, isNull, ne, or, asc, desc, sql, type SQL } from 'drizzle-orm';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 import { getOwnedBusinessIds, resolveAccessForConversation, isBusinessOpen } from '@/lib/chat';
@@ -206,6 +206,41 @@ export async function GET(req: Request) {
         }
       }
     } catch { /* si falla, se muestran (mejor que perder mensajes) */ }
+
+    // ── Bunzy Connect: estado del comunicado para ESTA persona ──
+    // La tarjeta oficial necesita saber si ya se archivó ("Entendido"). El
+    // estado vive en bunzyDeliveries, no en el texto del mensaje.
+    try {
+      const bunzyIds = history
+        .filter((m) => m.type === 'BUNZY_UPDATE' && m.id)
+        .map((m) => m.id);
+      if (bunzyIds.length > 0) {
+        const rows = await db
+          .select({
+            id: bunzyDeliveries.id,
+            messageId: bunzyDeliveries.messageId,
+            archivedAt: bunzyDeliveries.archivedAt,
+            readAt: bunzyDeliveries.readAt,
+          })
+          .from(bunzyDeliveries)
+          .where(inArray(bunzyDeliveries.messageId, bunzyIds));
+        const byMessage = new Map(rows.map((r) => [r.messageId, r]));
+        history = history.map((m) => {
+          if (m.type !== 'BUNZY_UPDATE') return m;
+          const d = byMessage.get(m.id);
+          if (!d) return m;
+          return {
+            ...m,
+            metadata: {
+              ...((m.metadata as Record<string, unknown>) || {}),
+              deliveryId: d.id,
+              archivedAt: d.archivedAt,
+              readAt: d.readAt,
+            },
+          };
+        });
+      }
+    } catch { /* best-effort: si falla, la tarjeta se muestra sin estado */ }
 
     const latestMessage = history.length > 0 ? history[history.length - 1] : null;
     const nextCursor = latestMessage
