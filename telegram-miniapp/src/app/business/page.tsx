@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import BusinessSetupForm from '@/features/business/BusinessSetupForm';
+import { BusinessWebGate } from '@/features/business/BusinessWebGate';
 import MobileAffiliateDashboard from '@/features/business/MobileAffiliateDashboard';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { PlatformBridge } from '@/lib/platform';
@@ -13,6 +14,8 @@ export default function BusinessPage() {
   const [business, setBusiness] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [showLocalForm, setShowLocalForm] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchBusiness = async () => {
     try {
@@ -75,9 +78,23 @@ export default function BusinessPage() {
     );
   }
 
-  // Flow 1: Create Business (Onboarding)
+  // Flow 1: alta de negocio. La web es el canal oficial; el formulario local
+  // queda como alternativa secundaria (showLocalForm).
   if (business === null) {
-    return <BusinessSetupForm onSubmit={handleCreateBusiness} isLoading={submitting} />;
+    if (showLocalForm) {
+      return <BusinessSetupForm onSubmit={handleCreateBusiness} isLoading={submitting} />;
+    }
+    return (
+      <BusinessWebGate
+        onLocal={() => setShowLocalForm(true)}
+        refreshing={refreshing}
+        onRefresh={async () => {
+          setRefreshing(true);
+          await fetchBusiness();
+          setRefreshing(false);
+        }}
+      />
+    );
   }
 
   // Flow 2: Active Business Dashboard (Airbnb-Style Mobile View)
