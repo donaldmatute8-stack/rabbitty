@@ -743,6 +743,60 @@ export const memoryCandidates = pgTable("memoryCandidates", {
 });
 
 /**
+ * 📣 Bunzy Connect — Broadcasts institucionales
+ * Contenido editorial (producto, tips, noticias, avisos) que se distribuye al
+ * hilo oficial de Bunzy de cada destinatario. NUNCA es una respuesta de IA.
+ */
+export const bunzyBroadcasts = pgTable("bunzyBroadcasts", {
+  id: id(),
+  /** Clave de idempotencia editorial: reintentar el mismo payload no duplica. */
+  requestKey: text("requestKey").unique(),
+  category: text("category").notNull(), // PRODUCT | TIP | NEWS | SYSTEM
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  ctaLabel: text("ctaLabel"),
+  ctaUrl: text("ctaUrl"),
+  mediaKey: text("mediaKey"),
+  audienceScope: text("audienceScope").notNull(), // BUSINESS | ALL_AFFILIATES
+  audienceFilter: jsonb("audienceFilter"),
+  status: text("status").default("DRAFT").notNull(), // DRAFT | PUBLISHED | FAILED
+  contentHash: text("contentHash").notNull(),
+  createdBy: text("createdBy").notNull(),
+  publishedAt: timestamp("publishedAt"),
+  ...timestamps,
+}, (table) => [
+  index("bunzy_broadcasts_status_idx").on(table.status, table.createdAt),
+]);
+
+/**
+ * 📬 Bunzy Connect — Deliveries por destinatario
+ * Una fila por broadcast+destinatario. El UNIQUE es la garantía de que un
+ * reintento no vuelve a entregar el mismo broadcast.
+ * Estados: PENDING → CREATED → PUBLISHED → READ · FAILED.
+ */
+export const bunzyDeliveries = pgTable("bunzyDeliveries", {
+  id: id(),
+  broadcastId: uuid("broadcastId").notNull().references(() => bunzyBroadcasts.id, { onDelete: "cascade" }),
+  recipientType: text("recipientType").notNull(), // BUSINESS | USER
+  recipientId: text("recipientId").notNull(),
+  conversationId: text("conversationId").notNull(),
+  messageId: uuid("messageId"),
+  status: text("status").default("PENDING").notNull(), // PENDING | CREATED | PUBLISHED | READ | FAILED
+  error: text("error"),
+  deliveredAt: timestamp("deliveredAt"),
+  readAt: timestamp("readAt"),
+  clickedAt: timestamp("clickedAt"),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex("bunzy_deliveries_broadcast_recipient_uidx").on(
+    table.broadcastId,
+    table.recipientType,
+    table.recipientId,
+  ),
+  index("bunzy_deliveries_recipient_idx").on(table.recipientType, table.recipientId),
+]);
+
+/**
  * 🎯 Affiliate Growth Campaigns
  * Modelo persistente y financiero de campañas comerciales activadas por el afiliado.
  */

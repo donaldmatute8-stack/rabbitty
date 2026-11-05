@@ -97,14 +97,16 @@ export async function GET(req: Request) {
         let otherName = 'Usuario';
         let otherAvatar: string | null = null;
         let isBot = false;
+        let isOfficial = false;
 
         if ((conv.kind ?? 'DIRECT') === 'GROUP') {
           otherName = conv.name || 'Grupo';
         }
 
-        if (otherId === 'bot') {
-          otherName = 'Bunzy 🐰';
-          isBot = true;
+        if (otherId === 'bot' || otherId === 'bunzy') {
+          otherName = otherId === 'bunzy' ? 'Bunzy · Oficial' : 'Bunzy 🐰';
+          isBot = otherId === 'bot';
+          isOfficial = otherId === 'bunzy';
         } else {
           const business = await db.query.ownedBusinesses.findFirst({
             where: or(eq(ownedBusinesses.id, otherId), eq(ownedBusinesses.slug, otherId)),
@@ -133,6 +135,7 @@ export async function GET(req: Request) {
           targetName: otherName,
           targetAvatar: otherAvatar,
           isBot,
+          isOfficial,
           isBusinessInbox: isBusinessContext,
           kind: conv.kind ?? 'DIRECT',
           audience: conv.audience ?? 'BUSINESS',

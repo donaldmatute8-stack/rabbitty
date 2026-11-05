@@ -98,11 +98,13 @@ export async function GET(req: Request) {
     let targetCategory: string | null = null;
     let targetBusinessId: string | null = null;
 
-    if (otherId === 'bot') {
-      targetName = 'Bunzy 🐰';
+    if (otherId === 'bot' || otherId === 'bunzy') {
+      targetName = otherId === 'bunzy' ? 'Bunzy · Oficial' : 'Bunzy 🐰';
       targetRole = 'BOT';
-      targetUsername = 'bunzy_concierge_bot';
-      targetBio = 'Concierge oficial de Rabbitty. Asistente con IA para descubrir ofertas, reservar mesas y maximizar recompensas Bunz.';
+      targetUsername = otherId === 'bunzy' ? 'bunzy_oficial' : 'bunzy_concierge_bot';
+      targetBio = otherId === 'bunzy'
+        ? 'Canal oficial de Rabbitty para tu negocio: actualizaciones, tips y avisos.'
+        : 'Concierge oficial de Rabbitty. Asistente con IA para descubrir ofertas, reservar mesas y maximizar recompensas Bunz.';
     } else {
       const business = await db.query.ownedBusinesses.findFirst({
         where: or(eq(ownedBusinesses.id, otherId), eq(ownedBusinesses.slug, otherId)),
@@ -217,7 +219,7 @@ export async function GET(req: Request) {
 
     // H21: 'online' real — presenceSession abierta del par con ping vivo (≤5 min)
     let partnerOnline: boolean | null = null;
-    if (otherId && otherId !== 'bot') {
+    if (otherId && otherId !== 'bot' && otherId !== 'bunzy') {
       try {
         const { presenceSessions } = await import('@/db/schema');
         const openRow = await db.query.presenceSessions.findFirst({

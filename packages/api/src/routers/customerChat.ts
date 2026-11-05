@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { eq, ne, and, or, not, inArray, sql, asc, desc, type SQL } from "drizzle-orm";
+import { eq, ne, and, or, not, inArray, isNull, sql, asc, desc, type SQL } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
-import { conversations, messages, ownedBusinesses, users, chatEventOutbox } from "@rabbitty/database-core";
+import { bunzyDeliveries, conversations, messages, ownedBusinesses, users, chatEventOutbox } from "@rabbitty/database-core";
 import type { Context } from "../trpc";
 
 export interface BusinessRef {
@@ -163,17 +163,26 @@ export const customerChatRouter = router({
           .where(eq(users.id, customerId));
 
         const [last] = await ctx.coreDb
-          .select({ content: messages.content, createdAt: messages.createdAt, senderId: messages.senderId })
+          .select({
+            content: messages.content,
+            createdAt: messages.createdAt,
+            senderId: messages.senderId,
+            metadata: messages.metadata,
+          })
           .from(messages)
           .where(eq(messages.conversationId, conv.id))
           .orderBy(desc(messages.createdAt))
           .limit(1);
 
-        const customerName = customer
-          ? `${customer.firstName ?? ""} ${customer.lastName ?? ""}`.trim() ||
-            customer.username ||
-            "Cliente"
-          : "Cliente";
+        const isBunzy = customerId === 'bunzy';
+        const lastMeta = (last?.metadata ?? null) as { title?: string } | null;
+        const customerName = isBunzy
+          ? 'Bunzy'
+          : customer
+            ? `${customer.firstName ?? ""} ${customer.lastName ?? ""}`.trim() ||
+              customer.username ||
+              "Cliente"
+            : "Cliente";
 
         return {
           id: conv.id,
@@ -181,10 +190,11 @@ export const customerChatRouter = router({
           businessName: nameById.get(businessId) ?? "Mi Negocio",
           customerId,
           customerName,
-          lastMessage: last?.content ?? "",
+          lastMessage: isBunzy && lastMeta?.title ? lastMeta.title : last?.content ?? "",
           lastMessageSenderId: last?.senderId ?? null,
           lastMessageAt: last?.createdAt ?? conv.updatedAt,
           // H-CHAT-TRUTH: la UI deja de depender de localStorage para el badge.
+          isOfficial: isBunzy,
           unread: Number(unseenRow?.n ?? 0),
           messageTotal: Number(messageTotalRow?.n ?? 0),
         };
@@ -268,6 +278,17 @@ export const customerChatRouter = router({
           sql`"readAt" IS NULL`
         ))
         .returning({ id: messages.id });
+
+      // Bunzy Connect (C0): sincroniza el estado de lectura del delivery con el
+      // mark-read real del chat. No inventa lectura: solo cuando el negocio lee.
+      await ctx.coreDb
+        .update(bunzyDeliveries)
+        .set({ status: "READ", readAt: new Date(), updatedAt: new Date() })
+        .where(and(
+          eq(bunzyDeliveries.conversationId, input.conversationId),
+          isNull(bunzyDeliveries.readAt),
+        ))
+        .catch(() => undefined);
 
       return { ok: true, markedCount: marked.length };
     }),

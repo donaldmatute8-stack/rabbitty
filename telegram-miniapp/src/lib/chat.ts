@@ -152,7 +152,7 @@ export interface TelegramRecipient {
 }
 
 export async function resolveTelegramRecipient(otherId: string): Promise<TelegramRecipient> {
-  if (!otherId || otherId === 'bot') {
+  if (!otherId || otherId === 'bot' || otherId === 'bunzy') {
     return { userId: null, telegramId: null, displayName: 'Bunzy' };
   }
   const business = await db.query.ownedBusinesses.findFirst({

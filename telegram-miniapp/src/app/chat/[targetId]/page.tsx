@@ -9,6 +9,7 @@ import { PlatformBridge } from '@/lib/platform';
 import { cursorFromMessage } from '@/lib/chatCursor';
 import { useTheme } from '@/contexts/ThemeContext';
 import { BottomSheet } from '@/components/ui/BottomSheet';
+import { BunzyUpdateCard } from '@/components/chat/BunzyUpdateCard';
 import { QRCodeSVG } from 'qrcode.react';
 import { useToast } from '@/contexts/ToastContext';
 import { Bell, BellOff, Search, Ban, MoreHorizontal, Store, Bot, ExternalLink, Zap } from 'lucide-react';
@@ -3023,6 +3024,9 @@ export default function ChatRoomPage() {
             </div>
           )}
           {messages.map((msg, idx) => {
+            if (msg.type === 'BUNZY_UPDATE') {
+              return <BunzyUpdateCard key={msg.id || idx} message={msg} />;
+            }
             const isMe = msg.senderId === myParticipantId;
             const isSelected = selectedIds.includes(msg.id);
             const prevMsg = idx > 0 ? messages[idx - 1] : null;

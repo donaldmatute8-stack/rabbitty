@@ -150,7 +150,7 @@ export async function POST(req: Request) {
 
     // userId REAL del destinatario para el outbox (el worker NOTIFICA a users).
     // El par puede ser businessId ⇒ el userId es el ownerId.
-    const recipientForOutbox = otherId === 'bot'
+    const recipientForOutbox = otherId === 'bot' || otherId === 'bunzy'
       ? null
       : await resolveTelegramRecipient(otherId).catch(() => null);
 
@@ -161,9 +161,6 @@ export async function POST(req: Request) {
     //   (c) la notificación del chat se registra EN la MISMA tx (outbox
     //       transaccional). Publicación at-least-once por el worker — el
     //       `void fire-and-forget` prohibido (mismo patrón que pagos, D-13).
-    let userMessage: typeof messages.$inferSelect;
-    let replayed = false;
-
     type SendTx = { userMessage: typeof messages.$inferSelect; replayed?: boolean };
     const txResult = await db.transaction(async (tx): Promise<SendTx> => {
       const inserted = await tx
@@ -267,8 +264,8 @@ export async function POST(req: Request) {
       return { userMessage: lastMessage, replayed: false };
     });
 
-    userMessage = txResult.userMessage;
-    replayed = Boolean(txResult.replayed);
+    const userMessage = txResult.userMessage;
+    const replayed = Boolean(txResult.replayed);
 
     // Publicación best-effort del evento (no bloquea la respuesta). Si falla,
     // el cron del outbox lo reintenta: el mensaje ya está persistido.

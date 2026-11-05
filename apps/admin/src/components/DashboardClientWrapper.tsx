@@ -1,5 +1,6 @@
 "use client";
 
+import { BunzyUpdateCard } from './BunzyUpdateCard';
 import React, { useState, createContext, useContext, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { AdminSidebar } from "./AdminSidebar";
@@ -678,6 +679,9 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                         )}
 
                         {thread?.messages.map((msg) => {
+                          if (msg.type === 'BUNZY_UPDATE') {
+                            return <BunzyUpdateCard key={msg.id} message={msg} />;
+                          }
                           const mine = msg.senderId === thread.businessId;
                           return (
                             <div key={msg.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
