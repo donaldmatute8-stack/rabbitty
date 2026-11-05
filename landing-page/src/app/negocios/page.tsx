@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -21,6 +21,7 @@ import {
   ArrowRight,
   Check,
   CheckCircle2,
+  CornerDownLeft,
   ExternalLink,
   Loader2,
   Mail,
@@ -313,13 +314,6 @@ export default function NegociosPage() {
     back();
   };
 
-  const handleEnter = (e: ReactKeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleContinue();
-    }
-  };
-
   const submit = async () => {
     if (!stepValid[4] || submitting) return;
     setSubmitting(true);
@@ -602,14 +596,14 @@ export default function NegociosPage() {
                             : undefined
                         }
                       >
-                        <input
+                        <InputWithEnter
                           autoFocus
                           value={data.businessName}
-                          onChange={(e) => update('businessName', e.target.value.slice(0, 80))}
-                          onKeyDown={handleEnter}
+                          onChange={(v) => update('businessName', v.slice(0, 80))}
+                          onAction={handleContinue}
+                          disabled={!dataStepValid[0]}
                           placeholder="Ej. Taquería El Compa"
                           autoComplete="organization"
-                          className={inputClass}
                         />
                       </Field>
                     )}
@@ -624,14 +618,14 @@ export default function NegociosPage() {
                             : undefined
                         }
                       >
-                        <input
+                        <InputWithEnter
                           autoFocus
                           value={data.contactName}
-                          onChange={(e) => update('contactName', e.target.value.slice(0, 60))}
-                          onKeyDown={handleEnter}
+                          onChange={(v) => update('contactName', v.slice(0, 60))}
+                          onAction={handleContinue}
+                          disabled={!dataStepValid[1]}
                           placeholder="Nombre del responsable"
                           autoComplete="name"
-                          className={inputClass}
                         />
                       </Field>
                     )}
@@ -642,16 +636,16 @@ export default function NegociosPage() {
                         icon={<Mail className="h-3.5 w-3.5" />}
                         hint={data.email && !emailOk ? 'Revisa el correo' : undefined}
                       >
-                        <input
+                        <InputWithEnter
                           autoFocus
                           value={data.email}
-                          onChange={(e) => update('email', e.target.value.slice(0, 160))}
-                          onKeyDown={handleEnter}
+                          onChange={(v) => update('email', v.slice(0, 160))}
+                          onAction={handleContinue}
+                          disabled={!dataStepValid[2]}
                           placeholder="tu@correo.com"
                           type="email"
                           inputMode="email"
                           autoComplete="email"
-                          className={inputClass}
                         />
                       </Field>
                     )}
@@ -664,16 +658,17 @@ export default function NegociosPage() {
                       >
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-bold text-gray-500 dark:text-white/50">+52</span>
-                          <input
+                          <InputWithEnter
                             autoFocus
+                            className="flex-1"
                             value={data.phone}
-                            onChange={(e) => update('phone', formatPhone(e.target.value))}
-                            onKeyDown={handleEnter}
+                            onChange={(v) => update('phone', formatPhone(v))}
+                            onAction={handleContinue}
+                            disabled={!dataStepValid[3]}
                             placeholder="322 123 4567"
                             type="tel"
                             inputMode="tel"
                             autoComplete="tel-national"
-                            className={`${inputClass} flex-1`}
                           />
                         </div>
                       </Field>
@@ -689,27 +684,27 @@ export default function NegociosPage() {
                             : undefined
                         }
                       >
-                        <input
+                        <InputWithEnter
                           autoFocus
                           value={data.address}
-                          onChange={(e) => update('address', e.target.value.slice(0, 160))}
-                          onKeyDown={handleEnter}
+                          onChange={(v) => update('address', v.slice(0, 160))}
+                          onAction={handleContinue}
+                          disabled={!dataStepValid[4]}
                           placeholder="Ej. Av. Insurgentes 123, Guadalajara, Jalisco"
                           autoComplete="street-address"
-                          className={inputClass}
                         />
                       </Field>
                     )}
 
                     {dataStep === 5 && (
                       <Field label="¿Cómo nos conociste?" hint="Opcional">
-                        <input
+                        <InputWithEnter
                           autoFocus
                           value={data.referral}
-                          onChange={(e) => update('referral', e.target.value.slice(0, 120))}
-                          onKeyDown={handleEnter}
+                          onChange={(v) => update('referral', v.slice(0, 120))}
+                          onAction={handleContinue}
+                          disabled={false}
                           placeholder="Instagram, un amigo, Google…"
-                          className={inputClass}
                         />
                       </Field>
                     )}
@@ -751,9 +746,11 @@ export default function NegociosPage() {
                   </motion.div>
                 </AnimatePresence>
 
-                <p className="m-0 mt-3 text-center text-[10px] text-gray-400 dark:text-white/30">
-                  {dataStep < 6 ? 'Presiona Enter para continuar' : 'La ubicación es opcional'}
-                </p>
+                {dataStep === 6 && (
+                  <p className="m-0 mt-3 text-center text-[10px] text-gray-400 dark:text-white/30">
+                    La ubicación es opcional
+                  </p>
+                )}
               </div>
             )}
 
@@ -954,6 +951,61 @@ export default function NegociosPage() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function InputWithEnter({
+  value,
+  onChange,
+  onAction,
+  disabled,
+  placeholder,
+  type = 'text',
+  inputMode,
+  autoComplete,
+  autoFocus,
+  className = '',
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onAction: () => void;
+  disabled?: boolean;
+  placeholder?: string;
+  type?: 'text' | 'email' | 'tel';
+  inputMode?: 'text' | 'email' | 'tel';
+  autoComplete?: string;
+  autoFocus?: boolean;
+  className?: string;
+}) {
+  return (
+    <div className={`relative ${className}`}>
+      <input
+        autoFocus={autoFocus}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            onAction();
+          }
+        }}
+        placeholder={placeholder}
+        type={type}
+        inputMode={inputMode}
+        autoComplete={autoComplete}
+        style={{ paddingRight: 96 }}
+        className={inputClass}
+      />
+      <button
+        type="button"
+        onClick={onAction}
+        disabled={disabled}
+        aria-label="Continuar (Enter)"
+        className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-xl bg-pink-500 px-2 py-1.5 text-[9px] font-black tracking-wider text-white shadow-sm transition-colors hover:bg-pink-400 disabled:cursor-not-allowed disabled:opacity-35"
+      >
+        <CornerDownLeft className="h-3 w-3" /> ENTER
+      </button>
     </div>
   );
 }
