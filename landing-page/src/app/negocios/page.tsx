@@ -165,8 +165,6 @@ const DATA_BUBBLES = [
 
 const BUSINESS_LOGIN_URL =
   process.env.NEXT_PUBLIC_BUSINESS_LOGIN_URL || 'https://admin.rabbitty.me/login';
-const APP_URL =
-  process.env.NEXT_PUBLIC_BUSINESS_APP_URL || 'https://app.rabbitty.me/business?intent=affiliate';
 
 interface FormData {
   niche: string;
@@ -539,10 +537,10 @@ export default function NegociosPage() {
               </a>
             </div>
             <p className="m-0 mt-3 text-[11px] text-white/40">
-              También puedes{' '}
-              <a href={APP_URL} className="text-pink-400 underline underline-offset-2">
-                hacerlo desde la app
-              </a>
+              Cuando te aprobemos, puedes operar también desde la app.{' '}
+              <Link href="/download" className="text-pink-400 underline underline-offset-2">
+                Descargarla
+              </Link>
               .
             </p>
 

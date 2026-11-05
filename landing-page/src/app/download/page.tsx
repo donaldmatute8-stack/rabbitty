@@ -19,7 +19,8 @@ function DownloadContent() {
 
   // Enlace iOS: Si existe en ENV usa el real, si no usa fallback seguro o TestFlight link
   // Al publicar en App Store, solo cambia NEXT_PUBLIC_IOS_APP_URL (el texto del botón se adapta solo).
-  const IOS_APP_URL = process.env.NEXT_PUBLIC_IOS_APP_URL || '/support';
+  const IOS_APP_URL =
+    process.env.NEXT_PUBLIC_IOS_APP_URL || 'https://testflight.apple.com/join/HyY1eVSU';
   const IS_TESTFLIGHT = IOS_APP_URL.includes('testflight.apple.com');
   const ANDROID_APK_URL = process.env.NEXT_PUBLIC_ANDROID_APP_URL || 'https://rabbitty.me/rabbitty-app.apk';
   // Telegram exige A-Za-z0-9_- en startapp — sanitiza el ref (slug o id)

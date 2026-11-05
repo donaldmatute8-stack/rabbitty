@@ -11,7 +11,8 @@ import { NextRequest, NextResponse } from 'next/server';
 export function GET(req: NextRequest) {
   const ua = req.headers.get('user-agent') || '';
   const isIOS = /iPad|iPhone|iPod/i.test(ua);
-  const iosUrl = process.env.NEXT_PUBLIC_IOS_APP_URL;
+  const iosUrl =
+    process.env.NEXT_PUBLIC_IOS_APP_URL || 'https://testflight.apple.com/join/HyY1eVSU';
 
   if (isIOS && iosUrl) {
     return NextResponse.redirect(iosUrl, 302);
