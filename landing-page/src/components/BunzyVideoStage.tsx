@@ -16,7 +16,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Play, RotateCcw } from 'lucide-react';
+import { Play, RotateCcw } from 'lucide-react';
 
 export interface BunzyVideoStageProps {
   /** Ruta al video mp4 (ej: /videos/bunzy/bunzy-1-hi.mp4). */
@@ -207,11 +207,6 @@ export function BunzyVideoStage({
             )}
           </AnimatePresence>
 
-          {/* Badge Bunzy */}
-          <div className="absolute bottom-2.5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-pink-500/40 bg-black/75 px-3 py-1 shadow-md backdrop-blur-md">
-            <Sparkles className="h-3 w-3 animate-pulse text-pink-400" />
-            <span className="text-[10px] font-black uppercase tracking-wider text-pink-200">Bunzy</span>
-          </div>
         </div>
       </motion.button>
 
