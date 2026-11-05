@@ -269,6 +269,26 @@ export default function LoginPage() {
   };
 
   const handleQuickLogin = async () => {
+    // Solo dev local: entra como el tenant demo para probar el re-onboarding
+    // (Demo Replay Café) sin pasar por el correo. Si falla, cae al e2e.
+    try {
+      const res = await fetch(resolveApiUrl("/api/auth/otp/send"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input: "tester@rabbitty.me" }),
+      });
+      const data = await res.json();
+      if (data?.success) {
+        await signIn("email-token", {
+          email: "tester@rabbitty.me",
+          token: data.otpCode || "123456",
+          callbackUrl: "/onboarding",
+        });
+        return;
+      }
+    } catch {
+      // sigue el fallback
+    }
     await signIn("test-e2e", { password: "test", callbackUrl: "/" });
   };
 
@@ -618,7 +638,7 @@ export default function LoginPage() {
                 onClick={handleQuickLogin}
                 className="flex h-10 w-full items-center justify-center rounded-xl border border-pink-500/20 bg-pink-500/10 text-pink-400 font-bold hover:bg-pink-500/20 hover:text-white transition-all cursor-pointer text-xs shadow-[0_0_15px_rgba(236,72,153,0.05)]"
               >
-                Acceso Rápido (Bypass)
+                Acceso Rápido · tester@rabbitty.me
               </button>
             </div>
           )}
