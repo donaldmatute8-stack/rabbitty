@@ -78,8 +78,9 @@ if (!data) fail(1, `Respuesta no-JSON (HTTP ${res.status})`);
 if (!data.ok) fail(1, `Seed/semantic FAILED: ${data.error || JSON.stringify(data).slice(0, 240)}`);
 
 ok(`Seed idempotente: ${data.seeded} chunks nuevos · total ${data.total} (${data.withEmbedding} con embedding)`);
-if (data.top) {
-  ok(`Top-1 semántico: ${data.top.sourceId} · score ${data.top.score}`);
+const top = data.top ?? data.semanticCheck?.top ?? null;
+if (top) {
+  ok(`Top-1 semántico: ${top.sourceId} · score ${top.score}`);
 } else {
   fail(1, 'La certificación semántica no devolvió top hit.');
 }
