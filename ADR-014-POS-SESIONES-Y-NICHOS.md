@@ -588,6 +588,23 @@ rabbitty.me
 - Como `onboardingCompletedAt` se marcó al crear, **no** pasa por el
   re-onboarding de tenants existentes; entra directo a su panel.
 
+**Aviso no bloqueante en el POS**
+
+Si el negocio tiene el re-onboarding pendiente, el POS muestra un **banner
+informativo una sola vez por dispositivo** ("Configuración de tu negocio" →
+Revisar). No bloquea cobro, turno ni terminal; el gate completo sigue viviendo
+en el dashboard. El aviso se apaga con `localStorage` al revisarlo o cerrarlo.
+
+Los tres tenants iniciales: **Ka13 y Bull Box** se marcaron completos
+(`onboardingCompletedAt = NOW()`); **626 Café** queda pendiente para que lo vea
+una vez. Para repetirlo:
+
+```sql
+UPDATE "ownedBusinesses"
+SET "onboardingCompletedAt" = NULL
+WHERE id = 'fb7f4847-920f-4482-8ae3-c810a20e75ad';
+```
+
 **Archivos**
 
 | Archivo | Rol |

@@ -176,6 +176,26 @@ export const posTerminalsRouter = router({
         }),
       );
 
+      // Aviso informativo (no bloqueante): el negocio ya opera pero aún no
+      // revisó el onboarding nuevo. Solo aplica a negocios APPROVED/VERIFIED.
+      const businessId = ctx.posAuth?.businessId ?? null;
+      let onboardingPending = false;
+      if (businessId) {
+        const [biz] = await ctx.coreDb
+          .select({
+            status: ownedBusinesses.status,
+            completedAt: ownedBusinesses.onboardingCompletedAt,
+          })
+          .from(ownedBusinesses)
+          .where(eq(ownedBusinesses.id, businessId))
+          .limit(1);
+        onboardingPending = Boolean(
+          biz &&
+            (biz.status === "APPROVED" || biz.status === "VERIFIED") &&
+            !biz.completedAt,
+        );
+      }
+
       return {
         mode: "terminal" as const,
         // Rol del empleado en turno. Sin turno no hay rol (la UI muestra el gate).
@@ -183,8 +203,9 @@ export const posTerminalsRouter = router({
         permissions: posPermissionsOf(ctx),
         // La terminal SIEMPRE aplica la matriz; el panel admin solo con el flag.
         enforceRole: true,
+        onboardingPending,
         branchId: ctx.branchId,
-        businessId: ctx.posAuth?.businessId ?? null,
+        businessId,
         terminalName: ctx.posAuth?.terminalName ?? null,
         branches: branch ? [branch] : [],
       };
@@ -200,6 +221,8 @@ export const posTerminalsRouter = router({
         role: resolvePosRole(ctx),
         permissions: posPermissionsOf(ctx),
         enforceRole: process.env.POS_ROLE_ENFORCEMENT === "1",
+        // En admin el POS consulta admin.onboardingStatus (más completo).
+        onboardingPending: false,
         branchId: ctx.branchId,
         businessId: null,
         terminalName: null,

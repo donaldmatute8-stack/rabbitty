@@ -417,6 +417,36 @@ export default function PosPage() {
     enabled: isTerminalDevice,
   });
 
+  // Aviso informativo de re-onboarding (no bloquea el POS). Una sola vez por
+  // dispositivo; el dueño puede revisarlo o descartarlo.
+  const { data: posOnboardingStatus } = trpc.admin.onboardingStatus.useQuery(undefined, {
+    retry: false,
+    enabled: !isTerminalDevice,
+  });
+  const [onboardingBannerSeen, setOnboardingBannerSeen] = useState(false);
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setOnboardingBannerSeen(
+        localStorage.getItem("rabbitty_pos_onboarding_banner_seen") === "1",
+      );
+    } catch {
+      /* modo privado */
+    }
+  }, []);
+  const onboardingPending = isTerminalDevice
+    ? posSession?.onboardingPending === true
+    : posOnboardingStatus?.pending === true;
+  const showOnboardingBanner = onboardingPending && !onboardingBannerSeen;
+  const dismissOnboardingBanner = () => {
+    setOnboardingBannerSeen(true);
+    try {
+      localStorage.setItem("rabbitty_pos_onboarding_banner_seen", "1");
+    } catch {
+      /* noop */
+    }
+  };
+
   // ── Permisos por rol (servidor y UI comparten la misma matriz) ──
   const posRole = operatorStatus?.role ?? posSession?.role ?? null;
   const posPermissions = (operatorStatus?.permissions ?? posSession?.permissions ?? []) as PosPermission[];
@@ -1730,6 +1760,35 @@ export default function PosPage() {
           <PosClock />
         </div>
       </header>
+
+      {showOnboardingBanner && (
+        <div className="mx-3 mt-2 flex items-start gap-2.5 rounded-2xl border border-pink-500/30 bg-pink-500/10 px-3 py-2.5">
+          <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-pink-300" />
+          <div className="min-w-0 flex-1">
+            <p className="m-0 text-[10px] font-black uppercase tracking-wider text-pink-300">
+              Configuración de tu negocio
+            </p>
+            <p className="m-0 text-[11px] leading-snug text-gray-300">
+              Tu operación ya está inyectada. Revisa y confirma tu giro para dejar los módulos al día.
+            </p>
+          </div>
+          <Link
+            href="/onboarding"
+            onClick={dismissOnboardingBanner}
+            className="shrink-0 rounded-xl bg-pink-500 px-3 py-1.5 text-[10px] font-black text-white hover:bg-pink-400"
+          >
+            Revisar
+          </Link>
+          <button
+            type="button"
+            onClick={dismissOnboardingBanner}
+            aria-label="Cerrar aviso"
+            className="shrink-0 rounded-lg p-1 text-gray-400 hover:text-white"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* ── Banner: Llegada de Rabbitter (CUSTOMER_ARRIVAL del motor de proximidad) ── */}
       {arrivalBanner && (
