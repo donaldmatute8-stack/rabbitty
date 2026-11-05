@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { desc, eq, inArray, sql } from "drizzle-orm";
+import { desc, eq, gte, inArray, or, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { router, godAdminProcedure } from "../trpc";
-import { bunzyBroadcasts, bunzyDeliveries, ownedBusinesses } from "@rabbitty/database-core";
+import { bunzyBroadcasts, bunzyDeliveries, bunzyPreferences, bunzySeries, ownedBusinesses } from "@rabbitty/database-core";
 import {
   BUNZY_CATEGORIES,
   draftBroadcast,
@@ -117,6 +117,8 @@ export const bunzyConnectRouter = router({
         total: sql<number>`count(*)::int`,
         published: sql<number>`count(*) filter (where ${bunzyDeliveries.status} in ('PUBLISHED','READ'))::int`,
         read: sql<number>`count(*) filter (where ${bunzyDeliveries.status} = 'READ')::int`,
+        clicked: sql<number>`count(*) filter (where ${bunzyDeliveries.clickedAt} is not null)::int`,
+        skipped: sql<number>`count(*) filter (where ${bunzyDeliveries.status} = 'SKIPPED')::int`,
         failed: sql<number>`count(*) filter (where ${bunzyDeliveries.status} = 'FAILED')::int`,
       })
       .from(bunzyDeliveries)
@@ -143,6 +145,8 @@ export const bunzyConnectRouter = router({
       total: byId.get(r.id)?.total ?? 0,
       published: byId.get(r.id)?.published ?? 0,
       read: byId.get(r.id)?.read ?? 0,
+      clicked: byId.get(r.id)?.clicked ?? 0,
+      skipped: byId.get(r.id)?.skipped ?? 0,
       failed: byId.get(r.id)?.failed ?? 0,
     }));
   }),
@@ -184,6 +188,93 @@ export const bunzyConnectRouter = router({
         );
       }
       return { scheduled: results.length, results };
+    }),
+
+  analytics: godAdminProcedure.query(async ({ ctx }) => {
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const categories = await ctx.coreDb
+      .select({
+        category: bunzyBroadcasts.category,
+        sent: sql<number>`count(*)::int`,
+        published: sql<number>`count(*) filter (where ${bunzyDeliveries.status} in ('PUBLISHED','READ'))::int`,
+        read: sql<number>`count(*) filter (where ${bunzyDeliveries.status} = 'READ')::int`,
+        clicked: sql<number>`count(*) filter (where ${bunzyDeliveries.clickedAt} is not null)::int`,
+        skipped: sql<number>`count(*) filter (where ${bunzyDeliveries.status} = 'SKIPPED')::int`,
+        failed: sql<number>`count(*) filter (where ${bunzyDeliveries.status} = 'FAILED')::int`,
+      })
+      .from(bunzyDeliveries)
+      .innerJoin(bunzyBroadcasts, eq(bunzyDeliveries.broadcastId, bunzyBroadcasts.id))
+      .where(gte(bunzyBroadcasts.createdAt, since))
+      .groupBy(bunzyBroadcasts.category);
+
+    const [optOuts] = await ctx.coreDb
+      .select({ n: sql<number>`count(*)::int` })
+      .from(bunzyPreferences)
+      .where(or(eq(bunzyPreferences.product, false), eq(bunzyPreferences.tips, false), eq(bunzyPreferences.news, false)));
+
+    return { categories, optOuts: Number(optOuts?.n ?? 0) };
+  }),
+
+  series: godAdminProcedure.query(async ({ ctx }) =>
+    ctx.coreDb
+      .select()
+      .from(bunzySeries)
+      .orderBy(desc(bunzySeries.active), bunzySeries.nextRunAt)
+      .limit(50),
+  ),
+
+  createSeries: godAdminProcedure
+    .input(
+      z.object({
+        name: z.string().min(3).max(80),
+        audienceScope: z.enum(["BUSINESS", "ALL_AFFILIATES", "ALL_RABBITTERS"]),
+        businessId: z.string().min(1).optional(),
+        category: z.enum(["TIP", "NEWS", "SYSTEM"]),
+        cadenceDays: z.number().int().min(1).max(90),
+        title: z.string().min(3).max(120),
+        body: z.string().min(10).max(4000),
+        ctaLabel: z.string().max(40).optional().nullable(),
+        ctaUrl: z.string().url().optional().nullable(),
+        startAt: z.string().datetime().optional(),
+        confirmMass: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (input.audienceScope !== "BUSINESS") {
+        assertMassAllowed(input.audienceScope, input.confirmMass);
+      } else if (!input.businessId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Falta businessId para una serie de un negocio" });
+      }
+
+      const [created] = await ctx.coreDb
+        .insert(bunzySeries)
+        .values({
+          name: input.name,
+          audienceScope: input.audienceScope,
+          businessId: input.businessId ?? null,
+          category: input.category,
+          cadenceDays: input.cadenceDays,
+          nextRunAt: input.startAt ? new Date(input.startAt) : new Date(Date.now() + 24 * 60 * 60 * 1000),
+          title: input.title,
+          body: input.body,
+          ctaLabel: input.ctaLabel ?? null,
+          ctaUrl: input.ctaUrl ?? null,
+          active: true,
+          createdBy: String(ctx.userId || "god"),
+        })
+        .returning();
+
+      return created;
+    }),
+
+  toggleSeries: godAdminProcedure
+    .input(z.object({ id: z.string().uuid(), active: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.coreDb
+        .update(bunzySeries)
+        .set({ active: input.active, updatedAt: new Date() })
+        .where(eq(bunzySeries.id, input.id));
+      return { ok: true };
     }),
 
   evidence: godAdminProcedure

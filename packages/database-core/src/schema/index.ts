@@ -814,6 +814,30 @@ export const bunzyPreferences = pgTable("bunzyPreferences", {
 ]);
 
 /**
+ * 🔁 Bunzy Connect — Series recurrentes (estrategias)
+ * Plantillas editoriales que el cron publica con una cadencia fija.
+ * PRODUCT no se programa: las actualizaciones de producto son manuales.
+ */
+export const bunzySeries = pgTable("bunzySeries", {
+  id: id(),
+  name: text("name").notNull(),
+  audienceScope: text("audienceScope").notNull(), // BUSINESS | ALL_AFFILIATES | ALL_RABBITTERS
+  businessId: text("businessId"),
+  category: text("category").notNull(), // TIP | NEWS | PRODUCT | SYSTEM
+  cadenceDays: integer("cadenceDays").notNull(),
+  nextRunAt: timestamp("nextRunAt").notNull(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  ctaLabel: text("ctaLabel"),
+  ctaUrl: text("ctaUrl"),
+  active: boolean("active").default(true).notNull(),
+  createdBy: text("createdBy").notNull(),
+  ...timestamps,
+}, (table) => [
+  index("bunzy_series_active_next_idx").on(table.active, table.nextRunAt),
+]);
+
+/**
  * 🎯 Affiliate Growth Campaigns
  * Modelo persistente y financiero de campañas comerciales activadas por el afiliado.
  */

@@ -695,3 +695,76 @@ Flags: `--local` (3003) / `--prod`, `--dry-run`, `--category`, `--audience`, `--
 5. ¿Formato del cuerpo: texto plano con saltos o Markdown sanitizado?
 6. ¿Preferencias por categoría desde C1 o C2?
 
+---
+
+# 19. C4 — Estrategias de comunicación, series y aprendizaje
+
+> **Estado:** implementado 2026-11-05. Analítica de 30 días, series recurrentes, cola de masivos y estrategia por categoría documentada en el KB de Bunzy.
+
+## 19.1 Qué se construyó
+
+| Pieza | Detalle |
+|---|---|
+| Analítica | Entregas, leídos, clics, omitidos y fallidos por categoría (30 días) + opt-outs de preferencias |
+| Series recurrentes | `bunzySeries`: nombre, audiencia, categoría, cadencia, próxima ejecución, activa/pausada |
+| Cron | Publica programados, ejecuta series y drena la cola (100 entregas por corrida) |
+| Cola masiva | Deliveries `PENDING` → worker; el request no bloquea |
+| Manual | PRODUCTO nunca se automatiza: las actualizaciones se envían cuando hay algo nuevo |
+| Aprendizaje | Sección nueva en el KB de Bunzy con categorías, cadencias y estrategias de ataque |
+
+## 19.2 Estrategia de ataque por categoría
+
+| Categoría | Audiencia | Cadencia | Objetivo | CTA | Automatizable |
+|---|---|---|---|---|---|
+| **PRODUCTO** | Afiliados y Rabbitters | Manual, solo cuando hay algo nuevo | Adopción de la mejora | “Conocer la mejora” | ❌ Manual siempre |
+| **TIP** | Afiliados | Semanal (cap 6 días) | Operación y uso | “Aplicar el tip” | ✅ Serie |
+| **TIP** | Rabbitters | Semanal | Descubrimiento y recurrencia | “Ver lugares” | ✅ Serie |
+| **NOVEDADES** | Afiliados | Quincenal (cap 15 días) | Campañas y oportunidades | “Ver detalle” | ✅ Serie |
+| **NOVEDADES** | Rabbitters | Mensual | Novedades del ecosistema | “Abrir Rabbitty” | ✅ Serie |
+| **SISTEMA** | Todos | Inmediato, solo si aplica | Continuidad y confianza | “Ver estado” | ❌ Evento |
+| **BIENVENIDA** | Negocio nuevo | 1 vez tras aprobación | Activación | “Configurar mi negocio” | ✅ Evento |
+| **WINBACK** | Afiliado inactivo | 1 vez por ciclo | Reactivación | “Volver a operar” | ✅ Condicional |
+
+## 19.3 Series recomendadas (ya disponibles como presets)
+
+1. **Tips semanales · Afiliados** — TIP, 7 días.
+2. **Tips semanales · Rabbitters** — TIP, 7 días.
+3. **Novedades quincenales · Afiliados** — NEWS, 15 días.
+4. **Novedades mensuales · Rabbitters** — NEWS, 30 días.
+
+Reglas:
+- Un solo CTA por mensaje.
+- Máximo 3 bullets o 3 párrafos cortos.
+- No prometer ingresos ni funciones no lanzadas.
+- Revisar lectura/clics/opt-out a los 7 días.
+- Si el opt-out sube de 2%, pausar la serie y revisar contenido/frecuencia.
+- PRODUCTO y SISTEMA no entran en series.
+
+## 19.4 Seguimiento y simplificación
+
+- **God → Bunzy Connect → Rendimiento**: leer/clics/omitidos por categoría en 30 días.
+- **God → Bunzy Connect → Estrategias recurrentes**: crear, pausar y ver la próxima ejecución.
+- **CLI**: `node scripts/bunzy-connect.mjs` para envíos puntuales y `scripts/bunzy-release.mjs` para releases.
+- **Cadencia de revisión**: semanal (tips), quincenal (novedades), mensual (opt-out y calidad), tras cada release (producto).
+
+## 19.5 Cómo aprende Bunzy
+
+- El KB (`support-content.ts`) ya incluye la sección **“Bunzy Connect — comunicación, estrategias y cadencias”**.
+- Tras deploy hay que re-ingestar el KB (`scripts/bunzy-rag-smoke.mjs`) para que Bunzy la cite.
+- Bunzy puede responder:
+  - qué categoría usar,
+  - cada cuánto enviar,
+  - qué CTA recomendar,
+  - qué evitar (ingresos garantizados, fechas inventadas),
+  - qué medir y cuándo pausar.
+- Con MAG (fase M2) el playbook del negocio se enriquece con resultados reales: qué tips funcionaron, qué campañas tuvieron lift y qué series conviene ajustar.
+- La IA solo **redacta borradores**; la estrategia y la publicación requieren aprobación humana.
+
+## 19.6 Variables y operación
+
+- No hay variables nuevas. Se mantienen:
+  - `BUNZY_CONNECT_ALLOW_MASS=1` para habilitar masivos (UI/CLI) con confirmación.
+  - `CRON_SECRET` para el cron de series/cola/programados.
+  - `BUNZY_CONNECT_TRACKING_BASE` (o `RABBITTY_MINIAPP_URL`) para el CTA con tracking.
+- El producto se anuncia manualmente: no se programa por serie.
+

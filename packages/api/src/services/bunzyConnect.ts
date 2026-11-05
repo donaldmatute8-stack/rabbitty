@@ -1,9 +1,10 @@
 import crypto from "node:crypto";
-import { and, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import {
   bunzyBroadcasts,
   bunzyDeliveries,
   bunzyPreferences,
+  bunzySeries,
   chatEventOutbox,
   conversations,
   messages,
@@ -840,6 +841,59 @@ function clampDraft(parsed: { title?: string; body?: string }, provider: string)
   const body = (parsed.body || "").trim().slice(0, 700);
   if (title.length < 3 || body.length < 10) throw new Error("El borrador salió vacío; intenta de nuevo");
   return { title, body, provider };
+}
+
+/**
+ * Cron de estrategias: publica las series activas cuya fecha llegó.
+ * PRODUCT se ignora por diseño (las actualizaciones de producto son manuales).
+ */
+export async function processBunzySeries(db: CoreDb, limit = 20) {
+  const due = await db
+    .select()
+    .from(bunzySeries)
+    .where(and(eq(bunzySeries.active, true), lte(bunzySeries.nextRunAt, new Date())))
+    .limit(limit);
+
+  const results = [];
+  for (const series of due) {
+    if (series.category === "PRODUCT") {
+      await db
+        .update(bunzySeries)
+        .set({ active: false, updatedAt: new Date() })
+        .where(eq(bunzySeries.id, series.id));
+      results.push({ ok: false, seriesId: series.id, error: "PRODUCT es manual; serie pausada" });
+      continue;
+    }
+
+    try {
+      const runDate = series.nextRunAt.toISOString().slice(0, 10);
+      const result = await publishBroadcast(db, {
+        category: series.category as BunzyCategory,
+        title: series.title,
+        body: series.body,
+        ctaLabel: series.ctaLabel,
+        ctaUrl: series.ctaUrl,
+        audience: {
+          scope: series.audienceScope as BunzyAudience["scope"],
+          businessId: series.businessId ?? undefined,
+        },
+        requestKey: `series:${series.id}:${runDate}`,
+        createdBy: series.createdBy,
+      });
+      await db
+        .update(bunzySeries)
+        .set({ nextRunAt: new Date(Date.now() + series.cadenceDays * 24 * 60 * 60 * 1000), updatedAt: new Date() })
+        .where(eq(bunzySeries.id, series.id));
+      results.push({ ok: true, seriesId: series.id, ...result });
+    } catch (err) {
+      results.push({
+        ok: false,
+        seriesId: series.id,
+        error: err instanceof Error ? err.message : "error",
+      });
+    }
+  }
+  return { due: due.length, results };
 }
 
 /** Metadata de entorno para que el CLI muestre el destino real. */

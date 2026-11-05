@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Copy, GraduationCap, Megaphone, RefreshCw, Send, Sparkles } from "lucide-react";
+import { ArrowLeft, BarChart3, Copy, GraduationCap, Megaphone, RefreshCw, Repeat, Send, Sparkles } from "lucide-react";
 import { Button, Card, Input, cn, toast } from "@rabbitty/ui";
 import { trpc } from "../../../../lib/trpc-client";
 import { BunzyUpdateCard } from "../../../../components/BunzyUpdateCard";
@@ -15,6 +15,50 @@ const CATEGORIES = [
 ] as const;
 
 type Category = (typeof CATEGORIES)[number]["id"];
+
+const SERIES_PRESETS = [
+  {
+    name: "Tips semanales · Afiliados",
+    audienceScope: "ALL_AFFILIATES" as const,
+    category: "TIP" as const,
+    cadenceDays: 7,
+    title: "Un tip para tu negocio",
+    body:
+      "Esta semana te proponemos revisar tu menú digital: fotos actualizadas, nombres claros y precios correctos. Un menú ordenado ayuda a que el cliente se decida antes de llegar.",
+  },
+  {
+    name: "Tips semanales · Rabbitters",
+    audienceScope: "ALL_RABBITTERS" as const,
+    category: "TIP" as const,
+    cadenceDays: 7,
+    title: "Un consejo para tu semana",
+    body:
+      "Descubre un lugar nuevo cerca de ti y aprovecha las recompensas Bunz de los negocios afiliados. Cada visita puede dejar algo para la siguiente.",
+  },
+  {
+    name: "Novedades quincenales · Afiliados",
+    audienceScope: "ALL_AFFILIATES" as const,
+    category: "NEWS" as const,
+    cadenceDays: 15,
+    title: "Novedades para tu negocio",
+    body:
+      "Estamos preparando mejoras para los negocios afiliados. Revisa el canal oficial para conocerlas y aprovecharlas en tu operación.",
+  },
+  {
+    name: "Novedades mensuales · Rabbitters",
+    audienceScope: "ALL_RABBITTERS" as const,
+    category: "NEWS" as const,
+    cadenceDays: 30,
+    title: "Novedades de Rabbitty",
+    body:
+      "Este mes hay nuevos lugares y recompensas en la red. Abre el mapa y encuentra tu próximo favorito.",
+  },
+];
+
+function pct(part: number, total: number) {
+  if (!total) return "0%";
+  return `${Math.round((part / total) * 100)}%`;
+}
 
 interface PreviewData {
   audienceCount: number;
@@ -62,6 +106,21 @@ export default function BunzyConnectPage() {
 
   const businesses = trpc.bunzyConnect.businesses.useQuery();
   const list = trpc.bunzyConnect.list.useQuery(undefined, { refetchInterval: 15_000 });
+  const analytics = trpc.bunzyConnect.analytics.useQuery(undefined, { refetchInterval: 30_000 });
+  const series = trpc.bunzyConnect.series.useQuery(undefined, { refetchInterval: 30_000 });
+
+  const createSeries = trpc.bunzyConnect.createSeries.useMutation({
+    onSuccess: () => {
+      toast.success("Estrategia programada");
+      void series.refetch();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const toggleSeries = trpc.bunzyConnect.toggleSeries.useMutation({
+    onSuccess: () => void series.refetch(),
+    onError: (err) => toast.error(err.message),
+  });
 
   useEffect(() => {
     if (!businessId && businesses.data && businesses.data.length > 0) {
@@ -462,6 +521,98 @@ export default function BunzyConnectPage() {
         </div>
       </div>
 
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Card className="p-5">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4 text-pink-300" />
+            <p className="m-0 text-sm font-black text-white">Rendimiento · últimos 30 días</p>
+          </div>
+          <p className="m-0 mt-1 text-[11px] text-gray-500">
+            Opt-outs de preferencias: <strong className="text-gray-300">{analytics.data?.optOuts ?? 0}</strong>
+          </p>
+          <div className="mt-3 space-y-2">
+            {(analytics.data?.categories ?? []).map((c) => (
+              <div key={c.category} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-white">{c.category}</span>
+                  <span className="text-[10px] text-gray-500">{c.sent} entregas</span>
+                </div>
+                <div className="mt-1.5 grid grid-cols-4 gap-1 text-[10.5px] text-gray-400">
+                  <span>Leídos <strong className="text-gray-200">{pct(c.read, c.sent)}</strong></span>
+                  <span>Clics <strong className="text-gray-200">{pct(c.clicked, c.sent)}</strong></span>
+                  <span>Omitidos <strong className="text-gray-200">{c.skipped}</strong></span>
+                  <span>Fallidos <strong className="text-gray-200">{c.failed}</strong></span>
+                </div>
+              </div>
+            ))}
+            {(analytics.data?.categories ?? []).length === 0 && (
+              <p className="m-0 text-xs text-gray-500">Aún no hay entregas en los últimos 30 días.</p>
+            )}
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <div className="flex items-center gap-2">
+            <Repeat className="h-4 w-4 text-pink-300" />
+            <p className="m-0 text-sm font-black text-white">Estrategias recurrentes</p>
+          </div>
+          <p className="m-0 mt-1 text-[11px] leading-relaxed text-gray-500">
+            El cron publica con la cadencia elegida. <strong className="text-gray-300">Producto es manual</strong>: se
+            envía solo cuando hay algo nuevo.
+          </p>
+
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {SERIES_PRESETS.map((preset) => (
+              <button
+                key={preset.name}
+                type="button"
+                onClick={() => {
+                  const ok = window.confirm(
+                    `¿Programar "${preset.name}" cada ${preset.cadenceDays} días? Es un envío masivo programado.`,
+                  );
+                  if (!ok) return;
+                  createSeries.mutate({ ...preset, confirmMass: true });
+                }}
+                disabled={createSeries.isPending}
+                className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-left transition-colors hover:border-pink-500/40 disabled:opacity-50"
+              >
+                <p className="m-0 text-[11px] font-black text-white">{preset.name}</p>
+                <p className="m-0 mt-0.5 text-[10px] text-gray-500">
+                  {preset.category} · cada {preset.cadenceDays} días
+                </p>
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-3 space-y-1.5">
+            {(series.data ?? []).map((s) => (
+              <div
+                key={s.id}
+                className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <p className="m-0 truncate text-[11px] font-bold text-white">{s.name}</p>
+                  <p className="m-0 text-[10px] text-gray-500">
+                    {s.category} · {s.audienceScope} · cada {s.cadenceDays}d ·{" "}
+                    {s.active ? `next ${new Date(s.nextRunAt).toLocaleDateString("es-MX")}` : "pausada"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => toggleSeries.mutate({ id: s.id, active: !s.active })}
+                  className="shrink-0 rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-bold text-gray-300 hover:text-white"
+                >
+                  {s.active ? "Pausar" : "Activar"}
+                </button>
+              </div>
+            ))}
+            {(series.data ?? []).length === 0 && (
+              <p className="m-0 text-[11px] text-gray-500">Aún no hay estrategias recurrentes.</p>
+            )}
+          </div>
+        </Card>
+      </div>
+
       <Card className="p-0">
         <div className="flex items-center justify-between border-b border-white/10 px-5 py-3.5">
           <p className="m-0 text-sm font-black text-white">Historial</p>
@@ -476,6 +627,8 @@ export default function BunzyConnectPage() {
                 <th className="px-4 py-2.5">Estado</th>
                 <th className="px-4 py-2.5">Entregados</th>
                 <th className="px-4 py-2.5">Leídos</th>
+                <th className="px-4 py-2.5">Clics</th>
+                <th className="px-4 py-2.5">Omitidos</th>
                 <th className="px-4 py-2.5">Fallidos</th>
                 <th className="px-4 py-2.5">Fecha</th>
               </tr>
@@ -497,6 +650,8 @@ export default function BunzyConnectPage() {
                   </td>
                   <td className="px-4 py-2.5">{b.published}/{b.total}</td>
                   <td className="px-4 py-2.5">{b.read}</td>
+                  <td className="px-4 py-2.5">{b.clicked}</td>
+                  <td className="px-4 py-2.5">{b.skipped}</td>
                   <td className="px-4 py-2.5">{b.failed}</td>
                   <td className="px-4 py-2.5 text-gray-500">
                     {b.createdAt ? new Date(b.createdAt).toLocaleString("es-MX") : "—"}
@@ -505,7 +660,7 @@ export default function BunzyConnectPage() {
               ))}
               {(list.data ?? []).length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
                     Aún no hay broadcasts.
                   </td>
                 </tr>

@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getCoreDb } from "@rabbitty/api/db";
-import { processBunzyQueue, publishScheduledBroadcasts } from "@rabbitty/api/services/bunzyConnect";
+import { processBunzyQueue, processBunzySeries, publishScheduledBroadcasts } from "@rabbitty/api/services/bunzyConnect";
 
 export const runtime = "nodejs";
 
@@ -29,8 +29,9 @@ export async function GET(req: NextRequest) {
   try {
     const db = getCoreDb();
     const scheduled = await publishScheduledBroadcasts(db);
+    const series = await processBunzySeries(db);
     const queue = await processBunzyQueue(db);
-    return NextResponse.json({ ok: true, scheduled, queue });
+    return NextResponse.json({ ok: true, scheduled, series, queue });
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : "error" },
