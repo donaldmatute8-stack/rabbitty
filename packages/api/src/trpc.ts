@@ -229,10 +229,8 @@ export const godAdminProcedure = platformOnlyProcedure.use(async ({ ctx, next })
       .from(usersCore)
       .where(eq(usersCore.id, ctx.userId))
       .limit(1);
-    identityOk = Boolean(
-      coreUser &&
-        (coreUser.role === "ADMIN" || isGodAdminIdentity(coreUser.email, coreUser.username))
-    );
+    // Solo el correo allowlist. Un rol ADMIN de un tenant NO concede God.
+    identityOk = Boolean(coreUser && isGodAdminIdentity(coreUser.email, coreUser.username));
   }
   if (!identityOk) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Operación reservada al God Admin de Rabbitty." });

@@ -9,12 +9,16 @@ import crypto from "crypto";
  */
 
 export const GOD_ADMIN_EMAILS = ["marco.munoz9@gmail.com", "admin@rabbitty.com"];
-export const GOD_ADMIN_USERNAMES = ["deltoro", "mardelbull"];
 
-export function isGodAdminIdentity(email?: string | null, name?: string | null): boolean {
+/**
+ * Identidad God Admin: SOLO por correo allowlist.
+ * Antes también aceptaba usernames/nombres ("deltoro", "mardelbull"), lo que
+ * permitía que un nombre mostrado spoofeara la identidad y, con ello, pedir la
+ * cookie de 2FA. El correo no se puede cambiar desde un tenant.
+ */
+export function isGodAdminIdentity(email?: string | null, _name?: string | null): boolean {
   const e = (email || "").trim().toLowerCase();
-  const n = (name || "").trim().toLowerCase();
-  return GOD_ADMIN_EMAILS.includes(e) || GOD_ADMIN_USERNAMES.includes(n);
+  return GOD_ADMIN_EMAILS.includes(e);
 }
 
 // ── TOTP (RFC 6238, SHA1, 6 dígitos, 30s, ventana ±1) — sin dependencias ──

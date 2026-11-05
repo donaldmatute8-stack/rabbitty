@@ -14,6 +14,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { signOut } from "next-auth/react";
 import { trpc } from "../../../../lib/trpc-client";
 import { Button, Input, toast } from "@rabbitty/ui";
 import { getOrCreateDeviceKey, getPosTerminalInfo, getPosTerminalToken, savePosTerminal, clearPosTerminal } from "../../../../lib/pos-terminal";
@@ -56,14 +57,24 @@ export default function PosLinkPage() {
   const deviceKey = useMemo(() => (typeof window === "undefined" ? "" : getOrCreateDeviceKey()), []);
 
   const activate = trpc.posTerminals.activate.useMutation({
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       savePosTerminal(data.sessionToken, {
         terminalId: data.terminalId,
         name,
         branchId: null,
         expiresAt: data.expiresAt ? new Date(data.expiresAt).toISOString() : null,
       });
-      toast.success("Terminal vinculada. El POS ya puede operar sin la sesión del admin.");
+
+      // Importante: el dispositivo queda como TERMINAL, no como admin. Al
+      // cerrar la sesión de NextAuth, salir del POS al dashboard vuelve a pedir
+      // las credenciales del administrador (no basta un PIN de gerente).
+      try {
+        await signOut({ redirect: false });
+      } catch {
+        /* si no había sesión, seguimos */
+      }
+
+      toast.success("Terminal vinculada. El POS ya opera con el PIN del empleado.");
       router.replace("/pos");
     },
     onError: (err) => toast.error(err.message),
@@ -77,6 +88,16 @@ export default function PosLinkPage() {
     },
     onError: (err) => toast.error(err.message),
   });
+
+  // Entrar al POS SIEMPRE deja el dispositivo como terminal (sin sesión admin).
+  const openPos = async () => {
+    try {
+      await signOut({ redirect: false });
+    } catch {
+      /* sin sesión */
+    }
+    router.replace("/pos");
+  };
 
   const featureOff = !featureLoading && feature?.enabled !== true;
   const canActivate = !featureOff && !!deviceKey && name.trim().length >= 2 && !activate.isPending;
@@ -99,8 +120,13 @@ export default function PosLinkPage() {
               Este dispositivo ya tiene una sesión de terminal guardada. Si el servidor la rechaza (revocada o vencida),
               vuelve a vincularlo aquí después de iniciar sesión como administrador.
             </p>
+            <p className="m-0 text-[11px] leading-relaxed text-gray-500">
+              Instala esta página en la pantalla de inicio: abrirá directo en <code>/pos</code>. Los empleados solo
+              capturan su PIN; para entrar al panel de administración se usa “Entrar como administrador” en la
+              pantalla del PIN.
+            </p>
             <div className="flex gap-2 pt-1">
-              <Button variant="secondary" onClick={() => router.replace("/pos")} className="flex-1">
+              <Button variant="secondary" onClick={() => void openPos()} className="flex-1">
                 Abrir POS
               </Button>
               <Button
@@ -185,7 +211,7 @@ export default function PosLinkPage() {
 
         <button
           type="button"
-          onClick={() => router.replace("/pos")}
+          onClick={() => void openPos()}
           className="w-full rounded-xl border border-white/10 bg-transparent py-2.5 text-xs font-bold text-gray-400 hover:text-white"
         >
           Volver al POS
