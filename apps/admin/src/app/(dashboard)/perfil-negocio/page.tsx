@@ -91,6 +91,7 @@ export default function BusinessProfilePage() {
   // ── Formularios ──
   const [form, setForm] = useState({
     name: "", description: "", address: "", website: "",
+    addressData: { street1: "", city: "", state: "", zip: "", country: "MX" },
     startTime: "09:00", endTime: "21:00", timezone: "America/Mexico_City",
     activeDays: [1, 2, 3, 4, 5, 6, 7] as number[],
     rewardPercentage: "10",
@@ -128,6 +129,18 @@ export default function BusinessProfilePage() {
       name: biz.name ?? "",
       description: biz.description ?? "",
       address: biz.address ?? "",
+      addressData: (() => {
+        const raw = (biz as { addressData?: unknown }).addressData;
+        const parsed = typeof raw === "string" ? (() => { try { return JSON.parse(raw); } catch { return null; } })() : raw;
+        const a = (parsed ?? {}) as Record<string, string | undefined>;
+        return {
+          street1: a.street1 ?? "",
+          city: a.city ?? "",
+          state: a.state ?? "",
+          zip: a.zip ?? "",
+          country: a.country ?? "MX",
+        };
+      })(),
       website: biz.website ?? "",
       startTime: biz.startTime ?? "09:00",
       endTime: biz.endTime ?? "21:00",
@@ -198,6 +211,13 @@ export default function BusinessProfilePage() {
         name: form.name.trim(),
         description: form.description.trim() || null,
         address: form.address.trim(),
+        addressData: {
+          street1: form.addressData.street1.trim(),
+          city: form.addressData.city.trim(),
+          state: form.addressData.state.trim(),
+          zip: form.addressData.zip.trim(),
+          country: (form.addressData.country || "MX").trim().toUpperCase(),
+        },
         website: form.website.trim() || null,
         activeDays: form.activeDays,
         startTime: form.startTime,
@@ -365,9 +385,53 @@ export default function BusinessProfilePage() {
               <h2 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2 m-0">
                 <MapPin className="h-4 w-4 text-emerald-400" /> Ubicación & sitio
               </h2>
-              <Field label="Dirección">
+              <Field label="Dirección (texto visible en la app)">
                 <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className={textInput} />
               </Field>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Calle y número" hint="Punto de recolección para repartidores">
+                  <Input
+                    value={form.addressData.street1}
+                    onChange={(e) => setForm({ ...form, addressData: { ...form.addressData, street1: e.target.value } })}
+                    placeholder="Av. Álvaro Obregón 100"
+                    className={textInput}
+                  />
+                </Field>
+                <Field label="Ciudad">
+                  <Input
+                    value={form.addressData.city}
+                    onChange={(e) => setForm({ ...form, addressData: { ...form.addressData, city: e.target.value } })}
+                    placeholder="Ciudad de México"
+                    className={textInput}
+                  />
+                </Field>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Field label="Estado">
+                  <Input
+                    value={form.addressData.state}
+                    onChange={(e) => setForm({ ...form, addressData: { ...form.addressData, state: e.target.value } })}
+                    placeholder="CDMX"
+                    className={textInput}
+                  />
+                </Field>
+                <Field label="Código postal">
+                  <Input
+                    value={form.addressData.zip}
+                    onChange={(e) => setForm({ ...form, addressData: { ...form.addressData, zip: e.target.value } })}
+                    placeholder="06700"
+                    className={textInput}
+                  />
+                </Field>
+                <Field label="País">
+                  <Input
+                    value={form.addressData.country}
+                    onChange={(e) => setForm({ ...form, addressData: { ...form.addressData, country: e.target.value } })}
+                    placeholder="MX"
+                    className={textInput}
+                  />
+                </Field>
+              </div>
               <Field label="Sitio web" hint="Vacío = la app no muestra el bloque 'Sitio Web Oficial'">
                 <Input value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} placeholder="midominio.com" className={textInput} />
               </Field>

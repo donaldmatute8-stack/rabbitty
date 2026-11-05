@@ -39,12 +39,16 @@ export async function POST(req: Request) {
     const db = await getRestaurantDb();
     
     // 2. Insertar en Rabbitty DB
+    const provider = (new URL(req.url).searchParams.get("provider") || "UBER_EATS").toUpperCase();
     const [newOrder] = await db.insert(orders).values({
       branchId,
       orderType: "DELIVERY",
       status: "PENDING",
       subtotal: uberOrder.subtotal,
       total: uberOrder.total,
+      // Identidad externa persistida: permite conciliar y sincronizar estados.
+      externalProvider: provider,
+      externalId: uberOrder.id,
       notes: `Aggregator Order #${uberOrder.id}`,
     }).returning();
 
@@ -66,7 +70,7 @@ export async function POST(req: Request) {
     bus.emit(EventTypes.ORDER_CREATED, {
       branchId,
       orderId: newOrder.id,
-      source: "UBER_EATS"
+      source: provider,
     });
 
     return NextResponse.json({ success: true, message: "Order injected to POS and KDS successfully", orderId: newOrder.id });

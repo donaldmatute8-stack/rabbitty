@@ -441,13 +441,14 @@ function AffiliateProfileContent() {
 
   const handleSubmitOrder = async (
     orderType: 'DINE_IN' | 'PICKUP' | 'DELIVERY',
-    address?: string,
+    address?: { text: string; data: Record<string, unknown> },
   ) => {
     PlatformBridge.hapticFeedback('heavy');
 
     const payload = {
       orderType,
-      deliveryAddress: orderType === 'DELIVERY' ? address ?? null : null,
+      deliveryAddress: orderType === 'DELIVERY' ? address?.text ?? null : null,
+      deliveryAddressData: orderType === 'DELIVERY' ? address?.data ?? null : null,
       // Sin mesa elegida el pedido puede salir "producto solo" — el POS la
       // vincula a mesa después si procede. branchId permite crear la orden
       // cuando no hay mesa (el id del perfil afiliado ES la branch).
@@ -466,7 +467,7 @@ function AffiliateProfileContent() {
     // cancelar o modificar (misma identidad que la tarjeta de pedido).
     const order = {
       orderType,
-      address,
+      address: address?.text,
       payload,
       items: cart.map((item) => ({ name: item.name, quantity: item.quantity })),
       total: cart.reduce((acc, item) => {

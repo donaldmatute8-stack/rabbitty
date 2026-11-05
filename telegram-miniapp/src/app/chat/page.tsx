@@ -38,6 +38,7 @@ import {
   UserCheck,
   RefreshCw,
   Smartphone,
+  Car,
   HelpCircle,
 } from 'lucide-react';
 import { GROUPS } from '@/components/groups/GroupsStrip';
@@ -934,6 +935,18 @@ export default function ChatInboxPage() {
                   <path d="M1 3.5h16" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
                   <path d="M1 10.5h9" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
                 </svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  PlatformBridge.hapticFeedback('light');
+                  router.push('/move');
+                }}
+                aria-label="Moverme"
+                title="Moverme"
+                className="w-9 h-9 rounded-full bg-(--bg-elevated) border border-(--border-subtle) text-(--text-primary) flex items-center justify-center active:scale-95 transition-transform shadow-xs"
+              >
+                <Car size={16} />
               </button>
             </div>
           }

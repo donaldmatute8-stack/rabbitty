@@ -2060,6 +2060,29 @@ export default function ChatRoomPage() {
         {draft.notes && (
           <p style={{ margin: '8px 0 0', fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>📝 {draft.notes}</p>
         )}
+        {draft.orderId && (
+          <button
+            type="button"
+            onClick={() => {
+              PlatformBridge.hapticFeedback('light');
+              router.push(`/track/${draft.orderId}`);
+            }}
+            style={{
+              marginTop: 10,
+              width: '100%',
+              border: '1px solid rgba(233,30,99,0.3)',
+              background: 'rgba(233,30,99,0.10)',
+              color: 'var(--text-primary)',
+              borderRadius: 10,
+              fontSize: 12,
+              fontWeight: 800,
+              padding: '8px 10px',
+              cursor: 'pointer',
+            }}
+          >
+            Ver seguimiento del pedido
+          </button>
+        )}
       </div>
     </div>
   );

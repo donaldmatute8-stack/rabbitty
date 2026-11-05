@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { conversations, messages, ownedBusinesses } from '@/db/schema';
+import { restaurantDb } from '@/db/restaurant';
+import { branches, orders, restaurants } from '@rabbitty/database-restaurant/schema';
 import { and, eq, or } from 'drizzle-orm';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
-import { resolveTelegramRecipient, notifyChatRecipient } from '@/lib/chat';
+import { resolveTelegramRecipient, notifyChatRecipient, isBusinessOpen } from '@/lib/chat';
 
 export async function POST(req: Request) {
   try {
@@ -16,6 +18,8 @@ export async function POST(req: Request) {
       businessId?: string;
       items?: string;
       notes?: string;
+      orderType?: 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY';
+      deliveryAddress?: string;
     };
 
     const businessId = (body.businessId || '').trim();
@@ -27,6 +31,15 @@ export async function POST(req: Request) {
     const business = await db.query.ownedBusinesses.findFirst({ where: eq(ownedBusinesses.id, businessId) });
     if (!business) {
       return NextResponse.json({ error: 'Comercio no encontrado' }, { status: 404 });
+    }
+    // Fuera de horario el local no recibe pedidos (el chat normal sigue vivo).
+    if (!isBusinessOpen(business)) {
+      return NextResponse.json(
+        {
+          error: `El local está cerrado ahora (${business.startTime}–${business.endTime}). Puedes pedir dentro del horario.`,
+        },
+        { status: 409 },
+      );
     }
 
     let conversation = await db.query.conversations.findFirst({
@@ -51,6 +64,45 @@ export async function POST(req: Request) {
 
     const summary = `🛒 Pedido Bunzy\n${itemLines.join('\n')}${body.notes ? `\n\n📝 ${body.notes.trim()}` : ''}`;
 
+    // ── Orden real en el POS ──
+    // Antes el pedido por chat era solo un mensaje: el POS nunca lo veía.
+    // Se crea como borrador sin productos (el cajero los carga) para que
+    // entre a la cola, tenga seguimiento y pueda asignarse repartidor.
+    let posOrderId: string | null = null;
+    try {
+      const [branch] = await restaurantDb
+        .select({ id: branches.id })
+        .from(branches)
+        .innerJoin(restaurants, eq(branches.restaurantId, restaurants.id))
+        .where(eq(restaurants.businessId, businessId))
+        .limit(1);
+      if (branch?.id) {
+        const orderType =
+          body.orderType === 'DINE_IN' || body.orderType === 'DELIVERY' ? body.orderType : 'TAKEAWAY';
+        const [created] = await restaurantDb
+          .insert(orders)
+          .values({
+            branchId: branch.id,
+            customerId: caller.id,
+            orderType,
+            status: 'PENDING',
+            subtotal: 0,
+            tax: 0,
+            discount: 0,
+            tip: 0,
+            total: 0,
+            notes: summary.slice(0, 500),
+            deliveryAddress:
+              orderType === 'DELIVERY' ? body.deliveryAddress?.trim().slice(0, 300) ?? null : null,
+          })
+          .returning({ id: orders.id });
+        posOrderId = created?.id ?? null;
+      }
+    } catch (posErr) {
+      // Nunca romper el chat por el POS: el mensaje sigue siendo válido.
+      console.warn('[CHAT ORDER] no se pudo crear la orden en POS:', posErr);
+    }
+
     const [orderMessage] = await db
       .insert(messages)
       .values({
@@ -60,7 +112,8 @@ export async function POST(req: Request) {
         type: 'ORDER',
         metadata: {
           kind: 'ORDER',
-          orderId,
+          // Si hay orden en POS, el id real habilita el seguimiento.
+          orderId: posOrderId || orderId,
           businessId,
           businessName: business.name,
           items: itemLines,
@@ -89,7 +142,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
-      orderId,
+      orderId: posOrderId || orderId,
+      posOrderId,
       conversationId: conversation.id,
       message: orderMessage,
     });

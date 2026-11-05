@@ -91,6 +91,8 @@ export const ownedBusinesses = pgTable("ownedBusinesses", {
   onboardingCompletedAt: timestamp("onboardingCompletedAt"),
   description: text("description"),
   address: text("address").notNull(),
+  /** Dirección estructurada del local (pickup para proveedores de entrega). */
+  addressData: jsonb("addressData"),
   lat: real("lat").notNull(),
   lng: real("lng").notNull(),
   logoUrl: text("logoUrl"),

@@ -190,14 +190,58 @@ export const orders = pgTable("orders", {
   notes: text("notes"),
   /** Dirección de entrega (solo pedidos DELIVERY). */
   deliveryAddress: text("deliveryAddress"),
-  /** Tiempo estimado de preparación que el POS promete al cliente. */
+  /** Dirección estructurada para proveedores (Uber Direct): street1/2, city, state, zip, country, phone, lat/lng. */
+  deliveryAddressData: jsonb("deliveryAddressData"),
+  /** Costo de entrega cobrado al cliente (0 si lo absorbe el negocio). */
+  deliveryFee: real("deliveryFee").default(0).notNull(),
+  /** Origen externo: RABBITTY | UBER_EATS | UBER_DIRECT | RABBITTY_RIDE… */
+  externalProvider: text("externalProvider"),
+  /** Id de la orden/entrega en el proveedor externo. */
+  externalId: text("externalId"),
+  /** ETA efectivo que ve el cliente (cocina mientras no hay entrega; luego el del proveedor). */
   etaMinutes: integer("etaMinutes"),
   etaAt: timestamp("etaAt"),
+  /** ETA de cocina, separado para no pisar el de entrega (Uber Direct). */
+  prepEtaMinutes: integer("prepEtaMinutes"),
+  prepEtaAt: timestamp("prepEtaAt"),
   voidReason: text("voidReason"),
   cfdiStatus: text("cfdiStatus").default("NONE").notNull(),
   cfdiUrl: text("cfdiUrl"),
   ...timestamps,
 });
+
+/**
+ * 🛵 Entregas (última milla) — capa proveedor-agnóstica.
+ *
+ * Una entrega por pedido. `provider` identifica quién la ejecuta:
+ * MANUAL (asignación a mano), UBER_DIRECT, RABBITTY_RIDE (futuro).
+ * Los estados son de Rabbitty, no del proveedor, para no acoplar la UI.
+ */
+export const deliveries = pgTable("deliveries", {
+  id: id(),
+  orderId: fkId("orderId").references(() => orders.id, { onDelete: "cascade" }),
+  branchId: fkId("branchId").references(() => branches.id),
+  /** MANUAL | UBER_DIRECT | RABBITTY_RIDE */
+  provider: text("provider").notNull(),
+  /** Id de la entrega en el proveedor (null en MANUAL). */
+  providerDeliveryId: text("providerDeliveryId"),
+  /** REQUESTED | ASSIGNED | PICKED_UP | DELIVERED | CANCELLED | FAILED | NEEDS_MANUAL_ACTION */
+  status: text("status").default("REQUESTED").notNull(),
+  courierName: text("courierName"),
+  courierPhone: text("courierPhone"),
+  trackingUrl: text("trackingUrl"),
+  /** Costo de la entrega en centavos (MXN) para conciliar. */
+  feeCents: integer("feeCents"),
+  /** Quién paga la entrega: BUSINESS (absorbe) o CUSTOMER (se suma al total). */
+  feePaidBy: text("feePaidBy").default("BUSINESS").notNull(),
+  currency: text("currency").default("MXN").notNull(),
+  notes: text("notes"),
+  externalPayload: jsonb("externalPayload"),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex("deliveries_order_uidx").on(table.orderId),
+  index("deliveries_status_idx").on(table.status),
+]);
 
 export const orderItems = pgTable("order_items", {
   id: id(),

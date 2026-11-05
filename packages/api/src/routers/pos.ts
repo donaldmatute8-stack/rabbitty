@@ -7,8 +7,17 @@ import { TRPCError } from "@trpc/server";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
 import { deriveOrderStage, type OrderStage, orderStageStepIndex } from "@rabbitty/events";
-import { tables as tablesTable, tableSessions, branches, menuCategories, menuItems, orders, orderItems, payments, menuItemModifiers, restaurants, events as posEvents, paymentIntents, bunzReserves } from "@rabbitty/database-restaurant/schema";
-import { users as coreUsers, systemSettings, membershipSubscriptions as coreMembershipSubs, membershipEntitlements as coreMembershipEnts, entitlementUsages as coreEntUsages } from "@rabbitty/database-core/schema";
+import { tables as tablesTable, tableSessions, branches, menuCategories, menuItems, orders, orderItems, deliveries, payments, menuItemModifiers, restaurants, events as posEvents, paymentIntents, bunzReserves } from "@rabbitty/database-restaurant/schema";
+import { DELIVERY_PROVIDERS, canTransition, getProvider, type DeliveryStatus } from "../services/deliveryProviders";
+import {
+  uberDirectConfigured,
+  uberQuote,
+  uberCreateDelivery,
+  uberCancelDelivery,
+  mapUberStatus,
+  type UberAddress,
+} from "../services/uberDirect";
+import { users as coreUsers, systemSettings, ownedBusinesses as coreBusinesses, membershipSubscriptions as coreMembershipSubs, membershipEntitlements as coreMembershipEnts, entitlementUsages as coreEntUsages } from "@rabbitty/database-core/schema";
 /** Split DIVIDIDA activo? */
 function pendingSplit(input: { splitBunz?: number; splitCash?: number }): boolean {
   return typeof input.splitBunz === "number" && input.splitBunz > 0;
@@ -85,6 +94,95 @@ export function calcTax(itemsTotal: number): { total: number; subtotal: number; 
  * La miniapp /api/pos/reward espera un businessId de negocio (su inventario Bunz
  * vive en ownedBusinesses) — un branchId jamás matcheará.
  */
+/**
+ * Contexto para Uber Direct: pickup estructurado del negocio + dropoff del
+ * pedido + items (manifest). Falla con mensajes accionables si falta algo.
+ */
+async function loadDeliveryContext(
+  restaurantDb: any,
+  coreDb: any,
+  branchId: string,
+  orderId: string,
+) {
+  const [order] = await restaurantDb
+    .select({
+      id: orders.id,
+      branchId: orders.branchId,
+      orderType: orders.orderType,
+      status: orders.status,
+      total: orders.total,
+      customerId: orders.customerId,
+      customerName: orders.customerName,
+      customerPhone: orders.customerPhone,
+      deliveryAddress: orders.deliveryAddress,
+      deliveryAddressData: orders.deliveryAddressData,
+      deliveryFee: orders.deliveryFee,
+      prepEtaMinutes: orders.prepEtaMinutes,
+    })
+    .from(orders)
+    .where(and(eq(orders.id, orderId), eq(orders.branchId, branchId)))
+    .limit(1);
+  if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Orden no encontrada" });
+  if (order.orderType !== "DELIVERY") {
+    throw new TRPCError({ code: "PRECONDITION_FAILED", message: "El pedido no es a domicilio" });
+  }
+
+  const businessId = await resolveBusinessIdFromBranch(restaurantDb, branchId);
+  const [biz] = businessId
+    ? await coreDb
+        .select({
+          name: coreBusinesses.name,
+          addressData: coreBusinesses.addressData,
+          lat: coreBusinesses.lat,
+          lng: coreBusinesses.lng,
+        })
+        .from(coreBusinesses)
+        .where(eq(coreBusinesses.id, businessId))
+        .limit(1)
+    : [];
+
+  const pickupData = (biz?.addressData ?? null) as UberAddress | null;
+  if (!pickupData?.street1 || !pickupData?.city) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Configura la dirección estructurada del negocio (calle y ciudad) para usar Uber Direct.",
+    });
+  }
+
+  const dropoffData = (order.deliveryAddressData ?? null) as UberAddress | null;
+  if (!dropoffData?.street1 || !dropoffData?.city) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "El pedido no tiene dirección estructurada (calle, ciudad, estado, CP).",
+    });
+  }
+
+  const items = await restaurantDb
+    .select({ name: menuItems.name, quantity: orderItems.quantity })
+    .from(orderItems)
+    .innerJoin(menuItems, eq(orderItems.menuItemId, menuItems.id))
+    .where(eq(orderItems.orderId, orderId))
+    .limit(20);
+
+  return {
+    order,
+    pickup: {
+      ...pickupData,
+      name: biz?.name ?? "Rabbitty",
+      phone: pickupData.phone ?? null,
+      lat: pickupData.lat ?? biz?.lat ?? null,
+      lng: pickupData.lng ?? biz?.lng ?? null,
+    } as UberAddress,
+    dropoff: {
+      ...dropoffData,
+      name: order.customerName ?? undefined,
+      phone: order.customerPhone ?? dropoffData.phone ?? undefined,
+    } as UberAddress,
+    items,
+    businessId,
+  };
+}
+
 async function resolveBusinessIdFromBranch(restaurantDb: any, branchId: string): Promise<string | null> {
   try {
     const [br] = await restaurantDb
@@ -1887,17 +1985,20 @@ export const posRouter = router({
             // pos_rwd_${orderId}; un reintento jamás doble-otorga. Si ambos
             // intentos fallan, awardedBunz queda en 0 y el ticket imprime el
             // QR de claim para que el cliente recupere sus Bunz por su boleto.
+            // El costo de entrega no genera cashback (hasta tener Rabbitty Ride).
+            const deliveryFee = Number((order as { deliveryFee?: number }).deliveryFee ?? 0);
+            const rewardBase = Math.max(0, finalAmount - deliveryFee);
             const attemptReward = async (): Promise<{ success: boolean; bunz?: number } | null> => {
               const directBizId = (await resolveBusinessIdFromBranch(ctx.restaurantDb, ctx.branchId)) || ctx.branchId;
               // Recompensa en la moneda del país (MXN) — la tasa USD es solo
               // para valuación de cobros en dólares, no altera el mint.
               try {
-              return await miniappClient.rewardBunz(targetRecipient, finalAmount, order.id, directBizId);
+              return await miniappClient.rewardBunz(targetRecipient, rewardBase, order.id, directBizId);
               } catch (firstErr) {
                 console.error("[POS_REWARD_FAIL] orderId=" + order.id + " intento 1:", firstErr);
                 try {
                   await new Promise((r) => setTimeout(r, 800));
-                  return await miniappClient.rewardBunz(targetRecipient, finalAmount, order.id, directBizId);
+                  return await miniappClient.rewardBunz(targetRecipient, rewardBase, order.id, directBizId);
                 } catch (secondErr) {
                   console.error("[POS_REWARD_FAIL] orderId=" + order.id + " intento 2 definitivo:", secondErr);
                   return null;
@@ -2100,13 +2201,44 @@ export const posRouter = router({
       .from(orders)
       .where(and(
         eq(orders.branchId, ctx.branchId),
-        inArray(orders.status, ["PENDING", "CASH_PAYMENT_REQUESTED"])
+        // PAID incluido: los pedidos pagados con Bunz en la app llegan igual
+        // a la cola del POS (antes se quedaban fuera y nunca se preparaban).
+        inArray(orders.status, ["PENDING", "PAID", "CASH_PAYMENT_REQUESTED"])
       ))
       .orderBy(desc(orders.createdAt));
 
     // 4. Productos de las órdenes pendientes — la comanda del Rabbitter
     // (pedida desde la app) debe verse completa en el POS con lo que pidió.
     const orderIds = pendingOrders.map((o) => o.id);
+    const deliveriesByOrder = new Map<string, {
+      id: string;
+      provider: string;
+      status: string;
+      courierName: string | null;
+      courierPhone: string | null;
+      trackingUrl: string | null;
+      feeCents: number | null;
+    }>();
+    if (orderIds.length > 0) {
+      const rows = await ctx.restaurantDb
+        .select({
+          orderId: deliveries.orderId,
+          id: deliveries.id,
+          provider: deliveries.provider,
+          status: deliveries.status,
+          courierName: deliveries.courierName,
+          courierPhone: deliveries.courierPhone,
+          trackingUrl: deliveries.trackingUrl,
+          feeCents: deliveries.feeCents,
+        })
+        .from(deliveries)
+        .where(inArray(deliveries.orderId, orderIds));
+      for (const row of rows) {
+        const { orderId, ...rest } = row;
+        deliveriesByOrder.set(orderId, rest);
+      }
+    }
+
     const itemsByOrder = new Map<string, { name: string; quantity: number; unitPrice: number; notes: string | null; status: string | null }[]>();
     if (orderIds.length > 0) {
       const itemRows = await ctx.restaurantDb
@@ -2188,8 +2320,11 @@ export const posRouter = router({
         createdAt: ord.createdAt,
         items,
         stage,
+        delivery: deliveriesByOrder.get(ord.id) ?? null,
         etaMinutes: ord.etaMinutes ?? null,
         etaAt: ord.etaAt ?? null,
+        prepEtaMinutes: ord.prepEtaMinutes ?? null,
+        prepEtaAt: ord.prepEtaAt ?? null,
         deliveryAddress: ord.deliveryAddress ?? null,
         fromApp,
         customer: user
@@ -2264,11 +2399,20 @@ export const posRouter = router({
       const etaMinutes =
         input.stage === "PREPARING" && input.etaMinutes ? input.etaMinutes : null;
       if (etaMinutes) {
+        const prepEtaAt = new Date(Date.now() + etaMinutes * 60_000);
+        // Si ya hay repartidor (p. ej. Uber), el ETA del cliente lo manda la
+        // entrega: aquí solo se guarda el tiempo de cocina para no pisarlo.
+        const [hasDelivery] = await ctx.restaurantDb
+          .select({ id: deliveries.id })
+          .from(deliveries)
+          .where(eq(deliveries.orderId, input.orderId))
+          .limit(1);
         await ctx.restaurantDb
           .update(orders)
           .set({
-            etaMinutes,
-            etaAt: new Date(Date.now() + etaMinutes * 60_000),
+            prepEtaMinutes: etaMinutes,
+            prepEtaAt,
+            ...(hasDelivery ? {} : { etaMinutes, etaAt: prepEtaAt }),
             updatedAt: new Date(),
           })
           .where(eq(orders.id, input.orderId));
@@ -2296,6 +2440,17 @@ export const posRouter = router({
           .update(orderItems)
           .set({ status: itemStatus })
           .where(eq(orderItems.orderId, input.orderId));
+      }
+
+      // Si el pedido tiene repartidor asignado y el POS marca "listo/en camino",
+      // la entrega avanza con la etapa para que el seguimiento no se contradiga.
+      if (input.stage === "READY") {
+        try {
+          await ctx.restaurantDb
+            .update(deliveries)
+            .set({ status: "PICKED_UP", updatedAt: new Date() })
+            .where(and(eq(deliveries.orderId, input.orderId), eq(deliveries.status, "ASSIGNED")));
+        } catch { /* la entrega es opcional */ }
       }
 
       try {
@@ -2361,7 +2516,7 @@ export const posRouter = router({
               title: copy.title,
               message: copy.message,
               type: "SYSTEM",
-              route: "/",
+              route: `/track/${input.orderId}`,
               dedupeKey: stageKey,
               // Seguimiento de pedido = aviso "vivo": prioridad alta para que
               // llegue con la pantalla bloqueada y atraviese Focus (iOS).
@@ -2400,6 +2555,391 @@ export const posRouter = router({
       }
 
       return { success: true, stage: input.stage };
+    }),
+
+  /** Cotiza con Uber Direct (no crea nada todavía). */
+  quoteUberDelivery: posProcedure
+    .input(z.object({ orderId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      if (!uberDirectConfigured()) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Uber Direct no está configurado" });
+      }
+      const c = await loadDeliveryContext(ctx.restaurantDb, ctx.coreDb, ctx.branchId, input.orderId);
+      const quote = await uberQuote({ pickup: c.pickup, dropoff: c.dropoff });
+      return { ...quote, orderId: c.order.id };
+    }),
+
+  /** Solicita el repartidor a Uber Direct con la cotización aceptada. */
+  createUberDelivery: posProcedure
+    .input(
+      z.object({
+        orderId: z.string(),
+        quoteId: z.string().min(4),
+        feeCents: z.number().int().nonnegative().optional(),
+        feePaidBy: z.enum(["BUSINESS", "CUSTOMER"]).default("CUSTOMER"),
+        /** ETA de la cotización (fallback si Uber no devuelve dropoff_eta). */
+        etaMinutes: z.number().int().min(1).max(600).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!uberDirectConfigured()) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Uber Direct no está configurado" });
+      }
+      const c = await loadDeliveryContext(ctx.restaurantDb, ctx.coreDb, ctx.branchId, input.orderId);
+      const feeAbsorbedByBusiness = input.feePaidBy === "CUSTOMER" && c.order.status !== "PENDING";
+      const effectiveFeePaidBy = feeAbsorbedByBusiness ? "BUSINESS" : input.feePaidBy;
+
+      // Evita solicitar dos veces la misma entrega (doble clic / reintento).
+      const [existing] = await ctx.restaurantDb
+        .select({ id: deliveries.id, providerDeliveryId: deliveries.providerDeliveryId, trackingUrl: deliveries.trackingUrl })
+        .from(deliveries)
+        .where(and(eq(deliveries.orderId, c.order.id), eq(deliveries.provider, "UBER_DIRECT")))
+        .limit(1);
+      if (existing?.providerDeliveryId) {
+        return {
+          success: true,
+          delivery: existing,
+          trackingUrl: existing.trackingUrl,
+          alreadyRequested: true,
+          feeAbsorbedByBusiness: false,
+        };
+      }
+
+      const created = await uberCreateDelivery({
+        quoteId: input.quoteId,
+        pickup: c.pickup,
+        dropoff: c.dropoff,
+        manifestItems: c.items.length > 0 ? c.items : [{ name: "Pedido Rabbitty", quantity: 1 }],
+        externalId: c.order.id,
+      });
+      if (!created.id) {
+        throw new TRPCError({ code: "BAD_GATEWAY", message: "Uber no devolvió el id de la entrega" });
+      }
+
+      const now = new Date();
+      const status = mapUberStatus(created.status);
+      // Tiempo estimado de Uber → se refleja en el pedido (y en /track).
+      const rawDropoffEta =
+        typeof created.raw.dropoff_eta === "string" ? new Date(created.raw.dropoff_eta) : null;
+      const quoteEtaAt = input.etaMinutes ? new Date(now.getTime() + input.etaMinutes * 60_000) : null;
+      const etaAt =
+        rawDropoffEta && !Number.isNaN(rawDropoffEta.getTime()) ? rawDropoffEta : quoteEtaAt;
+      const etaMinutes = etaAt
+        ? Math.max(1, Math.round((etaAt.getTime() - now.getTime()) / 60000))
+        : null;
+      const values = {
+        provider: "UBER_DIRECT",
+        providerDeliveryId: created.id,
+        status,
+        trackingUrl: created.trackingUrl,
+        feeCents: input.feeCents ?? created.feeCents ?? null,
+        feePaidBy: effectiveFeePaidBy,
+        externalPayload: created.raw as unknown as Record<string, unknown>,
+        updatedAt: now,
+      };
+
+      const [delivery] = await ctx.restaurantDb
+        .insert(deliveries)
+        .values({
+          id: crypto.randomUUID(),
+          orderId: c.order.id,
+          branchId: c.order.branchId,
+          currency: "MXN",
+          ...values,
+        })
+        .onConflictDoUpdate({ target: deliveries.orderId, set: values })
+        .returning();
+
+      // Igual que en MANUAL: si el cliente paga la entrega, se suma una vez.
+      const fee = Math.round(Number(values.feeCents ?? 0)) / 100;
+      const alreadyCharged = Number(c.order.deliveryFee ?? 0) > 0;
+      const shouldCharge =
+        values.feePaidBy === "CUSTOMER" && fee > 0 && !alreadyCharged && c.order.status === "PENDING";
+      await ctx.restaurantDb
+        .update(orders)
+        .set({
+          externalProvider: "UBER_DIRECT",
+          externalId: created.id,
+          ...(shouldCharge ? { deliveryFee: fee } : {}),
+          ...(etaAt ? { etaAt, etaMinutes } : {}),
+          updatedAt: now,
+        })
+        .where(eq(orders.id, c.order.id));
+
+      if (c.order.customerId) {
+        try {
+          await miniappClient.sendNotification({
+            userId: c.order.customerId,
+            title: "🛵 Repartidor asignado",
+            message: "Uber ya asignó a tu repartidor. Puedes seguir tu pedido en tiempo real.",
+            type: "SYSTEM",
+            route: `/track/${c.order.id}`,
+            dedupeKey: `delivery:${c.order.id}:ASSIGNED`,
+            priority: "high",
+          });
+        } catch (notifyErr) {
+          console.warn("[createUberDelivery] notificar cliente falló:", notifyErr);
+        }
+      }
+
+      return { success: true, delivery, trackingUrl: created.trackingUrl, feeAbsorbedByBusiness };
+    }),
+
+  /** Cancela la entrega en Uber Direct y localmente. */
+  cancelUberDelivery: posProcedure
+    .input(z.object({ orderId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const [delivery] = await ctx.restaurantDb
+        .select({ id: deliveries.id, provider: deliveries.provider, providerDeliveryId: deliveries.providerDeliveryId })
+        .from(deliveries)
+        .where(eq(deliveries.orderId, input.orderId))
+        .limit(1);
+      if (!delivery) throw new TRPCError({ code: "NOT_FOUND", message: "Sin entrega para cancelar" });
+      if (delivery.provider === "UBER_DIRECT" && delivery.providerDeliveryId) {
+        try {
+          await uberCancelDelivery(delivery.providerDeliveryId);
+        } catch (err) {
+          const [row] = await ctx.restaurantDb
+            .select({ status: deliveries.status })
+            .from(deliveries)
+            .where(eq(deliveries.id, delivery.id))
+            .limit(1);
+          // Si el courier ya la recogió, Uber no permite cancelar: no mentimos
+          // localmente; el negocio debe gestionarlo con Uber.
+          if (row?.status === "PICKED_UP" || row?.status === "DELIVERED") {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message: "Uber ya recogió el pedido; no se puede cancelar desde Rabbitty.",
+            });
+          }
+          console.warn("[cancelUberDelivery] Uber cancel falló (se marca local):", err);
+        }
+      }
+      const [updated] = await ctx.restaurantDb
+        .update(deliveries)
+        .set({ status: "CANCELLED", updatedAt: new Date() })
+        .where(eq(deliveries.id, delivery.id))
+        .returning();
+      return { success: true, delivery: updated };
+    }),
+
+  /** Proveedores de entrega disponibles en este entorno (capacidades reales). */
+  deliveryProviders: posProcedure.query(async () => DELIVERY_PROVIDERS),
+
+  /**
+   * Asigna un repartidor al pedido (Fase 0: asignación manual).
+   * Crea/actualiza la entrega y avisa al cliente con quién lleva su pedido.
+   */
+  assignDelivery: posProcedure
+    .input(
+      z.object({
+        orderId: z.string(),
+        provider: z.enum(["MANUAL", "UBER_DIRECT", "RABBITTY_RIDE"]).default("MANUAL"),
+        courierName: z.string().max(80).optional(),
+        courierPhone: z.string().max(30).optional(),
+        trackingUrl: z.string().url().max(500).optional(),
+        feeCents: z.number().int().min(0).max(100000).optional(),
+        /** Quién paga la entrega: el negocio la absorbe o se le suma al cliente. */
+        feePaidBy: z.enum(["BUSINESS", "CUSTOMER"]).default("BUSINESS"),
+        notes: z.string().max(300).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const provider = getProvider(input.provider);
+      if (!provider?.available) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: provider?.unavailableReason || "Proveedor de entrega no disponible",
+        });
+      }
+      if (!provider.capabilities.createDelivery) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Este proveedor no puede crear entregas" });
+      }
+
+      const [order] = await ctx.restaurantDb
+        .select({
+          id: orders.id,
+          branchId: orders.branchId,
+          customerId: orders.customerId,
+          orderType: orders.orderType,
+          deliveryAddress: orders.deliveryAddress,
+          status: orders.status,
+          total: orders.total,
+          deliveryFee: orders.deliveryFee,
+        })
+        .from(orders)
+        .where(eq(orders.id, input.orderId))
+        .limit(1);
+      if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Orden no encontrada" });
+      if (order.branchId !== ctx.branchId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Orden de otra sucursal" });
+      }
+
+      const [uberExisting] = await ctx.restaurantDb
+        .select({ provider: deliveries.provider, providerDeliveryId: deliveries.providerDeliveryId })
+        .from(deliveries)
+        .where(eq(deliveries.orderId, input.orderId))
+        .limit(1);
+      if (uberExisting?.provider === "UBER_DIRECT" && uberExisting.providerDeliveryId) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Este pedido ya tiene una entrega de Uber Direct. Cancélala antes de asignar a mano.",
+        });
+      }
+
+      // Si la orden ya se pagó, no hay forma de cobrarle la entrega al cliente:
+      // se registra como absorbida por el negocio (sin bloquear la operación).
+      const feeAbsorbedByBusiness = input.feePaidBy === "CUSTOMER" && order.status !== "PENDING";
+      const effectiveFeePaidBy = feeAbsorbedByBusiness ? "BUSINESS" : input.feePaidBy;
+
+      const now = new Date();
+      const courierName = input.courierName?.trim() || null;
+      const courierPhone = input.courierPhone?.trim() || null;
+      const values = {
+        provider: provider.id,
+        providerDeliveryId: null as string | null,
+        status: "ASSIGNED",
+        courierName,
+        courierPhone,
+        trackingUrl: input.trackingUrl || null,
+        feeCents: input.feeCents ?? null,
+        feePaidBy: effectiveFeePaidBy,
+        notes: input.notes?.trim() || null,
+        updatedAt: now,
+      };
+
+      const [delivery] = await ctx.restaurantDb
+        .insert(deliveries)
+        .values({
+          id: crypto.randomUUID(),
+          orderId: order.id,
+          branchId: order.branchId,
+          currency: "MXN",
+          ...values,
+        })
+        .onConflictDoUpdate({ target: deliveries.orderId, set: values })
+        .returning();
+
+      // Si el cliente paga la entrega, se suma UNA sola vez y solo si la
+      // orden aún no está pagada (si ya se cobró, se registra aparte).
+      const fee = Math.round(Number(input.feeCents ?? 0)) / 100;
+      const alreadyCharged = Number(order.deliveryFee ?? 0) > 0;
+      const shouldCharge =
+        effectiveFeePaidBy === "CUSTOMER" && fee > 0 && !alreadyCharged && order.status === "PENDING";
+      await ctx.restaurantDb
+        .update(orders)
+        .set({
+          externalProvider: provider.id,
+          ...(shouldCharge ? { deliveryFee: fee, total: Number(order.total ?? 0) + fee } : {}),
+          updatedAt: now,
+        })
+        .where(eq(orders.id, order.id));
+
+      if (order.customerId) {
+        try {
+          await miniappClient.sendNotification({
+            userId: order.customerId,
+            title: "🛵 Repartidor asignado",
+            message: courierName
+              ? `${courierName} llevará tu pedido. Te avisamos cuando salga.`
+              : "Tu pedido ya tiene repartidor asignado. Te avisamos cuando salga.",
+            type: "SYSTEM",
+            route: `/track/${input.orderId}`,
+            dedupeKey: `delivery:${order.id}:ASSIGNED`,
+            priority: "high",
+          });
+        } catch (notifyErr) {
+          console.warn("[assignDelivery] notificar cliente falló (no fatal):", notifyErr);
+        }
+      }
+
+      return { success: true, delivery, feeAbsorbedByBusiness };
+    }),
+
+  /** Avanza el estado de la entrega (recogido / entregado / cancelado). */
+  advanceDelivery: posProcedure
+    .input(
+      z.object({
+        orderId: z.string(),
+        status: z.enum(["PICKED_UP", "DELIVERED", "CANCELLED", "FAILED", "NEEDS_MANUAL_ACTION"]),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const [order] = await ctx.restaurantDb
+        .select({ id: orders.id, branchId: orders.branchId, customerId: orders.customerId, etaAt: orders.etaAt })
+        .from(orders)
+        .where(eq(orders.id, input.orderId))
+        .limit(1);
+      if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Orden no encontrada" });
+      if (order.branchId !== ctx.branchId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Orden de otra sucursal" });
+      }
+
+      const [current] = await ctx.restaurantDb
+        .select({ id: deliveries.id, status: deliveries.status, provider: deliveries.provider })
+        .from(deliveries)
+        .where(eq(deliveries.orderId, order.id))
+        .limit(1);
+      if (!current) throw new TRPCError({ code: "NOT_FOUND", message: "Este pedido no tiene entrega asignada" });
+      if (current.provider === "UBER_DIRECT") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "El estado lo actualiza Uber Direct; usa el seguimiento o cancela la entrega.",
+        });
+      }
+      if (!canTransition(current.status, input.status as DeliveryStatus)) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `No se puede pasar de ${current.status} a ${input.status}`,
+        });
+      }
+
+      const [delivery] = await ctx.restaurantDb
+        .update(deliveries)
+        .set({ status: input.status, updatedAt: new Date() })
+        .where(eq(deliveries.orderId, order.id))
+        .returning();
+
+      if (order.customerId) {
+        const copy: Record<string, { title: string; message: string }> = {
+          PICKED_UP: {
+            title: "🛵 Tu pedido va en camino",
+            message: order.etaAt
+              ? `El repartidor ya recogió tu pedido y llega aproximadamente a las ${new Date(order.etaAt).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}.`
+              : "El repartidor ya recogió tu pedido y va hacia tu dirección.",
+          },
+          DELIVERED: {
+            title: "✅ Pedido entregado",
+            message: "¡Buen provecho! Tu pedido se entregó. Tu cashback Bunz se acredita con la venta.",
+          },
+          CANCELLED: {
+            title: "❌ Entrega cancelada",
+            message: "La entrega de tu pedido se canceló. El local se pondrá en contacto contigo.",
+          },
+          FAILED: {
+            title: "⚠️ Problema con la entrega",
+            message: "La entrega no se pudo completar. El local revisará tu pedido.",
+          },
+        };
+        const notice = copy[input.status];
+        if (notice) {
+          try {
+            await miniappClient.sendNotification({
+              userId: order.customerId,
+              title: notice.title,
+              message: notice.message,
+              type: "SYSTEM",
+              route: `/track/${input.orderId}`,
+              dedupeKey: `delivery:${order.id}:${input.status}`,
+              priority: "high",
+            });
+          } catch (notifyErr) {
+            console.warn("[advanceDelivery] notificar cliente falló (no fatal):", notifyErr);
+          }
+        }
+      }
+
+      return { success: true, delivery };
     }),
 
   /**

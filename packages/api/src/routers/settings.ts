@@ -145,6 +145,19 @@ export const settingsRouter = router({
       name: z.string().min(2).max(80).optional(),
       description: z.string().max(600).nullable().optional(),
       address: z.string().min(3).max(200).optional(),
+      /** Dirección estructurada del local (pickup de repartidores). */
+      addressData: z
+        .object({
+          street1: z.string().max(200).optional(),
+          street2: z.string().max(200).optional(),
+          neighborhood: z.string().max(120).optional(),
+          city: z.string().max(120).optional(),
+          state: z.string().max(120).optional(),
+          zip: z.string().max(20).optional(),
+          country: z.string().max(2).optional(),
+        })
+        .nullable()
+        .optional(),
       website: z.string().max(200).nullable().optional(),
       /** Días activos ISO-8601: 1=lunes … 7=domingo */
       activeDays: z.array(z.number().int().min(1).max(7)).min(1).max(7).optional(),
@@ -177,6 +190,24 @@ export const settingsRouter = router({
       if (input.name !== undefined) patch.name = input.name.trim();
       if (input.description !== undefined) patch.description = input.description?.trim() || null;
       if (input.address !== undefined) patch.address = input.address.trim();
+      if (input.addressData !== undefined) {
+        patch.addressData = input.addressData ?? null;
+        // Si no mandaron texto, se compone desde los campos para no romper
+        // listados, mapas ni la ficha pública.
+        if (input.addressData && !input.address?.trim()) {
+          const composed = [
+            input.addressData.street1?.trim(),
+            input.addressData.street2?.trim(),
+            input.addressData.neighborhood?.trim() ? `Col. ${input.addressData.neighborhood.trim()}` : '',
+            [input.addressData.city?.trim(), input.addressData.state?.trim(), input.addressData.zip?.trim()]
+              .filter(Boolean)
+              .join(', '),
+          ]
+            .filter(Boolean)
+            .join(', ');
+          if (composed) patch.address = composed.slice(0, 200);
+        }
+      }
       if (website !== undefined) patch.website = website;
       if (input.activeDays !== undefined) patch.activeDays = JSON.stringify(Array.from(new Set(input.activeDays)).sort());
       if (input.startTime !== undefined) patch.startTime = input.startTime;

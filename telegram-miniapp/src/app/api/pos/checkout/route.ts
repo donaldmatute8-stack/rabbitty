@@ -5,12 +5,87 @@ import { eq, and, desc, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { users, ownedBusinesses } from '@/db/schema';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
+import { isBusinessOpen } from '@/lib/chat';
 import { recordLedgerTransaction, findLedgerEntry } from '@/lib/ledgerHelper';
 
 // IVA canónico idéntico al POS (packages/api/src/routers/pos.ts calcTax):
 // los precios del menú incluyen IVA 16% — el desglose se deriva, nunca se suma.
 const TAX_RATE = 0.16;
 const r2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * Dirección estructurada de entrega.
+ * Uber Direct (y cualquier proveedor serio) necesita campos separados, no una
+ * línea de texto. `text` se conserva para mostrar/WhatsApp/seguimiento.
+ */
+interface DeliveryAddressData {
+  street1: string;
+  street2?: string;
+  neighborhood?: string;
+  city: string;
+  state: string;
+  zip: string;
+  country: string;
+  phone?: string;
+  notes?: string;
+  lat?: number;
+  lng?: number;
+}
+
+function normalizeDeliveryAddress(
+  raw: unknown,
+  fallbackText?: string,
+): { text: string; data: DeliveryAddressData } | null {
+  const a = (raw ?? {}) as Record<string, unknown>;
+  const str = (k: string) => (typeof a[k] === 'string' ? (a[k] as string).trim() : '');
+  const num = (k: string) => (typeof a[k] === 'number' && Number.isFinite(a[k]) ? (a[k] as number) : undefined);
+
+  const street1 = str('street1');
+  const city = str('city');
+  const state = str('state');
+  const zip = str('zip');
+
+  // Si no viene estructurada, aceptamos el texto libre (compatibilidad) como calle.
+  if (!street1 && fallbackText) {
+    return {
+      text: fallbackText.trim().slice(0, 300),
+      data: {
+        street1: fallbackText.trim().slice(0, 200),
+        city: city || '',
+        state: state || '',
+        zip: zip || '',
+        country: (str('country') || 'MX').toUpperCase(),
+      },
+    };
+  }
+
+  if (street1.length < 4 || city.length < 3 || state.length < 2 || zip.length < 4) return null;
+
+  const data: DeliveryAddressData = {
+    street1,
+    street2: str('street2') || undefined,
+    neighborhood: str('neighborhood') || undefined,
+    city,
+    state,
+    zip,
+    country: (str('country') || 'MX').toUpperCase(),
+    phone: str('phone') || undefined,
+    notes: str('notes') || undefined,
+    lat: num('lat'),
+    lng: num('lng'),
+  };
+
+  const text = [
+    data.street1,
+    data.street2,
+    data.neighborhood ? `Col. ${data.neighborhood}` : '',
+    `${data.city}, ${data.state} ${data.zip}`,
+  ]
+    .filter(Boolean)
+    .join(', ');
+
+  return { text: text.slice(0, 300), data };
+}
 
 // H-ORDER-LOCAL: el cliente del perfil afiliado manda el id del NEGOCIO
 // (ownedBusinesses.id) en `branchId` — NO es un branches.id, y el INSERT en
@@ -33,6 +108,35 @@ async function resolveBranchId(branchOrBusinessId: string): Promise<string | nul
   return byBusiness?.[0]?.id ?? null;
 }
 
+/** Motivo legible si el negocio está cerrado; null si puede recibir pedidos. */
+async function businessClosedReason(branchId: string): Promise<string | null> {
+  try {
+    const [biz] = await restaurantDb
+      .select({ businessId: restaurants.businessId })
+      .from(branches)
+      .innerJoin(restaurants, eq(branches.restaurantId, restaurants.id))
+      .where(eq(branches.id, branchId))
+      .limit(1);
+    if (!biz?.businessId) return null;
+    const [owner] = await db
+      .select({
+        activeDays: ownedBusinesses.activeDays,
+        startTime: ownedBusinesses.startTime,
+        endTime: ownedBusinesses.endTime,
+        timezone: ownedBusinesses.timezone,
+      })
+      .from(ownedBusinesses)
+      .where(eq(ownedBusinesses.id, biz.businessId))
+      .limit(1);
+    if (!owner) return null;
+    if (isBusinessOpen(owner)) return null;
+    return `El local está cerrado ahora (${owner.startTime}–${owner.endTime}). Puedes pedir dentro del horario.`;
+  } catch {
+    // Si falla la consulta, no bloqueamos el pedido.
+    return null;
+  }
+}
+
 export async function POST(req: Request) {
   try {    const body = await req.json();
     const {
@@ -44,6 +148,7 @@ export async function POST(req: Request) {
       splitPaymentAmount,
       orderType: requestedOrderType,
       deliveryAddress,
+      deliveryAddressData,
     } = body;
 
     // Domicilio / recoger / mesa: el POS necesita distinguirlo para prometer
@@ -54,10 +159,26 @@ export async function POST(req: Request) {
         : requestedOrderType === 'DELIVERY'
           ? 'DELIVERY'
           : 'TAKEAWAY';
-    const normalizedAddress =
-      resolvedOrderType === 'DELIVERY' && typeof deliveryAddress === 'string'
-        ? deliveryAddress.trim().slice(0, 300)
+    const addressResult =
+      resolvedOrderType === 'DELIVERY'
+        ? normalizeDeliveryAddress(
+            deliveryAddressData,
+            typeof deliveryAddress === 'string' ? deliveryAddress : undefined,
+          )
         : null;
+    // Sin dirección válida no se puede entregar: se rechaza acá, no en el POS
+    // cuando ya prometimos tiempo de entrega.
+    if (resolvedOrderType === 'DELIVERY' && !addressResult) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Falta la dirección de entrega (calle, ciudad, estado y CP) para el pedido a domicilio.',
+        },
+        { status: 400 },
+      );
+    }
+    const normalizedAddress = addressResult?.text ?? null;
+    const normalizedAddressData = addressResult?.data ?? null;
 
     // Si pasaron existingOrderId, es un Split Bill.
     // Si no, es una orden nueva. La mesa es opcional si hay usuario
@@ -94,6 +215,12 @@ export async function POST(req: Request) {
       }
       if (!orderBranchId) {
         return NextResponse.json({ success: false, error: 'Mesa no válida' }, { status: 404 });
+      }
+
+      // Pedidos sin mesa (app para llevar / domicilio) solo dentro del horario.
+      if (!tableId) {
+        const closed = await businessClosedReason(orderBranchId);
+        if (closed) return NextResponse.json({ success: false, error: closed }, { status: 409 });
       }
 
       interface OrderItemInput {
@@ -205,6 +332,7 @@ export async function POST(req: Request) {
         status: paymentMethod === 'BUNZ' ? 'PAID' : 'PENDING',
         orderType: resolvedOrderType,
         deliveryAddress: normalizedAddress,
+        deliveryAddressData: normalizedAddressData,
       }).returning();
 
       // Fase C: identificar al comensal en la orden (para POS/cuenta/cashback)

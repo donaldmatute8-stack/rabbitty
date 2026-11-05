@@ -564,7 +564,15 @@ export async function reconcileOrderCashback(
   params: { orderId: string }
 ): Promise<{ minted: boolean; bunz?: number; skipped?: "ALREADY_REWARDED" | "NO_PAYER" | "NOT_PAID" | "NO_ORDER" | "NO_FIAT" }> {
   const [order] = await db
-    .select({ id: orders.id, customerId: orders.customerId, branchId: orders.branchId, status: orders.status, total: orders.total, bunzReward: orders.bunzReward })
+    .select({
+      id: orders.id,
+      customerId: orders.customerId,
+      branchId: orders.branchId,
+      status: orders.status,
+      total: orders.total,
+      bunzReward: orders.bunzReward,
+      deliveryFee: orders.deliveryFee,
+    })
     .from(orders)
     .where(eq(orders.id, params.orderId))
     .limit(1);
@@ -604,6 +612,11 @@ export async function reconcileOrderCashback(
       fiatMxn = Math.max(0, Number(covered.amountMxn || 0) - Number(covered.bunzAmount || 0));
     }
   }
+  // Decisión de producto: el costo de entrega NO genera cashback hasta que
+  // Rabbitty Ride esté integrado. Se descuenta de la base fiat.
+  const deliveryFee = Number(order.deliveryFee ?? 0);
+  if (deliveryFee > 0) fiatMxn = Math.max(0, fiatMxn - deliveryFee);
+
   if (fiatMxn <= 0) return { minted: false, skipped: "NO_FIAT" };
 
   // businessId del comercio (branches → restaurants.businessId), fallback del branchId

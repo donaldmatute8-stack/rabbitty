@@ -22,7 +22,10 @@ interface OrderCartSheetProps {
   onRemoveItem: (id: string) => void;
   onUpdateQuantity: (id: string, delta: number) => void;
   onClearCart: () => void;
-  onSubmitOrder: (orderType: 'DINE_IN' | 'PICKUP' | 'DELIVERY', address?: string) => Promise<void>;
+  onSubmitOrder: (
+    orderType: 'DINE_IN' | 'PICKUP' | 'DELIVERY',
+    address?: { text: string; data: Record<string, unknown> },
+  ) => Promise<void>;
   tableNumber?: number | null;
   currency?: string;
   rewardPercentage?: number;
@@ -55,7 +58,30 @@ export function OrderCartSheet({
   const [orderType, setOrderType] = React.useState<'DINE_IN' | 'PICKUP' | 'DELIVERY'>(
     tableNumber ? 'DINE_IN' : 'PICKUP'
   );
-  const [deliveryAddress, setDeliveryAddress] = React.useState('');
+  const [address, setAddress] = React.useState({
+    street1: '',
+    street2: '',
+    neighborhood: '',
+    city: '',
+    state: '',
+    zip: '',
+    country: 'MX',
+    phone: '',
+    notes: '',
+  });
+  const addressValid =
+    address.street1.trim().length >= 4 &&
+    address.city.trim().length >= 3 &&
+    address.state.trim().length >= 2 &&
+    address.zip.trim().length >= 4;
+  const addressText = [
+    address.street1.trim(),
+    address.street2.trim(),
+    address.neighborhood.trim() ? `Col. ${address.neighborhood.trim()}` : '',
+    `${address.city.trim()}, ${address.state.trim()} ${address.zip.trim()}`,
+  ]
+    .filter(Boolean)
+    .join(', ');
 
   // H-ORDEN-LOCAL: con check-in activo el destino es el local, sin excepción.
   React.useEffect(() => {
@@ -74,7 +100,12 @@ export function OrderCartSheet({
   const handleConfirm = async () => {
     try {
       setSubmitting(true);
-      await onSubmitOrder(orderType, orderType === 'DELIVERY' ? deliveryAddress.trim() : undefined);
+      await onSubmitOrder(
+        orderType,
+        orderType === 'DELIVERY'
+          ? { text: addressText, data: { ...address, country: address.country.trim().toUpperCase() || 'MX' } }
+          : undefined,
+      );
       onClose();
     } catch (e) {
       console.error(e);
@@ -180,18 +211,74 @@ export function OrderCartSheet({
                   </div>
 
                   {orderType === 'DELIVERY' && (
-                    <div className="mb-4 space-y-1">
+                    <div className="mb-4 space-y-2">
                       <label className="text-[10px] font-black uppercase tracking-wider text-white/50">
                         Dirección de entrega
                       </label>
                       <input
-                        value={deliveryAddress}
-                        onChange={(e) => setDeliveryAddress(e.target.value)}
-                        placeholder="Calle, número, colonia y referencias"
+                        value={address.street1}
+                        onChange={(e) => setAddress((a) => ({ ...a, street1: e.target.value }))}
+                        placeholder="Calle y número *"
+                        className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-[#E91E63]/60"
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          value={address.street2}
+                          onChange={(e) => setAddress((a) => ({ ...a, street2: e.target.value }))}
+                          placeholder="Interior / depto"
+                          className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-[#E91E63]/60"
+                        />
+                        <input
+                          value={address.neighborhood}
+                          onChange={(e) => setAddress((a) => ({ ...a, neighborhood: e.target.value }))}
+                          placeholder="Colonia"
+                          className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-[#E91E63]/60"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          value={address.city}
+                          onChange={(e) => setAddress((a) => ({ ...a, city: e.target.value }))}
+                          placeholder="Ciudad *"
+                          className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-[#E91E63]/60"
+                        />
+                        <input
+                          value={address.state}
+                          onChange={(e) => setAddress((a) => ({ ...a, state: e.target.value }))}
+                          placeholder="Estado *"
+                          className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-[#E91E63]/60"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          value={address.zip}
+                          onChange={(e) => setAddress((a) => ({ ...a, zip: e.target.value }))}
+                          placeholder="Código postal *"
+                          inputMode="numeric"
+                          className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-[#E91E63]/60"
+                        />
+                        <input
+                          value={address.country}
+                          onChange={(e) => setAddress((a) => ({ ...a, country: e.target.value }))}
+                          placeholder="País"
+                          className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-[#E91E63]/60"
+                        />
+                      </div>
+                      <input
+                        value={address.phone}
+                        onChange={(e) => setAddress((a) => ({ ...a, phone: e.target.value }))}
+                        placeholder="Teléfono de contacto"
+                        inputMode="tel"
+                        className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-[#E91E63]/60"
+                      />
+                      <input
+                        value={address.notes}
+                        onChange={(e) => setAddress((a) => ({ ...a, notes: e.target.value }))}
+                        placeholder="Referencias para el repartidor"
                         className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-[#E91E63]/60"
                       />
                       <p className="m-0 text-[10px] text-white/40">
-                        El local usará esta dirección para calcular el tiempo de entrega y asignar al repartidor.
+                        * Obligatorios. Con estos campos el local puede cotizar y solicitar repartidor.
                       </p>
                     </div>
                   )}
@@ -283,7 +370,7 @@ export function OrderCartSheet({
                   <button
                     type="button"
                     onClick={handleConfirm}
-                    disabled={submitting || (orderType === 'DELIVERY' && deliveryAddress.trim().length < 8)}
+                    disabled={submitting || (orderType === 'DELIVERY' && !addressValid)}
                     className="w-full bg-linear-to-r from-[#E91E63] to-[#FF4081] text-white py-3.5 px-4 rounded-2xl font-black text-sm tracking-wide shadow-lg shadow-[#E91E63]/30 active:scale-98 transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     <span>

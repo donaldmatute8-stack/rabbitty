@@ -846,6 +846,123 @@ export default function PosPage() {
   // ── H-TRACK: botones de etapa (Recibido → Preparando → Listo → Entregado)
   // para pedidos desde la app (fromApp): el tracking bidireccional
   // mobile ↔ POS vive aquí — el Rabbitter ve la etapa en su tarjeta.
+  const [deliveryDialog, setDeliveryDialog] = useState<{
+    orderId: string;
+    name: string;
+    phone: string;
+    fee: string;
+    feePaidBy: 'BUSINESS' | 'CUSTOMER';
+  } | null>(null);
+
+  const { data: deliveryProviders } = trpc.pos.deliveryProviders.useQuery(undefined, {
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  const [uberQuoteDialog, setUberQuoteDialog] = useState<{
+    orderId: string;
+    quoteId: string;
+    feeCents: number;
+    etaMinutes: number;
+    payer: 'BUSINESS' | 'CUSTOMER';
+  } | null>(null);
+
+  const uberQuoteMutation = trpc.pos.quoteUberDelivery.useMutation({
+    onSuccess: (q) =>
+      setUberQuoteDialog({
+        orderId: q.orderId,
+        quoteId: q.quoteId,
+        feeCents: q.feeCents,
+        etaMinutes: q.durationMinutes,
+        payer: 'CUSTOMER',
+      }),
+    onError: (e) => toast.error(e.message || "No se pudo cotizar con Uber"),
+  });
+
+  const createUberMutation = trpc.pos.createUberDelivery.useMutation({
+    onSuccess: (data) => {
+      if (data?.feeAbsorbedByBusiness) {
+        toast.info("La orden ya estaba pagada: esta entrega la absorbe el negocio");
+      }
+      toast.success("Uber Direct asignado — el cliente puede seguirlo");
+      setUberQuoteDialog(null);
+      void refetchActiveTabs();
+    },
+    onError: (e) => toast.error(e.message || "No se pudo solicitar la entrega"),
+  });
+
+  const cancelUberMutation = trpc.pos.cancelUberDelivery.useMutation({
+    onSuccess: () => {
+      toast.info("Entrega cancelada en Uber");
+      void refetchActiveTabs();
+    },
+    onError: (e) => toast.error(e.message || "No se pudo cancelar en Uber"),
+  });
+
+  const assignDeliveryMutation = trpc.pos.assignDelivery.useMutation({
+    onSuccess: (data) => {
+      if (data?.feeAbsorbedByBusiness) {
+        toast.info("La orden ya estaba pagada: esta entrega la absorbe el negocio");
+      }
+      toast.success("Repartidor asignado — el cliente recibe el aviso");
+      setDeliveryDialog(null);
+      void refetchActiveTabs();
+    },
+    onError: (e) => toast.error(e.message || "No se pudo asignar"),
+  });
+
+  const advanceDeliveryMutation = trpc.pos.advanceDelivery.useMutation({
+    onSuccess: (_d, vars) => {
+      if (vars.status === "DELIVERED") toast.success("Entrega completada");
+      else if (vars.status === "PICKED_UP") toast.info("Pedido en camino");
+      else toast.info("Entrega actualizada");
+      void refetchActiveTabs();
+    },
+    onError: (e) => toast.error(e.message || "No se pudo actualizar la entrega"),
+  });
+
+  const buildDispatchText = (tab: {
+    orderId: string;
+    items?: Array<{ name: string; quantity: number }>;
+    customer?: { name?: string | null; phone?: string | null } | null;
+    deliveryAddress?: string | null;
+    total?: number;
+  }) => {
+    const items = (tab.items ?? []).map((it) => `${it.quantity}× ${it.name}`).join('\n');
+    return [
+      `🛵 Pedido ${String(tab.orderId).slice(0, 8)}`,
+      tab.customer?.name ? `Cliente: ${tab.customer.name}` : '',
+      items,
+      tab.deliveryAddress ? `📍 ${tab.deliveryAddress}` : '',
+      tab.customer?.phone ? `📞 ${tab.customer.phone}` : '',
+      `💵 Cobrar: $${Number(tab.total ?? 0).toFixed(2)} MXN`,
+      '',
+      'Entrega de Rabbitty. Responde con tu tiempo estimado.',
+    ]
+      .filter((line) => line !== '')
+      .join('\n');
+  };
+
+  const openCourierWhatsApp = (tab: {
+    orderId: string;
+    items?: Array<{ name: string; quantity: number }>;
+    customer?: { name?: string | null; phone?: string | null } | null;
+    deliveryAddress?: string | null;
+    total?: number;
+    delivery?: { courierPhone?: string | null } | null;
+  }) => {
+    const text = encodeURIComponent(buildDispatchText(tab));
+    const phone = String(tab.delivery?.courierPhone || '').replace(/[^\d]/g, '');
+    const url = phone ? `https://wa.me/${phone}?text=${text}` : `https://wa.me/?text=${text}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const openDeliveryRoute = (tab: { deliveryAddress?: string | null }) => {
+    if (!tab.deliveryAddress) return;
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(tab.deliveryAddress)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   const stageMutation = trpc.pos.setOrderStage.useMutation({
     onSuccess: (_d, vars) => {
       if (vars.stage === 'READY') toast.success('Pedido listo — el Rabbitter lo ve en su app');
@@ -3983,6 +4100,198 @@ export default function PosPage() {
         </div>
       </Dialog>
 
+      {/* ── Uber Direct: cotización y solicitud ── */}
+      <Dialog
+        open={!!uberQuoteDialog}
+        onClose={() => setUberQuoteDialog(null)}
+        title="Uber Direct"
+        className="max-w-sm w-full"
+      >
+        <div className="space-y-3 p-1">
+          <p className="m-0 text-xs text-gray-400">
+            Cotización de Uber para este pedido. Al solicitar, Uber asigna al repartidor.
+          </p>
+
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-1.5">
+            <div className="flex items-center justify-between text-sm font-black text-white">
+              <span>Costo de entrega</span>
+              <span>${((uberQuoteDialog?.feeCents ?? 0) / 100).toFixed(2)} MXN</span>
+            </div>
+            <div className="flex items-center justify-between text-[11px] text-gray-400">
+              <span>Tiempo estimado</span>
+              <span>~{uberQuoteDialog?.etaMinutes ?? 0} min</span>
+            </div>
+          </div>
+
+          <label className="block space-y-1">
+            <span className="block text-[10px] font-black uppercase tracking-wider text-gray-400">
+              Quién paga la entrega
+            </span>
+            <select
+              value={uberQuoteDialog?.payer ?? "CUSTOMER"}
+              onChange={(e) =>
+                setUberQuoteDialog((prev) =>
+                  prev ? { ...prev, payer: e.target.value as 'BUSINESS' | 'CUSTOMER' } : prev,
+                )
+              }
+              className="h-[42px] w-full rounded-xl bg-white/5 border border-white/10 px-3 text-sm text-white outline-none"
+            >
+              <option value="CUSTOMER" className="bg-[#0b0b12]">El cliente</option>
+              <option value="BUSINESS" className="bg-[#0b0b12]">El negocio (lo absorbe)</option>
+            </select>
+          </label>
+
+          <div className="flex gap-2 pt-1">
+            <Button variant="secondary" className="flex-1" onClick={() => setUberQuoteDialog(null)}>
+              Cancelar
+            </Button>
+            <Button
+              className="flex-1"
+              disabled={!uberQuoteDialog || createUberMutation.isPending}
+              onClick={() => {
+                if (!uberQuoteDialog) return;
+                createUberMutation.mutate({
+                  orderId: uberQuoteDialog.orderId,
+                  quoteId: uberQuoteDialog.quoteId,
+                  feeCents: uberQuoteDialog.feeCents,
+                  feePaidBy: uberQuoteDialog.payer,
+                  etaMinutes: uberQuoteDialog.etaMinutes || undefined,
+                });
+              }}
+            >
+              {createUberMutation.isPending ? "Solicitando…" : "Solicitar entrega"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* ── Asignar repartidor (Fase 0: manual) ── */}
+      <Dialog
+        open={!!deliveryDialog}
+        onClose={() => setDeliveryDialog(null)}
+        title="Asignar repartidor"
+        className="max-w-sm w-full"
+      >
+        <div className="space-y-3 p-1">
+          <p className="text-xs text-gray-400">
+            Registra quién lleva el pedido. El Rabbitter recibe el aviso con su nombre.
+          </p>
+          <input
+            value={deliveryDialog?.name ?? ""}
+            onChange={(e) =>
+              setDeliveryDialog((prev) => (prev ? { ...prev, name: e.target.value } : prev))
+            }
+            placeholder="Nombre del repartidor"
+            className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-400/60"
+          />
+          <input
+            value={deliveryDialog?.phone ?? ""}
+            onChange={(e) =>
+              setDeliveryDialog((prev) => (prev ? { ...prev, phone: e.target.value } : prev))
+            }
+            placeholder="Teléfono (opcional)"
+            inputMode="tel"
+            className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-400/60"
+          />
+
+          <div className="grid grid-cols-2 gap-2">
+            <label className="space-y-1">
+              <span className="block text-[10px] font-black uppercase tracking-wider text-gray-400">
+                Costo entrega (MXN)
+              </span>
+              <input
+                value={deliveryDialog?.fee ?? ""}
+                onChange={(e) =>
+                  setDeliveryDialog((prev) => (prev ? { ...prev, fee: e.target.value } : prev))
+                }
+                placeholder="0.00"
+                inputMode="decimal"
+                className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-400/60"
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="block text-[10px] font-black uppercase tracking-wider text-gray-400">
+                Lo paga
+              </span>
+              <select
+                value={deliveryDialog?.feePaidBy ?? "BUSINESS"}
+                onChange={(e) =>
+                  setDeliveryDialog((prev) =>
+                    prev ? { ...prev, feePaidBy: e.target.value as 'BUSINESS' | 'CUSTOMER' } : prev,
+                  )
+                }
+                className="h-[42px] w-full rounded-xl bg-white/5 border border-white/10 px-3 text-sm text-white outline-none"
+              >
+                <option value="BUSINESS" className="bg-[#0b0b12]">El negocio</option>
+                <option value="CUSTOMER" className="bg-[#0b0b12]">El cliente</option>
+              </select>
+            </label>
+          </div>
+          {deliveryDialog?.feePaidBy === 'CUSTOMER' && (
+            <p className="m-0 text-[10px] text-amber-300">
+              Se sumará al total del pedido (solo si aún no está pagado).
+            </p>
+          )}
+
+          <div className="space-y-1.5">
+            <p className="m-0 text-[10px] font-black uppercase tracking-wider text-gray-400">
+              Proveedor
+            </p>
+            {(deliveryProviders ?? []).map((provider) => (
+              <div
+                key={provider.id}
+                className={cn(
+                  "flex items-start gap-2 rounded-xl border px-2.5 py-2",
+                  provider.id === "MANUAL"
+                    ? "border-cyan-400/40 bg-cyan-400/10"
+                    : "border-white/10 bg-white/[0.03] opacity-70",
+                )}
+              >
+                <span
+                  className={cn(
+                    "mt-1 h-2 w-2 shrink-0 rounded-full",
+                    provider.available ? "bg-cyan-400" : "bg-gray-600",
+                  )}
+                />
+                <div className="min-w-0">
+                  <p className="m-0 text-[11.5px] font-black text-white">{provider.name}</p>
+                  <p className="m-0 text-[10px] leading-snug text-gray-400">
+                    {provider.available ? provider.description : provider.unavailableReason}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <Button variant="secondary" className="flex-1" onClick={() => setDeliveryDialog(null)}>
+              Cancelar
+            </Button>
+            <Button
+              className="flex-1"
+              disabled={!deliveryDialog?.name.trim() || assignDeliveryMutation.isPending}
+              onClick={() => {
+                if (!deliveryDialog) return;
+                const feeNumber = Number.parseFloat(deliveryDialog.fee.replace(',', '.'));
+                assignDeliveryMutation.mutate({
+                  orderId: deliveryDialog.orderId,
+                  provider: "MANUAL",
+                  courierName: deliveryDialog.name.trim(),
+                  courierPhone: deliveryDialog.phone.trim() || undefined,
+                  feeCents:
+                    Number.isFinite(feeNumber) && feeNumber > 0
+                      ? Math.round(feeNumber * 100)
+                      : undefined,
+                  feePaidBy: deliveryDialog.feePaidBy,
+                });
+              }}
+            >
+              {assignDeliveryMutation.isPending ? "Asignando…" : "Asignar"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
       {/* ── Tiempo estimado de preparación (se promete al cliente) ── */}
       <Dialog
         open={!!etaPrompt}
@@ -4225,6 +4534,136 @@ export default function PosPage() {
                     </div>
                   )}
 
+                  {/* Entrega (domicilio): asignar repartidor y seguir el estado */}
+                  {tab.fromApp && tab.orderType === 'DELIVERY' && (
+                    <div className="mt-2 space-y-2 rounded-xl border border-white/10 bg-white/[0.04] p-2.5">
+                      <div className="flex items-center justify-between">
+                        <p className="m-0 text-[10px] font-black uppercase tracking-wider text-gray-400">
+                          Entrega
+                        </p>
+                        <span className="text-[10px] font-black uppercase tracking-wide text-gray-300">
+                          {tab.delivery?.provider === 'UBER_DIRECT'
+                            ? 'Uber Direct'
+                            : tab.delivery?.provider === 'RABBITTY_RIDE'
+                              ? 'Rabbitty Ride'
+                              : 'Manual'}
+                          {tab.delivery ? ` · ${tab.delivery.status}` : ''}
+                        </span>
+                      </div>
+
+                      {tab.delivery ? (
+                        <>
+                          <p className="m-0 text-[12px] font-bold text-white">
+                            {tab.delivery.courierName || 'Repartidor sin nombre'}
+                            {tab.delivery.courierPhone ? (
+                              <span className="ml-2 font-medium text-gray-400">{tab.delivery.courierPhone}</span>
+                            ) : null}
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {tab.delivery.provider !== 'UBER_DIRECT' && tab.delivery.status === 'ASSIGNED' && (
+                              <button
+                                type="button"
+                                onClick={() => advanceDeliveryMutation.mutate({ orderId: tab.orderId, status: 'PICKED_UP' })}
+                                disabled={advanceDeliveryMutation.isPending}
+                                className="rounded-lg bg-cyan-400/20 border border-cyan-400/40 px-2.5 py-1.5 text-[10.5px] font-black text-cyan-200 cursor-pointer disabled:opacity-50"
+                              >
+                                Marcar recogido
+                              </button>
+                            )}
+                            {tab.delivery.provider !== 'UBER_DIRECT' && tab.delivery.status === 'PICKED_UP' && (
+                              <button
+                                type="button"
+                                onClick={() => advanceDeliveryMutation.mutate({ orderId: tab.orderId, status: 'DELIVERED' })}
+                                disabled={advanceDeliveryMutation.isPending}
+                                className="rounded-lg bg-emerald-400/20 border border-emerald-400/40 px-2.5 py-1.5 text-[10.5px] font-black text-emerald-200 cursor-pointer disabled:opacity-50"
+                              >
+                                Marcar entregado
+                              </button>
+                            )}
+                            {(tab.delivery.status === 'ASSIGNED' || tab.delivery.status === 'PICKED_UP') && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  tab.delivery?.provider === 'UBER_DIRECT'
+                                    ? cancelUberMutation.mutate({ orderId: tab.orderId })
+                                    : advanceDeliveryMutation.mutate({ orderId: tab.orderId, status: 'CANCELLED' })
+                                }
+                                disabled={advanceDeliveryMutation.isPending || cancelUberMutation.isPending}
+                                className="rounded-lg bg-red-500/15 border border-red-500/40 px-2.5 py-1.5 text-[10.5px] font-black text-red-300 cursor-pointer disabled:opacity-50"
+                              >
+                                Cancelar entrega
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDeliveryDialog({
+                              orderId: tab.orderId,
+                              name: '',
+                              phone: '',
+                              fee: '',
+                              feePaidBy: 'CUSTOMER',
+                            })
+                          }
+                          className="w-full rounded-lg border border-white/15 bg-white/5 py-2 text-[11px] font-black text-white hover:bg-white/10 cursor-pointer"
+                        >
+                          Asignar repartidor
+                        </button>
+                      )}
+
+                      {!tab.delivery && (deliveryProviders ?? []).some((p) => p.id === 'UBER_DIRECT' && p.available) && (
+                        <button
+                          type="button"
+                          onClick={() => uberQuoteMutation.mutate({ orderId: tab.orderId })}
+                          disabled={uberQuoteMutation.isPending}
+                          className="w-full rounded-lg border border-cyan-400/40 bg-cyan-400/15 py-2 text-[11px] font-black text-cyan-100 hover:bg-cyan-400/25 cursor-pointer disabled:opacity-50"
+                        >
+                          {uberQuoteMutation.isPending ? 'Cotizando…' : 'Cotizar con Uber Direct'}
+                        </button>
+                      )}
+
+                      <div className="flex flex-wrap gap-2 pt-0.5">
+                        <button
+                          type="button"
+                          onClick={() => openCourierWhatsApp(tab)}
+                          className="rounded-lg bg-emerald-500/15 border border-emerald-500/40 px-2.5 py-1.5 text-[10.5px] font-black text-emerald-200 hover:bg-emerald-500/25 cursor-pointer"
+                        >
+                          Enviar por WhatsApp
+                        </button>
+                        {tab.deliveryAddress && (
+                          <button
+                            type="button"
+                            onClick={() => openDeliveryRoute(tab)}
+                            className="rounded-lg bg-white/5 border border-white/15 px-2.5 py-1.5 text-[10.5px] font-black text-white hover:bg-white/10 cursor-pointer"
+                          >
+                            Ruta en Maps
+                          </button>
+                        )}
+                        {tab.delivery?.trackingUrl && (
+                          <a
+                            href={tab.delivery.trackingUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-lg bg-white/5 border border-white/15 px-2.5 py-1.5 text-[10.5px] font-black text-white hover:bg-white/10 no-underline"
+                          >
+                            Seguimiento Uber
+                          </a>
+                        )}
+                        {tab.delivery?.courierPhone && (
+                          <a
+                            href={`tel:${tab.delivery.courierPhone}`}
+                            className="rounded-lg bg-white/5 border border-white/15 px-2.5 py-1.5 text-[10.5px] font-black text-white hover:bg-white/10 no-underline"
+                          >
+                            Llamar
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Comanda: items ordenados desde la app */}
                   {tab.items && tab.items.length > 0 && (
                     <div className="pt-2 border-t border-white/5 flex flex-wrap gap-1.5">
@@ -4295,13 +4734,22 @@ export default function PosPage() {
                           })}
                         </div>
 
-                        {tab.fromApp && stage === "PREPARING" && tab.etaMinutes ? (
-                          <div className="inline-flex items-center gap-1.5 rounded-full bg-cyan-400/15 border border-cyan-400/35 px-2.5 py-1">
-                            <span className="text-[10px] font-black uppercase tracking-wide text-cyan-300">
-                              ⏱ Prometido al cliente: ~{tab.etaMinutes} min
-                            </span>
-                          </div>
-                        ) : null}
+                        <div className="flex flex-wrap gap-1.5">
+                          {tab.fromApp && tab.prepEtaMinutes ? (
+                            <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-400/15 border border-amber-400/35 px-2.5 py-1">
+                              <span className="text-[10px] font-black uppercase tracking-wide text-amber-200">
+                                👨‍🍳 Cocina: ~{tab.prepEtaMinutes} min
+                              </span>
+                            </div>
+                          ) : null}
+                          {tab.fromApp && tab.etaMinutes ? (
+                            <div className="inline-flex items-center gap-1.5 rounded-full bg-cyan-400/15 border border-cyan-400/35 px-2.5 py-1">
+                              <span className="text-[10px] font-black uppercase tracking-wide text-cyan-300">
+                                {tab.delivery ? '🛵 Entrega' : '⏱ Prometido'} al cliente: ~{tab.etaMinutes} min
+                              </span>
+                            </div>
+                          ) : null}
+                        </div>
 
                         {isEmpty ? (
                           <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 px-3 py-2.5">
