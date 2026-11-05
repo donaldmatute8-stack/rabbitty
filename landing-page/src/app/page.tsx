@@ -192,6 +192,38 @@ export default function LandingPage() {
     return () => clearTimeout(timeout);
   }, [currentText, isDeleting, currentWordIndex]);
 
+  // Control de scroll para Dock central
+  // En el cover (top <= 40px): se ubica a top-20 (~80px) debajo del header
+  // Al hacer scroll hacia abajo: se oculta suavemente
+  // Al hacer scroll hacia arriba: reaparece arriba a la altura del nav regular (top-4, ~16px) junto con la flecha
+  const [scrollYPos, setScrollYPos] = useState(0);
+  const [isScrollingUp, setIsScrollingUp] = useState(false);
+
+  useEffect(() => {
+    let lastScrollY = window.scrollY;
+
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      const scrollingUp = currentScrollY < lastScrollY;
+      setScrollYPos(currentScrollY);
+      setIsScrollingUp(scrollingUp);
+      lastScrollY = currentScrollY;
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const isCover = scrollYPos <= 40;
+  // Visible en el cover inicial o cuando el usuario hace scroll up
+  const showCenterDock = isCover || isScrollingUp;
+  // Flecha para subir aparece cuando no está en el cover y va hacia arriba
+  const showScrollTop = !isCover && isScrollingUp;
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const fadeInUp: Variants = {
     hidden: { opacity: 0, y: 30 },
     visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } }
@@ -237,103 +269,27 @@ export default function LandingPage() {
         <div className="absolute inset-0 bg-linear-to-r from-[#05050A] via-transparent to-[#05050A] z-20" />
       </div>
 
-      {/* HEADER */}
-      <header className="fixed top-0 w-full z-50 py-3.5 px-4 sm:px-8 md:px-12 transition-all duration-300">
-        <div className="max-w-7xl mx-auto flex items-center justify-between bg-[#05050A]/85 backdrop-blur-2xl border border-white/10 rounded-full px-4 sm:px-6 py-2.5 shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
-          {/* Brand */}
-          <a href="#" className="flex items-center gap-3 group">
-            <Image 
-              src="/icon_ra.png" 
-              alt="Rabbitty" 
-              width={34} 
-              height={34} 
-              className="object-contain drop-shadow-[0_0_15px_rgba(233,30,99,0.6)] group-hover:scale-105 transition-transform" 
-            />
-            <span className="font-black text-lg tracking-tight hidden sm:block text-white">
-              RABBITTY<span className="text-gradient">.me</span>
-            </span>
-          </a>
-
-          {/* Integrated Segmented Pill Navigation */}
-          <nav className="hidden lg:flex items-center bg-white/4 border border-white/8 rounded-full p-1 text-xs font-semibold">
-            {/* Comunidad / Rabbitters */}
-            <a 
-              href="#rabbitters" 
-              className="px-3.5 py-1.5 rounded-full text-white/70 hover:text-white hover:bg-white/8 transition-all flex items-center gap-1.5"
-            >
-              <UserCircle2 size={13} className="text-white/60" />
-              Rabbitters
+      {/* BARRA SUPERIOR FIJA EN EL COVER (absolute para que no siga el scroll al bajar) */}
+      <header className="absolute top-0 left-0 w-full z-50 py-3.5 px-4 sm:px-8 md:px-12 pointer-events-none">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          {/* Brand - Fijo en el cover, no sigue el scroll */}
+          <div className="pointer-events-auto bg-[#05050A]/85 backdrop-blur-2xl border border-white/10 rounded-full px-4 sm:px-5 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
+            <a href="#" className="flex items-center gap-3 group">
+              <Image 
+                src="/icon_ra.png" 
+                alt="Rabbitty" 
+                width={32} 
+                height={32} 
+                className="object-contain drop-shadow-[0_0_15px_rgba(233,30,99,0.6)] group-hover:scale-105 transition-transform" 
+              />
+              <span className="font-black text-base sm:text-lg tracking-tight hidden sm:block text-white">
+                RABBITTY<span className="text-gradient">.me</span>
+              </span>
             </a>
+          </div>
 
-            {/* Dropdown Negocios / B2B */}
-            <div className="relative group/biz">
-              <a 
-                href="#affiliates" 
-                className="px-3.5 py-1.5 rounded-full text-white/70 hover:text-white hover:bg-white/8 transition-all flex items-center gap-1 cursor-pointer"
-              >
-                <Store size={13} className="text-blue-400" />
-                Negocios
-                <ChevronDown size={11} className="text-white/40 group-hover/biz:rotate-180 transition-transform duration-200" />
-              </a>
-
-              {/* Mega Dropdown */}
-              <div className="absolute top-full left-0 mt-2 w-64 p-2 bg-[#090912]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_16px_40px_rgba(0,0,0,0.6)] opacity-0 translate-y-2 pointer-events-none group-hover/biz:opacity-100 group-hover/biz:translate-y-0 group-hover/biz:pointer-events-auto transition-all duration-200 z-50">
-                <a 
-                  href={BUSINESS_ONBOARDING_URL}
-                  className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/6 transition-colors text-left"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-blue-500/15 border border-blue-500/30 flex items-center justify-center shrink-0">
-                    <Store size={15} className="text-blue-400" />
-                  </div>
-                  <div>
-                    <div className="text-white text-xs font-bold">Afiliados y POS</div>
-                    <div className="text-[10px] text-white/50 leading-tight">Gestión y terminales de lealtad</div>
-                  </div>
-                </a>
-                <a 
-                  href="#paquetes" 
-                  className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/6 transition-colors text-left"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-pink-500/15 border border-pink-500/30 flex items-center justify-center shrink-0">
-                    <Zap size={15} className="text-pink-400" />
-                  </div>
-                  <div>
-                    <div className="text-white text-xs font-bold">Planes y Hardware</div>
-                    <div className="text-[10px] text-white/50 leading-tight">Membresías por nicho de negocio</div>
-                  </div>
-                </a>
-              </div>
-            </div>
-
-            {/* Mood & Vibe Phygital Pill */}
-            <a 
-              href="#phygital-experience" 
-              className="px-3.5 py-1.5 rounded-full text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 transition-all flex items-center gap-1.5 font-bold shadow-[0_0_12px_rgba(245,158,11,0.15)]"
-            >
-              <Sparkles size={12} className="text-amber-400 animate-spin-slow" />
-              Mood & Vibe
-            </a>
-
-            {/* Paquetes */}
-            <a 
-              href="#paquetes" 
-              className="px-3.5 py-1.5 rounded-full text-white/70 hover:text-white hover:bg-white/8 transition-all"
-            >
-              Paquetes
-            </a>
-
-            {/* Economía Bunz */}
-            <a 
-              href="#bunz" 
-              className="px-3.5 py-1.5 rounded-full text-white/70 hover:text-white hover:bg-white/8 transition-all flex items-center gap-1.5"
-            >
-              <Coins size={12} className="text-emerald-400" />
-              Economía
-            </a>
-          </nav>
-
-          {/* Action CTAs */}
-          <div className="flex items-center gap-2.5 sm:gap-3">
+          {/* Action CTAs - Fijos en el cover, no siguen el scroll */}
+          <div className="pointer-events-auto flex items-center gap-2 sm:gap-2.5 bg-[#05050A]/85 backdrop-blur-2xl border border-white/10 rounded-full p-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
             <a
               href={BUSINESS_ONBOARDING_URL}
               className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 px-3.5 py-2 rounded-full transition-all shadow-[0_0_18px_rgba(37,99,235,0.35)]"
@@ -349,13 +305,128 @@ export default function LandingPage() {
             >
               Ya tengo cuenta
             </a>
-            <OpenAppButton className="bg-white text-black px-4.5 sm:px-5 py-2 rounded-full font-bold text-xs sm:text-sm hover:scale-105 active:scale-95 transition-all shadow-[0_0_20px_rgba(255,255,255,0.25)] cursor-pointer flex items-center gap-1.5">
+            <OpenAppButton className="bg-white text-black px-4 sm:px-5 py-2 rounded-full font-bold text-xs sm:text-sm hover:scale-105 active:scale-95 transition-all shadow-[0_0_20px_rgba(255,255,255,0.25)] cursor-pointer flex items-center gap-1.5">
               <span>Abrir App</span>
               <ArrowRight size={13} />
             </OpenAppButton>
           </div>
         </div>
       </header>
+
+      {/* DOCK CENTRAL FLOTANTE */}
+      {/* En el cover: top-20 (80px). Al scroll up a lo largo de la página: pegado arriba al nivel del nav regular (top-4, 16px) */}
+      <AnimatePresence>
+        {showCenterDock && (
+          <motion.div
+            key={isCover ? 'dock-cover' : 'dock-scrolled'}
+            initial={{ opacity: 0, y: -14, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -14, scale: 0.97 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className={`fixed left-1/2 -translate-x-1/2 z-50 pointer-events-auto hidden lg:flex items-center gap-1.5 ${
+              isCover ? 'top-20' : 'top-3.5 sm:top-4'
+            }`}
+          >
+            <nav className="flex items-center bg-[#07070F]/90 backdrop-blur-2xl border border-white/12 rounded-full p-1.5 text-xs font-semibold shadow-[0_12px_40px_rgba(0,0,0,0.65)] ring-1 ring-white/5">
+              {/* Comunidad / Rabbitters */}
+              <a 
+                href="#rabbitters" 
+                className="px-3.5 py-1.5 rounded-full text-white/75 hover:text-white hover:bg-white/10 transition-all flex items-center gap-1.5"
+              >
+                <UserCircle2 size={13} className="text-white/60" />
+                Rabbitters
+              </a>
+
+              {/* Dropdown Negocios / B2B */}
+              <div className="relative group/biz">
+                <a 
+                  href="#affiliates" 
+                  className="px-3.5 py-1.5 rounded-full text-white/75 hover:text-white hover:bg-white/10 transition-all flex items-center gap-1 cursor-pointer"
+                >
+                  <Store size={13} className="text-blue-400" />
+                  Negocios
+                  <ChevronDown size={11} className="text-white/40 group-hover/biz:rotate-180 transition-transform duration-200" />
+                </a>
+
+                {/* Mega Dropdown */}
+                <div className="absolute top-full left-0 mt-2.5 w-64 p-2 bg-[#090912]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_16px_40px_rgba(0,0,0,0.6)] opacity-0 translate-y-2 pointer-events-none group-hover/biz:opacity-100 group-hover/biz:translate-y-0 group-hover/biz:pointer-events-auto transition-all duration-200 z-50">
+                  <a 
+                    href={BUSINESS_ONBOARDING_URL}
+                    className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/6 transition-colors text-left"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-blue-500/15 border border-blue-500/30 flex items-center justify-center shrink-0">
+                      <Store size={15} className="text-blue-400" />
+                    </div>
+                    <div>
+                      <div className="text-white text-xs font-bold">Afiliados y POS</div>
+                      <div className="text-[10px] text-white/50 leading-tight">Gestión y terminales de lealtad</div>
+                    </div>
+                  </a>
+                  <a 
+                    href="#paquetes" 
+                    className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/6 transition-colors text-left"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-pink-500/15 border border-pink-500/30 flex items-center justify-center shrink-0">
+                      <Zap size={15} className="text-pink-400" />
+                    </div>
+                    <div>
+                      <div className="text-white text-xs font-bold">Planes y Hardware</div>
+                      <div className="text-[10px] text-white/50 leading-tight">Membresías por nicho de negocio</div>
+                    </div>
+                  </a>
+                </div>
+              </div>
+
+              {/* Mood & Vibe Phygital Pill */}
+              <a 
+                href="#phygital-experience" 
+                className="px-3.5 py-1.5 rounded-full text-amber-300 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 transition-all flex items-center gap-1.5 font-bold shadow-[0_0_14px_rgba(245,158,11,0.2)]"
+              >
+                <Sparkles size={12} className="text-amber-400 animate-spin-slow" />
+                Mood & Vibe
+              </a>
+
+              {/* Paquetes */}
+              <a 
+                href="#paquetes" 
+                className="px-3.5 py-1.5 rounded-full text-white/75 hover:text-white hover:bg-white/10 transition-all"
+              >
+                Paquetes
+              </a>
+
+              {/* Economía Bunz */}
+              <a 
+                href="#bunz" 
+                className="px-3.5 py-1.5 rounded-full text-white/75 hover:text-white hover:bg-white/10 transition-all flex items-center gap-1.5"
+              >
+                <Coins size={12} className="text-emerald-400" />
+                Economía
+              </a>
+
+              {/* Flecha minimalista para scroll up automático: aparece al scroll up a un lado del menú de economía */}
+              <AnimatePresence>
+                {showScrollTop && (
+                  <motion.button
+                    initial={{ opacity: 0, width: 0, scale: 0.7 }}
+                    animate={{ opacity: 1, width: 'auto', scale: 1 }}
+                    exit={{ opacity: 0, width: 0, scale: 0.7 }}
+                    transition={{ duration: 0.2 }}
+                    type="button"
+                    onClick={scrollToTop}
+                    title="Subir al inicio"
+                    aria-label="Subir al inicio"
+                    className="ml-1 pl-1 pr-1.5 py-1 rounded-full text-white/70 hover:text-white bg-white/6 hover:bg-white/15 border border-white/10 transition-colors flex items-center justify-center cursor-pointer overflow-hidden shrink-0"
+                  >
+                    <div className="w-5 h-5 rounded-full bg-pink-500/20 text-pink-300 flex items-center justify-center shadow-xs">
+                      <ArrowUp size={12} className="stroke-[2.5]" />
+                    </div>
+                  </motion.button>
+                )}
+              </AnimatePresence>
+            </nav>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* HERO SECTION */}
       <section className="relative z-10 min-h-screen flex items-center justify-center px-6 pt-20">
