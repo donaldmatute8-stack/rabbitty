@@ -40,6 +40,7 @@ import { customerChatRouter } from "./customerChat";
 import { moodRouter } from "./mood";
 import { bunzyRouter } from "./bunzy";
 import { bunzyConnectRouter } from "./bunzyConnect";
+import { updatesRouter } from "./updates";
 import { godRouter } from "./god";
 import { ratingsRouter } from "./ratings";
 import "../services/queue";
@@ -86,6 +87,7 @@ export const appRouter = router({
   mood: moodRouter,
   bunzy: bunzyRouter,
   bunzyConnect: bunzyConnectRouter,
+  updates: updatesRouter,
   god: godRouter,
   ratings: ratingsRouter,
 });

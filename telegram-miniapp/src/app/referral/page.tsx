@@ -78,14 +78,14 @@ export default function ReferralPage() {
     if (tg?.openTelegramLink) {
       tg.openTelegramLink(`https://t.me/share/url?url=${url}&text=${encodeURIComponent('¡Qué onda! Te invito a Rabbitty:')}`);
     } else {
-      window.open(`https://t.me/share/url?url=${url}&text=${encodeURIComponent('¡Qué onda! Te invito a Rabbitty:')}`, '_blank');
+      void PlatformBridge.openExternalUrl(`https://t.me/share/url?url=${url}&text=${encodeURIComponent('¡Qué onda! Te invito a Rabbitty:')}`);
     }
   };
 
   const shareOnWhatsApp = () => {
     PlatformBridge.hapticFeedback('medium');
     const text = encodeURIComponent(`¡Únete a Rabbitty y descubre los mejores comercios de la ciudad! ${referralLink}`);
-    window.open(`https://wa.me/?text=${text}`, '_blank');
+    void PlatformBridge.openExternalUrl(`https://wa.me/?text=${text}`);
   };
 
   return (

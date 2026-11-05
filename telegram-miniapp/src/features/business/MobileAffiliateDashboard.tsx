@@ -393,7 +393,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
               PlatformBridge.hapticFeedback('light');
               setShowCodeModal(true);
             }}
-            className="rounded-xl p-1.5 flex items-center justify-center cursor-pointer active:scale-95 transition-transform"
+            className="rounded-xl p-1.5 flex items-center justify-center cursor-pointer active:scale-95 transition-transform shrink-0"
             style={{ backgroundColor: '#180B28', border: '1px solid rgba(233,30,99,0.3)' }}
           >
             <QRDiscovery value={`rc:${business?.scanCode ?? ''}`} variant="affiliate" size={38} revealMode="immediate" surfaceKey="biz-mini" />
@@ -447,7 +447,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
             const encodedNiche = encodeURIComponent(business.category || '');
             const bunzValue = encodeURIComponent(String(business.rewardPercentage || 25));
             const printKitUrl = `https://rabbitty.me/impresos?name=${encodedName}&ref=${encodedRef}&bunz=${bunzValue}&logo=${encodedLogo}&niche=${encodedNiche}`;
-            window.open(printKitUrl, '_blank');
+            void PlatformBridge.openExternalUrl(printKitUrl);
           }}
         >
           <div className="flex items-center gap-3">

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { notifications } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 import { getAuthenticatedUser } from "@/lib/serverAuth";
 
 export async function GET(req: NextRequest) {
@@ -101,7 +101,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    const { id, all } = await req.json();
+    const { id, all, route } = await req.json();
 
     if (all) {
       await db
@@ -111,14 +111,25 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ success: true, all: true });
     }
 
+    // Auto-lectura al visitar la función: apaga las notificaciones cuya ruta
+    // destino ya se abrió (siempre acotado al usuario autenticado).
+    if (route && typeof route === "string") {
+      await db
+        .update(notifications)
+        .set({ isRead: true })
+        .where(and(eq(notifications.userId, caller.id), eq(notifications.route, route)));
+      return NextResponse.json({ success: true, route });
+    }
+
     if (!id || typeof id !== "string") {
       return NextResponse.json({ error: "ID requerido" }, { status: 400 });
     }
 
+    // Anti-IDOR: solo el dueño puede marcar su notificación.
     await db
       .update(notifications)
       .set({ isRead: true })
-      .where(eq(notifications.id, id));
+      .where(and(eq(notifications.id, id), eq(notifications.userId, caller.id)));
 
     return NextResponse.json({ success: true });
   } catch (error) {

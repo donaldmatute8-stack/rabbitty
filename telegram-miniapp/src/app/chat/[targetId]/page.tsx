@@ -12,7 +12,7 @@ import { BottomSheet } from '@/components/ui/BottomSheet';
 import { BunzyUpdateCard } from '@/components/chat/BunzyUpdateCard';
 import { QRCodeSVG } from 'qrcode.react';
 import { useToast } from '@/contexts/ToastContext';
-import { Bell, BellOff, Search, Ban, MoreHorizontal, Store, Bot, ExternalLink, Zap, Megaphone } from 'lucide-react';
+import { Bell, BellOff, Search, Ban, MoreHorizontal, Store, Bot, ExternalLink, Zap, Megaphone, Newspaper } from 'lucide-react';
 
 import { useRealtimeChat } from '@/lib/realtime/useRealtimeChat';
 import { ensureIdentity, getDeviceId } from '@/lib/e2e/identity';
@@ -77,6 +77,9 @@ type MessageMetadata =
   | { kind: 'FORWARDED'; forwardedFrom?: { id: string; name: string } }
   | { kind: 'TEXT'; reactions?: Record<string, string> }
   | Record<string, unknown>;
+
+/** Ventana para arrepentirse antes de que el pedido llegue al POS. */
+const ORDER_UNDO_MS = 5000;
 
 type Message = {
   id: string;
@@ -683,6 +686,13 @@ export default function ChatRoomPage() {
     setShowScrollDown(!nearBottom && messages.length > 3);
   };
   const [orderTarget, setOrderTarget] = useState<{ businessId: string; businessName: string } | null>(null);
+  const [pendingOrder, setPendingOrder] = useState<{
+    businessId: string;
+    businessName: string;
+    items: string;
+    notes: string;
+  } | null>(null);
+  const pendingOrderTimerRef = useRef<number | null>(null);
   const [orderItems, setOrderItems] = useState('');
   const [orderNotes, setOrderNotes] = useState('');
   const [bunzyOpen, setBunzyOpen] = useState(false);
@@ -743,30 +753,6 @@ export default function ChatRoomPage() {
     }
   };
 
-  // Pin temporal del comunicado oficial: desaparece al verlo (clic) o al
-  // pulsar "Entendido". Persistido para que no reaparezca en cada recarga.
-  const [seenPins, setSeenPins] = useState<Set<string>>(() => {
-    try {
-      if (typeof window === 'undefined') return new Set<string>();
-      const raw = window.localStorage.getItem('bunzy_pin_seen');
-      const list = raw ? (JSON.parse(raw) as unknown) : [];
-      return new Set(Array.isArray(list) ? (list as string[]) : []);
-    } catch {
-      return new Set<string>();
-    }
-  });
-
-  const dismissPin = (key: string) => {
-    setSeenPins((prev) => {
-      const next = new Set(prev);
-      next.add(key);
-      try {
-        window.localStorage.setItem('bunzy_pin_seen', JSON.stringify(Array.from(next).slice(-50)));
-      } catch { /* sin storage */ }
-      return next;
-    });
-  };
-
   const [contextMsg, setContextMsg] = useState<string | null>(null);
   const voiceBlobCacheRef = useRef<Record<string, string>>({});
   const [voiceSrcMap, setVoiceSrcMap] = useState<Record<string, string>>({});
@@ -780,32 +766,6 @@ export default function ChatRoomPage() {
   const [forwardLoading, setForwardLoading] = useState(false);
   const [swipingMsgId, setSwipingMsgId] = useState<string | null>(null);
   const [contextMenuPos, setContextMenuPos] = useState<{ top: number; left: number; bottom: number; right: number; isMe: boolean } | null>(null);
-
-  const bunzyPinMeta = (msg: Message) =>
-    (msg.metadata ?? {}) as { deliveryId?: string; archivedAt?: string | null; title?: string; category?: string };
-
-  /** Último comunicado oficial sin archivar y sin ver → se fija arriba. */
-  const pinnedComunicado = useMemo(() => {
-    for (let i = messages.length - 1; i >= 0; i -= 1) {
-      const m = messages[i];
-      if (m.type !== 'BUNZY_UPDATE') continue;
-      const meta = bunzyPinMeta(m);
-      if (meta.archivedAt) continue;
-      const key = meta.deliveryId || m.id;
-      if (!key || seenPins.has(key)) continue;
-      return m;
-    }
-    return null;
-  }, [messages, seenPins]);
-
-  const openPinnedComunicado = (msg: Message) => {
-    PlatformBridge.hapticFeedback('light');
-    const meta = bunzyPinMeta(msg);
-    const key = meta.deliveryId || msg.id;
-    if (key) dismissPin(key);
-    const el = document.getElementById(`comunicado-${msg.id}`);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  };
   const longPressTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -1376,29 +1336,82 @@ export default function ChatRoomPage() {
     }
   };
 
-  const submitOrder = async () => {
-    if (!orderTarget || !orderItems.trim() || sending) return;
-    setSending(true);
+  /**
+   * Pedido con ventana de arrepentimiento (5 s).
+   *
+   * Antes el pedido salía al POS de inmediato y, si había un paso extra de
+   * confirmación, eran dos toques para lo mismo. Ahora: se envía solo tras la
+   * barra de 5 s, con tarjeta inferior y botones Cancelar / Modificar.
+   */
+  const dispatchOrder = async (order: {
+    businessId: string;
+    businessName: string;
+    items: string;
+    notes: string;
+  }) => {
     try {
       const headers = await PlatformBridge.getAuthHeaders();
       const res = await fetch('/api/chat/order', {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ businessId: orderTarget.businessId, items: orderItems, notes: orderNotes }),
+        body: JSON.stringify({ businessId: order.businessId, items: order.items, notes: order.notes }),
       });
       const data = await res.json();
       if (data.success) {
         PlatformBridge.hapticFeedback('success');
-        const target = orderTarget;
-        setOrderTarget(null);
-        setOrderItems('');
-        setOrderNotes('');
-        router.push(`/chat/${target.businessId}`);
+        showToast('Pedido enviado al local', 'success');
+        router.push(`/chat/${order.businessId}`);
+      } else {
+        showToast(data.error || 'No se pudo enviar el pedido', 'error');
       }
     } catch (err) {
       console.error('Error enviando pedido', err);
-    } finally {
-      setSending(false);
+      showToast('No se pudo enviar el pedido', 'error');
+    }
+  };
+
+  const submitOrder = () => {
+    if (!orderTarget || !orderItems.trim() || sending) return;
+    const order = {
+      businessId: orderTarget.businessId,
+      businessName: orderTarget.businessName,
+      items: orderItems,
+      notes: orderNotes,
+    };
+    // Cierra la hoja y deja el pedido "en rampa" 5 s antes de tocar el POS.
+    setOrderTarget(null);
+    setPendingOrder(order);
+    setOrderItems('');
+    setOrderNotes('');
+    PlatformBridge.hapticFeedback('medium');
+    if (pendingOrderTimerRef.current) clearTimeout(pendingOrderTimerRef.current);
+    pendingOrderTimerRef.current = window.setTimeout(() => {
+      pendingOrderTimerRef.current = null;
+      setPendingOrder(null);
+      void dispatchOrder(order);
+    }, ORDER_UNDO_MS);
+  };
+
+  const cancelPendingOrder = () => {
+    if (pendingOrderTimerRef.current) {
+      clearTimeout(pendingOrderTimerRef.current);
+      pendingOrderTimerRef.current = null;
+    }
+    setPendingOrder(null);
+    PlatformBridge.hapticFeedback('light');
+  };
+
+  const modifyPendingOrder = () => {
+    if (pendingOrderTimerRef.current) {
+      clearTimeout(pendingOrderTimerRef.current);
+      pendingOrderTimerRef.current = null;
+    }
+    const order = pendingOrder;
+    setPendingOrder(null);
+    if (order) {
+      setOrderTarget({ businessId: order.businessId, businessName: order.businessName });
+      setOrderItems(order.items);
+      setOrderNotes(order.notes);
     }
   };
 
@@ -2777,6 +2790,37 @@ export default function ChatRoomPage() {
             </button>
           )}
 
+          {isBot && (
+            <button
+              type="button"
+              onClick={() => {
+                PlatformBridge.hapticFeedback('light');
+                setTargetInfoOpen(false);
+                router.push('/updates');
+              }}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 14,
+                background: 'var(--bg-elevated)',
+                padding: '11px 14px',
+                cursor: 'pointer',
+                color: 'var(--text-primary)',
+                fontSize: 13,
+                fontWeight: 800,
+              }}
+            >
+              <Newspaper size={15} style={{ color: 'var(--text-muted)' }} />
+              Novedades de producto
+              <span style={{ marginLeft: 'auto', color: 'var(--text-muted)', fontWeight: 700, fontSize: 11 }}>
+                Update log
+              </span>
+            </button>
+          )}
+
           {/* Action Row: Mute, Search, Block, More (Telegram screenshot 4) */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, width: '100%', marginTop: 6 }}>
             {/* Mute */}
@@ -3070,76 +3114,6 @@ export default function ChatRoomPage() {
         </div>
       </BottomSheet>
 
-      {/* Pin temporal: comunicado oficial sin ver/entender */}
-      {pinnedComunicado && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 'calc(var(--safe-top, 0px) + 56px)',
-            left: 10,
-            right: 10,
-            zIndex: 45,
-            pointerEvents: 'auto',
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => openPinnedComunicado(pinnedComunicado)}
-            style={{
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              border: '1px solid rgba(233,30,99,0.35)',
-              borderLeft: '3px solid #E91E63',
-              borderRadius: 12,
-              background: 'linear-gradient(180deg, rgba(233,30,99,0.22), rgba(20,10,16,0.92))',
-              padding: '8px 10px',
-              cursor: 'pointer',
-              color: 'var(--text-primary)',
-              textAlign: 'left',
-              backdropFilter: 'blur(14px)',
-              WebkitBackdropFilter: 'blur(14px)',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
-            }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/bunzy-avatar.png"
-              alt=""
-              style={{ width: 26, height: 26, borderRadius: 999, objectFit: 'cover', flexShrink: 0 }}
-            />
-            <span style={{ minWidth: 0, flex: 1 }}>
-              <span
-                style={{
-                  display: 'block',
-                  fontSize: 9,
-                  fontWeight: 900,
-                  letterSpacing: 0.7,
-                  textTransform: 'uppercase',
-                  color: '#FF8FB8',
-                }}
-              >
-                Comunicado oficial
-              </span>
-              <span
-                style={{
-                  display: 'block',
-                  fontSize: 12.5,
-                  fontWeight: 800,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {bunzyPinMeta(pinnedComunicado).title || 'Nuevo comunicado de Bunzy'}
-              </span>
-            </span>
-            <span style={{ fontSize: 15, color: 'var(--text-muted)', flexShrink: 0 }}>›</span>
-          </button>
-        </div>
-      )}
-
       <main
         ref={mainRef}
         onScroll={handleMainScroll}
@@ -3147,10 +3121,7 @@ export default function ChatRoomPage() {
           flex: 1,
           overflowY: 'auto',
           WebkitOverflowScrolling: 'touch',
-          // Con el pin visible se reserva su alto para no tapar el primer mensaje.
-          padding: pinnedComunicado
-            ? 'calc(var(--safe-top, 0px) + 112px) 10px 10px'
-            : 'calc(var(--safe-top, 0px) + 58px) 10px 10px',
+          padding: 'calc(var(--safe-top, 0px) + 58px) 10px 10px',
           display: 'flex',
           flexDirection: 'column',
           gap: '4px',
@@ -4425,7 +4396,7 @@ export default function ChatRoomPage() {
               type="button"
               onClick={() => {
                 const text = (forwardTexts || []).map((t) => `↪ ${t}`).join('\n');
-                window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+                void PlatformBridge.openExternalUrl(`https://wa.me/?text=${encodeURIComponent(text)}`);
               }}
               style={{ flex: 1, border: '1px solid #25D366', background: 'rgba(37,211,102,0.12)', color: '#25D366', borderRadius: 100, padding: '12px 0', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}
             >
@@ -4510,6 +4481,109 @@ export default function ChatRoomPage() {
           </button>
         </div>
       </BottomSheet>
+
+      {/* Pedido en rampa: barra de 5 s para cancelar o modificar antes del POS */}
+      {pendingOrder && (
+        <div
+          style={{
+            position: 'fixed',
+            left: 10,
+            right: 10,
+            bottom: 'calc(var(--safe-bottom, 0px) + 76px)',
+            zIndex: 80,
+          }}
+        >
+          <div
+            style={{
+              borderRadius: 16,
+              border: '1px solid rgba(233,30,99,0.4)',
+              background: 'rgba(20,10,16,0.96)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              padding: '10px 12px 9px',
+              boxShadow: '0 14px 36px rgba(0,0,0,0.5)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: 9.5,
+                    fontWeight: 900,
+                    letterSpacing: 1,
+                    textTransform: 'uppercase',
+                    color: '#FF8FB8',
+                  }}
+                >
+                  Enviando pedido…
+                </p>
+                <p
+                  style={{
+                    margin: '2px 0 0',
+                    fontSize: 12.5,
+                    fontWeight: 800,
+                    color: 'var(--text-primary)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {pendingOrder.businessName} · {pendingOrder.items.split('\n')[0]}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={cancelPendingOrder}
+                style={{
+                  border: '1px solid rgba(255,255,255,0.16)',
+                  background: 'rgba(255,255,255,0.06)',
+                  color: 'var(--text-primary)',
+                  borderRadius: 10,
+                  fontSize: 12,
+                  fontWeight: 800,
+                  padding: '7px 11px',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={modifyPendingOrder}
+                style={{
+                  border: 'none',
+                  background: '#E91E63',
+                  color: '#fff',
+                  borderRadius: 10,
+                  fontSize: 12,
+                  fontWeight: 900,
+                  padding: '8px 12px',
+                  cursor: 'pointer',
+                }}
+              >
+                Modificar
+              </button>
+            </div>
+            <div
+              style={{
+                marginTop: 9,
+                height: 3,
+                borderRadius: 999,
+                background: 'rgba(255,255,255,0.12)',
+                overflow: 'hidden',
+              }}
+            >
+              <motion.div
+                initial={{ width: '100%' }}
+                animate={{ width: '0%' }}
+                transition={{ duration: ORDER_UNDO_MS / 1000, ease: 'linear' }}
+                style={{ height: '100%', background: 'linear-gradient(90deg, #FF2E93, #8B5CF6)' }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       <BottomSheet isOpen={bunzyOpen} onClose={() => setBunzyOpen(false)} title="Bunzy 🐰">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>

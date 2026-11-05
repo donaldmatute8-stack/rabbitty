@@ -211,6 +211,8 @@ export default function PosPage() {
   const prevAppPendingRef = useRef<number | null>(null);
   // B1: una sola superficie "Operación" con dos vistas dentro (comandas / app)
   const [tabsView, setTabsView] = useState<"ALL" | "APP">("ALL");
+  /** Pedido al que se le está prometiendo un tiempo de preparación. */
+  const [etaPrompt, setEtaPrompt] = useState<{ orderId: string; orderType?: string | null } | null>(null);
   // B3: gratificación colapsada por defecto (se abre al clic)
   const [gratuityOpen, setGratuityOpen] = useState(false);
   // H-PERSIST: comanda persistente del Rabbitter vinculado (sobrevive reloads)
@@ -3981,6 +3983,49 @@ export default function PosPage() {
         </div>
       </Dialog>
 
+      {/* ── Tiempo estimado de preparación (se promete al cliente) ── */}
+      <Dialog
+        open={!!etaPrompt}
+        onClose={() => setEtaPrompt(null)}
+        title={etaPrompt?.orderType === "DELIVERY" ? "¿Cuánto tarda la entrega?" : "¿Cuánto tarda?"}
+        className="max-w-sm w-full"
+      >
+        <div className="space-y-3 p-1">
+          <p className="text-xs text-gray-400">
+            {etaPrompt?.orderType === "DELIVERY"
+              ? "Incluye preparación + traslado. El Rabbitter lo verá en su notificación y en el seguimiento."
+              : "El Rabbitter lo verá en su notificación y en el seguimiento de su pedido."}
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            {[5, 10, 15, 20, 30, 45].map((minutes) => (
+              <button
+                key={minutes}
+                type="button"
+                onClick={() => {
+                  if (!etaPrompt) return;
+                  stageMutation.mutate({ orderId: etaPrompt.orderId, stage: "PREPARING", etaMinutes: minutes });
+                  setEtaPrompt(null);
+                }}
+                className="py-3 rounded-xl bg-white/5 border border-white/10 text-white font-black text-sm hover:bg-cyan-400/20 hover:border-cyan-400/40 active:scale-95 transition-all cursor-pointer"
+              >
+                {minutes} min
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (!etaPrompt) return;
+              stageMutation.mutate({ orderId: etaPrompt.orderId, stage: "PREPARING" });
+              setEtaPrompt(null);
+            }}
+            className="w-full py-2.5 text-xs font-bold text-gray-400 hover:text-white cursor-pointer"
+          >
+            Sin estimado
+          </button>
+        </div>
+      </Dialog>
+
       {/* ── Alerta gigante + sonido: pedido nuevo desde la app ── */}
       <PosOrderAlert
         open={orderAlertOpen}
@@ -4162,6 +4207,24 @@ export default function PosPage() {
                     </div>
                   </div>
 
+                  {/* Tipo de pedido: en local / recoger / domicilio */}
+                  {tab.fromApp && (
+                    <div className="flex flex-wrap items-center gap-2 pt-2">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-gray-200">
+                        {tab.orderType === 'DELIVERY'
+                          ? '🛵 Domicilio'
+                          : tab.orderType === 'DINE_IN'
+                            ? '🍽️ En local'
+                            : '🥡 Para recoger'}
+                      </span>
+                      {tab.orderType === 'DELIVERY' && tab.deliveryAddress && (
+                        <span className="min-w-0 flex-1 truncate text-[10.5px] font-bold text-cyan-300">
+                          📍 {tab.deliveryAddress}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
                   {/* Comanda: items ordenados desde la app */}
                   {tab.items && tab.items.length > 0 && (
                     <div className="pt-2 border-t border-white/5 flex flex-wrap gap-1.5">
@@ -4183,10 +4246,11 @@ export default function PosPage() {
                        → Cobrar. Cada paso empuja la etapa al móvil (bidireccional). ── */}
                   {tab.fromApp && (() => {
                     const stage = String(tab.stage ?? 'RECEIVED');
+                    const isDelivery = tab.orderType === 'DELIVERY';
                     const steps = [
                       { id: 'RECEIVED', label: 'Recibido', Icon: Smartphone },
-                      { id: 'PREPARING', label: 'Procesando', Icon: Flame },
-                      { id: 'READY', label: 'Despachando', Icon: Bike },
+                      { id: 'PREPARING', label: isDelivery ? 'Preparando' : 'Procesando', Icon: Flame },
+                      { id: 'READY', label: isDelivery ? 'En camino' : 'Despachando', Icon: Bike },
                       { id: 'DONE', label: 'Entregado', Icon: CheckCircle2 },
                     ];
                     const idx = Math.max(0, steps.findIndex((s) => s.id === stage));
@@ -4194,7 +4258,9 @@ export default function PosPage() {
                     const nextCopy = next === 'PREPARING'
                       ? { label: 'Procesando', hint: 'Avisar al cliente que ya lo estamos haciendo', Icon: Flame }
                       : next === 'READY'
-                        ? { label: 'Despachando', hint: 'Listo: el cliente ya puede recogerlo', Icon: Bike }
+                        ? isDelivery
+                          ? { label: 'En camino', hint: 'Avisar al cliente que el repartidor ya salió', Icon: Bike }
+                          : { label: 'Despachando', hint: 'Listo: el cliente ya puede recogerlo', Icon: Bike }
                         : next === 'DONE'
                           ? { label: 'Entregado', hint: 'Cerrar el pedido', Icon: CheckCircle2 }
                           : null;
@@ -4229,6 +4295,14 @@ export default function PosPage() {
                           })}
                         </div>
 
+                        {tab.fromApp && stage === "PREPARING" && tab.etaMinutes ? (
+                          <div className="inline-flex items-center gap-1.5 rounded-full bg-cyan-400/15 border border-cyan-400/35 px-2.5 py-1">
+                            <span className="text-[10px] font-black uppercase tracking-wide text-cyan-300">
+                              ⏱ Prometido al cliente: ~{tab.etaMinutes} min
+                            </span>
+                          </div>
+                        ) : null}
+
                         {isEmpty ? (
                           <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 px-3 py-2.5">
                             <p className="text-[11px] font-black text-amber-300 m-0">Comanda sin productos</p>
@@ -4242,7 +4316,13 @@ export default function PosPage() {
                         {nextCopy ? (
                           <button
                             type="button"
-                            onClick={() => stageMutation.mutate({ orderId: tab.orderId, stage: next! })}
+                            onClick={() => {
+                              if (next === "PREPARING") {
+                                setEtaPrompt({ orderId: tab.orderId, orderType: tab.orderType });
+                                return;
+                              }
+                              stageMutation.mutate({ orderId: tab.orderId, stage: next! });
+                            }}
                             disabled={stageMutation.isPending}
                             className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-cyan-400 hover:bg-cyan-300 text-gray-950 text-base font-black cursor-pointer active:scale-[0.99] transition-transform disabled:opacity-60 shadow-lg shadow-cyan-500/20"
                           >

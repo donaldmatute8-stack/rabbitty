@@ -26,11 +26,39 @@ interface Props {
 export function PosOrderAlert({ open, count, soundEnabled = true, onOpen, onDismiss }: Props) {
   const ctxRef = useRef<AudioContext | null>(null);
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Chrome/Safari no dejan sonar audio sin un gesto previo. En una caja el
+  // cajero ya tocó la pantalla, pero el AudioContext puede nacer suspendido:
+  // lo desbloqueamos al primer toque y lo reutilizamos.
+  useEffect(() => {
+    const unlock = () => {
+      try {
+        if (!ctxRef.current) {
+          const Ctor = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+          if (Ctor) ctxRef.current = new Ctor();
+        }
+        if (ctxRef.current?.state === 'suspended') void ctxRef.current.resume();
+      } catch {
+        /* sin audio disponible */
+      }
+    };
+    window.addEventListener('pointerdown', unlock, { once: true });
+    window.addEventListener('keydown', unlock, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+  }, []);
 
   useEffect(() => {
     const clearTimers = () => {
       timersRef.current.forEach(clearTimeout);
       timersRef.current = [];
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     };
     const closeCtx = () => {
       ctxRef.current?.close().catch(() => {});
@@ -75,8 +103,22 @@ export function PosOrderAlert({ open, count, soundEnabled = true, onOpen, onDism
       }
     };
 
+    // Aviso insistente: dos tonos ahora y luego cada 4 s mientras siga abierto.
     beep();
     timersRef.current.push(setTimeout(beep, 900));
+    try {
+      navigator.vibrate?.([180, 90, 180]);
+    } catch {
+      /* sin vibración */
+    }
+    intervalRef.current = setInterval(() => {
+      beep();
+      try {
+        navigator.vibrate?.([180, 90, 180]);
+      } catch {
+        /* sin vibración */
+      }
+    }, 4000);
 
     return () => {
       clearTimers();

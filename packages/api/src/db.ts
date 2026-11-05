@@ -29,6 +29,9 @@ const RESTAURANT_COLUMNS: string[] = [
   `ALTER TABLE "restaurants" ADD COLUMN IF NOT EXISTS "phone" text`,
   `ALTER TABLE "restaurants" ADD COLUMN IF NOT EXISTS "ticketFooter" text`,
   `ALTER TABLE "restaurants" ADD COLUMN IF NOT EXISTS "isActive" boolean DEFAULT true NOT NULL`,
+  `ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "deliveryAddress" text`,
+  `ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "etaMinutes" integer`,
+  `ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "etaAt" timestamp`,
   `ALTER TABLE "restaurants" ADD COLUMN IF NOT EXISTS "createdAt" timestamp DEFAULT now()`,
   `ALTER TABLE "restaurants" ADD COLUMN IF NOT EXISTS "updatedAt" timestamp DEFAULT now()`,
 ];

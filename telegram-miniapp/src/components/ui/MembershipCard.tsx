@@ -102,14 +102,14 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
           style={{ background: 'radial-gradient(circle, #E91E63 0%, transparent 70%)' }}
         />
 
-        {/* App icon de fondo: grande y tenue, anclado al borde inferior */}
+        {/* Conejo con fade de fondo: cargado a la derecha, anclado al borde inferior para ver su base y perder las orejas arriba */}
         <Image
-          src="/app_icon.png"
+          src="/rabbit_pass_watermark.png"
           alt=""
-          width={220}
-          height={220}
+          width={210}
+          height={244}
           aria-hidden
-          className="pointer-events-none select-none absolute -bottom-10 left-1/2 -translate-x-1/2 opacity-[0.07] object-contain"
+          className="pointer-events-none select-none absolute bottom-0 right-4 sm:right-8 opacity-[0.11] object-contain object-bottom"
         />
 
         {/* Top Header inside Card (Only when expanded) */}

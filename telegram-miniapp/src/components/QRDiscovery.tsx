@@ -74,7 +74,7 @@ export default function QRDiscovery({
   }, [revealMode, storageKey, value]);
 
   const invalid = !value || !value.trim();
-  const qrSize = Math.max(120, Math.round(size * 0.82));
+  const qrSize = Math.max(24, Math.round(size * 0.82));
 
   return (
     <div className={`relative flex flex-col items-center ${className}`} style={{ width: size }}>
@@ -113,7 +113,11 @@ export default function QRDiscovery({
                 <span className="text-xs text-neutral-500 font-bold">Código no disponible.<br />Actualiza la pantalla.</span>
               </div>
             ) : (
-              <div className="bg-white rounded-2xl p-2.5 shadow-[0_8px_30px_rgba(0,0,0,0.25)]">
+              <div
+                className={`bg-white shadow-[0_8px_30px_rgba(0,0,0,0.25)] flex items-center justify-center shrink-0 ${
+                  size <= 60 ? 'rounded-lg p-1' : 'rounded-2xl p-2.5'
+                }`}
+              >
                 <QRCodeSVG
                   value={value}
                   size={qrSize}

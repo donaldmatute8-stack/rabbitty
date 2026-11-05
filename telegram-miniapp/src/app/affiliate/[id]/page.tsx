@@ -168,6 +168,21 @@ function AffiliateProfileContent() {
   // Cart & Ordering
   const [cart, setCart] = useState<CartItem[]>([]);
   const [showCartSheet, setShowCartSheet] = useState(false);
+  /** Pedido en rampa: 5 s para arrepentirse antes de tocar el POS. */
+  const [pendingPosOrder, setPendingPosOrder] = useState<{
+    orderType: 'DINE_IN' | 'PICKUP' | 'DELIVERY';
+    address?: string;
+    payload: Record<string, unknown>;
+    items: Array<{ name: string; quantity: number }>;
+    total: number;
+  } | null>(null);
+  const [sentOrder, setSentOrder] = useState<{
+    orderType: 'DINE_IN' | 'PICKUP' | 'DELIVERY';
+    address?: string;
+    items: Array<{ name: string; quantity: number }>;
+    total: number;
+  } | null>(null);
+  const pendingPosOrderTimerRef = useRef<number | null>(null);
 
   // Modals
   const [showMapSelector, setShowMapSelector] = useState(false);
@@ -373,10 +388,66 @@ function AffiliateProfileContent() {
     );
   };
 
-  const handleSubmitOrder = async (orderType: 'DINE_IN' | 'PICKUP') => {
+  const dispatchPosOrder = async (order: {
+    payload: Record<string, unknown>;
+    orderType: 'DINE_IN' | 'PICKUP' | 'DELIVERY';
+    address?: string;
+    items: Array<{ name: string; quantity: number }>;
+    total: number;
+  }) => {
+    try {
+      // Fase C: headers de auth → la orden queda con customerId y se acumula
+      // en el Tab abierto de la mesa que reclame (ya no una orden anónima nueva).
+      const authHeaders = await PlatformBridge.getAuthHeaders().catch(() => null);
+      const res = await fetch('/api/pos/checkout', {
+        method: 'POST',
+        headers: { ...(authHeaders || {}), 'Content-Type': 'application/json' },
+        body: JSON.stringify(order.payload),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        showToast(data.error || 'Error al enviar orden', 'error');
+        return;
+      }
+      setCart([]);
+      PlatformBridge.hapticFeedback('success');
+      setSentOrder(order);
+      window.setTimeout(() => setSentOrder(null), 2800);
+      showToast('¡Orden enviada a cocina / personal con éxito!', 'success');
+    } catch {
+      showToast('Error al enviar orden', 'error');
+    }
+  };
+
+  const cancelPendingPosOrder = () => {
+    if (pendingPosOrderTimerRef.current) {
+      clearTimeout(pendingPosOrderTimerRef.current);
+      pendingPosOrderTimerRef.current = null;
+    }
+    setPendingPosOrder(null);
+    setCart([]);
+    PlatformBridge.hapticFeedback('light');
+    showToast('Pedido cancelado', 'info');
+  };
+
+  const modifyPendingPosOrder = () => {
+    if (pendingPosOrderTimerRef.current) {
+      clearTimeout(pendingPosOrderTimerRef.current);
+      pendingPosOrderTimerRef.current = null;
+    }
+    setPendingPosOrder(null);
+    setShowCartSheet(true);
+  };
+
+  const handleSubmitOrder = async (
+    orderType: 'DINE_IN' | 'PICKUP' | 'DELIVERY',
+    address?: string,
+  ) => {
     PlatformBridge.hapticFeedback('heavy');
 
     const payload = {
+      orderType,
+      deliveryAddress: orderType === 'DELIVERY' ? address ?? null : null,
       // Sin mesa elegida el pedido puede salir "producto solo" — el POS la
       // vincula a mesa después si procede. branchId permite crear la orden
       // cuando no hay mesa (el id del perfil afiliado ES la branch).
@@ -389,25 +460,28 @@ function AffiliateProfileContent() {
         notes: item.notes || null,
       })),
       paymentMethod: 'CASH',
-      orderType,
     };
 
-    // Fase C: headers de auth → la orden queda con customerId y se acumula
-    // en el Tab abierto de la mesa que reclame (ya no una orden anónima nueva).
-    const authHeaders = await PlatformBridge.getAuthHeaders().catch(() => null);
-    const res = await fetch('/api/pos/checkout', {
-      method: 'POST',
-      headers: { ...(authHeaders || {}), 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      showToast(data.error || 'Error al enviar orden', 'error');
-      throw new Error(data.error || 'Order submission failed');
-    }
-
-    showToast('¡Orden enviada a cocina / personal con éxito!', 'success');
+    // El pedido sale solo tras la barra de 5 s, con la tarjeta inferior para
+    // cancelar o modificar (misma identidad que la tarjeta de pedido).
+    const order = {
+      orderType,
+      address,
+      payload,
+      items: cart.map((item) => ({ name: item.name, quantity: item.quantity })),
+      total: cart.reduce((acc, item) => {
+        const mods = (item.modifiers || []).reduce((m, mod) => m + (Number(mod.priceAdjust) || 0), 0);
+        return acc + (item.price + mods) * item.quantity;
+      }, 0),
+    };
+    setShowCartSheet(false);
+    setPendingPosOrder(order);
+    if (pendingPosOrderTimerRef.current) clearTimeout(pendingPosOrderTimerRef.current);
+    pendingPosOrderTimerRef.current = window.setTimeout(() => {
+      pendingPosOrderTimerRef.current = null;
+      setPendingPosOrder(null);
+      void dispatchPosOrder(order);
+    }, 5000);
   };
 
   const totalCartCount = useMemo(() => {
@@ -852,7 +926,7 @@ function AffiliateProfileContent() {
                             const { Browser } = await import('@capacitor/browser');
                             await Browser.open({ url: data.url });
                           } else {
-                            window.open(data.url, '_blank');
+                            void PlatformBridge.openExternalUrl(data.url);
                           }
                         } else {
                           showToast(data?.error || 'No se pudo iniciar el pago', 'error');
@@ -1134,6 +1208,219 @@ function AffiliateProfileContent() {
         checkedIn={hasPresenceCheckedIn}
       />
 
+      {/* Pedido en rampa: identidad de tarjeta de pedido + barra de 5 s */}
+      {pendingPosOrder && (
+        <div
+          style={{
+            position: 'fixed',
+            left: 10,
+            right: 10,
+            bottom: 'calc(var(--safe-bottom, 0px) + 84px)',
+            zIndex: 120,
+          }}
+        >
+          <div
+            style={{
+              borderRadius: 18,
+              border: '1px solid rgba(233,30,99,0.45)',
+              background: 'linear-gradient(180deg, rgba(233,30,99,0.16), rgba(20,10,16,0.98))',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              padding: '12px 14px 10px',
+              boxShadow: '0 16px 40px rgba(0,0,0,0.55)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: 16 }}>🧾</span>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: 9.5,
+                    fontWeight: 900,
+                    letterSpacing: 1,
+                    textTransform: 'uppercase',
+                    color: '#FF8FB8',
+                  }}
+                >
+                  {pendingPosOrder.orderType === 'DELIVERY'
+                    ? 'Pedido a domicilio por enviar'
+                    : pendingPosOrder.orderType === 'DINE_IN'
+                      ? 'Pedido en local por enviar'
+                      : 'Pedido para recoger por enviar'}
+                </p>
+                <p style={{ margin: '1px 0 0', fontSize: 13, fontWeight: 900, color: 'var(--text-primary)' }}>
+                  {affiliate?.name}
+                </p>
+              </div>
+              <span style={{ fontSize: 13, fontWeight: 900, color: 'var(--text-primary)' }}>
+                ${pendingPosOrder.total.toFixed(2)}
+              </span>
+            </div>
+
+            <div style={{ maxHeight: 90, overflow: 'hidden', marginBottom: 8 }}>
+              {pendingPosOrder.items.slice(0, 4).map((it, i) => (
+                <p key={i} style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-secondary)' }}>
+                  • {it.quantity}× {it.name}
+                </p>
+              ))}
+              {pendingPosOrder.items.length > 4 && (
+                <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)' }}>
+                  +{pendingPosOrder.items.length - 4} más
+                </p>
+              )}
+              {pendingPosOrder.address && (
+                <p style={{ margin: '4px 0 0', fontSize: 11, color: '#7DD3FC' }}>📍 {pendingPosOrder.address}</p>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                onClick={cancelPendingPosOrder}
+                style={{
+                  flex: 1,
+                  border: '1px solid rgba(255,255,255,0.16)',
+                  background: 'rgba(255,255,255,0.06)',
+                  color: 'var(--text-primary)',
+                  borderRadius: 10,
+                  fontSize: 12,
+                  fontWeight: 800,
+                  padding: '9px 11px',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={modifyPendingPosOrder}
+                style={{
+                  flex: 1,
+                  border: 'none',
+                  background: '#E91E63',
+                  color: '#fff',
+                  borderRadius: 10,
+                  fontSize: 12,
+                  fontWeight: 900,
+                  padding: '9px 11px',
+                  cursor: 'pointer',
+                }}
+              >
+                Modificar
+              </button>
+            </div>
+
+            <div
+              style={{
+                marginTop: 9,
+                height: 3,
+                borderRadius: 999,
+                background: 'rgba(255,255,255,0.12)',
+                overflow: 'hidden',
+              }}
+            >
+              <motion.div
+                initial={{ width: '100%' }}
+                animate={{ width: '0%' }}
+                transition={{ duration: 5, ease: 'linear' }}
+                style={{ height: '100%', background: 'linear-gradient(90deg, #FF2E93, #8B5CF6)' }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmación: misma tarjeta de pedido, ahora enviada */}
+      {sentOrder && (
+        <div
+          style={{
+            position: 'fixed',
+            left: 10,
+            right: 10,
+            bottom: 'calc(var(--safe-bottom, 0px) + 84px)',
+            zIndex: 120,
+          }}
+        >
+          <div
+            style={{
+              borderRadius: 18,
+              border: '1px solid rgba(16,185,129,0.45)',
+              background: 'linear-gradient(180deg, rgba(16,185,129,0.16), rgba(12,16,14,0.98))',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              padding: '12px 14px 10px',
+              boxShadow: '0 16px 40px rgba(0,0,0,0.55)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: 16 }}>✅</span>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: 9.5,
+                    fontWeight: 900,
+                    letterSpacing: 1,
+                    textTransform: 'uppercase',
+                    color: '#6EE7B7',
+                  }}
+                >
+                  {sentOrder.orderType === 'DELIVERY'
+                    ? 'Pedido a domicilio enviado'
+                    : sentOrder.orderType === 'DINE_IN'
+                      ? 'Pedido en local enviado'
+                      : 'Pedido para recoger enviado'}
+                </p>
+                <p style={{ margin: '1px 0 0', fontSize: 13, fontWeight: 900, color: 'var(--text-primary)' }}>
+                  {affiliate?.name}
+                </p>
+              </div>
+              <span style={{ fontSize: 13, fontWeight: 900, color: 'var(--text-primary)' }}>
+                ${sentOrder.total.toFixed(2)}
+              </span>
+            </div>
+
+            <div style={{ maxHeight: 70, overflow: 'hidden', marginBottom: 6 }}>
+              {sentOrder.items.slice(0, 3).map((it, i) => (
+                <p key={i} style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-secondary)' }}>
+                  • {it.quantity}× {it.name}
+                </p>
+              ))}
+              {sentOrder.items.length > 3 && (
+                <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)' }}>
+                  +{sentOrder.items.length - 3} más
+                </p>
+              )}
+              {sentOrder.address && (
+                <p style={{ margin: '4px 0 0', fontSize: 11, color: '#7DD3FC' }}>📍 {sentOrder.address}</p>
+              )}
+            </div>
+
+            <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.45 }}>
+              El local ya lo recibió. Te avisamos cuando esté en preparación, en camino y con el tiempo estimado.
+            </p>
+
+            <div
+              style={{
+                marginTop: 9,
+                height: 3,
+                borderRadius: 999,
+                background: 'rgba(16,185,129,0.18)',
+                overflow: 'hidden',
+              }}
+            >
+              <motion.div
+                initial={{ width: '100%' }}
+                animate={{ width: '0%' }}
+                transition={{ duration: 2.8, ease: 'linear' }}
+                style={{ height: '100%', background: 'linear-gradient(90deg, #34D399, #10B981)' }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Map selector modal */}
       {showMapSelector && (
         <div className="fixed inset-0 z-999 bg-black/70 backdrop-blur-md flex items-end">
@@ -1156,7 +1443,7 @@ function AffiliateProfileContent() {
               <button
                 onClick={() => {
                   const query = encodeURIComponent(`${affiliate.name} ${affiliate.address || ''}`);
-                  window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
+                  void PlatformBridge.openExternalUrl(`https://www.google.com/maps/search/?api=1&query=${query}`);
                   setShowMapSelector(false);
                 }}
                 className="w-full bg-[#1E1E24] text-white p-4 rounded-2xl border border-white/10 font-bold text-sm flex items-center gap-3 text-left"
@@ -1166,7 +1453,7 @@ function AffiliateProfileContent() {
               <button
                 onClick={() => {
                   const query = encodeURIComponent(`${affiliate.name} ${affiliate.address || ''}`);
-                  window.open(`https://waze.com/ul?q=${query}&navigate=yes`, '_blank');
+                  void PlatformBridge.openExternalUrl(`https://waze.com/ul?q=${query}&navigate=yes`);
                   setShowMapSelector(false);
                 }}
                 className="w-full bg-[#1E1E24] text-white p-4 rounded-2xl border border-white/10 font-bold text-sm flex items-center gap-3 text-left"
@@ -1228,7 +1515,7 @@ function AffiliateProfileContent() {
                     const text = encodeURIComponent(
                       `¡Hola ${affiliate.name}! Vi su perfil en Rabbitty y me gustaría más información.`
                     );
-                    window.open(`https://wa.me/${cleanPhone}?text=${text}`, '_blank');
+                    void PlatformBridge.openExternalUrl(`https://wa.me/${cleanPhone}?text=${text}`);
                   } else {
                     showToast('WhatsApp directo no configurado por el comercio', 'info');
                   }
@@ -1265,7 +1552,7 @@ function AffiliateProfileContent() {
               </div>
             </div>
             <button
-              onClick={() => window.open(formattedWebUrl, '_blank')}
+              onClick={() => void PlatformBridge.openExternalUrl(formattedWebUrl)}
               className="bg-[#E91E63] text-white px-3.5 py-1.5 rounded-xl font-bold text-xs"
             >
               Abrir en Navegador

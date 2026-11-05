@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { cn } from "@rabbitty/ui";
+import { cn, Button, Dialog, toast } from "@rabbitty/ui";
 import { 
   LayoutDashboard, 
   Banknote,
@@ -59,8 +59,9 @@ import {
   MessageSquarePlus,
   Ticket,
 } from "lucide-react";
-import { useSidebar } from "./DashboardClientWrapper";
+import { useSidebar, useBranch } from "./DashboardClientWrapper";
 import { AdminFeedbackModal } from "./AdminFeedbackModal";
+import { trpc } from "../lib/trpc-client";
 
 type MenuItem = {
   href: string;
@@ -391,6 +392,72 @@ export function AdminSidebar() {
 
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [feedbackType, setFeedbackType] = useState<"BUG" | "FEEDBACK">("BUG");
+  const [logoutModalOpen, setLogoutModalOpen] = useState(false);
+  const [sandboxModalOpen, setSandboxModalOpen] = useState(false);
+
+  const utils = trpc.useUtils();
+  const { branchId, setBranchId } = useBranch();
+  const { data: sandboxStatus } = trpc.sandbox.getSandboxStatus.useQuery();
+  const { data: branches } = trpc.admin.getBranches.useQuery();
+
+  const isSandboxActive =
+    sandboxStatus?.hasSandbox &&
+    sandboxStatus.sandboxBranch &&
+    branchId === sandboxStatus.sandboxBranch.id;
+
+  const initSandbox = trpc.sandbox.initSandbox.useMutation({
+    onSuccess: (res) => {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("activeBranchId", res.branchId);
+      }
+      setBranchId(res.branchId);
+      utils.invalidate();
+      setSandboxModalOpen(false);
+      toast.success("¡Entorno Sandbox inicializado y activado!");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const toggleSandbox = () => {
+    if (isSandboxActive) {
+      // Salir del sandbox y regresar a la sucursal de producción
+      const mainBranch = branches?.find(
+        (b) =>
+          !b.name.toLowerCase().includes("sandbox") &&
+          !b.name.toLowerCase().includes("entrenamiento")
+      ) || branches?.[0];
+
+      if (mainBranch) {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("activeBranchId", mainBranch.id);
+        }
+        setBranchId(mainBranch.id);
+        utils.invalidate();
+        setSandboxModalOpen(false);
+        toast.info("Regresando a producción...");
+        setTimeout(() => {
+          if (typeof window !== "undefined") {
+            window.location.href = "/";
+          }
+        }, 500);
+      } else {
+        toast.error("No se encontró sucursal de producción.");
+      }
+    } else {
+      // Entrar al sandbox
+      if (sandboxStatus?.hasSandbox && sandboxStatus.sandboxBranch) {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("activeBranchId", sandboxStatus.sandboxBranch.id);
+        }
+        setBranchId(sandboxStatus.sandboxBranch.id);
+        utils.invalidate();
+        setSandboxModalOpen(false);
+        toast.success("Modo Entrenamiento activado.");
+      } else {
+        initSandbox.mutate();
+      }
+    }
+  };
 
   const openFeedback = (type: "BUG" | "FEEDBACK") => {
     setFeedbackType(type);
@@ -614,47 +681,141 @@ export function AdminSidebar() {
         })}
       </nav>
 
-      {/* Footer & Logout */}
-      <div className="border-t border-white/5 p-3 space-y-1.5 bg-black/40">
-        {/* Support & Feedback Section (Unificado) */}
-        <button
-          onClick={() => openFeedback("FEEDBACK")}
-          className={cn(
-            "group flex w-full items-center rounded-xl py-2 text-xs font-semibold text-purple-300/90 hover:text-purple-200 hover:bg-purple-500/10 border border-transparent hover:border-purple-500/20 transition-all duration-200 cursor-pointer relative",
-            isCollapsed ? "justify-center px-0" : "px-3"
-          )}
-        >
-          <MessageSquarePlus className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110 text-purple-400" />
-          {!isCollapsed && <span className="ml-3 truncate">Report a bug / Feedback</span>}
-          {isCollapsed && (
-            <span className="absolute left-16 scale-0 group-hover:scale-100 rounded-xl bg-neutral-900 border border-purple-500/30 px-3 py-2 text-xs font-bold text-purple-200 shadow-xl backdrop-blur-md transition-all duration-200 pointer-events-none z-50 whitespace-nowrap">
-              Report a bug / Feedback
-            </span>
-          )}
-        </button>
+      {/* Footer & Actions (Sandbox, Bug/Feedback, Cerrar Sesión en una misma fila) */}
+      <div className="border-t border-white/5 p-2.5 bg-black/40 space-y-2">
+        <div className="flex items-center justify-between gap-1.5">
+          {/* 1. Modo Sandbox */}
+          <div className="relative group flex-1">
+            <button
+              type="button"
+              onClick={() => setSandboxModalOpen(true)}
+              disabled={initSandbox.isPending}
+              className={cn(
+                "w-full flex items-center justify-center rounded-xl p-2.5 text-xs font-bold transition-all duration-200 cursor-pointer border",
+                isSandboxActive
+                  ? "bg-amber-500/25 border-amber-500/50 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.25)]"
+                  : "bg-amber-500/10 border-amber-500/20 text-amber-400/90 hover:bg-amber-500/20 hover:text-amber-300 hover:border-amber-500/40"
+              )}
+              aria-label="Modo Sandbox"
+            >
+              <FlaskConical className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110" />
+            </button>
+            {/* Tooltip al Hover */}
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 scale-0 group-hover:scale-100 transition-all duration-150 origin-bottom pointer-events-none z-50">
+              <div className="rounded-lg bg-neutral-900 border border-amber-500/30 px-2.5 py-1 text-[11px] font-bold text-amber-300 shadow-xl whitespace-nowrap">
+                {isSandboxActive ? "Salir de Sandbox" : "Modo Sandbox"}
+              </div>
+            </div>
+          </div>
 
-        <div className="h-px bg-white/5 my-1" />
+          {/* 2. Bug / Feedback */}
+          <div className="relative group flex-1">
+            <button
+              type="button"
+              onClick={() => openFeedback("FEEDBACK")}
+              className="w-full flex items-center justify-center rounded-xl p-2.5 text-xs font-semibold text-purple-300/90 hover:text-purple-200 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 hover:border-purple-500/40 transition-all duration-200 cursor-pointer"
+              aria-label="Report a bug / Feedback"
+            >
+              <MessageSquarePlus className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110 text-purple-400" />
+            </button>
+            {/* Tooltip al Hover */}
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 scale-0 group-hover:scale-100 transition-all duration-150 origin-bottom pointer-events-none z-50">
+              <div className="rounded-lg bg-neutral-900 border border-purple-500/30 px-2.5 py-1 text-[11px] font-bold text-purple-200 shadow-xl whitespace-nowrap">
+                Report a bug / Feedback
+              </div>
+            </div>
+          </div>
 
-        <button
-          onClick={handleLogout}
-          className={cn(
-            "group flex w-full items-center rounded-xl py-2 text-xs font-bold text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all duration-200 cursor-pointer relative",
-            isCollapsed ? "justify-center px-0" : "px-3"
-          )}
-        >
-          <LogOut className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:-translate-x-0.5" />
-          {!isCollapsed && <span className="ml-3 whitespace-nowrap">Cerrar Sesión</span>}
-          {isCollapsed && (
-            <span className="absolute left-16 scale-0 group-hover:scale-100 rounded-xl bg-red-950 border border-red-500/20 px-3 py-2 text-xs font-bold text-red-300 shadow-xl backdrop-blur-md transition-all duration-200 pointer-events-none z-50 whitespace-nowrap">
-              Cerrar Sesión
-            </span>
-          )}
-        </button>
+          {/* 3. Cerrar Sesión */}
+          <div className="relative group flex-1">
+            <button
+              type="button"
+              onClick={() => setLogoutModalOpen(true)}
+              className="w-full flex items-center justify-center rounded-xl p-2.5 text-xs font-bold text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/40 transition-all duration-200 cursor-pointer"
+              aria-label="Cerrar Sesión"
+            >
+              <LogOut className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110" />
+            </button>
+            {/* Tooltip al Hover */}
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 scale-0 group-hover:scale-100 transition-all duration-150 origin-bottom pointer-events-none z-50">
+              <div className="rounded-lg bg-red-950 border border-red-500/30 px-2.5 py-1 text-[11px] font-bold text-red-300 shadow-xl whitespace-nowrap">
+                Cerrar Sesión
+              </div>
+            </div>
+          </div>
+        </div>
 
         <div className="text-center text-[10px] tracking-wider text-gray-500 font-semibold uppercase whitespace-nowrap overflow-hidden">
           {isCollapsed ? "v1.0" : "Rabbitty OS v1.0"}
         </div>
       </div>
+
+      {/* Modal de confirmación para Modo Sandbox */}
+      <Dialog
+        open={sandboxModalOpen}
+        onClose={() => setSandboxModalOpen(false)}
+        title={isSandboxActive ? "¿Salir del Modo Sandbox?" : "¿Activar Modo Sandbox?"}
+      >
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-sm">
+            <FlaskConical className="h-5 w-5 shrink-0" />
+            <span>
+              {isSandboxActive
+                ? "Regresarás a la sucursal activa de producción real."
+                : "Entrarás a un entorno de prueba y capacitación aislado."}
+            </span>
+          </div>
+          <p className="text-sm text-gray-300">
+            {isSandboxActive
+              ? "Las ventas y pruebas que hayas realizado en Sandbox quedarán guardadas en el entorno simulado y podrás volver cuando quieras."
+              : "En el Modo Sandbox puedes crear comandas, simular cobros y entrenar al personal sin afectar los reportes ni la contabilidad real de tu negocio."}
+          </p>
+          <div className="flex justify-end gap-3 pt-3 border-t border-white/5">
+            <Button variant="secondary" onClick={() => setSandboxModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              className="bg-amber-500 hover:bg-amber-400 text-black font-black"
+              onClick={toggleSandbox}
+              disabled={initSandbox.isPending}
+            >
+              {initSandbox.isPending
+                ? "Cargando..."
+                : isSandboxActive
+                ? "Sí, Salir a Producción"
+                : "Sí, Entrar a Sandbox"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* Modal de confirmación para Cerrar Sesión */}
+      <Dialog
+        open={logoutModalOpen}
+        onClose={() => setLogoutModalOpen(false)}
+        title="¿Deseas cerrar tu sesión?"
+      >
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-sm">
+            <LogOut className="h-5 w-5 shrink-0" />
+            <span>Se cerrará la sesión actual en este dispositivo.</span>
+          </div>
+          <p className="text-sm text-gray-300">
+            Tendrás que volver a ingresar con tus credenciales para acceder al panel de administración.
+          </p>
+          <div className="flex justify-end gap-3 pt-3 border-t border-white/5">
+            <Button variant="secondary" onClick={() => setLogoutModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleLogout}
+            >
+              Cerrar Sesión
+            </Button>
+          </div>
+        </div>
+      </Dialog>
 
       <AdminFeedbackModal
         isOpen={feedbackOpen}

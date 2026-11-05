@@ -218,7 +218,7 @@ export default function NotificationsPage() {
       {/* Ajuste de campana (única fuente: /settings) — acceso por el gear del header */}
 
       {!inAppBell ? (
-        <div className="bg-(--bg-elevated) p-8 rounded-3xl text-center border border-(--border-subtle) mt-4">
+        <div className="mt-4 rounded-3xl border border-white/10 bg-white/[0.05] p-8 text-center backdrop-blur-xl">
           <div className="w-16 h-16 bg-[#FFF0F5]/10 rounded-[20px] flex items-center justify-center mx-auto mb-4 text-(--text-muted)">
             <Bell size={28} />
           </div>
@@ -236,7 +236,7 @@ export default function NotificationsPage() {
         {loading ? (
           <div className="flex justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div></div>
         ) : notifications.length === 0 ? (
-          <div className="bg-(--bg-elevated) p-8 rounded-3xl text-center border border-(--border-subtle) shadow-[0_4px_20px_rgba(0,0,0,0.03)] mt-4">
+          <div className="mt-4 rounded-3xl border border-white/10 bg-white/[0.05] p-8 text-center backdrop-blur-xl">
             <div className="w-16 h-16 bg-[#FFF0F5]/10 rounded-[20px] flex items-center justify-center mx-auto mb-4 text-[#E91E63]">
               <Bell size={28} />
             </div>
@@ -251,7 +251,11 @@ export default function NotificationsPage() {
                 if (!notif.isRead) markAsRead(notif.id);
                 if (notif.route) router.push(notif.route);
               }}
-              className={`bg-(--bg-elevated) p-4 rounded-2xl border transition-all ${notif.isRead ? 'opacity-60 border-(--border-subtle) shadow-sm' : 'border-pink-500/30 shadow-md cursor-pointer'}`}
+              className={`relative overflow-hidden rounded-2xl border p-4 backdrop-blur-xl transition-all ${
+                notif.isRead
+                  ? 'opacity-65 border-white/10 bg-white/[0.04]'
+                  : 'cursor-pointer border-pink-500/30 bg-gradient-to-b from-pink-500/12 to-white/[0.04] shadow-[0_16px_36px_-20px_rgba(233,30,99,0.65)]'
+              }`}
             >
               <div className="flex items-start gap-3">
                 <div className="mt-1 bg-white/5 p-2 rounded-full">

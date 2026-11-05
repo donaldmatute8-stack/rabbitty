@@ -2188,6 +2188,9 @@ export const posRouter = router({
         createdAt: ord.createdAt,
         items,
         stage,
+        etaMinutes: ord.etaMinutes ?? null,
+        etaAt: ord.etaAt ?? null,
+        deliveryAddress: ord.deliveryAddress ?? null,
         fromApp,
         customer: user
           ? {
@@ -2228,10 +2231,20 @@ export const posRouter = router({
     .input(z.object({
       orderId: z.string(),
       stage: z.enum(["RECEIVED", "PREPARING", "READY", "DONE"]),
+      /** Minutos que el local promete para tenerlo listo (solo PREPARING). */
+      etaMinutes: z.number().int().min(1).max(240).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const [order] = await ctx.restaurantDb
-        .select({ id: orders.id, branchId: orders.branchId, status: orders.status, customerId: orders.customerId, total: orders.total })
+        .select({
+          id: orders.id,
+          branchId: orders.branchId,
+          status: orders.status,
+          customerId: orders.customerId,
+          total: orders.total,
+          orderType: orders.orderType,
+          deliveryAddress: orders.deliveryAddress,
+        })
         .from(orders)
         .where(eq(orders.id, input.orderId))
         .limit(1);
@@ -2247,6 +2260,19 @@ export const posRouter = router({
         DONE: "SERVED",
       };
       const itemStatus = itemStatusByStage[input.stage];
+
+      const etaMinutes =
+        input.stage === "PREPARING" && input.etaMinutes ? input.etaMinutes : null;
+      if (etaMinutes) {
+        await ctx.restaurantDb
+          .update(orders)
+          .set({
+            etaMinutes,
+            etaAt: new Date(Date.now() + etaMinutes * 60_000),
+            updatedAt: new Date(),
+          })
+          .where(eq(orders.id, input.orderId));
+      }
 
       if (input.stage === "DONE") {
         // Entrega confirmada por el personal: la orden se cierra operativamente.
@@ -2309,11 +2335,18 @@ export const posRouter = router({
           const stageCopy: Record<string, { title: string; message: string }> = {
             PREPARING: {
               title: "🔥 Tu pedido está en preparación",
-              message: `Ya estamos preparando tu pedido en ${businessName}${detail}. Te avisamos cuando esté listo.`,
+              message: etaMinutes
+                ? `Ya estamos preparando tu pedido en ${businessName}${detail}. El local calcula ~${etaMinutes} min.`
+                : `Ya estamos preparando tu pedido en ${businessName}${detail}. Te avisamos cuando esté listo.`,
             },
             READY: {
-              title: "✅ ¡Pedido listo!",
-              message: `Tu pedido en ${businessName} está listo${detail}.`,
+              title: order.orderType === "DELIVERY" ? "🛵 Tu pedido va en camino" : "✅ ¡Pedido listo!",
+              message:
+                order.orderType === "DELIVERY"
+                  ? `Tu pedido de ${businessName} salió a entrega${detail}.${
+                      order.deliveryAddress ? ` Destino: ${order.deliveryAddress}.` : ""
+                    }`
+                  : `Tu pedido en ${businessName} está listo${detail}.`,
             },
             DONE: {
               title: "🎉 Pedido entregado",
@@ -2343,10 +2376,17 @@ export const posRouter = router({
               contentState: {
                 stage: input.stage,
                 stageLabel:
-                  input.stage === "PREPARING" ? "En preparación"
-                  : input.stage === "READY" ? "Listo para recoger"
-                  : input.stage === "DONE" ? "Entregado"
-                  : "Pedido recibido",
+                  input.stage === "PREPARING"
+                    ? etaMinutes
+                      ? `En preparación · ~${etaMinutes} min`
+                      : "En preparación"
+                    : input.stage === "READY"
+                      ? order.orderType === "DELIVERY"
+                        ? "En camino"
+                        : "Listo para recoger"
+                      : input.stage === "DONE"
+                        ? "Entregado"
+                        : "Pedido recibido",
                 step: orderStageStepIndex(input.stage as OrderStage),
                 stepCount: 4,
                 total: Number(order.total ?? 0),

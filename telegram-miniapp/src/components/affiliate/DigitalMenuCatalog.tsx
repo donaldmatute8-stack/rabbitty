@@ -262,7 +262,7 @@ export function DigitalMenuCatalog({
 
                         <div className="flex items-center gap-1 text-xs font-black text-white bg-linear-to-r from-[#FF2E93] to-[#E91E63] group-hover:brightness-110 px-3 py-1 rounded-xl transition-all shadow-sm shadow-pink-500/20">
                           <Plus size={13} className="shrink-0" />
-                          <span>{digitalOrderingEnabled ? 'Pedir' : 'Ver'}</span>
+                          <span>{digitalOrderingEnabled ? 'Agregar' : 'Ver'}</span>
                         </div>
                       </div>
                     </div>

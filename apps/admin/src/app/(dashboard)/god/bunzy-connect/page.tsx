@@ -98,6 +98,8 @@ export default function BunzyConnectPage() {
   const [businessId, setBusinessId] = useState("");
   const [scope, setScope] = useState<"BUSINESS" | "ALL_AFFILIATES" | "ALL_RABBITTERS">("BUSINESS");
   const [scheduledAt, setScheduledAt] = useState("");
+  const [academyStartAt, setAcademyStartAt] = useState("");
+  const [updateSlug, setUpdateSlug] = useState("");
   const [brief, setBrief] = useState("");
   const [requestKey, setRequestKey] = useState("");
   const [preview, setPreview] = useState<PreviewData | null>(null);
@@ -109,6 +111,7 @@ export default function BunzyConnectPage() {
   const list = trpc.bunzyConnect.list.useQuery(undefined, { refetchInterval: 15_000 });
   const analytics = trpc.bunzyConnect.analytics.useQuery(undefined, { refetchInterval: 30_000 });
   const series = trpc.bunzyConnect.series.useQuery(undefined, { refetchInterval: 30_000 });
+  const updates = trpc.updates.list.useQuery();
 
   const createSeries = trpc.bunzyConnect.createSeries.useMutation({
     onSuccess: () => {
@@ -377,6 +380,40 @@ export default function BunzyConnectPage() {
             <span className="text-[10px] text-gray-500">{body.length}/4000 · texto plano, sin HTML</span>
           </label>
 
+          <label className="block space-y-1">
+            <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">
+              Novedad del Update Log (opcional)
+            </span>
+            <select
+              value={updateSlug}
+              onChange={(e) => {
+                const slug = e.target.value;
+                setUpdateSlug(slug);
+                const entry = (updates.data ?? []).find((u) => u.slug === slug);
+                if (entry) {
+                  setCtaLabel("Ver la novedad");
+                  setCtaUrl(entry.url);
+                }
+              }}
+              className="h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white outline-none"
+            >
+              <option value="" className="bg-[#0b0b12]">Sin novedad enlazada</option>
+              {(updates.data ?? [])
+                .filter((u) => u.status === "PUBLISHED")
+                .map((u) => (
+                  <option key={u.slug} value={u.slug} className="bg-[#0b0b12]">
+                    {u.version ? `v${u.version} · ` : ""}
+                    {u.title}
+                  </option>
+                ))}
+            </select>
+            {updateSlug && (
+              <span className="block break-all text-[10px] text-gray-500">
+                Enlace: {ctaUrl}
+              </span>
+            )}
+          </label>
+
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="space-y-1">
               <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">CTA (texto)</span>
@@ -497,6 +534,17 @@ export default function BunzyConnectPage() {
               Programa una serie de 4 tips semanales para {selectedBusiness?.name ?? "el negocio"}: menú digital,
               productos populares, recompensas Bunz y revisión de actividad.
             </p>
+            <label className="mt-3 block space-y-1">
+              <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">
+                Primera clase (día y hora)
+              </span>
+              <input
+                type="datetime-local"
+                value={academyStartAt}
+                onChange={(e) => setAcademyStartAt(e.target.value)}
+                className="h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white outline-none"
+              />
+            </label>
             <Button
               variant="secondary"
               onClick={() => {
@@ -504,15 +552,19 @@ export default function BunzyConnectPage() {
                   toast.error("Elige un negocio para programar la Academia");
                   return;
                 }
-                academyMutation.mutate({ businessId });
+                academyMutation.mutate({
+                  businessId,
+                  startAt: academyStartAt ? new Date(academyStartAt).toISOString() : undefined,
+                });
               }}
               disabled={academyMutation.isPending}
-              className="mt-3 gap-2"
+              className="mt-2 gap-2"
             >
               <GraduationCap size={14} /> {academyMutation.isPending ? "Programando…" : "Programar 4 semanas"}
             </Button>
             <p className="m-0 mt-2 text-[10.5px] leading-relaxed text-gray-500">
-              Se crean como TIP programados; el cron los publica cada semana.
+              La primera sale a la hora elegida y las siguientes cada 7 días a la misma hora. Sin fecha, empieza
+              mañana.
             </p>
           </Card>
 

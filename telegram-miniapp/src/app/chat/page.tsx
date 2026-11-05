@@ -130,6 +130,94 @@ const actionStyleBase: React.CSSProperties = {
 
 const actionLabelStyle: React.CSSProperties = { fontSize: 10, fontWeight: 800, lineHeight: 1.1 };
 
+type PinnedComunicado = {
+  deliveryId: string;
+  title: string;
+  summary: string;
+  body: string;
+  category: string;
+  createdAt: string;
+  archivedAt: string | null;
+};
+
+const PINNED_CATEGORY: Record<string, string> = {
+  PRODUCT: 'Actualización',
+  TIP: 'Tip',
+  NEWS: 'Novedad',
+  SYSTEM: 'Aviso importante',
+};
+
+/**
+ * Comunicado oficial fijado arriba de los chats (no dentro del hilo).
+ * Se abre en el chat de Bunzy; "Entendido" o swipe left/right lo archivan.
+ */
+function PinnedComunicadoCard({
+  item,
+  onOpen,
+  onAcknowledge,
+}: {
+  item: PinnedComunicado;
+  onOpen: () => void;
+  onAcknowledge: () => void;
+}) {
+  const x = useMotionValue(0);
+
+  const handleClick = () => {
+    // Si viene de un swipe, no navegar.
+    if (Math.abs(x.get()) > 6) return;
+    onOpen();
+  };
+
+  return (
+    <motion.div
+      drag="x"
+      dragConstraints={{ left: 0, right: 0 }}
+      dragElastic={0.22}
+      style={{ x }}
+      onDragEnd={(_event, info) => {
+        if (Math.abs(info.offset.x) > 90) {
+          onAcknowledge();
+          return;
+        }
+        animate(x, 0, { type: 'spring', stiffness: 420, damping: 32 });
+      }}
+      className="relative overflow-hidden rounded-2xl border border-pink-500/30 bg-white/[0.07] backdrop-blur-xl shadow-[0_10px_30px_-12px_rgba(0,0,0,0.6)]"
+      whileTap={{ scale: 0.995 }}
+    >
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-pink-500/15 via-transparent to-violet-500/10" />
+      <div className="relative flex items-start gap-2.5 p-3">
+        <div className="mt-0.5 h-9 w-9 shrink-0 overflow-hidden rounded-full border border-white/15">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/bunzy-avatar.png" alt="" className="h-full w-full object-cover" />
+        </div>
+        <button type="button" onClick={handleClick} className="min-w-0 flex-1 text-left">
+          <span className="flex items-center gap-1.5">
+            <span className="text-[9px] font-black uppercase tracking-[0.16em] text-pink-300/90">
+              {PINNED_CATEGORY[item.category] || 'Comunicado'}
+            </span>
+            <span className="rounded-full border border-pink-500/35 px-1.5 py-0.5 text-[8.5px] font-extrabold uppercase tracking-wider text-pink-300">
+              Oficial
+            </span>
+          </span>
+          <span className="mt-1 block truncate text-[13.5px] font-black text-(--text-primary)">
+            {item.title}
+          </span>
+          <span className="mt-0.5 block truncate text-[11.5px] text-(--text-muted)">
+            {item.summary || item.body}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={onAcknowledge}
+          className="shrink-0 self-center rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-[10.5px] font-black text-(--text-primary) active:scale-95"
+        >
+          Entendido
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
 type BottomDockTab = 'contacts' | 'chats' | 'business' | 'settings' | 'search';
 type SearchCategory = 'Chats' | 'Canales' | 'Apps' | 'Posts' | 'Media';
 
@@ -338,6 +426,55 @@ export default function ChatInboxPage() {
   // Un Rabbitter común NUNCA debe ver los settings de negocio a menos que sea dueño en DB de un negocio o rol AFFILIATE
   const hasOwnedBusiness = !!profileRes?.profile?.ownedBusiness;
   const isAffiliate = user?.role === 'AFFILIATE' || hasOwnedBusiness;
+
+  // ── Comunicados oficiales fijados arriba ──
+  // Rabbiter → pestaña Chats (audiencia usuario).
+  // Afiliado  → pestaña Negocios (audiencia negocio).
+  // Nunca se mezclan y nunca viven dentro del hilo de Bunzy.
+  const [pinnedComunicados, setPinnedComunicados] = useState<PinnedComunicado[]>([]);
+
+  const loadPinnedComunicados = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const audience = activeTab === 'business' ? 'business' : 'user';
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch(`/api/chat/bunzy-comunicados?audience=${audience}`, { headers });
+      const data = await res.json();
+      if (!data?.success) return;
+      setPinnedComunicados(
+        (data.items as PinnedComunicado[]).filter((item) => !item.archivedAt),
+      );
+    } catch {
+      /* silencioso: la lista de chats no debe romperse por esto */
+    }
+  }, [user?.id, activeTab]);
+
+  useEffect(() => {
+    void loadPinnedComunicados();
+  }, [loadPinnedComunicados]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void loadPinnedComunicados();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [loadPinnedComunicados]);
+
+  const acknowledgePinnedComunicado = useCallback(async (deliveryId: string) => {
+    setPinnedComunicados((prev) => prev.filter((c) => c.deliveryId !== deliveryId));
+    PlatformBridge.hapticFeedback('light');
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      await fetch('/api/chat/bunzy-comunicados', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deliveryId }),
+      });
+    } catch {
+      /* best-effort */
+    }
+  }, []);
   const archivedCount = allConversations.filter((c) => prefs[c.id]?.archived).length;
   const totalUnreadCount = useMemo(
     () => allConversations.reduce((acc, c) => acc + (c.unreadCount || 0), 0),
@@ -348,6 +485,9 @@ export default function ChatInboxPage() {
     const list = allConversations.filter((c) => {
       const p = prefs[c.id] || {};
       if (!!p.archived !== archived) return false;
+      // El chat de Bunzy no vive en la lista: se llega por el comunicado fijado
+      // (o por /comunicados para el historial).
+      if (c.isBot) return false;
       if (activeTab === 'business') return !!c.isBusinessInbox;
       // Una conversación donde YO actúo como negocio solo vive en la pestaña
       // Negocio; si no, aparecía duplicada en ambos lados.
@@ -951,6 +1091,19 @@ export default function ChatInboxPage() {
                   {archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
                   {archived ? 'Volver a chats' : `Archivados${archivedCount ? ` (${archivedCount})` : ''}`}
                 </button>
+              )}
+
+              {!archived && pinnedComunicados.length > 0 && (
+                <div className="mb-1 flex flex-col gap-2">
+                  {pinnedComunicados.slice(0, 3).map((item) => (
+                    <PinnedComunicadoCard
+                      key={item.deliveryId}
+                      item={item}
+                      onOpen={() => router.push('/chat/bot')}
+                      onAcknowledge={() => void acknowledgePinnedComunicado(item.deliveryId)}
+                    />
+                  ))}
+                </div>
               )}
 
               {isLoading && (

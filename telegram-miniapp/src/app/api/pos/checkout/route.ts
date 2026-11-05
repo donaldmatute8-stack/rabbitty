@@ -35,7 +35,29 @@ async function resolveBranchId(branchOrBusinessId: string): Promise<string | nul
 
 export async function POST(req: Request) {
   try {    const body = await req.json();
-    const { tableId, items, paymentMethod, tip = 0, existingOrderId, splitPaymentAmount } = body;
+    const {
+      tableId,
+      items,
+      paymentMethod,
+      tip = 0,
+      existingOrderId,
+      splitPaymentAmount,
+      orderType: requestedOrderType,
+      deliveryAddress,
+    } = body;
+
+    // Domicilio / recoger / mesa: el POS necesita distinguirlo para prometer
+    // tiempo de entrega y asignar repartidor.
+    const resolvedOrderType =
+      tableId
+        ? 'DINE_IN'
+        : requestedOrderType === 'DELIVERY'
+          ? 'DELIVERY'
+          : 'TAKEAWAY';
+    const normalizedAddress =
+      resolvedOrderType === 'DELIVERY' && typeof deliveryAddress === 'string'
+        ? deliveryAddress.trim().slice(0, 300)
+        : null;
 
     // Si pasaron existingOrderId, es un Split Bill.
     // Si no, es una orden nueva. La mesa es opcional si hay usuario
@@ -181,7 +203,8 @@ export async function POST(req: Request) {
         tip: totalTip,
         total: r2(grandTotal + totalTip),
         status: paymentMethod === 'BUNZ' ? 'PAID' : 'PENDING',
-        orderType: tableId ? 'DINE_IN' : 'TAKEAWAY'
+        orderType: resolvedOrderType,
+        deliveryAddress: normalizedAddress,
       }).returning();
 
       // Fase C: identificar al comensal en la orden (para POS/cuenta/cashback)

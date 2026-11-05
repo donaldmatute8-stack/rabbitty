@@ -22,7 +22,7 @@ interface OrderCartSheetProps {
   onRemoveItem: (id: string) => void;
   onUpdateQuantity: (id: string, delta: number) => void;
   onClearCart: () => void;
-  onSubmitOrder: (orderType: 'DINE_IN' | 'PICKUP') => Promise<void>;
+  onSubmitOrder: (orderType: 'DINE_IN' | 'PICKUP' | 'DELIVERY', address?: string) => Promise<void>;
   tableNumber?: number | null;
   currency?: string;
   rewardPercentage?: number;
@@ -52,9 +52,10 @@ export function OrderCartSheet({
 }: OrderCartSheetProps) {
   const [submitting, setSubmitting] = React.useState(false);
   const [orderSuccess, setOrderSuccess] = React.useState(false);
-  const [orderType, setOrderType] = React.useState<'DINE_IN' | 'PICKUP'>(
+  const [orderType, setOrderType] = React.useState<'DINE_IN' | 'PICKUP' | 'DELIVERY'>(
     tableNumber ? 'DINE_IN' : 'PICKUP'
   );
+  const [deliveryAddress, setDeliveryAddress] = React.useState('');
 
   // H-ORDEN-LOCAL: con check-in activo el destino es el local, sin excepción.
   React.useEffect(() => {
@@ -68,16 +69,13 @@ export function OrderCartSheet({
 
   const estimatedBunz = Math.round(subtotal * (rewardPercentage / 100));
 
+  // El padre gestiona la ventana de arrepentimiento: aquí solo se encola el
+  // pedido y se cierra la hoja. No se muestra una segunda confirmación.
   const handleConfirm = async () => {
     try {
       setSubmitting(true);
-      await onSubmitOrder(orderType);
-      setOrderSuccess(true);
-      setTimeout(() => {
-        setOrderSuccess(false);
-        onClose();
-        onClearCart();
-      }, 2000);
+      await onSubmitOrder(orderType, orderType === 'DELIVERY' ? deliveryAddress.trim() : undefined);
+      onClose();
     } catch (e) {
       console.error(e);
     } finally {
@@ -142,30 +140,62 @@ export function OrderCartSheet({
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-2 my-4 bg-white/5 p-1 rounded-2xl border border-white/5">
-                  <button
-                    type="button"
-                    onClick={() => setOrderType('DINE_IN')}
-                    className={`py-2 text-xs font-black rounded-xl transition-all ${
-                      orderType === 'DINE_IN'
-                        ? 'bg-[#E91E63] text-white shadow-md'
-                        : 'text-white/60 hover:text-white'
-                    }`}
-                  >
-                    En Mesa {tableNumber ? `#${tableNumber}` : ''}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setOrderType('PICKUP')}
-                    className={`py-2 text-xs font-black rounded-xl transition-all ${
-                      orderType === 'PICKUP'
-                        ? 'bg-[#E91E63] text-white shadow-md'
-                        : 'text-white/60 hover:text-white'
-                    }`}
-                  >
-                    Para Recoger
-                  </button>
-                </div>
+                <>
+                  <div className={`grid ${tableNumber ? 'grid-cols-3' : 'grid-cols-2'} gap-2 my-4 bg-white/5 p-1 rounded-2xl border border-white/5`}>
+                    {tableNumber && (
+                      <button
+                        type="button"
+                        onClick={() => setOrderType('DINE_IN')}
+                        className={`py-2 text-xs font-black rounded-xl transition-all ${
+                          orderType === 'DINE_IN'
+                            ? 'bg-[#E91E63] text-white shadow-md'
+                            : 'text-white/60 hover:text-white'
+                        }`}
+                      >
+                        En Mesa #{tableNumber}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setOrderType('DELIVERY')}
+                      className={`py-2 text-xs font-black rounded-xl transition-all ${
+                        orderType === 'DELIVERY'
+                          ? 'bg-[#E91E63] text-white shadow-md'
+                          : 'text-white/60 hover:text-white'
+                      }`}
+                    >
+                      A Domicilio
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOrderType('PICKUP')}
+                      className={`py-2 text-xs font-black rounded-xl transition-all ${
+                        orderType === 'PICKUP'
+                          ? 'bg-[#E91E63] text-white shadow-md'
+                          : 'text-white/60 hover:text-white'
+                      }`}
+                    >
+                      Para Recoger
+                    </button>
+                  </div>
+
+                  {orderType === 'DELIVERY' && (
+                    <div className="mb-4 space-y-1">
+                      <label className="text-[10px] font-black uppercase tracking-wider text-white/50">
+                        Dirección de entrega
+                      </label>
+                      <input
+                        value={deliveryAddress}
+                        onChange={(e) => setDeliveryAddress(e.target.value)}
+                        placeholder="Calle, número, colonia y referencias"
+                        className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-[#E91E63]/60"
+                      />
+                      <p className="m-0 text-[10px] text-white/40">
+                        El local usará esta dirección para calcular el tiempo de entrega y asignar al repartidor.
+                      </p>
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Items List */}
@@ -253,10 +283,16 @@ export function OrderCartSheet({
                   <button
                     type="button"
                     onClick={handleConfirm}
-                    disabled={submitting}
+                    disabled={submitting || (orderType === 'DELIVERY' && deliveryAddress.trim().length < 8)}
                     className="w-full bg-linear-to-r from-[#E91E63] to-[#FF4081] text-white py-3.5 px-4 rounded-2xl font-black text-sm tracking-wide shadow-lg shadow-[#E91E63]/30 active:scale-98 transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
                   >
-                    <span>{submitting ? 'Enviando orden...' : 'Confirmar y Enviar Pedido'}</span>
+                    <span>
+                      {submitting
+                        ? 'Enviando orden...'
+                        : orderType === 'DELIVERY'
+                          ? 'Confirmar pedido a domicilio'
+                          : 'Confirmar y Enviar Pedido'}
+                    </span>
                     <ChevronRight size={18} />
                   </button>
                 </div>

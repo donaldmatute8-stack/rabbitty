@@ -63,6 +63,9 @@ export default function ScanPage() {
   };
   const [hasCamera, setHasCamera] = useState(() => typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices));
   const [isNativeApp, setIsNativeApp] = useState(false);
+  // En iOS el plugin de ML Kit no está implementado (solo CocoaPods): se usa el
+  // escáner web con getUserMedia en vez de mostrar un error.
+  const [nativeScannerSupported, setNativeScannerSupported] = useState(false);
   const [nativeSession, setNativeSession] = useState(0);
   const [nativeUnavailable, setNativeUnavailable] = useState(false);
   const nativeSessionRef = useRef(0);
@@ -93,6 +96,7 @@ export default function ScanPage() {
   useEffect(() => {
     const native = PlatformBridge.isNative();
     setIsNativeApp(native);
+    setNativeScannerSupported(native && !PlatformBridge.isIos());
     if (native) setHasCamera(true);
   }, []);
   const [result, setResult] = useState<PaymentIntentData | null>(null);
@@ -273,6 +277,15 @@ export default function ScanPage() {
   const requestCameraAccess = async () => {
     if (PlatformBridge.isNative()) {
       setHasCamera(true);
+      // iOS no tiene plugin nativo: sigue al getUserMedia del WebView.
+      if (PlatformBridge.isIos()) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+          stream.getTracks().forEach((t) => t.stop());
+        } catch {
+          setHasCamera(false);
+        }
+      }
       return;
     }
     if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
@@ -550,7 +563,7 @@ export default function ScanPage() {
   }, [API_SERVER_URL, router, stopScanning]);
 
   const startScanning = useCallback(async () => {
-    if (PlatformBridge.isNative() && !nativeUnavailable) {
+    if (PlatformBridge.isNative() && !PlatformBridge.isIos() && !nativeUnavailable) {
       openNativeScanner();
       return;
     }
@@ -824,7 +837,7 @@ export default function ScanPage() {
         color: 'var(--text-primary)'
       }}
     >
-      {isNativeApp && !nativeUnavailable && nativeSession > 0 && activeTab === 'scan' && !showManualInput && !result && !scanLoader && (
+      {isNativeApp && nativeScannerSupported && !nativeUnavailable && nativeSession > 0 && activeTab === 'scan' && !showManualInput && !result && !scanLoader && (
         <NativeQrScanner
           key={nativeSession}
           onScan={handleNativeScan}

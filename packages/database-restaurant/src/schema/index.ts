@@ -188,6 +188,11 @@ export const orders = pgTable("orders", {
   bunzReward: integer("bunzReward").default(0),
   bunzPaid: integer("bunzPaid").default(0),
   notes: text("notes"),
+  /** Dirección de entrega (solo pedidos DELIVERY). */
+  deliveryAddress: text("deliveryAddress"),
+  /** Tiempo estimado de preparación que el POS promete al cliente. */
+  etaMinutes: integer("etaMinutes"),
+  etaAt: timestamp("etaAt"),
   voidReason: text("voidReason"),
   cfdiStatus: text("cfdiStatus").default("NONE").notNull(),
   cfdiUrl: text("cfdiUrl"),

@@ -194,16 +194,6 @@ export function SandboxBanner() {
     );
   }
 
-  return (
-    <button
-      type="button"
-      onClick={enterSandbox}
-      disabled={initSandbox.isPending}
-      className="flex items-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-bold text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/50 transition-all cursor-pointer shadow-sm"
-      title="Entrar al entorno de prueba y capacitación"
-    >
-      <FlaskConical className="h-3.5 w-3.5" />
-      <span>{initSandbox.isPending ? "Cargando Sandbox..." : "🧪 Modo Sandbox"}</span>
-    </button>
-  );
+  // Si no está activo el sandbox, la barra superior no renderiza nada (el botón vive en el sidebar inferior)
+  return null;
 }

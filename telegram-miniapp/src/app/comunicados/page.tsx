@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Megaphone } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ChevronRight, Megaphone, Newspaper } from 'lucide-react';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import { BunzyUpdateCard } from '@/components/chat/BunzyUpdateCard';
 import { PlatformBridge } from '@/lib/platform';
@@ -36,6 +37,7 @@ const FILTERS: Array<{ id: Filter; label: string }> = [
  * (readAt / archivedAt en bunzyDeliveries), no un pin del chat.
  */
 export default function ComunicadosPage() {
+  const router = useRouter();
   const [items, setItems] = useState<Comunicado[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -118,6 +120,26 @@ export default function ComunicadosPage() {
             </span>
           )}
         </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            PlatformBridge.hapticFeedback('light');
+            router.push('/updates');
+          }}
+          className="mb-4 flex w-full items-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.03] px-3.5 py-3 text-left"
+        >
+          <Newspaper size={16} className="shrink-0 text-pink-300" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-[12.5px] font-extrabold text-(--text-primary)">
+              Novedades de producto
+            </span>
+            <span className="block text-[11px] text-(--text-muted)">
+              El update log completo, con enlaces permanentes
+            </span>
+          </span>
+          <ChevronRight size={16} className="shrink-0 text-(--text-muted)" />
+        </button>
 
         <div className="mb-4 flex items-center gap-2 overflow-x-auto hide-scrollbar">
           {FILTERS.map((f) => (

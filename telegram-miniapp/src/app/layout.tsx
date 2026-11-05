@@ -8,6 +8,7 @@ import AppOpener from "@/components/AppOpener";
 import DeepLinkHandler from "@/components/DeepLinkHandler";
 import BunzyLaunchOverlay from "@/components/bunzy/BunzyLaunchOverlay";
 import ProximityEngine from "@/components/ProximityEngine";
+import AutoReadNotifications from "@/components/AutoReadNotifications";
 
 const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem('rabbitty_theme')||'dark';var r=t==='system'?(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t;var d=document.documentElement;d.setAttribute('data-theme',r);d.classList.toggle('dark',r==='dark');d.classList.toggle('light',r==='light');d.style.colorScheme=r;}catch(e){}})();`;
 
@@ -54,6 +55,7 @@ export default function RootLayout({
             <AuthProvider>
               <DeepLinkHandler />
               <WalletProvider>
+                <AutoReadNotifications />
                 {children}
                 {/* Motor global de proximidad: pings en cualquier pantalla + modal de check-in */}
                 <ProximityEngine />

@@ -844,6 +844,34 @@ export const bunzySeries = pgTable("bunzySeries", {
 ]);
 
 /**
+ * 📝 Update Log — blog de novedades de producto.
+ *
+ * Fuente persistente de las actualizaciones que se muestran en `/updates`
+ * (app) y que Bunzy Connect enlaza desde los comunicados. El contenido se
+ * inyecta desde local (scripts/update-log.mjs) con el slug y la versión como
+ * clave estable, de modo que la URL pública no cambia al corregir el texto.
+ */
+export const updatePosts = pgTable("updatePosts", {
+  id: id(),
+  slug: text("slug").notNull().unique(),
+  version: text("version"),
+  title: text("title").notNull(),
+  summary: text("summary").notNull(),
+  body: text("body").notNull(),
+  /** PRODUCT | IMPROVEMENT | FIX | SECURITY */
+  category: text("category").default("PRODUCT").notNull(),
+  tags: jsonb("tags").$type<string[]>().default([]).notNull(),
+  coverUrl: text("coverUrl"),
+  /** DRAFT | PUBLISHED */
+  status: text("status").default("PUBLISHED").notNull(),
+  publishedAt: timestamp("publishedAt").defaultNow().notNull(),
+  createdBy: text("createdBy"),
+  ...timestamps,
+}, (table) => [
+  index("update_posts_status_published_idx").on(table.status, table.publishedAt),
+]);
+
+/**
  * 🎯 Affiliate Growth Campaigns
  * Modelo persistente y financiero de campañas comerciales activadas por el afiliado.
  */

@@ -21,20 +21,25 @@ export const runtime = 'nodejs';
  */
 
 /** Filtro de destinatario: usuario directo o negocio propio. */
-async function recipientScope(userId: string): Promise<SQL | undefined> {
+async function recipientScope(
+  userId: string,
+  audience?: 'user' | 'business' | null,
+): Promise<SQL | undefined> {
   const businessIds = await getOwnedBusinessIds(userId);
-  const scopes: Array<SQL | undefined> = [
-    and(eq(bunzyDeliveries.recipientType, 'USER'), eq(bunzyDeliveries.recipientId, userId)),
-  ];
-  if (businessIds.length > 0) {
-    scopes.push(
-      and(
-        eq(bunzyDeliveries.recipientType, 'BUSINESS'),
-        inArray(bunzyDeliveries.recipientId, businessIds),
-      ),
-    );
-  }
-  return or(...scopes);
+  const userScope = and(eq(bunzyDeliveries.recipientType, 'USER'), eq(bunzyDeliveries.recipientId, userId));
+  const businessScope =
+    businessIds.length > 0
+      ? and(
+          eq(bunzyDeliveries.recipientType, 'BUSINESS'),
+          inArray(bunzyDeliveries.recipientId, businessIds),
+        )
+      : undefined;
+
+  // Separación por audiencia: lo de Rabbiter vive en Chats, lo del negocio en
+  // la pestaña Negocios. Nunca se mezclan.
+  if (audience === 'user') return userScope;
+  if (audience === 'business') return businessScope;
+  return or(...[userScope, businessScope].filter(Boolean));
 }
 
 export async function GET(req: Request) {
@@ -42,16 +47,21 @@ export async function GET(req: Request) {
     const caller = await getAuthenticatedUser(req);
     if (!caller) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
-    const scope = await recipientScope(caller.id);
-    if (!scope) return NextResponse.json({ success: true, items: [], unread: 0 });
-
     const { searchParams } = new URL(req.url);
+    const audienceParam = searchParams.get('audience');
+    const audience =
+      audienceParam === 'user' || audienceParam === 'business' ? audienceParam : null;
     const onlyArchived = searchParams.get('archived') === '1';
+
+    const scope = await recipientScope(caller.id, audience);
+    if (!scope) return NextResponse.json({ success: true, items: [], unread: 0 });
 
     const rows = await db
       .select({
         deliveryId: bunzyDeliveries.id,
         broadcastId: bunzyBroadcasts.id,
+        conversationId: bunzyDeliveries.conversationId,
+        recipientType: bunzyDeliveries.recipientType,
         category: bunzyBroadcasts.category,
         title: bunzyBroadcasts.title,
         body: bunzyBroadcasts.body,
@@ -88,7 +98,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'deliveryId requerido' }, { status: 400 });
     }
 
-    const scope = await recipientScope(caller.id);
+    const scope = await recipientScope(caller.id, null);
     if (!scope) return NextResponse.json({ error: 'Comunicado no encontrado' }, { status: 404 });
 
     const now = new Date();
