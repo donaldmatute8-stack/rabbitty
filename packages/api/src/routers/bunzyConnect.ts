@@ -9,7 +9,10 @@ import {
   getBroadcastEvidence,
   getConnectMeta,
   previewBroadcast,
+  processBunzyQueue,
+  processBunzySeries,
   publishBroadcast,
+  publishScheduledBroadcasts,
 } from "../services/bunzyConnect";
 
 const ACADEMY_SERIES = [
@@ -93,6 +96,21 @@ export const bunzyConnectRouter = router({
       createdBy: String(ctx.userId || "god"),
     }),
   ),
+
+  /**
+   * "Tick" de Bunzy Connect: publica programados, avanza series y drena la cola.
+   *
+   * El cron de GitHub debería hacerlo cada 5 minutos, pero en este repo los
+   * schedules se están disparando cada ~8 horas. Esto garantiza que un envío
+   * masivo (o un programado) no dependa de esa puntualidad: se ejecuta al
+   * publicar y al abrir el panel.
+   */
+  processQueue: godAdminProcedure.mutation(async ({ ctx }) => {
+    const scheduled = await publishScheduledBroadcasts(ctx.coreDb);
+    const series = await processBunzySeries(ctx.coreDb);
+    const queue = await processBunzyQueue(ctx.coreDb);
+    return { ...queue, scheduledDue: scheduled.due, seriesDue: series.due };
+  }),
 
   publish: godAdminProcedure.input(broadcastInput).mutation(async ({ ctx, input }) => {
     assertMassAllowed(input.audience.scope, input.confirmMass);

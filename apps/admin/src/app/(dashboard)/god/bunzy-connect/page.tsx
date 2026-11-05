@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, ArrowLeft, BarChart3, Building2, CalendarClock, Copy, GraduationCap, Megaphone, RefreshCw, Repeat, Send, Sparkles, Users } from "lucide-react";
 import { Button, Card, Dialog, Input, cn, toast } from "@rabbitty/ui";
@@ -156,11 +156,32 @@ export default function BunzyConnectPage() {
     onError: (err) => toast.error(err.message),
   });
 
+  // La cola de un masivo se procesa al instante (hasta 100). El cron sigue
+  // siendo el respaldo, pero GitHub no siempre dispara cada 5 minutos.
+  const runQueue = trpc.bunzyConnect.processQueue.useMutation({
+    onSuccess: (data) => {
+      if (data.processed > 0) toast.success(`${data.processed} entrega(s) procesada(s)`);
+      void list.refetch();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  // Al abrir el panel, ponerse al día: programados vencidos, series y cola.
+  // El cron de GitHub se retrasa horas en este repo, así que no se depende de él.
+  const tickedRef = useRef(false);
+  useEffect(() => {
+    if (tickedRef.current) return;
+    tickedRef.current = true;
+    runQueue.mutate();
+  }, [runQueue]);
+
   const publishMutation = trpc.bunzyConnect.publish.useMutation({
     onSuccess: (data) => {
       setResult(data as PublishResult);
-      toast.success("Mensaje publicado");
+      const queued = "queued" in data && Boolean(data.queued);
+      toast.success(queued ? "Encolado · procesando ahora" : "Mensaje publicado");
       void list.refetch();
+      if (queued) runQueue.mutate();
     },
     onError: (err) => toast.error(err.message),
   });
@@ -449,7 +470,7 @@ export default function BunzyConnectPage() {
               )}
               <p className="m-0 text-[11px] text-gray-400">
                 {result.queued
-                  ? `${result.audienceCount} en cola · el cron procesa 100 por corrida`
+                  ? `${result.audienceCount} en cola · procesando en lotes de 100`
                   : `${result.published}/${result.audienceCount} entregados`}
               </p>
               {(result.skipped ?? []).length > 0 && (
@@ -617,7 +638,17 @@ export default function BunzyConnectPage() {
       <Card className="p-0">
         <div className="flex items-center justify-between border-b border-white/10 px-5 py-3.5">
           <p className="m-0 text-sm font-black text-white">Historial</p>
-          <span className="text-[11px] text-gray-500">Últimos 50</span>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-gray-500">Últimos 50</span>
+            <Button
+              variant="secondary"
+              onClick={() => runQueue.mutate()}
+              disabled={runQueue.isPending}
+              className="gap-1.5"
+            >
+              <RefreshCw size={12} /> {runQueue.isPending ? "Procesando…" : "Procesar pendientes"}
+            </Button>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
