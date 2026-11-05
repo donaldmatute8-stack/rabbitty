@@ -220,6 +220,7 @@ export default function NegociosPage() {
   const [data, setData] = useState<FormData>(EMPTY);
   const [submitted, setSubmitted] = useState(false);
   const [showRitual, setShowRitual] = useState(false);
+  const [ritualPreview, setRitualPreview] = useState(false);
   const [existing, setExisting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -467,6 +468,16 @@ export default function NegociosPage() {
     }
   };
 
+  // ?ritual=1 permite revisar el ritual sin enviar el alta. Usa una llave de
+  // preview para no consumir la llave real del flujo.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (new URLSearchParams(window.location.search).get('ritual') !== '1') return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setRitualPreview(true);
+    setShowRitual(true);
+  }, []);
+
   const meta = STEP_META[step];
 
   if (submitted) {
@@ -564,6 +575,16 @@ export default function NegociosPage() {
 
   return (
     <div className="min-h-[100dvh] bg-[#07070F] text-white">
+      {showRitual && (
+        <WelcomeRitual
+          storageKey={
+            ritualPreview ? 'rabbitty_affiliate_ritual_preview' : AFFILIATE_RITUAL_KEY
+          }
+          audioSrc="/assets/lugares-por-descubrir.mp3"
+          onComplete={() => setShowRitual(false)}
+        />
+      )}
+
       <header className="border-b border-white/10 bg-[#07070F]/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2.5">
