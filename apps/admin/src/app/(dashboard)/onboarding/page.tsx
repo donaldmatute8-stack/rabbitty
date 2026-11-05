@@ -37,6 +37,10 @@ import {
 import { BunzyVideoStage } from '../../../components/BunzyVideoStage';
 import { BunzyTypingBubble } from '../../../components/BunzyTypingBubble';
 import { NicheSearch } from '../../../components/NicheSearch';
+import { WelcomeRitual } from '../../../components/WelcomeRitual';
+
+/** El ritual de bienvenida se muestra una vez por dispositivo en el re-onboarding. */
+const AFFILIATE_RITUAL_KEY = 'rabbitty_affiliate_ritual_admin_seen_v1';
 
 const STEP_META = [
   {
@@ -91,6 +95,22 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
   const [accepted, setAccepted] = useState(false);
+  const [showRitual, setShowRitual] = useState(false);
+
+  useEffect(() => {
+    // Ritual de bienvenida para afiliados que ya operan: una vez por dispositivo.
+    // Se puede forzar en pruebas con /onboarding?ritual=1
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const forced = params.get('ritual') === '1';
+      if (forced || !localStorage.getItem(AFFILIATE_RITUAL_KEY)) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setShowRitual(true);
+      }
+    } catch {
+      // Sin localStorage: no interrumpimos el re-onboarding.
+    }
+  }, []);
 
   const status = trpc.admin.onboardingStatus.useQuery(undefined, { retry: false });
   const niches = trpc.admin.onboardingNiches.useQuery(undefined, { retry: false });
@@ -167,6 +187,14 @@ export default function OnboardingPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6">
+      {showRitual && (
+        <WelcomeRitual
+          storageKey={AFFILIATE_RITUAL_KEY}
+          audioSrc="/assets/lugares-por-descubrir.mp3"
+          onComplete={() => setShowRitual(false)}
+        />
+      )}
+
       {/* Progreso */}
       <div>
         <div className="mb-2 flex items-center justify-between">
