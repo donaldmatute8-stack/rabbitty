@@ -524,3 +524,174 @@ Fases tentativas: **A1** solo lectura (digest), **A2** acciones con aprobación,
 
 > **Nota de cierre:** RAG ya no es una promesa: está certificado en producción. El siguiente salto de valor no es “más modelo”, es **memoria útil + acciones concretas por rol**. MAG M0 y el brief del afiliado son el mejor siguiente paso por impacto/esfuerzo.
 
+---
+
+# 18. Bunzy Connect — auditoría de preparación y especificación
+
+> **Veredicto:** ~70% de la infraestructura ya existe y se reutiliza. Lo que falta es aditivo (tablas, servicio, UI y script). **C0 (prueba real a un negocio) es viable en ~1 día; MVP completo en 3–4 días.**
+
+## 18.1 Lo que ya existe (evidencia en código)
+
+| Capacidad | Dónde vive | Se reutiliza |
+|---|---|---|
+| Conversaciones 1:1 y grupos | `conversations` (`kind`, `audience`, `participant1/2`) | ✅ hilo Bunzy por negocio/usuario |
+| Mensajes con metadata y tipos | `messages` (`type`, `metadata`, `readAt`) | ✅ tarjeta institucional |
+| Idempotencia de envío | `UNIQUE(conversationId, clientMessageId)` | ✅ `clientMessageId = bc:<broadcastId>` |
+| Miembros y último leído | `conversation_members.lastReadAt` | ✅ no leídos |
+| Bandeja del negocio | `customerChat.listConversations/getMessages/markRead` (tRPC) | ✅ admin |
+| Chat móvil | `/api/chat/*` + `/chat/[targetId]` | ✅ app |
+| Realtime | `chatEventOutbox` + Centrifugo | ✅ entrega en hilo abierto |
+| Push nativo | `sendOwnerPush` (`/api/notifications/send`) | ✅ aviso al dueño |
+| Telegram | fallback existente | ✅ solo respaldo |
+| God Shell | `/god` + allowlist + 2FA | ✅ página nueva hereda protección |
+| Segmentación | `ownedBusinesses` (`status`, `niche`, `package`, `onboardingCompletedAt`), `pos_terminals`, menú en `restaurantDb` | ✅ audiencias |
+| Patrón REST con secreto | `/api/bunzy/kb` (`x-bunzy-kb-secret`) | ✅ mismo patrón para el script |
+| Local con DB real | Neon compartida + tenants demo | ✅ probar sin desplegar |
+
+## 18.2 Lo que falta (todo aditivo)
+
+1. Identidad virtual `bunzy` y `audience='BUNZY'` (legible por servidor, **no E2E**).
+2. Tablas `bunzyBroadcasts`, `bunzyDeliveries`, `bunzyPreferences`.
+3. Índice único parcial para una sola conversación Bunzy por destinatario.
+4. Servicio `publishBroadcast` como **único punto de disparo**.
+5. Endpoint REST con secreto para el script.
+6. Página God “Bunzy Connect” (compositor, preview, audiencia, stats, terminal).
+7. Tarjeta `BunzyUpdateCard` en app y admin.
+8. Segmentos y topes de frecuencia.
+9. Tracking de clic.
+10. Script local `scripts/bunzy-connect.mjs`.
+
+## 18.3 Decisión de arquitectura
+
+- **Un hilo Bunzy por destinatario**, no uno por broadcast: como una cuenta oficial dentro del chat.
+- **Destinatario** = `businessId` (afiliados) o `userId` (Rabbitters).
+- `conversations`: `kind='DIRECT'`, `audience='BUNZY'`, `participant1='bunzy'`, `participant2=<recipientId>`, `encrypted=false`.
+- `messages`: `type='BUNZY_UPDATE'`, `senderId='bunzy'`, `content` = cuerpo plano (fallback), `metadata` = `{ broadcastId, category, title, ctaLabel, ctaUrl, mediaKey }`.
+- **Contenido editorial controlado**: la IA puede redactar borradores, pero publica un humano (God) o un script aprobado. Nunca publicación autónoma.
+- **System Notices** no dependen de preferencias de marketing.
+
+## 18.4 Modelo de datos propuesto
+
+| Tabla | Columnas clave |
+|---|---|
+| `bunzyBroadcasts` | `id`, `category` (PRODUCT/TIP/NEWS/SYSTEM), `title`, `body`, `ctaLabel`, `ctaUrl`, `mediaKey`, `audienceScope`, `audienceFilter` (jsonb), `status` (DRAFT/SCHEDULED/PUBLISHED), `scheduledAt`, `publishedAt`, `createdBy`, `contentHash` (idempotencia editorial), timestamps |
+| `bunzyDeliveries` | `id`, `broadcastId`, `recipientType` (BUSINESS/USER), `recipientId`, `conversationId`, `messageId`, `deliveredAt`, `readAt`, `clickedAt`, `pushSentAt` · `UNIQUE(broadcastId, recipientType, recipientId)` |
+| `bunzyPreferences` | `id`, `recipientType`, `recipientId`, `product`, `tips`, `news`, `systemAlways=true`, `quietHours`, timestamps |
+| Índice | `UNIQUE(audience, participant1, participant2) WHERE audience='BUNZY'` (evita hilos duplicados) |
+
+## 18.5 Flujo de publicación (un solo punto de disparo)
+
+```
+publishBroadcast(input)
+  → resolveAudience(filtros)        // negocio(s) o usuario(s)
+  → por destinatario:
+      conversation = findOrCreateBunzyThread(recipient)
+      message = insert (clientMessageId = 'bc:'+broadcastId)   // idempotente
+      delivery = insert (unique broadcast+recipient)
+      enqueueChatEvent(message)                                 // realtime
+      push si aplica (prefs + quiet hours)
+  → broadcast.status = PUBLISHED
+```
+
+- **Lectura**: `markRead` existente marca `messages.readAt`; un job o trigger actualiza `bunzyDeliveries.readAt`.
+- **Clic**: el CTA pasa por `/api/bunzy/connect/click?d=<deliveryId>` y marca `clickedAt` antes de redirigir.
+- **Programación**: `scheduledAt` + cron de Vercel o worker; MVP publica inmediato.
+
+## 18.6 Segmentación
+
+| Segmento | Fuente | MVP |
+|---|---|---|
+| Todos los afiliados | `ownedBusinesses.status IN (APPROVED, VERIFIED)` | ✅ |
+| Un negocio | `businessId` | ✅ (pruebas) |
+| Por nicho | `ownedBusinesses.niche` | ✅ |
+| Por paquete | `ownedBusinesses.package` | ✅ |
+| Onboarding pendiente | `onboardingCompletedAt IS NULL` | ✅ |
+| Con POS | `pos_terminals` activas | Fase C1 |
+| Con menú | `menuItems` en `restaurantDb` | Fase C1 |
+| Inactivos | última orden/visita > N días | Fase C2 |
+| Nuevos | alta < 30 días | Fase C2 |
+| Todos los Rabbitters | `users` con opt-in | Fase C2 |
+| Un usuario | `userId` | ✅ (pruebas) |
+
+Preview de audiencia: conteo + muestra de 5 nombres antes de publicar.
+
+## 18.7 UI
+
+**God → `/god/bunzy-connect`**
+
+- Compositor: categoría, título, cuerpo, CTA, media.
+- Audiencia: selector + conteo + muestra.
+- Preview: la misma tarjeta que verá el afiliado.
+- Publicar ahora / programar.
+- Historial con entregados, leídos y clics.
+- **Tarjeta “Desde terminal”**: comando exacto (local y producción) con secreto enmascarado y botón copiar.
+- Botón **“Enviar prueba a mi negocio”**.
+
+**Chat (app y admin)**
+
+- `BunzyUpdateCard`: avatar Bunzy, badge de categoría, título, cuerpo, CTA, hora; distinto a una burbuja normal.
+- En la bandeja del admin: conversación “Bunzy”, nombre/avatar propios, badge “Oficial”; no se mezcla con clientes.
+- Push con deep link a la conversación.
+
+## 18.8 Inyección local (la pieza clave)
+
+Endpoint único:
+
+```
+POST /api/bunzy/connect
+x-bunzy-connect-secret: <BUNZY_CONNECT_SECRET>
+```
+
+Script a la mano:
+
+```bash
+# ver audiencia sin escribir nada
+node scripts/bunzy-connect.mjs --local --dry-run \
+  --category product --audience all-affiliates
+
+# enviar a un solo negocio de prueba (Demo Replay Café)
+node scripts/bunzy-connect.mjs --local \
+  --category tip --business <businessId> \
+  --file ./tmp/update.json
+
+# producción
+node scripts/bunzy-connect.mjs --prod --file ./tmp/update.json
+```
+
+Flags: `--local` (3003) / `--prod`, `--dry-run`, `--category`, `--audience`, `--business`, `--user`, `--schedule`, `--file`.
+
+- Como local y producción comparten Neon, el mensaje enviado desde local aparece en el chat local (3000) y en el admin (3003).
+- La tarjeta “Desde terminal” del God muestra estos comandos con el secreto enmascarado.
+- `--dry-run` devuelve audiencia + preview y no escribe.
+
+## 18.9 Fases
+
+| Fase | Alcance | Esfuerzo | Gate |
+|---|---|---|---|
+| **C0 — Prueba real** | Tablas + servicio + endpoint + script + tarjeta en app + envío a un negocio | 1 día | Migración aplicada; mensaje visible en chat |
+| **C1 — Centro de comunicación** | God UI, segmentos, preview, push, stats, bandeja admin | 2 días | Envío a todos los afiliados con métricas |
+| **C2 — Preferencias y escala** | Opt-in por categoría, topes, programación, clics, digest, Rabbitters | 3–4 días | Tasa de opt-out < 2% |
+| **C3 — Automatización** | Hook post-release, Academia, borradores con IA + aprobación | 3–5 días | Publicación asistida, nunca autónoma |
+
+## 18.10 Riesgos y mitigaciones
+
+| Riesgo | Mitigación |
+|---|---|
+| Hilos duplicados por carrera | Índice único parcial + transacción |
+| Spam / fatiga | Topes semanales/mensuales + preferencias + quiet hours |
+| XSS por Markdown | Render de texto plano con saltos; sanitizar CTA |
+| Fuga entre tenants | Destinatarios resueltos por negocio/usuario; tests |
+| E2E vs institucional | `audience='BUNZY'` nunca cifrado |
+| Escala de entrega | Batch + outbox; no N+1 |
+| Push sin permiso | Fallback a bandeja + email digest |
+| Publicación autónoma | Aprobación humana obligatoria |
+
+## 18.11 Decisiones pendientes
+
+1. ¿Rabbitters entran en el MVP o en C2?
+2. ¿Un hilo por destinatario (recomendado) o un hilo por broadcast?
+3. ¿Quién publica: solo God o también un rol Growth?
+4. ¿Programación con cron o solo publicación inmediata en C1?
+5. ¿Formato del cuerpo: texto plano con saltos o Markdown sanitizado?
+6. ¿Preferencias por categoría desde C1 o C2?
+
