@@ -549,3 +549,62 @@ rabbitty.me
 - El dueño recibe aviso por **app nativa** (push) y Telegram como respaldo, con
   la URL del panel. Entra con su teléfono o correo (el login del admin soporta
   ambos).
+
+
+---
+
+## 18 · Onboarding web de negocios (`/negocios`)
+
+El canal principal de alta es la web. La app queda como alternativa para quien
+ya la usa.
+
+**Flujo**
+
+```
+rabbitty.me
+  ├─ "Soy negocio" · "Crear mi negocio" · elegir paquete
+  │     → /negocios
+  │        1. Nicho (catálogo DB)
+  │        2. Datos del negocio + contacto
+  │        3. Recompensa Bunz (2–50%)
+  │        4. Paquete de crédito
+  │        5. Firma + aceptación
+  │     → POST /api/apply
+  │        · ownedBusinesses PENDING + niche + reward + package + credit
+  │        · onboardingCompletedAt = ahora
+  │        · correo de confirmación al solicitante + Telegram al equipo
+  │
+  └─ "Ya tengo cuenta" → admin.rabbitty.me/login
+```
+
+**Aprobación**
+
+- El God Admin aprueba en `/restaurants` (ve el nicho).
+- Se aprovisiona **restaurante + sucursal** (idempotente) y se envía:
+  - **email de aprobación** al dueño (canal principal para leads web),
+  - push a la app si la tiene,
+  - Telegram solo como respaldo.
+- El dueño entra a `admin.rabbitty.me/login` con su correo o teléfono.
+- Como `onboardingCompletedAt` se marcó al crear, **no** pasa por el
+  re-onboarding de tenants existentes; entra directo a su panel.
+
+**Archivos**
+
+| Archivo | Rol |
+|---|---|
+`landing-page/src/app/negocios/page.tsx` | Onboarding web (5 pasos + éxito) |
+`landing-page/src/app/negocios/layout.tsx` | Metadata / SEO |
+`landing-page/src/app/api/niches/route.ts` | Catálogo activo desde DB |
+`landing-page/src/app/api/apply/route.ts` | Alta: validación, DB, email, Telegram |
+`landing-page/src/components/BunzyVideoStage.tsx` | Videos de Bunzy (copia local) |
+`landing-page/src/app/page.tsx` | CTAs → `/negocios` (nicho + paquete) |
+`packages/api/src/routers/admin.ts` | Aprobación: provisioning + email/push/Telegram |
+
+**Notas**
+
+- Dedupe por `ownerId`: si el contacto ya tiene negocio, no se duplica; la
+  respuesta marca `existing`.
+- El formulario viejo de la landing quedó retirado de la UI; `/api/apply` se
+  conserva y ahora es el backend del onboarding nuevo.
+- El correo de confirmación usa Resend (`RESEND_API_KEY`/`AUTH_RESEND_KEY`/
+  `RESEND_KEY`); si falta la clave, la solicitud se registra pero no se envía.

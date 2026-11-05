@@ -258,7 +258,7 @@ export const adminRouter = router({
         // ── Aviso al dueño: push nativo primero, Telegram como respaldo ──
         try {
           const [owner] = await ctx.coreDb
-            .select({ id: users.id, telegramId: users.telegramId })
+            .select({ id: users.id, telegramId: users.telegramId, email: users.email, firstName: users.firstName })
             .from(users)
             .where(eq(users.id, updated.ownerId))
             .limit(1);
@@ -267,9 +267,59 @@ export const adminRouter = router({
           const title = "🎉 Tu negocio está aprobado";
           const body = `${updated.name} ya está activo. Entra a tu panel con tu teléfono o correo.`;
 
+          // Push a la app (si la tiene) y email: el email es el canal real de
+          // los negocios que llegan por la web y no tienen Telegram/app.
           let delivered = false;
           if (owner?.id) {
             delivered = await sendOwnerPush(owner.id, title, body, "/business");
+          }
+
+          const resendKey =
+            process.env.RESEND_API_KEY || process.env.AUTH_RESEND_KEY || process.env.RESEND_KEY;
+          if (owner?.email && resendKey) {
+            try {
+              const html = `
+                <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0A0314;padding:24px;color:#fff">
+                  <div style="max-width:560px;margin:0 auto;background:linear-gradient(180deg,#130725,#0A0314);border:1px solid rgba(244,63,94,0.35);border-radius:24px;overflow:hidden">
+                    <div style="padding:28px 24px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.08)">
+                      <p style="margin:0;font-size:11px;font-weight:900;letter-spacing:.25em;color:#F43F5E">RABBITTY</p>
+                      <h1 style="margin:8px 0 0;font-size:24px;color:#fff">¡Tu negocio fue aprobado!</h1>
+                    </div>
+                    <div style="padding:28px 24px">
+                      <p style="margin:0 0 12px;font-size:15px;color:#E2E8F0">Hola ${owner.firstName || "equipo"},</p>
+                      <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#CBD5E1">
+                        <strong>${updated.name}</strong> ya está activo en Rabbitty. Ya puedes entrar a tu panel,
+                        configurar tu menú y comenzar a operar.
+                      </p>
+                      <div style="text-align:center;margin:24px 0 8px">
+                        <a href="${adminUrl}/login" style="display:inline-block;background:#E91E63;color:#fff;font-weight:900;font-size:14px;padding:14px 30px;border-radius:14px;text-decoration:none">
+                          Entrar a mi panel
+                        </a>
+                      </div>
+                      <p style="margin:12px 0 0;font-size:12px;color:#94A3B8;text-align:center">
+                        Entra con tu correo o teléfono. Si necesitas ayuda, responde este correo.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              `;
+              const emailRes = await fetch("https://api.resend.com/emails", {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${resendKey}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  from: "Rabbitty Team <hola@rabbitty.me>",
+                  to: [owner.email],
+                  subject: `🎉 Tu negocio ${updated.name} fue aprobado`,
+                  html,
+                }),
+              });
+              if (emailRes.ok) delivered = true;
+            } catch (emailError) {
+              console.error("[APPROVE] no se pudo enviar el correo de aprobación:", emailError);
+            }
           }
 
           const botToken = process.env.TELEGRAM_BOT_TOKEN || process.env.AUTH_TELEGRAM_BOT_TOKEN;

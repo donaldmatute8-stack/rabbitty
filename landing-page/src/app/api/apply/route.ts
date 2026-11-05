@@ -10,11 +10,42 @@ const MIN_FILL_TIME_MS = 2500;
 const hitsByIp = new Map<string, number[]>();
 
 const CATEGORY_BY_NICHE: Record<string, string> = {
-  food: 'Restaurante',
+  restaurant: 'Restaurante',
+  cafe: 'Cafetería',
+  bar: 'Bar',
+  bakery: 'Cafetería',
+  pizza: 'Restaurante',
+  tacos: 'Restaurante',
+  barbershop: 'Belleza y Spa',
   fitness: 'Gimnasio',
-  retail: 'Retail',
+  retail: 'Tienda de Ropa',
+  services: 'Servicios de Salud',
+  other: 'Restaurante',
+  // Compatibilidad con el formulario viejo de la landing:
+  food: 'Restaurante',
   entertainment: 'Entretenimiento',
 };
+
+const PACKAGES: Record<string, number> = {
+  Starter: 10000,
+  Growth: 20000,
+  Pro: 50000,
+  Enterprise: 100000,
+};
+
+/** Normaliza un celular MX a E.164 (52 + 10 dígitos) o null. */
+function normalizePhone(value: string): string | null {
+  let digits = value.replace(/\D/g, '');
+  if (digits.length === 13 && digits.startsWith('521')) digits = `52${digits.slice(3)}`;
+  if (digits.length === 12 && digits.startsWith('52')) return `+${digits}`;
+  if (digits.length === 10) return `+52${digits}`;
+  return null;
+}
+
+function makeSlug(name: string): string {
+  const base = slug(name).slice(0, 34) || 'negocio';
+  return `${base}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+}
 
 function str(value: unknown): string {
   if (typeof value === 'string') return value.trim();
@@ -33,11 +64,6 @@ function slug(value: string): string {
 
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
-}
-
-function isValidPhone(phone: string): boolean {
-  const digits = phone.replace(/\D/g, '');
-  return digits.length >= 8 && digits.length <= 15;
 }
 
 function isRateLimited(ip: string): boolean {
@@ -92,38 +118,57 @@ export async function POST(req: Request) {
     }
 
     const negocio = str(data.negocio);
-    const telefono = str(data.telefono);
-    const email = str(data.email);
+    const telefonoRaw = str(data.telefono);
+    const telefono = normalizePhone(telefonoRaw);
+    const email = str(data.email).toLowerCase();
     const nombre = str(data.nombre);
     const ubicacion = str(data.ubicacion);
 
+    const nicheId = str(data.niche) || str(data.nicheId) || slug(str(data.tipo)) || 'other';
+    const nicheName = str(data.nicheName) || CATEGORY_BY_NICHE[nicheId] || 'Otro';
+    const category = CATEGORY_BY_NICHE[nicheId] || 'Restaurante';
+
+    const rewardRaw = Number(data.rewardPercentage);
+    const rewardPercentage = Number.isFinite(rewardRaw)
+      ? Math.min(50, Math.max(2, Math.round(rewardRaw)))
+      : 10;
+
+    const packageInput = str(data.package) || str(data.packageCode);
+    const packageCode = Object.prototype.hasOwnProperty.call(PACKAGES, packageInput)
+      ? packageInput
+      : 'Starter';
+    const creditLimit = PACKAGES[packageCode];
+    const signature = str(data.signature);
+    const acceptedTerms = data.acceptedTerms === true;
+    const signatureDate = str(data.signatureDate) || new Date().toISOString();
+
     const fields: Record<string, string> = {};
+    if (!nicheId || nicheId === 'other') fields.niche = 'required';
     if (negocio.length < 2) fields.negocio = 'required';
-    if (!isValidPhone(telefono) && !isValidEmail(email)) {
-      fields.contacto = 'requiere un teléfono o correo válido';
-    }
-    if (email && !isValidEmail(email)) fields.email = 'invalid';
-    if (telefono && !isValidPhone(telefono)) fields.telefono = 'invalid';
+    if (nombre.length < 2) fields.nombre = 'required';
+    if (!isValidEmail(email)) fields.email = 'invalid';
+    if (!telefono) fields.telefono = 'invalid';
+    if (ubicacion.length < 4) fields.ubicacion = 'required';
+    if (!signature || signature.length < 3) fields.signature = 'required';
+    if (!acceptedTerms) fields.terms = 'required';
 
     if (Object.keys(fields).length > 0) {
       console.warn('[Landing Apply] Validación fallida:', fields);
       return NextResponse.json({ ok: false, error: 'validation_failed', fields }, { status: 400 });
     }
 
-    const nicheId = str(data.nicheId) || slug(str(data.tipo)) || 'other';
-    const nicheName = str(data.nicheName) || str(data.tipo) || 'Sin nicho';
     const billingPeriod = str(data.billingPeriod) === 'monthly' ? 'monthly' : 'yearly';
-    const packageCode = str(data.packageCode) || slug(str(data.paquete)) || 'custom';
-    const packageName = str(data.packageName) || str(data.paquete) || 'Personalizado';
-    const setupBunz = Number(data.setupBunz) || null;
-    const initialVaultBunz = Number(data.initialVaultBunz) || null;
-    const category = CATEGORY_BY_NICHE[nicheId] || str(data.tipo) || 'Otro';
+    const packageName = packageCode;
+    const setupBunz = null;
+    const initialVaultBunz = null;
 
     const msg = `🆕 *Nueva solicitud negocio Rabbitty*\n\n` +
       `🏪 *Negocio:* ${negocio || 'N/A'}\n` +
       `📦 *Paquete:* ${str(data.paquete) || packageCode} (${packageCode})\n` +
       `🔄 *Periodicidad:* ${billingPeriod === 'yearly' ? 'Anual (-20% Ahorro)' : 'Mensual'}\n` +
       `📂 *Nicho:* ${nicheName} (${nicheId})\n` +
+      `💰 *Recompensa:* ${rewardPercentage}% en Bunz\n` +
+      `✍️ *Firma:* ${signature || 'N/A'}\n` +
       `👤 *Contacto:* ${nombre || 'N/A'}\n` +
       `📱 *Teléfono:* ${telefono || 'N/A'}\n` +
       `✉️ *Email:* ${email || 'N/A'}\n` +
@@ -169,13 +214,21 @@ export async function POST(req: Request) {
     }
 
     const normalized = {
-      source: 'landing',
+      source: 'web_onboarding',
       submittedAt: new Date().toISOString(),
       nicheId,
       nicheName,
+      rewardPercentage,
       packageCode,
       packageName,
+      creditLimit,
       billingPeriod,
+      signature,
+      acceptedTerms,
+      signatureDate,
+      contactName: nombre,
+      phone: telefono,
+      email,
       setupBunz,
       initialVaultBunz,
       monthlyBunz: 5000,
@@ -195,6 +248,7 @@ export async function POST(req: Request) {
     };
 
     let persisted = false;
+    let existedBefore = false;
     let newBusinessId = '';
     const dbUrl = process.env.CORE_DATABASE_URL;
     if (dbUrl) {
@@ -209,7 +263,12 @@ export async function POST(req: Request) {
           if (userByEmail.length > 0) ownerId = userByEmail[0].id;
         }
         if (!ownerId && telefono) {
-          const userByPhone = await sql`SELECT id FROM "users" WHERE "phoneNumber" = ${telefono} LIMIT 1`;
+          const last10 = telefono.replace(/\D/g, '').slice(-10);
+          const userByPhone = await sql`
+            SELECT id FROM "users"
+            WHERE regexp_replace("phoneNumber", '\\D', '', 'g') LIKE ${'%' + last10}
+            LIMIT 1
+          `;
           if (userByPhone.length > 0) ownerId = userByPhone[0].id;
         }
 
@@ -217,7 +276,7 @@ export async function POST(req: Request) {
           // Si no existe, crear un usuario independiente para este solicitante
           const newApplicant = await sql`
             INSERT INTO "users" (id, "telegramId", "firstName", "lastName", email, "phoneNumber", "role")
-            VALUES (gen_random_uuid(), ${'WEB_' + Date.now()}, ${nombre || 'Emprendedor'}, '(Afiliado)', ${email || null}, ${telefono || null}, 'USER')
+            VALUES (gen_random_uuid(), ${'WEB_' + Date.now()}, ${nombre || 'Emprendedor'}, '(Afiliado)', ${email}, ${telefono}, 'AFFILIATE')
             RETURNING id
           `;
           ownerId = newApplicant[0].id;
@@ -226,27 +285,34 @@ export async function POST(req: Request) {
         const placeholderOwnerId = ownerId;
 
         const existing = await sql`
-          SELECT id FROM "ownedBusinesses" WHERE name = ${negocio || 'Nuevo Negocio'} LIMIT 1
+          SELECT id FROM "ownedBusinesses" WHERE "ownerId" = ${placeholderOwnerId} LIMIT 1
         `;
 
         if (existing.length === 0) {
+          const businessSlug = makeSlug(negocio);
           const inserted = await sql`
             INSERT INTO "ownedBusinesses" (
-              id, "ownerId", name, category, package, description, address, lat, lng,
-              "rewardPercentage", status, "verificationMethod", "verificationData", "createdAt", "updatedAt"
+              id, "ownerId", name, slug, category, niche, package, "creditLimit", "creditUsed",
+              description, address, lat, lng, "rewardPercentage", status,
+              "onboardingCompletedAt", "verificationMethod", "verificationData", "createdAt", "updatedAt"
             ) VALUES (
               gen_random_uuid(),
               ${placeholderOwnerId},
               ${negocio},
+              ${businessSlug},
               ${category},
+              ${nicheId},
               ${packageCode},
-              ${str(data.mensaje) || `Solicitud ${packageName || packageCode} (${billingPeriod}) desde landing`},
-              ${ubicacion || 'Por confirmar'},
+              ${creditLimit},
+              0,
+              ${`Alta web: ${packageName} · ${rewardPercentage}% en Bunz`},
+              ${ubicacion},
               ${lat},
               ${lng},
-              10,
+              ${rewardPercentage},
               'PENDING',
-              'web_form',
+              NOW(),
+              'web_onboarding',
               ${JSON.stringify(normalized)},
               NOW(),
               NOW()
@@ -260,8 +326,9 @@ export async function POST(req: Request) {
           }
         } else {
           newBusinessId = existing[0].id;
+          existedBefore = true;
           persisted = true;
-          console.log('[Landing Apply] Negocio ya existe en DB:', negocio);
+          console.log('[Landing Apply] El dueño ya tiene un negocio:', newBusinessId);
         }
 
         await sql.end();
@@ -272,12 +339,16 @@ export async function POST(req: Request) {
       console.error('[Landing Apply] CORE_DATABASE_URL no configurada');
     }
 
+    const resendKey =
+      process.env.RESEND_API_KEY || process.env.AUTH_RESEND_KEY || process.env.RESEND_KEY;
     let emailed = false;
-    if (email && process.env.RESEND_API_KEY) {
+    if (email && resendKey) {
       try {
         const businessName = negocio || 'Tu negocio';
         const applicantName = nombre || 'Emprendedor';
         const botUsername = process.env.NEXT_PUBLIC_BOT_USERNAME || 'Rabbittyme_bot';
+        const adminLoginUrl =
+          process.env.NEXT_PUBLIC_BUSINESS_LOGIN_URL || 'https://admin.rabbitty.me/login';
         const magicLink = newBusinessId
           ? `https://t.me/${botUsername}/app?startapp=claim_${newBusinessId.replace(/-/g, '')}`
           : `https://t.me/${botUsername}/app`;
@@ -308,9 +379,10 @@ export async function POST(req: Request) {
                     </p>
                   </div>
                   <div style="background: linear-gradient(135deg, rgba(244,63,94,0.12), rgba(168,85,247,0.12)); border-radius: 18px; padding: 20px; text-align: center; margin-bottom: 24px; border: 1px solid rgba(244,63,94,0.25);">
-                    <h3 style="margin: 0 0 8px 0; color: #FFF; font-size: 16px; font-weight: 800;">🔗 Vincula tu Negocio Ahora</h3>
-                    <p style="margin: 0 0 16px 0; color: #E2E8F0; font-size: 13px; line-height: 1.5;">Haz clic en el siguiente botón para abrir Telegram, acceder a tu Panel de Comercio y completar tu perfil mientras revisamos tu solicitud.</p>
-                    <a href="${magicLink}" style="display: inline-block; background: #F43F5E; color: #FFF; font-weight: 800; font-size: 14px; padding: 14px 28px; border-radius: 12px; text-decoration: none; box-shadow: 0 0 15px rgba(244,63,94,0.4);">Vincular con Telegram 🚀</a>
+                    <h3 style="margin: 0 0 8px 0; color: #FFF; font-size: 16px; font-weight: 800;">🔗 Tu solicitud está en revisión</h3>
+                    <p style="margin: 0 0 16px 0; color: #E2E8F0; font-size: 13px; line-height: 1.5;">Te avisamos en cuanto esté aprobada. Entonces podrás entrar a tu panel con tu correo o teléfono.</p>
+                    <a href="${adminLoginUrl}" style="display: inline-block; background: #F43F5E; color: #FFF; font-weight: 800; font-size: 14px; padding: 14px 28px; border-radius: 12px; text-decoration: none; box-shadow: 0 0 15px rgba(244,63,94,0.4);">Portal de negocios</a>
+                    <p style="margin: 12px 0 0 0; color: #94A3B8; font-size: 11px;">¿Prefieres la app? <a href="${magicLink}" style="color: #F43F5E; text-decoration: underline;">Abre Rabbitty en Telegram</a>.</p>
                   </div>
                 </div>
                 <div style="background: rgba(0, 0, 0, 0.4); padding: 24px; text-align: center; border-top: 1px solid rgba(255, 255, 255, 0.06); font-size: 11px; color: #94A3B8;">
@@ -319,7 +391,7 @@ export async function POST(req: Request) {
                   <div style="margin-bottom: 12px;">
                     <a href="https://rabbitty.me" style="color: #F43F5E; text-decoration: none; margin: 0 10px; font-weight: 700;">Sitio Web</a> ·
                     <a href="https://t.me/Rabbittyme_bot/app" style="color: #F43F5E; text-decoration: none; margin: 0 10px; font-weight: 700;">MiniApp Telegram</a> ·
-                    <a href="${magicLink}" style="color: #F43F5E; text-decoration: none; margin: 0 10px; font-weight: 700;">Portal Comercio</a>
+                    <a href="${adminLoginUrl}" style="color: #F43F5E; text-decoration: none; margin: 0 10px; font-weight: 700;">Portal Comercio</a>
                   </div>
                   <p style="margin: 0; color: #475569; font-size: 10px;">Recibiste este mensaje transaccional como comercio/usuario registrado en Rabbitty.</p>
                 </div>
@@ -331,7 +403,7 @@ export async function POST(req: Request) {
         const emailRes = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+            Authorization: `Bearer ${resendKey}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -347,9 +419,13 @@ export async function POST(req: Request) {
       }
     }
 
-    const ok = telegramSent || persisted;
+    const ok = persisted;
     if (!ok) {
-      console.error('[Landing Apply] Solicitud NO registrada en ningún canal', { negocio, email });
+      console.error('[Landing Apply] Solicitud NO registrada en DB', { negocio, email });
+      return NextResponse.json(
+        { ok: false, error: 'persist_failed' },
+        { status: 500 },
+      );
     }
 
     return NextResponse.json({
@@ -357,6 +433,7 @@ export async function POST(req: Request) {
       persisted,
       telegramSent,
       emailed,
+      existing: existedBefore,
       newBusinessId: newBusinessId || null,
     });
   } catch (error) {

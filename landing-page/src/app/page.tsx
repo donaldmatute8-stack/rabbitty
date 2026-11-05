@@ -31,8 +31,7 @@ const fireConversion = (event: string, params: Record<string, unknown> = {}) => 
 // El alta de negocio vive en el onboarding nuevo (nichos + Bunzy + aprovisionamiento).
 // Configurable para probar en local sin tocar el código.
 const BUSINESS_ONBOARDING_URL =
-  process.env.NEXT_PUBLIC_BUSINESS_ONBOARDING_URL ||
-  'https://app.rabbitty.me/business?intent=affiliate&from=landing';
+  process.env.NEXT_PUBLIC_BUSINESS_ONBOARDING_URL || '/negocios';
 const BUSINESS_LOGIN_URL =
   process.env.NEXT_PUBLIC_BUSINESS_LOGIN_URL || 'https://admin.rabbitty.me/login';
 
@@ -134,7 +133,19 @@ export default function LandingPage() {
       billing: billingPeriod,
     });
     if (typeof window !== 'undefined') {
-      window.location.href = BUSINESS_ONBOARDING_URL;
+      const map: Record<string, string> = {
+        food: 'restaurant',
+        fitness: 'fitness',
+        retail: 'retail',
+        entertainment: 'services',
+      };
+      const webNiche = map[niche.id] || '';
+      const setupBunz = Number(plan.setupBunz) || 0;
+      const webPackage = setupBunz <= 4000 ? 'Starter' : setupBunz <= 10000 ? 'Growth' : 'Pro';
+      const qs = new URLSearchParams();
+      if (webNiche) qs.set('niche', webNiche);
+      if (webPackage) qs.set('package', webPackage);
+      window.location.href = `${BUSINESS_ONBOARDING_URL}${qs.toString() ? `?${qs.toString()}` : ''}`;
     }
   };
   // Typewriter effect state
