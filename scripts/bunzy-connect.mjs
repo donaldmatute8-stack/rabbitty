@@ -73,17 +73,18 @@ const scheduledAt = val('--schedule', payload.scheduledAt || null);
 const businessId = val('--business', payload.businessId || null);
 const userId = val('--user', payload.userId || null);
 const audienceFlag = String(val('--audience', '') || '').toLowerCase();
-const mass = audienceFlag.startsWith('all') || has('--all-affiliates');
+const allAffiliates = audienceFlag.includes('affiliate') || has('--all-affiliates');
+const allRabbiters = audienceFlag.includes('rabbitter') || has('--all-rabbitters');
+const mass = allAffiliates || allRabbiters;
 
 if (!title.trim() || !body.trim()) fail('Faltan --title y --body (o --file con title/body).');
-if (mass && !allowMass) fail('El envío masivo requiere --allow-mass (y BUNZY_CONNECT_ALLOW_MASS=1 en el server).');
-if (mass && (businessId || userId)) fail('Usa --business/--user O --audience all-affiliates, no ambos.');
+if (mass && (businessId || userId)) fail('Usa --business/--user O --audience all-*, no ambos.');
 if (!mass && !businessId && !userId) fail('Falta --business <id> o --user <id>.');
 if (businessId && userId) fail('Usa solo uno: --business o --user.');
 if (scheduledAt && Number.isNaN(Date.parse(scheduledAt))) fail('--schedule no es una fecha ISO válida.');
-if (publish && mass && !allowMass) fail('Confirma el masivo con --allow-mass.');
+if (publish && mass && !allowMass) fail('El envío masivo requiere --allow-mass (y BUNZY_CONNECT_ALLOW_MASS=1 en el server).');
 
-const scope = mass ? 'ALL_AFFILIATES' : userId ? 'USER' : 'BUSINESS';
+const scope = allRabbiters ? 'ALL_RABBITTERS' : allAffiliates ? 'ALL_AFFILIATES' : userId ? 'USER' : 'BUSINESS';
 const audience = {
   scope,
   ...(scope === 'BUSINESS' ? { businessId } : {}),
@@ -131,7 +132,7 @@ console.log(`Título:    ${title}`);
 console.log(`Cuerpo:    ${body.slice(0, 160)}${body.length > 160 ? '…' : ''}`);
 console.log(`CTA:       ${ctaLabel || '—'} ${ctaUrl || ''}`);
 console.log(`Programado:${scheduledAt ? ` ${scheduledAt}` : ' inmediato'}`);
-console.log(`Destino:   ${mass ? 'TODOS los afiliados' : userId ? `usuario ${userId}` : `negocio ${businessId}`}`);
+console.log(`Destino:   ${allRabbiters ? 'TODOS los Rabbitters' : allAffiliates ? 'TODOS los afiliados' : userId ? `usuario ${userId}` : `negocio ${businessId}`}`);
 console.log('');
 
 if (!publish) {
@@ -160,7 +161,7 @@ const expected = mass
     ? 'PUBLICAR EN PRODUCCION'
     : 'CONFIRMAR';
 console.log(`⚠️  Vas a ESCRIBIR en ${meta.environment} · DB ${meta.dbHost}.`);
-if (mass) console.log('⚠️  Es un envío MASIVO a todos los afiliados aprobados.');
+if (mass) console.log(allRabbiters ? '⚠️  Es un envío MASIVO a todos los Rabbitters.' : '⚠️  Es un envío MASIVO a todos los afiliados aprobados.');
 const answer = await rl.question(`Escribe "${expected}" para continuar: `);
 rl.close();
 if (answer.trim() !== expected) fail('Confirmación incorrecta. No se publicó nada.');
@@ -175,6 +176,7 @@ if (!res.ok) fail(`Publicación falló (HTTP ${res.status}): ${data.error || 'si
 
 console.log('');
 console.log(`✓ Broadcast ${data.broadcastId} · ${data.status}`);
+if (data.queued) console.log('  Encolado: el worker procesará las entregas por lotes (cron cada 5 min).');
 if (data.scheduledAt) console.log(`  Programado para: ${data.scheduledAt}`);
 console.log(`  Audiencia: ${data.audienceCount} · Publicados: ${data.published}`);
 for (const d of data.deliveries || []) {

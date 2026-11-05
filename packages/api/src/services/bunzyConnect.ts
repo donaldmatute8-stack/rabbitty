@@ -35,7 +35,7 @@ export type BunzyCategory = (typeof BUNZY_CATEGORIES)[number];
 export type BunzyRecipientType = "BUSINESS" | "USER";
 
 export interface BunzyAudience {
-  scope: "BUSINESS" | "ALL_AFFILIATES" | "USER";
+  scope: "BUSINESS" | "ALL_AFFILIATES" | "ALL_RABBITTERS" | "USER";
   businessId?: string;
   userId?: string;
   niche?: string;
@@ -147,6 +147,19 @@ export async function resolveAudience(db: CoreDb, audience: BunzyAudience): Prom
     if (!user) throw new Error("Usuario no encontrado");
     const name = `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.email || user.id;
     return [{ type: "USER", id: user.id, name }];
+  }
+
+  if (audience.scope === "ALL_RABBITTERS") {
+    const rows = await db
+      .select({ id: users.id, firstName: users.firstName, lastName: users.lastName, email: users.email })
+      .from(users)
+      .where(sql`coalesce(${users.role}, 'USER') NOT IN ('AFFILIATE', 'ADMIN')`)
+      .limit(5000);
+    return rows.map((u) => ({
+      type: "USER" as const,
+      id: u.id,
+      name: `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || u.email || u.id,
+    }));
   }
 
   const filters = [inArray(ownedBusinesses.status, [...APPROVED_STATUSES])];
@@ -311,196 +324,276 @@ async function pushRecipient(
   }
 }
 
-/** Entrega un broadcast ya creado a su audiencia. */
+/** Entrega a UN destinatario (idempotente por delivery). */
+async function deliverOne(
+  db: CoreDb,
+  broadcast: typeof bunzyBroadcasts.$inferSelect,
+  recipient: BunzyRecipient,
+): Promise<BunzyDeliveryResult> {
+  const [existingDelivery] = await db
+    .select()
+    .from(bunzyDeliveries)
+    .where(
+      and(
+        eq(bunzyDeliveries.broadcastId, broadcast.id),
+        eq(bunzyDeliveries.recipientType, recipient.type),
+        eq(bunzyDeliveries.recipientId, recipient.id),
+      ),
+    )
+    .limit(1);
+
+  if (existingDelivery && ["PUBLISHED", "READ", "CREATED"].includes(existingDelivery.status)) {
+    return {
+      recipientType: recipient.type,
+      recipientId: recipient.id,
+      conversationId: existingDelivery.conversationId,
+      messageId: existingDelivery.messageId,
+      status: existingDelivery.status,
+      replayed: true,
+    };
+  }
+
+  const reason = await skipReason(db, recipient, broadcast.category as BunzyCategory);
+  if (reason) {
+    await db
+      .insert(bunzyDeliveries)
+      .values({
+        broadcastId: broadcast.id,
+        recipientType: recipient.type,
+        recipientId: recipient.id,
+        conversationId: existingDelivery?.conversationId ?? "",
+        status: "SKIPPED",
+        error: reason,
+      })
+      .onConflictDoUpdate({
+        target: [bunzyDeliveries.broadcastId, bunzyDeliveries.recipientType, bunzyDeliveries.recipientId],
+        set: { status: "SKIPPED", error: reason, updatedAt: new Date() },
+      })
+      .catch(() => undefined);
+    return {
+      recipientType: recipient.type,
+      recipientId: recipient.id,
+      conversationId: existingDelivery?.conversationId ?? "",
+      messageId: null,
+      status: "SKIPPED",
+      replayed: false,
+    };
+  }
+
+  try {
+    const result = await db.transaction(async (tx): Promise<BunzyDeliveryResult> => {
+      const thread = await findOrCreateThread(tx, recipient.id);
+      const deliveryId = existingDelivery?.id ?? crypto.randomUUID();
+      const clientMessageId = `bc:${broadcast.id}`;
+      const trackedCta = broadcast.ctaUrl
+        ? `${trackingBase()}/api/bunzy/connect/click?d=${deliveryId}`
+        : null;
+      const metadata = {
+        official: true,
+        broadcastId: broadcast.id,
+        deliveryId,
+        category: broadcast.category,
+        title: broadcast.title,
+        ctaLabel: broadcast.ctaLabel ?? null,
+        ctaUrl: trackedCta,
+        mediaKey: broadcast.mediaKey ?? null,
+      };
+
+      const [insertedMessage] = await tx
+        .insert(messages)
+        .values({
+          conversationId: thread.id,
+          senderId: BUNZY_SENDER_ID,
+          content: broadcast.body,
+          type: BUNZY_MESSAGE_TYPE,
+          metadata,
+          clientMessageId,
+          encrypted: false,
+        })
+        .onConflictDoNothing({ target: [messages.conversationId, messages.clientMessageId] })
+        .returning();
+
+      const message =
+        insertedMessage ??
+        (
+          await tx
+            .select()
+            .from(messages)
+            .where(and(eq(messages.conversationId, thread.id), eq(messages.clientMessageId, clientMessageId)))
+            .limit(1)
+        )[0];
+      if (!message) throw new Error("No se pudo crear el mensaje");
+
+      await tx
+        .insert(bunzyDeliveries)
+        .values({
+          id: deliveryId,
+          broadcastId: broadcast.id,
+          recipientType: recipient.type,
+          recipientId: recipient.id,
+          conversationId: thread.id,
+          messageId: message.id,
+          status: "CREATED",
+          deliveredAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: [bunzyDeliveries.broadcastId, bunzyDeliveries.recipientType, bunzyDeliveries.recipientId],
+          set: {
+            conversationId: thread.id,
+            messageId: message.id,
+            status: "CREATED",
+            error: null,
+            deliveredAt: new Date(),
+            updatedAt: new Date(),
+          },
+        });
+
+      await tx
+        .insert(chatEventOutbox)
+        .values({
+          conversationId: thread.id,
+          type: "message.created",
+          eventId: `bunzy:${message.id}`,
+          payload: {
+            messageId: message.id,
+            conversationId: thread.id,
+            senderId: BUNZY_SENDER_ID,
+            type: BUNZY_MESSAGE_TYPE,
+            content: broadcast.body,
+            metadata,
+            createdAt: message.createdAt,
+          },
+        })
+        .onConflictDoNothing({ target: chatEventOutbox.eventId });
+
+      await tx
+        .update(conversations)
+        .set({ lastMessageAt: new Date(), updatedAt: new Date() })
+        .where(eq(conversations.id, thread.id));
+
+      await tx
+        .update(bunzyDeliveries)
+        .set({ status: "PUBLISHED", deliveredAt: new Date(), updatedAt: new Date() })
+        .where(
+          and(
+            eq(bunzyDeliveries.broadcastId, broadcast.id),
+            eq(bunzyDeliveries.recipientType, recipient.type),
+            eq(bunzyDeliveries.recipientId, recipient.id),
+          ),
+        );
+
+      return {
+        recipientType: recipient.type,
+        recipientId: recipient.id,
+        conversationId: thread.id,
+        messageId: message.id,
+        status: "PUBLISHED",
+        replayed: false,
+      };
+    });
+
+    void pushRecipient(db, recipient, broadcast);
+    return result;
+  } catch (err) {
+    await db
+      .insert(bunzyDeliveries)
+      .values({
+        broadcastId: broadcast.id,
+        recipientType: recipient.type,
+        recipientId: recipient.id,
+        conversationId: "",
+        status: "FAILED",
+        error: err instanceof Error ? err.message.slice(0, 300) : "error",
+      })
+      .onConflictDoUpdate({
+        target: [bunzyDeliveries.broadcastId, bunzyDeliveries.recipientType, bunzyDeliveries.recipientId],
+        set: {
+          status: "FAILED",
+          error: err instanceof Error ? err.message.slice(0, 300) : "error",
+          updatedAt: new Date(),
+        },
+      })
+      .catch(() => undefined);
+
+    return {
+      recipientType: recipient.type,
+      recipientId: recipient.id,
+      conversationId: "",
+      messageId: null,
+      status: "FAILED",
+      replayed: false,
+    };
+  }
+}
+
+/** Crea deliveries PENDING para un envío masivo (cola). */
+async function enqueueBroadcast(
+  db: CoreDb,
+  broadcast: typeof bunzyBroadcasts.$inferSelect,
+  audience: BunzyRecipient[],
+) {
+  const chunkSize = 500;
+  for (let i = 0; i < audience.length; i += chunkSize) {
+    const chunk = audience.slice(i, i + chunkSize);
+    await db
+      .insert(bunzyDeliveries)
+      .values(
+        chunk.map((r) => ({
+          broadcastId: broadcast.id,
+          recipientType: r.type,
+          recipientId: r.id,
+          conversationId: "",
+          status: "PENDING",
+        })),
+      )
+      .onConflictDoNothing({
+        target: [bunzyDeliveries.broadcastId, bunzyDeliveries.recipientType, bunzyDeliveries.recipientId],
+      });
+  }
+
+  await db
+    .update(bunzyBroadcasts)
+    .set({ status: "QUEUED", updatedAt: new Date() })
+    .where(eq(bunzyBroadcasts.id, broadcast.id));
+}
+
+/** Entrega un broadcast: masa → cola; individual → síncrono. */
 async function deliverBroadcast(
   db: CoreDb,
   broadcast: typeof bunzyBroadcasts.$inferSelect,
 ) {
   const audience = await resolveAudience(db, broadcast.audienceFilter as unknown as BunzyAudience);
-  const deliveries: BunzyDeliveryResult[] = [];
-  const skipped: BunzySkipped[] = [];
+  const isMass =
+    broadcast.audienceScope === "ALL_AFFILIATES" || broadcast.audienceScope === "ALL_RABBITTERS";
 
-  for (const recipient of audience) {
-    const reason = await skipReason(db, recipient, broadcast.category as BunzyCategory);
-    if (reason) {
-      skipped.push({ recipientType: recipient.type, recipientId: recipient.id, reason });
-      continue;
-    }
-
-    try {
-      const result = await db.transaction(async (tx): Promise<BunzyDeliveryResult> => {
-        const [existingDelivery] = await tx
-          .select()
-          .from(bunzyDeliveries)
-          .where(
-            and(
-              eq(bunzyDeliveries.broadcastId, broadcast.id),
-              eq(bunzyDeliveries.recipientType, recipient.type),
-              eq(bunzyDeliveries.recipientId, recipient.id),
-            ),
-          )
-          .limit(1);
-
-        if (existingDelivery && existingDelivery.status !== "FAILED") {
-          return {
-            recipientType: recipient.type,
-            recipientId: recipient.id,
-            conversationId: existingDelivery.conversationId,
-            messageId: existingDelivery.messageId,
-            status: existingDelivery.status,
-            replayed: true,
-          };
-        }
-
-        const thread = await findOrCreateThread(tx, recipient.id);
-        const deliveryId = existingDelivery?.id ?? crypto.randomUUID();
-        const clientMessageId = `bc:${broadcast.id}`;
-        const trackedCta = broadcast.ctaUrl
-          ? `${trackingBase()}/api/bunzy/connect/click?d=${deliveryId}`
-          : null;
-        const metadata = {
-          official: true,
-          broadcastId: broadcast.id,
-          deliveryId,
-          category: broadcast.category,
-          title: broadcast.title,
-          ctaLabel: broadcast.ctaLabel ?? null,
-          ctaUrl: trackedCta,
-          mediaKey: broadcast.mediaKey ?? null,
-        };
-
-        const [insertedMessage] = await tx
-          .insert(messages)
-          .values({
-            conversationId: thread.id,
-            senderId: BUNZY_SENDER_ID,
-            content: broadcast.body,
-            type: BUNZY_MESSAGE_TYPE,
-            metadata,
-            clientMessageId,
-            encrypted: false,
-          })
-          .onConflictDoNothing({ target: [messages.conversationId, messages.clientMessageId] })
-          .returning();
-
-        const message =
-          insertedMessage ??
-          (
-            await tx
-              .select()
-              .from(messages)
-              .where(and(eq(messages.conversationId, thread.id), eq(messages.clientMessageId, clientMessageId)))
-              .limit(1)
-          )[0];
-        if (!message) throw new Error("No se pudo crear el mensaje");
-
-        await tx
-          .insert(bunzyDeliveries)
-          .values({
-            id: deliveryId,
-            broadcastId: broadcast.id,
-            recipientType: recipient.type,
-            recipientId: recipient.id,
-            conversationId: thread.id,
-            messageId: message.id,
-            status: "CREATED",
-            deliveredAt: new Date(),
-          })
-          .onConflictDoUpdate({
-            target: [bunzyDeliveries.broadcastId, bunzyDeliveries.recipientType, bunzyDeliveries.recipientId],
-            set: {
-              conversationId: thread.id,
-              messageId: message.id,
-              status: "CREATED",
-              error: null,
-              deliveredAt: new Date(),
-              updatedAt: new Date(),
-            },
-          });
-
-        await tx
-          .insert(chatEventOutbox)
-          .values({
-            conversationId: thread.id,
-            type: "message.created",
-            eventId: `bunzy:${message.id}`,
-            payload: {
-              messageId: message.id,
-              conversationId: thread.id,
-              senderId: BUNZY_SENDER_ID,
-              type: BUNZY_MESSAGE_TYPE,
-              content: broadcast.body,
-              metadata,
-              createdAt: message.createdAt,
-            },
-          })
-          .onConflictDoNothing({ target: chatEventOutbox.eventId });
-
-        await tx
-          .update(conversations)
-          .set({ lastMessageAt: new Date(), updatedAt: new Date() })
-          .where(eq(conversations.id, thread.id));
-
-        await tx
-          .update(bunzyDeliveries)
-          .set({ status: "PUBLISHED", deliveredAt: new Date(), updatedAt: new Date() })
-          .where(
-            and(
-              eq(bunzyDeliveries.broadcastId, broadcast.id),
-              eq(bunzyDeliveries.recipientType, recipient.type),
-              eq(bunzyDeliveries.recipientId, recipient.id),
-            ),
-          );
-
-        return {
-          recipientType: recipient.type,
-          recipientId: recipient.id,
-          conversationId: thread.id,
-          messageId: message.id,
-          status: "PUBLISHED",
-          replayed: false,
-        };
-      });
-      deliveries.push(result);
-    } catch (err) {
-      skipped.push({ recipientType: recipient.type, recipientId: recipient.id, reason: "FAILED" });
-      await db
-        .insert(bunzyDeliveries)
-        .values({
-          broadcastId: broadcast.id,
-          recipientType: recipient.type,
-          recipientId: recipient.id,
-          conversationId: "",
-          status: "FAILED",
-          error: err instanceof Error ? err.message.slice(0, 300) : "error",
-        })
-        .onConflictDoUpdate({
-          target: [bunzyDeliveries.broadcastId, bunzyDeliveries.recipientType, bunzyDeliveries.recipientId],
-          set: {
-            status: "FAILED",
-            error: err instanceof Error ? err.message.slice(0, 300) : "error",
-            updatedAt: new Date(),
-          },
-        })
-        .catch(() => undefined);
-    }
+  if (isMass) {
+    await enqueueBroadcast(db, broadcast, audience);
+    return {
+      broadcastId: broadcast.id,
+      status: "QUEUED" as const,
+      audienceCount: audience.length,
+      published: 0,
+      queued: true,
+      replayed: false,
+      deliveries: [] as BunzyDeliveryResult[],
+      skipped: [] as BunzySkipped[],
+    };
   }
 
-  // Push solo a entregas nuevas (un reintento no vuelve a notificar).
-  const fresh = deliveries.filter((d) => d.status === "PUBLISHED" && !d.replayed);
-  if (fresh.length > 0) {
-    const byId = new Map(audience.map((r) => [r.id, r]));
-    for (let i = 0; i < fresh.length; i += 10) {
-      await Promise.allSettled(
-        fresh.slice(i, i + 10).map((d) => {
-          const recipient = byId.get(d.recipientId);
-          return recipient ? pushRecipient(db, recipient, broadcast) : Promise.resolve();
-        }),
-      );
-    }
+  const deliveries: BunzyDeliveryResult[] = [];
+  for (const recipient of audience) {
+    deliveries.push(await deliverOne(db, broadcast, recipient));
   }
 
   const published = deliveries.filter((d) => d.status === "PUBLISHED").length;
+  const skipped = deliveries
+    .filter((d) => d.status === "SKIPPED" || d.status === "FAILED")
+    .map((d) => ({
+      recipientType: d.recipientType,
+      recipientId: d.recipientId,
+      reason: (d.status === "FAILED" ? "FAILED" : "PREFERENCE") as BunzySkipped["reason"],
+    }));
+
   await db
     .update(bunzyBroadcasts)
     .set({
@@ -515,10 +608,75 @@ async function deliverBroadcast(
     status: published > 0 ? "PUBLISHED" : "FAILED",
     audienceCount: audience.length,
     published,
+    queued: false,
     replayed: false,
     deliveries,
     skipped,
   };
+}
+
+/** Worker: procesa deliveries PENDING de envíos masivos. */
+export async function processBunzyQueue(db: CoreDb, limit = 100) {
+  const pending = await db
+    .select()
+    .from(bunzyDeliveries)
+    .where(eq(bunzyDeliveries.status, "PENDING"))
+    .limit(limit);
+
+  const touched = new Set<string>();
+  const results: Array<BunzyDeliveryResult & { broadcastId: string }> = [];
+
+  for (const row of pending) {
+    const [broadcast] = await db
+      .select()
+      .from(bunzyBroadcasts)
+      .where(eq(bunzyBroadcasts.id, row.broadcastId))
+      .limit(1);
+    if (!broadcast) {
+      await db
+        .update(bunzyDeliveries)
+        .set({ status: "FAILED", error: "broadcast no encontrado", updatedAt: new Date() })
+        .where(eq(bunzyDeliveries.id, row.id));
+      continue;
+    }
+    const recipient: BunzyRecipient = {
+      type: row.recipientType as BunzyRecipientType,
+      id: row.recipientId,
+      name: row.recipientId,
+    };
+    const result = await deliverOne(db, broadcast, recipient);
+    results.push({ ...result, broadcastId: broadcast.id });
+    touched.add(broadcast.id);
+  }
+
+  for (const broadcastId of touched) {
+    const [remaining] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(bunzyDeliveries)
+      .where(and(eq(bunzyDeliveries.broadcastId, broadcastId), eq(bunzyDeliveries.status, "PENDING")));
+    if (Number(remaining?.n ?? 0) > 0) continue;
+
+    const [publishedRow] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(bunzyDeliveries)
+      .where(
+        and(
+          eq(bunzyDeliveries.broadcastId, broadcastId),
+          inArray(bunzyDeliveries.status, ["PUBLISHED", "READ"]),
+        ),
+      );
+
+    await db
+      .update(bunzyBroadcasts)
+      .set({
+        status: Number(publishedRow?.n ?? 0) > 0 ? "PUBLISHED" : "FAILED",
+        publishedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(bunzyBroadcasts.id, broadcastId));
+  }
+
+  return { processed: pending.length, results };
 }
 
 /** Publica (o programa) un broadcast. Idempotente por requestKey. */

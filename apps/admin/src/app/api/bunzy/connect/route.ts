@@ -43,7 +43,13 @@ function authorize(req: NextRequest): boolean {
 function parseAudience(raw: unknown): BunzyAudience {
   const a = (raw ?? {}) as Record<string, unknown>;
   const scope =
-    a.scope === "ALL_AFFILIATES" ? "ALL_AFFILIATES" : a.scope === "USER" ? "USER" : "BUSINESS";
+    a.scope === "ALL_AFFILIATES"
+      ? "ALL_AFFILIATES"
+      : a.scope === "ALL_RABBITTERS"
+        ? "ALL_RABBITTERS"
+        : a.scope === "USER"
+          ? "USER"
+          : "BUSINESS";
   return {
     scope,
     businessId: typeof a.businessId === "string" ? a.businessId : undefined,
@@ -111,8 +117,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, ...preview });
     }
 
+    const isMass = audience.scope === "ALL_AFFILIATES" || audience.scope === "ALL_RABBITTERS";
     if (
-      audience.scope === "ALL_AFFILIATES" &&
+      isMass &&
       (process.env.BUNZY_CONNECT_ALLOW_MASS !== "1" || body.allowMass !== true)
     ) {
       return NextResponse.json(

@@ -35,6 +35,7 @@ interface PublishResult {
   published: number;
   replayed: boolean;
   scheduledAt?: string | null;
+  queued?: boolean;
   skipped?: Array<{ recipientId: string; reason: string }>;
   deliveries: Array<{
     recipientId: string;
@@ -51,7 +52,7 @@ export default function BunzyConnectPage() {
   const [ctaLabel, setCtaLabel] = useState("");
   const [ctaUrl, setCtaUrl] = useState("");
   const [businessId, setBusinessId] = useState("");
-  const [scope, setScope] = useState<"BUSINESS" | "ALL_AFFILIATES">("BUSINESS");
+  const [scope, setScope] = useState<"BUSINESS" | "ALL_AFFILIATES" | "ALL_RABBITTERS">("BUSINESS");
   const [scheduledAt, setScheduledAt] = useState("");
   const [brief, setBrief] = useState("");
   const [requestKey, setRequestKey] = useState("");
@@ -113,10 +114,12 @@ export default function BunzyConnectPage() {
     audience:
       scope === "BUSINESS"
         ? ({ scope: "BUSINESS" as const, businessId } as const)
-        : ({ scope: "ALL_AFFILIATES" as const } as const),
+        : scope === "ALL_RABBITTERS"
+          ? ({ scope: "ALL_RABBITTERS" as const } as const)
+          : ({ scope: "ALL_AFFILIATES" as const } as const),
     requestKey: requestKey.trim() || null,
     scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
-    confirmMass: scope === "ALL_AFFILIATES",
+    confirmMass: scope !== "BUSINESS",
   };
 
   const canSubmit =
@@ -135,17 +138,23 @@ export default function BunzyConnectPage() {
     const target =
       scope === "ALL_AFFILIATES"
         ? "TODOS los afiliados aprobados"
-        : selectedBusiness?.name ?? businessId;
+        : scope === "ALL_RABBITTERS"
+          ? "TODOS los Rabbitters"
+          : selectedBusiness?.name ?? businessId;
     const ok = window.confirm(
       `¿Publicar “${title.trim()}” para ${target}? Se escribirá en la DB real.` +
-        (scope === "ALL_AFFILIATES" ? "\n\nEs un envío MASIVO." : ""),
+        (scope !== "BUSINESS" ? "\n\nEs un envío MASIVO." : ""),
     );
     if (!ok) return;
     publishMutation.mutate(payload);
   };
 
   const targetFlag =
-    scope === "ALL_AFFILIATES" ? "--audience all-affiliates --allow-mass" : `--business ${businessId || "<businessId>"}`;
+    scope === "ALL_AFFILIATES"
+      ? "--audience all-affiliates --allow-mass"
+      : scope === "ALL_RABBITTERS"
+        ? "--audience all-rabbitters --allow-mass"
+        : `--business ${businessId || "<businessId>"}`;
   const terminalCommands = [
     `# Preview (solo lectura)`,
     `BUNZY_CONNECT_SECRET=$BUNZY_CONNECT_SECRET node scripts/bunzy-connect.mjs --local ${targetFlag} --dry-run`,
@@ -210,11 +219,12 @@ export default function BunzyConnectPage() {
               <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">Alcance</span>
               <select
                 value={scope}
-                onChange={(e) => setScope(e.target.value as "BUSINESS" | "ALL_AFFILIATES")}
+                onChange={(e) => setScope(e.target.value as "BUSINESS" | "ALL_AFFILIATES" | "ALL_RABBITTERS")}
                 className="h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white outline-none"
               >
                 <option value="BUSINESS" className="bg-[#0b0b12]">Un negocio</option>
                 <option value="ALL_AFFILIATES" className="bg-[#0b0b12]">Todos los afiliados (masivo)</option>
+                <option value="ALL_RABBITTERS" className="bg-[#0b0b12]">Todos los Rabbitters (masivo)</option>
               </select>
             </label>
           </div>
@@ -237,10 +247,11 @@ export default function BunzyConnectPage() {
             </label>
           )}
 
-          {scope === "ALL_AFFILIATES" && (
+          {scope !== "BUSINESS" && (
             <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-200">
-              Envío masivo a todos los afiliados aprobados. Requiere <code>BUNZY_CONNECT_ALLOW_MASS=1</code> en el
-              servidor y confirmación explícita. Revisa el preview antes de publicar.
+              Envío masivo a {scope === "ALL_RABBITTERS" ? "todos los Rabbitters" : "todos los afiliados aprobados"}.
+              Requiere <code>BUNZY_CONNECT_ALLOW_MASS=1</code> y confirmación explícita. Las entregas se encolan y el
+              cron las procesa por lotes. Revisa el preview antes de publicar.
             </div>
           )}
 
@@ -368,7 +379,7 @@ export default function BunzyConnectPage() {
           {result && (
             <Card className="border-emerald-500/30 bg-emerald-500/[0.06] p-5">
               <p className="m-0 text-sm font-black text-emerald-300">
-                {result.replayed ? "Reintento idempotente" : "Publicado"} · {result.status}
+                {result.replayed ? "Reintento idempotente" : result.queued ? "Encolado" : "Publicado"} · {result.status}
               </p>
               <p className="m-0 mt-1 break-all text-[11px] text-gray-400">Broadcast: {result.broadcastId}</p>
               {result.scheduledAt && (
@@ -377,7 +388,9 @@ export default function BunzyConnectPage() {
                 </p>
               )}
               <p className="m-0 text-[11px] text-gray-400">
-                {result.published}/{result.audienceCount} entregados
+                {result.queued
+                  ? `${result.audienceCount} en cola · el cron procesa 100 por corrida`
+                  : `${result.published}/${result.audienceCount} entregados`}
               </p>
               {(result.skipped ?? []).length > 0 && (
                 <p className="m-0 mt-1 text-[11px] text-amber-300">

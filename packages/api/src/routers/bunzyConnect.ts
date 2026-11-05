@@ -36,7 +36,7 @@ const ACADEMY_SERIES = [
 ] as const;
 
 const audienceSchema = z.object({
-  scope: z.enum(["BUSINESS", "ALL_AFFILIATES", "USER"]),
+  scope: z.enum(["BUSINESS", "ALL_AFFILIATES", "ALL_RABBITTERS", "USER"]),
   businessId: z.string().min(1).optional(),
   userId: z.string().min(1).optional(),
   niche: z.string().min(1).optional(),
@@ -55,8 +55,9 @@ const broadcastInput = z.object({
   confirmMass: z.boolean().optional(),
 });
 
-function assertMassAllowed(scope: "BUSINESS" | "ALL_AFFILIATES" | "USER", confirmMass?: boolean) {
-  if (scope === "ALL_AFFILIATES" && (process.env.BUNZY_CONNECT_ALLOW_MASS !== "1" || confirmMass !== true)) {
+function assertMassAllowed(scope: "BUSINESS" | "ALL_AFFILIATES" | "ALL_RABBITTERS" | "USER", confirmMass?: boolean) {
+  const isMass = scope === "ALL_AFFILIATES" || scope === "ALL_RABBITTERS";
+  if (isMass && (process.env.BUNZY_CONNECT_ALLOW_MASS !== "1" || confirmMass !== true)) {
     throw new TRPCError({
       code: "FORBIDDEN",
       message: "El envío masivo requiere BUNZY_CONNECT_ALLOW_MASS=1 y confirmación explícita.",
