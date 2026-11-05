@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, LocateFixed, Navigation, ExternalLink } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
@@ -24,6 +24,17 @@ export default function MovePage() {
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [destName, setDestName] = useState<string | null>(null);
+
+  // Si venimos de una página de afiliado, el destino ya está precargado.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const to = params.get('to');
+    const name = params.get('name');
+    if (to) setDropoff(to);
+    if (name) setDestName(name);
+  }, []);
 
   const useMyLocation = () => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
@@ -184,17 +195,49 @@ export default function MovePage() {
         <div
           style={{
             borderRadius: 22,
-            border: '1px solid rgba(255,255,255,0.10)',
-            background: 'rgba(255,255,255,0.05)',
-            backdropFilter: 'blur(18px)',
-            WebkitBackdropFilter: 'blur(18px)',
+            border: '1px solid rgba(255,255,255,0.12)',
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04))',
+            backdropFilter: 'blur(22px)',
+            WebkitBackdropFilter: 'blur(22px)',
             padding: 16,
-            boxShadow: '0 18px 44px -22px rgba(0,0,0,0.7)',
+            position: 'relative',
+            overflow: 'hidden',
+            boxShadow: '0 18px 44px -22px rgba(0,0,0,0.7), 0 0 60px -24px rgba(233,30,99,0.5)',
           }}
         >
+          <div
+            aria-hidden
+            style={{
+              position: 'absolute',
+              insetInline: 0,
+              top: 0,
+              height: 3,
+              background: 'linear-gradient(90deg,#FF2E93,#E91E63,#8B5CF6)',
+              opacity: 0.9,
+            }}
+          />
           <p style={{ margin: 0, fontSize: 17, fontWeight: 900, letterSpacing: '-0.3px' }}>
             Muévete con los servicios disponibles
           </p>
+          {destName && (
+            <p
+              style={{
+                margin: '6px 0 0',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                borderRadius: 999,
+                border: '1px solid rgba(255,143,184,0.35)',
+                background: 'rgba(233,30,99,0.12)',
+                color: '#FF8FB8',
+                fontSize: 11,
+                fontWeight: 800,
+                padding: '3px 9px',
+              }}
+            >
+              Destino: {destName}
+            </p>
+          )}
           <p style={{ margin: '4px 0 0', fontSize: 12, color: 'rgba(255,255,255,0.55)', lineHeight: 1.5 }}>
             Rabbitty abre la app del proveedor con tu origen y destino. El precio y el viaje los opera el proveedor.
           </p>
@@ -280,12 +323,13 @@ export default function MovePage() {
                 alignItems: 'center',
                 gap: 10,
                 borderRadius: 14,
-                border: '1px solid rgba(255,255,255,0.14)',
-                background: 'rgba(255,255,255,0.07)',
+                border: '1px solid rgba(255,46,147,0.45)',
+                background: 'linear-gradient(135deg, rgba(233,30,99,0.85), rgba(139,92,246,0.85))',
                 color: '#fff',
                 padding: '13px 14px',
                 cursor: 'pointer',
                 textAlign: 'left',
+                boxShadow: '0 10px 26px -14px rgba(233,30,99,0.8)',
               }}
             >
               <span style={{ fontSize: 18 }}>🚗</span>
@@ -307,7 +351,9 @@ export default function MovePage() {
                 gap: 10,
                 borderRadius: 14,
                 border: '1px solid rgba(255,255,255,0.14)',
-                background: 'rgba(255,255,255,0.07)',
+                background: 'rgba(255,255,255,0.06)',
+                backdropFilter: 'blur(14px)',
+                WebkitBackdropFilter: 'blur(14px)',
                 color: '#fff',
                 padding: '13px 14px',
                 cursor: 'pointer',

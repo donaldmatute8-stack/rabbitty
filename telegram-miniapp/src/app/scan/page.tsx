@@ -21,6 +21,7 @@ import { resolveScannedPayload } from '@/lib/scannerResolver';
 import { PlatformBridge } from '@/lib/platform';
 import { InAppPaySheet } from '@/components/affiliate/InAppPaySheet';
 import { useToast } from '@/contexts/ToastContext';
+import { useUserAvatar } from '@/lib/avatar';
 
 interface PaymentIntentData {
   id?: string;
@@ -39,6 +40,7 @@ export default function ScanPage() {
   const { user } = useAuth();
   const { isDark } = useTheme();
   const { showToast } = useToast();
+  const userAvatar = useUserAvatar(user);
   
   const [myScanCode, setMyScanCode] = useState<string>('');
   useEffect(() => {
@@ -878,12 +880,12 @@ export default function ScanPage() {
         </div>
 
         {/* Tabs */}
-        <div className="bg-(--bg-elevated) backdrop-blur-2xl border border-(--border-subtle) p-1 rounded-full flex w-60 shadow-xs">
+        <div className="bg-(--bg-elevated) backdrop-blur-2xl border border-(--border-subtle) p-0.5 rounded-full flex w-48 shadow-xs">
           {(['scan', 'my-code'] as const).map((t, i) => (
             <button
               key={t}
               onClick={() => setActiveTab(t)}
-              className={`flex-1 py-2 text-[11px] font-extrabold rounded-full border-0 cursor-pointer transition-all duration-200 ${
+              className={`flex-1 py-1.5 text-[10.5px] font-extrabold rounded-full border-0 cursor-pointer transition-all duration-200 ${
                 activeTab === t ? 'bg-[#E91E63] text-white shadow-md' : 'bg-transparent text-(--text-muted) hover:text-(--text-primary)'
               }`}
             >
@@ -899,12 +901,8 @@ export default function ScanPage() {
         {/* My Code tab - Official Rabbitty Code Hologram */}
         {activeTab === 'my-code' && (
           <div className="flex flex-col items-center justify-center w-full max-w-85 z-20">
-            <div className="text-center mb-6 px-2">
-              <span className="text-[11px] font-black uppercase tracking-[2px] text-[#E91E63] block mb-1">Mi Identificador Rabbitty</span>
-              <p className="text-(--text-muted) text-xs leading-relaxed m-0">Muestra este código en caja para acumular Bunz o autorizar consumo.</p>
-            </div>
             
-            <div className="flex w-full flex-col items-center justify-center pt-8">
+            <div className="flex w-full flex-col items-center justify-center pt-2">
               {RABBITTY_CODE_STYLE === 'simple' ? (
                 <RabbittyCodeSimple
                   value={`https://app.rabbitty.me/u/${encodeURIComponent(
@@ -912,7 +910,8 @@ export default function ScanPage() {
                   )}`}
                   handle={user?.username || null}
                   name={user?.firstName ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}` : null}
-                  size={236}
+                  avatarUrl={userAvatar}
+                  size={204}
                   theme="violet"
                   onShare={async () => {
                     const handle = user?.username ? `@${user.username}` : String(qrValue || '');

@@ -655,8 +655,8 @@ function AffiliateProfileContent() {
                   setTrackOpenId(activeOrder.orderId);
                 }}
                 className="h-9 px-3.5 rounded-full flex items-center gap-2 text-xs font-black shadow-lg border backdrop-blur-xl transition-all active:scale-95 cursor-pointer bg-red-500/95 text-white border-red-300/50 shadow-[0_4px_16px_rgba(239,68,68,0.45)]"
-                title={`${activeOrder.stageLabel} · $${activeOrder.total.toFixed(0)} MXN — toca para ver el seguimiento`}
-                aria-label={`Pedido en curso: ${activeOrder.stageLabel}. Abrir seguimiento`}
+                aria-label="Pedido en curso. Abrir seguimiento"
+                title="Pedido en curso"
               >
                 <span className="inline-block w-2 h-2 rounded-full bg-white animate-pulse" />
                 <span>Pedido en Curso</span>
@@ -997,6 +997,30 @@ function AffiliateProfileContent() {
                   </p>
                 </div>
               </div>
+
+              {/* Moverme: abre Rabbitty Move con este negocio como destino */}
+              <div className="h-px bg-white/5" />
+              <button
+                type="button"
+                onClick={() => {
+                  PlatformBridge.hapticFeedback('medium');
+                  router.push(
+                    `/move?to=${encodeURIComponent(affiliate.address || affiliate.name)}&name=${encodeURIComponent(affiliate.name)}`,
+                  );
+                }}
+                className="w-full flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.05] px-3.5 py-3 backdrop-blur-xl active:scale-[0.99] transition-transform"
+              >
+                <span className="flex items-center gap-3 min-w-0">
+                  <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#FF2E93] to-[#8B5CF6] flex items-center justify-center shrink-0">
+                    <Navigation size={17} color="#fff" />
+                  </span>
+                  <span className="min-w-0 text-left">
+                    <span className="block text-sm font-bold text-white">Moverme hasta aquí</span>
+                    <span className="block text-[11px] text-white/50 truncate">Uber con el destino precargado</span>
+                  </span>
+                </span>
+                <ChevronRight size={16} className="text-white/40 shrink-0" />
+              </button>
 
               {/* Website Link Action — solo si el negocio configuró su sitio */}
               {(affiliate.website || affiliate.webUrl) && (

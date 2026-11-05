@@ -3,6 +3,7 @@ import { Outfit } from "next/font/google";
 import "./globals.css";
 import { TRPCProvider } from "../lib/providers";
 import { ErrorBoundary, Toaster } from "@rabbitty/ui";
+import { PushRegistration } from "../components/PushRegistration";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -39,6 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen" style={{ background: "var(--bg-primary)", color: "var(--text-primary)" }}>
         <ErrorBoundary>
           <TRPCProvider>
+            <PushRegistration />
             {children}
             <Toaster theme="dark" position="top-right" />
           </TRPCProvider>

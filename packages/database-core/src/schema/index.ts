@@ -581,6 +581,8 @@ export const pushDevices = pgTable("pushDevices", {
   userId: fkId("userId").references(() => users.id, { onDelete: "cascade" }),
   token: text("token").notNull().unique(),
   platform: text("platform").default("unknown").notNull(), // 'ios' | 'android'
+  /** App que posee el token: com.rabbitty.app (Rabbiter) | com.rabbitty.pos (POS). */
+  appId: text("appId").default("com.rabbitty.app").notNull(),
   isActive: boolean("isActive").default(true).notNull(),
   ...timestamps,
 });

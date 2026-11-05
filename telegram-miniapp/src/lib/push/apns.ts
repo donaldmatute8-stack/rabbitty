@@ -137,6 +137,7 @@ function buildBody(payload: PushPayload): Record<string, unknown> {
 export async function sendApnsToDevice(
   deviceToken: string,
   payload: PushPayload,
+  bundleIdOverride?: string | null,
 ): Promise<ApnsDeviceResult> {
   const cfg = getConfig();
   if (!cfg) throw new Error("APNS_NOT_CONFIGURED");
@@ -150,7 +151,7 @@ export async function sendApnsToDevice(
       ":method": "POST",
       ":path": `/3/device/${deviceToken}`,
       authorization: `bearer ${token}`,
-      "apns-topic": cfg.bundleId,
+      "apns-topic": (bundleIdOverride || cfg.bundleId).trim(),
       "apns-push-type": "alert",
       "apns-priority": "10",
       "apns-expiration": "0",
@@ -219,7 +220,11 @@ export async function sendPushToUsers(
   await Promise.all(
     devices.map(async (device) => {
       try {
-        const res = await sendApnsToDevice(device.token, payload);
+        const res = await sendApnsToDevice(
+          device.token,
+          payload,
+          (device as { appId?: string | null }).appId || null,
+        );
         if (res.ok) {
           result.sent += 1;
           console.log(`[APNs] ✓ enviado (${res.status}) para token …${device.token.slice(-10)}`);

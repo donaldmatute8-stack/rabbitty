@@ -6,6 +6,7 @@ import { initAppLifecycleHandlers } from "../../lib/print-engine";
 import { getPosTerminalInfo, getPosTerminalToken, hasPosDeviceKey } from "../../lib/pos-terminal";
 import { PosShiftGate } from "../../components/PosShiftGate";
 import { PosReauthPanel } from "../../components/PosReauthPanel";
+import { EnableNotificationsBanner } from "../../components/EnableNotificationsBanner";
 
 export default function PosLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -216,6 +217,8 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
 
       <main className="relative z-10 flex-1 flex flex-col h-[100dvh] overflow-hidden pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)] pl-[env(safe-area-inset-left,0px)] pr-[env(safe-area-inset-right,0px)]">
         {children}
+        {/* Permiso de notificaciones: sin esto, en Mac/iPad no aparece el aviso del sistema */}
+        {!terminalMode && <EnableNotificationsBanner />}
       </main>
     </div>
   );

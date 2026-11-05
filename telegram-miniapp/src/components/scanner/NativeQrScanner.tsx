@@ -265,9 +265,14 @@ export function NativeQrScanner({ onScan, onClose, onFallback, onConsumed }: Nat
         const max = await api.getMaxZoom().catch(() => 1);
         if (!cancelled) setZoomMax(Math.max(1, Number(max) || 1));
       } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'No se pudo iniciar la cámara.');
+        const message = err instanceof Error ? err.message : 'No se pudo iniciar la cámara.';
+        // Build nativo viejo (sin el plugin SPM): caer al escáner web sin modal.
+        if (/not implemented/i.test(message) && onFallback) {
+          await teardown();
+          if (!cancelled) onFallback();
+          return;
         }
+        if (!cancelled) setError(message);
         await teardown();
       }
     })();

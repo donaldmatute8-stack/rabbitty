@@ -70,12 +70,17 @@ export async function POST(req: Request) {
     // entre a la cola, tenga seguimiento y pueda asignarse repartidor.
     let posOrderId: string | null = null;
     try {
-      const [branch] = await restaurantDb
-        .select({ id: branches.id })
+      // Preferir la sucursal de PRODUCCIÓN activa (no Sandbox/Entrenamiento).
+      const branchRows = await restaurantDb
+        .select({ id: branches.id, name: branches.name, isActive: branches.isActive })
         .from(branches)
         .innerJoin(restaurants, eq(branches.restaurantId, restaurants.id))
-        .where(eq(restaurants.businessId, businessId))
-        .limit(1);
+        .where(eq(restaurants.businessId, businessId));
+      const activeBranchRows = branchRows.filter((b) => b.isActive !== false);
+      const branch =
+        activeBranchRows.find((b) => !/sandbox|entrenamiento|prueba|test/i.test(b.name || '')) ??
+        activeBranchRows[0] ??
+        branchRows[0];
       if (branch?.id) {
         const orderType =
           body.orderType === 'DINE_IN' || body.orderType === 'DELIVERY' ? body.orderType : 'TAKEAWAY';

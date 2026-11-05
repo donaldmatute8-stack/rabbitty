@@ -865,6 +865,33 @@ export default function PosPage() {
     feeCents: number;
     etaMinutes: number;
     payer: 'BUSINESS' | 'CUSTOMER';
+    address?: {
+      street1: string;
+      city: string;
+      state: string;
+      zip: string;
+      country: string;
+      phone?: string;
+    };
+  } | null>(null);
+
+  // Para llevar: capturar domicilio antes de cotizar con Uber.
+  const [uberAddressDialog, setUberAddressDialog] = useState<{
+    orderId: string;
+    street1: string;
+    city: string;
+    state: string;
+    zip: string;
+    phone: string;
+    country: string;
+  } | null>(null);
+  const pendingUberAddressRef = useRef<{
+    street1: string;
+    city: string;
+    state: string;
+    zip: string;
+    country: string;
+    phone?: string;
   } | null>(null);
 
   const uberQuoteMutation = trpc.pos.quoteUberDelivery.useMutation({
@@ -875,6 +902,7 @@ export default function PosPage() {
         feeCents: q.feeCents,
         etaMinutes: q.durationMinutes,
         payer: 'CUSTOMER',
+        address: pendingUberAddressRef.current ?? undefined,
       }),
     onError: (e) => toast.error(e.message || "No se pudo cotizar con Uber"),
   });
@@ -4100,6 +4128,99 @@ export default function PosPage() {
         </div>
       </Dialog>
 
+      {/* ── Para llevar: capturar domicilio y cotizar con Uber ── */}
+      <Dialog
+        open={!!uberAddressDialog}
+        onClose={() => setUberAddressDialog(null)}
+        title="Domicilio de entrega"
+        className="max-w-sm w-full"
+      >
+        <div className="space-y-3 p-1">
+          <p className="m-0 text-xs text-gray-400">
+            Pedido para llevar: captura el domicilio para enviarlo con Uber mientras se cocina.
+          </p>
+          <input
+            value={uberAddressDialog?.street1 ?? ""}
+            onChange={(e) =>
+              setUberAddressDialog((prev) => (prev ? { ...prev, street1: e.target.value } : prev))
+            }
+            placeholder="Calle y número *"
+            className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-400/60"
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              value={uberAddressDialog?.city ?? ""}
+              onChange={(e) =>
+                setUberAddressDialog((prev) => (prev ? { ...prev, city: e.target.value } : prev))
+              }
+              placeholder="Ciudad *"
+              className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-400/60"
+            />
+            <input
+              value={uberAddressDialog?.state ?? ""}
+              onChange={(e) =>
+                setUberAddressDialog((prev) => (prev ? { ...prev, state: e.target.value } : prev))
+              }
+              placeholder="Estado *"
+              className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-400/60"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              value={uberAddressDialog?.zip ?? ""}
+              onChange={(e) =>
+                setUberAddressDialog((prev) => (prev ? { ...prev, zip: e.target.value } : prev))
+              }
+              placeholder="CP *"
+              inputMode="numeric"
+              className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-400/60"
+            />
+            <input
+              value={uberAddressDialog?.phone ?? ""}
+              onChange={(e) =>
+                setUberAddressDialog((prev) => (prev ? { ...prev, phone: e.target.value } : prev))
+              }
+              placeholder="Teléfono"
+              inputMode="tel"
+              className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-400/60"
+            />
+          </div>
+          <div className="flex gap-2 pt-1">
+            <Button variant="secondary" className="flex-1" onClick={() => setUberAddressDialog(null)}>
+              Cancelar
+            </Button>
+            <Button
+              className="flex-1"
+              disabled={
+                !uberAddressDialog ||
+                uberAddressDialog.street1.trim().length < 4 ||
+                uberAddressDialog.city.trim().length < 2 ||
+                uberAddressDialog.state.trim().length < 2 ||
+                uberAddressDialog.zip.trim().length < 3 ||
+                uberQuoteMutation.isPending
+              }
+              onClick={() => {
+                if (!uberAddressDialog) return;
+                const address = {
+                  street1: uberAddressDialog.street1.trim(),
+                  city: uberAddressDialog.city.trim(),
+                  state: uberAddressDialog.state.trim(),
+                  zip: uberAddressDialog.zip.trim(),
+                  country: (uberAddressDialog.country || "MX").trim().toUpperCase(),
+                  phone: uberAddressDialog.phone.trim() || undefined,
+                };
+                const orderId = uberAddressDialog.orderId;
+                pendingUberAddressRef.current = address;
+                setUberAddressDialog(null);
+                uberQuoteMutation.mutate({ orderId, address });
+              }}
+            >
+              {uberQuoteMutation.isPending ? "Cotizando…" : "Cotizar con Uber"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
       {/* ── Uber Direct: cotización y solicitud ── */}
       <Dialog
         open={!!uberQuoteDialog}
@@ -4156,6 +4277,7 @@ export default function PosPage() {
                   feeCents: uberQuoteDialog.feeCents,
                   feePaidBy: uberQuoteDialog.payer,
                   etaMinutes: uberQuoteDialog.etaMinutes || undefined,
+                  address: uberQuoteDialog.address,
                 });
               }}
             >
@@ -4535,7 +4657,7 @@ export default function PosPage() {
                   )}
 
                   {/* Entrega (domicilio): asignar repartidor y seguir el estado */}
-                  {tab.fromApp && tab.orderType === 'DELIVERY' && (
+                  {tab.fromApp && (tab.orderType === 'DELIVERY' || tab.orderType === 'TAKEAWAY') && (
                     <div className="mt-2 space-y-2 rounded-xl border border-white/10 bg-white/[0.04] p-2.5">
                       <div className="flex items-center justify-between">
                         <p className="m-0 text-[10px] font-black uppercase tracking-wider text-gray-400">
@@ -4615,14 +4737,39 @@ export default function PosPage() {
                       )}
 
                       {!tab.delivery && (deliveryProviders ?? []).some((p) => p.id === 'UBER_DIRECT' && p.available) && (
-                        <button
-                          type="button"
-                          onClick={() => uberQuoteMutation.mutate({ orderId: tab.orderId })}
-                          disabled={uberQuoteMutation.isPending}
-                          className="w-full rounded-lg border border-cyan-400/40 bg-cyan-400/15 py-2 text-[11px] font-black text-cyan-100 hover:bg-cyan-400/25 cursor-pointer disabled:opacity-50"
-                        >
-                          {uberQuoteMutation.isPending ? 'Cotizando…' : 'Cotizar con Uber Direct'}
-                        </button>
+                        <>
+                          {tab.orderType === 'DELIVERY' ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                pendingUberAddressRef.current = null;
+                                uberQuoteMutation.mutate({ orderId: tab.orderId });
+                              }}
+                              disabled={uberQuoteMutation.isPending}
+                              className="w-full rounded-lg border border-cyan-400/40 bg-cyan-400/15 py-2 text-[11px] font-black text-cyan-100 hover:bg-cyan-400/25 cursor-pointer disabled:opacity-50"
+                            >
+                              {uberQuoteMutation.isPending ? 'Cotizando…' : 'Cotizar con Uber Direct'}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setUberAddressDialog({
+                                  orderId: tab.orderId,
+                                  street1: '',
+                                  city: '',
+                                  state: '',
+                                  zip: '',
+                                  phone: '',
+                                  country: 'MX',
+                                })
+                              }
+                              className="w-full rounded-lg border border-cyan-400/40 bg-cyan-400/15 py-2 text-[11px] font-black text-cyan-100 hover:bg-cyan-400/25 cursor-pointer"
+                            >
+                              Enviar con Uber (capturar domicilio)
+                            </button>
+                          )}
+                        </>
                       )}
 
                       <div className="flex flex-wrap gap-2 pt-0.5">

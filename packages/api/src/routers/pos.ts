@@ -94,15 +94,32 @@ export function calcTax(itemsTotal: number): { total: number; subtotal: number; 
  * La miniapp /api/pos/reward espera un businessId de negocio (su inventario Bunz
  * vive en ownedBusinesses) — un branchId jamás matcheará.
  */
+const uberAddressSchema = z.object({
+  street1: z.string().min(4).max(200),
+  street2: z.string().max(200).optional(),
+  neighborhood: z.string().max(120).optional(),
+  city: z.string().min(2).max(120),
+  state: z.string().min(2).max(120),
+  zip: z.string().min(3).max(20),
+  country: z.string().min(2).max(2).default("MX"),
+  phone: z.string().max(30).optional(),
+  notes: z.string().max(300).optional(),
+  lat: z.number().optional(),
+  lng: z.number().optional(),
+});
+
 /**
  * Contexto para Uber Direct: pickup estructurado del negocio + dropoff del
  * pedido + items (manifest). Falla con mensajes accionables si falta algo.
+ * `addressOverride` permite enviar a domicilio un pedido PARA LLEVAR que aún
+ * no tenía dirección capturada.
  */
 async function loadDeliveryContext(
   restaurantDb: any,
   coreDb: any,
   branchId: string,
   orderId: string,
+  addressOverride?: UberAddress | null,
 ) {
   const [order] = await restaurantDb
     .select({
@@ -123,8 +140,8 @@ async function loadDeliveryContext(
     .where(and(eq(orders.id, orderId), eq(orders.branchId, branchId)))
     .limit(1);
   if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Orden no encontrada" });
-  if (order.orderType !== "DELIVERY") {
-    throw new TRPCError({ code: "PRECONDITION_FAILED", message: "El pedido no es a domicilio" });
+  if (order.orderType !== "DELIVERY" && order.orderType !== "TAKEAWAY") {
+    throw new TRPCError({ code: "PRECONDITION_FAILED", message: "El pedido no es a domicilio ni para llevar" });
   }
 
   const businessId = await resolveBusinessIdFromBranch(restaurantDb, branchId);
@@ -149,7 +166,7 @@ async function loadDeliveryContext(
     });
   }
 
-  const dropoffData = (order.deliveryAddressData ?? null) as UberAddress | null;
+  const dropoffData = (addressOverride ?? order.deliveryAddressData ?? null) as UberAddress | null;
   if (!dropoffData?.street1 || !dropoffData?.city) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
@@ -2559,12 +2576,18 @@ export const posRouter = router({
 
   /** Cotiza con Uber Direct (no crea nada todavía). */
   quoteUberDelivery: posProcedure
-    .input(z.object({ orderId: z.string() }))
+    .input(z.object({ orderId: z.string(), address: uberAddressSchema.optional() }))
     .mutation(async ({ ctx, input }) => {
       if (!uberDirectConfigured()) {
         throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Uber Direct no está configurado" });
       }
-      const c = await loadDeliveryContext(ctx.restaurantDb, ctx.coreDb, ctx.branchId, input.orderId);
+      const c = await loadDeliveryContext(
+        ctx.restaurantDb,
+        ctx.coreDb,
+        ctx.branchId,
+        input.orderId,
+        input.address as UberAddress | undefined,
+      );
       const quote = await uberQuote({ pickup: c.pickup, dropoff: c.dropoff });
       return { ...quote, orderId: c.order.id };
     }),
@@ -2579,13 +2602,20 @@ export const posRouter = router({
         feePaidBy: z.enum(["BUSINESS", "CUSTOMER"]).default("CUSTOMER"),
         /** ETA de la cotización (fallback si Uber no devuelve dropoff_eta). */
         etaMinutes: z.number().int().min(1).max(600).optional(),
+        address: uberAddressSchema.optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       if (!uberDirectConfigured()) {
         throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Uber Direct no está configurado" });
       }
-      const c = await loadDeliveryContext(ctx.restaurantDb, ctx.coreDb, ctx.branchId, input.orderId);
+      const c = await loadDeliveryContext(
+        ctx.restaurantDb,
+        ctx.coreDb,
+        ctx.branchId,
+        input.orderId,
+        input.address as UberAddress | undefined,
+      );
       const feeAbsorbedByBusiness = input.feePaidBy === "CUSTOMER" && c.order.status !== "PENDING";
       const effectiveFeePaidBy = feeAbsorbedByBusiness ? "BUSINESS" : input.feePaidBy;
 
@@ -2655,6 +2685,18 @@ export const posRouter = router({
       const alreadyCharged = Number(c.order.deliveryFee ?? 0) > 0;
       const shouldCharge =
         values.feePaidBy === "CUSTOMER" && fee > 0 && !alreadyCharged && c.order.status === "PENDING";
+      const capturedAddress = input.address;
+      const capturedText = capturedAddress
+        ? [
+            capturedAddress.street1,
+            capturedAddress.street2,
+            capturedAddress.neighborhood ? `Col. ${capturedAddress.neighborhood}` : "",
+            `${capturedAddress.city}, ${capturedAddress.state} ${capturedAddress.zip}`,
+          ]
+            .filter(Boolean)
+            .join(", ")
+        : null;
+
       await ctx.restaurantDb
         .update(orders)
         .set({
@@ -2662,6 +2704,9 @@ export const posRouter = router({
           externalId: created.id,
           ...(shouldCharge ? { deliveryFee: fee } : {}),
           ...(etaAt ? { etaAt, etaMinutes } : {}),
+          ...(capturedAddress
+            ? { deliveryAddress: capturedText, deliveryAddressData: capturedAddress }
+            : {}),
           updatedAt: now,
         })
         .where(eq(orders.id, c.order.id));

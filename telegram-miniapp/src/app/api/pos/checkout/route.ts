@@ -99,13 +99,20 @@ async function resolveBranchId(branchOrBusinessId: string): Promise<string | nul
     .where(eq(branches.id, branchOrBusinessId))
     .limit(1);
   if (byId) return byId.id;
+  // Un negocio puede tener varias sucursales (incluida Sandbox/Entrenamiento).
+  // El pedido debe caer en la de PRODUCCIÓN activa, no en la de pruebas.
   const byBusiness = await restaurantDb
-    .select({ id: branches.id })
+    .select({ id: branches.id, name: branches.name, isActive: branches.isActive })
     .from(branches)
     .innerJoin(restaurants, eq(branches.restaurantId, restaurants.id))
-    .where(eq(restaurants.businessId, branchOrBusinessId))
-    .limit(1);
-  return byBusiness?.[0]?.id ?? null;
+    .where(eq(restaurants.businessId, branchOrBusinessId));
+  if (byBusiness.length === 0) return null;
+  const activeBranches = byBusiness.filter((b) => b.isActive !== false);
+  const production =
+    activeBranches.find((b) => !/sandbox|entrenamiento|prueba|test/i.test(b.name || '')) ??
+    activeBranches[0] ??
+    byBusiness[0];
+  return production?.id ?? null;
 }
 
 /** Motivo legible si el negocio está cerrado; null si puede recibir pedidos. */

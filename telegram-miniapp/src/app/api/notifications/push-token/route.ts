@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    const { token, platform, rearm } = await req.json();
+    const { token, platform, rearm, appId } = await req.json();
     if (!token) {
       // Re-encendido desde settings sin token en mano: el re-registro real
       // viene de AuthProvider (initPushNotifications → POST con token).
@@ -23,6 +23,10 @@ export async function POST(req: NextRequest) {
     const cleanPlatform = typeof platform === "string" && platform.trim()
       ? platform.trim().slice(0, 20)
       : "unknown";
+    const cleanAppId =
+      typeof appId === "string" && appId.trim()
+        ? appId.trim().slice(0, 120)
+        : "com.rabbitty.app";
 
     try {
       await db
@@ -31,6 +35,7 @@ export async function POST(req: NextRequest) {
           userId: caller.id,
           token: cleanToken,
           platform: cleanPlatform,
+          appId: cleanAppId,
           isActive: true,
           updatedAt: new Date(),
         })
@@ -39,6 +44,7 @@ export async function POST(req: NextRequest) {
           set: {
             userId: caller.id,
             platform: cleanPlatform,
+            appId: cleanAppId,
             isActive: true,
             updatedAt: new Date(),
           },
