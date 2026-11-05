@@ -486,9 +486,9 @@ export default function ChatInboxPage() {
     const list = allConversations.filter((c) => {
       const p = prefs[c.id] || {};
       if (!!p.archived !== archived) return false;
-      // El chat de Bunzy no vive en la lista: se llega por el comunicado fijado
-      // (o por /comunicados para el historial).
-      if (c.isBot) return false;
+      // El hilo "Bunzy · Oficial" vive dentro del chat del agente: no se
+      // muestra como conversación aparte. El agente ('bot') sí está visible.
+      if (c.targetId === 'bunzy') return false;
       if (activeTab === 'business') return !!c.isBusinessInbox;
       // Una conversación donde YO actúo como negocio solo vive en la pestaña
       // Negocio; si no, aparecía duplicada en ambos lados.
@@ -512,6 +512,7 @@ export default function ChatInboxPage() {
   const contacts = useMemo(() => {
     const seen = new Set<string>();
     return allConversations.filter((c) => {
+      if (c.targetId === 'bunzy') return false;
       if (seen.has(c.targetId)) return false;
       seen.add(c.targetId);
       return true;
@@ -1072,16 +1073,32 @@ export default function ChatInboxPage() {
           {community === 'chats' ? (
             <PullToRefresh onRefresh={async () => { await mutateConversations(); }}>
             <div className={`flex flex-col gap-3 pb-28 ${dockPosition === 'top' ? 'pt-16' : ''}`}>
-              {/* Telegram Search Bar (Screenshot 1 top bar) */}
-              <div
-                onClick={() => {
-                  PlatformBridge.hapticFeedback('light');
-                  setSearchOverlayOpen(true);
-                }}
-                className="flex items-center justify-start gap-2.5 py-2.5 px-3.5 rounded-xl bg-(--bg-elevated) border border-(--border-subtle) cursor-pointer active:opacity-80 transition-opacity shadow-xs"
-              >
-                <Search size={16} className="shrink-0 text-(--text-muted)" />
-                <span className="flex-1 text-left text-[16px] text-(--text-muted)">Search</span>
+              {/* Telegram Search Bar + acceso directo a Bunzy (esquina cortada) */}
+              <div className="relative">
+                <div
+                  onClick={() => {
+                    PlatformBridge.hapticFeedback('light');
+                    setSearchOverlayOpen(true);
+                  }}
+                  className="flex items-center justify-start gap-2.5 py-2.5 pl-3.5 pr-16 rounded-xl bg-(--bg-elevated) border border-(--border-subtle) cursor-pointer active:opacity-80 transition-opacity shadow-xs"
+                >
+                  <Search size={16} className="shrink-0 text-(--text-muted)" />
+                  <span className="flex-1 text-left text-[16px] text-(--text-muted)">Search</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    PlatformBridge.hapticFeedback('medium');
+                    router.push('/chat/bot');
+                  }}
+                  aria-label="Abrir Bunzy"
+                  title="Bunzy"
+                  className="absolute -right-1 -top-1 z-10 h-12 w-12 overflow-hidden rounded-[18px] border-2 border-(--bg-primary) shadow-lg active:scale-95 transition-transform"
+                  style={{ background: 'linear-gradient(135deg, #FF2E93, #8B5CF6)' }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/bunzy-avatar.png" alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </button>
               </div>
 
               {/* Filtro archivados */}
@@ -1112,7 +1129,9 @@ export default function ChatInboxPage() {
                     <PinnedComunicadoCard
                       key={item.deliveryId}
                       item={item}
-                      onOpen={() => router.push('/chat/bot')}
+                      onOpen={() =>
+                        router.push(activeTab === 'business' ? '/comunicados' : '/chat/bot')
+                      }
                       onAcknowledge={() => void acknowledgePinnedComunicado(item.deliveryId)}
                     />
                   ))}

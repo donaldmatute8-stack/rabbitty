@@ -29,6 +29,8 @@ import { ollamaEndpoint, ollamaHeaders, ollamaErrorDetail } from "./ollama";
 
 export const BUNZY_SENDER_ID = "bunzy";
 export const BUNZY_AUDIENCE = "BUNZY";
+/** Hilo único de Bunzy (agente) donde también viven los comunicados del Rabbiter. */
+const BOT_THREAD_ID = "bot";
 export const BUNZY_MESSAGE_TYPE = "BUNZY_UPDATE";
 
 export const BUNZY_CATEGORIES = ["PRODUCT", "TIP", "NEWS", "SYSTEM"] as const;
@@ -197,11 +199,57 @@ export async function previewBroadcast(db: CoreDb, input: BunzyBroadcastInput) {
   };
 }
 
-async function findOrCreateThread(tx: Tx | CoreDb, recipientId: string): Promise<{ id: string }> {
+async function findOrCreateThread(
+  tx: Tx | CoreDb,
+  recipient: { id: string; type: BunzyRecipientType },
+): Promise<{ id: string }> {
+  // ── Rabbiter: un solo Bunzy ──────────────────────────────────────────
+  // Los comunicados entran al MISMO hilo del agente ('bot'), así no hay dos
+  // chats de Bunzy. Se archivan igual (delivery → Entendido → /comunicados).
+  if (recipient.type === "USER") {
+    const [existingBot] = await tx
+      .select({ id: conversations.id })
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.participant1, recipient.id),
+          eq(conversations.participant2, BOT_THREAD_ID),
+        ),
+      )
+      .limit(1);
+    if (existingBot) return existingBot;
+
+    try {
+      const [created] = await tx
+        .insert(conversations)
+        .values({
+          kind: "DIRECT",
+          participant1: recipient.id,
+          participant2: BOT_THREAD_ID,
+        })
+        .returning({ id: conversations.id });
+      if (created) return created;
+    } catch (err) {
+      const [raced] = await tx
+        .select({ id: conversations.id })
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.participant1, recipient.id),
+            eq(conversations.participant2, BOT_THREAD_ID),
+          ),
+        )
+        .limit(1);
+      if (raced) return raced;
+      throw err;
+    }
+  }
+
+  // ── Negocio: hilo oficial propio (oculto en la lista) ───────────────
   const [existing] = await tx
     .select({ id: conversations.id })
     .from(conversations)
-    .where(and(eq(conversations.audience, BUNZY_AUDIENCE), eq(conversations.participant2, recipientId)))
+    .where(and(eq(conversations.audience, BUNZY_AUDIENCE), eq(conversations.participant2, recipient.id)))
     .limit(1);
   if (existing) return existing;
 
@@ -212,7 +260,7 @@ async function findOrCreateThread(tx: Tx | CoreDb, recipientId: string): Promise
         kind: "DIRECT",
         audience: BUNZY_AUDIENCE,
         participant1: BUNZY_SENDER_ID,
-        participant2: recipientId,
+        participant2: recipient.id,
       })
       .returning({ id: conversations.id });
     if (created) return created;
@@ -220,7 +268,7 @@ async function findOrCreateThread(tx: Tx | CoreDb, recipientId: string): Promise
     const [raced] = await tx
       .select({ id: conversations.id })
       .from(conversations)
-      .where(and(eq(conversations.audience, BUNZY_AUDIENCE), eq(conversations.participant2, recipientId)))
+      .where(and(eq(conversations.audience, BUNZY_AUDIENCE), eq(conversations.participant2, recipient.id)))
       .limit(1);
     if (raced) return raced;
     throw err;
@@ -384,7 +432,7 @@ async function deliverOne(
 
   try {
     const result = await db.transaction(async (tx): Promise<BunzyDeliveryResult> => {
-      const thread = await findOrCreateThread(tx, recipient.id);
+      const thread = await findOrCreateThread(tx, recipient);
       const deliveryId = existingDelivery?.id ?? crypto.randomUUID();
       const clientMessageId = `bc:${broadcast.id}`;
       const trackedCta = broadcast.ctaUrl

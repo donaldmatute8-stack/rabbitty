@@ -65,6 +65,18 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
     refetchOnWindowFocus: true,
   });
 
+  // ── Re-onboarding: el POS no debe saltarse el welcome ritual del dueño ──
+  const { data: onboarding } = trpc.admin.onboardingStatus.useQuery(undefined, {
+    retry: false,
+    staleTime: 60_000,
+    enabled: !terminalMode && !!profileQuery.data,
+  });
+
+  useEffect(() => {
+    if (terminalMode) return;
+    if (onboarding?.pending) router.replace("/onboarding");
+  }, [onboarding?.pending, terminalMode, router]);
+
   const isLoading = hasTerminalToken
     ? featureLoading ||
       (terminalMode && (sessionQuery.isLoading || (sessionQuery.error && adminFallbackQuery.isLoading)))
