@@ -81,7 +81,13 @@ async function embedWithOllama(texts: string[]): Promise<number[][] | null> {
         "Content-Type": "application/json",
         ...(key ? { Authorization: `Bearer ${key}` } : {}),
       },
-      body: JSON.stringify({ model, input: textsSafe }),
+      // num_thread fijo: en CPU (Railway) Ollama autodetecta 1 hilo y tarda ~48s
+      // por request; con 4 hilos baja a <1s en caliente.
+      body: JSON.stringify({
+        model,
+        input: textsSafe,
+        options: { num_thread: Number(process.env.OLLAMA_EMBED_NUM_THREADS) || 4 },
+      }),
     });
     if (res.ok) {
       const data = (await res.json()) as { embeddings?: number[][]; error?: string };
