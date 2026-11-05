@@ -130,3 +130,14 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   }
 }
 }
+
+/* Escáner nativo: cámara detrás del WebView */
+body.barcode-scanner-active {
+  background: transparent !important;
+}
+body.barcode-scanner-active > *:not(.scanner-portal) {
+  visibility: hidden !important;
+}
+html:has(body.barcode-scanner-active) {
+  background: transparent !important;
+}

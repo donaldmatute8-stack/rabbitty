@@ -467,6 +467,9 @@ export async function verifyBiometric(reason = 'Confirma tu identidad para conti
   }
 
   if (rec.backend === 'webauthn' && rec.credId) {
+    if (typeof navigator === 'undefined' || !navigator.credentials?.get) {
+      return { ok: false, message: 'Passkey no disponible en este dispositivo. Usa tu PIN u OTP.' };
+    }
     try {
       const assertion = await navigator.credentials.get({
         publicKey: {

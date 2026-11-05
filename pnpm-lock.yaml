@@ -666,12 +666,18 @@ importers:
       '@capacitor-community/speech-recognition':
         specifier: ^7
         version: 7.0.1(@capacitor/core@8.5.3)
+      '@capacitor-mlkit/barcode-scanning':
+        specifier: 8.2.2
+        version: 8.2.2(@capacitor/core@8.5.3)
       '@capacitor/app':
         specifier: 8.1.2
         version: 8.1.2(@capacitor/core@8.5.3)
       '@capacitor/browser':
         specifier: ^8
         version: 8.0.5(@capacitor/core@8.5.3)
+      '@capacitor/camera':
+        specifier: 8.2.6
+        version: 8.2.6(@capacitor/core@8.5.3)
       '@capacitor/core':
         specifier: 8.5.3
         version: 8.5.3
@@ -952,6 +958,11 @@ packages:
     peerDependencies:
       '@capacitor/core': '>=7.0.0'
 
+  '@capacitor-mlkit/barcode-scanning@8.2.2':
+    resolution: {integrity: sha512-ifQbo09HDAveFpu89H9jhKbYw1sISdHCpXOi3qJDp/geVuxtJC2GDffBLAL3R6mXNDSjm8jO00AIP2Z1GlV8hQ==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
+
   '@capacitor/android@8.5.3':
     resolution: {integrity: sha512-ilH4gSSz3DrketMkzDVAvY9JsWJ//rCQnECLTdcFRO7xXDogwAbUvQAnIAbiqefwV/D1xfjEL4Gw1MJXEcaA9g==}
     peerDependencies:
@@ -964,6 +975,11 @@ packages:
 
   '@capacitor/browser@8.0.5':
     resolution: {integrity: sha512-qqcEjUqs9kG1naF+tsD8rERuZ3wuIfXzvoIJEERHI4RNWwNSUqAHHduaKhkyb+t01VyVPa0ydx0mZ/eOskk2Ug==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
+
+  '@capacitor/camera@8.2.6':
+    resolution: {integrity: sha512-jzvrMrEKs5ACw1/HmcgN5XwSlXYF+/xRKzWtBUESQs5ePf3tTfnR8Nk/p+aSEgay8yZEI0aZQ+2/1xDwMCdV2w==}
     peerDependencies:
       '@capacitor/core': '>=8.0.0'
 
@@ -6533,6 +6549,10 @@ snapshots:
     dependencies:
       '@capacitor/core': 8.5.3
 
+  '@capacitor-mlkit/barcode-scanning@8.2.2(@capacitor/core@8.5.3)':
+    dependencies:
+      '@capacitor/core': 8.5.3
+
   '@capacitor/android@8.5.3(@capacitor/core@8.5.3)':
     dependencies:
       '@capacitor/core': 8.5.3
@@ -6542,6 +6562,10 @@ snapshots:
       '@capacitor/core': 8.5.3
 
   '@capacitor/browser@8.0.5(@capacitor/core@8.5.3)':
+    dependencies:
+      '@capacitor/core': 8.5.3
+
+  '@capacitor/camera@8.2.6(@capacitor/core@8.5.3)':
     dependencies:
       '@capacitor/core': 8.5.3
 

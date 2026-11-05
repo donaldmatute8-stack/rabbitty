@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Html5Qrcode } from 'html5-qrcode';
 import RabbittyCode from '@/components/ui/RabbittyCode';
 import QRDiscovery from '@/components/QRDiscovery';
+import { NativeQrScanner } from '@/components/scanner/NativeQrScanner';
 import RabbittyLoader from '@/components/RabbittyLoader';
 import BottomNav from '@/components/BottomNav';
 import Button from '@/components/ui/Button';
@@ -61,6 +62,15 @@ export default function ScanPage() {
     return "Bearer TMA_TOKEN";
   };
   const [hasCamera, setHasCamera] = useState(() => typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices));
+  const [isNativeApp, setIsNativeApp] = useState(false);
+  const [nativeSession, setNativeSession] = useState(0);
+  const [nativeUnavailable, setNativeUnavailable] = useState(false);
+
+  useEffect(() => {
+    const native = PlatformBridge.isNative();
+    setIsNativeApp(native);
+    if (native) setHasCamera(true);
+  }, []);
   const [result, setResult] = useState<PaymentIntentData | null>(null);
   const [manualCode, setManualCode] = useState('');
   const [showManualInput, setShowManualInput] = useState(false);
@@ -237,6 +247,10 @@ export default function ScanPage() {
   }, [isDark, searchParams, router]);
 
   const requestCameraAccess = async () => {
+    if (PlatformBridge.isNative()) {
+      setHasCamera(true);
+      return;
+    }
     if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
@@ -500,6 +514,10 @@ export default function ScanPage() {
   }, [API_SERVER_URL, router, stopScanning]);
 
   const startScanning = useCallback(async () => {
+    if (PlatformBridge.isNative() && !nativeUnavailable) {
+      setNativeSession((s) => s + 1);
+      return;
+    }
     if (isTransitioningRef.current || scannerRef.current?.isScanning) return;
     const el = document.getElementById("qr-reader");
     if (!el) return;
@@ -764,6 +782,23 @@ export default function ScanPage() {
         color: 'var(--text-primary)'
       }}
     >
+      {isNativeApp && !nativeUnavailable && nativeSession > 0 && activeTab === 'scan' && !showManualInput && !result && !scanLoader && (
+        <NativeQrScanner
+          key={nativeSession}
+          onScan={handleDispatchPayload}
+          onClose={() => {
+            setNativeSession(0);
+            setShowManualInput(true);
+          }}
+          onFallback={() => {
+            setNativeSession(0);
+            setNativeUnavailable(true);
+            setShowManualInput(false);
+            window.setTimeout(() => startScanningRef.current(), 80);
+          }}
+        />
+      )}
+
       {/* Background glow only on my-code tab */}
       {activeTab === 'my-code' && (
         <div className="absolute inset-0 pointer-events-none z-0 bg-[radial-gradient(ellipse_at_50%_40%,rgba(233,30,99,0.08)_0%,transparent_65%)]" />
