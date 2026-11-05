@@ -526,6 +526,14 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                   <div className="flex-1 overflow-y-auto p-4 space-y-3">
                     {drawerTab === "bunzy" && (
                       <div className="flex flex-col h-full justify-between space-y-4">
+                        <div className="flex justify-end">
+                          <Link
+                            href="/settings/bunzy"
+                            className="text-[10px] font-bold text-pink-300 hover:text-pink-200"
+                          >
+                            Preferencias de Bunzy Connect →
+                          </Link>
+                        </div>
                         <div className="space-y-3">
                           {bunzyMessages.map((msg, i) => (
                             <div

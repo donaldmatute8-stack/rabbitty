@@ -2,7 +2,7 @@ import { z } from "zod";
 import { eq, ne, and, or, not, inArray, isNull, sql, asc, desc, type SQL } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
-import { bunzyDeliveries, conversations, messages, ownedBusinesses, users, chatEventOutbox } from "@rabbitty/database-core";
+import { bunzyDeliveries, bunzyPreferences, conversations, messages, ownedBusinesses, users, chatEventOutbox } from "@rabbitty/database-core";
 import type { Context } from "../trpc";
 
 export interface BusinessRef {
@@ -394,5 +394,45 @@ export const customerChatRouter = router({
       }
 
       return msg;
+    }),
+
+  // ── Bunzy Connect · preferencias del negocio ──
+  bunzyPreferences: protectedProcedure.query(async ({ ctx }) => {
+    const biz = await resolveOwnerBusinesses(ctx);
+    const businessId = biz[0]?.id ?? null;
+    if (!businessId) return { businessId: null, product: true, tips: true, news: true };
+    const [pref] = await ctx.coreDb
+      .select()
+      .from(bunzyPreferences)
+      .where(and(eq(bunzyPreferences.recipientType, "BUSINESS"), eq(bunzyPreferences.recipientId, businessId)))
+      .limit(1);
+    return {
+      businessId,
+      product: pref?.product ?? true,
+      tips: pref?.tips ?? true,
+      news: pref?.news ?? true,
+    };
+  }),
+
+  updateBunzyPreferences: protectedProcedure
+    .input(z.object({ product: z.boolean(), tips: z.boolean(), news: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const biz = await resolveOwnerBusinesses(ctx);
+      const businessId = biz[0]?.id;
+      if (!businessId) throw new TRPCError({ code: "FORBIDDEN", message: "Sin negocio asociado" });
+      await ctx.coreDb
+        .insert(bunzyPreferences)
+        .values({
+          recipientType: "BUSINESS",
+          recipientId: businessId,
+          product: input.product,
+          tips: input.tips,
+          news: input.news,
+        })
+        .onConflictDoUpdate({
+          target: [bunzyPreferences.recipientType, bunzyPreferences.recipientId],
+          set: { product: input.product, tips: input.tips, news: input.news, updatedAt: new Date() },
+        });
+      return { ok: true };
     }),
 });

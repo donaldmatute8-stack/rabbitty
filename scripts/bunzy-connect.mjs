@@ -7,15 +7,21 @@
  *
  * Uso:
  *   BUNZY_CONNECT_SECRET=... node scripts/bunzy-connect.mjs \
- *     --business <businessId> --category PRODUCT \
- *     --title "Título" --body "Cuerpo" --dry-run
+ *     --business <businessId> --category PRODUCT --title "..." --body "..." --dry-run
  *
  *   BUNZY_CONNECT_SECRET=... node scripts/bunzy-connect.mjs \
  *     --business <businessId> --file ./tmp/update.json --publish
  *
+ *   # programar (ISO 8601)
+ *   ... --schedule 2026-11-06T15:00:00-06:00 --publish
+ *
+ *   # usuario individual
+ *   ... --user <userId> --publish
+ *
  * Flags: --local (default) | --prod · --dry-run · --publish · --business <id>
+ *        --user <id> · --audience all-affiliates --allow-mass
  *        --category PRODUCT|TIP|NEWS|SYSTEM · --title · --body · --file <json>
- *        --cta-label · --cta-url · --request-key
+ *        --cta-label · --cta-url · --request-key · --schedule <iso>
  */
 import { readFileSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
@@ -42,6 +48,7 @@ if (has('--help') || has('-h')) {
 
 const prod = has('--prod');
 const publish = has('--publish');
+const allowMass = has('--allow-mass');
 const base = prod ? 'https://admin.rabbitty.me' : 'http://localhost:3003';
 const secret = process.env.BUNZY_CONNECT_SECRET || '';
 if (!secret) fail('Falta BUNZY_CONNECT_SECRET en el entorno (no lo pegues en el código).');
@@ -62,13 +69,26 @@ const body = val('--body', payload.body || '') || '';
 const ctaLabel = val('--cta-label', payload.ctaLabel || null);
 const ctaUrl = val('--cta-url', payload.ctaUrl || null);
 const requestKey = val('--request-key', payload.requestKey || null);
+const scheduledAt = val('--schedule', payload.scheduledAt || null);
 const businessId = val('--business', payload.businessId || null);
+const userId = val('--user', payload.userId || null);
+const audienceFlag = String(val('--audience', '') || '').toLowerCase();
+const mass = audienceFlag.startsWith('all') || has('--all-affiliates');
 
-if (has('--audience') && String(val('--audience')).toLowerCase().startsWith('all')) {
-  fail('C0 solo permite un negocio. Usa --business <businessId>.');
-}
 if (!title.trim() || !body.trim()) fail('Faltan --title y --body (o --file con title/body).');
-if (publish && !businessId) fail('Falta --business <businessId> para publicar en C0.');
+if (mass && !allowMass) fail('El envío masivo requiere --allow-mass (y BUNZY_CONNECT_ALLOW_MASS=1 en el server).');
+if (mass && (businessId || userId)) fail('Usa --business/--user O --audience all-affiliates, no ambos.');
+if (!mass && !businessId && !userId) fail('Falta --business <id> o --user <id>.');
+if (businessId && userId) fail('Usa solo uno: --business o --user.');
+if (scheduledAt && Number.isNaN(Date.parse(scheduledAt))) fail('--schedule no es una fecha ISO válida.');
+if (publish && mass && !allowMass) fail('Confirma el masivo con --allow-mass.');
+
+const scope = mass ? 'ALL_AFFILIATES' : userId ? 'USER' : 'BUSINESS';
+const audience = {
+  scope,
+  ...(scope === 'BUSINESS' ? { businessId } : {}),
+  ...(scope === 'USER' ? { userId } : {}),
+};
 
 const headers = { 'x-bunzy-connect-secret': secret, 'Content-Type': 'application/json' };
 
@@ -84,15 +104,14 @@ console.log('── Destino ──');
 console.log(`Entorno:   ${meta.environment || 'unknown'}`);
 console.log(`API:       ${base}`);
 console.log(`DB host:   ${meta.dbHost || 'desconocido'}`);
-console.log(`Tablas:    ${meta.tablesReady ? 'listas' : 'FALTAN (aplica 0045_bunzy_connect.sql)'}`);
+console.log(`Tablas:    ${meta.tablesReady ? 'listas' : 'FALTAN (aplica 0045/0046)'}`);
 console.log(`Remitente: ${meta.sender}`);
 console.log('');
 
 if (!meta.tablesReady && publish) {
-  fail('Las tablas de Bunzy Connect no existen. Aplica la migración 0045 antes de publicar.');
+  fail('Las tablas de Bunzy Connect no existen. Aplica las migraciones antes de publicar.');
 }
 
-const audience = { scope: 'BUSINESS', businessId };
 const requestBody = {
   category,
   title,
@@ -100,7 +119,9 @@ const requestBody = {
   ctaLabel,
   ctaUrl,
   requestKey,
+  scheduledAt,
   audience,
+  allowMass: mass ? true : undefined,
   dryRun: !publish,
 };
 
@@ -109,7 +130,8 @@ console.log(`Categoría: ${category}`);
 console.log(`Título:    ${title}`);
 console.log(`Cuerpo:    ${body.slice(0, 160)}${body.length > 160 ? '…' : ''}`);
 console.log(`CTA:       ${ctaLabel || '—'} ${ctaUrl || ''}`);
-console.log(`Destino:   negocio ${businessId}`);
+console.log(`Programado:${scheduledAt ? ` ${scheduledAt}` : ' inmediato'}`);
+console.log(`Destino:   ${mass ? 'TODOS los afiliados' : userId ? `usuario ${userId}` : `negocio ${businessId}`}`);
 console.log('');
 
 if (!publish) {
@@ -121,7 +143,7 @@ if (!publish) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) fail(`Preview falló (HTTP ${res.status}): ${data.error || 'sin detalle'}`);
   console.log('── Preview (solo lectura, nada escrito) ──');
-  console.log(`Audiencia: ${data.audienceCount} negocio(s)`);
+  console.log(`Audiencia: ${data.audienceCount} destinatario(s)`);
   for (const s of data.sample || []) console.log(`  · ${s.name} (${s.id})`);
   console.log(`Tarjeta:   [${data.preview?.category}] ${data.preview?.title}`);
   console.log('');
@@ -130,8 +152,15 @@ if (!publish) {
 }
 
 const rl = createInterface({ input: stdin, output: stdout });
-const expected = prod ? 'PUBLICAR EN PRODUCCION' : 'CONFIRMAR';
+const expected = mass
+  ? prod
+    ? 'PUBLICAR MASIVO'
+    : 'CONFIRMAR MASIVO'
+  : prod
+    ? 'PUBLICAR EN PRODUCCION'
+    : 'CONFIRMAR';
 console.log(`⚠️  Vas a ESCRIBIR en ${meta.environment} · DB ${meta.dbHost}.`);
+if (mass) console.log('⚠️  Es un envío MASIVO a todos los afiliados aprobados.');
 const answer = await rl.question(`Escribe "${expected}" para continuar: `);
 rl.close();
 if (answer.trim() !== expected) fail('Confirmación incorrecta. No se publicó nada.');
@@ -146,9 +175,13 @@ if (!res.ok) fail(`Publicación falló (HTTP ${res.status}): ${data.error || 'si
 
 console.log('');
 console.log(`✓ Broadcast ${data.broadcastId} · ${data.status}`);
+if (data.scheduledAt) console.log(`  Programado para: ${data.scheduledAt}`);
 console.log(`  Audiencia: ${data.audienceCount} · Publicados: ${data.published}`);
 for (const d of data.deliveries || []) {
   console.log(`  · ${d.recipientId} → ${d.status}${d.replayed ? ' (replay)' : ''} · msg ${d.messageId || '—'}`);
+}
+for (const s of data.skipped || []) {
+  console.log(`  · ${s.recipientId} omitido (${s.reason})`);
 }
 console.log('');
 console.log('Reintentar el mismo comando NO duplica (requestKey + delivery unique).');

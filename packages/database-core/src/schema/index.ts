@@ -763,6 +763,7 @@ export const bunzyBroadcasts = pgTable("bunzyBroadcasts", {
   contentHash: text("contentHash").notNull(),
   createdBy: text("createdBy").notNull(),
   publishedAt: timestamp("publishedAt"),
+  scheduledAt: timestamp("scheduledAt"),
   ...timestamps,
 }, (table) => [
   index("bunzy_broadcasts_status_idx").on(table.status, table.createdAt),
@@ -794,6 +795,22 @@ export const bunzyDeliveries = pgTable("bunzyDeliveries", {
     table.recipientId,
   ),
   index("bunzy_deliveries_recipient_idx").on(table.recipientType, table.recipientId),
+]);
+
+/**
+ * ⚙️ Bunzy Connect — Preferencias por categoría y destinatario.
+ * System Notices siempre llegan; el resto se puede apagar.
+ */
+export const bunzyPreferences = pgTable("bunzyPreferences", {
+  id: id(),
+  recipientType: text("recipientType").notNull(), // BUSINESS | USER
+  recipientId: text("recipientId").notNull(),
+  product: boolean("product").default(true).notNull(),
+  tips: boolean("tips").default(true).notNull(),
+  news: boolean("news").default(true).notNull(),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex("bunzy_preferences_recipient_uidx").on(table.recipientType, table.recipientId),
 ]);
 
 /**

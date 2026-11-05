@@ -34,6 +34,8 @@ interface PublishResult {
   audienceCount: number;
   published: number;
   replayed: boolean;
+  scheduledAt?: string | null;
+  skipped?: Array<{ recipientId: string; reason: string }>;
   deliveries: Array<{
     recipientId: string;
     status: string;
@@ -49,6 +51,8 @@ export default function BunzyConnectPage() {
   const [ctaLabel, setCtaLabel] = useState("");
   const [ctaUrl, setCtaUrl] = useState("");
   const [businessId, setBusinessId] = useState("");
+  const [scope, setScope] = useState<"BUSINESS" | "ALL_AFFILIATES">("BUSINESS");
+  const [scheduledAt, setScheduledAt] = useState("");
   const [requestKey, setRequestKey] = useState("");
   const [preview, setPreview] = useState<PreviewData | null>(null);
   const [result, setResult] = useState<PublishResult | null>(null);
@@ -88,11 +92,19 @@ export default function BunzyConnectPage() {
     body: body.trim(),
     ctaLabel: ctaLabel.trim() || null,
     ctaUrl: ctaUrl.trim() || null,
-    audience: { scope: "BUSINESS" as const, businessId },
+    audience:
+      scope === "BUSINESS"
+        ? ({ scope: "BUSINESS" as const, businessId } as const)
+        : ({ scope: "ALL_AFFILIATES" as const } as const),
     requestKey: requestKey.trim() || null,
+    scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
+    confirmMass: scope === "ALL_AFFILIATES",
   };
 
-  const canSubmit = title.trim().length >= 3 && body.trim().length >= 10 && Boolean(businessId);
+  const canSubmit =
+    title.trim().length >= 3 &&
+    body.trim().length >= 10 &&
+    (scope === "BUSINESS" ? Boolean(businessId) : true);
 
   const handlePreview = () => {
     if (!canSubmit) return toast.error("Completa título, cuerpo y negocio");
@@ -102,22 +114,32 @@ export default function BunzyConnectPage() {
 
   const handlePublish = () => {
     if (!canSubmit) return toast.error("Completa título, cuerpo y negocio");
+    const target =
+      scope === "ALL_AFFILIATES"
+        ? "TODOS los afiliados aprobados"
+        : selectedBusiness?.name ?? businessId;
     const ok = window.confirm(
-      `¿Publicar “${title.trim()}” para ${selectedBusiness?.name ?? businessId}? Se escribirá en la DB real.`,
+      `¿Publicar “${title.trim()}” para ${target}? Se escribirá en la DB real.` +
+        (scope === "ALL_AFFILIATES" ? "\n\nEs un envío MASIVO." : ""),
     );
     if (!ok) return;
     publishMutation.mutate(payload);
   };
 
+  const targetFlag =
+    scope === "ALL_AFFILIATES" ? "--audience all-affiliates --allow-mass" : `--business ${businessId || "<businessId>"}`;
   const terminalCommands = [
     `# Preview (solo lectura)`,
-    `BUNZY_CONNECT_SECRET=$BUNZY_CONNECT_SECRET node scripts/bunzy-connect.mjs --local --business ${businessId || "<businessId>"} --dry-run`,
+    `BUNZY_CONNECT_SECRET=$BUNZY_CONNECT_SECRET node scripts/bunzy-connect.mjs --local ${targetFlag} --dry-run`,
     ``,
     `# Publicar (pide confirmación)`,
-    `BUNZY_CONNECT_SECRET=$BUNZY_CONNECT_SECRET node scripts/bunzy-connect.mjs --local --business ${businessId || "<businessId>"} --file ./tmp/update.json --publish`,
+    `BUNZY_CONNECT_SECRET=$BUNZY_CONNECT_SECRET node scripts/bunzy-connect.mjs --local ${targetFlag} --file ./tmp/update.json --publish`,
+    ``,
+    `# Programar`,
+    `BUNZY_CONNECT_SECRET=$BUNZY_CONNECT_SECRET node scripts/bunzy-connect.mjs --local ${targetFlag} --file ./tmp/update.json --schedule 2026-11-06T15:00:00-06:00 --publish`,
     ``,
     `# Producción`,
-    `BUNZY_CONNECT_SECRET=$BUNZY_CONNECT_SECRET node scripts/bunzy-connect.mjs --prod --business ${businessId || "<businessId>"} --file ./tmp/update.json --publish`,
+    `BUNZY_CONNECT_SECRET=$BUNZY_CONNECT_SECRET node scripts/bunzy-connect.mjs --prod ${targetFlag} --file ./tmp/update.json --publish`,
   ].join("\n");
 
   const copyCommands = async () => {
@@ -167,15 +189,27 @@ export default function BunzyConnectPage() {
             </label>
 
             <label className="space-y-1">
+              <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">Alcance</span>
+              <select
+                value={scope}
+                onChange={(e) => setScope(e.target.value as "BUSINESS" | "ALL_AFFILIATES")}
+                className="h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white outline-none"
+              >
+                <option value="BUSINESS" className="bg-[#0b0b12]">Un negocio</option>
+                <option value="ALL_AFFILIATES" className="bg-[#0b0b12]">Todos los afiliados (masivo)</option>
+              </select>
+            </label>
+          </div>
+
+          {scope === "BUSINESS" && (
+            <label className="block space-y-1">
               <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">Negocio</span>
               <select
                 value={businessId}
                 onChange={(e) => setBusinessId(e.target.value)}
                 className="h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white outline-none"
               >
-                <option value="" className="bg-[#0b0b12]">
-                  Selecciona un negocio
-                </option>
+                <option value="" className="bg-[#0b0b12]">Selecciona un negocio</option>
                 {(businesses.data ?? []).map((b) => (
                   <option key={b.id} value={b.id} className="bg-[#0b0b12]">
                     {b.name} {b.niche ? `· ${b.niche}` : ""}
@@ -183,7 +217,14 @@ export default function BunzyConnectPage() {
                 ))}
               </select>
             </label>
-          </div>
+          )}
+
+          {scope === "ALL_AFFILIATES" && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-200">
+              Envío masivo a todos los afiliados aprobados. Requiere <code>BUNZY_CONNECT_ALLOW_MASS=1</code> en el
+              servidor y confirmación explícita. Revisa el preview antes de publicar.
+            </div>
+          )}
 
           <label className="block space-y-1">
             <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">Título</span>
@@ -222,6 +263,19 @@ export default function BunzyConnectPage() {
               onChange={(e) => setRequestKey(e.target.value.slice(0, 120))}
               placeholder="Ej. c1-ka13-menu-digital"
             />
+          </label>
+
+          <label className="block space-y-1">
+            <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">
+              Programar (opcional)
+            </span>
+            <input
+              type="datetime-local"
+              value={scheduledAt}
+              onChange={(e) => setScheduledAt(e.target.value)}
+              className="h-10 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white outline-none"
+            />
+            <span className="text-[10px] text-gray-500">Si es futuro, queda SCHEDULED y el cron lo publica.</span>
           </label>
 
           <div className="flex flex-wrap gap-2 pt-1">
@@ -275,9 +329,19 @@ export default function BunzyConnectPage() {
                 {result.replayed ? "Reintento idempotente" : "Publicado"} · {result.status}
               </p>
               <p className="m-0 mt-1 break-all text-[11px] text-gray-400">Broadcast: {result.broadcastId}</p>
+              {result.scheduledAt && (
+                <p className="m-0 text-[11px] text-gray-400">
+                  Programado: {new Date(result.scheduledAt).toLocaleString("es-MX")}
+                </p>
+              )}
               <p className="m-0 text-[11px] text-gray-400">
                 {result.published}/{result.audienceCount} entregados
               </p>
+              {(result.skipped ?? []).length > 0 && (
+                <p className="m-0 mt-1 text-[11px] text-amber-300">
+                  {(result.skipped ?? []).length} omitidos por preferencia/tope/fallo
+                </p>
+              )}
               <ul className="m-0 mt-2 list-none space-y-1 p-0 text-[11px] text-gray-300">
                 {result.deliveries.map((d) => (
                   <li key={d.recipientId}>

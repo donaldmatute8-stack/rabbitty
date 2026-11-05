@@ -12,8 +12,9 @@ import {
 } from "../services/bunzyConnect";
 
 const audienceSchema = z.object({
-  scope: z.enum(["BUSINESS", "ALL_AFFILIATES"]),
+  scope: z.enum(["BUSINESS", "ALL_AFFILIATES", "USER"]),
   businessId: z.string().min(1).optional(),
+  userId: z.string().min(1).optional(),
   niche: z.string().min(1).optional(),
   package: z.string().min(1).optional(),
 });
@@ -26,13 +27,15 @@ const broadcastInput = z.object({
   ctaUrl: z.string().url().optional().nullable(),
   audience: audienceSchema,
   requestKey: z.string().max(120).optional().nullable(),
+  scheduledAt: z.string().datetime().optional().nullable(),
+  confirmMass: z.boolean().optional(),
 });
 
-function assertMassAllowed(scope: "BUSINESS" | "ALL_AFFILIATES") {
-  if (scope === "ALL_AFFILIATES" && process.env.BUNZY_CONNECT_ALLOW_MASS !== "1") {
+function assertMassAllowed(scope: "BUSINESS" | "ALL_AFFILIATES" | "USER", confirmMass?: boolean) {
+  if (scope === "ALL_AFFILIATES" && (process.env.BUNZY_CONNECT_ALLOW_MASS !== "1" || confirmMass !== true)) {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: "El envío masivo está bloqueado. Usa un negocio específico hasta aprobar C1.",
+      message: "El envío masivo requiere BUNZY_CONNECT_ALLOW_MASS=1 y confirmación explícita.",
     });
   }
 }
@@ -67,7 +70,7 @@ export const bunzyConnectRouter = router({
   ),
 
   publish: godAdminProcedure.input(broadcastInput).mutation(async ({ ctx, input }) => {
-    assertMassAllowed(input.audience.scope);
+    assertMassAllowed(input.audience.scope, input.confirmMass);
     return publishBroadcast(ctx.coreDb, {
       ...input,
       createdBy: String(ctx.userId || "god"),
@@ -111,6 +114,7 @@ export const bunzyConnectRouter = router({
       audienceScope: r.audienceScope,
       createdAt: r.createdAt,
       publishedAt: r.publishedAt,
+      scheduledAt: r.scheduledAt,
       total: byId.get(r.id)?.total ?? 0,
       published: byId.get(r.id)?.published ?? 0,
       read: byId.get(r.id)?.read ?? 0,

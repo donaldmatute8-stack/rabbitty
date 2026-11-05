@@ -42,10 +42,12 @@ function authorize(req: NextRequest): boolean {
 
 function parseAudience(raw: unknown): BunzyAudience {
   const a = (raw ?? {}) as Record<string, unknown>;
-  const scope = a.scope === "ALL_AFFILIATES" ? "ALL_AFFILIATES" : "BUSINESS";
+  const scope =
+    a.scope === "ALL_AFFILIATES" ? "ALL_AFFILIATES" : a.scope === "USER" ? "USER" : "BUSINESS";
   return {
     scope,
     businessId: typeof a.businessId === "string" ? a.businessId : undefined,
+    userId: typeof a.userId === "string" ? a.userId : undefined,
     niche: typeof a.niche === "string" ? a.niche : undefined,
     package: typeof a.package === "string" ? a.package : undefined,
   };
@@ -88,13 +90,6 @@ export async function POST(req: NextRequest) {
   }
 
   const audience = parseAudience(body.audience);
-  if (audience.scope === "ALL_AFFILIATES" && process.env.BUNZY_CONNECT_ALLOW_MASS !== "1") {
-    return NextResponse.json(
-      { error: "C0 no permite envío masivo. Usa audience.scope=BUSINESS con un businessId." },
-      { status: 403 },
-    );
-  }
-
   const input = {
     category: category as (typeof BUNZY_CATEGORIES)[number],
     title: String(body.title || ""),
@@ -104,6 +99,7 @@ export async function POST(req: NextRequest) {
     mediaKey: typeof body.mediaKey === "string" ? body.mediaKey : null,
     audience,
     requestKey: typeof body.requestKey === "string" ? body.requestKey : null,
+    scheduledAt: typeof body.scheduledAt === "string" ? body.scheduledAt : null,
     createdBy: "cli",
   };
 
@@ -113,6 +109,16 @@ export async function POST(req: NextRequest) {
     if (dryRun) {
       const preview = await previewBroadcast(db, input);
       return NextResponse.json({ ok: true, ...preview });
+    }
+
+    if (
+      audience.scope === "ALL_AFFILIATES" &&
+      (process.env.BUNZY_CONNECT_ALLOW_MASS !== "1" || body.allowMass !== true)
+    ) {
+      return NextResponse.json(
+        { error: "El envío masivo requiere BUNZY_CONNECT_ALLOW_MASS=1 y allowMass=true." },
+        { status: 403 },
+      );
     }
 
     if (body.confirm !== "PUBLICAR") {
