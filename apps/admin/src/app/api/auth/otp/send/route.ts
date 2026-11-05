@@ -71,7 +71,10 @@ export async function POST(req: NextRequest) {
       or(
         eq(verificationTokens.identifier, email),
         eq(verificationTokens.identifier, rawInput),
-        phone ? eq(verificationTokens.identifier, phone) : sql`false`
+        phone ? eq(verificationTokens.identifier, phone) : sql`false`,
+        // La PK de verificationTokens es el token: al reutilizar 123456 (demo
+        // reviewer) hay que borrar cualquier fila previa con ese mismo código.
+        eq(verificationTokens.token, otpCode)
       )
     );
 
