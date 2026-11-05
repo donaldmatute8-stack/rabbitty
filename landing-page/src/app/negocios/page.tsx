@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { BunzyVideoStage } from '@/components/BunzyVideoStage';
 import { BunzyTypingBubble } from '@/components/BunzyTypingBubble';
+import { NicheSearch } from '@/components/NicheSearch';
 
 interface Niche {
   id: string;
@@ -336,7 +337,7 @@ export default function NegociosPage() {
     return (
       <div className="min-h-[100dvh] bg-[#07070F] text-white">
         <header className="border-b border-white/10">
-          <div className="mx-auto flex h-16 max-w-2xl items-center justify-between px-4 sm:px-6">
+          <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-4 sm:px-6">
             <Link href="/" className="flex items-center gap-2.5">
               <Image src="/icon_ra.png" alt="Rabbitty" width={28} height={28} className="object-contain" />
               <span className="text-sm font-black tracking-tight">RABBITTY.me</span>
@@ -420,7 +421,7 @@ export default function NegociosPage() {
   return (
     <div className="min-h-[100dvh] bg-[#07070F] text-white">
       <header className="border-b border-white/10 bg-[#07070F]/80 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-2xl items-center justify-between px-4 sm:px-6">
+        <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2.5">
             <Image src="/icon_ra.png" alt="Rabbitty" width={28} height={28} className="object-contain" />
             <span className="text-sm font-black tracking-tight">
@@ -441,7 +442,7 @@ export default function NegociosPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-4 pb-36 pt-6 sm:px-6">
+      <main className="mx-auto max-w-3xl px-4 pb-36 pt-6 sm:px-6">
         {/* Progreso */}
         <div className="mb-6">
           <div className="mb-2 flex items-center justify-between">
@@ -469,6 +470,8 @@ export default function NegociosPage() {
           title={meta.title}
           description={meta.description}
           videoHeightClass={step === 0 ? 'h-48 sm:h-56' : 'h-36 sm:h-44'}
+          layout={step === 0 ? 'horizontal' : 'stacked'}
+          loop
         />
 
         <BunzyTypingBubble message={meta.bubble} className="mt-4" />
@@ -484,54 +487,14 @@ export default function NegociosPage() {
           >
             {/* Paso 1: nicho */}
             {step === 0 && (
-              <div>
-                {loadingNiches ? (
-                  <div className="grid grid-cols-2 gap-2.5">
-                    {Array.from({ length: 6 }).map((_, i) => (
-                      <div key={i} className="h-24 animate-pulse rounded-2xl bg-white/5" />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                    {niches.map((n) => {
-                      const active = data.niche === n.id;
-                      return (
-                        <button
-                          key={n.id}
-                          type="button"
-                          onClick={() => update('niche', n.id)}
-                          aria-pressed={active}
-                          className={`relative rounded-2xl border p-4 text-left transition-all ${
-                            active
-                              ? 'border-pink-500/60 bg-pink-500/10'
-                              : 'border-white/10 bg-white/[0.03] hover:border-pink-500/30 hover:bg-white/[0.05]'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <span className="text-sm font-black leading-tight">{n.name}</span>
-                            {active && (
-                              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-pink-500 text-white">
-                                <Check className="h-3 w-3" strokeWidth={3} />
-                              </span>
-                            )}
-                          </div>
-                          {n.description && (
-                            <span className="mt-1 block line-clamp-2 text-[11px] leading-snug text-white/45">
-                              {n.description}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-                <p className="m-0 mt-3 text-center text-[11px] text-white/35">
-                  ¿No ves tu giro?{' '}
-                  <Link href="/support" className="text-pink-400 underline underline-offset-2">
-                    Escríbenos
-                  </Link>{' '}
-                  y lo registramos.
-                </p>
+              <div className="rounded-3xl border border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.03] sm:p-5">
+                <NicheSearch
+                  niches={niches}
+                  value={data.niche}
+                  onChange={(id) => update('niche', id)}
+                  loading={loadingNiches}
+                  supportHref="/support"
+                />
               </div>
             )}
 
@@ -780,7 +743,7 @@ export default function NegociosPage() {
 
       {/* CTA fijo */}
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-[#07070F]/95 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-2xl items-center gap-2 px-4 pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+12px)] sm:px-6">
+        <div className="mx-auto flex max-w-3xl items-center gap-2 px-4 pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+12px)] sm:px-6">
           <button
             type="button"
             onClick={back}

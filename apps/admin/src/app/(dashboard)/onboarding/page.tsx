@@ -21,7 +21,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
-  CheckCircle2,
   CreditCard,
   GitBranch,
   Loader2,
@@ -37,6 +36,7 @@ import {
 } from 'lucide-react';
 import { BunzyVideoStage } from '../../../components/BunzyVideoStage';
 import { BunzyTypingBubble } from '../../../components/BunzyTypingBubble';
+import { NicheSearch } from '../../../components/NicheSearch';
 
 const STEP_META = [
   {
@@ -196,6 +196,8 @@ export default function OnboardingPage() {
         title={step === 0 ? `${business.name} está listo` : meta.title}
         description={meta.description}
         videoHeightClass={step === 0 ? 'h-48 sm:h-56' : 'h-36 sm:h-44'}
+        layout={step === 0 ? 'horizontal' : 'stacked'}
+        loop
       />
 
       <BunzyTypingBubble message={meta.bubble} />
@@ -211,54 +213,13 @@ export default function OnboardingPage() {
           {/* 1 · Nicho */}
           {step === 0 && (
             <Card className="p-5">
-              <div className="mb-3 flex items-center gap-2">
-                <Store className="h-4 w-4 text-pink-500" />
-                <p className="m-0 text-sm font-black">Confirma tu tipo de negocio</p>
-              </div>
-              <p className="m-0 mb-3 text-xs text-gray-500">
-                De aquí salen tus módulos: mesas, cocina, citas, inventario… Puedes cambiarlo después.
-              </p>
-
-              {niches.isLoading ? (
-                <p className="m-0 flex items-center gap-2 text-xs text-gray-500">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Cargando giros…
-                </p>
-              ) : (
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {(niches.data ?? []).map((n) => {
-                    const active = selected === n.id;
-                    return (
-                      <button
-                        key={n.id}
-                        type="button"
-                        onClick={() => setSelected(n.id)}
-                        aria-pressed={active}
-                        className={`rounded-2xl border p-3 text-left transition-all ${
-                          active
-                            ? 'border-pink-500/60 bg-pink-500/10'
-                            : 'border-gray-200 hover:border-pink-400/40 dark:border-white/10 dark:hover:border-pink-500/30'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-1">
-                          <span className="text-xs font-black">{n.name}</span>
-                          {active && <CheckCircle2 className="h-4 w-4 text-pink-500" />}
-                        </div>
-                        {n.description && (
-                          <span className="mt-1 block line-clamp-2 text-[10.5px] leading-snug text-gray-500">
-                            {n.description}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-
-              {selectedNiche && (
-                <p className="m-0 mt-3 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-                  Vas con {selectedNiche.name}. Tu operación existente se conserva.
-                </p>
-              )}
+              <NicheSearch
+                niches={niches.data ?? []}
+                value={selected ?? ''}
+                onChange={(id) => setSelected(id)}
+                loading={niches.isLoading}
+                supportHref="https://rabbitty.me/support"
+              />
             </Card>
           )}
 

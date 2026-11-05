@@ -35,6 +35,8 @@ export interface BunzyVideoStageProps {
   loop?: boolean;
   /** Clase para el contenedor exterior. */
   className?: string;
+  /** stacked = video arriba/texto abajo; horizontal = video izquierda/texto derecha. */
+  layout?: 'stacked' | 'horizontal';
   /** Alto del marco del video (default: 'h-48 sm:h-56'). */
   videoHeightClass?: string;
   /** Callback cuando el video termina. */
@@ -50,9 +52,11 @@ export function BunzyVideoStage({
   autoPlay = true,
   loop = false,
   className = '',
+  layout = 'stacked',
   videoHeightClass = 'h-48 sm:h-56',
   onEnded,
 }: BunzyVideoStageProps) {
+  const horizontal = layout === 'horizontal';
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasEnded, setHasEnded] = useState(false);
@@ -134,7 +138,13 @@ export function BunzyVideoStage({
         : 'Reproducir video de Bunzy';
 
   return (
-    <div className={`relative flex w-full max-w-xl flex-col items-center text-center mx-auto ${className}`}>
+    <div
+      className={`relative mx-auto w-full ${
+        horizontal
+          ? 'flex max-w-3xl flex-col items-center gap-6 text-center sm:flex-row sm:gap-8 sm:text-left'
+          : 'flex max-w-xl flex-col items-center text-center'
+      } ${className}`}
+    >
       {/* Halo rosa Rabbitty */}
       <div className="pointer-events-none absolute -top-12 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-pink-500/15 blur-[90px]" />
 
@@ -146,10 +156,14 @@ export function BunzyVideoStage({
         initial={{ opacity: 0, scale: 0.94 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.45, ease: 'easeOut' }}
-        className="group relative mb-5 block cursor-pointer disabled:cursor-default"
+        className={`group relative block cursor-pointer disabled:cursor-default ${
+          horizontal ? 'w-[220px] shrink-0 sm:w-[260px]' : 'mb-5'
+        }`}
       >
         <div
-          className={`relative ${videoHeightClass} aspect-square w-full max-w-[280px] overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-zinc-900/90 to-black/90 shadow-[0_12px_40px_rgba(0,0,0,0.6)] backdrop-blur-xl`}
+          className={`relative ${videoHeightClass} aspect-square w-full ${
+            horizontal ? '' : 'max-w-[280px]'
+          } overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-zinc-900/90 to-black/90 shadow-[0_12px_40px_rgba(0,0,0,0.6)] backdrop-blur-xl`}
         >
           <div className="pointer-events-none absolute inset-0 z-10 rounded-3xl border border-pink-500/30 transition-colors group-hover:border-pink-500/60" />
 
@@ -201,17 +215,19 @@ export function BunzyVideoStage({
         </div>
       </motion.button>
 
-      <div className="w-full space-y-2 px-2">
+      <div className={`${horizontal ? 'w-full flex-1 space-y-2' : 'w-full space-y-2 px-2'}`}>
         {stepLabel && (
           <p className="m-0 text-[11px] font-black uppercase tracking-[0.22em] text-pink-400">{stepLabel}</p>
         )}
 
-        <h1 className="m-0 text-2xl font-black leading-tight tracking-tight text-white sm:text-3xl md:text-4xl">
+        <h1 className={`m-0 text-2xl font-black leading-tight tracking-tight text-white sm:text-3xl md:text-4xl ${horizontal ? 'sm:text-left' : ''}`}>
           {title}
         </h1>
 
         {description && (
-          <p className="m-0 mx-auto max-w-md text-sm leading-relaxed text-zinc-400 sm:text-base">{description}</p>
+          <p className={`m-0 mx-auto max-w-md text-sm leading-relaxed text-zinc-400 sm:text-base ${horizontal ? 'sm:mx-0 sm:text-left' : ''}`}>
+            {description}
+          </p>
         )}
       </div>
     </div>
