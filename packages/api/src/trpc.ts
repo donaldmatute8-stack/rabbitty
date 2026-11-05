@@ -219,9 +219,14 @@ export const platformOnlyProcedure = protectedProcedure.use(({ ctx, next }) => {
   return next({ ctx });
 });
 
-// ── God Admin: identidad allowlist/role ADMIN + 2FA verificado en esta sesión ──
+// ── God Admin: identidad allowlist + 2FA verificado en esta sesión ──
+// OJO: NO se construye sobre platformOnlyProcedure. Un God Admin que además
+// tiene ficha de staff activa en un restaurante (p. ej. rol ADMIN de su propio
+// local) recibía "Acción restringida a la plataforma" en TODOS los endpoints
+// God (verificado en producción: Bunzy Connect con negocios vacío). La
+// identidad allowlist + 2FA es una frontera más fuerte que el bloqueo de staff.
 import { isGodAdminIdentity } from "./services/god2fa";
-export const godAdminProcedure = platformOnlyProcedure.use(async ({ ctx, next }) => {
+export const godAdminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
   let identityOk = isGodAdminIdentity(ctx.user?.email, ctx.user?.name);
   if (!identityOk && ctx.userId) {
     const [coreUser] = await ctx.coreDb
