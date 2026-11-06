@@ -52,11 +52,8 @@ export function WelcomeRitual({
     }
   });
 
-  const [isMuted, setIsMuted] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    const isNative = !!(window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.();
-    return isNative;
-  });
+  // Audio ENCENDIDO por defecto, también en la app nativa.
+  const [isMuted, setIsMuted] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [progress, setProgress] = useState(0);
   const [isFinalClosing, setIsFinalClosing] = useState(false);
@@ -117,11 +114,7 @@ export function WelcomeRitual({
       audio = new Audio('/assets/lugares-por-descubrir.mp3');
       audioRef.current = audio;
       audio.preload = 'auto';
-      // En móvil / WKWebView nativo, silenciar por defecto para no ser bloqueado por la política de autoplay
-      const isNative = typeof window !== 'undefined' && !!(window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.();
-      if (isNative) {
-        audio.muted = true;
-      }
+      audio.muted = false;
     } catch {
       // Audio no soportado, proceder sin audio
     }
@@ -187,18 +180,29 @@ export function WelcomeRitual({
     }
 
     const unlockOnFirstTouch = () => {
-      if (audioRef.current && audioRef.current.muted) {
-        audioRef.current.muted = false;
-        audioRef.current.play().catch(() => {});
-        setIsMuted(false);
+      const aud = audioRef.current;
+      if (!aud) return;
+      if (!aud.muted && !aud.paused) {
+        removeUnlockListeners();
+        return;
       }
-      window.removeEventListener('pointerdown', unlockOnFirstTouch);
+      aud.muted = false;
+      aud.play()
+        .then(() => {
+          setIsMuted(false);
+          removeUnlockListeners();
+        })
+        .catch(() => {});
     };
-    window.addEventListener('pointerdown', unlockOnFirstTouch);
+    const unlockEvents: Array<keyof WindowEventMap> = ['pointerdown', 'touchstart', 'keydown', 'click'];
+    const removeUnlockListeners = () => {
+      unlockEvents.forEach((ev) => window.removeEventListener(ev, unlockOnFirstTouch));
+    };
+    unlockEvents.forEach((ev) => window.addEventListener(ev, unlockOnFirstTouch, { passive: true }));
 
     return () => {
       clearInterval(fallbackTicker);
-      window.removeEventListener('pointerdown', unlockOnFirstTouch);
+      removeUnlockListeners();
       if (audio) {
         audio.pause();
         audio.removeEventListener('timeupdate', handleTimeUpdate);

@@ -165,6 +165,7 @@ export function WelcomeRitual({
     const audio = new Audio(audioSrc);
     audioRef.current = audio;
     audio.preload = 'auto';
+    audio.muted = false; // audio ENCENDIDO por defecto
 
     const handleTimeUpdate = () => {
       if (audio.duration) {
@@ -219,18 +220,29 @@ export function WelcomeRitual({
     }, 250);
 
     const unlockOnFirstTouch = () => {
-      if (audioRef.current && audioRef.current.muted) {
-        audioRef.current.muted = false;
-        audioRef.current.play().catch(() => {});
-        setIsMuted(false);
+      const aud = audioRef.current;
+      if (!aud) return;
+      if (!aud.muted && !aud.paused) {
+        removeUnlockListeners();
+        return;
       }
-      window.removeEventListener('pointerdown', unlockOnFirstTouch);
+      aud.muted = false;
+      aud.play()
+        .then(() => {
+          setIsMuted(false);
+          removeUnlockListeners();
+        })
+        .catch(() => {});
     };
-    window.addEventListener('pointerdown', unlockOnFirstTouch);
+    const unlockEvents: Array<keyof WindowEventMap> = ['pointerdown', 'touchstart', 'keydown', 'click'];
+    const removeUnlockListeners = () => {
+      unlockEvents.forEach((ev) => window.removeEventListener(ev, unlockOnFirstTouch));
+    };
+    unlockEvents.forEach((ev) => window.addEventListener(ev, unlockOnFirstTouch, { passive: true }));
 
     return () => {
       clearInterval(fallbackTicker);
-      window.removeEventListener('pointerdown', unlockOnFirstTouch);
+      removeUnlockListeners();
       audio.pause();
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('ended', handleEnded);
