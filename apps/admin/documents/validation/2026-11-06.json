@@ -1,0 +1,805 @@
+{
+  "snapshot_version": "1.0",
+  "export_id": "exp-e84acf9ead55",
+  "generated_at": "2026-11-06T21:14:56.406Z",
+  "source_commit": "17ec9ab",
+  "dataset_kind": "pilot",
+  "dataset_hash": "e84acf9ead55f57547ce83de44d658ece4b677f174835b02dacdd0e5fb83c00c",
+  "spec_version": "1.0.0",
+  "status": {
+    "valid": true,
+    "calibration_ready": false,
+    "audit_verdict": "hallazgos",
+    "next_step": "piloto: instrumentar obligations, bunz_ledger, treasury, abuse_signals"
+  },
+  "counts": {
+    "affiliates": 3,
+    "sales": 112,
+    "rewards_issued": 6,
+    "redemptions": 0,
+    "capacity": 0,
+    "obligations": 0,
+    "fiat_settlements": 101,
+    "bunz_ledger": 0,
+    "treasury": 0,
+    "abuse_signals": 0
+  },
+  "coverage": {
+    "active_affiliates": 0,
+    "inactive_affiliates": 3,
+    "cells": [],
+    "insufficient_cells": [],
+    "sample_top3_sales_share": 0,
+    "limitations": []
+  },
+  "pilot": {
+    "kind": "pilot",
+    "datasets_present": [
+      "affiliates",
+      "sales",
+      "rewards_issued",
+      "redemptions",
+      "capacity",
+      "fiat_settlements"
+    ],
+    "datasets_missing": [
+      "obligations",
+      "bunz_ledger",
+      "treasury",
+      "abuse_signals"
+    ],
+    "rules_not_checked": [
+      "R08",
+      "R09",
+      "R10",
+      "R11",
+      "R12",
+      "R13",
+      "R14",
+      "R15",
+      "R16",
+      "R26"
+    ],
+    "suppressed_findings": 1,
+    "gaps": [
+      {
+        "dataset": "obligations",
+        "reason": "sin fuente o sin instrumentación: obligations"
+      },
+      {
+        "dataset": "bunz_ledger",
+        "reason": "sin fuente o sin instrumentación: bunz_ledger"
+      },
+      {
+        "dataset": "treasury",
+        "reason": "sin fuente o sin instrumentación: treasury"
+      },
+      {
+        "dataset": "abuse_signals",
+        "reason": "sin fuente o sin instrumentación: abuse_signals"
+      }
+    ],
+    "note": "Un piloto no calibra: sirve para probar la instrumentación con datos reales."
+  },
+  "metrics": {
+    "emitted_bunz": 97,
+    "redeemed_bunz": 0,
+    "circulating_bunz": 0,
+    "treasury_bunz": 0,
+    "reserved_bunz": 0,
+    "accrued_bunz": 0,
+    "settled_bunz": 0,
+    "settled_fiat_mxn": 0,
+    "fiat_collected_mxn": 0,
+    "written_off_bunz": 0,
+    "outstanding_bunz": 0,
+    "requested_bunz": 0,
+    "unmet_economic_bunz": 0,
+    "unmet_operational_bunz": 0,
+    "unmet_unknown_bunz": 0,
+    "unmet_rate": 0,
+    "unmet_by_reason": {},
+    "mobility_rate_amount": null,
+    "mobility_rate_count": null,
+    "capacity_available_bunz": 0,
+    "ce": null,
+    "mora_importe_bunz": 0,
+    "mora_conteo": 0,
+    "balances": {
+      "emission_budget": 0,
+      "user_wallet": 0,
+      "redemption_capacity": 0,
+      "commission_reserved": 0,
+      "treasury_bunz": 0,
+      "written_off": 0,
+      "external": 0
+    }
+  },
+  "rules": {
+    "errors": [],
+    "warnings": [
+      {
+        "code": "R27",
+        "msg": "dataset obligations ausente (hueco declarado en piloto)"
+      },
+      {
+        "code": "R27",
+        "msg": "dataset bunz_ledger ausente (hueco declarado en piloto)"
+      },
+      {
+        "code": "R27",
+        "msg": "dataset treasury ausente (hueco declarado en piloto)"
+      },
+      {
+        "code": "R27",
+        "msg": "dataset abuse_signals ausente (hueco declarado en piloto)"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[0]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[1]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[2]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[3]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[4]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[5]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[6]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[7]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[8]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[9]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[10]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[11]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[12]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[13]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[14]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[15]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[16]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[17]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[18]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[19]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[20]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[21]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[22]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[23]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[24]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[25]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[26]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[27]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[28]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[29]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[30]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[31]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[32]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[33]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[34]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[35]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[36]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[37]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[38]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[39]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[40]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[41]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[42]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[43]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[44]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[45]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[46]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[47]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[48]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[49]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[50]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[51]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[52]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[53]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[54]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[55]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[56]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[57]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[58]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[59]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[60]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[61]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[62]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[63]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[64]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[65]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[66]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[67]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[68]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[69]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[70]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[71]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[72]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[73]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[74]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[75]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[76]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[77]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[78]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[79]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[80]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[81]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[82]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[83]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[84]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[85]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[86]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[87]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[88]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[89]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[90]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[91]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[92]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[93]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[94]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[95]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[96]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[97]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[98]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[99]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[100]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R19",
+        "msg": "ventana operativa de 18 días (< 84): limitación de piloto"
+      },
+      {
+        "code": "R19",
+        "msg": "ventana financiera de ~1 meses (< 6): limitación de piloto"
+      },
+      {
+        "code": "R24",
+        "msg": "paridad Bunz↔MXN no aprobada: la identidad contable mezcla unidades → no se calibra"
+      }
+    ],
+    "not_checked": [
+      "R08",
+      "R09",
+      "R10",
+      "R11",
+      "R12",
+      "R13",
+      "R14",
+      "R15",
+      "R16",
+      "R26"
+    ]
+  },
+  "backtest": {
+    "skipped": true,
+    "reason": "dataset no calibrable (piloto, cobertura o metadatos)"
+  },
+  "audit": {
+    "verdict": "hallazgos",
+    "manifest_hash": "5b5f300318d51db41ee4ba3902d12ba5cafbbe872be14f17e4a51747e8db9af6",
+    "fingerprint": "0ba53f24921ed417bb8177602f10894e8a310fdf53dc9e540ad55b84fe8ff5c7",
+    "determinism": true,
+    "findings": [
+      {
+        "code": "LKG-01",
+        "parameter": "rewardRate",
+        "severity": "alto",
+        "mitigated": false,
+        "msg": "'rewardRate' se estima sobre la serie observada y luego se usa para predecirla: la comparación es en muestra.",
+        "fix": "medirlo con fuente independiente (encuesta de movilidad, política de disputas) cuando exista; mientras tanto, la partición temporal es el mínimo exigible."
+      },
+      {
+        "code": "LKG-01",
+        "parameter": "redemptionRate",
+        "severity": "alto",
+        "mitigated": false,
+        "msg": "'redemptionRate' se estima sobre la serie observada y luego se usa para predecirla: la comparación es en muestra.",
+        "fix": "medirlo con fuente independiente (encuesta de movilidad, política de disputas) cuando exista; mientras tanto, la partición temporal es el mínimo exigible."
+      },
+      {
+        "code": "LKG-01",
+        "parameter": "expectedRedemptionRatio",
+        "severity": "alto",
+        "mitigated": false,
+        "msg": "'expectedRedemptionRatio' se estima sobre la serie observada y luego se usa para predecirla: la comparación es en muestra.",
+        "fix": "medirlo con fuente independiente (encuesta de movilidad, política de disputas) cuando exista; mientras tanto, la partición temporal es el mínimo exigible."
+      },
+      {
+        "code": "LKG-01",
+        "parameter": "mobility",
+        "severity": "alto",
+        "mitigated": false,
+        "msg": "'mobility' se estima sobre la serie observada y luego se usa para predecirla: la comparación es en muestra.",
+        "fix": "medirlo con fuente independiente (encuesta de movilidad, política de disputas) cuando exista; mientras tanto, la partición temporal es el mínimo exigible."
+      },
+      {
+        "code": "LKG-01",
+        "parameter": "disputedShare",
+        "severity": "alto",
+        "mitigated": false,
+        "msg": "'disputedShare' se estima sobre la serie observada y luego se usa para predecirla: la comparación es en muestra.",
+        "fix": "medirlo con fuente independiente (encuesta de movilidad, política de disputas) cuando exista; mientras tanto, la partición temporal es el mínimo exigible."
+      },
+      {
+        "code": "TMP-01",
+        "severity": "medio",
+        "msg": "ventana insuficiente para validación temporal"
+      },
+      {
+        "code": "FIT-02",
+        "severity": "alto",
+        "msg": "dataset no apto: cobertura o metadatos insuficientes: se extiende la observación, no se calibra"
+      }
+    ],
+    "leakage_mitigated": false
+  },
+  "decisions": [
+    {
+      "id": "G1",
+      "label": "Contratos canónicos de pago (RP-0)",
+      "status": "hecho",
+      "owner": "tech"
+    },
+    {
+      "id": "G2",
+      "label": "Shadow mode sin discrepancias",
+      "status": "en-curso",
+      "owner": "tech"
+    },
+    {
+      "id": "G3",
+      "label": "¿Una obligación fiat se extingue entregando Bunz?",
+      "status": "pendiente",
+      "owner": "negocio+legal"
+    },
+    {
+      "id": "G4",
+      "label": "Paridad Bunz–MXN y su mecanismo",
+      "status": "pendiente",
+      "owner": "negocio+CFO"
+    },
+    {
+      "id": "G5",
+      "label": "Límite contractual de autorización",
+      "status": "pendiente",
+      "owner": "negocio"
+    },
+    {
+      "id": "G6",
+      "label": "Política de concentración y remedios",
+      "status": "pendiente",
+      "owner": "negocio"
+    },
+    {
+      "id": "G7",
+      "label": "orders.bunzPaid con semántica única",
+      "status": "en-curso",
+      "owner": "producto+tech"
+    },
+    {
+      "id": "G8",
+      "label": "Datos reales que respalden el modelo",
+      "status": "pendiente",
+      "owner": "datos"
+    },
+    {
+      "id": "G9",
+      "label": "Aprobación explícita de RP-2",
+      "status": "pendiente",
+      "owner": "gobernanza"
+    }
+  ],
+  "roadmap": [
+    {
+      "id": "OT-8",
+      "label": "Unidades, agregación y conciliación (R24–R26)",
+      "status": "hecho"
+    },
+    {
+      "id": "OT-7",
+      "label": "Bitemporalidad y reconstrucción as-of",
+      "status": "hecho"
+    },
+    {
+      "id": "OT-6",
+      "label": "Protocolo temporal por defecto",
+      "status": "hecho"
+    },
+    {
+      "id": "OT-1",
+      "label": "Redenciones con motivo (no atendido)",
+      "status": "pendiente"
+    },
+    {
+      "id": "OT-4",
+      "label": "Snapshot diario de capacidad",
+      "status": "pendiente"
+    },
+    {
+      "id": "OT-3",
+      "label": "Libro Bunz de doble entrada",
+      "status": "pendiente"
+    },
+    {
+      "id": "OT-2",
+      "label": "Obligaciones con ciclo de vida",
+      "status": "pendiente"
+    },
+    {
+      "id": "OT-5",
+      "label": "Señales de abuso",
+      "status": "pendiente"
+    },
+    {
+      "id": "OT-9",
+      "label": "Dual-run / sombra y cobertura",
+      "status": "pendiente"
+    }
+  ],
+  "checklist": [
+    {
+      "id": "export",
+      "label": "Export generado",
+      "ok": true,
+      "detail": "222 filas"
+    },
+    {
+      "id": "valid",
+      "label": "Dataset válido",
+      "ok": true,
+      "detail": "sin errores"
+    },
+    {
+      "id": "errors",
+      "label": "Sin errores de contrato",
+      "ok": true,
+      "detail": "0 error(es)"
+    },
+    {
+      "id": "coverage",
+      "label": "Cobertura declarada",
+      "ok": true,
+      "detail": "6/10 datasets"
+    },
+    {
+      "id": "recon",
+      "label": "Auditoría determinista",
+      "ok": true,
+      "detail": "OK"
+    },
+    {
+      "id": "backtest",
+      "label": "Backtest fuera de muestra",
+      "ok": false,
+      "detail": "no ejecutado"
+    },
+    {
+      "id": "calibration",
+      "label": "Calibrable",
+      "ok": false,
+      "detail": "bloqueado"
+    },
+    {
+      "id": "decisions",
+      "label": "Compuertas sin pendientes",
+      "ok": false,
+      "detail": "6 pendiente(s)"
+    }
+  ],
+  "alerts": [
+    {
+      "code": "ALR-02",
+      "severity": "info",
+      "message": "no calibrable (es el estado esperado del piloto)"
+    },
+    {
+      "code": "ALR-04",
+      "severity": "medio",
+      "message": "faltan 4 dataset(s): obligations, bunz_ledger, treasury, abuse_signals"
+    },
+    {
+      "code": "ALR-05",
+      "severity": "medio",
+      "message": "paridad Bunz–MXN no aprobada (R24)"
+    }
+  ],
+  "artifacts": {
+    "validation_hash": "0ede10a525b4810f56221ccc1804228911a9f246cd401b793e27aac7fb0ecd8e",
+    "audit_hash": "0ba53f24921ed417bb8177602f10894e8a310fdf53dc9e540ad55b84fe8ff5c7",
+    "backtest_hash": null
+  }
+}
