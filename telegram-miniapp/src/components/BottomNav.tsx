@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { MessageCircle, ScanLine, User } from 'lucide-react';
+import { MessageCircle, User } from 'lucide-react';
+import RabbittyScanIcon from '@/components/icons/RabbittyScanIcon';
 import useSWR from 'swr';
 
 import { PlatformBridge } from '@/lib/platform';
@@ -156,8 +157,8 @@ export default function BottomNav({ isDark }: BottomNavProps = {}) {
           </Link>
 
           {/* Scan */}
-          <Link href="/scan" onClick={handleTabPress} className="flex items-center justify-center w-12 h-12 active:scale-90 transition-all" style={{ color: getColor(isScan) }}>
-            <ScanLine className="w-6.25 h-6.25" strokeWidth={2.2} />
+          <Link href="/scan?tab=my-code" onClick={handleTabPress} className="flex items-center justify-center w-12 h-12 active:scale-90 transition-all" style={{ color: getColor(isScan) }}>
+            <RabbittyScanIcon size={25} />
           </Link>
 
           {/* Perfil */}

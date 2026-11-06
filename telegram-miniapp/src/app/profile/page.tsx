@@ -182,17 +182,20 @@ export default function ProfilePage() {
         onClick={handleAvatarTap}
         style={{ 
           background: levelGradient,
-          boxShadow: (user?.hops ?? 0) >= 500 ? '0 4px 16px rgba(0,0,0,0.1)' : 'none'
+          rotate: 8,
+          boxShadow: (user?.hops ?? 0) >= 500
+            ? '0 8px 22px rgba(0,0,0,0.30), 0 0 18px rgba(233,30,99,0.20)'
+            : '0 8px 22px rgba(0,0,0,0.22)',
         }}
-        className="w-12.5 h-12.5 rounded-[14px] p-0.5 flex items-center justify-center shrink-0 relative cursor-pointer"
+        className="h-14 w-14 rounded-[18px] p-0.5 flex items-center justify-center shrink-0 relative cursor-pointer"
       >
         <Image 
           src={userAvatar} 
           alt={user?.firstName || 'User'} 
-          width={46}
-          height={46}
+          width={52}
+          height={52}
           unoptimized
-          className="w-full h-full rounded-xl object-cover" 
+          className="w-full h-full rounded-[15px] object-cover" 
         />
         {(user?.hops ?? 0) >= 2000 && (
           <div className="absolute -top-1.5 -right-1.5 text-base">👑</div>

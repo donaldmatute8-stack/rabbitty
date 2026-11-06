@@ -38,6 +38,28 @@ input, textarea, [contenteditable="true"], .selectable, code, pre, .font-mono {
   padding-right: var(--safe-right);
 }
 
+/* ── Mi Código (QR): escala compacta en pantallas bajas ─────────────── */
+.qr-screen {
+  --qr-top-pad: 40px;
+  --qr-card-pt: 48px;
+  --qr-card-pb: 20px;
+  --qr-handle-mt: 16px;
+  --qr-grid-h: 92px;
+  --qr-btn-h: 52px;
+  --qr-btn2-h: 46px;
+}
+@media (max-height: 820px) {
+  .qr-screen {
+    --qr-top-pad: 10px;
+    --qr-card-pt: 28px;
+    --qr-card-pb: 12px;
+    --qr-handle-mt: 10px;
+    --qr-grid-h: 70px;
+    --qr-btn-h: 46px;
+    --qr-btn2-h: 42px;
+  }
+}
+
 /* Leaflet container background adapts to the active theme */
 .leaflet-container {
   background: #0D0914 !important;

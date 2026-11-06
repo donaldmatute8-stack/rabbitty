@@ -8,7 +8,7 @@
         "components": [
           {
             "/": "/scan*",
-            "comment": "Tickets QR y vinculaci\u00f3n de mesa"
+            "comment": "Tickets QR y vinculación de mesa"
           },
           {
             "/": "/qr/*"
@@ -25,6 +25,10 @@
           {
             "/": "/kiosk-confirm*",
             "comment": "Identidad del cliente para el kiosko"
+          },
+          {
+            "/": "/u/*",
+            "comment": "Rabbitty Code Simple: perfil publico del usuario"
           }
         ]
       }

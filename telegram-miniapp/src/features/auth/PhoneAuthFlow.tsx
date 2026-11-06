@@ -105,7 +105,8 @@ export default function PhoneAuthFlow({ mode, onBack }: PhoneAuthFlowProps) {
     (async () => {
       try {
         const stash = getFastLogin();
-        if (stash?.token && hasAnyLocalSecurity()) setFastLoginAvailable(true);
+        // El acceso rápido (Face ID/PIN) solo aplica al login, no al registro.
+        if (!isRegisterMode && stash?.token && hasAnyLocalSecurity()) setFastLoginAvailable(true);
       } catch { /* noop */ }
     })();
   }, [autoDetecting]);

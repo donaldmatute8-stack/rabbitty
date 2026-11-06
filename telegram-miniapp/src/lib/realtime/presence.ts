@@ -49,12 +49,19 @@ export async function closeConnection(userId: string, sessionId: string): Promis
  * Presencia agregada de varios usuarios.
  * `online` = al menos una sesión sin cerrar y con heartbeat dentro del TTL.
  */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function getPresenceForUsers(userIds: string[]): Promise<Map<string, PresenceInfo>> {
   const out = new Map<string, PresenceInfo>();
   const ids = Array.from(new Set(userIds.filter(Boolean)));
   if (ids.length === 0) return out;
 
+  // `chat_connections.userId` es uuid: ids sintéticos ('bot', 'bunzy') rompen
+  // la consulta ("invalid input syntax for type uuid"). Se filtran para la DB.
+  const queryIds = ids.filter((id) => UUID_RE.test(id));
+
   try {
+    if (queryIds.length === 0) throw new Error('no-uuid-ids');
     const rows = await db
       .select({
         userId: chatConnections.userId,
@@ -62,7 +69,7 @@ export async function getPresenceForUsers(userIds: string[]): Promise<Map<string
         online: sql<boolean>`BOOL_OR(${isNull(chatConnections.disconnectedAt)} AND ${chatConnections.lastSeenAt} > (now() AT TIME ZONE 'UTC') - (${PRESENCE_TTL_SECONDS} * interval '1 second'))`,
       })
       .from(chatConnections)
-      .where(inArray(chatConnections.userId, ids))
+      .where(inArray(chatConnections.userId, queryIds))
       .groupBy(chatConnections.userId);
 
     for (const row of rows) {

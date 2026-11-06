@@ -151,6 +151,19 @@ export default function FeedPage() {
 
   const { isDark } = useTheme();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Cuánto se desplaza el contenido al abrir el drawer: su borde izquierdo
+  // queda 20px ENCIMA del panel para que se vean SUS esquinas redondeadas.
+  const [drawerShift, setDrawerShift] = useState(0);
+  useEffect(() => {
+    const computeShift = () => {
+      const w = typeof window !== 'undefined' ? window.innerWidth : 390;
+      const drawerW = Math.min(w * 0.75, w >= 640 ? 320 : 288);
+      setDrawerShift(Math.max(0, Math.round(drawerW - 20)));
+    };
+    computeShift();
+    window.addEventListener('resize', computeShift);
+    return () => window.removeEventListener('resize', computeShift);
+  }, []);
   const [moodOpen, setMoodOpen] = useState(false);
   const bunzBalance = (user?.totalBunzEarned || 0) - (user?.totalBunzSpent || 0);
 
@@ -593,9 +606,10 @@ export default function FeedPage() {
       <motion.div
         animate={drawerOpen ? {
           scale: 0.90,
-          x: '74%',
+          x: drawerShift,
           borderRadius: 36,
-          filter: isDark ? 'brightness(0.65)' : 'brightness(0.97)',
+          // El home se oscurece un poco más al abrir el sidebar
+          filter: isDark ? 'brightness(0.50)' : 'brightness(0.86)',
         } : {
           scale: 1,
           x: 0,
@@ -607,6 +621,7 @@ export default function FeedPage() {
         style={{
           transformOrigin: 'center left',
           background: 'var(--bg-primary)',
+          zIndex: drawerOpen ? 202 : undefined,
           pointerEvents: drawerOpen ? 'none' : 'auto',
           border: drawerOpen ? (isDark ? '1.5px solid rgba(255,255,255,0.18)' : '1.5px solid rgba(0,0,0,0.12)') : 'none',
           boxShadow: drawerOpen ? (isDark ? '-12px 0 45px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.08)' : '-10px 0 40px rgba(0,0,0,0.18)') : 'none',
@@ -686,9 +701,24 @@ export default function FeedPage() {
                 }}
                 className="flex items-center gap-3 bg-transparent border-none cursor-pointer p-0 text-left active:scale-[0.98] transition-transform"
               >
-                <div className="w-11 h-11 rounded-full overflow-hidden" style={{ background: 'var(--bg-pressed)', border: '1px solid var(--border-subtle)' }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={userAvatar} alt={user?.firstName || 'User'} className="w-full h-full object-cover" />
+                {/* Avatar “mancha”: mismo lenguaje que el sidebar, girado al otro lado */}
+                <div className="-ml-2 shrink-0">
+                  <div
+                    className="h-[60px] w-[60px] overflow-hidden rounded-[20px] border-2 border-[#E91E63]"
+                    style={{
+                      background: 'var(--bg-pressed)',
+                      transform: 'rotate(8deg)',
+                      boxShadow: '0 8px 22px rgba(0,0,0,0.30), 0 0 0 1px rgba(233,30,99,0.25), 0 0 18px rgba(233,30,99,0.20)',
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={userAvatar}
+                      alt={user?.firstName || 'User'}
+                      className="h-full w-full object-cover"
+                      style={{ transform: 'scale(1.06)' }}
+                    />
+                  </div>
                 </div>
                 <h1 className="sr-only">{user?.firstName || 'Rabbitty'}</h1>
               </button>
@@ -732,33 +762,22 @@ export default function FeedPage() {
                   )}
                 </Link>
 
-                {/* Rabbitty Mood Trigger */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    PlatformBridge.hapticFeedback('medium');
-                    setMoodOpen(true);
-                  }}
-                  className="w-9 h-9 rounded-full flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.04)] active:scale-95 transition-transform bg-linear-to-tr from-amber-500/20 to-orange-500/20 border border-amber-400/30 text-amber-400"
-                  aria-label="Rabbitty Mood"
-                  title="Tu vibra y experiencia de hoy"
-                >
-                  <Sparkles size={16} strokeWidth={2.5} />
-                </button>
+                {/* Rabbitty Mood se abre solo al entrar y vive dentro de cada affiliate page.
+                    Se retiró el acceso del header para no duplicarlo. */}
 
                 <Link 
                   href="/chat/bot" 
                   onClick={(e) => { e.preventDefault(); PlatformBridge.hapticFeedback('medium'); openBunzy(); }}
-                  className="w-9 h-9 rounded-full flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.04)] active:scale-95 transition-transform" 
+                  className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.04)] active:scale-95 transition-transform" 
                   style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
                   aria-label="Hablar con Bunzy"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img 
-                    src="/logo_conejo.png" 
+                    src="/bunzy-avatar.png" 
                     alt="Bunzy" 
-                    className="w-4 h-5 object-contain"
-                    style={{ filter: isDark ? 'grayscale(100%) brightness(10)' : 'grayscale(100%) brightness(0)' }} 
+                    className="w-full h-full object-cover"
+                    style={{ objectPosition: '50% 26%', transform: 'scale(1.35)' }}
                   />
                 </Link>
               </div>
@@ -778,80 +797,6 @@ export default function FeedPage() {
           />
         )}
       </div>
-
-      {/* NAVBAR SUPERIOR MINIMALISTA FLOTANTE (ESTILO FACEBOOK):
-          Aparece solo al hacer scroll hacia arriba y permanece oculto al bajar */}
-      {activeTab !== 'Freehands' && (
-      <div
-        className={`fixed top-0 left-0 right-0 z-80 transition-all duration-300 ease-out select-none ${
-          showMinimalHeader ? 'pointer-events-auto' : 'pointer-events-none'
-        }`}
-        style={{
-          transform: showMinimalHeader ? 'translateY(0)' : 'translateY(-110%)',
-          background: 'var(--glass-bg)',
-          backdropFilter: 'blur(24px)',
-          WebkitBackdropFilter: 'blur(24px)',
-          borderBottom: '1px solid var(--glass-border)',
-          paddingTop: 'var(--safe-top, 0px)',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
-        }}
-      >
-        <div className="flex items-center justify-between max-w-150 mx-auto px-4 py-2">
-          {/* 3/4 Horizontal: Los 3 menús compactos (bunz'in, Stock, Freehands) */}
-          <div className="flex items-center gap-1.5 w-[75%] pr-2">
-            {TABS.map((tab) => {
-              const isActive = activeTab === tab;
-              return (
-                <button
-                  key={tab}
-                  onClick={() => {
-                    PlatformBridge.hapticFeedback('light');
-                    setActiveTab(tab);
-                  }}
-                  className="relative py-1.5 px-2.5 rounded-full text-[13px] font-bold tracking-tight transition-all active:scale-95 whitespace-nowrap"
-                  style={{
-                    background: isActive ? 'rgba(233, 30, 99, 0.18)' : 'transparent',
-                    color: isActive ? '#E91E63' : 'var(--text-secondary)',
-                    border: isActive ? '1px solid rgba(233, 30, 99, 0.35)' : '1px solid transparent',
-                  }}
-                >
-                  {tab}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* 1/4 Horizontal: Iconos de Notificaciones + Mini Conejo Scan */}
-          <div className="flex items-center justify-end gap-2 w-[25%]">
-            <Link 
-              href="/notifications" 
-              onClick={() => PlatformBridge.hapticFeedback('light')}
-              className="relative w-8 h-8 rounded-full flex items-center justify-center active:scale-95 transition-transform" 
-              style={{ background: 'var(--bg-pressed)' }}
-            >
-              <Bell size={16} strokeWidth={2.3} style={{ color: 'var(--text-primary)' }} />
-              <div className="absolute top-1.5 right-1.75 w-1.25 h-1.25 bg-[#E91E63] rounded-full" />
-            </Link>
-
-            <Link 
-              href="/chat/bot" 
-              onClick={(e) => { e.preventDefault(); PlatformBridge.hapticFeedback('medium'); openBunzy(); }}
-              className="w-8 h-8 rounded-full flex items-center justify-center active:scale-95 transition-transform" 
-              style={{ background: 'var(--bg-pressed)' }}
-              aria-label="Hablar con Bunzy"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img 
-                src="/logo_conejo.png" 
-                alt="Bunzy" 
-                className="w-3.5 h-4 object-contain"
-                style={{ filter: isDark ? 'grayscale(100%) brightness(10)' : 'grayscale(100%) brightness(0)' }} 
-              />
-            </Link>
-          </div>
-        </div>
-      </div>
-      )}
 
       <main className="flex-1 w-full max-w-150 mx-auto px-4">
         <div className="pt-4">
@@ -967,7 +912,15 @@ export default function FeedPage() {
                     id={post.id}
                     user={post.user}
                     device={post.device}
-                    label={post.distance ? `${post.distance}km` : post.label}
+                    label={
+                      post.distance === undefined
+                        ? post.label
+                        : post.distance < 0.1
+                          ? 'Aquí'
+                          : post.distance < 1
+                            ? `${Math.round(post.distance * 1000)} m`
+                            : `${post.distance.toFixed(1)} km`
+                    }
                     bunz={post.reward_percentage}
                     imageUrl={post.imageUrl}
                     initialHops={post.hops}
@@ -1085,6 +1038,85 @@ export default function FeedPage() {
         </div>
       </main>
       </motion.div>
+
+      {/* NAVBAR SUPERIOR MINIMALISTA FLOTANTE (ESTILO FACEBOOK):
+          Aparece solo al hacer scroll hacia arriba y permanece oculto al bajar.
+          Se oculta siempre mientras el sidebar (drawer) está abierto. */}
+      {activeTab !== 'Freehands' && (
+      <div
+        className={`fixed top-0 left-0 right-0 z-80 transition-all duration-300 ease-out select-none ${
+          showMinimalHeader && !drawerOpen ? 'pointer-events-auto' : 'pointer-events-none'
+        }`}
+        style={{
+          transform: showMinimalHeader && !drawerOpen ? 'translateY(0)' : 'translateY(-110%)',
+          // Con el drawer abierto se oculta del todo (no solo el -110%),
+          // así no asoma ni un borde mientras el sidebar está encima.
+          opacity: drawerOpen ? 0 : 1,
+          visibility: drawerOpen ? 'hidden' : 'visible',
+          background: 'var(--glass-bg)',
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
+          borderBottom: '1px solid var(--glass-border)',
+          paddingTop: 'var(--safe-top, 0px)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
+        }}
+      >
+        <div className="flex items-center justify-between max-w-150 mx-auto px-4 py-2">
+          {/* 3/4 Horizontal: Los 3 menús compactos (bunz'in, Stock, Freehands) */}
+          <div className="flex items-center gap-1.5 w-[75%] pr-2">
+            {TABS.map((tab) => {
+              const isActive = activeTab === tab;
+              return (
+                <button
+                  key={tab}
+                  onClick={() => {
+                    PlatformBridge.hapticFeedback('light');
+                    setActiveTab(tab);
+                  }}
+                  className="relative py-1.5 px-2.5 rounded-full text-[13px] font-bold tracking-tight transition-all active:scale-95 whitespace-nowrap"
+                  style={{
+                    background: isActive ? 'rgba(233, 30, 99, 0.18)' : 'transparent',
+                    color: isActive ? '#E91E63' : 'var(--text-secondary)',
+                    border: isActive ? '1px solid rgba(233, 30, 99, 0.35)' : '1px solid transparent',
+                  }}
+                >
+                  {tab}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* 1/4 Horizontal: Iconos de Notificaciones + Mini Conejo Scan */}
+          <div className="flex items-center justify-end gap-2 w-[25%]">
+            <Link 
+              href="/notifications" 
+              onClick={() => PlatformBridge.hapticFeedback('light')}
+              className="relative w-8 h-8 rounded-full flex items-center justify-center active:scale-95 transition-transform" 
+              style={{ background: 'var(--bg-pressed)' }}
+            >
+              <Bell size={16} strokeWidth={2.3} style={{ color: 'var(--text-primary)' }} />
+              <div className="absolute top-1.5 right-1.75 w-1.25 h-1.25 bg-[#E91E63] rounded-full" />
+            </Link>
+
+            <Link 
+              href="/chat/bot" 
+              onClick={(e) => { e.preventDefault(); PlatformBridge.hapticFeedback('medium'); openBunzy(); }}
+              className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center active:scale-95 transition-transform" 
+              style={{ background: 'var(--bg-pressed)' }}
+              aria-label="Hablar con Bunzy"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img 
+                src="/bunzy-avatar.png" 
+                alt="Bunzy" 
+                className="w-full h-full object-cover"
+                style={{ objectPosition: '50% 26%', transform: 'scale(1.35)' }}
+              />
+            </Link>
+          </div>
+        </div>
+      </div>
+      )}
 
       {/* ── Freehands tab ── FUERA del motion.div: fixed dentro de un ancestro
           con transform se vuelve relativo y el mapa sale recortado/invisible. */}

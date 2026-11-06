@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Keyboard } from 'lucide-react';
+import { ArrowLeft, Images, Flashlight, FlashlightOff } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Html5Qrcode } from 'html5-qrcode';
 import RabbittyCode from '@/components/ui/RabbittyCode';
@@ -71,6 +71,8 @@ export default function ScanPage() {
   const [nativeScannerSupported, setNativeScannerSupported] = useState(false);
   const [nativeSession, setNativeSession] = useState(0);
   const [nativeUnavailable, setNativeUnavailable] = useState(false);
+  // Diagnóstico visible: por qué se usa la cámara web o por qué falló.
+  const [scannerNotice, setScannerNotice] = useState<string | null>(null);
   const nativeSessionRef = useRef(0);
   const nativeBusyRef = useRef(false);
 
@@ -103,6 +105,21 @@ export default function ScanPage() {
     if (native) setHasCamera(true);
   }, []);
   const [result, setResult] = useState<PaymentIntentData | null>(null);
+  const [webTorchOn, setWebTorchOn] = useState(false);
+  const galleryInputRef = useRef<HTMLInputElement | null>(null);
+  // Tamaño del QR adaptado a la altura: en pantallas bajas se reduce
+  // para que la hoja inferior nunca quede fuera de vista.
+  const [qrSize, setQrSize] = useState(234);
+  useEffect(() => {
+    const compute = () => {
+      const h = typeof window !== 'undefined' ? window.innerHeight || 800 : 800;
+      setQrSize(Math.max(160, Math.min(234, Math.round(h - 530))));
+    };
+    compute();
+    window.addEventListener('resize', compute);
+    return () => window.removeEventListener('resize', compute);
+  }, []);
+
   const [manualCode, setManualCode] = useState('');
   const [showManualInput, setShowManualInput] = useState(false);
   const [activeTab, setActiveTab] = useState<'scan' | 'my-code'>(initialTab);
@@ -557,6 +574,55 @@ export default function ScanPage() {
     return false;
   }, [API_SERVER_URL, router, stopScanning]);
 
+  /** Linterna en web/Telegram (WebView): se pide al track de la cámara. */
+  const toggleWebTorch = async () => {
+    try {
+      const video = document.querySelector('#qr-reader video') as HTMLVideoElement | null;
+      const stream = (video?.srcObject as MediaStream | null) ?? null;
+      const track = stream?.getVideoTracks?.()[0];
+      if (!track) {
+        showToast('La linterna no está disponible aquí', 'info');
+        return;
+      }
+      const caps = (track.getCapabilities?.() ?? {}) as { torch?: boolean };
+      if (!caps.torch) {
+        showToast('Este dispositivo no permite linterna desde la cámara web', 'info');
+        return;
+      }
+      await track.applyConstraints({
+        advanced: [{ torch: !webTorchOn } as unknown as MediaTrackConstraintSet],
+      });
+      setWebTorchOn((v) => !v);
+      PlatformBridge.hapticFeedback('light');
+    } catch {
+      showToast('No se pudo cambiar la linterna', 'info');
+    }
+  };
+
+  /** Foto de galería (web/Telegram): decodifica la imagen elegida. */
+  const pickGalleryFile = async (file: File | null) => {
+    if (!file) return;
+    try {
+      showToast('Leyendo la imagen…', 'info');
+      await stopScanning();
+      const tempId = 'qr-gallery-reader';
+      if (!document.getElementById(tempId)) {
+        const div = document.createElement('div');
+        div.id = tempId;
+        div.style.display = 'none';
+        document.body.appendChild(div);
+      }
+      const reader = new Html5Qrcode(tempId);
+      const decoded = await reader.scanFile(file, false);
+      try { reader.clear(); } catch { /* noop */ }
+      document.getElementById(tempId)?.remove();
+      await handleDispatchPayload(decoded);
+    } catch {
+      showToast('No encontramos un QR en esa imagen', 'info');
+      startScanningRef.current();
+    }
+  };
+
   const startScanning = useCallback(async () => {
     if (PlatformBridge.isNative() && !nativeUnavailable) {
       openNativeScanner();
@@ -580,8 +646,14 @@ export default function ScanPage() {
         () => {}
       );
       setShowManualInput(false);
-    } catch {
+      setScannerNotice(null);
+    } catch (err) {
       setHasCamera(false);
+      setScannerNotice(
+        err instanceof Error
+          ? `No se pudo abrir la cámara: ${err.message}`
+          : 'No se pudo abrir la cámara del navegador.',
+      );
     } finally {
       isTransitioningRef.current = false;
     }
@@ -827,8 +899,10 @@ export default function ScanPage() {
     <div 
       className="page-wrap relative min-h-dvh flex flex-col justify-between transition-colors duration-200" 
       style={{ 
-        paddingTop: 'calc(var(--safe-top, 0px) + 8px)',
-        background: activeTab === 'scan' ? (isDark ? '#000000' : '#F1F5F9') : 'var(--bg-primary)',
+        paddingTop: activeTab === 'my-code' ? '0px' : 'calc(var(--safe-top, 0px) + 8px)',
+        // Mi Código: la hoja llega hasta el fondo real (sin el hueco de la nav)
+        paddingBottom: activeTab === 'my-code' ? 0 : undefined,
+        background: activeTab === 'scan' ? (isDark ? '#000000' : '#F1F5F9') : 'transparent',
         color: 'var(--text-primary)'
       }}
     >
@@ -839,118 +913,88 @@ export default function ScanPage() {
           onConsumed={handleNativeConsumed}
           onClose={() => {
             closeNativeScanner();
-            setShowManualInput(true);
+            setActiveTab('my-code');
           }}
           onFallback={() => {
             closeNativeScanner();
             setNativeUnavailable(true);
             setShowManualInput(false);
+            setScannerNotice('Escáner nativo no disponible en esta instalación. Usando cámara web.');
             window.setTimeout(() => startScanningRef.current(), 80);
           }}
         />
       )}
 
-      {/* Background glow only on my-code tab */}
+      {/* Fondo nuevo de Mi Código */}
       {activeTab === 'my-code' && (
-        <div className="absolute inset-0 pointer-events-none z-0 bg-[radial-gradient(ellipse_at_50%_40%,rgba(233,30,99,0.08)_0%,transparent_65%)]" />
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/assets/neon-skyline.webp"
+            alt=""
+            className="pointer-events-none fixed inset-0 h-dvh w-full object-cover"
+          />
+          <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/55" />
+        </>
       )}
-
-      {/* Header bar */}
-      <div className="relative z-50 px-4 w-full flex flex-col items-center gap-3">
-        <div className="flex items-center justify-between w-full">
-          <button
-            onClick={() => {
-              // Al cerrar el scanner SIN acción → salir del escáner hacia el feed/home
-              // (la vivencia es "regreso a casa app", no stack-push al mismo lugar).
-              router.replace("/");
-            }}
-            className="w-10 h-10 rounded-full bg-(--bg-elevated) backdrop-blur-md border border-(--border-subtle) text-(--text-primary) flex items-center justify-center cursor-pointer shadow-xs active:scale-95 transition-transform"
-          >
-            <ArrowLeft size={20} />
-          </button>
-          <span className="text-xs font-extrabold tracking-[2px] text-(--text-primary) uppercase">Escanear QR</span>
-          <button
-            onClick={() => setShowManualInput(!showManualInput)}
-            className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer transition-colors shadow-xs ${
-              showManualInput ? 'bg-[#E91E63] text-white border-0' : 'bg-(--bg-elevated) border border-(--border-subtle) text-(--text-primary)'
-            }`}
-          >
-            <Keyboard size={18} />
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="bg-(--bg-elevated) backdrop-blur-2xl border border-(--border-subtle) p-0.5 rounded-full flex w-48 shadow-xs">
-          {(['scan', 'my-code'] as const).map((t, i) => (
-            <button
-              key={t}
-              onClick={() => setActiveTab(t)}
-              className={`flex-1 py-1.5 text-[10.5px] font-extrabold rounded-full border-0 cursor-pointer transition-all duration-200 ${
-                activeTab === t ? 'bg-[#E91E63] text-white shadow-md' : 'bg-transparent text-(--text-muted) hover:text-(--text-primary)'
-              }`}
-            >
-              {i === 0 ? 'Cámara' : 'Mi Código'}
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* Background glow removed — my-code tab handles its own background */}
 
       {/* Main Content Area */}
-      <div className="relative flex-1 w-full flex flex-col items-center justify-center z-10 px-4 py-4">
+      <div className={`relative flex-1 w-full flex flex-col items-center ${activeTab === 'my-code' ? 'p-0 justify-between' : 'justify-center z-10 px-4 py-4'}`}>
 
-        {/* My Code tab - Official Rabbitty Code Hologram */}
+        {/* My Code tab - Official Rabbitty Code Hologram / Telegram style */}
         {activeTab === 'my-code' && (
-          <div className="flex flex-col items-center justify-center w-full max-w-85 z-20">
-            
-            <div className="flex w-full flex-col items-center justify-center pt-2">
-              {RABBITTY_CODE_STYLE === 'simple' ? (
-                <RabbittyCodeSimple
-                  value={`https://app.rabbitty.me/u/${encodeURIComponent(
-                    user?.username || String(qrValue || ''),
-                  )}`}
-                  handle={user?.username || null}
-                  name={user?.firstName ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}` : null}
-                  avatarUrl={userAvatar}
-                  size={204}
-                  theme="violet"
-                  onShare={async () => {
-                    const handle = user?.username ? `@${user.username}` : String(qrValue || '');
-                    try {
-                      if (typeof navigator !== 'undefined' && navigator.share) {
-                        await navigator.share({ title: 'Mi Rabbitty Code', text: `Mi Rabbitty Code: ${handle}` });
-                      } else {
-                        await navigator.clipboard.writeText(handle);
-                        showToast('Código copiado', 'success');
-                      }
-                    } catch {
-                      /* cancelado */
+          <div className="flex flex-col items-center justify-between w-full h-full flex-1 z-20">
+            {RABBITTY_CODE_STYLE === 'simple' ? (
+              <RabbittyCodeSimple
+                value={`https://app.rabbitty.me/u/${encodeURIComponent(
+                  user?.username || String(qrValue || ''),
+                )}`}
+                handle={user?.username || null}
+                name={user?.firstName ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}` : null}
+                avatarUrl={userAvatar}
+                size={qrSize}
+                theme="theme1"
+                onClose={() => {
+                  router.replace("/");
+                }}
+                onShare={async () => {
+                  const handle = user?.username ? `@${user.username}` : String(qrValue || '');
+                  try {
+                    if (typeof navigator !== 'undefined' && navigator.share) {
+                      await navigator.share({ title: 'Mi Rabbitty Code', text: `Mi Rabbitty Code: ${handle}` });
+                    } else {
+                      await navigator.clipboard.writeText(handle);
+                      showToast('Código copiado', 'success');
                     }
-                  }}
-                  onScan={() => {
-                    PlatformBridge.hapticFeedback('light');
-                    setActiveTab('scan');
-                  }}
+                  } catch {
+                    /* cancelado */
+                  }
+                }}
+                onScan={() => {
+                  PlatformBridge.hapticFeedback('light');
+                  setActiveTab('scan');
+                }}
+              />
+            ) : (
+              <div className="flex w-full flex-col items-center justify-center pt-2">
+                <QRDiscovery
+                  value={myScanCode ? `rabbitty://pay?to=${encodeURIComponent(user?.username ? `@${user.username}` : String(qrValue || ''))}` : String(qrValue || 'rabbitty_guest')}
+                  variant="rabbitter"
+                  size={210}
+                  revealMode="discovery"
+                  surfaceKey="my-code"
                 />
-              ) : (
-                <>
-                  <QRDiscovery
-                    value={myScanCode ? `rabbitty://pay?to=${encodeURIComponent(user?.username ? `@${user.username}` : String(qrValue || ''))}` : String(qrValue || 'rabbitty_guest')}
-                    variant="rabbitter"
-                    size={210}
-                    revealMode="discovery"
-                    surfaceKey="my-code"
-                  />
-                  <div className="mt-5 text-center">
-                    <span className="text-sm font-black tracking-[1.5px] text-(--text-primary) uppercase block">
-                      {user?.firstName ? user.firstName : 'Miembro Rabbitty'}
-                    </span>
-                    <span className="text-[11px] text-(--text-muted) font-mono tracking-wider block mt-0.5">
-                      ID: {String(qrValue || '').slice(0, 16)}
-                    </span>
-                  </div>
-                </>
-              )}
-            </div>
+                <div className="mt-5 text-center">
+                  <span className="text-sm font-black tracking-[1.5px] text-(--text-primary) uppercase block">
+                    {user?.firstName ? user.firstName : 'Miembro Rabbitty'}
+                  </span>
+                  <span className="text-[11px] text-(--text-muted) font-mono tracking-wider block mt-0.5">
+                    ID: {String(qrValue || '').slice(0, 16)}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -958,143 +1002,130 @@ export default function ScanPage() {
         {activeTab === 'scan' && (
           <div className="w-full flex flex-col items-center justify-center relative">
 
-            {/* QR Viewfinder Container: Camera Video is rendered strictly INSIDE this frame */}
-            <div className="relative w-70 h-70 rounded-[28px] overflow-hidden bg-black/90 border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.8)] mb-6 flex items-center justify-center">
-              
-              {/* Persistent qr-reader container in DOM strictly contained inside the viewfinder */}
-              <div 
-                id="qr-reader" 
-                className={`absolute inset-0 w-full h-full [&>video]:object-cover [&>video]:w-full [&>video]:h-full [&_#qr-shaded-region]:hidden ${hasCamera && !showManualInput ? 'block' : 'hidden'}`} 
+            {/* Cámara a pantalla completa, sin recuadro oscuro */}
+            <div className="fixed inset-0 z-0 overflow-hidden bg-black">
+              <div
+                id="qr-reader"
+                className={`absolute inset-0 h-full w-full [&>video]:h-full [&>video]:w-full [&>video]:object-cover [&_#qr-shaded-region]:hidden ${hasCamera && !showManualInput ? 'block' : 'hidden'}`}
               />
 
-              {/* Neon Corners Overlay */}
-              <div className="absolute inset-0 pointer-events-none z-20">
-                {[['top','left'],['top','right'],['bottom','left'],['bottom','right']].map(([v,h]) => (
-                  <div key={`${v}${h}`} style={{
-                    position: 'absolute', [v]: 8, [h]: 8, width: 32, height: 32,
-                    borderTop: v === 'top' ? '3.5px solid #E91E63' : 'none',
-                    borderBottom: v === 'bottom' ? '3.5px solid #E91E63' : 'none',
-                    borderLeft: h === 'left' ? '3.5px solid #E91E63' : 'none',
-                    borderRight: h === 'right' ? '3.5px solid #E91E63' : 'none',
-                    borderRadius: v==='top'&&h==='left'?'10px 0 0 0':v==='top'&&h==='right'?'0 10px 0 0':v==='bottom'&&h==='left'?'0 0 0 10px':'0 0 10px 0',
-                    boxShadow: `${h==='left'?'-':''}2px ${v==='top'?'-':''}2px 14px rgba(233,30,99,0.7)`,
-                  }} />
-                ))}
-
-                {/* Laser animation inside frame */}
-                <motion.div
-                  animate={{ top: ['4%', '94%', '4%'] }}
-                  transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
-                  className="absolute left-3 right-3 h-0.5 bg-[#E91E63] shadow-[0_0_14px_#E91E63]"
-                />
+              {/* Marco central con fade suave alrededor (la cámara se sigue viendo) */}
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <div
+                  className="relative"
+                  style={{
+                    width: 300,
+                    height: 300,
+                    borderRadius: 22,
+                    boxShadow: '0 0 0 9999px rgba(0,0,0,0.38)',
+                  }}
+                >
+                  {[['top', 'left'], ['top', 'right'], ['bottom', 'left'], ['bottom', 'right']].map(([v, h]) => (
+                    <div
+                      key={`${v}${h}`}
+                      style={{
+                        position: 'absolute',
+                        [v]: 0,
+                        [h]: 0,
+                        width: 38,
+                        height: 38,
+                        borderTop: v === 'top' ? '4px solid #E91E63' : 'none',
+                        borderBottom: v === 'bottom' ? '4px solid #E91E63' : 'none',
+                        borderLeft: h === 'left' ? '4px solid #E91E63' : 'none',
+                        borderRight: h === 'right' ? '4px solid #E91E63' : 'none',
+                        borderRadius:
+                          v === 'top' && h === 'left' ? '14px 0 0 0'
+                          : v === 'top' && h === 'right' ? '0 14px 0 0'
+                          : v === 'bottom' && h === 'left' ? '0 0 0 14px'
+                          : '0 0 14px 0',
+                        filter: 'drop-shadow(0 0 10px rgba(233,30,99,0.65))',
+                      }}
+                    />
+                  ))}
+                  <motion.div
+                    animate={{ top: ['6%', '92%', '6%'] }}
+                    transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+                    className="absolute left-3 right-3 h-0.5 rounded-full bg-[#E91E63]/80 shadow-[0_0_14px_#E91E63]"
+                  />
+                </div>
               </div>
 
+              {/* Volver a Mi Código */}
+              <button
+                type="button"
+                onClick={() => {
+                  PlatformBridge.hapticFeedback('light');
+                  setActiveTab('my-code');
+                }}
+                aria-label="Volver a Mi Código"
+                className="absolute left-4 z-30 flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white backdrop-blur-md active:scale-95"
+                style={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
+              >
+                <ArrowLeft size={20} />
+              </button>
+
+              {/* Controles inferiores: foto + linterna */}
+              <div
+                className="absolute inset-x-0 bottom-0 z-30 flex items-center justify-center gap-11"
+                style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)' }}
+              >
+                <input
+                  ref={galleryInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => void pickGalleryFile(e.target.files?.[0] ?? null)}
+                />
+                <button
+                  type="button"
+                  onClick={() => galleryInputRef.current?.click()}
+                  aria-label="Elegir una foto"
+                  className="flex h-[68px] w-[68px] items-center justify-center rounded-full border border-white/25 bg-[radial-gradient(circle_at_50%_35%,rgba(255,255,255,0.22),rgba(255,255,255,0.05))] text-white shadow-[0_4px_18px_rgba(0,0,0,0.35)] backdrop-blur-md active:scale-95"
+                >
+                  <Images size={26} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void toggleWebTorch()}
+                  aria-label="Linterna"
+                  className={`flex h-[68px] w-[68px] items-center justify-center rounded-full border shadow-[0_4px_18px_rgba(0,0,0,0.35)] backdrop-blur-md active:scale-95 ${
+                    webTorchOn
+                      ? 'border-amber-300/50 bg-[radial-gradient(circle_at_50%_35%,rgba(251,191,36,0.42),rgba(251,191,36,0.12))] text-amber-200'
+                      : 'border-white/25 bg-[radial-gradient(circle_at_50%_35%,rgba(255,255,255,0.22),rgba(255,255,255,0.05))] text-white'
+                  }`}
+                >
+                  {webTorchOn ? <FlashlightOff size={26} /> : <Flashlight size={26} />}
+                </button>
+              </div>
+
+              {scannerNotice && (
+                <div
+                  className="absolute inset-x-0 z-30 flex justify-center px-6"
+                  style={{ top: 'calc(env(safe-area-inset-top, 0px) + 68px)' }}
+                >
+                  <p className="m-0 rounded-xl border border-amber-400/35 bg-black/65 px-3 py-2 text-center text-[11px] font-bold leading-snug text-amber-200 backdrop-blur-md">
+                    {scannerNotice}
+                  </p>
+                </div>
+              )}
+
               {!hasCamera && (
-                <div className="z-30 text-center p-4 flex flex-col items-center gap-3">
-                  <p className="text-xs text-white/70 m-0">Cámara no disponible o permiso denegado</p>
+                <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 bg-black/75 px-6">
+                  <p className="m-0 text-center text-xs text-white/80">
+                    Cámara no disponible o permiso denegado
+                  </p>
                   <button
-                    onClick={requestCameraAccess}
-                    className="px-4 py-2 rounded-full bg-[#E91E63] text-white text-xs font-bold border-none cursor-pointer active:scale-95 transition-transform shadow-lg shadow-[#E91E63]/30"
+                    onClick={async () => {
+                      setScannerNotice(null);
+                      await requestCameraAccess();
+                      startScanningRef.current();
+                    }}
+                    className="rounded-full bg-[#E91E63] px-4 py-2 text-xs font-bold text-white shadow-lg shadow-[#E91E63]/30 active:scale-95"
                   >
                     Activar cámara
                   </button>
                 </div>
               )}
-            </div>
-
-            <p className="text-center text-[13px] text-(--text-muted) z-10 px-8 pointer-events-none mb-6">
-              Alinea el código QR dentro del recuadro
-            </p>
-
-            {/* Ingreso manual abajo de la cámara */}
-            <div className="w-full max-w-[320px] px-4 z-20">
-              <button
-                type="button"
-                onClick={() => setShowManualInput(!showManualInput)}
-                className="w-full py-3 px-4 bg-(--bg-elevated) hover:bg-(--bg-subtle) backdrop-blur-xl border border-(--border-subtle) rounded-2xl flex items-center justify-center gap-2 text-xs font-bold text-(--text-primary) transition-colors cursor-pointer shadow-xs"
-              >
-                <Keyboard size={16} />
-                <span>{showManualInput ? 'Ocultar ingreso manual' : '¿No puedes escanear? Escribe el código'}</span>
-              </button>
-
-              <AnimatePresence>
-                {showManualInput && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="mt-3 flex flex-col gap-2 overflow-hidden"
-                  >
-                    <input
-                      type="text"
-                      placeholder="Código de 8 dígitos..."
-                      value={manualCode}
-                      onChange={e => setManualCode(e.target.value.toUpperCase())}
-                      className="w-full bg-(--bg-elevated) border border-(--border-subtle) rounded-xl px-4 py-3 text-(--text-primary) text-center font-mono font-bold text-base tracking-[2px] outline-none"
-                    />
-                    <button
-                      onClick={async () => {
-                        const trimmed = manualCode.trim();
-                        if (!trimmed) return;
-
-                        // ── Código numérico de 6 dígitos (RabbittyCode manual) ──
-                        if (/^\d{6}$/.test(trimmed)) {
-                          try {
-                            const res = await fetch('/api/rabbitty-code/lookup', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ code: Number(trimmed) }),
-                            });
-                            const data = await res.json();
-                            if (data?.success) {
-                              if (data.type === 'qrlogin' && data.qrToken) {
-                                setManualCode('');
-                                setQrConfirm({ qrToken: data.qrToken, origin: 'www.rabbitty.me/impresos' });
-                                return;
-                              } else if (data.type === 'user' && data.user) {
-                                setManualCode('');
-                                router.push(`/profile/wallet?to=${encodeURIComponent(data.user.handle || data.user.id)}`);
-                                return;
-                              } else if (data.type === 'business' && data.businessId) {
-                                setManualCode('');
-                                router.push(`/affiliate/${data.businessId}`);
-                                return;
-                              }
-                            }
-                            alert(data?.error || 'Código no reconocido. Verifica con la pantalla.');
-                            return;
-                          } catch {
-                            alert('Error de red al resolver el código');
-                            return;
-                          }
-                        }
-
-                        try {
-                          const headers = await PlatformBridge.getAuthHeaders();
-                          const res = await fetch('/api/auth/qr/scan', {
-                            method: 'POST',
-                            headers: { ...headers, 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ qrToken: trimmed.toLowerCase() }),
-                          });
-                          const data = await res.json();
-                          if (data?.success) {
-                            alert('¡Inicio de sesión QR Neón exitoso! 🪄');
-                            setManualCode('');
-                            router.push('/profile');
-                            return;
-                          }
-                        } catch {}
-                        alert(`Código ${trimmed} verificado exitosamente`);
-                        setManualCode('');
-                        router.push('/');
-                      }}
-                      className="w-full bg-[#E91E63] text-white font-extrabold text-xs py-3 rounded-xl border-0 cursor-pointer shadow-lg shadow-[#E91E63]/30"
-                    >
-                      Verificar código
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
             </div>
 
             <AnimatePresence>
@@ -1281,7 +1312,8 @@ export default function ScanPage() {
           </motion.div>
         </div>
       )}
-      <BottomNav isDark={isDark} />
+      {/* En la cámara no mostramos la barra: pantalla completa como Telegram */}
+      {activeTab !== 'scan' && <BottomNav isDark={isDark} />}
     </div>
   );
 }

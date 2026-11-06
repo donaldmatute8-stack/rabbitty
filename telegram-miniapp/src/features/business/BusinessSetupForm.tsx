@@ -263,6 +263,7 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
               
               <div style={{ margin: '0 auto 20px', width: '100%' }}>
                 <BunzyVideoStage
+          loop
                   videoSrc="/videos/bunzy/bunzy-1-hi.mp4"
                   poster="/videos/bunzy/bunzy-1-hi.jpg"
                   stepLabel="AFILIACIÓN DE NEGOCIO"
@@ -285,6 +286,7 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
             <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
               <div style={{ marginBottom: 20 }}>
                 <BunzyVideoStage
+          loop
                   videoSrc="/videos/bunzy/bunzy-2-show.mp4"
                   poster="/videos/bunzy/bunzy-2-show.jpg"
                   stepLabel="PASO 1 · PERFIL COMERCIAL"
@@ -376,6 +378,7 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
             <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
               <div style={{ marginBottom: 20 }}>
                 <BunzyVideoStage
+          loop
                   videoSrc="/videos/bunzy/bunzy-3-conexion.mp4"
                   poster="/videos/bunzy/bunzy-3-conexion.jpg"
                   stepLabel="PASO 2 · CONFIANZA & VALOR"
@@ -438,6 +441,7 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
             <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
               <div style={{ marginBottom: 20 }}>
                 <BunzyVideoStage
+          loop
                   videoSrc="/videos/bunzy/bunzy-4-descubrimiento.mp4"
                   poster="/videos/bunzy/bunzy-4-descubrimiento.jpg"
                   stepLabel="PASO 3 · CAPACIDAD DE EMISIÓN"
@@ -516,6 +520,7 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
             <motion.div key="step4" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} style={{ textAlign: 'left', paddingTop: 12 }}>
               <div style={{ marginBottom: 20 }}>
                 <BunzyVideoStage
+          loop
                   videoSrc="/videos/bunzy/bunzy-5-celebra.mp4"
                   poster="/videos/bunzy/bunzy-5-celebra.jpg"
                   stepLabel="PASO 4 · FINALIZACIÓN & FIRMA"

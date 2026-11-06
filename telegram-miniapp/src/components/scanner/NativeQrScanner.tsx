@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
-import { Flashlight, FlashlightOff, Images, ScanLine, X } from 'lucide-react';
+import { ArrowLeft, Flashlight, FlashlightOff, Images } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
 import { createNativeScanner, type NativeScannerApi } from '@/lib/nativeScanner';
 import { useToast } from '@/contexts/ToastContext';
@@ -22,8 +22,8 @@ interface NativeQrScannerProps {
   onConsumed?: () => void;
 }
 
-const DEFAULT_SIZE = 280;
-const MIN_SIZE = 132;
+const DEFAULT_SIZE = 300;
+const MIN_SIZE = 150;
 
 /**
  * Escáner nativo estilo Telegram:
@@ -53,7 +53,7 @@ export function NativeQrScanner({ onScan, onClose, onFallback, onConsumed }: Nat
 
   // Posición inicial centrada
   useEffect(() => {
-    const size = Math.min(window.innerWidth * 0.72, 300);
+    const size = Math.min(window.innerWidth * 0.78, 320);
     setFrame({
       left: (window.innerWidth - size) / 2,
       top: (window.innerHeight - size) / 2,
@@ -83,7 +83,7 @@ export function NativeQrScanner({ onScan, onClose, onFallback, onConsumed }: Nat
     const maxX = Math.max(...xs);
     const minY = Math.min(...ys);
     const maxY = Math.max(...ys);
-    const pad = 14;
+    const pad = 18;
     const size = Math.max(MIN_SIZE, Math.min(Math.max(maxX - minX, maxY - minY) + pad * 2, w * 0.86));
     const left = Math.max(10, Math.min(w - size - 10, (minX + maxX) / 2 - size / 2));
     const top = Math.max(80, Math.min(h - size - 120, (minY + maxY) / 2 - size / 2));
@@ -358,7 +358,7 @@ export function NativeQrScanner({ onScan, onClose, onFallback, onConsumed }: Nat
 
   return createPortal(
     <div className="scanner-portal fixed inset-0 z-[200] select-none">
-      {/* Recuadro: el box-shadow dimmea todo alrededor; dentro se ve la cámara */}
+      {/* Recuadro con fade suave alrededor: la cámara se sigue viendo */}
       <div
         style={{
           position: 'absolute',
@@ -367,7 +367,7 @@ export function NativeQrScanner({ onScan, onClose, onFallback, onConsumed }: Nat
           width: frame.size,
           height: frame.size,
           borderRadius: 22,
-          boxShadow: '0 0 0 9999px rgba(0,0,0,0.62)',
+          boxShadow: '0 0 0 9999px rgba(0,0,0,0.38)',
           transition: 'left 140ms ease-out, top 140ms ease-out, width 140ms ease-out, height 140ms ease-out',
         }}
       >
@@ -406,16 +406,12 @@ export function NativeQrScanner({ onScan, onClose, onFallback, onConsumed }: Nat
             void stopNative();
             onClose();
           }}
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-black/35 text-white backdrop-blur-md"
-          aria-label="Cerrar escáner"
+          className="flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white backdrop-blur-md active:scale-95"
+          aria-label="Volver a Mi Código"
         >
-          <X size={19} />
+          <ArrowLeft size={20} />
         </button>
-        <div className="flex items-center gap-2 rounded-full border border-white/15 bg-black/35 px-3.5 py-2 backdrop-blur-md">
-          <ScanLine size={14} className="text-pink-300" />
-          <span className="text-[11px] font-black uppercase tracking-[1.4px] text-white">Escanear QR</span>
-        </div>
-        <div className="h-10 w-10" />
+        <div className="flex-1" />
       </div>
 
       {/* Hint */}
@@ -425,25 +421,25 @@ export function NativeQrScanner({ onScan, onClose, onFallback, onConsumed }: Nat
             hint === 'Ese código no es de Rabbitty' ? 'text-amber-300' : 'text-white/75'
           }`}
         >
-          {hint ?? 'Apunta al QR; el recuadro lo sigue y se detecta solo'}
+          {hint ?? 'Apunta al código QR'}
         </p>
       </div>
 
       {/* Controls */}
       <div
-        className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-3 px-6 pb-2"
+        className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-4 px-4 pb-2"
         style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 22px)' }}
       >
         <button
           type="button"
           onClick={pickPhoto}
-          className="flex h-13 w-13 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white backdrop-blur-md active:scale-95"
+          className="flex h-[64px] w-[64px] items-center justify-center rounded-full border border-white/25 bg-[radial-gradient(circle_at_50%_35%,rgba(255,255,255,0.22),rgba(255,255,255,0.05))] text-white shadow-[0_4px_18px_rgba(0,0,0,0.35)] backdrop-blur-md active:scale-95"
           aria-label="Escanear desde una foto"
         >
-          <Images size={21} />
+          <Images size={25} />
         </button>
 
-        <div className="flex items-center gap-1 rounded-full border border-white/15 bg-black/40 p-1 backdrop-blur-md">
+        <div className="flex items-center gap-1 rounded-full border border-white/15 bg-black/45 p-1 backdrop-blur-md">
           {[1, 2, 3].map((z) => {
             const disabled = z > zoomMax + 0.01;
             return (
@@ -452,7 +448,7 @@ export function NativeQrScanner({ onScan, onClose, onFallback, onConsumed }: Nat
                 type="button"
                 disabled={disabled}
                 onClick={() => void applyZoom(z)}
-                className={`h-9 min-w-9 rounded-full px-2 text-[11px] font-black transition-colors ${
+                className={`h-8 min-w-8 rounded-full px-1.5 text-[10px] font-black transition-colors ${
                   zoom === z ? 'bg-white text-black' : 'text-white/70 disabled:opacity-25'
                 }`}
                 aria-label={`Zoom ${z}x`}
@@ -467,14 +463,14 @@ export function NativeQrScanner({ onScan, onClose, onFallback, onConsumed }: Nat
           type="button"
           onClick={toggleTorch}
           disabled={!torchAvailable}
-          className={`flex h-13 w-13 items-center justify-center rounded-full border backdrop-blur-md active:scale-95 ${
+          className={`flex h-[64px] w-[64px] items-center justify-center rounded-full border shadow-[0_4px_18px_rgba(0,0,0,0.35)] backdrop-blur-md active:scale-95 ${
             torchOn
-              ? 'border-amber-300/50 bg-amber-400/25 text-amber-200'
-              : 'border-white/20 bg-black/40 text-white disabled:opacity-30'
+              ? 'border-amber-300/50 bg-[radial-gradient(circle_at_50%_35%,rgba(251,191,36,0.42),rgba(251,191,36,0.12))] text-amber-200'
+              : 'border-white/25 bg-[radial-gradient(circle_at_50%_35%,rgba(255,255,255,0.22),rgba(255,255,255,0.05))] text-white disabled:opacity-30'
           }`}
           aria-label={torchOn ? 'Apagar linterna' : 'Encender linterna'}
         >
-          {torchOn ? <FlashlightOff size={21} /> : <Flashlight size={21} />}
+          {torchOn ? <FlashlightOff size={25} /> : <Flashlight size={25} />}
         </button>
       </div>
 

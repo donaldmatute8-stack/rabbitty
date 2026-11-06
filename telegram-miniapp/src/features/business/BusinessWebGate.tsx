@@ -62,6 +62,7 @@ export function BusinessWebGate({ onLocal, onRefresh, refreshing = false }: Busi
         </div>
 
         <BunzyVideoStage
+          loop
           videoSrc="/videos/bunzy/bunzy-1-hi.mp4"
           poster="/videos/bunzy/bunzy-1-hi.jpg"
           stepLabel="ALTA OFICIAL EN LA WEB"

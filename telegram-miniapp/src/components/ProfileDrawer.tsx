@@ -101,11 +101,14 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}
             transition={{ type: 'spring', damping: 32, stiffness: 320 }}
-            className="fixed top-0 left-0 bottom-0 z-201 w-[75%] max-w-72 sm:max-w-80 flex flex-col justify-between rounded-r-2xl border-r border-(--border-subtle) overflow-hidden"
+            className="fixed top-0 left-0 bottom-0 z-201 w-[75%] max-w-72 sm:max-w-80 flex flex-col justify-between border-r border-(--border-subtle) overflow-hidden"
             style={{
               background: 'var(--bg-primary)',
               paddingTop: 'calc(max(var(--safe-top, 0px), 12px) + 8px)',
-              paddingBottom: 'max(var(--safe-bottom, 0px), 6px)',
+              // El safe-area inferior lo aplica SOLO la barra de abajo:
+              // si lo aplicamos aquí también, en la app nativa se duplica
+              // y aparece ese margen raro.
+              paddingBottom: 0,
               boxShadow: '10px 0 30px rgba(0, 0, 0, 0.12), 4px 0 10px rgba(0, 0, 0, 0.05)',
             }}
           >
@@ -113,23 +116,28 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
             <div className="px-5 pt-1 pb-4 shrink-0">
               {/* Top Row: Avatar and Close Button */}
               <div className="flex items-center justify-between mb-3.5">
-                {/* Main Avatar */}
-                <div className="relative">
-                  <div 
-                    className="w-12 h-12 rounded-full overflow-hidden p-0.5 border-2 border-[#E91E63] shrink-0 shadow-sm"
-                    style={{ background: 'var(--bg-elevated)' }}
+                {/* Main Avatar — “mancha”: cuadrado redondeado, rotado y pegado al borde */}
+                <div className="relative shrink-0 -ml-3">
+                  <div
+                    className="h-[68px] w-[68px] overflow-hidden rounded-[22px] border-2 border-[#E91E63]"
+                    style={{
+                      background: 'var(--bg-elevated)',
+                      transform: 'rotate(-8deg)',
+                      boxShadow: '0 8px 22px rgba(0,0,0,0.45), 0 0 0 1px rgba(233,30,99,0.25), 0 0 18px rgba(233,30,99,0.22)',
+                    }}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={avatarUrl}
                       alt={user?.firstName || 'User'}
-                      className="w-full h-full rounded-full object-cover"
+                      className="h-full w-full object-cover"
+                      style={{ transform: 'scale(1.06)' }}
                     />
                   </div>
                 </div>
 
-                {/* Right cluster: subtle affiliated businesses pill + Close button */}
-                <div className="flex items-center gap-2">
+                {/* Right cluster: subtle affiliated businesses pill */}
+                <div className="flex items-center gap-2 pr-4">
                   {user?.role === 'AFFILIATE' && (
                     <div 
                       className="flex items-center gap-1 px-2.5 py-0.5 rounded-full"
@@ -142,18 +150,6 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                       <span className="text-[10px] font-black text-[#E91E63] tracking-wide">SOCIO</span>
                     </div>
                   )}
-
-                  <button
-                    onClick={() => {
-                      PlatformBridge.hapticFeedback('light');
-                      onClose();
-                    }}
-                    aria-label="Cerrar menú"
-                    className="w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition-transform cursor-pointer border-none shrink-0"
-                    style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
-                  >
-                    <ArrowLeft size={16} strokeWidth={2.4} />
-                  </button>
                 </div>
               </div>
 
@@ -299,7 +295,7 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
             >
               {/* Dark / Light Toggle */}
               <div
-                className="flex items-center gap-0.5 p-0.5 rounded-lg"
+                className="flex items-center gap-1 p-1 rounded-xl"
                 style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
               >
                 <button
@@ -309,14 +305,14 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                     PlatformBridge.hapticFeedback('light');
                     setTheme('light');
                   }}
-                  className="w-6 h-6 rounded-md flex items-center justify-center transition-all border-none cursor-pointer"
+                  className="w-10 h-8 rounded-lg flex items-center justify-center transition-all border-none cursor-pointer"
                   style={{
                     background: resolvedTheme === 'light' ? 'var(--bg-primary)' : 'transparent',
                     color: resolvedTheme === 'light' ? '#E91E63' : 'var(--text-muted)',
                     boxShadow: resolvedTheme === 'light' ? 'var(--shadow-sm)' : 'none',
                   }}
                 >
-                  <Sun size={13} strokeWidth={2.4} />
+                  <Sun size={16} strokeWidth={2.4} />
                 </button>
                 <button
                   type="button"
@@ -325,14 +321,14 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                     PlatformBridge.hapticFeedback('light');
                     setTheme('dark');
                   }}
-                  className="w-6 h-6 rounded-md flex items-center justify-center transition-all border-none cursor-pointer"
+                  className="w-10 h-8 rounded-lg flex items-center justify-center transition-all border-none cursor-pointer"
                   style={{
                     background: resolvedTheme === 'dark' ? 'var(--bg-primary)' : 'transparent',
                     color: resolvedTheme === 'dark' ? '#E91E63' : 'var(--text-muted)',
                     boxShadow: resolvedTheme === 'dark' ? 'var(--shadow-sm)' : 'none',
                   }}
                 >
-                  <Moon size={13} strokeWidth={2.4} />
+                  <Moon size={16} strokeWidth={2.4} />
                 </button>
               </div>
 
@@ -353,6 +349,31 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
               </button>
             </div>
           </motion.aside>
+
+          {/* Cerrar: círculo 1.5x centrado SOBRE la línea del borde del sidebar.
+              Va fuera del <aside> para quedar por encima del home (que se le
+              encima 20px con z-index mayor). */}
+          <motion.button
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            transition={{ duration: 0.18 }}
+            whileTap={{ scale: 0.92 }}
+            onClick={() => {
+              PlatformBridge.hapticFeedback('light');
+              onClose();
+            }}
+            aria-label="Cerrar menú"
+            className="fixed z-[203] left-[calc(min(75vw,18rem)-21px)] sm:left-[calc(min(75vw,20rem)-21px)] flex h-[42px] w-[42px] items-center justify-center rounded-full border shadow-[0_6px_20px_rgba(0,0,0,0.35)] cursor-pointer"
+            style={{
+              top: 'calc(max(var(--safe-top, 0px), 12px) + 15px)',
+              background: 'var(--bg-elevated)',
+              borderColor: 'var(--border-subtle)',
+              color: 'var(--text-primary)',
+            }}
+          >
+            <ArrowLeft size={24} strokeWidth={2.4} />
+          </motion.button>
         </>
       )}
     </AnimatePresence>

@@ -19,6 +19,7 @@ export default function SignupPage() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [username, setUsername] = useState('');
+  const [hydrating, setHydrating] = useState(false);
 
   // Focus refs
   const inputRef = useRef<HTMLInputElement>(null);
@@ -54,13 +55,27 @@ export default function SignupPage() {
       return;
     }
 
-    // 3. Check if stored session exists for native before kicking out
-    PlatformBridge.getSessionToken().then((token) => {
-      if (!token) {
-        // No session token and not in Telegram -> Send to login
-        router.replace('/login');
+    // 3. Sesión nativa: dar margen a que el token se persista tras el OTP.
+    // Antes se mandaba a /login al primer intento y se perdía el setup.
+    let alive = true;
+    setHydrating(true);
+    (async () => {
+      for (let attempt = 0; attempt < 14; attempt += 1) {
+        const token = await PlatformBridge.getSessionToken().catch(() => null);
+        if (!alive) return;
+        if (token) {
+          setHydrating(false);
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 150));
       }
-    });
+      if (!alive) return;
+      setHydrating(false);
+      router.replace('/login');
+    })();
+    return () => {
+      alive = false;
+    };
   }, [user, authLoading, router]);
 
   useEffect(() => {
@@ -103,7 +118,8 @@ export default function SignupPage() {
       if (data.success) {
         await PlatformBridge.hapticFeedback('success');
         await checkAuth();
-        router.replace(hasAffiliateIntent() ? '/business' : '/');
+        // El welcome ritual se muestra al entrar por primera vez tras el setup.
+        router.replace(hasAffiliateIntent() ? '/business' : '/?ritual=1');
       } else {
         setError(data.error);
         if (res.status === 409 || res.status === 400) setStep(2);
@@ -127,6 +143,11 @@ export default function SignupPage() {
 
   return (
     <div className="min-h-[100dvh] bg-[#0A0A0A] text-white flex flex-col font-sans relative overflow-hidden">
+      {hydrating && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#0A0A0A]">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/15 border-t-[var(--rabbitty-pink)]" />
+        </div>
+      )}
 
       {/* Top Progress Bar */}
       <div className="absolute left-0 h-1.5 bg-[var(--rabbitty-pink)] transition-all duration-500 ease-out z-50" style={{ top: 'var(--safe-top, 0px)', width: `${(step / totalSteps) * 100}%` }} />

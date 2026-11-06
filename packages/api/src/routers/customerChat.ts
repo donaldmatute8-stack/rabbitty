@@ -112,9 +112,12 @@ export const customerChatRouter = router({
       .from(conversations)
       .where(
         and(
-          // Solo conversaciones de NEGOCIO: los chats entre Rabbitters (PEER)
-          // no pertenecen a la bandeja del admin.
-          eq(conversations.audience, 'BUSINESS'),
+          // Bandeja del admin: chats con clientes (BUSINESS) y el canal oficial
+          // de Bunzy (BUNZY). Los chats entre Rabbitters (PEER) no van aquí.
+          or(
+            eq(conversations.audience, 'BUSINESS'),
+            eq(conversations.audience, 'BUNZY'),
+          ),
           or(
             inArray(conversations.participant1, bizIds),
             inArray(conversations.participant2, bizIds)
