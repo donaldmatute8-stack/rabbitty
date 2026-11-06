@@ -1,0 +1,3 @@
+id,group,ts,account,direction,amount,ref_type,ref_id
+l1,em-rw0001,2025-10-15T12:05:00Z,emission_budget,debit,2090.39,reward,rw0001
+l2,em-rw0001,2025-10-15T12:05:00Z,user_wallet,credit,2090.39,reward,rw0001

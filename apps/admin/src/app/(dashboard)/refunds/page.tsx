@@ -30,8 +30,8 @@ export default function RefundsPage() {
   const todayStr = new Date().toISOString().split("T")[0]!;
   const { data: totals } = trpc.payments.getTotals.useQuery({ startDate: todayStr, endDate: todayStr });
 
-  const completedPayments = payments?.filter(p => p.payment.status !== "REFUNDED") ?? [];
-  const refundedPayments = payments?.filter(p => p.payment.status === "REFUNDED") ?? [];
+  const completedPayments = payments?.filter(p => p.payment.status !== "REFUNDED" && p.payment.status !== "PARTIALLY_REFUNDED") ?? [];
+  const refundedPayments = payments?.filter(p => p.payment.status === "REFUNDED" || p.payment.status === "PARTIALLY_REFUNDED") ?? [];
 
   const selectedPayment = completedPayments.find(p => p.payment.id === selectedPaymentId);
 
@@ -166,8 +166,8 @@ export default function RefundsPage() {
                           </p>
                         </div>
                       </div>
-                      <Badge variant={payment.status === "REFUNDED" ? "danger" : "success"}>
-                        {payment.status === "REFUNDED" ? "Reembolsado" : "Completado"}
+                      <Badge variant={payment.status === "REFUNDED" || payment.status === "PARTIALLY_REFUNDED" ? "danger" : "success"}>
+                        {payment.status === "REFUNDED" ? "Reembolsado" : payment.status === "PARTIALLY_REFUNDED" ? "Parcial" : "Completado"}
                       </Badge>
                     </div>
                   ))}

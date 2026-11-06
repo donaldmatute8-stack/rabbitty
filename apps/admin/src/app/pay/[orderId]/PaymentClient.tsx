@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import { isCashPaymentRequested, type PaymentMethod } from "@rabbitty/api/services/payments/contracts";
 
 // Inicializador del Stripe Promise con la Publishable Key pública
 const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
@@ -87,7 +88,7 @@ function StripeCheckoutForm({
   clientSecret: string;
   orderId: string;
   intentId: string | null;
-  onSuccess: () => void;
+  onSuccess: (settled: boolean) => void;
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -116,22 +117,21 @@ function StripeCheckoutForm({
       setErrorMsg(error.message || "Error al procesar el pago");
       setSubmitting(false);
     } else if (paymentIntent && paymentIntent.status === "succeeded") {
-      toast.success("¡Pago recibido con éxito!");
-      // Pide al servidor reconciliar contra Stripe y liquidar la orden YA
-      // (si el webhook llega después, es idempotente y no duplica nada).
+      // Pide al servidor reconciliar contra Stripe y liquidar la orden YA.
+      // Solo se declara pagado si el servidor confirma la liquidación.
+      let settled = false;
       try {
         if (intentId) {
           const r = await verifyMutation.mutateAsync({ intentId });
-          if (!r?.settled) {
-            toast.info("Pago confirmado en Stripe — liquidando…");
-          }
-        } else {
-          toast.info("Pago confirmado en Stripe — liquidando…");
+          settled = Boolean(r?.settled);
         }
       } catch {
+        settled = false;
+      }
+      if (!settled) {
         toast.info("Pago confirmado en Stripe — liquidando…");
       }
-      onSuccess();
+      onSuccess(settled);
     }
   };
 
@@ -181,7 +181,8 @@ function StripeCheckoutForm({
 export function PaymentClient({ order }: { order: any }) {
   const [notified, setNotified] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
-  const [selectedMethod, setSelectedMethod] = useState<"CARD" | "CASH">("CARD");
+  const [settling, setSettling] = useState(false);
+  const [selectedMethod, setSelectedMethod] = useState<Extract<PaymentMethod, "CARD" | "CASH">>("CARD");
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [intentId, setIntentId] = useState<string | null>(null);
   const [loadingSecret, setLoadingSecret] = useState(false);
@@ -215,6 +216,18 @@ export function PaymentClient({ order }: { order: any }) {
       setLoadingSecret(false);
     }
   };
+
+  if (settling) {
+    return (
+      <Card className="border border-amber-500/30 bg-amber-500/10 p-6 text-center backdrop-blur-md rounded-2xl">
+        <Loader2 className="h-10 w-10 text-amber-300 mx-auto mb-3 animate-spin" />
+        <h2 className="text-lg font-black text-white">Pago confirmado — liquidando</h2>
+        <p className="text-sm text-gray-300 mt-1">
+          Stripe ya cobró. Estamos cerrando la cuenta en el sistema; esto puede tardar unos segundos.
+        </p>
+      </Card>
+    );
+  }
 
   if (paymentSuccess) {
     return (
@@ -309,7 +322,10 @@ export function PaymentClient({ order }: { order: any }) {
                 clientSecret={clientSecret}
                 orderId={order.id}
                 intentId={intentId}
-                onSuccess={() => setPaymentSuccess(true)}
+                onSuccess={(settled) => {
+                  if (settled) setPaymentSuccess(true);
+                  else setSettling(true);
+                }}
               />
             </Elements>
           ) : (
@@ -355,7 +371,7 @@ export function PaymentClient({ order }: { order: any }) {
             </span>
           </div>
 
-          {notified || order.status === "CASH_PAYMENT_REQUESTED" ? (
+          {notified || isCashPaymentRequested(String(order.status)) ? (
             <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center gap-2 text-emerald-400 text-xs font-bold">
               <CheckCircle2 className="h-4 w-4 shrink-0" />
               <span>Solicitud de efectivo recibida en caja. El mesero se acerca a tu mesa con tu cuenta.</span>

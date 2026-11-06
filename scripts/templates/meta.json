@@ -1,0 +1,25 @@
+{
+  "spec_version": "1.0.0",
+  "dataset_kind": "template-example",
+  "window": {
+    "operational": {
+      "from": "2026-01-01",
+      "to": "2026-03-31"
+    },
+    "financial": {
+      "from": "2025-10-01",
+      "to": "2026-03-31"
+    }
+  },
+  "granularity": {
+    "capacity": "weekly",
+    "treasury": "weekly"
+  },
+  "unit_policy": {
+    "bunz_per_mxn": 1,
+    "approved": true,
+    "note": "supuesto del fixture sintético; la paridad real sigue sin aprobar"
+  },
+  "capacity_scope": "affiliate",
+  "note": "Export CSV de un dataset. Ver BUNZ-REAL-DATA-SPEC-v1.0."
+}

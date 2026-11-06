@@ -1,4 +1,5 @@
 "use client";
+import { isCashPaymentRequested, toLegacyPosPaymentMethod } from "@rabbitty/api/services/payments/contracts";
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import { trpc } from "../../../lib/trpc-client";
@@ -274,6 +275,8 @@ export default function PosPage() {
   const [rabbitterModalOpen, setRabbitterModalOpen] = useState(false);
   const [lastPaidOrderId, setLastPaidOrderId] = useState<string | null>(null);
   const [cardFlowChoice, setCardFlowChoice] = useState<"stripe" | "external" | null>(null);
+  // P0-3: referencia/autorización de la terminal externa (obligatoria para tarjeta)
+  const [cardReference, setCardReference] = useState("");
   const [rabbitterQuery, setRabbitterQuery] = useState("");
   // ── Propina del cobro directo + split DIVIDIDA (efectivo vs Bunz) ──
   const [posTip, setPosTip] = useState("");
@@ -1567,10 +1570,7 @@ export default function PosPage() {
     if (!requirePermission("POS_CHARGE")) return;
 
     // Map payment method string to schema enum
-    let mappedMethod: "CASH" | "CREDIT_CARD" | "DEBIT_CARD" | "BUNZ" = "CASH";
-    if (method.includes("TARJETA") || method.includes("CREDIT")) mappedMethod = "CREDIT_CARD";
-    else if (method.includes("DEBIT")) mappedMethod = "DEBIT_CARD";
-    else if (method.includes("BUNZ") || method.includes("QR")) mappedMethod = "BUNZ";
+    const mappedMethod = toLegacyPosPaymentMethod(method);
 
     // Map orderType
     const mappedOrderType: "DINE_IN" | "TO_GO" | "DELIVERY" = 
@@ -1629,6 +1629,7 @@ export default function PosPage() {
           tableId: selectedTableId || undefined,
           orderType: mappedOrderType,
           paymentMethod: mappedMethod,
+          cardReference: cardFlowChoice === "external" ? cardReference.trim() : undefined,
           customerId: selectedRabbitter?.id || undefined,
           customerName: selectedRabbitter?.name || undefined,
           customerPhone: selectedRabbitter?.phoneNumber || undefined,
@@ -3354,6 +3355,17 @@ export default function PosPage() {
                         <span className="text-[11px] text-gray-400">Total a cobrar en terminal</span>
                         <strong className="text-lg font-black text-white tracking-tight">${total.toFixed(2)}</strong>
                       </div>
+                      <div className="rounded-xl bg-white/[0.04] border border-white/10 px-3 py-2.5">
+                        <label className="text-[10px] font-bold text-gray-400 block mb-1">
+                          Autorización / referencia de la terminal
+                        </label>
+                        <input
+                          value={cardReference}
+                          onChange={(e) => setCardReference(e.target.value)}
+                          placeholder="Ej. 123456 o APROBADA"
+                          className="w-full bg-transparent text-sm text-white outline-none placeholder:text-gray-600"
+                        />
+                      </div>
                       <p className="text-[10px] text-gray-500 leading-snug">
                         Confirma con <strong className="text-emerald-400">Terminal aprobada</strong> únicamente después de verificar el voucher o el mensaje de éxito en la máquina física.
                       </p>
@@ -3481,7 +3493,10 @@ export default function PosPage() {
                 </Button>
                 <Button 
                   id="pos-confirm-charge" 
-                  disabled={isCash && cashReceived !== "" && numericReceived < total}
+                  disabled={
+                    (isCash && cashReceived !== "" && numericReceived < total) ||
+                    (pendingMethod === "TARJETA" && cardFlowChoice === "external" && cardReference.trim().length < 3)
+                  }
                   onClick={() => {
                     const finalCash = isCash ? (numericReceived > 0 ? numericReceived : total) : undefined;
                     const m = pendingMethod === "TARJETA"
@@ -3491,7 +3506,8 @@ export default function PosPage() {
                     confirmCheckout(finalCash);
                   }} 
                   className={`rounded-2xl py-3.5 font-black text-sm border-none cursor-pointer transition-all ${
-                    isCash && cashReceived !== "" && numericReceived < total
+                    (isCash && cashReceived !== "" && numericReceived < total) ||
+                    (pendingMethod === "TARJETA" && cardFlowChoice === "external" && cardReference.trim().length < 3)
                       ? "opacity-40 cursor-not-allowed bg-gray-700 text-gray-400"
                       : "bg-gradient-to-r from-[#FF2E93] to-[#E91E63] text-white shadow-[0_10px_30px_-10px_rgba(233,30,99,0.55)] hover:opacity-90"
                   }`}
@@ -4599,7 +4615,7 @@ export default function PosPage() {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {tab.status === "CASH_PAYMENT_REQUESTED" ? (
+                        {isCashPaymentRequested(tab.status) ? (
                           <span
                             className="flex items-center gap-1.5 py-2 px-3 rounded-xl bg-amber-500/15 text-amber-300 border border-amber-500/40 text-xs font-bold"
                             title="El comensal solicitó pagar en efectivo: cobra en gaveta con tu PIN"

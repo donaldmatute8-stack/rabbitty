@@ -28,6 +28,12 @@ import { TRPCError } from "@trpc/server";
 import { computeTrustShadow, type TrustPaymentsInput } from "../services/trustRules";
 import { computeAllocationShadow } from "../services/allocRules";
 import { computeShadowScore } from "../services/ratingRules";
+import {
+  isValidationPanelEnabled,
+  listSnapshots,
+  readSnapshot,
+  validationDir,
+} from "../services/validationSnapshots";
 
 /** Desenrolla result de drizzle raw SQL (rows array en pg driver). */
 const sqlRows = (r: unknown) => ((r as { rows?: unknown[] }).rows ?? r) as Array<Record<string, unknown>>;
@@ -1168,5 +1174,28 @@ export const godRouter = router({
         .set({ bunzMultiplier: input.bunzMultiplier, requiredHops: input.requiredHops })
         .where(eq(levels.id, input.id));
       return { success: true };
+    }),
+
+  // ── Validación económica (READ-ONLY) ───────────────────────────────────────
+  // Lee snapshots generados por scripts/validation-snapshot.mjs.
+  // No escribe, no consulta la DB, no calcula economía. Flag apagado = vacío.
+  getValidationSnapshots: godAdminProcedure.query(async () => {
+    if (!isValidationPanelEnabled()) {
+      return { enabled: false, dir: null, snapshots: [], ignored: [] };
+    }
+    const dir = validationDir();
+    const { snapshots, ignored } = listSnapshots(dir);
+    return { enabled: true, dir, snapshots, ignored };
+  }),
+
+  getValidationSnapshot: godAdminProcedure
+    .input(z.object({ id: z.string().max(80).optional() }).optional())
+    .query(async ({ input }) => {
+      if (!isValidationPanelEnabled()) return { enabled: false, snapshot: null };
+      const dir = validationDir();
+      const fallback = listSnapshots(dir).snapshots[0]?.id;
+      const id = input?.id ?? fallback;
+      if (!id) return { enabled: true, snapshot: null };
+      return { enabled: true, snapshot: readSnapshot(dir, id) };
     }),
 });

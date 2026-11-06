@@ -5,6 +5,7 @@ import {
   registerProviderWebhookEvent,
   markProviderWebhookEventCompleted,
   markProviderWebhookEventFailed,
+  markProviderWebhookEventDiscrepancy,
   confirmPaymentIntentSettled,
   releasePaymentIntentHold,
 } from "@rabbitty/api/services/paymentCore";
@@ -107,9 +108,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ received: true, duplicate: true });
   }
 
-  try {
-    let resolvedIntentId: string | undefined;
+  let resolvedIntentId: string | undefined;
 
+  try {
     switch (event.type) {
       case "payment_intent.succeeded": {
         const pi = event.data.object;
@@ -130,12 +131,27 @@ export async function POST(req: Request) {
         if (internalIntentId) {
           resolvedIntentId = internalIntentId;
           // P0 FIX: Validación de negocio del cobro (monto, moneda y status)
+          const destination = pi.transfer_data?.destination;
+          const destinationId =
+            typeof destination === "string" ? destination : destination?.id;
+          const transitions = (pi as {
+            status_transitions?: { succeeded_at?: number | null };
+          }).status_transitions;
+
           await confirmPaymentIntentSettled(restaurantDb, {
             paymentIntentId: internalIntentId,
             externalTransactionId: pi.latest_charge || externalId,
             verifiedMethod: "STRIPE_CARD",
             expectedAmountCents: typeof pi.amount === "number" ? pi.amount : undefined,
             expectedCurrency: pi.currency ? pi.currency.toUpperCase() : undefined,
+            expectedBranchId:
+              typeof pi.metadata?.branchId === "string" ? pi.metadata.branchId : undefined,
+            expectedStripeAccountId: destinationId,
+            paidAtExternal: transitions?.succeeded_at
+              ? new Date(transitions.succeeded_at * 1000)
+              : event.created
+                ? new Date(event.created * 1000)
+                : undefined,
           });
           console.log(`[Stripe Webhook] Intento ${internalIntentId} liquidado exitosamente.`);
         } else {
@@ -330,9 +346,28 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ received: true });
   } catch (error: any) {
+    const message = error?.message || "Error procesando webhook";
     console.error("[Stripe Webhook] Error procesando evento de Stripe:", error);
-    // P0 FIX: Marcar como FAILED en DB para auditoría y devolver 500 para que Stripe reintente
-    await markProviderWebhookEventFailed(restaurantDb, event.id, error.message || "Error procesando webhook");
-    return NextResponse.json({ error: error.message }, { status: 500 });
+
+    // ── P0-2: discrepancia de liquidación (no reintentable) ─────────────
+    // Stripe ya cobró, pero el intent/orden ya no admite liquidación.
+    // Se registra con ciclo de vida (DISCREPANCY) para reverso/conciliación.
+    if (String(message).includes("SETTLEMENT_NOT_ALLOWED")) {
+      console.error("[Stripe Webhook] DISCREPANCIA DE LIQUIDACIÓN:", message);
+      await markProviderWebhookEventDiscrepancy(restaurantDb, {
+        eventId: event.id,
+        paymentIntentId: resolvedIntentId,
+        code: "SETTLEMENT_NOT_ALLOWED",
+        message,
+      });
+      return NextResponse.json(
+        { received: true, discrepancy: true, message },
+        { status: 200 }
+      );
+    }
+
+    // Errores transitorios: marcar FAILED y 500 para que Stripe reintente
+    await markProviderWebhookEventFailed(restaurantDb, event.id, message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

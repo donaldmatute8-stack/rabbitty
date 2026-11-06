@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import {
   orders,
@@ -13,8 +13,15 @@ import {
   inventoryItems,
   branches,
   restaurants,
+  merchantPaymentAccounts,
+  ledgerEntries,
+  bunzRedemptionAttempts,
+  bunzLedgerEntries,
 } from "@rabbitty/database-restaurant/schema";
-import { users } from "@rabbitty/database-core/schema";
+import { users, ownedBusinesses } from "@rabbitty/database-core/schema";
+import { cancelStripePaymentIntent } from "./stripeConnect";
+import { recordEmissionBooks, recordRedemptionBooks, recordReversalBooks } from "./bunzBooks";
+import { buildShadowReport, recordShadowReport, type ShadowReport } from "./payments/shadow";
 import { bus, EventTypes } from "@rabbitty/events";
 import crypto from "crypto";
 
@@ -167,8 +174,20 @@ export async function createOrGetPaymentIntent(
       throw new TRPCError({ code: "NOT_FOUND", message: "Orden no encontrada en esta sucursal." });
     }
 
-    if (orderRow.status === "COMPLETED" || orderRow.status === "PAID") {
-      throw new TRPCError({ code: "BAD_REQUEST", message: "Esta orden ya se encuentra completamente pagada." });
+    const NON_PAYABLE_ORDER_STATUSES = new Set([
+      "COMPLETED",
+      "PAID",
+      "CANCELLED",
+      "VOID",
+      "EXPIRED",
+      "REFUNDED",
+      "PARTIALLY_REFUNDED",
+    ]);
+    if (orderRow.status && NON_PAYABLE_ORDER_STATUSES.has(String(orderRow.status))) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `Esta orden no admite pagos (estado ${orderRow.status}).`,
+      });
     }
 
     // b) Calcular pagos previos ya acreditados para obtener el saldo pendiente
@@ -310,9 +329,15 @@ export async function confirmPaymentIntentSettled(
     verifiedMethod: "STRIPE_CARD" | "APPLE_PAY" | "CASH" | "BUNZ_ONLY";
     expectedAmountCents?: number;
     expectedCurrency?: string;
-    expectedMerchantId?: string;
+    /** Sucursal esperada (el campo `merchantId` del intent guarda branchId). */
+    expectedBranchId?: string;
+    /** Cuenta Connect esperada (destino del cargo). */
+    expectedStripeAccountId?: string;
+    /** Momento financiero del cobro en Stripe (no el de recepción del webhook). */
+    paidAtExternal?: string | Date;
   }
 ): Promise<{ success: boolean; orderId: string; status: string; recoveryHold?: boolean }> {
+  let shadowReport: ShadowReport | null = null;
   const result = await db.transaction(async (tx: Db) => {
     // 1. Lock del Payment Intent
     const [intent] = await tx
@@ -340,16 +365,38 @@ export async function confirmPaymentIntentSettled(
       });
     }
 
-    if (params.expectedMerchantId !== undefined && params.expectedMerchantId !== intent.merchantId) {
+    if (params.expectedBranchId !== undefined && params.expectedBranchId !== intent.merchantId) {
       throw new TRPCError({
         code: "BAD_REQUEST",
-        message: `Comercio del cobro no coincide. Esperado: ${intent.merchantId}, recibido: ${params.expectedMerchantId}.`,
+        message: `Sucursal del cobro no coincide. Esperada: ${intent.merchantId}, recibida: ${params.expectedBranchId}.`,
       });
     }
 
     // Si ya fue completado previamente, retornar éxito idempotente
     if (intent.status === "SUCCEEDED") {
       return { success: true, orderId: intent.orderId!, status: "SUCCEEDED" };
+    }
+
+    // ── P0-2: solo se liquidan intents vigentes ───────────────────────────
+    // Un intent cancelado/expirado/fallido no puede producir un cobro: si
+    // Stripe ya cobró, el webhook registra la discrepancia para reverso.
+    const SETTLEABLE_INTENT_STATUSES = new Set(["PENDING_PAYMENT", "PROCESSING", "REQUIRES_ACTION"]);
+    if (!SETTLEABLE_INTENT_STATUSES.has(String(intent.status))) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: `SETTLEMENT_NOT_ALLOWED: el intento está en estado ${intent.status}.`,
+      });
+    }
+
+    // TTL con 5 min de gracia para webhooks que llegan justo al expirar.
+    const EXPIRY_GRACE_MS = 5 * 60 * 1000;
+    const financialDate = params.paidAtExternal ? new Date(params.paidAtExternal) : new Date();
+    const financialMs = Number.isFinite(financialDate.getTime()) ? financialDate.getTime() : Date.now();
+    if (intent.expiresAt && financialMs > new Date(intent.expiresAt).getTime() + EXPIRY_GRACE_MS) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: `SETTLEMENT_NOT_ALLOWED: el intento expiró el ${new Date(intent.expiresAt).toISOString()}.`,
+      });
     }
 
     // 2. Lock de la orden asociada
@@ -361,6 +408,45 @@ export async function confirmPaymentIntentSettled(
 
     if (!orderRow) {
       throw new TRPCError({ code: "NOT_FOUND", message: "Orden asociada no encontrada." });
+    }
+
+    // ── P0-2: la orden debe seguir abierta y ser la misma sucursal ────────
+    const CLOSED_ORDER_STATUSES = new Set([
+      "COMPLETED",
+      "PAID",
+      "VOID",
+      "CANCELLED",
+      "EXPIRED",
+      "REFUNDED",
+      "PARTIALLY_REFUNDED",
+    ]);
+    if (orderRow.status && CLOSED_ORDER_STATUSES.has(String(orderRow.status))) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: `SETTLEMENT_NOT_ALLOWED: la orden ${orderRow.id} está en estado ${orderRow.status}.`,
+      });
+    }
+    if (orderRow.branchId && intent.merchantId && String(orderRow.branchId) !== String(intent.merchantId)) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: `SETTLEMENT_NOT_ALLOWED: la orden pertenece a la sucursal ${orderRow.branchId} y el intento a ${intent.merchantId}.`,
+      });
+    }
+
+    // Cuenta Connect: si el caller conoce el destino del cargo, debe coincidir
+    // con la cuenta registrada de la sucursal (evita liquidar en otra cuenta).
+    if (params.expectedStripeAccountId && intent.merchantId) {
+      const [account] = await tx
+        .select({ stripeAccountId: merchantPaymentAccounts.stripeAccountId })
+        .from(merchantPaymentAccounts)
+        .where(eq(merchantPaymentAccounts.branchId, intent.merchantId))
+        .limit(1);
+      if (!account || account.stripeAccountId !== params.expectedStripeAccountId) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `SETTLEMENT_NOT_ALLOWED: la cuenta Connect del cargo no corresponde a la sucursal ${intent.merchantId}.`,
+        });
+      }
     }
 
     // 3. Procesar captura definitiva de reservas de Bunz
@@ -419,21 +505,112 @@ export async function confirmPaymentIntentSettled(
       }
     }
 
-    // 5. Insertar registro de pago con Bunz ÚNICAMENTE si la reserva fue capturada válidamente
+    // 5. Insertar registro de pago con Bunz ÚNICAMENTE si la reserva fue capturada
+    //    válidamente Y el afiliado tiene stock (capacidad) para honrarla.
     if (intent.bunzAmount > 0 && isReserveValid) {
-      await tx.insert(payments).values({
-        orderId: intent.orderId!,
-        method: "BUNZ",
-        amount: centsToMxn(Math.round(intent.bunzAmount * BUNZ_VALUE_CENTS)),
-        reference: `RESERVE:${reserve?.id || intent.id}`,
-        status: "COMPLETED",
-        verificationMethod: "INTERNAL_LEDGER",
-      });
+      // ── P0-4: consumo atómico del stock del afiliado ───────────────────
+      // Sin stock suficiente no se captura el hold: se libera y queda en
+      // RECOVERY_HOLD para auditoría (no se inventa capacidad).
+      const [branchRow] = await tx
+        .select({ restaurantId: branches.restaurantId })
+        .from(branches)
+        .where(eq(branches.id, intent.merchantId))
+        .limit(1);
 
-      await tx
-        .update(orders)
-        .set({ bunzPaid: (orderRow.bunzPaid || 0) + intent.bunzAmount })
-        .where(eq(orders.id, intent.orderId!));
+      const [restRow] = branchRow?.restaurantId
+        ? await tx
+            .select({ businessId: restaurants.businessId })
+            .from(restaurants)
+            .where(eq(restaurants.id, branchRow.restaurantId))
+            .limit(1)
+        : [];
+
+      const businessId = restRow?.businessId;
+      const bunzToConsume = Math.floor(Number(intent.bunzAmount || 0));
+
+      let stockConsumed = false;
+      if (businessId && bunzToConsume > 0) {
+        const consumed = await tx
+          .update(ownedBusinesses)
+          .set({
+            bunzBalance: sql`COALESCE(${ownedBusinesses.bunzBalance}, 0) - ${bunzToConsume}`,
+          })
+          .where(
+            and(
+              eq(ownedBusinesses.id, businessId),
+              sql`COALESCE(${ownedBusinesses.bunzBalance}, 0) >= ${bunzToConsume}`
+            )
+          )
+          .returning({ remaining: ownedBusinesses.bunzBalance });
+        stockConsumed = consumed.length > 0;
+      }
+
+      if (!stockConsumed) {
+        // Liberar el hold del usuario y marcar recuperación
+        if (reserve) {
+          await tx
+            .update(users)
+            .set({
+              totalBunzSpent: sql`GREATEST(0, COALESCE(${users.totalBunzSpent}, 0) - ${Math.round(
+                Number(reserve.amount || 0)
+              )})`,
+            })
+            .where(eq(users.id, reserve.userId));
+
+          await tx
+            .update(bunzReserves)
+            .set({
+              status: "RECOVERY_HOLD",
+              failureReason:
+                "BUNZ_BACKING_INSUFFICIENT: el afiliado no tiene stock para honrar la redención.",
+            })
+            .where(eq(bunzReserves.id, reserve.id));
+        }
+        isReserveValid = false;
+        isRecoveryHold = true;
+      } else {
+        // Asiento del consumo de stock (idempotente)
+        await tx
+          .insert(ledgerEntries)
+          .values({
+            branchId: intent.merchantId,
+            payerSubjectId: `biz_${businessId}`,
+            payeeSubjectId: `usr_${reserve?.userId ?? intent.payerSubjectId ?? "unknown"}`,
+            amount: bunzToConsume,
+            type: "SPEND",
+            referenceId: intent.id,
+            idempotencyKey: `bunz_stock_${intent.id}`,
+            metadata: {
+              concept: "BUNZ_REDEMPTION",
+              orderId: intent.orderId,
+              intentId: intent.id,
+            },
+          })
+          .onConflictDoNothing();
+
+        await tx.insert(payments).values({
+          orderId: intent.orderId!,
+          method: "BUNZ",
+          amount: centsToMxn(Math.round(intent.bunzAmount * BUNZ_VALUE_CENTS)),
+          reference: `RESERVE:${reserve?.id || intent.id}`,
+          status: "COMPLETED",
+          verificationMethod: "INTERNAL_LEDGER",
+        });
+
+        await tx
+          .update(orders)
+          .set({ bunzPaid: (orderRow.bunzPaid || 0) + intent.bunzAmount })
+          .where(eq(orders.id, intent.orderId!));
+
+        // OT-1 / OT-3: intento + asientos de la redención (idempotente, no fatal).
+        await recordRedemptionBooks(tx, {
+          orderId: intent.orderId!,
+          branchId: orderRow.branchId,
+          bunz: intent.bunzAmount,
+          userHash: orderRow.customerId ?? null,
+          tables: { attempts: bunzRedemptionAttempts, ledger: bunzLedgerEntries },
+        });
+      }
     }
 
     // 6. Verificar total pagado contra la orden
@@ -491,6 +668,42 @@ export async function confirmPaymentIntentSettled(
       }
     }
 
+    // ── RP-0.2: snapshot shadow (solo lectura, no altera nada) ───────────
+    try {
+      shadowReport = buildShadowReport({
+        order: {
+          id: orderRow.id,
+          branchId: orderRow.branchId,
+          total: Number(orderRow.total || 0),
+          status: String(orderRow.status || ""),
+          bunzPaid: orderRow.bunzPaid,
+        },
+        payments: (allPayments as Array<Record<string, unknown>>).map((p) => ({
+          id: String(p.id),
+          orderId: p.orderId ? String(p.orderId) : undefined,
+          amount: Number(p.amount || 0),
+          method: String(p.method || ""),
+          status: String(p.status || ""),
+          reference: p.reference ? String(p.reference) : undefined,
+          tipAmount: p.tipAmount ? Number(p.tipAmount) : undefined,
+          verificationMethod: p.verificationMethod ? String(p.verificationMethod) : undefined,
+        })),
+        intent: {
+          id: intent.id,
+          orderId: intent.orderId,
+          merchantId: intent.merchantId,
+          status: "SUCCEEDED",
+          amountCents: Number(intent.amountCents || 0),
+          netFiatCents: Number(intent.netFiatCents || 0),
+          bunzAmount: Number(intent.bunzAmount || 0),
+          currency: intent.currency,
+          externalIntentId: intent.externalIntentId,
+        },
+      });
+    } catch (shadowErr) {
+      console.warn("[SHADOW_PAYMENT] no se pudo construir el snapshot:", shadowErr);
+    }
+
     // 7. Actualizar Payment Intent a SUCCEEDED
     await tx
       .update(paymentIntents)
@@ -542,6 +755,15 @@ export async function confirmPaymentIntentSettled(
       await reconcileOrderCashback(db, { orderId: result.orderId });
     } catch (err) {
       console.error("[STRIPE_CASHBACK_FAIL] orderId=" + result.orderId, err);
+    }
+  }
+
+
+  if (shadowReport) {
+    try {
+      recordShadowReport(shadowReport);
+    } catch (shadowErr) {
+      console.warn("[SHADOW_PAYMENT] no se pudo registrar:", shadowErr);
     }
   }
 
@@ -658,6 +880,13 @@ export async function reconcileOrderCashback(
       .update(orders)
       .set({ bunzReward: res.bunz ?? 0 })
       .where(eq(orders.id, order.id));
+
+    // OT-3: emisión al cobrar (idempotente, no fatal).
+    await recordEmissionBooks(db, {
+      orderId: order.id,
+      bunz: res.bunz ?? 0,
+      tables: { ledger: bunzLedgerEntries },
+    });
     return { minted: true, bunz: res.bunz ?? 0 };
   }
   return { minted: false };
@@ -697,6 +926,26 @@ export async function releasePaymentIntentHold(
         code: "BAD_REQUEST",
         message: "No se puede liberar un intento de pago que ya fue cobrado exitosamente.",
       });
+    }
+
+    // ── P0-1: anular también el PaymentIntent en Stripe ──────────────────
+    // Sin esto, el client_secret sigue vivo y el comensal puede pagar después
+    // aunque el cajero ya canceló (doble cobro). Flag para apagarlo en emergencia.
+    const cancelStripeEnabled = process.env.RABBITTY_PAY_CANCEL_STRIPE !== "0";
+    if (
+      cancelStripeEnabled &&
+      intent.provider === "STRIPE" &&
+      intent.externalIntentId &&
+      process.env.STRIPE_SECRET_KEY
+    ) {
+      const result = await cancelStripePaymentIntent(intent.externalIntentId);
+      if (result === "succeeded") {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message:
+            "El pago ya fue cobrado en Stripe; no se puede cancelar. Revisa el cobro antes de continuar.",
+        });
+      }
     }
 
     let refundedBunz = 0;
@@ -793,7 +1042,15 @@ export async function registerProviderWebhookEvent(
         )
         .limit(1);
 
-      if (existing?.status === "COMPLETED") {
+      const TERMINAL_WEBHOOK_STATUSES = new Set([
+        "COMPLETED",
+        "DISCREPANCY",
+        "REFUND_PENDING",
+        "REFUNDED",
+        "RECONCILED",
+        "RESOLVED_WITH_EXCEPTION",
+      ]);
+      if (existing && TERMINAL_WEBHOOK_STATUSES.has(String(existing.status))) {
         return {
           isDuplicate: true,
           alreadyCompleted: true,
@@ -849,3 +1106,234 @@ export async function markProviderWebhookEventFailed(
     .where(eq(paymentProviderEvents.eventId, eventId));
 }
 
+
+/**
+ * ── P0-2: ciclo de vida de discrepancias ──────────────────────────────────
+ * Cuando Stripe cobra pero Rabbitty no puede liquidar (orden cerrada, intent
+ * vencido, cuenta distinta), el evento no se pierde: queda en DISCREPANCY y
+ * sigue un ciclo operativo hasta resolverse.
+ */
+export type ProviderWebhookDiscrepancyStatus =
+  | "DISCREPANCY"
+  | "REFUND_PENDING"
+  | "REFUNDED"
+  | "RECONCILED"
+  | "RESOLVED_WITH_EXCEPTION";
+
+export async function markProviderWebhookEventDiscrepancy(
+  db: Db,
+  params: {
+    eventId: string;
+    paymentIntentId?: string;
+    code: string;
+    message: string;
+  }
+): Promise<void> {
+  await db
+    .update(paymentProviderEvents)
+    .set({
+      status: "DISCREPANCY",
+      paymentIntentId: params.paymentIntentId ?? undefined,
+      errorMessage: `${params.code}: ${params.message}`,
+      processedAt: new Date(),
+    })
+    .where(eq(paymentProviderEvents.eventId, params.eventId));
+}
+
+export async function resolveProviderWebhookDiscrepancy(
+  db: Db,
+  params: {
+    eventId: string;
+    status: ProviderWebhookDiscrepancyStatus;
+    note?: string;
+  }
+): Promise<void> {
+  await db
+    .update(paymentProviderEvents)
+    .set({
+      status: params.status,
+      errorMessage: params.note ? `${params.status}: ${params.note}` : undefined,
+      processedAt: new Date(),
+    })
+    .where(eq(paymentProviderEvents.eventId, params.eventId));
+}
+
+/**
+ * ── P0-7: reverso de un pago con Bunz ─────────────────────────────────────
+ * Restaura el saldo del usuario y el stock del afiliado, con asientos
+ * idempotentes. Se usa desde payments.refund.
+ */
+export async function refundBunzPayment(
+  db: Db,
+  params: { paymentId: string; amountMxn: number; reason?: string }
+): Promise<{ refunded: boolean; amount: number }> {
+  return await db.transaction(async (tx: Db) => {
+    const [payment] = await tx
+      .select()
+      .from(payments)
+      .where(eq(payments.id, params.paymentId))
+      .for("update");
+
+    if (!payment) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Pago no encontrado." });
+    }
+    if (payment.status === "REFUNDED") {
+      return { refunded: false, amount: 0 };
+    }
+
+    const original = Math.max(0, Number(payment.amount || 0));
+    const amount = Math.min(original, Math.max(0, Math.round(Number(params.amountMxn))));
+    if (amount <= 0) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Monto de reembolso inválido." });
+    }
+
+    // Idempotencia: si ya existe el asiento de reverso, no repetir.
+    const [prior] = await tx
+      .select({ id: ledgerEntries.id })
+      .from(ledgerEntries)
+      .where(eq(ledgerEntries.idempotencyKey, `bunz_refund_user_${payment.id}`))
+      .limit(1);
+    if (prior) return { refunded: false, amount: 0 };
+
+    // Resolver usuario (por reserva o por intent de la orden)
+    let userId: string | null = null;
+    let merchantId: string | null = null;
+    const ref = String(payment.reference ?? "");
+
+    if (ref.startsWith("RESERVE:")) {
+      const reserveId = ref.slice("RESERVE:".length);
+      const [reserve] = await tx
+        .select()
+        .from(bunzReserves)
+        .where(eq(bunzReserves.id, reserveId))
+        .limit(1);
+      userId = reserve?.userId ?? null;
+    }
+
+    if (payment.orderId) {
+      const [intent] = await tx
+        .select()
+        .from(paymentIntents)
+        .where(
+          and(
+            eq(paymentIntents.orderId, payment.orderId),
+            sql`COALESCE(${paymentIntents.bunzAmount}, 0) > 0`
+          )
+        )
+        .orderBy(desc(paymentIntents.createdAt))
+        .limit(1);
+      if (!userId) userId = intent?.payerSubjectId ?? null;
+      merchantId = intent?.merchantId ?? null;
+    }
+
+    if (!userId) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "BUNZ_REFUND_UNRESOLVED: no se encontró el usuario del pago con Bunz.",
+      });
+    }
+
+    // Resolver el afiliado (stock) desde la sucursal del intent/orden
+    let businessId: string | null = null;
+    let branchId: string | null = null;
+    if (payment.orderId) {
+      const [ord] = await tx
+        .select({ branchId: orders.branchId })
+        .from(orders)
+        .where(eq(orders.id, payment.orderId))
+        .limit(1);
+      branchId = ord?.branchId ?? null;
+    }
+    const effectiveBranchId = branchId ?? merchantId;
+    if (effectiveBranchId) {
+      const [br] = await tx
+        .select({ restaurantId: branches.restaurantId })
+        .from(branches)
+        .where(eq(branches.id, effectiveBranchId))
+        .limit(1);
+      if (br?.restaurantId) {
+        const [rest] = await tx
+          .select({ businessId: restaurants.businessId })
+          .from(restaurants)
+          .where(eq(restaurants.id, br.restaurantId))
+          .limit(1);
+        businessId = rest?.businessId ?? null;
+      }
+    }
+
+    // Restaurar saldo del usuario
+    await tx
+      .update(users)
+      .set({
+        totalBunzSpent: sql`GREATEST(0, COALESCE(${users.totalBunzSpent}, 0) - ${amount})`,
+      })
+      .where(eq(users.id, userId));
+
+    // Restaurar stock del afiliado
+    if (businessId) {
+      await tx
+        .update(ownedBusinesses)
+        .set({
+          bunzBalance: sql`COALESCE(${ownedBusinesses.bunzBalance}, 0) + ${amount}`,
+        })
+        .where(eq(ownedBusinesses.id, businessId));
+    }
+
+    // Asientos de reverso (idempotentes)
+    await tx
+      .insert(ledgerEntries)
+      .values([
+        {
+          branchId: null,
+          payerSubjectId: "POS_CHECKOUT",
+          payeeSubjectId: `usr_${userId}`,
+          amount,
+          type: "REFUND",
+          referenceId: payment.id,
+          idempotencyKey: `bunz_refund_user_${payment.id}`,
+          metadata: { concept: "BUNZ_REFUND", reason: params.reason ?? null },
+        },
+        ...(businessId
+          ? [
+              {
+                branchId: null,
+                payerSubjectId: `usr_${userId}`,
+                payeeSubjectId: `biz_${businessId}`,
+                amount,
+                type: "REFUND",
+                referenceId: payment.id,
+                idempotencyKey: `bunz_refund_stock_${payment.id}`,
+                metadata: { concept: "BUNZ_REFUND_STOCK", reason: params.reason ?? null },
+              },
+            ]
+          : []),
+      ])
+      .onConflictDoNothing();
+
+    // Asiento negativo + estado
+    await tx.insert(payments).values({
+      orderId: payment.orderId,
+      method: "BUNZ",
+      amount: -amount,
+      reference: `Bunz refund: ${params.reason || "Sin razón"}`,
+      status: "REFUNDED",
+    });
+
+    await tx
+      .update(payments)
+      .set({ status: amount >= original ? "REFUNDED" : "PARTIALLY_REFUNDED" })
+      .where(eq(payments.id, payment.id));
+
+    // OT-3: reembolso total de la pata Bunz ⇒ revertir sus asientos de redención.
+    // La reversión de la RECOMPENSA es una decisión de negocio aparte (¿se clawback?).
+    if (amount >= original && payment.orderId) {
+      const entries = await tx
+        .select()
+        .from(bunzLedgerEntries)
+        .where(and(eq(bunzLedgerEntries.refId, payment.orderId), eq(bunzLedgerEntries.refType, "redemption")));
+      await recordReversalBooks(tx, { original: entries, tables: { ledger: bunzLedgerEntries } });
+    }
+
+    return { refunded: true, amount };
+  });
+}

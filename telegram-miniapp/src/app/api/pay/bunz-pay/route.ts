@@ -134,11 +134,18 @@ async function loadPolicyAndReceivedToday(branchId: string | null): Promise<{
 const ADMIN_TRPC = process.env.NEXT_PUBLIC_ADMIN_API_URL || 'https://admin.rabbitty.me/api/trpc';
 
 // tRPC mutation batch proxy (input en el cuerpo, es el mismo patrón de /api/pay/setup)
-async function callAdmin(procedure: string, input: unknown): Promise<Record<string, unknown>> {
+async function callAdmin(
+  procedure: string,
+  input: unknown,
+  authorization?: string
+): Promise<Record<string, unknown>> {
   const url = `${ADMIN_TRPC}/${procedure}?batch=1`;
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  // RP-0.3: propagar la identidad del pagador al admin (antes se perdía)
+  if (authorization) headers.Authorization = authorization;
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ '0': input }),
     signal: AbortSignal.timeout(15000),
   });
@@ -209,6 +216,10 @@ export async function POST(req: NextRequest) {
   try {
     const caller = await getAuthenticatedUser(req).catch(() => null);
     if (!caller) return NextResponse.json({ ok: false, error: 'Inicia sesión para pagar' }, { status: 401 });
+
+    // RP-0.3: identidad y flag de migración del motor
+    const authHeader = req.headers.get('authorization') || undefined;
+    const engineV2 = process.env.RABBITTY_PAY_ENGINE_V2 === '1';
 
     const rate = await checkRateLimit(`pay_bunz:${caller.id}`, 8, 60);
     if (!rate.allowed) {
@@ -297,15 +308,57 @@ export async function POST(req: NextRequest) {
       let localError: string | null = null;
       let wrapped: Record<string, unknown> | null = null;
       try {
-        const intent = await callAdmin('payments.createIntent', {
-          orderId,
-          amountMxn: owed0,
-          idempotencyKey: `bill_bunz_${orderId}`,
-        });
-        const intentId = String(intent?.id ?? '');
-        if (!intentId) throw new Error('No se pudo crear el intent del pago');
-        const approved = await callAdmin('payments.approveIntent', { intentId });
-        wrapped = { intentId, approved };
+        if (engineV2) {
+          // ── RP-0.3: motor nuevo (paymentCore) detrás de flag ────────────
+          const created = await callAdmin(
+            'payments.createPaymentIntent',
+            {
+              orderId,
+              bunzAmount: owed0,
+              tipAmount: 0,
+              provider: 'BUNZ_ONLY',
+            },
+            authHeader
+          );
+          const intentId = String(created?.intentId ?? '');
+          if (!intentId) throw new Error('No se pudo crear el intent del pago');
+          const netFiat = Number(created?.netFiatCents ?? 0);
+          if (netFiat > 0) {
+            await callAdmin(
+              'payments.cancelPaymentIntent',
+              { intentId, reason: 'BUNZ_CORE_INSUFFICIENT' },
+              authHeader
+            ).catch(() => {});
+            throw new Error('Saldo Bunz insuficiente para cubrir la cuenta');
+          }
+          const settled = await callAdmin(
+            'payments.settleBunzIntent',
+            { intentId },
+            authHeader
+          );
+          if (settled?.recoveryHold) {
+            throw new Error('El negocio no tiene stock suficiente para esta redención');
+          }
+          wrapped = {
+            intentId,
+            approved: { amountMxn: owed0, status: settled?.status ?? 'SUCCEEDED' },
+          };
+        } else {
+          // Motor legacy (paymentIntentDomain) — sin cambios
+          const intent = await callAdmin(
+            'payments.createIntent',
+            {
+              orderId,
+              amountMxn: owed0,
+              idempotencyKey: `bill_bunz_${orderId}`,
+            },
+            authHeader
+          );
+          const intentId = String(intent?.id ?? '');
+          if (!intentId) throw new Error('No se pudo crear el intent del pago');
+          const approved = await callAdmin('payments.approveIntent', { intentId }, authHeader);
+          wrapped = { intentId, approved };
+        }
       } catch (err: unknown) {
         localError = err instanceof Error ? err.message : 'No se pudo ejecutar el pago con Bunz';
       }

@@ -5,6 +5,7 @@ import { Dialog, toast, Button, Input } from "@rabbitty/ui";
 import { PaymentMethodSelector } from "./PaymentMethodSelector";
 import { SplitBillModal } from "./SplitBillModal";
 import { QrCustomerLogin } from "./QrCustomerLogin";
+import { RedemptionRejectModal } from "./RedemptionRejectModal";
 import { trpc } from "../lib/trpc-client";
 import { User, QrCode } from "lucide-react";
 
@@ -19,6 +20,10 @@ export function CheckoutModal({ orderId, total, onClose, onSuccess }: CheckoutMo
   const [showSplit, setShowSplit] = useState(false);
   const [phoneInput, setPhoneInput] = useState("");
   const [showQr, setShowQr] = useState(false);
+  // P0-3: referencia obligatoria para cobros con tarjeta
+  const [cardReference, setCardReference] = useState("");
+  // OT-1: si el cobro con Bunz falla, se pide el motivo antes de cerrar.
+  const [rejectBunz, setRejectBunz] = useState<number | null>(null);
 
   const { data: orders } = trpc.pos.getOrders.useQuery({});
   const order = orders?.find((o) => o.id === orderId);
@@ -48,6 +53,10 @@ export function CheckoutModal({ orderId, total, onClose, onSuccess }: CheckoutMo
   });
 
   const handleSelectPayment = async (method: "cash" | "card" | "bunz" | "stripe", tip: number) => {
+    if ((method === "card" || method === "stripe") && cardReference.trim().length < 3) {
+      toast.error("Registra la referencia/autorización de la terminal para cobrar con tarjeta.");
+      return;
+    }
     let apiMethod: "CASH" | "CREDIT_CARD" | "DEBIT_CARD" | "BUNZ";
     if (method === "cash") {
       apiMethod = "CASH";
@@ -64,9 +73,12 @@ export function CheckoutModal({ orderId, total, onClose, onSuccess }: CheckoutMo
         orderId,
         method: apiMethod,
         amount: total + tip,
+        reference: apiMethod === "CREDIT_CARD" ? cardReference.trim() : undefined,
       });
     } catch {
-      // Error is handled in onError of payMutation
+      // Error is handled in onError of payMutation. Si era Bunz, además se pide
+      // el motivo del rechazo (OT-1) para que la demanda no atendida exista.
+      if (apiMethod === "BUNZ") setRejectBunz(total + tip);
     }
   };
 
@@ -161,6 +173,17 @@ export function CheckoutModal({ orderId, total, onClose, onSuccess }: CheckoutMo
             )}
           </div>
 
+          <div className="rounded-xl border border-gray-200 bg-white p-3 space-y-1.5">
+            <label className="text-[11px] font-bold text-gray-600 block">
+              Referencia / autorización de la terminal (solo tarjeta)
+            </label>
+            <Input
+              placeholder="Ej. 123456 o APROBADA"
+              value={cardReference}
+              onChange={(e) => setCardReference(e.target.value)}
+            />
+          </div>
+
           <PaymentMethodSelector
             total={total}
             onSelect={handleSelectPayment}
@@ -178,6 +201,15 @@ export function CheckoutModal({ orderId, total, onClose, onSuccess }: CheckoutMo
           }}
           orderId={orderId}
           total={total}
+        />
+      )}
+
+      {rejectBunz !== null && (
+        <RedemptionRejectModal
+          open={true}
+          orderId={orderId}
+          bunz={rejectBunz}
+          onClose={() => setRejectBunz(null)}
         />
       )}
     </>

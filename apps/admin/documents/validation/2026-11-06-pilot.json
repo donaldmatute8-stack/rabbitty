@@ -1,0 +1,302 @@
+{
+  "snapshot_version": "1.0",
+  "export_id": "exp-a5b7493894a9",
+  "generated_at": "2026-11-06T12:00:00Z",
+  "source_commit": "demo",
+  "dataset_kind": "pilot",
+  "dataset_hash": "a5b7493894a974c1e5289486e7bfdfc587c9b1b27ed0912eac464a78c513b684",
+  "spec_version": "1.0.0",
+  "status": {
+    "valid": true,
+    "calibration_ready": false,
+    "audit_verdict": "hallazgos",
+    "next_step": "piloto: instrumentar obligations, bunz_ledger, abuse_signals"
+  },
+  "counts": {
+    "affiliates": 1,
+    "sales": 42,
+    "rewards_issued": 42,
+    "redemptions": 6,
+    "capacity": 1,
+    "obligations": 0,
+    "fiat_settlements": 2,
+    "bunz_ledger": 0,
+    "treasury": 21,
+    "abuse_signals": 0
+  },
+  "coverage": {
+    "active_affiliates": 1,
+    "inactive_affiliates": 0,
+    "cells": [
+      {
+        "cell": "coffee|S",
+        "affiliates": 1
+      }
+    ],
+    "insufficient_cells": [
+      {
+        "cell": "coffee|S",
+        "affiliates": 1
+      }
+    ],
+    "sample_top3_sales_share": 1,
+    "limitations": [
+      "cobertura insuficiente por celda: no extrapolar",
+      "muestra dominada por pocos afiliados: conclusiones no generalizables"
+    ]
+  },
+  "pilot": {
+    "kind": "pilot",
+    "datasets_present": [
+      "affiliates",
+      "sales",
+      "rewards_issued",
+      "redemptions",
+      "capacity",
+      "fiat_settlements",
+      "treasury"
+    ],
+    "datasets_missing": [
+      "obligations",
+      "bunz_ledger",
+      "abuse_signals"
+    ],
+    "rules_not_checked": [
+      "R08",
+      "R09",
+      "R10",
+      "R11",
+      "R12",
+      "R13",
+      "R14",
+      "R15",
+      "R26"
+    ],
+    "suppressed_findings": 3,
+    "gaps": [
+      {
+        "dataset": "obligations",
+        "reason": "sin fuente o sin instrumentación: obligations"
+      },
+      {
+        "dataset": "bunz_ledger",
+        "reason": "sin fuente o sin instrumentación: bunz_ledger"
+      },
+      {
+        "dataset": "abuse_signals",
+        "reason": "sin fuente o sin instrumentación: abuse_signals"
+      }
+    ],
+    "note": "Un piloto no calibra: sirve para probar la instrumentación con datos reales."
+  },
+  "metrics": {
+    "emitted_bunz": 801,
+    "redeemed_bunz": 150,
+    "circulating_bunz": 0,
+    "treasury_bunz": 0,
+    "reserved_bunz": 0,
+    "accrued_bunz": 0,
+    "settled_bunz": 0,
+    "settled_fiat_mxn": 0,
+    "fiat_collected_mxn": 0,
+    "written_off_bunz": 0,
+    "outstanding_bunz": 0,
+    "requested_bunz": 150,
+    "unmet_economic_bunz": 0,
+    "unmet_operational_bunz": 0,
+    "unmet_unknown_bunz": 0,
+    "unmet_rate": 0,
+    "unmet_by_reason": {},
+    "mobility_rate_amount": 0,
+    "mobility_rate_count": 0,
+    "capacity_available_bunz": 50000,
+    "ce": null,
+    "mora_importe_bunz": 0,
+    "mora_conteo": 0,
+    "balances": {
+      "emission_budget": 0,
+      "user_wallet": 0,
+      "redemption_capacity": 0,
+      "commission_reserved": 0,
+      "treasury_bunz": 0,
+      "written_off": 0,
+      "external": 0
+    }
+  },
+  "rules": {
+    "errors": [],
+    "warnings": [
+      {
+        "code": "R27",
+        "msg": "dataset obligations ausente (hueco declarado en piloto)"
+      },
+      {
+        "code": "R27",
+        "msg": "dataset bunz_ledger ausente (hueco declarado en piloto)"
+      },
+      {
+        "code": "R27",
+        "msg": "dataset abuse_signals ausente (hueco declarado en piloto)"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[0]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[1]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R19",
+        "msg": "ventana operativa de 21 días (< 84): limitación de piloto"
+      },
+      {
+        "code": "R20",
+        "msg": "celdas con < 5 afiliados activos: coffee|S(1)"
+      },
+      {
+        "code": "R21",
+        "msg": "muestra concentrada: top3 de ventas 100.0%"
+      },
+      {
+        "code": "R24",
+        "msg": "paridad Bunz↔MXN no aprobada: la identidad contable mezcla unidades → no se calibra"
+      }
+    ],
+    "not_checked": [
+      "R08",
+      "R09",
+      "R10",
+      "R11",
+      "R12",
+      "R13",
+      "R14",
+      "R15",
+      "R26"
+    ]
+  },
+  "backtest": {
+    "skipped": true,
+    "reason": "dataset no calibrable (piloto, cobertura o metadatos)"
+  },
+  "audit": {
+    "verdict": "hallazgos",
+    "manifest_hash": "cbc4aa19591407454158a0f0ba84abeea3b00f63d6e149d84470f392b238a364",
+    "fingerprint": "1cc84a7a4fa350079dc49f77471ebe31f472bdb7964ce1caf113634c0d562f25",
+    "determinism": true,
+    "findings": [
+      {
+        "code": "LKG-01",
+        "parameter": "rewardRate",
+        "severity": "alto",
+        "mitigated": false,
+        "msg": "'rewardRate' se estima sobre la serie observada y luego se usa para predecirla: la comparación es en muestra.",
+        "fix": "medirlo con fuente independiente (encuesta de movilidad, política de disputas) cuando exista; mientras tanto, la partición temporal es el mínimo exigible."
+      },
+      {
+        "code": "LKG-01",
+        "parameter": "redemptionRate",
+        "severity": "alto",
+        "mitigated": false,
+        "msg": "'redemptionRate' se estima sobre la serie observada y luego se usa para predecirla: la comparación es en muestra.",
+        "fix": "medirlo con fuente independiente (encuesta de movilidad, política de disputas) cuando exista; mientras tanto, la partición temporal es el mínimo exigible."
+      },
+      {
+        "code": "LKG-01",
+        "parameter": "expectedRedemptionRatio",
+        "severity": "alto",
+        "mitigated": false,
+        "msg": "'expectedRedemptionRatio' se estima sobre la serie observada y luego se usa para predecirla: la comparación es en muestra.",
+        "fix": "medirlo con fuente independiente (encuesta de movilidad, política de disputas) cuando exista; mientras tanto, la partición temporal es el mínimo exigible."
+      },
+      {
+        "code": "LKG-01",
+        "parameter": "mobility",
+        "severity": "alto",
+        "mitigated": false,
+        "msg": "'mobility' se estima sobre la serie observada y luego se usa para predecirla: la comparación es en muestra.",
+        "fix": "medirlo con fuente independiente (encuesta de movilidad, política de disputas) cuando exista; mientras tanto, la partición temporal es el mínimo exigible."
+      },
+      {
+        "code": "LKG-01",
+        "parameter": "disputedShare",
+        "severity": "alto",
+        "mitigated": false,
+        "msg": "'disputedShare' se estima sobre la serie observada y luego se usa para predecirla: la comparación es en muestra.",
+        "fix": "medirlo con fuente independiente (encuesta de movilidad, política de disputas) cuando exista; mientras tanto, la partición temporal es el mínimo exigible."
+      },
+      {
+        "code": "TMP-01",
+        "severity": "medio",
+        "msg": "ventana insuficiente para validación temporal"
+      },
+      {
+        "code": "FIT-02",
+        "severity": "alto",
+        "msg": "dataset no apto: cobertura o metadatos insuficientes: se extiende la observación, no se calibra"
+      }
+    ],
+    "leakage_mitigated": false
+  },
+  "decisions": [
+    {
+      "id": "G1",
+      "label": "Contratos canónicos de pago (RP-0)",
+      "status": "hecho",
+      "owner": "tech"
+    },
+    {
+      "id": "G2",
+      "label": "Shadow mode sin discrepancias",
+      "status": "en-curso",
+      "owner": "tech"
+    },
+    {
+      "id": "G3",
+      "label": "¿Una obligación fiat se extingue entregando Bunz?",
+      "status": "pendiente",
+      "owner": "negocio+legal"
+    },
+    {
+      "id": "G4",
+      "label": "Paridad Bunz–MXN y su mecanismo",
+      "status": "pendiente",
+      "owner": "negocio+CFO"
+    },
+    {
+      "id": "G5",
+      "label": "Límite contractual de autorización",
+      "status": "pendiente",
+      "owner": "negocio"
+    },
+    {
+      "id": "G6",
+      "label": "Política de concentración y remedios",
+      "status": "pendiente",
+      "owner": "negocio"
+    },
+    {
+      "id": "G7",
+      "label": "orders.bunzPaid con semántica única",
+      "status": "en-curso",
+      "owner": "producto+tech"
+    },
+    {
+      "id": "G8",
+      "label": "Datos reales que respalden el modelo",
+      "status": "pendiente",
+      "owner": "datos"
+    },
+    {
+      "id": "G9",
+      "label": "Aprobación explícita de RP-2",
+      "status": "pendiente",
+      "owner": "gobernanza"
+    }
+  ],
+  "artifacts": {
+    "validation_hash": "63046cde7b2af6a68707cda88fd9903ce35151731a2edbf268dc72a7934ab0e5",
+    "audit_hash": "1cc84a7a4fa350079dc49f77471ebe31f472bdb7964ce1caf113634c0d562f25",
+    "backtest_hash": null
+  }
+}

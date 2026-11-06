@@ -1,4 +1,5 @@
 "use client";
+import type { PaymentMethod } from "@rabbitty/api/services/payments/contracts";
 
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -91,7 +92,7 @@ export default function PosMenuPage() {
   const tipAmount = subtotal * tipPercentage;
   const grandTotal = subtotal + tipAmount;
 
-  const handleCheckout = async (method: 'STARS' | 'BUNZ') => {
+  const handleCheckout = async (method: Extract<PaymentMethod, 'STARS' | 'BUNZ'>) => {
     toast.success(`Generando pago con ${method}...`);
     try {
       const payload: any = {

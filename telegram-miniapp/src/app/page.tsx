@@ -20,6 +20,7 @@ import MembershipCard from '@/components/ui/MembershipCard';
 import ProfileDrawer from '@/components/ProfileDrawer';
 import { useTheme } from '@/contexts/ThemeContext';
 import RabbittyContourLoader from '@/components/ui/RabbittyContourLoader';
+import { playLoaderSound } from '@/lib/loaderSound';
 import { useOrderTracking } from '@/lib/useOrderTracking';
 import { useAppFlags } from '@/lib/useAppFlags';
 import { OrderTrackingCard, OrderTrackSheet } from '@/components/affiliate/OrderTrackingCard';
@@ -509,6 +510,8 @@ export default function FeedPage() {
       window.scrollTo(0, 0);
     });
     PlatformBridge.hapticFeedback('light');
+    // Sonido del loader: mismo punto para pull-to-refresh y menú Ra
+    playLoaderSound();
     if (refreshBarTimer.current) clearTimeout(refreshBarTimer.current);
     setRefreshingFeed(true);
     setRefreshKey((k) => k + 1);

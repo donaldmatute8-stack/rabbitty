@@ -193,6 +193,10 @@ export async function POST(req: Request) {
     // Autenticación best-effort: el comensal de la app envía headers; los
     // códigos QR externos (sin sesión) siguen funcionando como anónimos.
     const caller = await getAuthenticatedUser(req).catch(() => null);
+    // P0-5: no crear orden para un pago con Bunz sin sesión
+    if (paymentMethod === 'BUNZ' && !caller) {
+      return NextResponse.json({ success: false, error: 'Inicia sesión para pagar con Bunz' }, { status: 401 });
+    }
     if (!existingOrderId && (!items || items.length === 0)) {
       return NextResponse.json({ success: false, error: 'Datos inválidos' }, { status: 400 });
     }
@@ -336,7 +340,8 @@ export async function POST(req: Request) {
         tax: r2(grandTotal - grandTotal / (1 + TAX_RATE)),
         tip: totalTip,
         total: r2(grandTotal + totalTip),
-        status: paymentMethod === 'BUNZ' ? 'PAID' : 'PENDING',
+        // P0-5: BUNZ se marca PAID solo después del débito verificado
+        status: 'PENDING_PAYMENT',
         orderType: resolvedOrderType,
         deliveryAddress: normalizedAddress,
         deliveryAddressData: normalizedAddressData,
@@ -446,6 +451,33 @@ export async function POST(req: Request) {
         return NextResponse.json({ success: false, error: 'Inicia sesión para pagar con Bunz' }, { status: 401 });
       }
 
+      // P0-4: resolver el afiliado dueño de la sucursal para consumir su stock
+      const [payOrderRow] = await restaurantDb
+        .select({ branchId: orders.branchId })
+        .from(orders)
+        .where(eq(orders.id, targetOrderId))
+        .limit(1);
+      const paymentBranchId = payOrderRow?.branchId;
+      if (!paymentBranchId) {
+        return NextResponse.json(
+          { success: false, error: 'No pudimos resolver la sucursal del pago' },
+          { status: 409 }
+        );
+      }
+      const [bizRow] = await restaurantDb
+        .select({ businessId: restaurants.businessId })
+        .from(branches)
+        .innerJoin(restaurants, eq(branches.restaurantId, restaurants.id))
+        .where(eq(branches.id, paymentBranchId))
+        .limit(1);
+      const businessId = bizRow?.businessId;
+      if (!businessId) {
+        return NextResponse.json(
+          { success: false, error: 'No pudimos identificar el negocio para el pago con Bunz' },
+          { status: 409 }
+        );
+      }
+
       const bunzRequired = Math.round(Number(totalToPay));
       if (bunzRequired <= 0) {
         return NextResponse.json({ success: false, error: 'Monto inválido de Bunz' }, { status: 400 });
@@ -480,7 +512,7 @@ export async function POST(req: Request) {
           })
           .where(eq(users.id, lockedUser.id));
 
-        // Record authoritative ledger entry
+        // Record authoritative ledger entry (usuario)
         await recordLedgerTransaction(
           {
             payerSubjectId: `usr_${caller.id}`,
@@ -497,22 +529,97 @@ export async function POST(req: Request) {
           },
           tx
         );
+
+        // P0-4: consumir stock del afiliado (condicional, sin sobregiro)
+        const consumed = await tx
+          .update(ownedBusinesses)
+          .set({
+            bunzBalance: sql`COALESCE(${ownedBusinesses.bunzBalance}, 0) - ${bunzRequired}`,
+          })
+          .where(
+            and(
+              eq(ownedBusinesses.id, businessId),
+              sql`COALESCE(${ownedBusinesses.bunzBalance}, 0) >= ${bunzRequired}`
+            )
+          )
+          .returning({ remaining: ownedBusinesses.bunzBalance });
+
+        if (consumed.length === 0) {
+          throw new Error('STOCK_INSUFFICIENT');
+        }
+
+        await recordLedgerTransaction(
+          {
+            branchId: paymentBranchId,
+            payerSubjectId: `biz_${businessId}`,
+            payeeSubjectId: `usr_${caller.id}`,
+            amount: bunzRequired,
+            type: 'SPEND',
+            referenceId: targetOrderId,
+            idempotencyKey: `bunz_stock_${targetOrderId}`,
+            metadata: {
+              orderId: targetOrderId,
+              concept: 'Consumo de stock Bunz en checkout',
+            },
+          },
+          tx
+        );
       });
 
-      // 2. Insert restaurant payment record
-      await restaurantDb.insert(payments).values({
-        orderId: targetOrderId,
-        method: "BUNZ",
-        amount: totalToPay,
-        status: "COMPLETED"
-      });
+      // 2. Insert restaurant payment record (con compensación si falla)
+      let insertedPaymentId: string | null = null;
+      try {
+        const [inserted] = await restaurantDb.insert(payments).values({
+          orderId: targetOrderId,
+          method: "BUNZ",
+          amount: totalToPay,
+          status: "COMPLETED"
+        }).returning({ id: payments.id });
+        insertedPaymentId = inserted?.id ?? null;
 
-      const [orderAfter] = await restaurantDb.select().from(orders).where(eq(orders.id, targetOrderId));
-      const allPayments = await restaurantDb.select().from(payments).where(eq(payments.orderId, targetOrderId));
-      const sumPayments = allPayments.reduce((s, p) => s + p.amount, 0);
+        const [orderAfter] = await restaurantDb.select().from(orders).where(eq(orders.id, targetOrderId));
+        const allPayments = await restaurantDb.select().from(payments).where(eq(payments.orderId, targetOrderId));
+        const sumPayments = allPayments.reduce((s, p) => s + p.amount, 0);
 
-      if (sumPayments >= orderAfter.total) {
-        await restaurantDb.update(orders).set({ status: 'PAID' }).where(eq(orders.id, targetOrderId));
+        if (sumPayments >= orderAfter.total) {
+          await restaurantDb.update(orders).set({ status: 'PAID' }).where(eq(orders.id, targetOrderId));
+        }
+      } catch (paymentErr) {
+        console.error('[POS_CHECKOUT_BUNZ] fallo al registrar el pago; compensando:', paymentErr);
+        try {
+          if (insertedPaymentId) {
+            await restaurantDb.update(payments)
+              .set({ status: 'REFUNDED' })
+              .where(eq(payments.id, insertedPaymentId));
+          }
+          await db.transaction(async (tx) => {
+            await tx.update(users)
+              .set({ totalBunzSpent: sql`GREATEST(0, COALESCE(${users.totalBunzSpent}, 0) - ${bunzRequired})` })
+              .where(eq(users.id, caller.id));
+            await tx.update(ownedBusinesses)
+              .set({ bunzBalance: sql`COALESCE(${ownedBusinesses.bunzBalance}, 0) + ${bunzRequired}` })
+              .where(eq(ownedBusinesses.id, businessId));
+            await recordLedgerTransaction(
+              {
+                branchId: null,
+                payerSubjectId: 'POS_CHECKOUT',
+                payeeSubjectId: `usr_${caller.id}`,
+                amount: bunzRequired,
+                type: 'REFUND',
+                referenceId: targetOrderId,
+                idempotencyKey: `bunz_checkout_comp_${targetOrderId}_${caller.id}`,
+                metadata: { concept: 'COMPENSACION_CHECKOUT_BUNZ' },
+              },
+              tx
+            );
+          });
+        } catch (compErr) {
+          console.error('[POS_CHECKOUT_BUNZ] compensación falló:', compErr);
+        }
+        return NextResponse.json(
+          { success: false, error: 'No se pudo registrar el pago; tu saldo fue restaurado. Reintenta.' },
+          { status: 500 }
+        );
       }
 
       // Notificar al Rabbitter de su consumo con Bunz

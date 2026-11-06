@@ -6,6 +6,7 @@ import { Receipt, X, Wallet, Banknote, CheckCircle2 } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
 import { toast } from '@rabbitty/ui';
 import { InAppPaySheet } from './InAppPaySheet';
+import { isCashPaymentRequested } from '@rabbitty/api/services/payments/contracts';
 
 interface TableBillSheetProps {
   isOpen: boolean;
@@ -57,7 +58,8 @@ export function TableBillSheet({
       const data = await res.json().catch(() => null);
       if (data?.success !== false) {
         setBill(data);
-        if (data?.order?.status === 'CASH_PAYMENT_REQUESTED' || data?.status === 'CASH_PAYMENT_REQUESTED') {
+        const orderStatus = data?.order?.status ?? data?.status;
+        if (isCashPaymentRequested(String(orderStatus ?? ''))) {
           setCashRequested(true);
         }
       }

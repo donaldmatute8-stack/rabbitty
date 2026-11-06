@@ -4,10 +4,12 @@ import crypto from "crypto";
 import { router, posProcedure, posPermission } from "../trpc";
 import { validateGratuity, parseGratuityPcts, GRATUITY_MAX_PCT } from "../services/gratuityRules";
 import { TRPCError } from "@trpc/server";
+import { assertCardPaymentAllowed, isCardMethod } from "../services/cardGuard";
+import { ORDER_STATUS, isCashPaymentRequested, isOrderPaidStatus, isOrderPayableStatus } from "../services/payments/contracts";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
 import { deriveOrderStage, type OrderStage, orderStageStepIndex } from "@rabbitty/events";
-import { tables as tablesTable, tableSessions, branches, menuCategories, menuItems, orders, orderItems, deliveries, payments, menuItemModifiers, restaurants, events as posEvents, paymentIntents, bunzReserves } from "@rabbitty/database-restaurant/schema";
+import { tables as tablesTable, tableSessions, branches, menuCategories, menuItems, orders, orderItems, deliveries, payments, menuItemModifiers, restaurants, events as posEvents, paymentIntents, bunzReserves, bunzRedemptionAttempts, bunzLedgerEntries } from "@rabbitty/database-restaurant/schema";
 import { DELIVERY_PROVIDERS, canTransition, getProvider, type DeliveryStatus } from "../services/deliveryProviders";
 import {
   uberDirectConfigured,
@@ -25,6 +27,7 @@ function pendingSplit(input: { splitBunz?: number; splitCash?: number }): boolea
 
 import { miniappClient } from "../services/miniapp-client";
 import { assertOpenShiftForCash } from "../services/cashShift";
+import { REDEMPTION_REASONS, recordEmissionBooks, recordRedemptionBooks } from "../services/bunzBooks";
 
 
 /**
@@ -926,6 +929,8 @@ export const posRouter = router({
       if (input.method === "CASH") {
         await assertOpenShiftForCash(ctx.restaurantDb, ctx.branchId);
       }
+      // P0-3: tarjeta exige referencia de terminal (no basta el cajero)
+      assertCardPaymentAllowed(input.method, input.reference);
 
       // ── Seg. STRIX-0010: transacción + lock pesimista — la decisión de pago es
       // atómica; doble click / concurrencia jamás duplica pagos ni recompensas.
@@ -939,8 +944,16 @@ export const posRouter = router({
         if (!orderRow) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Orden no encontrada" });
         }
-        if (orderRow.status === "COMPLETED" || orderRow.status === "PAID") {
+        if (isOrderPaidStatus(orderRow.status)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "La orden ya está pagada" });
+        }
+        // ── P0-5: no registrar BUNZ sin cliente identificado ──────────────
+        // Antes, sin teléfono, la orden se completaba sin debitar nada.
+        if (input.method === "BUNZ" && !orderRow.customerPhone && !orderRow.customerId) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "BUNZ_REQUIRES_CUSTOMER: vincula al cliente antes de cobrar con Bunz.",
+          });
         }
 
         let finalAmount = r2(input.amount);
@@ -966,6 +979,7 @@ export const posRouter = router({
           method: input.method,
           amount: finalAmount,
           reference: input.reference ?? null,
+          verificationMethod: isCardMethod(input.method) ? "EXTERNAL_TERMINAL" : undefined,
         }).returning();
 
         const existingPayments = await tx.select().from(payments).where(eq(payments.orderId, input.orderId));
@@ -975,11 +989,21 @@ export const posRouter = router({
           await tx.update(orders)
             .set({ bunzPaid: (orderRow.bunzPaid || 0) + finalAmount })
             .where(eq(orders.id, input.orderId));
+
+          // OT-1 / OT-3: intento + asientos. Idempotente y no fatal: si las tablas
+          // no existen, el pago sigue (se registra el aviso). Flag apagado = no-op.
+          await recordRedemptionBooks(tx, {
+            orderId: input.orderId,
+            branchId: orderRow.branchId,
+            bunz: finalAmount,
+            userHash: orderRow.customerId ?? orderRow.customerPhone ?? null,
+            tables: { attempts: bunzRedemptionAttempts, ledger: bunzLedgerEntries },
+          });
         }
 
         const targetPayableAmount = Math.max(0, orderNetTotal);
         if (r2(totalPaid) >= targetPayableAmount) {
-          await tx.update(orders).set({ status: "COMPLETED" }).where(eq(orders.id, input.orderId));
+          await tx.update(orders).set({ status: ORDER_STATUS.COMPLETED }).where(eq(orders.id, input.orderId));
 
           const paidOrderRow = await tx.select({ tableId: orders.tableId }).from(orders).where(eq(orders.id, input.orderId)).limit(1);
           if (paidOrderRow[0]?.tableId) {
@@ -1182,7 +1206,7 @@ export const posRouter = router({
       // ── Asignación POST-cobro con emisión atómica e idempotente ──
       let awardedBunz = 0;
       if (input.awardBunz && input.customerId) {
-        const isSettled = order.status === "COMPLETED" || order.status === "PAID";
+        const isSettled = isOrderPaidStatus(order.status);
         const alreadyRewarded = Number((order as any).bunzReward || 0) > 0;
         if (isSettled && !alreadyRewarded) {
           const { miniappClient } = await import("../services/miniapp-client");
@@ -1199,6 +1223,12 @@ export const posRouter = router({
               await ctx.restaurantDb.update(orders)
                 .set({ bunzReward: awardedBunz })
                 .where(eq(orders.id, order.id));
+              // OT-3: la recompensa se considera emitida al cobrar. Idempotente.
+              await recordEmissionBooks(ctx.restaurantDb, {
+                orderId: order.id,
+                bunz: awardedBunz,
+                tables: { ledger: bunzLedgerEntries },
+              });
             }
           } catch (err) {
             console.error("[POS_REWARD_FAIL] post-assign orderId=" + order.id, err);
@@ -1576,6 +1606,8 @@ export const posRouter = router({
           })
         ),
         paymentMethod: z.enum(["CASH", "CREDIT_CARD", "DEBIT_CARD", "BUNZ"]),
+        /** P0-3: referencia/autorización de la terminal para cobros con tarjeta. */
+        cardReference: z.string().trim().max(80).optional(),
         discountPercent: z.number().min(0).max(100).optional(),
         // GAP 1: beneficios de membresía a aplicar a esta venta (INCLUDED_PRODUCT,
         // DISCOUNT_PCT, CREDIT_BALANCE). El server re-verifica propiedad y cuota —
@@ -1600,11 +1632,24 @@ export const posRouter = router({
           message: "Los pagos con BUNZ requieren verificación del sistema. Usa createPaymentIntent." 
         });
       }
+      // P0-3: tarjeta exige referencia de terminal
+      assertCardPaymentAllowed(input.paymentMethod, input.cardReference);
 
       // 1. Orden: reutiliza la comanda persistente del cliente si existe
       //    (H-PERSIST) — así vincular no deja un borrador huérfano en Tabs.
       let order: typeof orders.$inferSelect;
       if (input.existingOrderId) {
+        const [reusedOrder] = await ctx.restaurantDb
+          .select({ status: orders.status })
+          .from(orders)
+          .where(and(eq(orders.id, input.existingOrderId), eq(orders.branchId, ctx.branchId)))
+          .limit(1);
+        if (reusedOrder && !isOrderPayableStatus(reusedOrder.status)) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: `La orden existente no admite cobros (estado ${reusedOrder.status}).`,
+          });
+        }
         const [reused] = await ctx.restaurantDb
           .update(orders)
           .set({
@@ -1618,7 +1663,7 @@ export const posRouter = router({
           .where(and(
             eq(orders.id, input.existingOrderId),
             eq(orders.branchId, ctx.branchId),
-            inArray(orders.status, ["PENDING", "CASH_PAYMENT_REQUESTED"]),
+            inArray(orders.status, [ORDER_STATUS.PENDING, ORDER_STATUS.CASH_REQUESTED]),
           ))
           .returning();
         if (!reused) {
@@ -1866,7 +1911,10 @@ export const posRouter = router({
         method: input.paymentMethod,
         amount: mainPaymentAmount,
         tipAmount: posTip,
-        verificationMethod: "CASHIER_CONFIRMED",
+        reference: isCardMethod(input.paymentMethod) ? input.cardReference : undefined,
+        verificationMethod: isCardMethod(input.paymentMethod)
+          ? "EXTERNAL_TERMINAL"
+          : "CASHIER_CONFIRMED",
       }).returning();
 
       if (creditApplied > 0) {
@@ -1908,7 +1956,7 @@ export const posRouter = router({
 
       void payment;
 
-      await ctx.restaurantDb.update(orders).set({ status: "COMPLETED" }).where(eq(orders.id, order.id));
+      await ctx.restaurantDb.update(orders).set({ status: ORDER_STATUS.COMPLETED }).where(eq(orders.id, order.id));
 
       // Liberar la mesa: cerrar la sesión activa de la tabla para que el
       // próximo comensal pueda reclamarla (409 anti-robo no se convierte en DoS).
@@ -2028,6 +2076,11 @@ export const posRouter = router({
               totalAwardedBunz = res.bunz || Math.floor(finalAmount * ((restaurant.defaultRewardRate ?? 20) / 100));
               // Guardar Bunz otorgados en la orden para auditoría
               await ctx.restaurantDb.update(orders).set({ bunzReward: totalAwardedBunz }).where(eq(orders.id, order.id));
+              await recordEmissionBooks(ctx.restaurantDb, {
+                orderId: order.id,
+                bunz: totalAwardedBunz,
+                tables: { ledger: bunzLedgerEntries },
+              });
             }
           }
         }
@@ -2162,6 +2215,52 @@ export const posRouter = router({
 
       // Check TTL
       if (intent.status === "PENDING_PAYMENT" && new Date() > intent.expiresAt) {
+        // ── P0-2: cancelar en Stripe ANTES de expirar ────────────────────
+        // Si Stripe ya cobró, no se expira: se reconcilia y se liquida.
+        if (
+          intent.provider === "STRIPE" &&
+          intent.externalIntentId &&
+          process.env.STRIPE_SECRET_KEY
+        ) {
+          try {
+            const { cancelStripePaymentIntent, retrieveStripePaymentIntent } = await import(
+              "../services/stripeConnect"
+            );
+            const cancelResult = await cancelStripePaymentIntent(intent.externalIntentId);
+
+            if (cancelResult === "succeeded") {
+              const pi = await retrieveStripePaymentIntent(intent.externalIntentId);
+              const { confirmPaymentIntentSettled } = await import("../services/paymentCore");
+              try {
+                const settled = await confirmPaymentIntentSettled(ctx.restaurantDb, {
+                  paymentIntentId: intent.id,
+                  externalTransactionId: pi.latestCharge,
+                  verifiedMethod: "STRIPE_CARD",
+                  expectedAmountCents: pi.amount,
+                  expectedCurrency: pi.currency ? pi.currency.toUpperCase() : undefined,
+                  expectedStripeAccountId: pi.destination,
+                  paidAtExternal: pi.succeededAt,
+                });
+                return { status: settled.status, reconciled: true };
+              } catch (settleErr) {
+                console.error(
+                  "[pollPaymentIntent] Stripe cobró pero no se pudo liquidar:",
+                  settleErr
+                );
+                return { status: "DISCREPANCY", reconciled: false };
+              }
+            }
+            // canceled / already_canceled / not_found → seguro expirar
+          } catch (remoteErr) {
+            // Error de comunicación/credenciales: NO expirar (evita perder un cobro)
+            console.error(
+              "[pollPaymentIntent] No se pudo verificar Stripe; no se expira:",
+              remoteErr
+            );
+            return { status: intent.status, pendingRemoteCancel: true };
+          }
+        }
+
         // Expire it
         await ctx.restaurantDb.update(dbSchema.paymentIntents).set({ status: "EXPIRED" })
           .where(eq(dbSchema.paymentIntents.id, intent.id));
@@ -2220,7 +2319,7 @@ export const posRouter = router({
         eq(orders.branchId, ctx.branchId),
         // PAID incluido: los pedidos pagados con Bunz en la app llegan igual
         // a la cola del POS (antes se quedaban fuera y nunca se preparaban).
-        inArray(orders.status, ["PENDING", "PAID", "CASH_PAYMENT_REQUESTED"])
+        inArray(orders.status, [ORDER_STATUS.PENDING, ORDER_STATUS.PAID, ORDER_STATUS.CASH_REQUESTED])
       ))
       .orderBy(desc(orders.createdAt));
 
@@ -2332,7 +2431,7 @@ export const posRouter = router({
         tableLocation: table?.location ?? null,
         orderType: ord.orderType,
         status: ord.status,
-        cashRequested: ord.status === "CASH_PAYMENT_REQUESTED",
+        cashRequested: isCashPaymentRequested(ord.status),
         total: Number(ord.total || 0),
         createdAt: ord.createdAt,
         items,
@@ -3089,4 +3188,47 @@ export const posRouter = router({
         customerName: input.customerName || order.customerName || "Rabbitter",
       };
     }),
+  /**
+   * OT-1: registra un intento de redención RECHAZADO con su motivo.
+   * El motivo es obligatorio (catálogo cerrado). Idempotente por `idempotencyKey`.
+   * No es fatal: si la tabla no existe, devuelve `{ ok: false }` sin romper el POS.
+   */
+  recordRedemptionAttempt: posProcedure
+    .input(
+      z.object({
+        orderId: z.string().optional(),
+        bunz: z.number().positive(),
+        reasons: z.array(z.enum(REDEMPTION_REASONS)).min(1),
+        status: z.enum(["unfulfilled", "cancelled", "fraud", "duplicate"]).default("unfulfilled"),
+        waitSeconds: z.number().int().min(0).optional(),
+        userRef: z.string().max(120).optional(),
+        idempotencyKey: z.string().max(120).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const key = input.idempotencyKey ?? crypto.randomUUID();
+      try {
+        await ctx.restaurantDb
+          .insert(bunzRedemptionAttempts)
+          .values({
+            id: key,
+            userHash: input.userRef ?? "walkin",
+            branchId: ctx.branchId,
+            orderId: input.orderId ?? null,
+            rewardId: null,
+            bunzRequested: input.bunz,
+            bunzFulfilled: 0,
+            status: input.status,
+            reasons: JSON.stringify(input.reasons),
+            waitSeconds: input.waitSeconds ?? null,
+            idempotencyKey: key,
+          })
+          .onConflictDoNothing();
+        return { ok: true };
+      } catch (e) {
+        console.warn(`[pos] intento de redención ${key} no registrado: ${e instanceof Error ? e.message : e}`);
+        return { ok: false, error: "no se pudo registrar el motivo" };
+      }
+    }),
+
 });

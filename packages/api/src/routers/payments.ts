@@ -1,16 +1,179 @@
 import { z } from "zod";
 import { and, eq, inArray, gte, lt, sql, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { assertCardPaymentAllowed, isCardMethod } from "../services/cardGuard";
 import { router, posProcedure, posPermission, publicLimitedProcedure, resolveBranchId } from "../trpc";
-import { orders, payments, tables, tableSessions, orderItems, menuItems } from "@rabbitty/database-restaurant/schema";
+import { orders, payments, paymentIntents, tables, tableSessions, orderItems, menuItems } from "@rabbitty/database-restaurant/schema";
 import { bus, EventTypes } from "@rabbitty/events";
 import { assertOpenShiftForCash, findStaffByPin, CASHIER_ROLES } from "../services/cashShift";
+import { buildShadowReport, getRecentShadowDiffs } from "../services/payments/shadow";
+import { validateBunzCoreSettlement } from "../services/payments/bunzParity";
 
 export const paymentsRouter = router({
+  /**
+   * RP-0.3: liquidar un intent 100% Bunz creado por paymentCore.
+   * Solo el pagador autenticado puede liquidarlo.
+   */
+  settleBunzIntent: posProcedure
+    .input(z.object({ intentId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.userId) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "Sesión requerida." });
+      }
+
+      const [intent] = await ctx.restaurantDb
+        .select()
+        .from(paymentIntents)
+        .where(eq(paymentIntents.id, input.intentId))
+        .limit(1);
+
+      if (!intent) throw new TRPCError({ code: "NOT_FOUND", message: "Intent no encontrado." });
+      if (intent.provider !== "BUNZ_ONLY" || Number(intent.netFiatCents) !== 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Solo se liquidan intents 100% Bunz por esta vía.",
+        });
+      }
+      if (intent.payerSubjectId && intent.payerSubjectId !== ctx.userId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "El intento pertenece a otra sesión." });
+      }
+      if (!intent.orderId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "El intento no tiene orden asociada." });
+      }
+
+      const [order] = await ctx.restaurantDb
+        .select({ branchId: orders.branchId })
+        .from(orders)
+        .where(eq(orders.id, intent.orderId))
+        .limit(1);
+      if (!order || order.branchId !== intent.merchantId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "La orden no corresponde a la sucursal del intent." });
+      }
+
+      // RP-0.4: paridad exacta (Bunz aplicado = monto del intent, sin fiat)
+      const parity = validateBunzCoreSettlement({
+        owedMxn: Number(intent.amountCents || 0) / 100,
+        netFiatCents: Number(intent.netFiatCents || 0),
+        bunzApplied: Number(intent.bunzAmount || 0),
+      });
+      if (!parity.ok) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            parity.error === "INSUFFICIENT_STOCK"
+              ? "El negocio no tiene stock suficiente para esta redención."
+              : "El intent no cubre la cuenta completa con Bunz.",
+        });
+      }
+
+      const { confirmPaymentIntentSettled } = await import("../services/paymentCore");
+      return await confirmPaymentIntentSettled(ctx.restaurantDb, {
+        paymentIntentId: intent.id,
+        verifiedMethod: "BUNZ_ONLY",
+        expectedAmountCents: 0,
+        expectedCurrency: intent.currency,
+        expectedBranchId: intent.merchantId,
+        paidAtExternal: new Date(),
+      });
+    }),
+
+  /**
+   * RP-0.7: estado canónico de una orden (lectura, sin cambios de estado).
+   * Permite que la UI/POS consulten el predicado nuevo antes de cablearlo.
+   */
+  getOrderPaymentState: posProcedure
+    .input(z.object({ orderId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const [order] = await ctx.restaurantDb
+        .select()
+        .from(orders)
+        .where(eq(orders.id, input.orderId))
+        .limit(1);
+      if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Orden no encontrada." });
+      if (order.branchId !== ctx.branchId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "La orden no pertenece a esta sucursal." });
+      }
+
+      const paymentRows = await ctx.restaurantDb
+        .select()
+        .from(payments)
+        .where(eq(payments.orderId, order.id));
+
+      const report = buildShadowReport({ order, payments: paymentRows });
+      return {
+        orderId: order.id,
+        orderStatus: order.status,
+        totalMinor: report.totalMinor,
+        legacy: report.legacy,
+        canonical: report.canonical,
+        matches: report.matches,
+      };
+    }),
+
+  /**
+   * RP-0.7: qué motor de Bunz está configurado (read-only, para staging).
+   */
+  diagnosticsEngine: posProcedure.query(() => ({
+    bunzPayEngine: process.env.RABBITTY_PAY_ENGINE_V2 === "1" ? "core_v2" : "legacy_domain",
+    shadowEnabled: true,
+  })),
+
+  /**
+   * RP-0.2: diagnóstico shadow (read-only).
+   * Compara el predicado legacy con el canónico sin cambiar estados ni dinero.
+   */
+  diagnosticsShadow: posProcedure
+    .input(z.object({ orderId: z.string().optional(), intentId: z.string().optional() }))
+    .query(async ({ ctx, input }) => {
+      if (!input.orderId && !input.intentId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Indica orderId o intentId." });
+      }
+
+      let intent: typeof paymentIntents.$inferSelect | null = null;
+      let orderId = input.orderId;
+
+      if (input.intentId) {
+        const [row] = await ctx.restaurantDb
+          .select()
+          .from(paymentIntents)
+          .where(eq(paymentIntents.id, input.intentId))
+          .limit(1);
+        if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Intent no encontrado." });
+        intent = row;
+        orderId = row.orderId ?? orderId;
+      }
+
+      if (!orderId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "El intent no tiene orden asociada." });
+      }
+
+      const [order] = await ctx.restaurantDb
+        .select()
+        .from(orders)
+        .where(eq(orders.id, orderId))
+        .limit(1);
+      if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Orden no encontrada." });
+      if (order.branchId !== ctx.branchId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "La orden no pertenece a esta sucursal." });
+      }
+
+      const paymentRows = await ctx.restaurantDb
+        .select()
+        .from(payments)
+        .where(eq(payments.orderId, orderId));
+
+      const report = buildShadowReport({ order, payments: paymentRows, intent });
+
+      return {
+        report,
+        recent: getRecentShadowDiffs().slice(0, 20),
+      };
+    }),
+
   refund: posPermission("POS_REFUND")
     .input(z.object({
       paymentId: z.string(),
-      amount: z.number(),
+      amount: z.number().positive(),
       reason: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -22,18 +185,143 @@ export const paymentsRouter = router({
       }
       if (payment.status === "REFUNDED") throw new Error("El pago ya fue reembolsado");
 
+      const original = Math.abs(Number(payment.amount || 0));
+      const refundAmount = Math.abs(Number(input.amount));
+      if (refundAmount > original + 0.01) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "El reembolso supera el monto del pago." });
+      }
+
+      // ── P0-7: reembolso real en Stripe (tarjeta) ──────────────────────
+      if (isCardMethod(payment.method)) {
+        const rawRef = String(payment.reference ?? "");
+        let chargeId: string | undefined = rawRef.startsWith("ch_") ? rawRef : undefined;
+        const { getStripeClient } = await import("../services/stripeConnect");
+        const stripe = getStripeClient();
+
+        if (!chargeId && rawRef.startsWith("pi_")) {
+          const pi = await stripe.paymentIntents.retrieve(rawRef);
+          chargeId = typeof pi.latest_charge === "string" ? pi.latest_charge : pi.latest_charge?.id;
+        }
+        if (!chargeId) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "REFUND_REQUIRES_STRIPE_REFERENCE: no hay cargo de Stripe asociado a este pago.",
+          });
+        }
+
+        await stripe.refunds.create({
+          charge: chargeId,
+          amount: Math.round(refundAmount * 100),
+          reverse_transfer: true,
+          refund_application_fee: true,
+          metadata: {
+            rabbittyPaymentId: payment.id,
+            orderId: payment.orderId ?? "",
+            reason: input.reason ?? "Rabbitty refund",
+          },
+        });
+      }
+
+      // Bunz: reverso real (saldo del usuario + stock del afiliado)
+      if (String(payment.method).toUpperCase() === "BUNZ") {
+        const { refundBunzPayment } = await import("../services/paymentCore");
+        const result = await refundBunzPayment(ctx.restaurantDb, {
+          paymentId: payment.id,
+          amountMxn: refundAmount,
+          reason: input.reason,
+        });
+        bus.emit(EventTypes.PAYMENT_PROCESSED, {
+          paymentId: payment.id,
+          orderId: payment.orderId,
+          type: "REFUND",
+        });
+        return { success: true, method: "BUNZ", ...result };
+      }
+
       const [refund] = await ctx.restaurantDb.insert(payments).values({
         orderId: payment.orderId,
         method: payment.method,
-        amount: -Math.abs(input.amount),
+        amount: -refundAmount,
         reference: `Refund: ${input.reason || "Sin razón"}`,
         status: "REFUNDED",
       }).returning();
 
-      await ctx.restaurantDb.update(payments).set({ status: "REFUNDED" }).where(eq(payments.id, input.paymentId));
+      const isFull = Math.abs(refundAmount - original) < 0.01;
+      await ctx.restaurantDb
+        .update(payments)
+        .set({ status: isFull ? "REFUNDED" : "PARTIALLY_REFUNDED" })
+        .where(eq(payments.id, input.paymentId));
 
       bus.emit(EventTypes.PAYMENT_PROCESSED, { paymentId: refund!.id, orderId: payment.orderId, type: "REFUND" });
       return refund;
+    }),
+
+  /**
+   * P0-7: resolver una discrepancia de liquidación.
+   * - REFUND: reembolsa el cargo en Stripe.
+   * - RECONCILE / EXCEPTION: cierra el caso con nota.
+   */
+  resolveDiscrepancy: posPermission("POS_REFUND")
+    .input(z.object({
+      eventId: z.string(),
+      action: z.enum(["REFUND", "RECONCILE", "EXCEPTION"]),
+      note: z.string().max(300).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { paymentProviderEvents } = await import("@rabbitty/database-restaurant/schema");
+      const [ev] = await ctx.restaurantDb
+        .select()
+        .from(paymentProviderEvents)
+        .where(eq(paymentProviderEvents.eventId, input.eventId))
+        .limit(1);
+
+      if (!ev) throw new TRPCError({ code: "NOT_FOUND", message: "Evento no encontrado." });
+      if (ev.status !== "DISCREPANCY") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `El evento está en estado ${ev.status}; solo se resuelven discrepancias.`,
+        });
+      }
+
+      const { resolveProviderWebhookDiscrepancy } = await import("../services/paymentCore");
+
+      if (input.action === "REFUND") {
+        const payload = ev.payload as unknown as {
+          data?: { object?: { latest_charge?: string | { id?: string } } };
+        };
+        const rawCharge = payload?.data?.object?.latest_charge;
+        const chargeId = typeof rawCharge === "string" ? rawCharge : rawCharge?.id;
+        if (!chargeId) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "El evento no contiene un cargo de Stripe para reembolsar.",
+          });
+        }
+        const { getStripeClient } = await import("../services/stripeConnect");
+        await getStripeClient().refunds.create({
+          charge: chargeId,
+          reverse_transfer: true,
+          refund_application_fee: true,
+          metadata: {
+            rabbittyEventId: ev.eventId,
+            reason: input.note ?? "discrepancy",
+          },
+        });
+        await resolveProviderWebhookDiscrepancy(ctx.restaurantDb, {
+          eventId: ev.eventId,
+          status: "REFUNDED",
+          note: input.note,
+        });
+        return { success: true, status: "REFUNDED" };
+      }
+
+      const status = input.action === "RECONCILE" ? "RECONCILED" : "RESOLVED_WITH_EXCEPTION";
+      await resolveProviderWebhookDiscrepancy(ctx.restaurantDb, {
+        eventId: ev.eventId,
+        status,
+        note: input.note,
+      });
+      return { success: true, status };
     }),
 
   processPayment: posPermission("POS_CHARGE")
@@ -49,6 +337,8 @@ export const paymentsRouter = router({
       if (input.method === "CASH") {
         await assertOpenShiftForCash(ctx.restaurantDb, ctx.branchId);
       }
+      // P0-3: tarjeta exige referencia de terminal
+      assertCardPaymentAllowed(input.method, input.reference);
       const order = await ctx.restaurantDb.select().from(orders).where(eq(orders.id, input.orderId));
       if (!order) throw new Error("Orden no encontrada");
 
@@ -57,6 +347,7 @@ export const paymentsRouter = router({
         method: input.method,
         amount: input.amount,
         reference: input.reference ?? null,
+        verificationMethod: isCardMethod(input.method) ? "EXTERNAL_TERMINAL" : undefined,
       }).returning();
 
       if (!payment) throw new Error("Error al procesar el pago");
@@ -230,8 +521,15 @@ export const paymentsRouter = router({
       const [order] = await ctx.restaurantDb.select().from(orders).where(eq(orders.id, input.orderId));
       if (!order) throw new Error("Orden no encontrada");
 
-      // Scoping: Si el usuario está autenticado, no permitir atribuir la deducción de Bunz a un tercero ajeno
-      const effectiveUserId = ctx.userId ?? input.customerId ?? undefined;
+      // P0-6: el pagador SIEMPRE es la sesión autenticada. `customerId` del
+      // body no puede reservar Bunz de un tercero.
+      const effectiveUserId = ctx.userId ?? undefined;
+      if (input.bunzAmount > 0 && !effectiveUserId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "BUNZ_REQUIRES_AUTH: inicia sesión para pagar con Bunz.",
+        });
+      }
 
       const { createOrGetPaymentIntent } = await import("../services/paymentCore");
 
@@ -438,13 +736,25 @@ export const paymentsRouter = router({
       const latestChargeId: string | undefined =
         typeof (pi as any).latest_charge === "string" ? (pi as any).latest_charge : ((pi as any).latest_charge?.id);
       const { confirmPaymentIntentSettled } = await import("../services/paymentCore");
+      const transitions = (pi as unknown as {
+        status_transitions?: { succeeded_at?: number | null };
+      }).status_transitions;
+      const destination = (pi as unknown as {
+        transfer_data?: { destination?: string | { id?: string } };
+      }).transfer_data?.destination;
+      const destinationId =
+        typeof destination === "string" ? destination : destination?.id;
+
       const result = await confirmPaymentIntentSettled(ctx.restaurantDb, {
         paymentIntentId: intent.id,
         externalTransactionId: latestChargeId,
         verifiedMethod: "STRIPE_CARD",
         expectedAmountCents: intent.netFiatCents,
         expectedCurrency: intent.currency,
-        expectedMerchantId: intent.merchantId,
+        expectedStripeAccountId: destinationId,
+        paidAtExternal: transitions?.succeeded_at
+          ? new Date(transitions.succeeded_at * 1000)
+          : undefined,
       });
       return { success: result.success, status: result.status, orderId: result.orderId, settled: result.success };
     }),

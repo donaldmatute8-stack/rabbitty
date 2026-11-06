@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import { 
   Crown, Store, Scale, Activity, Rocket, Gamepad2, Award, 
   LayoutDashboard, Settings, ArrowRight, ShieldCheck, RefreshCw, 
-  CheckCircle2, AlertTriangle, Users, Coins, Sparkles, Megaphone
+  CheckCircle2, AlertTriangle, Users, Coins, Sparkles, Megaphone, FileSearch
 } from "lucide-react";
 import { Card, Button, cn } from "@rabbitty/ui";
 
@@ -22,14 +22,18 @@ interface HubSummary {
 export default function GodHubPage() {
   const [summary, setSummary] = useState<HubSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  // Panel de validación: solo aparece si el feature flag está activo (read-only).
+  const [validationEnabled, setValidationEnabled] = useState(false);
 
   const fetchMetrics = async () => {
     setLoading(true);
     try {
-      const [ecoRes, reconRes] = await Promise.all([
+      const [ecoRes, reconRes, valRes] = await Promise.all([
         fetch("/api/trpc/god.getEcosystemMetrics?batch=1&input=" + encodeURIComponent(JSON.stringify({ "0": { json: null } }))).then(r => r.json()),
         fetch("/api/trpc/god.getLedgerReconciliation?batch=1&input=" + encodeURIComponent(JSON.stringify({ "0": { json: null } }))).then(r => r.json()).catch(() => null),
+        fetch("/api/trpc/god.getValidationSnapshots?batch=1&input=" + encodeURIComponent(JSON.stringify({ "0": { json: null } }))).then(r => r.json()).catch(() => null),
       ]);
+      setValidationEnabled(Boolean(valRes?.[0]?.result?.data?.json?.enabled));
 
       const eco = ecoRes?.[0]?.result?.data?.json;
       const recon = reconRes?.[0]?.result?.data?.json;
@@ -55,10 +59,13 @@ export default function GodHubPage() {
     let isMounted = true;
     (async () => {
       try {
-        const [ecoRes, reconRes] = await Promise.all([
+        const [ecoRes, reconRes, valRes] = await Promise.all([
           fetch("/api/trpc/god.getEcosystemMetrics?batch=1&input=" + encodeURIComponent(JSON.stringify({ "0": { json: null } }))).then(r => r.json()),
           fetch("/api/trpc/god.getLedgerReconciliation?batch=1&input=" + encodeURIComponent(JSON.stringify({ "0": { json: null } }))).then(r => r.json()).catch(() => null),
+          fetch("/api/trpc/god.getValidationSnapshots?batch=1&input=" + encodeURIComponent(JSON.stringify({ "0": { json: null } }))).then(r => r.json()).catch(() => null),
         ]);
+
+        if (isMounted) setValidationEnabled(Boolean(valRes?.[0]?.result?.data?.json?.enabled));
 
         const eco = ecoRes?.[0]?.result?.data?.json;
         const recon = reconRes?.[0]?.result?.data?.json;
@@ -84,6 +91,17 @@ export default function GodHubPage() {
       isMounted = false;
     };
   }, []);
+
+  const validationModule = {
+    title: "Validación económica",
+    description: "Panel read-only: cobertura, huecos declarados, reglas, backtest fuera de muestra y compuertas de RP-2. No aprueba nada.",
+    href: "/god/validacion",
+    icon: FileSearch,
+    badge: "Read-only",
+    color: "from-emerald-500/20 to-sky-600/20",
+    border: "border-emerald-500/30",
+    iconColor: "text-emerald-400",
+  };
 
   const modules = [
     {
@@ -274,11 +292,11 @@ export default function GodHubPage() {
           <h2 className="text-sm font-black uppercase tracking-wider text-gray-400 flex items-center gap-2">
             <span>Pilares de Gestión de Plataforma</span>
           </h2>
-          <span className="text-xs text-gray-500">6 áreas de control exclusivo</span>
+          <span className="text-xs text-gray-500">{validationEnabled ? "7" : "6"} áreas de control exclusivo</span>
         </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {modules.map((m) => {
+          {(validationEnabled ? [validationModule, ...modules] : modules).map((m) => {
             const Icon = m.icon;
             return (
               <Link

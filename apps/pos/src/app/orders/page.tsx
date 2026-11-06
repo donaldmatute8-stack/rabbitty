@@ -6,6 +6,7 @@ import { Badge, Button, toast } from "@rabbitty/ui";
 import { useState } from "react";
 import { ChevronDown, ChevronUp, DollarSign, Split, Percent, RotateCcw } from "lucide-react";
 import { SplitBillModal } from "../../components/SplitBillModal";
+import { CheckoutModal } from "../../components/CheckoutModal";
 import { DiscountModal } from "../../components/DiscountModal";
 
 const statusColors: Record<string, "default" | "success" | "warning" | "danger" | "info"> = {
@@ -19,6 +20,7 @@ export default function OrdersPage() {
   const [payingId, setPayingId] = useState<string | null>(null);
   const [splitBill, setSplitBill] = useState<{ orderId: string; total: number } | null>(null);
   const [discount, setDiscount] = useState<{ orderId: string; total: number } | null>(null);
+  const [checkout, setCheckout] = useState<{ orderId: string; total: number } | null>(null);
   const { data: orders } = trpc.pos.getOrders.useQuery({});
   const utils = trpc.useUtils();
   const payOrder = trpc.pos.payOrder.useMutation({
@@ -163,14 +165,14 @@ export default function OrdersPage() {
                                <Button
                                  variant="secondary"
                                  className="flex-1"
-                                 onClick={() => payOrder.mutate({ orderId: order.id, method: "CREDIT_CARD", amount: order.total })}
+                                 onClick={() => setCheckout({ orderId: order.id, total: order.total })}
                                >
                                  Tarjeta
                                </Button>
                                <Button
                                  variant="secondary"
                                  className="flex-1"
-                                 onClick={() => payOrder.mutate({ orderId: order.id, method: "BUNZ", amount: order.total })}
+                                 onClick={() => setCheckout({ orderId: order.id, total: order.total })}
                                >
                                 bunz
                               </Button>
@@ -204,6 +206,20 @@ export default function OrdersPage() {
           )}
         </div>
       </main>
+
+      {checkout && (
+        <CheckoutModal
+          orderId={checkout.orderId}
+          total={checkout.total}
+          onClose={() => setCheckout(null)}
+          onSuccess={() => {
+            setCheckout(null);
+            setPayingId(null);
+            utils.pos.getOrders.invalidate();
+            utils.pos.getTables.invalidate();
+          }}
+        />
+      )}
 
       {splitBill && (
         <SplitBillModal

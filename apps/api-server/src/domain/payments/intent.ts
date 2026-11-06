@@ -15,6 +15,11 @@ import {
 import { users } from "@rabbitty/database-core";
 import { LedgerService } from "../ledger/ledger";
 
+/**
+ * @deprecated RP-0.7 — tercer motor de pagos. No añadir consumidores.
+ * Su superficie (getIntent/approveIntent del scan) se migrará a paymentCore.
+ */
+
 export type PaymentIntentStatus = 
   | "CREATED"
   | "PENDING"

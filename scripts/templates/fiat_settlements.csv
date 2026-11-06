@@ -1,0 +1,3 @@
+id,obligation_id,received_at,amount_mxn,bank_ref,reconciled
+fs0001,ob0015,2026-03-31,2637.09,bank-ob0015,true
+fs0002,ob0017,2026-03-07,5332.73,bank-ob0017,true

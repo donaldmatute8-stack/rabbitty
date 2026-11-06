@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     const bunzRequired = Math.round(amount_usd);
     const preAvailable = Math.max(0, (user.totalBunzEarned ?? 0) - (user.totalBunzSpent ?? 0));
 
-    if (preAvailable < bunzRequired && !order_id) {
+    if (preAvailable < bunzRequired) {
       return NextResponse.json({ error: 'Saldo insuficiente de Bunz' }, { status: 402 });
     }
 
@@ -88,7 +88,7 @@ export async function POST(request: Request) {
       }
 
       // Authoritative balance is recomputed from the LOCKED row.
-      if (availableBalance < bunzRequired && !order_id) {
+      if (availableBalance < bunzRequired) {
         throw new Error('INSUFFICIENT_BUNZ');
       }
 
@@ -115,9 +115,20 @@ export async function POST(request: Request) {
 
       // ECONOMÍA: el gasto CONSUME el stock del comercio (bunz que pre-compró para aceptar redenciones)
       if (business_id && business_id !== 'unknown') {
-        await tx.update(ownedBusinesses)
-          .set({ bunzBalance: sql`GREATEST(0, COALESCE("bunzBalance", 0) - ${bunzRequired})` })
-          .where(eq(ownedBusinesses.id, business_id));
+        // P0-4: consumir stock de forma condicional (sin stock no hay redención)
+        const consumed = await tx
+          .update(ownedBusinesses)
+          .set({ bunzBalance: sql`COALESCE("bunzBalance", 0) - ${bunzRequired}` })
+          .where(
+            and(
+              eq(ownedBusinesses.id, business_id),
+              sql`COALESCE("bunzBalance", 0) >= ${bunzRequired}`
+            )
+          )
+          .returning({ remaining: ownedBusinesses.bunzBalance });
+        if (consumed.length === 0) {
+          throw new Error('INSUFFICIENT_STOCK');
+        }
       }
 
       await recordLedgerTransaction(

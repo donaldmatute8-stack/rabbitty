@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Dialog } from "@rabbitty/ui";
+import { Dialog, Input, toast } from "@rabbitty/ui";
 import { DollarSign, Split } from "lucide-react";
 import { trpc } from "../lib/trpc-client";
 
@@ -13,6 +13,7 @@ interface SplitBillModalProps {
 }
 
 export function SplitBillModal({ open, onClose, orderId, total }: SplitBillModalProps) {
+  const [cardReference, setCardReference] = useState("");
   const [splits, setSplits] = useState<{ method: "CASH" | "CREDIT_CARD"; amount: number }[]>([
     { method: "CASH", amount: Math.round(total / 2 * 100) / 100 },
     { method: "CREDIT_CARD", amount: Math.round(total / 2 * 100) / 100 },
@@ -33,8 +34,18 @@ export function SplitBillModal({ open, onClose, orderId, total }: SplitBillModal
   };
 
   const handlePay = () => {
+    const needsCard = splits.some((split) => split.method === "CREDIT_CARD");
+    if (needsCard && cardReference.trim().length < 3) {
+      toast.error("Registra la referencia de la terminal para las partes con tarjeta.");
+      return;
+    }
     splits.forEach(split => {
-      payMutation.mutate({ orderId, method: split.method, amount: split.amount });
+      payMutation.mutate({
+        orderId,
+        method: split.method,
+        amount: split.amount,
+        reference: split.method === "CREDIT_CARD" ? cardReference.trim() : undefined,
+      });
     });
     onClose();
   };
@@ -43,6 +54,14 @@ export function SplitBillModal({ open, onClose, orderId, total }: SplitBillModal
 
   return (
     <Dialog open={open} onClose={onClose} title="Dividir Cuenta">
+      <div className="p-3 border-b border-gray-100 space-y-1.5">
+        <label className="text-[11px] font-bold text-gray-600 block">Referencia de terminal (partes con tarjeta)</label>
+        <Input
+          placeholder="Ej. 123456 o APROBADA"
+          value={cardReference}
+          onChange={(e) => setCardReference(e.target.value)}
+        />
+      </div>
       <div className="space-y-4">
         {splits.map((split, i) => (
           <div key={i} className="flex items-center gap-3 rounded-xl bg-gray-50 p-3">

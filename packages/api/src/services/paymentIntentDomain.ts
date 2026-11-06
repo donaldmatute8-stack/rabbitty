@@ -13,6 +13,13 @@ import {
   restaurants
 } from "@rabbitty/database-restaurant/schema";
 import { users, ownedBusinesses } from "@rabbitty/database-core/schema";
+import { buildShadowReport, recordShadowReport } from "./payments/shadow";
+
+/**
+ * @deprecated RP-0.7 — motor legacy en migración a paymentCore.
+ * No añadir nuevos consumidores. Se retira cuando `RABBITTY_PAY_ENGINE_V2`
+ * esté activo y `bunz-pay` / `apps/api-server` dejen de usarlo.
+ */
 import { orderItems as posOrderItems, menuItems as menuItemsTable } from "@rabbitty/database-restaurant/schema";
 
 
@@ -209,7 +216,7 @@ export class PaymentIntentService {
 
     const restaurantDb = getRestaurantDb();
 
-    return await restaurantDb.transaction(async (tx: any) => {
+    const settled: PaymentIntent = await restaurantDb.transaction(async (tx: any) => {
       // 1. Pessimistic Row Lock on Intent (prevents double approval race condition)
       const [intent] = await tx
         .select()
@@ -503,6 +510,58 @@ export class PaymentIntentService {
         paidAt,
       };
     });
+
+    // ── RP-0.3: snapshot shadow (read-only, no altera nada) ─────────────
+    try {
+      if (settled.orderId) {
+        const [order] = await restaurantDb
+          .select()
+          .from(orders)
+          .where(eq(orders.id, settled.orderId))
+          .limit(1);
+        const paymentRows = await restaurantDb
+          .select()
+          .from(payments)
+          .where(eq(payments.orderId, settled.orderId));
+
+        if (order) {
+          const report = buildShadowReport({
+            order: {
+              id: order.id,
+              branchId: order.branchId,
+              total: Number(order.total || 0),
+              status: String(order.status || ""),
+              bunzPaid: order.bunzPaid,
+            },
+            payments: (paymentRows as Array<Record<string, unknown>>).map((p) => ({
+              id: String(p.id),
+              orderId: p.orderId ? String(p.orderId) : undefined,
+              amount: Number(p.amount || 0),
+              method: String(p.method || ""),
+              status: String(p.status || ""),
+              reference: p.reference ? String(p.reference) : undefined,
+              tipAmount: p.tipAmount ? Number(p.tipAmount) : undefined,
+              verificationMethod: p.verificationMethod ? String(p.verificationMethod) : undefined,
+            })),
+            intent: {
+              id: settled.id,
+              orderId: settled.orderId,
+              merchantId: settled.tenantId,
+              status: "SETTLED",
+              amountCents: Math.round(Number(settled.amountMxn || 0) * 100),
+              netFiatCents: 0,
+              bunzAmount: Number(settled.bunzAmount || 0),
+              currency: settled.currency,
+            },
+          });
+          recordShadowReport(report);
+        }
+      }
+    } catch (shadowErr) {
+      console.warn("[SHADOW_PAYMENT] dominio: no se pudo registrar el snapshot:", shadowErr);
+    }
+
+    return settled;
   }
 }
 

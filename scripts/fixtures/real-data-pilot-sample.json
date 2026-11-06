@@ -1,0 +1,1099 @@
+{
+  "spec_version": "1.0.0",
+  "dataset_kind": "pilot",
+  "note": "Fixture de piloto (1 afiliado, 2 usuarios, 3 semanas). No son datos reales.",
+  "window": {
+    "operational": {
+      "from": "2026-03-02",
+      "to": "2026-03-22"
+    },
+    "financial": {
+      "from": "2025-10-01",
+      "to": "2026-03-22"
+    }
+  },
+  "granularity": {
+    "capacity": "daily",
+    "treasury": "daily"
+  },
+  "unit_policy": {
+    "bunz_per_mxn": 1,
+    "approved": false,
+    "note": "paridad sin aprobar; R24 bloquea la calibración"
+  },
+  "capacity_scope": "affiliate",
+  "affiliates": [
+    {
+      "id": "a01",
+      "category": "coffee",
+      "size_band": "S",
+      "branch_id": "b1",
+      "opened_at": "2026-02-20",
+      "status": "active",
+      "city_hash": null
+    }
+  ],
+  "sales": [
+    {
+      "id": "s0001",
+      "affiliate_id": "a01",
+      "ts": "2026-03-02T14:15:00Z",
+      "gross_mxn": 233,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u1"
+    },
+    {
+      "id": "s0002",
+      "affiliate_id": "a01",
+      "ts": "2026-03-02T15:15:00Z",
+      "gross_mxn": 246,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u2"
+    },
+    {
+      "id": "s0003",
+      "affiliate_id": "a01",
+      "ts": "2026-03-03T16:15:00Z",
+      "gross_mxn": 296,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u1"
+    },
+    {
+      "id": "s0004",
+      "affiliate_id": "a01",
+      "ts": "2026-03-03T17:15:00Z",
+      "gross_mxn": 309,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u2"
+    },
+    {
+      "id": "s0005",
+      "affiliate_id": "a01",
+      "ts": "2026-03-04T18:15:00Z",
+      "gross_mxn": 359,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u1"
+    },
+    {
+      "id": "s0006",
+      "affiliate_id": "a01",
+      "ts": "2026-03-04T13:15:00Z",
+      "gross_mxn": 372,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u2"
+    },
+    {
+      "id": "s0007",
+      "affiliate_id": "a01",
+      "ts": "2026-03-05T14:15:00Z",
+      "gross_mxn": 422,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u1"
+    },
+    {
+      "id": "s0008",
+      "affiliate_id": "a01",
+      "ts": "2026-03-05T15:15:00Z",
+      "gross_mxn": 435,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u2"
+    },
+    {
+      "id": "s0009",
+      "affiliate_id": "a01",
+      "ts": "2026-03-06T16:15:00Z",
+      "gross_mxn": 485,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u1"
+    },
+    {
+      "id": "s0010",
+      "affiliate_id": "a01",
+      "ts": "2026-03-06T17:15:00Z",
+      "gross_mxn": 498,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u2"
+    },
+    {
+      "id": "s0011",
+      "affiliate_id": "a01",
+      "ts": "2026-03-07T18:15:00Z",
+      "gross_mxn": 548,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u1"
+    },
+    {
+      "id": "s0012",
+      "affiliate_id": "a01",
+      "ts": "2026-03-07T13:15:00Z",
+      "gross_mxn": 561,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u2"
+    },
+    {
+      "id": "s0013",
+      "affiliate_id": "a01",
+      "ts": "2026-03-08T14:15:00Z",
+      "gross_mxn": 231,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u1"
+    },
+    {
+      "id": "s0014",
+      "affiliate_id": "a01",
+      "ts": "2026-03-08T15:15:00Z",
+      "gross_mxn": 244,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u2"
+    },
+    {
+      "id": "s0015",
+      "affiliate_id": "a01",
+      "ts": "2026-03-09T16:15:00Z",
+      "gross_mxn": 294,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u1"
+    },
+    {
+      "id": "s0016",
+      "affiliate_id": "a01",
+      "ts": "2026-03-09T17:15:00Z",
+      "gross_mxn": 307,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u2"
+    },
+    {
+      "id": "s0017",
+      "affiliate_id": "a01",
+      "ts": "2026-03-10T18:15:00Z",
+      "gross_mxn": 357,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u1"
+    },
+    {
+      "id": "s0018",
+      "affiliate_id": "a01",
+      "ts": "2026-03-10T13:15:00Z",
+      "gross_mxn": 370,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u2"
+    },
+    {
+      "id": "s0019",
+      "affiliate_id": "a01",
+      "ts": "2026-03-11T14:15:00Z",
+      "gross_mxn": 420,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u1"
+    },
+    {
+      "id": "s0020",
+      "affiliate_id": "a01",
+      "ts": "2026-03-11T15:15:00Z",
+      "gross_mxn": 433,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u2"
+    },
+    {
+      "id": "s0021",
+      "affiliate_id": "a01",
+      "ts": "2026-03-12T16:15:00Z",
+      "gross_mxn": 483,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u1"
+    },
+    {
+      "id": "s0022",
+      "affiliate_id": "a01",
+      "ts": "2026-03-12T17:15:00Z",
+      "gross_mxn": 496,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u2"
+    },
+    {
+      "id": "s0023",
+      "affiliate_id": "a01",
+      "ts": "2026-03-13T18:15:00Z",
+      "gross_mxn": 546,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u1"
+    },
+    {
+      "id": "s0024",
+      "affiliate_id": "a01",
+      "ts": "2026-03-13T13:15:00Z",
+      "gross_mxn": 559,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u2"
+    },
+    {
+      "id": "s0025",
+      "affiliate_id": "a01",
+      "ts": "2026-03-14T14:15:00Z",
+      "gross_mxn": 229,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u1"
+    },
+    {
+      "id": "s0026",
+      "affiliate_id": "a01",
+      "ts": "2026-03-14T15:15:00Z",
+      "gross_mxn": 242,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u2"
+    },
+    {
+      "id": "s0027",
+      "affiliate_id": "a01",
+      "ts": "2026-03-15T16:15:00Z",
+      "gross_mxn": 292,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u1"
+    },
+    {
+      "id": "s0028",
+      "affiliate_id": "a01",
+      "ts": "2026-03-15T17:15:00Z",
+      "gross_mxn": 305,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u2"
+    },
+    {
+      "id": "s0029",
+      "affiliate_id": "a01",
+      "ts": "2026-03-16T18:15:00Z",
+      "gross_mxn": 355,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u1"
+    },
+    {
+      "id": "s0030",
+      "affiliate_id": "a01",
+      "ts": "2026-03-16T13:15:00Z",
+      "gross_mxn": 368,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u2"
+    },
+    {
+      "id": "s0031",
+      "affiliate_id": "a01",
+      "ts": "2026-03-17T14:15:00Z",
+      "gross_mxn": 418,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u1"
+    },
+    {
+      "id": "s0032",
+      "affiliate_id": "a01",
+      "ts": "2026-03-17T15:15:00Z",
+      "gross_mxn": 431,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u2"
+    },
+    {
+      "id": "s0033",
+      "affiliate_id": "a01",
+      "ts": "2026-03-18T16:15:00Z",
+      "gross_mxn": 481,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u1"
+    },
+    {
+      "id": "s0034",
+      "affiliate_id": "a01",
+      "ts": "2026-03-18T17:15:00Z",
+      "gross_mxn": 494,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u2"
+    },
+    {
+      "id": "s0035",
+      "affiliate_id": "a01",
+      "ts": "2026-03-19T18:15:00Z",
+      "gross_mxn": 544,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u1"
+    },
+    {
+      "id": "s0036",
+      "affiliate_id": "a01",
+      "ts": "2026-03-19T13:15:00Z",
+      "gross_mxn": 557,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u2"
+    },
+    {
+      "id": "s0037",
+      "affiliate_id": "a01",
+      "ts": "2026-03-20T14:15:00Z",
+      "gross_mxn": 227,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u1"
+    },
+    {
+      "id": "s0038",
+      "affiliate_id": "a01",
+      "ts": "2026-03-20T15:15:00Z",
+      "gross_mxn": 240,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u2"
+    },
+    {
+      "id": "s0039",
+      "affiliate_id": "a01",
+      "ts": "2026-03-21T16:15:00Z",
+      "gross_mxn": 290,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u1"
+    },
+    {
+      "id": "s0040",
+      "affiliate_id": "a01",
+      "ts": "2026-03-21T17:15:00Z",
+      "gross_mxn": 303,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u2"
+    },
+    {
+      "id": "s0041",
+      "affiliate_id": "a01",
+      "ts": "2026-03-22T18:15:00Z",
+      "gross_mxn": 353,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u1"
+    },
+    {
+      "id": "s0042",
+      "affiliate_id": "a01",
+      "ts": "2026-03-22T13:15:00Z",
+      "gross_mxn": 366,
+      "discount_bunz": 0,
+      "tickets": 1,
+      "user": "u2"
+    }
+  ],
+  "rewards_issued": [
+    {
+      "id": "rw0001",
+      "affiliate_id": "a01",
+      "user": "u1",
+      "ts": "2026-03-02T14:16:00Z",
+      "bunz": 12,
+      "origin": "package",
+      "reward_id": "s0001",
+      "expires_at": "2026-05-31"
+    },
+    {
+      "id": "rw0002",
+      "affiliate_id": "a01",
+      "user": "u2",
+      "ts": "2026-03-02T15:16:00Z",
+      "bunz": 12,
+      "origin": "package",
+      "reward_id": "s0002",
+      "expires_at": "2026-05-31"
+    },
+    {
+      "id": "rw0003",
+      "affiliate_id": "a01",
+      "user": "u1",
+      "ts": "2026-03-03T16:16:00Z",
+      "bunz": 15,
+      "origin": "package",
+      "reward_id": "s0003",
+      "expires_at": "2026-06-01"
+    },
+    {
+      "id": "rw0004",
+      "affiliate_id": "a01",
+      "user": "u2",
+      "ts": "2026-03-03T17:16:00Z",
+      "bunz": 15,
+      "origin": "package",
+      "reward_id": "s0004",
+      "expires_at": "2026-06-01"
+    },
+    {
+      "id": "rw0005",
+      "affiliate_id": "a01",
+      "user": "u1",
+      "ts": "2026-03-04T18:16:00Z",
+      "bunz": 18,
+      "origin": "package",
+      "reward_id": "s0005",
+      "expires_at": "2026-06-02"
+    },
+    {
+      "id": "rw0006",
+      "affiliate_id": "a01",
+      "user": "u2",
+      "ts": "2026-03-04T13:16:00Z",
+      "bunz": 19,
+      "origin": "package",
+      "reward_id": "s0006",
+      "expires_at": "2026-06-02"
+    },
+    {
+      "id": "rw0007",
+      "affiliate_id": "a01",
+      "user": "u1",
+      "ts": "2026-03-05T14:16:00Z",
+      "bunz": 21,
+      "origin": "package",
+      "reward_id": "s0007",
+      "expires_at": "2026-06-03"
+    },
+    {
+      "id": "rw0008",
+      "affiliate_id": "a01",
+      "user": "u2",
+      "ts": "2026-03-05T15:16:00Z",
+      "bunz": 22,
+      "origin": "package",
+      "reward_id": "s0008",
+      "expires_at": "2026-06-03"
+    },
+    {
+      "id": "rw0009",
+      "affiliate_id": "a01",
+      "user": "u1",
+      "ts": "2026-03-06T16:16:00Z",
+      "bunz": 24,
+      "origin": "package",
+      "reward_id": "s0009",
+      "expires_at": "2026-06-04"
+    },
+    {
+      "id": "rw0010",
+      "affiliate_id": "a01",
+      "user": "u2",
+      "ts": "2026-03-06T17:16:00Z",
+      "bunz": 25,
+      "origin": "package",
+      "reward_id": "s0010",
+      "expires_at": "2026-06-04"
+    },
+    {
+      "id": "rw0011",
+      "affiliate_id": "a01",
+      "user": "u1",
+      "ts": "2026-03-07T18:16:00Z",
+      "bunz": 27,
+      "origin": "package",
+      "reward_id": "s0011",
+      "expires_at": "2026-06-05"
+    },
+    {
+      "id": "rw0012",
+      "affiliate_id": "a01",
+      "user": "u2",
+      "ts": "2026-03-07T13:16:00Z",
+      "bunz": 28,
+      "origin": "package",
+      "reward_id": "s0012",
+      "expires_at": "2026-06-05"
+    },
+    {
+      "id": "rw0013",
+      "affiliate_id": "a01",
+      "user": "u1",
+      "ts": "2026-03-08T14:16:00Z",
+      "bunz": 12,
+      "origin": "package",
+      "reward_id": "s0013",
+      "expires_at": "2026-06-06"
+    },
+    {
+      "id": "rw0014",
+      "affiliate_id": "a01",
+      "user": "u2",
+      "ts": "2026-03-08T15:16:00Z",
+      "bunz": 12,
+      "origin": "package",
+      "reward_id": "s0014",
+      "expires_at": "2026-06-06"
+    },
+    {
+      "id": "rw0015",
+      "affiliate_id": "a01",
+      "user": "u1",
+      "ts": "2026-03-09T16:16:00Z",
+      "bunz": 15,
+      "origin": "package",
+      "reward_id": "s0015",
+      "expires_at": "2026-06-07"
+    },
+    {
+      "id": "rw0016",
+      "affiliate_id": "a01",
+      "user": "u2",
+      "ts": "2026-03-09T17:16:00Z",
+      "bunz": 15,
+      "origin": "package",
+      "reward_id": "s0016",
+      "expires_at": "2026-06-07"
+    },
+    {
+      "id": "rw0017",
+      "affiliate_id": "a01",
+      "user": "u1",
+      "ts": "2026-03-10T18:16:00Z",
+      "bunz": 18,
+      "origin": "package",
+      "reward_id": "s0017",
+      "expires_at": "2026-06-08"
+    },
+    {
+      "id": "rw0018",
+      "affiliate_id": "a01",
+      "user": "u2",
+      "ts": "2026-03-10T13:16:00Z",
+      "bunz": 19,
+      "origin": "package",
+      "reward_id": "s0018",
+      "expires_at": "2026-06-08"
+    },
+    {
+      "id": "rw0019",
+      "affiliate_id": "a01",
+      "user": "u1",
+      "ts": "2026-03-11T14:16:00Z",
+      "bunz": 21,
+      "origin": "package",
+      "reward_id": "s0019",
+      "expires_at": "2026-06-09"
+    },
+    {
+      "id": "rw0020",
+      "affiliate_id": "a01",
+      "user": "u2",
+      "ts": "2026-03-11T15:16:00Z",
+      "bunz": 22,
+      "origin": "package",
+      "reward_id": "s0020",
+      "expires_at": "2026-06-09"
+    },
+    {
+      "id": "rw0021",
+      "affiliate_id": "a01",
+      "user": "u1",
+      "ts": "2026-03-12T16:16:00Z",
+      "bunz": 24,
+      "origin": "package",
+      "reward_id": "s0021",
+      "expires_at": "2026-06-10"
+    },
+    {
+      "id": "rw0022",
+      "affiliate_id": "a01",
+      "user": "u2",
+      "ts": "2026-03-12T17:16:00Z",
+      "bunz": 25,
+      "origin": "package",
+      "reward_id": "s0022",
+      "expires_at": "2026-06-10"
+    },
+    {
+      "id": "rw0023",
+      "affiliate_id": "a01",
+      "user": "u1",
+      "ts": "2026-03-13T18:16:00Z",
+      "bunz": 27,
+      "origin": "package",
+      "reward_id": "s0023",
+      "expires_at": "2026-06-11"
+    },
+    {
+      "id": "rw0024",
+      "affiliate_id": "a01",
+      "user": "u2",
+      "ts": "2026-03-13T13:16:00Z",
+      "bunz": 28,
+      "origin": "package",
+      "reward_id": "s0024",
+      "expires_at": "2026-06-11"
+    },
+    {
+      "id": "rw0025",
+      "affiliate_id": "a01",
+      "user": "u1",
+      "ts": "2026-03-14T14:16:00Z",
+      "bunz": 11,
+      "origin": "package",
+      "reward_id": "s0025",
+      "expires_at": "2026-06-12"
+    },
+    {
+      "id": "rw0026",
+      "affiliate_id": "a01",
+      "user": "u2",
+      "ts": "2026-03-14T15:16:00Z",
+      "bunz": 12,
+      "origin": "package",
+      "reward_id": "s0026",
+      "expires_at": "2026-06-12"
+    },
+    {
+      "id": "rw0027",
+      "affiliate_id": "a01",
+      "user": "u1",
+      "ts": "2026-03-15T16:16:00Z",
+      "bunz": 15,
+      "origin": "package",
+      "reward_id": "s0027",
+      "expires_at": "2026-06-13"
+    },
+    {
+      "id": "rw0028",
+      "affiliate_id": "a01",
+      "user": "u2",
+      "ts": "2026-03-15T17:16:00Z",
+      "bunz": 15,
+      "origin": "package",
+      "reward_id": "s0028",
+      "expires_at": "2026-06-13"
+    },
+    {
+      "id": "rw0029",
+      "affiliate_id": "a01",
+      "user": "u1",
+      "ts": "2026-03-16T18:16:00Z",
+      "bunz": 18,
+      "origin": "package",
+      "reward_id": "s0029",
+      "expires_at": "2026-06-14"
+    },
+    {
+      "id": "rw0030",
+      "affiliate_id": "a01",
+      "user": "u2",
+      "ts": "2026-03-16T13:16:00Z",
+      "bunz": 18,
+      "origin": "package",
+      "reward_id": "s0030",
+      "expires_at": "2026-06-14"
+    },
+    {
+      "id": "rw0031",
+      "affiliate_id": "a01",
+      "user": "u1",
+      "ts": "2026-03-17T14:16:00Z",
+      "bunz": 21,
+      "origin": "package",
+      "reward_id": "s0031",
+      "expires_at": "2026-06-15"
+    },
+    {
+      "id": "rw0032",
+      "affiliate_id": "a01",
+      "user": "u2",
+      "ts": "2026-03-17T15:16:00Z",
+      "bunz": 22,
+      "origin": "package",
+      "reward_id": "s0032",
+      "expires_at": "2026-06-15"
+    },
+    {
+      "id": "rw0033",
+      "affiliate_id": "a01",
+      "user": "u1",
+      "ts": "2026-03-18T16:16:00Z",
+      "bunz": 24,
+      "origin": "package",
+      "reward_id": "s0033",
+      "expires_at": "2026-06-16"
+    },
+    {
+      "id": "rw0034",
+      "affiliate_id": "a01",
+      "user": "u2",
+      "ts": "2026-03-18T17:16:00Z",
+      "bunz": 25,
+      "origin": "package",
+      "reward_id": "s0034",
+      "expires_at": "2026-06-16"
+    },
+    {
+      "id": "rw0035",
+      "affiliate_id": "a01",
+      "user": "u1",
+      "ts": "2026-03-19T18:16:00Z",
+      "bunz": 27,
+      "origin": "package",
+      "reward_id": "s0035",
+      "expires_at": "2026-06-17"
+    },
+    {
+      "id": "rw0036",
+      "affiliate_id": "a01",
+      "user": "u2",
+      "ts": "2026-03-19T13:16:00Z",
+      "bunz": 28,
+      "origin": "package",
+      "reward_id": "s0036",
+      "expires_at": "2026-06-17"
+    },
+    {
+      "id": "rw0037",
+      "affiliate_id": "a01",
+      "user": "u1",
+      "ts": "2026-03-20T14:16:00Z",
+      "bunz": 11,
+      "origin": "package",
+      "reward_id": "s0037",
+      "expires_at": "2026-06-18"
+    },
+    {
+      "id": "rw0038",
+      "affiliate_id": "a01",
+      "user": "u2",
+      "ts": "2026-03-20T15:16:00Z",
+      "bunz": 12,
+      "origin": "package",
+      "reward_id": "s0038",
+      "expires_at": "2026-06-18"
+    },
+    {
+      "id": "rw0039",
+      "affiliate_id": "a01",
+      "user": "u1",
+      "ts": "2026-03-21T16:16:00Z",
+      "bunz": 15,
+      "origin": "package",
+      "reward_id": "s0039",
+      "expires_at": "2026-06-19"
+    },
+    {
+      "id": "rw0040",
+      "affiliate_id": "a01",
+      "user": "u2",
+      "ts": "2026-03-21T17:16:00Z",
+      "bunz": 15,
+      "origin": "package",
+      "reward_id": "s0040",
+      "expires_at": "2026-06-19"
+    },
+    {
+      "id": "rw0041",
+      "affiliate_id": "a01",
+      "user": "u1",
+      "ts": "2026-03-22T18:16:00Z",
+      "bunz": 18,
+      "origin": "package",
+      "reward_id": "s0041",
+      "expires_at": "2026-06-20"
+    },
+    {
+      "id": "rw0042",
+      "affiliate_id": "a01",
+      "user": "u2",
+      "ts": "2026-03-22T13:16:00Z",
+      "bunz": 18,
+      "origin": "package",
+      "reward_id": "s0042",
+      "expires_at": "2026-06-20"
+    }
+  ],
+  "redemptions": [
+    {
+      "id": "rd001",
+      "user": "u1",
+      "requested_at": "2026-03-05T18:00:00Z",
+      "requested_affiliate": "a01",
+      "bunz": 25,
+      "fulfilled_bunz": 25,
+      "status": "fulfilled",
+      "reasons": [],
+      "fulfilled_at": "2026-03-05T18:02:00Z",
+      "fulfilled_affiliate": "a01",
+      "wait_seconds": 120,
+      "reward_id": "rw0003"
+    },
+    {
+      "id": "rd002",
+      "user": "u2",
+      "requested_at": "2026-03-08T18:00:00Z",
+      "requested_affiliate": "a01",
+      "bunz": 25,
+      "fulfilled_bunz": 25,
+      "status": "fulfilled",
+      "reasons": [],
+      "fulfilled_at": "2026-03-08T18:02:00Z",
+      "fulfilled_affiliate": "a01",
+      "wait_seconds": 120,
+      "reward_id": "rw0004"
+    },
+    {
+      "id": "rd003",
+      "user": "u1",
+      "requested_at": "2026-03-11T18:00:00Z",
+      "requested_affiliate": "a01",
+      "bunz": 25,
+      "fulfilled_bunz": 25,
+      "status": "fulfilled",
+      "reasons": [],
+      "fulfilled_at": "2026-03-11T18:02:00Z",
+      "fulfilled_affiliate": "a01",
+      "wait_seconds": 120,
+      "reward_id": "rw0005"
+    },
+    {
+      "id": "rd004",
+      "user": "u2",
+      "requested_at": "2026-03-14T18:00:00Z",
+      "requested_affiliate": "a01",
+      "bunz": 25,
+      "fulfilled_bunz": 25,
+      "status": "fulfilled",
+      "reasons": [],
+      "fulfilled_at": "2026-03-14T18:02:00Z",
+      "fulfilled_affiliate": "a01",
+      "wait_seconds": 120,
+      "reward_id": "rw0006"
+    },
+    {
+      "id": "rd005",
+      "user": "u1",
+      "requested_at": "2026-03-17T18:00:00Z",
+      "requested_affiliate": "a01",
+      "bunz": 25,
+      "fulfilled_bunz": 25,
+      "status": "fulfilled",
+      "reasons": [],
+      "fulfilled_at": "2026-03-17T18:02:00Z",
+      "fulfilled_affiliate": "a01",
+      "wait_seconds": 120,
+      "reward_id": "rw0007"
+    },
+    {
+      "id": "rd006",
+      "user": "u2",
+      "requested_at": "2026-03-20T18:00:00Z",
+      "requested_affiliate": "a01",
+      "bunz": 25,
+      "fulfilled_bunz": 25,
+      "status": "fulfilled",
+      "reasons": [],
+      "fulfilled_at": "2026-03-20T18:02:00Z",
+      "fulfilled_affiliate": "a01",
+      "wait_seconds": 120,
+      "reward_id": "rw0008"
+    }
+  ],
+  "capacity": [
+    {
+      "affiliate_id": "a01",
+      "date": "2026-03-22",
+      "authorized_bunz": 50000,
+      "consumed_bunz": 1200
+    }
+  ],
+  "treasury": [
+    {
+      "date": "2026-03-02",
+      "bunz_balance": 24,
+      "fiat_balance": null,
+      "bank_balance": null,
+      "reconciled": false
+    },
+    {
+      "date": "2026-03-03",
+      "bunz_balance": 54,
+      "fiat_balance": null,
+      "bank_balance": null,
+      "reconciled": false
+    },
+    {
+      "date": "2026-03-04",
+      "bunz_balance": 91,
+      "fiat_balance": null,
+      "bank_balance": null,
+      "reconciled": false
+    },
+    {
+      "date": "2026-03-05",
+      "bunz_balance": 134,
+      "fiat_balance": null,
+      "bank_balance": null,
+      "reconciled": false
+    },
+    {
+      "date": "2026-03-06",
+      "bunz_balance": 183,
+      "fiat_balance": null,
+      "bank_balance": null,
+      "reconciled": false
+    },
+    {
+      "date": "2026-03-07",
+      "bunz_balance": 238,
+      "fiat_balance": null,
+      "bank_balance": null,
+      "reconciled": false
+    },
+    {
+      "date": "2026-03-08",
+      "bunz_balance": 262,
+      "fiat_balance": null,
+      "bank_balance": null,
+      "reconciled": false
+    },
+    {
+      "date": "2026-03-09",
+      "bunz_balance": 292,
+      "fiat_balance": null,
+      "bank_balance": null,
+      "reconciled": false
+    },
+    {
+      "date": "2026-03-10",
+      "bunz_balance": 329,
+      "fiat_balance": null,
+      "bank_balance": null,
+      "reconciled": false
+    },
+    {
+      "date": "2026-03-11",
+      "bunz_balance": 372,
+      "fiat_balance": null,
+      "bank_balance": null,
+      "reconciled": false
+    },
+    {
+      "date": "2026-03-12",
+      "bunz_balance": 421,
+      "fiat_balance": null,
+      "bank_balance": null,
+      "reconciled": false
+    },
+    {
+      "date": "2026-03-13",
+      "bunz_balance": 476,
+      "fiat_balance": null,
+      "bank_balance": null,
+      "reconciled": false
+    },
+    {
+      "date": "2026-03-14",
+      "bunz_balance": 499,
+      "fiat_balance": null,
+      "bank_balance": null,
+      "reconciled": false
+    },
+    {
+      "date": "2026-03-15",
+      "bunz_balance": 529,
+      "fiat_balance": null,
+      "bank_balance": null,
+      "reconciled": false
+    },
+    {
+      "date": "2026-03-16",
+      "bunz_balance": 565,
+      "fiat_balance": null,
+      "bank_balance": null,
+      "reconciled": false
+    },
+    {
+      "date": "2026-03-17",
+      "bunz_balance": 608,
+      "fiat_balance": null,
+      "bank_balance": null,
+      "reconciled": false
+    },
+    {
+      "date": "2026-03-18",
+      "bunz_balance": 657,
+      "fiat_balance": null,
+      "bank_balance": null,
+      "reconciled": false
+    },
+    {
+      "date": "2026-03-19",
+      "bunz_balance": 712,
+      "fiat_balance": null,
+      "bank_balance": null,
+      "reconciled": false
+    },
+    {
+      "date": "2026-03-20",
+      "bunz_balance": 735,
+      "fiat_balance": null,
+      "bank_balance": null,
+      "reconciled": false
+    },
+    {
+      "date": "2026-03-21",
+      "bunz_balance": 765,
+      "fiat_balance": null,
+      "bank_balance": null,
+      "reconciled": false
+    },
+    {
+      "date": "2026-03-22",
+      "bunz_balance": 801,
+      "fiat_balance": null,
+      "bank_balance": null,
+      "reconciled": false
+    }
+  ],
+  "fiat_settlements": [
+    {
+      "id": "fs001",
+      "obligation_id": "pending-1",
+      "received_at": "2026-03-09",
+      "amount_mxn": 1450,
+      "bank_ref": null,
+      "reconciled": false
+    },
+    {
+      "id": "fs002",
+      "obligation_id": "pending-2",
+      "received_at": "2026-03-16",
+      "amount_mxn": 1750,
+      "bank_ref": null,
+      "reconciled": false
+    }
+  ]
+}

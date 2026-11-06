@@ -785,3 +785,142 @@ export const pinAttempts = pgTable("pin_attempts", {
   lastFailAt: timestamp("lastFailAt").defaultNow().notNull(),
   lockedUntil: timestamp("lockedUntil"),
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 📈 OBSERVABILIDAD ECONÓMICA — OT-1 / OT-4
+// Captura para el pipeline de validación. Append-only, sin lógica de negocio.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * OT-1 · Intentos de redención (append-only).
+ *
+ * Un intento por fila, **también cuando se cumple**: si solo se registraran los
+ * fallos no se podría reconstruir la demanda. `reasons` es un JSON array con el
+ * catálogo cerrado (ver BUNZ-REAL-DATA-SPEC: capacity_exhausted, out_of_stock,
+ * affiliate_refused, closed, inactive_branch, tech_failure, user_cancelled,
+ * duplicate, fraud, unknown).
+ *
+ * `userHash` nunca contiene PII. `idempotencyKey` evita duplicados por reintento.
+ */
+export const bunzRedemptionAttempts = pgTable(
+  "bunz_redemption_attempts",
+  {
+    id: id(),
+    userHash: text("userHash").notNull(),
+    branchId: fkIdOpt("branchId").references(() => branches.id),
+    orderId: text("orderId"),
+    rewardId: text("rewardId"),
+    requestedAt: timestamp("requestedAt").defaultNow().notNull(),
+    bunzRequested: real("bunzRequested").notNull(),
+    bunzFulfilled: real("bunzFulfilled").default(0).notNull(),
+    status: text("status").default("unfulfilled").notNull(), // fulfilled | partial | unfulfilled | cancelled | fraud | duplicate
+    reasons: text("reasons").default("[]").notNull(), // JSON array del catálogo
+    waitSeconds: integer("waitSeconds"),
+    fulfilledAt: timestamp("fulfilledAt"),
+    fulfilledBranchId: text("fulfilledBranchId"),
+    idempotencyKey: text("idempotencyKey").notNull().unique(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [
+    index("bunz_attempts_requested_idx").on(t.requestedAt),
+    index("bunz_attempts_user_idx").on(t.userHash),
+  ]
+);
+
+/**
+ * OT-4 · Snapshot diario de capacidad por afiliado.
+ *
+ * Autorizado vs consumido. `bunzCapacityDaily` es una foto: se escribe una vez al
+ * día con un upsert idempotente por `(affiliateId, date)`. No hay histórico que
+ * reconstruir antes de existir la tabla, y eso se declara como hueco.
+ */
+export const bunzCapacityDaily = pgTable(
+  "bunz_capacity_daily",
+  {
+    id: id(),
+    affiliateId: text("affiliateId").notNull(),
+    date: text("date").notNull(), // YYYY-MM-DD
+    authorizedBunz: real("authorizedBunz").default(0).notNull(),
+    consumedBunz: real("consumedBunz").default(0).notNull(),
+    source: text("source").default("snapshot").notNull(), // credit_limit | package | campaign | snapshot
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("bunz_capacity_daily_pk").on(t.affiliateId, t.date)]
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 📚 OT-2 / OT-3 — Obligaciones y libro de doble entrada
+// Registro contable para el pipeline. Append-only; sin lógica de negocio.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * OT-2 · Obligación (devengo) con ciclo de vida.
+ * Estados: OPEN → DISPUTED → RESOLVED_PAYABLE → PARTIALLY_PAID → PAID
+ *          DISPUTED → RESOLVED_NOT_PAYABLE
+ * `amountBunz` es la denominación; `settledFiatMxn` es MXN y solo se compara con
+ * Bunz si `unit_policy.approved` (ver R24/R26).
+ */
+export const bunzObligations = pgTable(
+  "bunz_obligations",
+  {
+    id: id(),
+    affiliateId: text("affiliateId").notNull(),
+    origin: text("origin").notNull(), // fiat_sale | redeem_fee
+    accruedAt: timestamp("accruedAt").defaultNow().notNull(),
+    dueAt: timestamp("dueAt").notNull(),
+    amountBunz: real("amountBunz").notNull(),
+    state: text("state").default("OPEN").notNull(),
+    settledAt: timestamp("settledAt"),
+    instrument: text("instrument"), // bunz | fiat | mixed
+    settledBunz: real("settledBunz").default(0).notNull(),
+    settledFiatMxn: real("settledFiatMxn").default(0).notNull(),
+    writtenOffAt: timestamp("writtenOffAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [
+    index("bunz_obligations_affiliate_idx").on(t.affiliateId),
+    index("bunz_obligations_state_idx").on(t.state),
+    index("bunz_obligations_due_idx").on(t.dueAt),
+  ]
+);
+
+/** OT-2 · Historial de transiciones (append-only). Una fila por cambio de estado. */
+export const bunzObligationEvents = pgTable(
+  "bunz_obligation_events",
+  {
+    id: id(),
+    obligationId: fkId("obligationId").references(() => bunzObligations.id, { onDelete: "cascade" }),
+    at: timestamp("at").defaultNow().notNull(),
+    fromState: text("fromState").notNull(),
+    toState: text("toState").notNull(),
+    actor: text("actor").default("system").notNull(),
+    note: text("note"),
+  },
+  (t) => [index("bunz_obligation_events_obligation_idx").on(t.obligationId)]
+);
+
+/**
+ * OT-3 · Libro Bunz de doble entrada.
+ * Invariante: Σ débitos = Σ créditos por `groupId`.
+ * Cuentas: emission_budget, user_wallet, redemption_capacity,
+ *          commission_reserved, treasury_bunz, written_off, external.
+ */
+export const bunzLedgerEntries = pgTable(
+  "bunz_ledger_entries",
+  {
+    id: id(),
+    groupId: text("groupId").notNull(),
+    ts: timestamp("ts").defaultNow().notNull(),
+    account: text("account").notNull(),
+    direction: text("direction").notNull(), // debit | credit
+    amount: real("amount").notNull(),
+    refType: text("refType").notNull(), // reward | redemption | obligation | reversal | funding
+    refId: text("refId"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [
+    index("bunz_ledger_group_idx").on(t.groupId),
+    index("bunz_ledger_ref_idx").on(t.refType, t.refId),
+    index("bunz_ledger_ts_idx").on(t.ts),
+  ]
+);

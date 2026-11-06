@@ -128,7 +128,7 @@ importers:
         version: 9.39.4(jiti@2.7.0)
       eslint-config-next:
         specifier: 16.2.6
-        version: 16.2.6(@typescript-eslint/parser@8.60.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
+        version: 16.2.6(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
       tailwindcss:
         specifier: ^4
         version: 4.3.0
@@ -447,7 +447,7 @@ importers:
         version: 1.2.0
       drizzle-orm:
         specifier: 0.45.2
-        version: 0.45.2(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@5.0.10))(@opentelemetry/api@1.10.0)(@types/pg@8.20.0)(pg@8.21.0)(postgres@3.4.9)
+        version: 0.45.2(@libsql/client@0.17.3)(@opentelemetry/api@1.10.0)(@types/pg@8.20.0)(pg@8.21.0)(postgres@3.4.9)
       ioredis:
         specifier: ^5.11.1
         version: 5.11.1
@@ -544,7 +544,7 @@ importers:
     dependencies:
       drizzle-orm:
         specifier: 0.45.2
-        version: 0.45.2(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@5.0.10))(@opentelemetry/api@1.10.0)(@types/pg@8.20.0)(pg@8.21.0)(postgres@3.4.9)
+        version: 0.45.2(@libsql/client@0.17.3)(@opentelemetry/api@1.10.0)(@types/pg@8.20.0)(pg@8.21.0)(postgres@3.4.9)
       pg:
         specifier: ^8.21.0
         version: 8.21.0
@@ -563,7 +563,7 @@ importers:
     dependencies:
       drizzle-orm:
         specifier: 0.45.2
-        version: 0.45.2(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@5.0.10))(@opentelemetry/api@1.10.0)(@types/pg@8.20.0)(pg@8.21.0)(postgres@3.4.9)
+        version: 0.45.2(@libsql/client@0.17.3)(@opentelemetry/api@1.10.0)(@types/pg@8.20.0)(pg@8.21.0)(postgres@3.4.9)
       pg:
         specifier: ^8.21.0
         version: 8.21.0
@@ -708,6 +708,9 @@ importers:
       '@libsql/client':
         specifier: ^0.17.3
         version: 0.17.3(bufferutil@4.1.0)(utf-8-validate@5.0.10)
+      '@rabbitty/api':
+        specifier: workspace:*
+        version: link:../packages/api
       '@rabbitty/capacitor-scanner':
         specifier: workspace:*
         version: link:../packages/capacitor-rabbitty-scanner
@@ -752,7 +755,7 @@ importers:
         version: 2.0.1
       drizzle-orm:
         specifier: 0.45.2
-        version: 0.45.2(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@5.0.10))(@opentelemetry/api@1.10.0)(@types/pg@8.20.0)(pg@8.21.0)(postgres@3.4.9)
+        version: 0.45.2(@libsql/client@0.17.3)(@opentelemetry/api@1.10.0)(@types/pg@8.20.0)(pg@8.21.0)(postgres@3.4.9)
       firebase-admin:
         specifier: ^14.5.0
         version: 14.5.0
@@ -852,7 +855,7 @@ importers:
         version: 9.39.4(jiti@2.7.0)
       eslint-config-next:
         specifier: 16.2.6
-        version: 16.2.6(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
+        version: 16.2.6(@typescript-eslint/parser@8.60.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
       tailwindcss:
         specifier: ^4
         version: 4.3.0
@@ -7797,7 +7800,7 @@ snapshots:
 
   '@rabbitty/database-core@file:packages/database-core(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@5.0.10))(@opentelemetry/api@1.10.0)(@types/pg@8.20.0)(postgres@3.4.9)':
     dependencies:
-      drizzle-orm: 0.45.2(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@5.0.10))(@opentelemetry/api@1.10.0)(@types/pg@8.20.0)(pg@8.21.0)(postgres@3.4.9)
+      drizzle-orm: 0.45.2(@libsql/client@0.17.3)(@opentelemetry/api@1.10.0)(@types/pg@8.20.0)(pg@8.21.0)(postgres@3.4.9)
       pg: 8.21.0
     transitivePeerDependencies:
       - '@aws-sdk/client-rds-data'
@@ -9012,7 +9015,7 @@ snapshots:
       esbuild: 0.25.12
       tsx: 4.22.3
 
-  drizzle-orm@0.45.2(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@5.0.10))(@opentelemetry/api@1.10.0)(@types/pg@8.20.0)(pg@8.21.0)(postgres@3.4.9):
+  drizzle-orm@0.45.2(@libsql/client@0.17.3)(@opentelemetry/api@1.10.0)(@types/pg@8.20.0)(pg@8.21.0)(postgres@3.4.9):
     optionalDependencies:
       '@libsql/client': 0.17.3(bufferutil@4.1.0)(utf-8-validate@5.0.10)
       '@opentelemetry/api': 1.10.0

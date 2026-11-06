@@ -32,6 +32,81 @@ export function getStripeClient(): Stripe {
 }
 
 /**
+ * Cancela un PaymentIntent en Stripe (idempotente).
+ *
+ * P0-1: al cancelar un cobro en Rabbitty también hay que anular el intent en
+ * Stripe; si no, el `client_secret` sigue vivo y el comensal puede pagar
+ * después (doble cobro: efectivo + tarjeta).
+ *
+ * Devuelve el estado real para que el caller decida:
+ *  - "canceled"        → anulado ahora
+ *  - "already_canceled"→ ya estaba anulado (reintento seguro)
+ *  - "succeeded"       → ya se cobró: NO se puede cancelar
+ *  - "not_found"       → no existe en Stripe (nada que anular)
+ */
+export type StripeCancelResult = "canceled" | "already_canceled" | "succeeded" | "not_found";
+
+export async function cancelStripePaymentIntent(
+  externalIntentId: string
+): Promise<StripeCancelResult> {
+  const stripe = getStripeClient();
+
+  try {
+    const pi = await stripe.paymentIntents.cancel(externalIntentId, {
+      cancellation_reason: "abandoned",
+    });
+    return pi.status === "canceled" ? "canceled" : "already_canceled";
+  } catch (err) {
+    const code = (err as { code?: string })?.code;
+    if (code === "resource_missing") return "not_found";
+
+    // Si no se pudo cancelar, consultar el estado real (idempotencia).
+    try {
+      const pi = await stripe.paymentIntents.retrieve(externalIntentId);
+      if (pi.status === "canceled") return "already_canceled";
+      if (pi.status === "succeeded") return "succeeded";
+    } catch {
+      /* cae al throw original */
+    }
+
+    throw err;
+  }
+}
+
+/**
+ * Lee el estado real de un PaymentIntent en Stripe (para reconciliar cuando
+ * el polling detecta que el intent local expiró pero Stripe ya cobró).
+ */
+export async function retrieveStripePaymentIntent(externalIntentId: string): Promise<{
+  id: string;
+  status: string;
+  amount: number;
+  currency: string;
+  latestCharge?: string;
+  destination?: string;
+  succeededAt?: Date;
+}> {
+  const stripe = getStripeClient();
+  const pi = await stripe.paymentIntents.retrieve(externalIntentId);
+  const charge = pi.latest_charge;
+  const destination = pi.transfer_data?.destination;
+  const transitions = (pi as unknown as {
+    status_transitions?: { succeeded_at?: number | null };
+  }).status_transitions;
+  return {
+    id: pi.id,
+    status: pi.status,
+    amount: pi.amount,
+    currency: pi.currency,
+    latestCharge: typeof charge === "string" ? charge : charge?.id,
+    destination: typeof destination === "string" ? destination : destination?.id,
+    succeededAt: transitions?.succeeded_at
+      ? new Date(transitions.succeeded_at * 1000)
+      : undefined,
+  };
+}
+
+/**
  * Obtiene la cuenta conectada activa para una sucursal dada.
  */
 export async function getMerchantPaymentAccount(db: Db, branchId: string) {
