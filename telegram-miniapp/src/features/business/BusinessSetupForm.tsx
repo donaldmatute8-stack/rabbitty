@@ -86,7 +86,7 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
     () =>
       buildCapacityOptions({
         dailyCapacityDemand: offerDailyDemand,
-        nicheFloor: 1000,
+        nicheFloor: 500,
         nicheCeiling: 20000,
         solvencyCap: 10000,
         coverageDays: [7, 14, 30],
