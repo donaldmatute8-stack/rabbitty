@@ -464,6 +464,18 @@ export default function SettingsPage() {
       ══════════════════════════════════════════════════════════════ */}
       {activeTab === "business" && (
         <div className="space-y-8">
+          <Link
+            href="/settings/legal"
+            className="flex items-center justify-between rounded-2xl border border-violet-500/25 bg-violet-500/10 px-5 py-4 hover:bg-violet-500/15 transition-all"
+          >
+            <div>
+              <p className="text-sm font-black text-white">Documentación legal y acuerdo MCCE</p>
+              <p className="text-[11px] text-gray-400">
+                Razón social, RFC, representante, aceptación del borrador y autenticación móvil.
+              </p>
+            </div>
+            <span className="text-violet-300 text-xs font-bold">Abrir →</span>
+          </Link>
           {/* Business Type Selector */}
           <div>
             <h2 className="text-lg font-black text-white mb-1 flex items-center gap-2">

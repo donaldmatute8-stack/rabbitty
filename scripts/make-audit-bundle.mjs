@@ -138,6 +138,7 @@ const GROUPS = [
       "telegram-miniapp/src/lib/mcceOffer.ts",
       "telegram-miniapp/src/lib/mcceContract.ts",
       "telegram-miniapp/src/app/api/business/route.ts",
+      "apps/admin/src/app/(dashboard)/settings/legal/page.tsx",
       "DOCS/data/mcce-shadow-2026-11-07.json",
       "scripts/lib/mcce.mjs",
       "scripts/mcce.test.mjs",

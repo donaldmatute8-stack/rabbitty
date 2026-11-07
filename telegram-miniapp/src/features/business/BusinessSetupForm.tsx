@@ -9,6 +9,7 @@ import BunzGuide from './BunzGuide';
 import { NichePicker } from './NichePicker';
 import { BunzyOnboarding } from './BunzyOnboarding';
 import { BunzyVideoStage } from '@/components/onboarding/BunzyVideoStage';
+import { QRCodeSVG } from 'qrcode.react';
 import { verifyBiometric } from '@/lib/securityVault';
 import { buildCapacityOptions, estimateDailyDemand, priorForNiche, tierLabel } from '@/lib/mcceOffer';
 import { MCCE_CONTRACT_VERSION, MCCE_CONTRACT_STATUS, MCCE_CONTRACT_SUMMARY, renderContract, hashContract } from '@/lib/mcceContract';
@@ -766,6 +767,20 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
                   <p style={{ margin: '8px 0 0', fontSize: 10.5, color: 'rgba(255,255,255,0.4)' }}>
                     Si tu dispositivo no tiene biometría, tu nombre completo y las casillas son suficientes.
                   </p>
+                  <details style={{ marginTop: 10 }}>
+                    <summary style={{ cursor: 'pointer', fontSize: 11, color: '#F472B6', fontWeight: 800 }}>
+                      Completar en mobile
+                    </summary>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8 }}>
+                      <div style={{ background: '#fff', padding: 6, borderRadius: 10 }}>
+                        <QRCodeSVG value="https://t.me/Rabbittyme_bot/app" size={92} />
+                      </div>
+                      <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.55)', lineHeight: 1.45 }}>
+                        Escanea desde tu teléfono para abrir la app y completar la autenticación local.
+                        Si no tienes biometría, usa tu nombre y las casillas.
+                      </p>
+                    </div>
+                  </details>
                 </div>
               </div>
 

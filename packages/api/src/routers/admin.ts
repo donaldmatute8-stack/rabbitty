@@ -1680,6 +1680,42 @@ export const adminRouter = router({
       { id: "website", label: "Sitio web propio o Landing Rabbitty", done: has(biz?.slug), href: "https://www.rabbitty.me", level: "top", cta: "Reclamar landing" },
     ];
 
+    // MCCE: documentación legal del afiliado y aceptación del acuerdo.
+    let vData: Record<string, any> = {};
+    try {
+      vData = JSON.parse(biz?.verificationData || "{}");
+    } catch {
+      vData = {};
+    }
+    const legalProfile = vData.legalProfile ?? {};
+    const contractSignature = vData.contractSignature ?? null;
+    all.push(
+      {
+        id: "legal_identity",
+        label: "Razón social, RFC y representante legal",
+        done: Boolean(legalProfile.legalName && legalProfile.representative && legalProfile.rfc),
+        href: "/settings/legal",
+        level: "min",
+        cta: "Completar datos legales",
+      },
+      {
+        id: "mcce_contract",
+        label: "Aceptación del acuerdo MCCE",
+        done: Boolean(contractSignature),
+        href: "/settings/legal",
+        level: "min",
+        cta: "Aceptar acuerdo",
+      },
+      {
+        id: "mobile_auth",
+        label: "Autenticación local en mobile",
+        done: Boolean(contractSignature?.biometricVerified),
+        href: "/settings/legal",
+        level: "top",
+        cta: "Completar en mobile",
+      }
+    );
+
     // Estado real en base de datos para los 7 pasos operativos del OnboardingWizard
     const wizardSteps: Record<string, { done: boolean; detail: string }> = {
       menu: {
@@ -1838,5 +1874,86 @@ export const adminRouter = router({
         details: JSON.stringify(clean),
       });
       return { success: true, capConfig: clean };
+    }),
+
+  getLegalProfile: protectedProcedure.query(async ({ ctx }) => {
+    const restaurantId = await resolveRestaurantId(ctx);
+    if (!restaurantId) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Sucursal no resuelta" });
+    const [rest] = await ctx.restaurantDb
+      .select({ businessId: restaurants.businessId })
+      .from(restaurants)
+      .where(eq(restaurants.id, restaurantId))
+      .limit(1);
+    const [biz] = rest?.businessId
+      ? await ctx.coreDb
+          .select({
+            id: ownedBusinesses.id,
+            name: ownedBusinesses.name,
+            category: ownedBusinesses.category,
+            address: ownedBusinesses.address,
+            verificationData: ownedBusinesses.verificationData,
+          })
+          .from(ownedBusinesses)
+          .where(eq(ownedBusinesses.id, rest.businessId))
+          .limit(1)
+      : [];
+    let data: Record<string, any> = {};
+    try {
+      data = JSON.parse(biz?.verificationData || "{}");
+    } catch {
+      data = {};
+    }
+    return {
+      businessId: rest?.businessId ?? null,
+      businessName: biz?.name ?? null,
+      category: biz?.category ?? null,
+      address: biz?.address ?? null,
+      legalProfile: data.legalProfile ?? null,
+      contractSignature: data.contractSignature ?? null,
+    };
+  }),
+
+  updateLegalProfile: protectedProcedure
+    .input(
+      z.object({
+        legalName: z.string().min(2).max(200),
+        rfc: z.string().min(10).max(20),
+        representative: z.string().min(3).max(120),
+        representativePosition: z.string().max(80).optional(),
+        address: z.string().max(300).optional(),
+        phone: z.string().max(30).optional(),
+        email: z.string().email().max(120).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const restaurantId = await resolveRestaurantId(ctx);
+      if (!restaurantId) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Sucursal no resuelta" });
+      const [rest] = await ctx.restaurantDb
+        .select({ businessId: restaurants.businessId })
+        .from(restaurants)
+        .where(eq(restaurants.id, restaurantId))
+        .limit(1);
+      if (!rest?.businessId) throw new TRPCError({ code: "NOT_FOUND", message: "Negocio no encontrado" });
+
+      const [biz] = await ctx.coreDb
+        .select({ verificationData: ownedBusinesses.verificationData })
+        .from(ownedBusinesses)
+        .where(eq(ownedBusinesses.id, rest.businessId))
+        .limit(1);
+
+      let data: Record<string, any> = {};
+      try {
+        data = JSON.parse(biz?.verificationData || "{}");
+      } catch {
+        data = {};
+      }
+      data.legalProfile = { ...input, updatedAt: new Date().toISOString() };
+
+      await ctx.coreDb
+        .update(ownedBusinesses)
+        .set({ verificationData: JSON.stringify(data) })
+        .where(eq(ownedBusinesses.id, rest.businessId));
+
+      return { ok: true };
     }),
 });
