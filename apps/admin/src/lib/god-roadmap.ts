@@ -10,7 +10,7 @@
 
 export type RoadmapStatus = "done" | "active" | "blocked" | "pending";
 
-export const ROADMAP_VERSION = "2026-11-07.5";
+export const ROADMAP_VERSION = "2026-11-07.6";
 
 export interface RoadmapItem {
   id: string;
@@ -65,14 +65,14 @@ export const PHASES: RoadmapPhase[] = [
     title: "Piloto económico",
     subtitle: "Emisión, redención y liquidación con límites",
     status: "active",
-    progress: 85,
+    progress: 90,
     items: [
       { id: "B1", title: "Liquidación multi-instrumento", detail: "Bunz, fiat o mixto con tasa por operación; flags separados.", status: "done", evidence: "migración 0030" },
       { id: "B2", title: "Topes duros por afiliado", detail: "Máximo emitido, redimido y liquidado por periodo.", status: "done", evidence: "migración 0032 + bunzControls" },
       { id: "B3", title: "Lista blanca de afiliados", detail: "Solo los autorizados entran al piloto.", status: "done", evidence: "RABBITTY_BUNZ_PILOT" },
       { id: "B4", title: "Kill switches independientes", detail: "Detener emisión, redención o liquidación sin tocar fiat.", status: "done", evidence: "BUNZ_EMIT / BUNZ_REDEEM" },
       { id: "B5", title: "Conciliación con pausa", detail: "Diferencia entre orden, libro y obligación ⇒ alerta y pausa del flujo.", status: "done", evidence: "0033 + cron + panel" },
-      { id: "B6", title: "Fase B controlada", detail: "Redención y liquidación parcial para 3 afiliados, con topes y pausa.", status: "active", evidence: "Ka13 · 626 · Bull Box configurados" },
+      { id: "B6", title: "Fase B controlada", detail: "Redención y liquidación parcial para 3 afiliados, con topes y pausa.", status: "active", evidence: "piloto ON · 5,000/5,000/2,000" },
     ],
   },
   {
@@ -124,7 +124,7 @@ export const FLAGS: FlagRow[] = [
   { name: "RABBITTY_BUNZ_OBLIGATIONS", value: "true", on: true, what: "Devengo de comisión (6%)" },
   { name: "RABBITTY_BUNZ_ABUSE", value: "true", on: true, what: "Señales de abuso (OT-5)" },
   { name: "GOD_VALIDATION_PANEL", value: "true", on: true, what: "Panel y captura en /god/validacion" },
-  { name: "RABBITTY_BUNZ_PILOT", value: "false", on: false, what: "Lista blanca + topes del piloto" },
+  { name: "RABBITTY_BUNZ_PILOT", value: "true", on: true, what: "Lista blanca + topes del piloto" },
   { name: "RABBITTY_BUNZ_EMIT", value: "true", on: true, what: "Kill switch de emisión" },
   { name: "RABBITTY_BUNZ_REDEEM", value: "true", on: true, what: "Kill switch de redención" },
   { name: "RABBITTY_BUNZ_SETTLE", value: "false", on: false, what: "Liquidar obligaciones en Bunz" },
@@ -141,6 +141,12 @@ export interface HistoryEntry {
 }
 
 export const HISTORY: HistoryEntry[] = [
+  {
+    date: "2026-11-07",
+    title: "Piloto encendido",
+    detail: "RABBITTY_BUNZ_PILOT=true. Ka13, 626 Café y Bull Box con topes de 5,000 emisión / 5,000 redención / 2,000 liquidación por 7 días.",
+    ref: "RABBITTY_BUNZ_PILOT",
+  },
   {
     date: "2026-11-07",
     title: "Split de cuenta restaurado",
@@ -218,9 +224,9 @@ export const NEXT_ACTIONS: NextAction[] = [
   },
   {
     id: "N2",
-    title: "Encender el piloto",
-    detail: "Los 3 afiliados ya están configurados con topes. Falta RABBITTY_BUNZ_PILOT=true y la venta controlada.",
-    owner: "Negocio + Tech",
+    title: "Validar el piloto",
+    detail: "Piloto encendido con 3 afiliados. Falta la venta controlada (efectivo, Bunz y split) y revisar la captura.",
+    owner: "Operación + Tech",
   },
   {
     id: "N3",
