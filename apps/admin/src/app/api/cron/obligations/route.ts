@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { inArray, sql } from "drizzle-orm";
 import { getRestaurantDb } from "@rabbitty/api/db";
-import { markOverdue } from "@rabbitty/api/services/bunzObligations";
+import { scanOverdue } from "@rabbitty/api/services/bunzObligations";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * ── /api/cron/obligations ── OT-2: barrido diario de mora.
+ * ── /api/cron/obligations ── OT-2: foto diaria de deuda y mora.
  *
- * Solo cambia el estado OPEN → LATE de las obligaciones vencidas. **No mueve
- * dinero**: la liquidación es otro paso, apagado por defecto.
+ * La mora **no es un estado**: se deriva de `dueAt < now` (contrato v1.0).
+ * Este cron solo cuenta y reporta; **no escribe ni mueve dinero**. La
+ * liquidación es otro paso, apagado por defecto.
  *
  * Autorización: CRON_SECRET (mismo patrón que el resto de cron).
  */
@@ -31,13 +32,11 @@ async function run() {
   }
 
   const db = getRestaurantDb();
-  const { bunzObligations, bunzObligationEvents } = await import(
+  const { bunzObligations } = await import(
     "@rabbitty/database-restaurant/schema"
   );
 
-  const marked = await markOverdue(db, {
-    tables: { obligations: bunzObligations, events: bunzObligationEvents },
-  });
+  const overdue = await scanOverdue(db, { tables: { obligations: bunzObligations } });
 
   // Foto de deuda (read-only) para el log del cron.
   const [summary] = await db
@@ -51,11 +50,12 @@ async function run() {
     .where(inArray(bunzObligations.state, ["OPEN", "LATE", "PARTIAL"]));
 
   return NextResponse.json({
-    ok: marked.ok,
+    ok: overdue.ok,
     date: new Date().toISOString().slice(0, 10),
-    marked: marked.marked,
-    errors: marked.errors,
+    overdue: overdue.overdue,
     outstanding: Number(summary?.outstanding) || 0,
+    overdueOutstanding: overdue.outstanding,
+    errors: overdue.errors,
     states: {
       open: Number(summary?.open) || 0,
       late: Number(summary?.late) || 0,

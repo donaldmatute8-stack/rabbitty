@@ -43,6 +43,7 @@ const GROUPS = [
       "DOCS/BUNZ-ARQUITECTURA-OPERATIVA.md",
       "DOCS/BUNZ-SIGUIENTE-NIVEL.md",
       "DOCS/BUNZ-DECISIONES-G3-G4.md",
+      "DOCS/BUNZ-CIERRE-GAPS-2026-11-07.md",
       "packages/database-restaurant/migrations/manual/0027_ot1_ot4_bunz_observability.sql",
       "packages/database-restaurant/migrations/manual/0028_ot2_ot3_bunz_books.sql",
       "packages/database-restaurant/migrations/manual/0029_ot5_abuse_signals.sql",

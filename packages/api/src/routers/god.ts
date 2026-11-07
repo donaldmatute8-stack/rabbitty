@@ -1230,10 +1230,10 @@ export const godRouter = router({
       const [summary] = await ctx.restaurantDb
         .select({
           open: sql<number>`count(*) filter (where ${bunzObligations.state} = 'OPEN')`,
-          late: sql<number>`count(*) filter (where ${bunzObligations.state} = 'LATE')`,
-          partial: sql<number>`count(*) filter (where ${bunzObligations.state} = 'PARTIAL')`,
-          settled: sql<number>`count(*) filter (where ${bunzObligations.state} = 'SETTLED')`,
-          outstanding: sql<number>`coalesce(sum(${bunzObligations.amountBunz} - ${bunzObligations.settledBunz}) filter (where ${bunzObligations.state} in ('OPEN','LATE','PARTIAL')), 0)`,
+          disputed: sql<number>`count(*) filter (where ${bunzObligations.state} = 'DISPUTED')`,
+          partial: sql<number>`count(*) filter (where ${bunzObligations.state} = 'PARTIALLY_PAID')`,
+          settled: sql<number>`count(*) filter (where ${bunzObligations.state} = 'PAID')`,
+          outstanding: sql<number>`coalesce(sum(${bunzObligations.amountBunz} - ${bunzObligations.settledBunz}) filter (where ${bunzObligations.state} in ('OPEN','DISPUTED','RESOLVED_PAYABLE','PARTIALLY_PAID')), 0)`,
         })
         .from(bunzObligations);
 
@@ -1242,7 +1242,7 @@ export const godRouter = router({
         rows,
         summary: {
           open: Number(summary?.open) || 0,
-          late: Number(summary?.late) || 0,
+          disputed: Number(summary?.disputed) || 0,
           partial: Number(summary?.partial) || 0,
           settled: Number(summary?.settled) || 0,
           outstanding: Number(summary?.outstanding) || 0,

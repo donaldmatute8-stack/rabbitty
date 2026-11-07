@@ -855,7 +855,7 @@ export const bunzCapacityDaily = pgTable(
 
 /**
  * OT-2 · Obligación (devengo) con ciclo de vida.
- * Estados implementados: OPEN → LATE → PARTIAL → SETTLED (o WRITTEN_OFF).
+ * Estados (contrato v1.0): OPEN → PARTIALLY_PAID → PAID; la mora se deriva de dueAt.
  * `amountBunz` es la denominación; `settledFiatMxn` es MXN y solo se compara con
  * Bunz si `unit_policy.approved` (ver R24/R26).
  */

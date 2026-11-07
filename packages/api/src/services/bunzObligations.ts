@@ -4,8 +4,9 @@
  * Al cobrar una orden se devenga la comisión del afiliado (6% por defecto, igual
  * que el modelo). La obligación nace OPEN y vence a los 15 días.
  *
- * Ciclo de vida:
- *   NEW → OPEN → (LATE) → PARTIAL → SETTLED
+ * Ciclo de vida (estados del contrato v1.0):
+ *   NEW → OPEN → PARTIALLY_PAID → PAID
+ *   La mora NO es un estado: se deriva de `dueAt < now`.
  *
  * Reglas:
  *  - El devengo NO mueve dinero: es deuda. Detrás de `RABBITTY_BUNZ_OBLIGATIONS`.
@@ -15,7 +16,7 @@
  *  - Todo es idempotente por ids deterministas.
  */
 
-import { and, eq, lte } from "drizzle-orm";
+import { and, eq, inArray, lte } from "drizzle-orm";
 import { recordSettlementBooks } from "./bunzBooks";
 
 export const OBLIGATION_FLAG = "RABBITTY_BUNZ_OBLIGATIONS";
@@ -23,7 +24,18 @@ export const SETTLEMENT_FLAG = "RABBITTY_BUNZ_SETTLE";
 export const COMMISSION_RATE = 0.06;
 export const DUE_DAYS = 15;
 
-export const OBLIGATION_STATES = ["OPEN", "LATE", "PARTIAL", "SETTLED", "WRITTEN_OFF"] as const;
+export const OBLIGATION_STATES = [
+  "OPEN",
+  "DISPUTED",
+  "RESOLVED_PAYABLE",
+  "PARTIALLY_PAID",
+  "PAID",
+  "RESOLVED_NOT_PAYABLE",
+] as const;
+/** Estados que aún deben algo (para mora y outstanding). */
+export const DEBT_STATES = ["OPEN", "DISPUTED", "RESOLVED_PAYABLE", "PARTIALLY_PAID"] as const;
+/** Estados terminales: no admiten más liquidación. */
+export const CLOSED_STATES = ["PAID", "RESOLVED_NOT_PAYABLE"] as const;
 export type ObligationState = (typeof OBLIGATION_STATES)[number];
 
 function asBool(v: string | undefined): boolean {
@@ -129,55 +141,38 @@ export async function accrueCommission(
 }
 
 /**
- * Marca como LATE las obligaciones OPEN vencidas. Solo estado, no dinero.
- * Idempotente: el evento `obe-late-<id>` se inserta con onConflictDoNothing.
+ * Mora: **no es un estado**, se deriva de `dueAt < now` (contrato v1.0).
+ * Solo cuenta y suma lo pendiente; no escribe nada.
  */
-export async function markOverdue(
+export async function scanOverdue(
   db: ObligationDb,
   {
     now = new Date(),
     tables,
-  }: { now?: Date; tables: { obligations: unknown; events: unknown } }
-): Promise<{ ok: boolean; marked: number; errors: string[] }> {
-  if (!isObligationsEnabled()) return { ok: true, marked: 0, errors: [] };
+  }: { now?: Date; tables: { obligations: unknown } }
+): Promise<{ ok: boolean; overdue: number; outstanding: number; errors: string[] }> {
+  if (!isObligationsEnabled()) return { ok: true, overdue: 0, outstanding: 0, errors: [] };
 
   try {
-    const rows = await db
+    const rows = (await db
       .select()
       .from(tables.obligations)
-      .where(and(eq((tables.obligations as any).state, "OPEN"), lte((tables.obligations as any).dueAt, now)));
+      .where(
+        and(
+          inArray((tables.obligations as any).state, [...DEBT_STATES]),
+          lte((tables.obligations as any).dueAt, now)
+        )
+      )) as any[];
 
-    let marked = 0;
-    for (const row of rows as any[]) {
-      try {
-        await db.transaction(async (sp) => {
-          await sp
-            .update(tables.obligations)
-            .set({ state: "LATE" })
-            .where(eq((tables.obligations as any).id, row.id));
-          await sp
-            .insert(tables.events)
-            .values({
-              id: `obe-late-${row.id}`,
-              obligationId: row.id,
-              at: now,
-              fromState: "OPEN",
-              toState: "LATE",
-              actor: "system",
-              note: "vencimiento automático",
-            })
-            .onConflictDoNothing();
-        });
-        marked++;
-      } catch (e) {
-        console.warn(`[bunzObligations] mora ${row.id} no marcada: ${e instanceof Error ? e.message : e}`);
-      }
-    }
-    return { ok: true, marked, errors: [] };
+    const outstanding = rows.reduce(
+      (acc, r) => acc + Math.max(0, Number(r.amountBunz) - Number(r.settledBunz)),
+      0
+    );
+    return { ok: true, overdue: rows.length, outstanding: Math.round(outstanding * 100) / 100, errors: [] };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.warn(`[bunzObligations] barrido de mora falló (no fatal): ${msg}`);
-    return { ok: false, marked: 0, errors: [msg] };
+    return { ok: false, overdue: 0, outstanding: 0, errors: [msg] };
   }
 }
 
@@ -229,7 +224,7 @@ export async function settleObligation(
         .where(eq((tables.obligations as any).id, obligationId))) as any[];
 
       if (!row) return { ok: false, errors: [`obligación ${obligationId} no existe`] };
-      if (row.state === "SETTLED" || row.state === "WRITTEN_OFF") {
+      if (CLOSED_STATES.includes(row.state)) {
         return { ok: false, state: row.state, errors: [`obligación ya ${row.state}`] };
       }
 
@@ -239,7 +234,7 @@ export async function settleObligation(
 
       const newSettled = Math.round((Number(row.settledBunz) + amount) * 100) / 100;
       const fully = cents(newSettled) >= cents(row.amountBunz);
-      const state: ObligationState = fully ? "SETTLED" : "PARTIAL";
+      const state: ObligationState = fully ? "PAID" : "PARTIALLY_PAID";
       const seq = cents(newSettled);
 
       await sp
@@ -248,7 +243,7 @@ export async function settleObligation(
           state,
           settledBunz: newSettled,
           settledFiatMxn: Math.round((Number(row.settledFiatMxn) + Number(fiatMxn || 0)) * 100) / 100,
-          settledAt: fully ? at : row.settledAt ?? null,
+          settledAt: at,
           instrument,
         })
         .where(eq((tables.obligations as any).id, obligationId));
