@@ -77,6 +77,9 @@ const GROUPS = [
     files: [
       "packages/api/src/services/validationSnapshots.ts",
       "packages/api/src/services/bunzBooks.ts",
+      "packages/api/src/services/paymentCore.ts",
+      "packages/api/src/services/paymentIntentDomain.ts",
+      "packages/api/src/routers/pos.ts",
       "packages/api/src/services/bunzObligations.ts",
       "packages/api/src/services/bunzAbuse.ts",
       "packages/api/src/services/validationCapture.ts",
