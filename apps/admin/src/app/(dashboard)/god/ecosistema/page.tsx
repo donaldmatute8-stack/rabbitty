@@ -72,7 +72,7 @@ export default function GodEcosistemaPage() {
                   ["Bunz otorgados (EARN)", `${data.ledger.rewardsGiven.toLocaleString()} en ${data.ledger.rewardsCount} movimientos`],
                   ["Bunz canjeados (SPEND)", `${data.ledger.redemptionsSpent.toLocaleString()} en ${data.ledger.redemptionsCount} movimientos`],
                   ["Transferencias P2P", `${data.ledger.transfersP2P.toLocaleString()} en ${data.ledger.transfersCount} movimientos`],
-                  ["Crédito afiliados", `${data.businesses.totalCreditUsed.toLocaleString()} / ${data.businesses.totalCreditLimit.toLocaleString()} Bunz`],
+                  ["Capacidad adelantada (histórico)", `${data.businesses.totalCreditUsed.toLocaleString()} / ${data.businesses.totalCreditLimit.toLocaleString()} Bunz`],
                 ].map(([k, v]) => (
                   <div key={k} className="flex justify-between border-b border-white/5 pb-1.5">
                     <span className="text-gray-400">{k}</span><span className="font-black text-white">{v}</span>
@@ -80,6 +80,10 @@ export default function GodEcosistemaPage() {
                 ))}
               </div>
             )}
+            <p className="text-[10px] text-amber-300/80 pt-2">
+              Etiqueta heredada: <code>creditUsed</code> aún no refleja la recuperación real.
+              Se reconcilia en el MCCE antes de mostrarse al afiliado.
+            </p>
           </Card>
 
           <Card className="p-5 border border-white/10 bg-white/5">

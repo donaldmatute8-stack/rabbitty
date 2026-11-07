@@ -80,7 +80,7 @@ export const PHASES: RoadmapPhase[] = [
     title: "Capacidad híbrida",
     subtitle: "Incentivo de incorporación + capacidad adelantada",
     status: "active",
-    progress: 25,
+    progress: 35,
     items: [
       { id: "M1", title: "Contrato económico v1.0", detail: "Componentes, flujos, invariantes y lenguaje para el afiliado.", status: "done", evidence: "DOCS/MCCE-CONTRATO" },
       { id: "M2", title: "Especificación MCCE", detail: "Módulos, datos, eventos, UI y fases.", status: "done", evidence: "DOCS/MCCE-ESPECIFICACION" },
@@ -90,6 +90,8 @@ export const PHASES: RoadmapPhase[] = [
       { id: "M6", title: "Reconciliar composición", detail: "¿Qué parte del stock actual es incentivo, adelanto o generado?", status: "pending" },
       { id: "M7", title: "Sizer dinámico", detail: "Opciones por nicho, onboarding y solvencia.", status: "pending" },
       { id: "M8", title: "Integración con flags", detail: "Sin tocar saldos históricos; reversible.", status: "pending" },
+      { id: "M10", title: "Onboarding + contrato + firma", detail: "Datos, oferta estimada, contrato v1.0 y firma con nombre/checkbox (Face ID después).", status: "active", evidence: "DOCS/MCCE-ONBOARDING" },
+      { id: "M11", title: "Revisión legal del contrato", detail: "Naturaleza del incentivo y de la capacidad adelantada.", status: "pending" },
       { id: "M9", title: "Piloto de capacidad", detail: "Zona controlada, límites y monitoreo.", status: "blocked" },
     ],
   },

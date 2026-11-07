@@ -32,6 +32,10 @@ const OUT = process.env.AUDIT_OUT
 
 const GROUPS = [
   {
+    title: "Resumen del día",
+    files: ["DOCS/RESUMEN-DIA-2026-11-07.md"],
+  },
+  {
     title: "Contrato y método",
     files: [
       "DOCS/BUNZ-REAL-DATA-SPEC-v1.0.md",
@@ -111,6 +115,7 @@ const GROUPS = [
       "DOCS/MCCE-ESPECIFICACION-FUNCIONAL-v1.0.md",
       "DOCS/MCCE-AUDITORIA-CODIGO-2026-11-07.md",
       "DOCS/MCCE-SIMULACION-SOMBRA-2026-11-07.md",
+      "DOCS/MCCE-ONBOARDING-CONTRATO-FIRMA-v1.0.md",
       "DOCS/data/mcce-shadow-2026-11-07.json",
       "scripts/lib/mcce.mjs",
       "scripts/mcce.test.mjs",
