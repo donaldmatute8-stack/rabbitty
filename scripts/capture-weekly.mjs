@@ -101,27 +101,28 @@ async function collect() {
     // ── afiliados ──────────────────────────────────────────────────────────
     let affiliates;
     if (CORE) {
+      // Todos los negocios del core: si un afiliado no tiene fila en restaurants,
+      // igual existe y su capacidad debe poder referenciarse (si no, R02 falla).
       affiliates = await withClient(CORE, async (core) => {
         const rows = (
           await core.query(
             `SELECT id, COALESCE(niche, category) AS category, status, "createdAt" FROM "ownedBusinesses"`
           )
         ).rows;
-        const byId = new Map(rows.map((r) => [r.id, r]));
-        return restaurants.map((r) => {
-          const a = byId.get(r.businessId);
-          return {
-            id: r.businessId,
-            category: a?.category ?? "restaurant",
-            size_band: "S",
-            branch_id: branches.find((b) => b.restaurantId === r.id)?.id ?? r.id,
-            opened_at: isoDay(a?.createdAt ?? r.createdAt),
-            status: ["ACTIVE", "VERIFIED"].includes(a ? a.status : r.isActive ? "ACTIVE" : "INACTIVE")
-              ? "active"
-              : "inactive",
-            city_hash: null,
-          };
-        });
+        const branchOfBusiness = new Map();
+        for (const b of branches) {
+          const r = restById.get(b.restaurantId);
+          if (r && !branchOfBusiness.has(r.businessId)) branchOfBusiness.set(r.businessId, b.id);
+        }
+        return rows.map((a) => ({
+          id: a.id,
+          category: a.category ?? "restaurant",
+          size_band: "S",
+          branch_id: branchOfBusiness.get(a.id) ?? a.id,
+          opened_at: isoDay(a.createdAt),
+          status: ["ACTIVE", "VERIFIED"].includes(a.status) ? "active" : "inactive",
+          city_hash: null,
+        }));
       });
     } else {
       affiliates = restaurants.map((r) => ({

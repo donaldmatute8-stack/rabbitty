@@ -1,10 +1,10 @@
 {
   "snapshot_version": "1.0",
-  "export_id": "exp-e84acf9ead55",
-  "generated_at": "2026-11-06T21:14:56.406Z",
-  "source_commit": "17ec9ab",
+  "export_id": "exp-203c39ac8056",
+  "generated_at": "2026-11-07T03:17:15.643Z",
+  "source_commit": "1e5e882",
   "dataset_kind": "pilot",
-  "dataset_hash": "e84acf9ead55f57547ce83de44d658ece4b677f174835b02dacdd0e5fb83c00c",
+  "dataset_hash": "203c39ac80568f23a48607bd1bf840747b40b33204f6bf08e7ca5bb5c58b5997",
   "spec_version": "1.0.0",
   "status": {
     "valid": true,
@@ -13,20 +13,20 @@
     "next_step": "piloto: instrumentar obligations, bunz_ledger, treasury, abuse_signals"
   },
   "counts": {
-    "affiliates": 3,
-    "sales": 112,
+    "affiliates": 4,
+    "sales": 114,
     "rewards_issued": 6,
     "redemptions": 0,
-    "capacity": 0,
+    "capacity": 4,
     "obligations": 0,
-    "fiat_settlements": 101,
+    "fiat_settlements": 103,
     "bunz_ledger": 0,
     "treasury": 0,
     "abuse_signals": 0
   },
   "coverage": {
     "active_affiliates": 0,
-    "inactive_affiliates": 3,
+    "inactive_affiliates": 4,
     "cells": [],
     "insufficient_cells": [],
     "sample_top3_sales_share": 0,
@@ -101,7 +101,7 @@
     "unmet_by_reason": {},
     "mobility_rate_amount": null,
     "mobility_rate_count": null,
-    "capacity_available_bunz": 0,
+    "capacity_available_bunz": 3500,
     "ce": null,
     "mora_importe_bunz": 0,
     "mora_conteo": 0,
@@ -539,6 +539,14 @@
         "msg": "fiat_settlements[100]: sin conciliar/bank_ref, no cuenta como cobrado"
       },
       {
+        "code": "R17",
+        "msg": "fiat_settlements[101]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
+        "code": "R17",
+        "msg": "fiat_settlements[102]: sin conciliar/bank_ref, no cuenta como cobrado"
+      },
+      {
         "code": "R19",
         "msg": "ventana operativa de 18 días (< 84): limitación de piloto"
       },
@@ -571,7 +579,7 @@
   "audit": {
     "verdict": "hallazgos",
     "manifest_hash": "5b5f300318d51db41ee4ba3902d12ba5cafbbe872be14f17e4a51747e8db9af6",
-    "fingerprint": "0ba53f24921ed417bb8177602f10894e8a310fdf53dc9e540ad55b84fe8ff5c7",
+    "fingerprint": "ae6cd580520741d4c8e19bb26b8e7cdf77084b87683d8d5e0fcfc94176bd49d8",
     "determinism": true,
     "findings": [
       {
@@ -735,7 +743,7 @@
       "id": "export",
       "label": "Export generado",
       "ok": true,
-      "detail": "222 filas"
+      "detail": "231 filas"
     },
     {
       "id": "valid",
@@ -798,8 +806,8 @@
     }
   ],
   "artifacts": {
-    "validation_hash": "0ede10a525b4810f56221ccc1804228911a9f246cd401b793e27aac7fb0ecd8e",
-    "audit_hash": "0ba53f24921ed417bb8177602f10894e8a310fdf53dc9e540ad55b84fe8ff5c7",
+    "validation_hash": "4fd75b1f4acf81e40035ded362cf9fb455598734cb0fb1396b6aeb1ccd92d5b3",
+    "audit_hash": "ae6cd580520741d4c8e19bb26b8e7cdf77084b87683d8d5e0fcfc94176bd49d8",
     "backtest_hash": null
   }
 }
