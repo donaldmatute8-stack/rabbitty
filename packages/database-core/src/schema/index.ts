@@ -120,8 +120,42 @@ export const ownedBusinesses = pgTable("ownedBusinesses", {
   hops: integer("hops").default(0).notNull(),
   savedCount: integer("savedCount").default(0).notNull(),
   sharedCount: integer("sharedCount").default(0).notNull(),
+  /** Cuenta de prueba: su capacidad no tiene valor real y debe depurarse. */
+  sandbox: boolean("sandbox").default(false).notNull(),
   ...timestamps,
 });
+
+/** MCCE · Cuenta de capacidad comercial del afiliado. */
+export const merchantCapacityAccounts = pgTable("merchant_capacity_accounts", {
+  affiliateId: text("affiliateId").primaryKey(),
+  status: text("status").default("PROPOSED").notNull(), // PROPOSED | AUTHORIZED | ACTIVE | SUSPENDED | CLOSED
+  authorizedTotal: real("authorizedTotal").default(0).notNull(),
+  promoAuthorized: real("promoAuthorized").default(0).notNull(),
+  creditAuthorized: real("creditAuthorized").default(0).notNull(),
+  provisioned: real("provisioned").default(0).notNull(),
+  generated: real("generated").default(0).notNull(),
+  committed: real("committed").default(0).notNull(),
+  available: real("available").default(0).notNull(),
+  creditOutstanding: real("creditOutstanding").default(0).notNull(),
+  sandbox: boolean("sandbox").default(false).notNull(),
+  notes: text("notes"),
+  ...timestamps,
+});
+
+/** MCCE · Eventos append-only de capacidad. */
+export const merchantCapacityEvents = pgTable(
+  "merchant_capacity_events",
+  {
+    id: id(),
+    affiliateId: text("affiliateId").notNull(),
+    type: text("type").notNull(),
+    actor: text("actor").default("system").notNull(),
+    amount: real("amount").default(0).notNull(),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [index("merchant_capacity_events_affiliate_idx").on(t.affiliateId)]
+);
 
 export const transactions = pgTable("transactions", {
   id: id(),

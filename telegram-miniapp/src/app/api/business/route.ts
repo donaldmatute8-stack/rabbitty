@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { users, ownedBusinesses, auditEntries, niches } from '@/db/schema';
+import { users, ownedBusinesses, auditEntries, niches, merchantCapacityAccounts, merchantCapacityEvents } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { restaurantDb } from '@/db/restaurant';
 import { restaurants, branches } from '@rabbitty/database-restaurant/schema';
@@ -330,6 +330,43 @@ export async function POST(req: Request) {
           contractSignature,
         }),
       });
+
+      // MCCE: la oferta queda registrada como propuesta, no como capacidad activa.
+      const offer = contractSignature?.offer;
+      if (offer) {
+        try {
+          await db.insert(merchantCapacityAccounts).values({
+            affiliateId: business.id,
+            status: 'PROPOSED',
+            authorizedTotal: Number(offer.totalCapacity) || 0,
+            promoAuthorized: Number(offer.promoCapacity) || 0,
+            creditAuthorized: Number(offer.creditCapacity) || 0,
+            provisioned: 0,
+            generated: 0,
+            committed: 0,
+            available: 0,
+            creditOutstanding: 0,
+            sandbox: false,
+            notes: 'Oferta de onboarding; sujeta a autorización',
+          }).onConflictDoNothing();
+
+          await db.insert(merchantCapacityEvents).values({
+            id: `mce-proposal-${business.id}`,
+            affiliateId: business.id,
+            type: 'CAPACITY_PROPOSED',
+            actor: owner.id,
+            amount: Number(offer.totalCapacity) || 0,
+            metadata: {
+              offer,
+              contractVersion: contractSignature.contractVersion,
+              contractHash: contractSignature.contractHash,
+              signatureMethod: contractSignature.signatureMethod,
+            },
+          }).onConflictDoNothing();
+        } catch (mcceError) {
+          console.warn('[MCCE] no se pudo registrar la oferta del onboarding', mcceError);
+        }
+      }
     }
 
     // ── Si el alta nace APROBADA (Google verificado), provisionar tenancy ──

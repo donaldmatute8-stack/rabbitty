@@ -16,6 +16,8 @@ interface BusinessProfile {
   rewardPercentage?: number;
   creditLimit?: number;
   creditUsed?: number;
+  bunzBalance?: number;
+  sandbox?: boolean;
   package?: string;
   startTime?: string;
   endTime?: string;
@@ -492,7 +494,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
           </div>
         </motion.div>
 
-        {/* Minting Credit Card */}
+        {/* Capacidad para recibir */}
         <motion.div 
           initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
           className="rounded-2xl p-4 mb-4"
@@ -502,42 +504,37 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
             boxShadow: 'var(--shadow-sm)'
           }}
         >
-          <div className="flex justify-between items-start mb-3">
+          <div className="flex justify-between items-start mb-2">
             <div>
-              <p className="text-[14px] font-bold text-(--text-primary) m-0 mb-0.5">
-                {business?.package ? `${business.package}` : 'Crédito de Minting'}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-[14px] font-bold text-(--text-primary) m-0 mb-0.5">
+                  Capacidad para recibir
+                </p>
+                {business?.sandbox && (
+                  <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-500 border border-amber-500/30">
+                    Prueba
+                  </span>
+                )}
+              </div>
               <p className="text-[12px] text-(--text-muted) m-0">
-                {(business?.creditLimit || 0) > 0 
-                  ? `${(((business?.creditLimit || 0) - (business?.creditUsed || 0)) || 0).toLocaleString()} Bunz disponibles`
-                  : 'Sin límite configurado'}
+                Los Rabbitters pueden consumir Bunz hasta esta capacidad.
               </p>
             </div>
             <div className="text-right">
               <p className="text-lg font-black text-[#E91E63] m-0">
-                {(business?.creditLimit || 0) > 0 
-                  ? `${(((business?.creditLimit || 0) - (business?.creditUsed || 0)) || 0).toLocaleString()} B`
-                  : '∞'}
+                {((business?.bunzBalance ?? business?.creditLimit ?? 0)).toLocaleString()} B
               </p>
               {(business?.creditLimit || 0) > 0 && (
-                <p className="text-[10px] text-(--text-muted) m-0">de {business?.creditLimit?.toLocaleString()} B</p>
+                <p className="text-[10px] text-(--text-muted) m-0">
+                  autorizado {business?.creditLimit?.toLocaleString()} B
+                </p>
               )}
             </div>
           </div>
-          {(business?.creditLimit || 0) > 0 && (
-            <>
-              <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-subtle)' }}>
-                <motion.div 
-                  initial={{ width: 0 }} 
-                  animate={{ width: `${Math.min(100, (((business.creditUsed || 0)) / (business.creditLimit || 1)) * 100)}%` }} 
-                  transition={{ duration: 1, delay: 0.3 }}
-                  className="h-full rounded-full bg-[#E91E63]"
-                />
-              </div>
-              <p className="text-[11px] text-(--text-muted) mt-1.5 mb-0">
-                {Math.round(((business.creditUsed || 0) / (business.creditLimit || 1)) * 100)}% usado
-              </p>
-            </>
+          {business?.sandbox && (
+            <p className="text-[11px] text-amber-500 m-0 mt-1">
+              Capacidad de prueba: debe retornarse o depurarse; no tiene valor real.
+            </p>
           )}
         </motion.div>
 

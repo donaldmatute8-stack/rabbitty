@@ -193,9 +193,9 @@ export default function AdminPage() {
               <div className="flex items-center gap-4 divide-x divide-white/10">
                 <div>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] uppercase tracking-wider text-pink-300 font-black">Bóveda Bunz</span>
+                    <span className="text-[10px] uppercase tracking-wider text-pink-300 font-black">Bunz para recibir</span>
                     <span className="text-[9px] font-bold text-gray-400 bg-white/5 border border-white/10 px-1.5 py-0.2 rounded-full">
-                      {bunzInventory?.package || "Inventario"}
+                      {bunzInventory?.package || "Capacidad"}
                     </span>
                   </div>
                   <p className="text-base font-black text-white leading-none mt-0.5">

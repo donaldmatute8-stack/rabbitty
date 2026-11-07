@@ -316,7 +316,7 @@ export default function OnboardingPage() {
 
               <div className="mt-4 grid grid-cols-2 gap-2.5">
                 <Info
-                  label="Crédito aprobado"
+                  label="Capacidad estimada para recibir"
                   value={
                     business.creditLimit != null
                       ? `${business.creditLimit.toLocaleString("es-MX")} Bunz`

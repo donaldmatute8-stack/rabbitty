@@ -114,7 +114,7 @@ export default function RestaurantsPage() {
                       <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-gray-300">
                         <span>Reward: <strong>{b.rewardPercentage}%</strong></span>
                         {b.package && <span>Paquete: <strong>{b.package}</strong></span>}
-                        {b.creditLimit ? <span>Crédito: <strong>{b.creditLimit.toLocaleString()} Bunz</strong></span> : null}
+                        {b.creditLimit ? <span>Capacidad autorizada: <strong>{b.creditLimit.toLocaleString()} Bunz</strong></span> : null}
                         <span>Dueño: <strong>{b.ownerName || "Sin Nombre"}</strong> ({b.ownerTelegramId ? `@${b.ownerUsername || b.ownerTelegramId}` : "Sin Telegram"})</span>
                       </div>
                     </div>
