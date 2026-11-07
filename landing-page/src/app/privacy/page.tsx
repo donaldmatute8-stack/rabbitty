@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 };
 
 export default function PrivacyPage() {
-  const lastUpdated = '18 de Octubre de 2026';
+  const lastUpdated = '7 de Noviembre de 2026';
 
   return (
     <div className="min-h-screen bg-[#07070F] text-white selection:bg-[#E91E63] selection:text-white">
@@ -99,7 +99,7 @@ export default function PrivacyPage() {
               El presente documento establece las condiciones de uso y la política de privacidad de la plataforma <strong>Rabbitty</strong> (operada en territorio mexicano por Rabbitty Technologies y sus entidades vinculadas, en adelante «Rabbitty», «nosotros» o «la Plataforma»).
             </p>
             <p className="mt-3">
-              Rabbitty es el sujeto responsable del tratamiento y resguardo de los datos personales recabados a través de nuestro sitio web oficial (<code>rabbitty.me</code>), aplicaciones móviles nativas para iOS y Android, y la integración de Telegram Mini App.
+              El responsable del tratamiento es <strong className="text-white">MXHUB ECOSISTEMA BLOCKCHAIN, S.A. DE C.V.</strong>, RFC <strong className="text-white">MEB2402087Z3</strong>, que opera la marca comercial <strong className="text-white">RABBITTY</strong> (nombre comercial AGOD ECOSYSTEM), con domicilio en los Estados Unidos Mexicanos. El domicilio fiscal completo está disponible para consulta escribiendo a <a href="mailto:privacidad@rabbitty.me" className="text-[#E91E63] font-semibold underline underline-offset-4">privacidad@rabbitty.me</a>. Aplica a nuestro sitio web oficial (<code>rabbitty.me</code>), aplicaciones móviles nativas para iOS y Android, y la integración de Telegram Mini App.
             </p>
             <p className="mt-3">
               <strong>Canal de Atención Oficial y Oficial de Privacidad:</strong> Correo electrónico:{' '}
@@ -136,7 +136,7 @@ export default function PrivacyPage() {
                 <strong className="text-white">Acceso a Cámara:</strong> Uso del sensor de cámara estrictamente para el escaneo de códigos QR en mostrador o tickets de compra. <em>Rabbitty no almacena imágenes de la galería personal de los usuarios sin su acción directa.</em>
               </li>
               <li>
-                <strong className="text-white">Datos de Negocios Afiliados:</strong> Nombre comercial, Razón Social, RFC (en caso de facturación de paquetes promocionales), dirección física de la sucursal, horarios de atención, menús y datos de contacto del responsable operativo.
+                <strong className="text-white">Datos de Negocios Afiliados:</strong> Nombre comercial, razón social, RFC, domicilio, representante y facultades, capacidad comercial autorizada y recuperada, dirección física de la sucursal, horarios de atención, menús y datos de contacto del responsable operativo.
               </li>
             </ul>
           </section>
@@ -187,7 +187,7 @@ export default function PrivacyPage() {
                 <AlertCircle size={18} />
                 Aviso Importante sobre Tokens y Puntos de Fidelidad
               </div>
-              Los puntos «Bunz» son unidades promocionales y de fidelización interna emitidas exclusivamente para incentivar el consumo en la red de comercios asociados a Rabbitty. 
+              Los puntos «Bunz» son unidades promocionales y de fidelización interna emitidas exclusivamente para incentivar el consumo en la red de comercios asociados a Rabbitty.
             </div>
             <ul className="list-disc pl-6 space-y-2 text-white/70">
               <li>
@@ -198,6 +198,9 @@ export default function PrivacyPage() {
               </li>
               <li>
                 <strong>Vigencia y Reglas de Caducidad:</strong> Los Bunz acreditados no expiran mientras la cuenta permanezca activa. Cuentas inactivas por más de 12 meses consecutivos podrán ser sujetas a depuración previa notificación de 30 días naturales.
+              </li>
+              <li>
+                <strong>Capacidad comercial de afiliados:</strong> La capacidad para recibir redenciones no es dinero, depósito, inversión ni compra de Bunz. Puede incluir un incentivo de incorporación y capacidad adelantada recuperable. La recuperación se propone por ciclo con importe exacto y requiere aceptación del afiliado; nunca se aplica sobre capacidad comprometida ni genera intereses.
               </li>
             </ul>
           </section>
@@ -285,7 +288,7 @@ export default function PrivacyPage() {
 
       {/* Mini Footer */}
       <footer className="border-t border-white/10 py-8 text-center text-xs text-white/40">
-        <p>© 2026 Rabbitty Corp. Todos los derechos reservados. Ciudad de México y Guadalajara, México.</p>
+        <p>© 2026 MXHUB ECOSISTEMA BLOCKCHAIN, S.A. DE C.V. · RABBITTY · RFC MEB2402087Z3. Todos los derechos reservados. México.</p>
       </footer>
     </div>
   );

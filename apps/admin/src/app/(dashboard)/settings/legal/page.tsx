@@ -74,7 +74,7 @@ export default function LegalSettingsPage() {
         <div>
           <h1 className="text-xl font-black text-white">Documentación legal</h1>
           <p className="text-xs text-gray-400">
-            Datos del afiliado y aceptación del acuerdo MCCE. No activa capacidad automáticamente.
+            Datos del afiliado y aceptación del acuerdo MCCE v1.2. La capacidad y la recuperación se confirman por separado. No activa capacidad automáticamente.
           </p>
         </div>
       </div>
@@ -160,8 +160,13 @@ export default function LegalSettingsPage() {
 
       <Card className="p-5 bg-white/5 border-white/10 space-y-3">
         <h2 className="text-sm font-bold text-white flex items-center gap-2">
-          <ShieldCheck className="h-4 w-4 text-emerald-400" /> Acuerdo MCCE
+          <ShieldCheck className="h-4 w-4 text-emerald-400" /> Acuerdo MCCE v1.2
         </h2>
+        <p className="text-[11px] text-gray-400">
+          La aceptación se registra con nombre completo + checkbox. Face ID / Touch ID es
+          autenticación local opcional y no sustituye e.firma. La capacidad es dinámica: se estima
+          con tus ventas, recompensa y cobertura, y la recuperación requiere aceptación por ciclo.
+        </p>
         {contract ? (
           <div className="space-y-1 text-xs text-gray-300">
             <p className="flex items-center gap-2 text-emerald-300">
@@ -198,8 +203,8 @@ export default function LegalSettingsPage() {
             </p>
             <p className="text-[11px] text-gray-400">
               Escanea el código desde tu teléfono para abrir la app y completar la aceptación con
-              autenticación local (Face ID / Touch ID). Si tu equipo no tiene biometría, la firma por
-              nombre + checkbox sigue disponible.
+              nombre completo + checkbox. Si tu equipo tiene biometría, Face ID / Touch ID puede
+              usarse como autenticación local opcional; no es firma biométrica ni e.firma.
             </p>
             <Link href={mobileUrl} target="_blank" className="text-[11px] text-violet-300 underline">
               Abrir enlace en este dispositivo
@@ -211,7 +216,8 @@ export default function LegalSettingsPage() {
       <Card className="p-4 bg-amber-500/5 border-amber-500/25">
         <p className="text-[11px] text-amber-200/90">
           Aviso: esta pantalla no sustituye el dictamen legal, el aviso de privacidad ni la validación
-          de facultades. La capacidad real sigue bloqueada hasta completar los gates.
+          de facultades. La capacidad real sigue bloqueada hasta completar los gates. Revisa las
+          propuestas de recuperación en Configuración → Recuperación.
         </p>
       </Card>
     </div>

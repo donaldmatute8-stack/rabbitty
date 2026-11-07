@@ -90,7 +90,7 @@ const NICHE_TEMPLATES: Record<string, NicheTemplate> = {
     cashierCallout: 'Escanea antes de pagar y recibe tus Bunz de bienvenida.',
     guideStaffTitle: 'Guion para el Barista / Cajero',
     guideScriptGreeting: '“¿Ya tienes Rabbitty? Lo estrenamos hoy aquí. Escanea este código en el mostrador para registrarte y llevarte tu saldo de bienvenida al instante”.',
-    guideScriptExplain: '“Es una app de fidelidad digital. Cada visita acumulas Bunz que puedes canjear directamente aquí como dinero en tus próximos consumos”.'
+    guideScriptExplain: '“Es una app de fidelidad digital. Cada visita acumulas Bunz que puedes canjear directamente aquí como recompensa en tus próximos consumos”.'
   },
   seafood: {
     key: 'seafood',
@@ -190,7 +190,7 @@ const NICHE_TEMPLATES: Record<string, NicheTemplate> = {
     cashierCallout: 'Escanea en mostrador antes de pagar y recibe tu bono dulce.',
     guideStaffTitle: 'Guion para Encargado de Mostrador',
     guideScriptGreeting: '“¡Hola! Escanea este código en caja antes de registrar tu pan y te regalamos saldo de bienvenida para esta o tu próxima compra”.',
-    guideScriptExplain: '“Cada vez que vengas por tu pan o pastel acumulas Bunz que se convierten en dinero real para pagar aquí”.'
+    guideScriptExplain: '“Cada vez que vengas por tu pan o pastel acumulas Bunz que puedes canjear como recompensa aquí”.'
   }
 };
 

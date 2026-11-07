@@ -25,6 +25,13 @@ export default function PrivacyPage() {
           </p>
         </div>
 
+        <p className="text-[11px] leading-relaxed m-0 px-1 pt-3" style={{ color: 'var(--text-muted)' }}>
+          El responsable es MXHUB ECOSISTEMA BLOCKCHAIN, S.A. DE C.V., RFC MEB2402087Z3, que opera la marca RABBITTY. Para ejercer tus derechos ARCO o consultar el aviso completo, escribe a privacidad@rabbitty.me o visita{' '}
+          <a href="https://rabbitty.me/privacy" target="_blank" rel="noreferrer" className="underline" style={{ color: '#E91E63' }}>
+            rabbitty.me/privacy
+          </a>.
+        </p>
+
         <h3 className="text-[13px] font-bold uppercase tracking-wider m-0 px-1 pt-5 pb-1" style={{ color: 'var(--text-muted)' }}>
           Nuestros compromisos
         </h3>

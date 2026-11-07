@@ -6,11 +6,11 @@ export interface FaqItem {
 export const FAQS: FaqItem[] = [
   {
     q: '¿Qué son los Bunz?',
-    a: 'Los Bunz son la moneda digital exclusiva del ecosistema Rabbitty. Sirven para recibir recompensas cuando consumes en negocios afiliados y luego gastarlos como dinero real en otros negocios participantes.',
+    a: 'Los Bunz son puntos de lealtad del ecosistema Rabbitty. Recibes Bunz como recompensa cuando consumes en negocios afiliados y puedes usarlos en otros negocios participantes. No son dinero de curso legal, no son inversión y no se convierten a efectivo.',
   },
   {
     q: '¿Cómo gano Bunz?',
-    a: '¡Es automático! Cada vez que pagas en un restaurante o negocio con el sistema Rabbitty POS, muestras el código QR de tu billetera o das tu número de teléfono. El cajero lo escanea y un porcentaje de tu cuenta se regresa inmediatamente en Bunz.',
+    a: '¡Es automático! Cada vez que pagas en un restaurante o negocio con el sistema Rabbitty POS, muestras el código QR de tu billetera o das tu número de teléfono. El cajero lo escanea y un porcentaje de tu cuenta se regresa en Bunz, conforme a la recompensa publicada por el negocio.',
   },
   {
     q: '¿Tienen fecha de vencimiento?',
@@ -93,6 +93,14 @@ export const FAQS: FaqItem[] = [
     a: 'Sí. Recibes una notificación push al instante: "Ticket canjeado con éxito" cuando ganas Bunz, y "Pago realizado con éxito / Has gastado X Bunz en [negocio]" cuando pagas o canjeas. Si no te llegan, revisa que las notificaciones de Rabbitty estén activas en Ajustes de tu iPhone. Todas quedan también en tu centro de notificaciones dentro de la app.',
   },
   {
+    q: 'Soy negocio afiliado. ¿Qué es la capacidad y cómo se recupera?',
+    a: 'La capacidad es el límite operativo para recibir redenciones de Bunz. No es dinero, depósito, inversión ni compra de Bunz. Puede incluir un incentivo de incorporación y capacidad adelantada recuperable. La recuperación se calcula por ciclo con una tasa dinámica, se te avisa con el importe exacto y debes aceptarla en un modal antes de que se aplique. Nunca se toca la capacidad comprometida con los Rabbitters, no genera intereses y no tiene efectos retroactivos. Si rechazas la propuesta, no se descuenta nada.',
+  },
+  {
+    q: '¿La capacidad o los paquetes tienen montos fijos?',
+    a: 'No. La capacidad se estima con tus ventas mensuales elegibles, tu porcentaje de recompensa y los meses de cobertura que elijas. El alta muestra una estimación referencial; la capacidad real se confirma en una oferta individual después de revisar tu negocio. No se activa nada sin tu aceptación.',
+  },
+  {
     q: '¿Qué son las Membresías Rabbitty?',
     a: 'Son planes de un negocio afiliado que te dan derechos recurrentes: consumos incluidos (ej. 1 café al día), descuentos permanentes o saldo de crédito. Pagas una cuota (mensual, trimestral, semestral o anual) y muestras tu QR dorado en caja para canjear tus beneficios.',
   },
@@ -125,8 +133,8 @@ export const DOC_SECTIONS: { title: string; body: string }[] = [
   },
 
   {
-    title: 'Alta de negocio y nichos (onboarding)',
-    body: 'El alta de un afiliado empieza eligiendo NICHO. Hoy están cubiertos: restaurante, cafetería, bar, panadería/postres, pizzería, taquería/antojitos, barbería/estética, gym/fitness, tienda/retail y servicios con cita. El nicho define qué módulos ve el negocio (mesas, cocina/KDS, reservas, propinas, inventario, recetas, código de barras, citas) y de él se deriva la categoría operativa. Después del nicho vienen: bienvenida/contrato, datos básicos (nombre, dirección), recompensa en Bunz (mínimo 10%), paquete de crédito y firma. Bunzy acompaña cada paso explicando en lenguaje simple, sin inventar condiciones comerciales ni montos: los rangos y paquetes son los que muestra la app. Un negocio nuevo nunca ve datos de otro negocio; Bunzy responde solo sobre la configuración de quien pregunta.',
+    title: 'Alta de negocio, capacidad dinámica y recuperación',
+    body: 'El alta de un afiliado empieza eligiendo NICHO. Hoy están cubiertos: restaurante, cafetería, bar, panadería/postres, pizzería, taquería/antojitos, barbería/estética, gym/fitness, tienda/retail y servicios con cita. El nicho define qué módulos ve el negocio (mesas, cocina/KDS, reservas, propinas, inventario, recetas, código de barras, citas) y de él se deriva la categoría operativa. Después del nicho vienen: bienvenida/contrato, datos básicos (nombre, dirección), recompensa en Bunz (mínimo 10%), capacidad dinámica y firma. La capacidad no es un paquete fijo: se estima con ventas mensuales elegibles × % de recompensa × meses de cobertura. Es una estimación referencial y no autoriza capacidad. La capacidad autorizada puede incluir un incentivo de incorporación y capacidad adelantada recuperable. Al cierre de cada ciclo, Rabbitty calcula una propuesta de recuperación con el importe exacto y el afiliado debe aceptarla en un modal antes de que se aplique; si la rechaza, no se descuenta nada y no se toca la capacidad comprometida con los Rabbitters. Bunzy explica cada paso sin inventar condiciones ni montos: los números salen de la operación del negocio y de la oferta que revise Rabbitty.',
   },
 
   {

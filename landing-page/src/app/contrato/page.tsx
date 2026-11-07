@@ -4,17 +4,17 @@ import Link from 'next/link';
 export const metadata: Metadata = {
   title: 'Contrato de Adhesión para Negocios | Rabbitty',
   description:
-    'Términos y condiciones de afiliación de negocios a Rabbitty: recompensas Bunz, POS, paquetes, obligaciones, responsabilidad y firma electrónica.',
+    'Términos y condiciones de afiliación de negocios a Rabbitty: recompensas Bunz, capacidad dinámica, recuperación con aceptación, obligaciones, responsabilidad y firma electrónica.',
 };
 
-const VERSION = '2026-11-04';
+const VERSION = '2026.11-v1.2-draft';
 
 const SECTIONS: Array<{ title: string; paragraphs: string[]; bullets?: string[] }> = [
   {
     title: 'Partes y aceptación',
     paragraphs: [
-      'Este Contrato de Adhesión (el “Contrato”) se celebra entre Rabbitty Inc. y sus entidades operativas en México (“Rabbitty”) y la persona física o moral que registra un negocio en la plataforma (el “Afiliado”).',
-      'La aceptación se realiza electrónicamente al completar el alta, marcar la casilla correspondiente y firmar con el nombre completo del representante legal. El registro de fecha, hora, versión del Contrato, firma y datos de conexión constituye evidencia del consentimiento.',
+      'Este Contrato de Adhesión (el “Contrato”) se celebra entre MXHUB ECOSISTEMA BLOCKCHAIN, S.A. DE C.V., RFC MEB2402087Z3, que opera la marca comercial RABBITTY (nombre comercial AGOD ECOSYSTEM) (“Rabbitty”), y la persona física o moral que registra un negocio en la plataforma (el “Afiliado”).',
+      'La aceptación se realiza electrónicamente al completar el alta, marcar la casilla correspondiente y escribir el nombre completo del representante legal. La autenticación local del dispositivo (Face ID / Touch ID) es opcional y no constituye firma biométrica ni e.firma. El registro de fecha, hora, versión del Contrato, nombre, método y datos de conexión constituye evidencia del consentimiento.',
       'El Afiliado declara tener capacidad legal y contar con facultades suficientes para obligar a su negocio. Si actúa en representación de una persona moral, declara ser su representante legal autorizado.',
     ],
   },
@@ -55,11 +55,13 @@ const SECTIONS: Array<{ title: string; paragraphs: string[]; bullets?: string[] 
     ],
   },
   {
-    title: 'Paquetes, crédito y pagos',
+    title: 'Capacidad dinámica, recuperación y pagos',
     paragraphs: [
-      'Los paquetes de crédito y las condiciones comerciales se muestran en el alta y en el panel del Afiliado. El crédito respalda la emisión de Bunz y está sujeto a límites, reglas de riesgo y verificación.',
-      'Los pagos por paquetes, membresías o servicios se realizan por los medios habilitados. Salvo que la ley disponga lo contrario, los pagos no son reembolsables. Los impuestos son responsabilidad del Afiliado.',
-      'Rabbitty podrá ajustar límites, suspender emisiones o solicitar información adicional para prevenir fraude o cumplir obligaciones regulatorias.',
+      'La capacidad comercial no es un paquete fijo ni una compra de Bunz. Se calcula con la operación del Afiliado y se confirma en una Oferta Económica Individual que identifica la capacidad autorizada, la provisionada, la composición, la vigencia y las condiciones de recuperación.',
+      'La capacidad puede incluir un incentivo de incorporación y capacidad adelantada recuperable. La recuperación se calcula por ciclo con una tasa dinámica, se informa con el importe exacto y requiere que el Afiliado la acepte expresamente antes de aplicarse. Si no la acepta, no se descuenta nada.',
+      'La recuperación sale de la capacidad nueva generada por actividad elegible. Nunca se aplica sobre capacidad comprometida con Rabbitters, no genera intereses ni comisiones y no tiene efectos retroactivos. La propuesta vence si no se acepta en el plazo informado.',
+      'La estimación que muestra el alta es referencial y no autoriza capacidad. Rabbitty podrá ajustar límites, suspender emisiones o solicitar información adicional para prevenir fraude, mantener cobertura o cumplir obligaciones regulatorias.',
+      'Los pagos por membresías, servicios o cualquier contraprestación se realizan por los medios habilitados y se informan antes de cobrar. Salvo que la ley disponga lo contrario, los pagos no son reembolsables. Los impuestos son responsabilidad del Afiliado.',
     ],
   },
   {
@@ -88,7 +90,7 @@ const SECTIONS: Array<{ title: string; paragraphs: string[]; bullets?: string[] 
     title: 'Limitación de responsabilidad e indemnización',
     paragraphs: [
       'En la máxima medida permitida por la ley, Rabbitty no será responsable por daños indirectos, incidentales, especiales, punitivos o por lucro cesante, pérdida de datos, interrupciones de terceros, fuerza mayor o hechos fuera de su control razonable.',
-      'La responsabilidad total de Rabbitty derivada de este Contrato se limita al monto efectivamente pagado por el Afiliado por el paquete o servicio en los tres meses anteriores al evento.',
+      'La responsabilidad total de Rabbitty derivada de este Contrato se limita al monto efectivamente pagado por el Afiliado por el servicio en los tres meses anteriores al evento. Esta limitación no reduce derechos irrenunciables ni obligaciones esenciales de Rabbitty.',
       'El Afiliado indemnizará y sacará en paz y a salvo a Rabbitty frente a reclamaciones, sanciones, daños y gastos (incluidos honorarios legales razonables) derivados de su operación, productos, servicios, incumplimiento legal, datos de clientes, fraude o violación de este Contrato.',
     ],
   },
@@ -97,7 +99,7 @@ const SECTIONS: Array<{ title: string; paragraphs: string[]; bullets?: string[] 
     paragraphs: [
       'El Contrato entra en vigor al aceptarse y permanece vigente mientras el Afiliado opere en la red, salvo terminación.',
       'Rabbitty podrá suspender o terminar el acceso de forma inmediata ante fraude, riesgo, incumplimiento grave, requerimiento legal o conducta que afecte a la red o a los usuarios. El Afiliado podrá solicitar la baja cuando lo desee.',
-      'Al terminar, se liquidarán las cantidades pendientes y se desactivarán los accesos. Las obligaciones de confidencialidad, propiedad intelectual, indemnización y las que por su naturaleza deban sobrevivir, continuarán vigentes.',
+      'Al terminar, se detendrán nuevas autorizaciones, se identificarán redenciones y compromisos, se conciliará la capacidad y la obligación pendiente y se conservarán los registros. La terminación no convierte unilateralmente la obligación de capacidad en deuda monetaria. Las obligaciones de confidencialidad, propiedad intelectual, indemnización y las que por su naturaleza deban sobrevivir, continuarán vigentes.',
     ],
   },
   {

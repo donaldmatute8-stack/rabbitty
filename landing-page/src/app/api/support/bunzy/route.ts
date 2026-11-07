@@ -10,7 +10,7 @@ const KNOWLEDGE_BASE: KnowledgeItem[] = [
   {
     category: 'bunz',
     keywords: ['que son los bunz', 'que es un bunz', 'para que sirven los bunz', 'explicame los bunz', 'bunz', 'puntos', 'moneda'],
-    answer: '🪙 **Los Bunz son la moneda de recompensas oficial de Rabbitty.**\n\n• **¿Cómo funcionan?** Cada vez que pagas en una cafetería, bar o restaurante afiliado mostrando tu Rabbitty Code (QR), acumulas un porcentaje directo en Bunz (por ejemplo, el 10% o 15% de tu consumo).\n• **¿Para qué sirven?** Los Bunz acumulados tienen valor real dentro del ecosistema y los puedes usar para pagar cuentas futuras, invitar amigos o canjear productos en comercios de la red.\n• **¿Caducan?** No, en cuentas activas tus Bunz se preservan siempre.',
+    answer: '🪙 **Los Bunz son puntos de lealtad de Rabbitty.**\n\n• **¿Cómo funcionan?** Cada vez que pagas en una cafetería, bar o restaurante afiliado mostrando tu Rabbitty Code (QR), acumulas un porcentaje en Bunz conforme a la recompensa publicada por el negocio.\n• **¿Para qué sirven?** Los Bunz se usan como recompensas dentro de la red: puedes canjearlos en compras futuras, acceder a promociones o recibir beneficios de los comercios participantes. No son dinero de curso legal, no son inversión y no se convierten a efectivo.\n• **¿Caducan?** En cuentas activas tus Bunz se preservan conforme a las reglas del programa.',
   },
   {
     category: 'earnings',

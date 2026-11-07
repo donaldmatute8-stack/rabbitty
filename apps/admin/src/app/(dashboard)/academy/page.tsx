@@ -138,6 +138,61 @@ const guides: Guide[] = [
   },
 
   {
+    id: "capacity-recovery",
+    icon: Coins,
+    label: "Capacidad y recuperación",
+    desc: "Cómo se calcula tu capacidad, qué es la capacidad adelantada y cómo aceptar o rechazar una propuesta",
+    role: "admin",
+    content: `## Capacidad y recuperación
+
+Tu capacidad es el límite operativo para recibir redenciones de Bunz. **No es dinero, depósito, inversión ni compra de Bunz.**
+
+### 1. Capacidad dinámica, no paquetes fijos
+La capacidad se estima con:
+\`\`\`
+capacidad = ventas mensuales elegibles × % de recompensa × meses de cobertura
+\`\`\`
+- En el alta ves una **estimación referencial**. No autoriza capacidad ni cobra nada.
+- La capacidad real se confirma en una **Oferta Económica Individual** después de revisar tu negocio.
+- Puede incluir un **incentivo de incorporación** y **capacidad adelantada recuperable**.
+
+### 2. Qué protege el sistema
+- La capacidad **comprometida** con los Rabbitters no se toca.
+- La recuperación sale solo de la **capacidad nueva generada** por actividad elegible.
+- No hay intereses, comisión ni cambios retroactivos.
+- Si rechazas una propuesta, **no se descuenta nada**.
+
+### 3. Propuesta de recuperación
+Al cierre de cada ciclo, Rabbitty calcula una tasa según tu progreso y te muestra:
+- Base generada del periodo.
+- Tasa propuesta y por qué.
+- Importe exacto a retener.
+- Pendiente antes y después.
+- Capacidad disponible antes y después.
+- Cobertura antes y después.
+- Vigencia de la propuesta.
+
+### 4. Aceptar o rechazar
+1. Entra a **Configuración → Recuperación**.
+2. Revisa la tarjeta **Propuesta del ciclo**.
+3. Toca **Revisar y aceptar**.
+4. Lee el importe exacto, las condiciones y escribe tu nombre completo.
+5. Marca la casilla y confirma.
+
+Si el motor está en **shadow**, se registra tu conformidad y la evidencia, pero no se mueven saldos. En **dual/enforce** se aplica la retención y se actualiza tu estado de cuenta.
+
+### 5. Dónde verlo
+- **Afiliado:** Configuración → Recuperación.
+- **GOD:** Centro económico → Capacidad → Recuperación dinámica.
+- **Estado de cuenta:** capacidad autorizada, provisionada, disponible, comprometida y pendiente de recuperar.
+
+### 6. Reglas rápidas
+- La propuesta vence en 15 días.
+- Una propuesta aceptada no se puede volver a aceptar.
+- Sandbox no genera propuestas.
+- GOD puede auditar, pero no aplicar sin tu aceptación.`,
+  },
+  {
     id: "memberships",
     icon: Ticket,
     label: "Rabbitty Memberships",

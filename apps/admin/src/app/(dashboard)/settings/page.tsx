@@ -677,7 +677,7 @@ export default function SettingsPage() {
                     <Input label="Tasa fija (MXN por 1 USD)" type="number" step="0.01" value={form.usdRate} onChange={(e) => setForm((f) => ({ ...f, usdRate: Number(e.target.value) }))} />
                   )}
                   <p className="text-[11px] text-gray-500 leading-snug">
-                    💱 La tasa USD <strong className="text-gray-400">no cambia la recompensa</strong> (1 Bunz = 1 peso local: se calcula en MXN porque estamos en México; en cada país se usa su moneda). Sirve para <strong className="text-gray-400">valuar los cobros que recibas en dólares de turistas</strong>.
+                    💱 La tasa USD <strong className="text-gray-400">no cambia la recompensa</strong>. La recompensa se calcula en la moneda local del negocio (MXN en México), con el valor referencial que se informe en el programa. Sirve para <strong className="text-gray-400">valuar los cobros que recibas en dólares de turistas</strong>.
                   </p>
                   <label className="flex items-center gap-2.5 text-sm text-gray-300 font-semibold cursor-pointer">
                     <input

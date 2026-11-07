@@ -38,19 +38,13 @@ import { BunzyVideoStage } from '@/components/BunzyVideoStage';
 import { BunzyTypingBubble } from '@/components/BunzyTypingBubble';
 import { NicheSearch } from '@/components/NicheSearch';
 import { WelcomeRitual } from '@/components/WelcomeRitual';
+import { capacityScenarios, estimateCapacity, formatBunz } from '@/lib/capacity';
 
 interface Niche {
   id: string;
   name: string;
   description?: string | null;
 }
-
-const PACKAGES = [
-  { id: 'Starter', label: 'Starter', credit: 10000, price: '$10,000', desc: 'Para cafés y negocios pequeños', icon: '☕' },
-  { id: 'Growth', label: 'Growth', credit: 20000, price: '$20,000', desc: 'Para restaurantes medianos', icon: '🍽️' },
-  { id: 'Pro', label: 'Pro', credit: 50000, price: '$50,000', desc: 'Para cadenas y gimnasios', icon: '🏪' },
-  { id: 'Enterprise', label: 'Enterprise', credit: 100000, price: '$100,000', desc: 'Para grandes retailers', icon: '🏢' },
-];
 
 const STEP_META = [
   {
@@ -80,10 +74,10 @@ const STEP_META = [
   {
     video: '/videos/bunzy/bunzy-4-descubrimiento.mp4',
     poster: '/videos/bunzy/bunzy-4-descubrimiento.jpg',
-    label: 'Paso 4 · Paquete',
-    title: 'Respaldo y crédito',
-    description: 'Elige el paquete inicial de Bunz que respalda las recompensas de tu negocio.',
-    bubble: 'El paquete es el respaldo de los Bunz que puedes emitir. Puedes empezar chico.'
+    label: 'Paso 4 · Capacidad',
+    title: 'Tu capacidad, a tu medida',
+    description: 'Calculamos una capacidad referencial con tus ventas, tu recompensa y la cobertura que quieras.',
+    bubble: 'No hay paquetes fijos: movemos tus números y la capacidad se ajusta. Nada se activa sin tu firma.'
   },
   {
     video: '/videos/bunzy/bunzy-5-celebra.mp4',
@@ -95,24 +89,7 @@ const STEP_META = [
   },
 ];
 
-const PACKAGE_BY_NICHE: Record<string, string> = {
-  cafe: 'Starter',
-  bakery: 'Starter',
-  barbershop: 'Starter',
-  restaurant: 'Growth',
-  tacos: 'Growth',
-  pizza: 'Growth',
-  bar: 'Growth',
-  fitness: 'Growth',
-  services: 'Growth',
-  retail: 'Pro',
-};
-
-function suggestPackage(niche?: string | null): string {
-  return PACKAGE_BY_NICHE[niche ?? ''] ?? 'Starter';
-}
-
-const CONTRACT_VERSION = '2026-11-04';
+const CONTRACT_VERSION = '2026.11-v1.2-draft';
 
 /** El ritual se muestra una vez por dispositivo tras enviar el alta. */
 const AFFILIATE_RITUAL_KEY = 'rabbitty_affiliate_welcome_ritual_seen_v2';
@@ -139,18 +116,20 @@ const CONTRACT_POINTS = [
     text: 'Puedes cancelar cuando quieras. Podemos suspender la cuenta por fraude o incumplimiento.',
   },
   {
-    title: 'Firma electrónica',
-    text: 'Tu aceptación queda registrada con fecha, versión y firma; tiene validez como consentimiento.',
+    title: 'Aceptación y evidencia',
+    text: 'Aceptas con tu nombre completo y una acción afirmativa. Se registran versión, fecha, método y evidencia. Face ID/Touch ID es opcional y no sustituye e.firma.',
   },
 ];
 
 const CONTRACT_PARAGRAPHS = [
-  'Contrato de adhesión para negocios afiliados. Al aceptar, celebras un acuerdo con Rabbitty para operar como comercio afiliado, emitir recompensas Bunz y usar el POS.',
+  'Contrato de adhesión para negocios afiliados. Al aceptar, celebras un acuerdo con MXHUB ECOSISTEMA BLOCKCHAIN, S.A. DE C.V. (RABBITTY, RFC MEB2402087Z3) para operar como comercio afiliado, recibir capacidad y usar el POS.',
   'Los Bunz son puntos promocionales de lealtad: no son dinero, no generan rendimientos y no son canjeables por efectivo. El negocio es responsable de las recompensas que ofrece y de su respaldo.',
+  'La capacidad no es un paquete fijo ni una compra de Bunz. Se calcula con tus ventas mensuales elegibles, tu % de recompensa y los meses de cobertura. La estimación del alta es referencial y no autoriza capacidad. La capacidad autorizada puede incluir un incentivo de incorporación y capacidad adelantada recuperable.',
+  'La recuperación se propone por ciclo con una tasa dinámica y el importe exacto. Requiere tu aceptación en un modal antes de aplicarse; si rechazas, no se descuenta nada. Nunca se toca la capacidad comprometida con los Rabbitters, no hay intereses ni cambios retroactivos.',
   'El negocio se obliga a proporcionar información veraz, cumplir la legislación aplicable (incluidas obligaciones fiscales y de consumo), no realizar fraudes y mantener un canal de atención.',
-  'Rabbitty presta la plataforma, el soporte y las herramientas de operación con esfuerzo razonable, sin garantizar disponibilidad ininterrumpida. La responsabilidad total se limita a los montos efectivamente pagados por el paquete en los últimos 3 meses.',
+  'Rabbitty presta la plataforma, el soporte y las herramientas de operación con esfuerzo razonable, sin garantizar disponibilidad ininterrumpida. La responsabilidad total se limita a los montos efectivamente pagados por el servicio en los últimos 3 meses, sin reducir derechos irrenunciables.',
   'Cualquiera de las partes puede terminar el acuerdo. Rabbitty puede suspender el servicio ante fraude, riesgo o incumplimiento. Las obligaciones de confidencialidad, propiedad intelectual e indemnización sobreviven.',
-  'La aceptación electrónica, la firma capturada, la fecha, la versión del contrato y los datos de conexión constituyen evidencia del consentimiento. Se rige por las leyes de México.',
+  'La aceptación con nombre completo + checkbox, la fecha, la versión del contrato y los datos de conexión constituyen evidencia del consentimiento. Se rige por las leyes de México.',
 ];
 
 const DATA_BUBBLES = [
@@ -176,7 +155,9 @@ interface FormData {
   lat: number | null;
   lng: number | null;
   reward: number;
-  packageId: string;
+  monthlySales: number;
+  coverageMonths: number;
+  capacityRequested: number;
   signature: string;
   acceptedTerms: boolean;
   referral: string;
@@ -192,7 +173,9 @@ const EMPTY: FormData = {
   lat: null,
   lng: null,
   reward: 30,
-  packageId: 'Starter',
+  monthlySales: 60_000,
+  coverageMonths: 2,
+  capacityRequested: estimateCapacity({ monthlySales: 60_000, rewardPct: 30, months: 2 }),
   signature: '',
   acceptedTerms: false,
   referral: '',
@@ -216,7 +199,6 @@ export default function NegociosPage() {
   const [loadingNiches, setLoadingNiches] = useState(true);
   const [step, setStep] = useState(0);
   const [dataStep, setDataStep] = useState(0);
-  const [packageTouched, setPackageTouched] = useState(false);
   const [data, setData] = useState<FormData>(EMPTY);
   const [submitted, setSubmitted] = useState(false);
   const [showRitual, setShowRitual] = useState(false);
@@ -255,15 +237,27 @@ export default function NegociosPage() {
       retail: 'retail',
       entertainment: 'services',
     };
-    const rawPackage = params.get('package') || '';
-    const validPackage = PACKAGES.some((p) => p.id === rawPackage) ? rawPackage : '';
     const prefilledNiche = nicheMap[rawNiche] || rawNiche;
+    const salesParam = Number(params.get('sales'));
+    const rewardParam = Number(params.get('reward'));
+    const monthsParam = Number(params.get('months'));
+    const capacityParam = Number(params.get('capacity'));
+    const monthlySales = Number.isFinite(salesParam) && salesParam > 0 ? salesParam : 60_000;
+    const reward = Number.isFinite(rewardParam) && rewardParam >= 10 ? Math.min(50, rewardParam) : 30;
+    const coverageMonths = Number.isFinite(monthsParam) && monthsParam > 0 ? Math.min(3, monthsParam) : 2;
+    const capacityRequested =
+      Number.isFinite(capacityParam) && capacityParam > 0
+        ? capacityParam
+        : estimateCapacity({ monthlySales, rewardPct: reward, months: coverageMonths });
     // Prefill desde el query string al montar (no hay render alternativo).
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setData((prev) => ({
       ...prev,
       niche: prefilledNiche,
-      packageId: validPackage || suggestPackage(prefilledNiche),
+      monthlySales,
+      reward,
+      coverageMonths,
+      capacityRequested,
     }));
     setUtm({
       source: params.get('utm_source') || '',
@@ -282,13 +276,18 @@ export default function NegociosPage() {
     () => niches.find((n) => n.id === data.niche) ?? null,
     [niches, data.niche],
   );
-  const selectedPackage = useMemo(
-    () => PACKAGES.find((p) => p.id === data.packageId) ?? PACKAGES[0],
-    [data.packageId],
+  const capacity = useMemo(
+    () =>
+      estimateCapacity({
+        monthlySales: data.monthlySales,
+        rewardPct: data.reward,
+        months: data.coverageMonths,
+      }),
+    [data.monthlySales, data.reward, data.coverageMonths],
   );
-  const suggestedPackage = useMemo(
-    () => PACKAGES.find((p) => p.id === suggestPackage(data.niche)) ?? PACKAGES[0],
-    [data.niche],
+  const scenarios = useMemo(
+    () => capacityScenarios(data.monthlySales, data.reward),
+    [data.monthlySales, data.reward],
   );
 
   const phoneDigits = data.phone.replace(/\D/g, '').slice(-10);
@@ -303,7 +302,7 @@ export default function NegociosPage() {
       phoneOk &&
       data.address.trim().length >= 4,
     data.reward >= 10 && data.reward <= 50,
-    Boolean(data.packageId),
+    data.capacityRequested >= 1000,
     data.signature.trim().length >= 3 && data.acceptedTerms,
   ];
 
@@ -327,8 +326,19 @@ export default function NegociosPage() {
 
   const selectNiche = (id: string) => {
     update('niche', id);
-    // Si el usuario no ha tocado el paquete, Bunzy sugiere el del nicho.
-    if (!packageTouched) update('packageId', suggestPackage(id));
+  };
+
+  const setCapacity = (months: number) => {
+    setData((prev) => ({
+      ...prev,
+      coverageMonths: months,
+      capacityRequested: estimateCapacity({
+        monthlySales: prev.monthlySales,
+        rewardPct: prev.reward,
+        months,
+      }),
+    }));
+    setError('');
   };
 
   const requestGeo = () => {
@@ -409,10 +419,13 @@ export default function NegociosPage() {
           nicheId: data.niche,
           nicheName: selectedNiche?.name ?? data.niche,
           rewardPercentage: data.reward,
-          package: data.packageId,
-          packageCode: data.packageId,
-          packageName: data.packageId,
-          creditLimit: selectedPackage.credit,
+          monthlySales: data.monthlySales,
+          coverageMonths: data.coverageMonths,
+          capacityRequested: data.capacityRequested,
+          package: 'DYNAMIC',
+          packageCode: 'DYNAMIC',
+          packageName: 'Capacidad dinámica',
+          creditLimit: data.capacityRequested,
           signature: data.signature.trim(),
           acceptedTerms: data.acceptedTerms,
           contractVersion: CONTRACT_VERSION,
@@ -652,7 +665,7 @@ export default function NegociosPage() {
             step === 1
               ? DATA_BUBBLES[dataStep]
               : step === 3
-                ? `Para un ${selectedNiche?.name ?? 'negocio'}, te sugiero el paquete ${suggestedPackage.label}. Puedes cambiarlo.`
+                ? `Con $${data.monthlySales.toLocaleString('es-MX')} de ventas y ${data.reward}% de recompensa, tu capacidad sugerida es ${formatBunz(capacity)} Bunz.`
                 : meta.bubble
           }
           className="mt-4"
@@ -949,31 +962,74 @@ export default function NegociosPage() {
               </div>
             )}
 
-            {/* Paso 4: paquete */}
+            {/* Paso 4: capacidad dinámica */}
             {step === 3 && (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="flex items-start gap-2 rounded-2xl border border-pink-500/20 bg-pink-500/[0.06] p-3">
                   <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-pink-400" />
                   <p className="m-0 text-[11px] leading-relaxed text-white/70">
                     Para un <strong className="text-white">{selectedNiche?.name ?? 'negocio'}</strong>,
-                    te sugiero el paquete{' '}
-                    <strong className="text-pink-300">{suggestedPackage.label}</strong>. Puedes
-                    cambiarlo.
+                    calculamos tu capacidad con <strong className="text-white">ventas mensuales</strong>,{' '}
+                    <strong className="text-white">recompensa</strong> y{' '}
+                    <strong className="text-white">meses de cobertura</strong>. No es un paquete fijo.
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                  {PACKAGES.map((pkg) => {
-                    const active = data.packageId === pkg.id;
-                    const suggested = suggestedPackage.id === pkg.id;
+                <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 space-y-4">
+                  <label className="block">
+                    <span className="mb-1.5 flex items-center justify-between text-[10.5px] font-black uppercase tracking-wider text-white/45">
+                      Ventas mensuales elegibles
+                      <span className="font-mono text-pink-300">${data.monthlySales.toLocaleString('es-MX')}</span>
+                    </span>
+                    <input
+                      type="range"
+                      min={10_000}
+                      max={500_000}
+                      step={5_000}
+                      value={data.monthlySales}
+                      onChange={(e) =>
+                        setData((prev) => ({
+                          ...prev,
+                          monthlySales: Number(e.target.value),
+                          capacityRequested: estimateCapacity({
+                            monthlySales: Number(e.target.value),
+                            rewardPct: prev.reward,
+                            months: prev.coverageMonths,
+                          }),
+                        }))
+                      }
+                      className="w-full accent-pink-500"
+                    />
+                    <div className="mt-1 flex justify-between text-[10px] text-white/30">
+                      <span>$10 mil</span>
+                      <span>$500 mil</span>
+                    </div>
+                  </label>
+
+                  <div className="grid gap-2 text-xs sm:grid-cols-2">
+                    <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+                      <p className="m-0 text-[9px] font-black uppercase tracking-wider text-white/35">
+                        Recompensa
+                      </p>
+                      <p className="m-0 mt-0.5 text-sm font-bold text-white">{data.reward}% en Bunz</p>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+                      <p className="m-0 text-[9px] font-black uppercase tracking-wider text-white/35">
+                        Capacidad calculada
+                      </p>
+                      <p className="m-0 mt-0.5 text-sm font-bold text-pink-300">{formatBunz(capacity)} Bunz</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                  {scenarios.map((scenario) => {
+                    const active = data.coverageMonths === scenario.months;
                     return (
                       <button
-                        key={pkg.id}
+                        key={scenario.id}
                         type="button"
-                        onClick={() => {
-                          update('packageId', pkg.id);
-                          setPackageTouched(true);
-                        }}
+                        onClick={() => setCapacity(scenario.months)}
                         aria-pressed={active}
                         className={`relative rounded-2xl border p-3.5 text-left transition-all ${
                           active
@@ -982,30 +1038,33 @@ export default function NegociosPage() {
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-xl">{pkg.icon}</span>
+                          <span className="text-[10px] font-black uppercase tracking-wider text-white/40">
+                            {scenario.months} {scenario.months === 1 ? 'mes' : 'meses'}
+                          </span>
                           <span className="flex items-center gap-1.5">
-                            {suggested && (
+                            {scenario.badge && (
                               <span className="rounded-full bg-pink-500/15 px-2 py-0.5 text-[8.5px] font-black uppercase tracking-wide text-pink-300">
-                                Sugerido
+                                {scenario.badge}
                               </span>
                             )}
                             {active && <Check className="h-4 w-4 text-pink-400" />}
                           </span>
                         </div>
-                        <p className="m-0 mt-2 text-sm font-black text-white">{pkg.label}</p>
-                        <p className="m-0 text-[10px] font-bold text-white/45">
-                          {pkg.credit.toLocaleString('es-MX')} Bunz · {pkg.price}
+                        <p className="m-0 mt-2 text-sm font-black text-white">{scenario.label}</p>
+                        <p className="m-0 text-[11px] font-bold text-pink-300">
+                          {formatBunz(scenario.capacity)} Bunz
                         </p>
                         <p className="m-0 mt-1 text-[10.5px] leading-snug text-white/40">
-                          {pkg.desc}
+                          {scenario.description}
                         </p>
                       </button>
                     );
                   })}
                 </div>
 
-                <p className="m-0 text-center text-[11px] text-white/35">
-                  El crédito respalda los Bunz que puedes emitir. Puedes empezar chico y subir después.
+                <p className="m-0 text-center text-[11px] leading-relaxed text-white/35">
+                  La capacidad es una estimación referencial. No se autoriza ni se activa aquí.
+                  La oferta final se revisa contigo y requiere aceptación.
                 </p>
               </div>
             )}
@@ -1023,7 +1082,7 @@ export default function NegociosPage() {
                     <Summary label="Contacto" value={`${data.contactName} · +52 ${data.phone}`} />
                     <Summary label="Correo" value={data.email} />
                     <Summary label="Recompensa" value={`${data.reward}% en Bunz`} />
-                    <Summary label="Paquete" value={`${selectedPackage.label} · ${selectedPackage.credit.toLocaleString('es-MX')} Bunz`} />
+                    <Summary label="Capacidad" value={`${formatBunz(data.capacityRequested)} Bunz · ${data.coverageMonths} ${data.coverageMonths === 1 ? 'mes' : 'meses'}`} />
                   </div>
                   <p className="m-0 mt-3 flex items-start gap-1.5 text-[11px] leading-relaxed text-white/40">
                     <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />

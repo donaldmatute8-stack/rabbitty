@@ -26,12 +26,55 @@ const CATEGORY_BY_NICHE: Record<string, string> = {
   entertainment: 'Entretenimiento',
 };
 
-const PACKAGES: Record<string, number> = {
+// Compatibilidad con el formulario anterior. El alta nueva usa capacidad
+// dinámica: ventas mensuales × recompensa × meses de cobertura.
+const LEGACY_PACKAGES: Record<string, number> = {
   Starter: 10000,
   Growth: 20000,
   Pro: 50000,
   Enterprise: 100000,
 };
+
+const CAPACITY_MIN = 1_000;
+const CAPACITY_MAX = 200_000;
+
+function roundCapacity(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  if (value < 5_000) return Math.round(value / 500) * 500;
+  if (value < 20_000) return Math.round(value / 1_000) * 1_000;
+  return Math.round(value / 5_000) * 5_000;
+}
+
+function resolveCapacity(data: Record<string, unknown>, rewardPercentage: number): {
+  capacity: number;
+  monthlySales: number;
+  coverageMonths: number;
+  legacyPackage: string | null;
+} {
+  const packageInput = str(data.package) || str(data.packageCode);
+  const legacyPackage = Object.prototype.hasOwnProperty.call(LEGACY_PACKAGES, packageInput)
+    ? packageInput
+    : null;
+
+  const salesRaw = Number(data.monthlySales);
+  const monthsRaw = Number(data.coverageMonths);
+  const requestedRaw = Number(data.capacityRequested);
+  const monthlySales = Number.isFinite(salesRaw) && salesRaw > 0 ? Math.min(5_000_000, salesRaw) : 0;
+  const coverageMonths = Number.isFinite(monthsRaw) && monthsRaw > 0 ? Math.min(3, Math.max(0.5, monthsRaw)) : 2;
+
+  let capacity = Number.isFinite(requestedRaw) && requestedRaw > 0 ? requestedRaw : 0;
+  if (!(capacity > 0) && monthlySales > 0) {
+    capacity = monthlySales * (rewardPercentage / 100) * coverageMonths;
+  }
+  if (!(capacity > 0) && legacyPackage) capacity = LEGACY_PACKAGES[legacyPackage];
+
+  return {
+    capacity: Math.min(CAPACITY_MAX, Math.max(CAPACITY_MIN, roundCapacity(capacity))),
+    monthlySales,
+    coverageMonths,
+    legacyPackage,
+  };
+}
 
 /** Normaliza un celular MX a E.164 (52 + 10 dígitos) o null. */
 function normalizePhone(value: string): string | null {
@@ -133,11 +176,12 @@ export async function POST(req: Request) {
       ? Math.min(50, Math.max(10, Math.round(rewardRaw)))
       : 10;
 
-    const packageInput = str(data.package) || str(data.packageCode);
-    const packageCode = Object.prototype.hasOwnProperty.call(PACKAGES, packageInput)
-      ? packageInput
-      : 'Starter';
-    const creditLimit = PACKAGES[packageCode];
+    const capacityInfo = resolveCapacity(data, rewardPercentage);
+    const creditLimit = capacityInfo.capacity;
+    const packageCode = capacityInfo.legacyPackage ?? 'DYNAMIC';
+    const packageName = capacityInfo.legacyPackage
+      ? capacityInfo.legacyPackage
+      : 'Capacidad dinámica';
     const signature = str(data.signature);
     const acceptedTerms = data.acceptedTerms === true;
     const signatureDate = str(data.signatureDate) || new Date().toISOString();
@@ -158,13 +202,13 @@ export async function POST(req: Request) {
     }
 
     const billingPeriod = str(data.billingPeriod) === 'monthly' ? 'monthly' : 'yearly';
-    const packageName = packageCode;
     const setupBunz = null;
     const initialVaultBunz = null;
 
     const msg = `🆕 *Nueva solicitud negocio Rabbitty*\n\n` +
       `🏪 *Negocio:* ${negocio || 'N/A'}\n` +
-      `📦 *Paquete:* ${str(data.paquete) || packageCode} (${packageCode})\n` +
+      `📦 *Capacidad:* ${creditLimit.toLocaleString('es-MX')} Bunz (${capacityInfo.coverageMonths} meses)\n` +
+      `💵 *Ventas mensuales:* ${capacityInfo.monthlySales ? '$' + capacityInfo.monthlySales.toLocaleString('es-MX') : 'N/A'}\n` +
       `🔄 *Periodicidad:* ${billingPeriod === 'yearly' ? 'Anual (-20% Ahorro)' : 'Mensual'}\n` +
       `📂 *Nicho:* ${nicheName} (${nicheId})\n` +
       `💰 *Recompensa:* ${rewardPercentage}% en Bunz\n` +
@@ -222,6 +266,9 @@ export async function POST(req: Request) {
       packageCode,
       packageName,
       creditLimit,
+      monthlySales: capacityInfo.monthlySales,
+      coverageMonths: capacityInfo.coverageMonths,
+      capacityRequested: creditLimit,
       billingPeriod,
       signature,
       acceptedTerms,
@@ -234,8 +281,8 @@ export async function POST(req: Request) {
       email,
       setupBunz,
       initialVaultBunz,
-      monthlyBunz: 5000,
-      annualBunz: 48000,
+      monthlyBunz: null,
+      annualBunz: null,
       geoSource,
       geoNeedsReview: geoSource === 'fallback',
       utm: {

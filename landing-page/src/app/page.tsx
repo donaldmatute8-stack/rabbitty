@@ -7,7 +7,7 @@ import { motion, Variants, AnimatePresence } from 'framer-motion';
 import { ArrowRight, ArrowUp, Store, UserCircle2, Zap, Shield, Smartphone, QrCode, X, Clock, Salad, Truck, Receipt, Bell, Building2, DollarSign, Monitor, Gift, Award, Megaphone, Cake, BookOpen, HelpCircle, Sparkles, Compass, Headphones, Activity, Utensils, Globe, ChevronDown, Coins } from 'lucide-react';
 import BunzGuide from '@/components/BunzGuide';
 import OpenAppButton from '@/components/OpenAppButton';
-import PricingPackagesSection, { PackagePlan, NicheData } from '@/components/PricingPackagesSection';
+import PricingPackagesSection, { CapacitySelection } from '@/components/PricingPackagesSection';
 
 const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || '5213312345678';
 const BUSINESS_TYPES = ['restaurante', 'cafetería', 'barbería', 'gimnasio', 'tienda'];
@@ -122,14 +122,15 @@ export default function LandingPage() {
     setShowApplyForm(false);
   };
 
-  const handleSelectPlan = (plan: PackagePlan, niche: NicheData, billingPeriod: 'monthly' | 'yearly') => {
-    // El alta ahora vive en el onboarding nuevo: nicho, Bunzy, recompensas y
+  const handleSelectPlan = (selection: CapacitySelection) => {
+    // El alta vive en el onboarding nuevo: nicho, Bunzy, capacidad dinámica y
     // firma en un solo flujo. Conservamos el evento de conversión.
     fireConversion('Lead', {
-      niche: niche.id,
-      package: plan.id,
-      value: plan.setupBunz,
-      billing: billingPeriod,
+      niche: selection.nicheId,
+      capacity: selection.capacity,
+      months: selection.months,
+      sales: selection.monthlySales,
+      reward: selection.rewardPct,
     });
     if (typeof window !== 'undefined') {
       const map: Record<string, string> = {
@@ -138,12 +139,13 @@ export default function LandingPage() {
         retail: 'retail',
         entertainment: 'services',
       };
-      const webNiche = map[niche.id] || '';
-      const setupBunz = Number(plan.setupBunz) || 0;
-      const webPackage = setupBunz <= 4000 ? 'Starter' : setupBunz <= 10000 ? 'Growth' : 'Pro';
+      const webNiche = map[selection.nicheId] || '';
       const qs = new URLSearchParams();
       if (webNiche) qs.set('niche', webNiche);
-      if (webPackage) qs.set('package', webPackage);
+      qs.set('sales', String(selection.monthlySales));
+      qs.set('reward', String(selection.rewardPct));
+      qs.set('months', String(selection.months));
+      qs.set('capacity', String(selection.capacity));
       window.location.href = `${BUSINESS_ONBOARDING_URL}${qs.toString() ? `?${qs.toString()}` : ''}`;
     }
   };
@@ -508,7 +510,7 @@ export default function LandingPage() {
               Vive experiencias, <br/> colecciona recompensas.
             </h2>
             <p className="text-xl text-white/60">
-              Descubre los mejores lugares de la ciudad. Escanea tu código, acumula bunz y úsalos como dinero real en cualquier negocio afiliado.
+              Descubre los mejores lugares de la ciudad. Escanea tu código, acumula Bunz y canjéalos como recompensas en cualquier negocio afiliado.
             </p>
             <div className="space-y-6">
               {[

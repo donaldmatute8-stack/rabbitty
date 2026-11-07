@@ -471,7 +471,7 @@ export default async function AffiliateLandingPage({ params }: PageProps) {
               <BunzBadge affiliateName={affiliate.name} rewardPercentage={affiliate.rewardPercentage} className="text-amber-400 decoration-amber-400/50 hover:text-amber-300 text-3xl sm:text-4xl font-serif font-black" /> cada vez que nos visites.
             </h2>
             <p className="text-xs sm:text-sm text-stone-300 leading-relaxed font-normal">
-              Sin tarjetas plásticas ni sellos de papel que se pierden. Disfruta en {affiliate.name}, escanea tu código de Rabbitty en mostrador y acumula recompensas utilizables como dinero real en tus siguientes consumos.
+              Sin tarjetas plásticas ni sellos de papel que se pierden. Disfruta en {affiliate.name}, escanea tu código de Rabbitty en mostrador y acumula Bunz canjeables en tus siguientes consumos dentro de la red.
             </p>
           </div>
 

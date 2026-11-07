@@ -83,14 +83,13 @@ export default function BunzGuide({ onClose }: { onClose: () => void }) {
                   2. Tú eliges el % de recompensa (ej. 20% = 200 Bunz)<br/>
                   3. Esos Bunz van directo al wallet del cliente<br/>
                   4. El cliente los gasta en OTRO negocio de Rabbitty<br/>
-                  5. Ese otro negocio recibe el 91% del valor en Bunz</p>
+                  5. Ese otro negocio recibe capacidad conforme a las reglas del programa</p>
                 </div>
                 <p style={{ margin: 0 }}>
-                  <strong style={{ color: '#fff' }}>Colateral:</strong> Tu inventario y producto real respaldan los Bunz que creas. 
-                  No estás creando dinero de la nada — estás convirtiendo tu capacidad de servicio en recompensas.
+                  <strong style={{ color: '#fff' }}>Respaldo:</strong> Tu capacidad operativa y tu producto real respaldan las recompensas que entregas. No creas dinero: entregas un beneficio que tú defines y que se consume en tu negocio o en la red.
                 </p>
                 <p style={{ margin: 0 }}>
-                  <strong style={{ color: '#fff' }}>Paridad fija:</strong> 1 Bunz = $1 MXN. Siempre. Sin inflación, sin sorpresas.
+                  <strong style={{ color: '#fff' }}>Valor y reglas:</strong> Los Bunz no son dinero ni tienen una paridad fija garantizada. Su valor, vigencia y condiciones se informan en el programa y en el contrato vigente. Rabbitty no promete rendimientos ni convertibilidad a efectivo.
                 </p>
               </div>
             </motion.div>
@@ -110,26 +109,22 @@ export default function BunzGuide({ onClose }: { onClose: () => void }) {
                 </ul>
 
                 <div style={{ background: 'rgba(233,30,99,0.1)', borderRadius: 14, padding: 16, border: '1px solid rgba(233,30,99,0.2)', marginTop: 8 }}>
-                  <p style={{ margin: '0 0 8px', fontWeight: 700, color: '#fff' }}>💰 Costos de transacción (en Bunz):</p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Cuando RECOMPENSAS (minteas)</span>
-                      <span style={{ fontWeight: 800, color: THEME_COLOR }}>6%</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Cuando COBRAS en Bunz (recibes pago)</span>
-                      <span style={{ fontWeight: 800, color: '#22C55E' }}>0%</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Cuando un cliente GASTA en tu negocio</span>
-                      <span style={{ fontWeight: 800, color: THEME_COLOR }}>3%</span>
-                    </div>
+                  <p style={{ margin: '0 0 8px', fontWeight: 700, color: '#fff' }}>⚖️ Capacidad y recuperación</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
+                    <p style={{ margin: 0 }}>
+                      La capacidad no es un paquete fijo. Se calcula con tus ventas mensuales elegibles, tu % de recompensa y los meses de cobertura.
+                    </p>
+                    <p style={{ margin: 0 }}>
+                      Puede incluir un incentivo de incorporación y capacidad adelantada recuperable. La recuperación se propone por ciclo, con el importe exacto, y requiere tu aceptación en un modal. Si rechazas, no se descuenta nada.
+                    </p>
+                    <p style={{ margin: 0 }}>
+                      Nunca se toca la capacidad comprometida con los Rabbitters. No hay intereses ni cambios retroactivos. Cualquier cargo o cuota se informa antes de cobrar; no se aplican cargos no aprobados.
+                    </p>
                   </div>
                 </div>
 
                 <p style={{ margin: 0, fontSize: 13 }}>
-                  💡 <strong>Compara con tarjetas de crédito:</strong> 2-4% sin beneficio adicional. 
-                  Aquí pagas fees en Bunz (no en efectivo), y atraes clientes recurrentes.
+                  💡 <strong>Sin letras chiquitas:</strong> revisa tu oferta individual y el estado de cuenta. Ahí ves capacidad autorizada, disponible, comprometida y pendiente de recuperar.
                 </p>
               </div>
             </motion.div>
@@ -137,73 +132,42 @@ export default function BunzGuide({ onClose }: { onClose: () => void }) {
 
           {tab === 'example' && (
             <motion.div key="example" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-              <h3 style={{ fontSize: 18, fontWeight: 800, marginBottom: 16 }}>Ejemplo Real: 50% de Recompensa</h3>
-              
+              <h3 style={{ fontSize: 18, fontWeight: 800, marginBottom: 16 }}>Ejemplo: capacidad dinámica</h3>
+
               <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 14, padding: 16, marginBottom: 16 }}>
                 <p style={{ margin: '0 0 4px', fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>ESCENARIO</p>
-                <p style={{ margin: 0, fontWeight: 700 }}>Restaurante — Consumo de $1,000 MXN</p>
+                <p style={{ margin: 0, fontWeight: 700 }}>Ventas mensuales elegibles: $80,000 · Recompensa: 30% · Cobertura: 2 meses</p>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: 14, lineHeight: 1.6, color: 'rgba(255,255,255,0.8)' }}>
                 <div style={{ background: 'rgba(16,185,129,0.08)', borderRadius: 12, padding: 14, border: '1px solid rgba(16,185,129,0.2)' }}>
-                  <p style={{ margin: '0 0 6px', fontWeight: 800, color: '#22C55E' }}>✅ Con Bunz (50% recompensa)</p>
+                  <p style={{ margin: '0 0 6px', fontWeight: 800, color: '#22C55E' }}>✅ Capacidad sugerida</p>
                   <p style={{ margin: 0, fontSize: 13 }}>
-                    • Recibes <strong>$1,000 MXN</strong> del cliente (pago completo)<br/>
-                    • Entregas 500 Bunz (costo marginal: 6% fee = 30 Bunz ≈ $30 MXN)<br/>
-                    • <strong>Costo real: $30 MXN</strong> (solo el fee)<br/>
-                    • El cliente vuelve por más Bunz → recurrencia
+                    • $80,000 × 30% = $24,000 de recompensas al mes<br/>
+                    • × 2 meses de cobertura = 48,000 Bunz de capacidad referencial<br/>
+                    • Es una estimación: la capacidad real se confirma en tu oferta individual
                   </p>
                 </div>
 
-                <div style={{ background: 'rgba(239,68,68,0.08)', borderRadius: 12, padding: 14, border: '1px solid rgba(239,68,68,0.2)' }}>
-                  <p style={{ margin: '0 0 6px', fontWeight: 800, color: '#EF4444' }}>❌ Con Descuento del 50%</p>
+                <div style={{ background: 'rgba(233,30,99,0.1)', borderRadius: 12, padding: 14, border: '1px solid rgba(233,30,99,0.2)' }}>
+                  <p style={{ margin: '0 0 6px', fontWeight: 800, color: THEME_COLOR }}>🔄 Recuperación</p>
                   <p style={{ margin: 0, fontSize: 13 }}>
-                    • Recibes solo <strong>$500 MXN</strong> (perdiste $500)<br/>
-                    • Sin recompensa, sin fidelidad<br/>
-                    • <strong>Costo real: $500 MXN</strong> de ingreso perdido<br/>
-                    • El cliente se va y puede no volver
+                    Al cierre del ciclo, Rabbitty calcula una tasa según tu progreso y te propone un importe exacto. Tú lo aceptas o lo rechazas en un modal. Si aceptas, se descuenta de la capacidad nueva generada; nunca de la comprometida. Si rechazas, no se mueve nada.
                   </p>
                 </div>
 
-                <div style={{ background: '#fff', borderRadius: 12, padding: 14, color: '#111', marginTop: 4 }}>
-                  <p style={{ margin: '0 0 8px', fontWeight: 800, fontSize: 13 }}>📊 Diferencia clave</p>
-                  <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ borderBottom: '1px solid #EEE' }}>
-                        <th style={{ textAlign: 'left', padding: '4px 8px' }}></th>
-                        <th style={{ textAlign: 'right', padding: '4px 8px', color: '#22C55E' }}>Bunz 50%</th>
-                        <th style={{ textAlign: 'right', padding: '4px 8px', color: '#EF4444' }}>Dto 50%</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr style={{ borderBottom: '1px solid #F5F5F5' }}>
-                        <td style={{ padding: '4px 8px' }}>Ingreso inmediato</td>
-                        <td style={{ textAlign: 'right', padding: '4px 8px', fontWeight: 800 }}>$1,000</td>
-                        <td style={{ textAlign: 'right', padding: '4px 8px', fontWeight: 800 }}>$500</td>
-                      </tr>
-                      <tr style={{ borderBottom: '1px solid #F5F5F5' }}>
-                        <td style={{ padding: '4px 8px' }}>Costo real</td>
-                        <td style={{ textAlign: 'right', padding: '4px 8px' }}>$30</td>
-                        <td style={{ textAlign: 'right', padding: '4px 8px' }}>$500</td>
-                      </tr>
-                      <tr style={{ borderBottom: '1px solid #F5F5F5' }}>
-                        <td style={{ padding: '4px 8px' }}>¿Atrae nuevo tráfico?</td>
-                        <td style={{ textAlign: 'right', padding: '4px 8px', color: '#22C55E' }}>Sí</td>
-                        <td style={{ textAlign: 'right', padding: '4px 8px', color: '#EF4444' }}>No</td>
-                      </tr>
-                      <tr>
-                        <td style={{ padding: '4px 8px' }}>Cliente recurrente</td>
-                        <td style={{ textAlign: 'right', padding: '4px 8px', color: '#22C55E' }}>Alta prob.</td>
-                        <td style={{ textAlign: 'right', padding: '4px 8px', color: '#EF4444' }}>Baja prob.</td>
-                      </tr>
-                    </tbody>
-                  </table>
+                <div style={{ background: '#fff', borderRadius: 12, padding: 14, color: '#111' }}>
+                  <p style={{ margin: '0 0 8px', fontWeight: 800, fontSize: 13 }}>📊 Lo que ves antes de aceptar</p>
+                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, lineHeight: 1.8 }}>
+                    <li>Base generada del periodo</li>
+                    <li>Tasa propuesta y por qué</li>
+                    <li>Importe exacto a retener</li>
+                    <li>Pendiente antes y después</li>
+                    <li>Capacidad disponible antes y después</li>
+                    <li>Cobertura antes y después</li>
+                    <li>Vigencia de la propuesta</li>
+                  </ul>
                 </div>
-
-                <p style={{ margin: 0, fontSize: 13 }}>
-                  💡 <strong>Con Bunz pagas solo el fee (6%).</strong> El descuento real 
-                  es ~3% del valor de la transacción. Mucho menor que cualquier descuento tradicional.
-                </p>
               </div>
             </motion.div>
           )}
@@ -254,8 +218,9 @@ export default function BunzGuide({ onClose }: { onClose: () => void }) {
 
         <div style={{ marginTop: 24, padding: '16px', background: 'rgba(255,255,255,0.03)', borderRadius: 14, textAlign: 'center' }}>
           <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
-            Los Bunz son la moneda de recompensa del ecosistema Rabbitty. 
-            1 Bunz = $1 MXN. Solo negocios afiliados pueden mintear Bunz.
+            Los Bunz son puntos de lealtad del ecosistema Rabbitty. No son dinero,
+            no tienen paridad fija garantizada y no se convierten a efectivo. Solo los
+            negocios afiliados pueden entregar Bunz conforme a su capacidad autorizada.
           </p>
         </div>
       </motion.div>

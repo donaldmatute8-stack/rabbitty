@@ -7,7 +7,7 @@ import { resolveNicheWelcomeRuleSync } from '@/lib/welcomeBonusConfig';
 export default function LegalTerms({
   onNext,
   category = 'Cafetería',
-  selectedPackage = 'Starter',
+  selectedPackage: _selectedPackage = 'Starter',
 }: {
   onNext: (signatureData?: { signedBy: string; signedAt: string }) => void;
   category?: string;
@@ -27,23 +27,23 @@ export default function LegalTerms({
       <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-2xl font-black text-black tracking-tight mb-2">Contrato Digital de Adhesión</h1>
         <p className="text-gray-500 text-xs mb-6 leading-relaxed">
-          Acuerdo de Colateralización de Paquete y Co-Emisión de Recompensas Digitales (Bunz) en los Estados Unidos Mexicanos.
+          Acuerdo de Capacidad Comercial y Co-Emisión de Recompensas Digitales (Bunz) en los Estados Unidos Mexicanos.
         </p>
 
         <div className="bg-gray-50 border border-gray-200 rounded-2xl p-5 mb-6 h-64 overflow-y-auto text-xs text-gray-600 leading-relaxed custom-scrollbar">
           <p className="font-bold mb-2">1. DECLARACIONES</p>
           <p className="mb-4">
-            El presente acuerdo legal vincula a &ldquo;El Establecimiento&rdquo; con &ldquo;Rabbitty&rdquo;, estableciendo los términos y condiciones bajo los cuales El Establecimiento participará en la emisión, otorgamiento y recepción de recompensas digitales denominadas &ldquo;Bunz&rdquo;.
+            El presente acuerdo legal vincula a &ldquo;El Establecimiento&rdquo; con MXHUB ECOSISTEMA BLOCKCHAIN, S.A. DE C.V., RFC MEB2402087Z3, que opera la marca RABBITTY (&ldquo;Rabbitty&rdquo;), estableciendo los términos y condiciones bajo los cuales El Establecimiento participará en la emisión, otorgamiento y recepción de recompensas digitales denominadas &ldquo;Bunz&rdquo;.
           </p>
 
           <p className="font-bold mb-2">2. NATURALEZA DEL BUNZ</p>
           <p className="mb-4">
-            El Establecimiento reconoce y acepta que &ldquo;Bunz&rdquo; NO es una moneda de curso legal (Pesos Mexicanos), divisa extranjera, ni valor financiero regulado por Banxico o la CNBV. Bunz es un sistema cerrado de puntos y recompensas tecnológicas. La paridad de &ldquo;1 Bunz = 1 MXN&rdquo; es exclusivamente referencial para el cálculo interno de promociones.
+            El Establecimiento reconoce y acepta que &ldquo;Bunz&rdquo; NO es una moneda de curso legal, divisa extranjera, valor financiero regulado, inversión ni depósito. Bunz es un sistema cerrado de puntos y recompensas tecnológicas. No existe una paridad fija garantizada ni convertibilidad a efectivo; el valor y las reglas se informan en el programa y en la oferta individual.
           </p>
 
-          <p className="font-bold mb-2">3. RESPALDO DE INVENTARIO Y PAQUETE ({selectedPackage || 'Estándar'})</p>
+          <p className="font-bold mb-2">3. CAPACIDAD COMERCIAL, RESPALDO Y RECUPERACIÓN</p>
           <p className="mb-4">
-            Al adquirir o activar un &ldquo;Paquete de Crédito de Minteo&rdquo;, El Establecimiento se compromete irrevocablemente a aceptar Bunz como forma de canje o descuento por sus productos o servicios físicos, respaldando 1:1 dicho crédito de minteo con su propio inventario comercial.
+            La capacidad comercial no es un paquete fijo ni una compra de Bunz. Se calcula con las ventas mensuales elegibles, el porcentaje de recompensa y los meses de cobertura, y se confirma en una Oferta Económica Individual. Puede incluir un incentivo de incorporación y capacidad adelantada recuperable. Al cierre de cada ciclo, Rabbitty presenta una propuesta de recuperación con el importe exacto; El Establecimiento debe aceptarla expresamente antes de que se aplique. Sin aceptación no se descuenta nada. La recuperación sale de la capacidad nueva generada, nunca de la capacidad comprometida, y no genera intereses ni cambios retroactivos.
           </p>
 
           <p className="font-bold mb-2">4. CO-INVERSIÓN Y SPLIT DINÁMICO DE BONOS DE BIENVENIDA POR NICHO</p>
@@ -56,9 +56,9 @@ export default function LegalTerms({
             El Establecimiento se compromete a no discriminar ni negar el servicio a usuarios del ecosistema Rabbitty que deseen canjear sus Bunz legítimamente obtenidos. El incumplimiento de esta cláusula resultará en la baja definitiva de la plataforma.
           </p>
 
-          <p className="font-bold mb-2">6. FIRMA ELECTRÓNICA Y JURISDICCIÓN</p>
+          <p className="font-bold mb-2">6. ACEPTACIÓN, EVIDENCIA Y JURISDICCIÓN</p>
           <p>
-            De conformidad con el Artículo 89 del Código de Comercio, la firma electrónica estampada al calce produce los mismos efectos jurídicos que la firma autógrafa. Para la interpretación y cumplimiento de este contrato, las partes se someten a las leyes aplicables y tribunales de los Estados Unidos Mexicanos.
+            La aceptación se realiza con el nombre completo del firmante y una acción afirmativa (checkbox). Se registran versión, hash, fecha, método, IP y agente. La autenticación local del dispositivo (Face ID / Touch ID) es opcional y no constituye firma biométrica ni e.firma. Para la interpretación y cumplimiento de este contrato, las partes se someten a las leyes aplicables y tribunales de los Estados Unidos Mexicanos.
           </p>
         </div>
 
