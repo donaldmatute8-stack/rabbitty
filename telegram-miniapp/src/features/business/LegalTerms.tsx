@@ -25,7 +25,7 @@ export default function LegalTerms({
   return (
     <div className="max-w-md mx-auto py-10 px-6">
       <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-2xl font-black text-black tracking-tight mb-2">Contrato Digital de Adhesión</h1>
+        <h1 className="text-2xl font-black text-black tracking-tight mb-2">Contrato Digital de Participación</h1>
         <p className="text-gray-500 text-xs mb-6 leading-relaxed">
           Acuerdo de Capacidad Comercial y Co-Emisión de Recompensas Digitales (Bunz) en los Estados Unidos Mexicanos.
         </p>

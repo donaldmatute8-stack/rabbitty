@@ -84,7 +84,7 @@ const STEP_META = [
     poster: '/videos/bunzy/bunzy-5-celebra.jpg',
     label: 'Paso 5 · Firma',
     title: 'Firma y activa tu negocio',
-    description: 'Revisa tu resumen, firma tu adhesión y envía tu solicitud. Te avisamos al aprobarla.',
+    description: 'Revisa tu resumen, firma tu aceptación y envía tu solicitud. Te avisamos al aprobarla.',
     bubble: 'Último paso. Firma y te aviso por correo y WhatsApp cuando esté aprobado.'
   },
 ];
@@ -122,7 +122,7 @@ const CONTRACT_POINTS = [
 ];
 
 const CONTRACT_PARAGRAPHS = [
-  'Contrato de adhesión para negocios afiliados. Al aceptar, celebras un acuerdo con MXHUB ECOSISTEMA BLOCKCHAIN, S.A. DE C.V. (RABBITTY, RFC MEB2402087Z3) para operar como comercio afiliado, recibir capacidad y usar el POS.',
+  'Contrato de participación para negocios afiliados. Al aceptar, celebras un acuerdo con MXHUB ECOSISTEMA BLOCKCHAIN, S.A. DE C.V. (RABBITTY, RFC MEB2402087Z3, domicilio fiscal en Lázaro Cárdenas 74, Col. Dorada, C.P. 63732, Bucerías, Nayarit, México) para operar como comercio afiliado, recibir capacidad y usar el POS.',
   'Los Bunz son puntos promocionales de lealtad: no son dinero, no generan rendimientos y no son canjeables por efectivo. El negocio es responsable de las recompensas que ofrece y de su respaldo.',
   'La capacidad no es un paquete fijo ni una compra de Bunz. Se calcula con tus ventas mensuales elegibles, tu % de recompensa y los meses de cobertura. La estimación del alta es referencial y no autoriza capacidad. La capacidad autorizada puede incluir un incentivo de incorporación y capacidad adelantada recuperable.',
   'La recuperación se propone por ciclo con una tasa dinámica y el importe exacto. Requiere tu aceptación en un modal antes de aplicarse; si rechazas, no se descuenta nada. Nunca se toca la capacidad comprometida con los Rabbitters, no hay intereses ni cambios retroactivos.',
@@ -1170,7 +1170,7 @@ export default function NegociosPage() {
                         target="_blank"
                         className="text-pink-400 underline underline-offset-2"
                       >
-                        Contrato de Adhesión
+                        Contrato de Participación
                       </Link>{' '}
                       (v. {CONTRACT_VERSION}), el{' '}
                       <Link

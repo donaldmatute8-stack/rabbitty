@@ -2,9 +2,9 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'Contrato de Adhesión para Negocios | Rabbitty',
+  title: 'Contrato de Participación para Negocios | Rabbitty',
   description:
-    'Términos y condiciones de afiliación de negocios a Rabbitty: recompensas Bunz, capacidad dinámica, recuperación con aceptación, obligaciones, responsabilidad y firma electrónica.',
+    'Términos y condiciones de participación de negocios en Rabbitty: recompensas Bunz, capacidad dinámica, recuperación con aceptación, obligaciones, responsabilidad y evidencia de aceptación.',
 };
 
 const VERSION = '2026.11-v1.2-draft';
@@ -13,7 +13,8 @@ const SECTIONS: Array<{ title: string; paragraphs: string[]; bullets?: string[] 
   {
     title: 'Partes y aceptación',
     paragraphs: [
-      'Este Contrato de Adhesión (el “Contrato”) se celebra entre MXHUB ECOSISTEMA BLOCKCHAIN, S.A. DE C.V., RFC MEB2402087Z3, que opera la marca comercial RABBITTY (nombre comercial AGOD ECOSYSTEM) (“Rabbitty”), y la persona física o moral que registra un negocio en la plataforma (el “Afiliado”).',
+      'Este Contrato de Participación (el “Contrato”) se celebra entre MXHUB ECOSISTEMA BLOCKCHAIN, S.A. DE C.V., RFC MEB2402087Z3, con domicilio fiscal en Lázaro Cárdenas 74, Col. Dorada, C.P. 63732, Bucerías, Nayarit, México, que opera la marca comercial RABBITTY (nombre comercial AGOD ECOSYSTEM) (“Rabbitty”), y la persona física o moral que registra un negocio en la plataforma (el “Afiliado”).',
+      'La naturaleza mercantil, de adhesión u otra que corresponda a esta relación se determinará conforme a la legislación aplicable y al análisis legal de Rabbitty. La denominación “Contrato de Participación” no prejuzga sobre esa calificación.',
       'La aceptación se realiza electrónicamente al completar el alta, marcar la casilla correspondiente y escribir el nombre completo del representante legal. La autenticación local del dispositivo (Face ID / Touch ID) es opcional y no constituye firma biométrica ni e.firma. El registro de fecha, hora, versión del Contrato, nombre, método y datos de conexión constituye evidencia del consentimiento.',
       'El Afiliado declara tener capacidad legal y contar con facultades suficientes para obligar a su negocio. Si actúa en representación de una persona moral, declara ser su representante legal autorizado.',
     ],
@@ -70,6 +71,14 @@ const SECTIONS: Array<{ title: string; paragraphs: string[]; bullets?: string[] 
       'El Afiliado define el porcentaje de recompensa dentro de los rangos permitidos por la plataforma; el mínimo vigente es 10%. Las recompensas se aplican conforme a las reglas mostradas al cliente y al Afiliado.',
       'La relación comercial, la entrega de productos o servicios y cualquier reclamación del consumidor son responsabilidad exclusiva del Afiliado. Rabbitty no es proveedor, fabricante, distribuidor ni garante de esos productos o servicios.',
       'Los clientes conservan sus derechos como consumidores conforme a la legislación mexicana. Nada en este Contrato limita esos derechos.',
+    ],
+  },
+  {
+    title: 'Evidencia de aceptación',
+    paragraphs: [
+      'La aceptación se registra con el nombre completo del firmante y una acción afirmativa no premarcada. Se conserva la versión exacta del Contrato, su hash, la fecha y hora del servidor, el método de aceptación, la IP y el agente de usuario cuando se recaben legalmente, y la copia entregada al Afiliado.',
+      'Cuando exista un representante de persona moral, se conserva evidencia razonable de sus facultades. La confirmación de Rabbitty por persona autorizada y la reproducción posterior del expediente íntegro forman parte del expediente de aceptación.',
+      'La autenticación local del dispositivo (Face ID / Touch ID) es opcional y no constituye firma biométrica ni e.firma. RABBITTY no almacena plantillas biométricas.',
     ],
   },
   {
@@ -140,7 +149,7 @@ export default function ContratoPage() {
           Negocios afiliados
         </p>
         <h1 className="m-0 mt-2 text-3xl font-black tracking-tight sm:text-4xl">
-          Contrato de Adhesión
+          Contrato de Participación
         </h1>
         <p className="m-0 mt-2 text-sm text-white/50">
           Versión {VERSION} · Vigente desde el {VERSION}

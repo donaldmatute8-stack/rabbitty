@@ -79,7 +79,7 @@ export default function PrivacyPage() {
             </div>
             <h3 className="font-bold text-sm text-white">Derechos ARCO</h3>
             <p className="text-xs text-white/50 leading-relaxed">
-              Acceso, Rectificación, Cancelación y Oposición garantizados con respuesta en menos de 72 horas hábiles.
+              Acceso, Rectificación, Cancelación y Oposición con respuesta en los plazos legales de 20 días hábiles y ejecución en 15 días hábiles.
             </p>
           </div>
         </div>
@@ -96,10 +96,10 @@ export default function PrivacyPage() {
               <h2 className="text-2xl font-black text-white tracking-tight">Identidad y Domicilio del Responsable</h2>
             </div>
             <p>
-              El presente documento establece las condiciones de uso y la política de privacidad de la plataforma <strong>Rabbitty</strong> (operada en territorio mexicano por Rabbitty Technologies y sus entidades vinculadas, en adelante «Rabbitty», «nosotros» o «la Plataforma»).
+              El presente documento establece las condiciones de uso y la política de privacidad de la plataforma <strong>RABBITTY</strong>, operada en México por <strong>MXHUB ECOSISTEMA BLOCKCHAIN, S.A. DE C.V.</strong> (en adelante «RABBITTY», «nosotros» o «la Plataforma»).
             </p>
             <p className="mt-3">
-              El responsable del tratamiento es <strong className="text-white">MXHUB ECOSISTEMA BLOCKCHAIN, S.A. DE C.V.</strong>, RFC <strong className="text-white">MEB2402087Z3</strong>, que opera la marca comercial <strong className="text-white">RABBITTY</strong> (nombre comercial AGOD ECOSYSTEM), con domicilio en los Estados Unidos Mexicanos. El domicilio fiscal completo está disponible para consulta escribiendo a <a href="mailto:privacidad@rabbitty.me" className="text-[#E91E63] font-semibold underline underline-offset-4">privacidad@rabbitty.me</a>. Aplica a nuestro sitio web oficial (<code>rabbitty.me</code>), aplicaciones móviles nativas para iOS y Android, y la integración de Telegram Mini App.
+              El responsable del tratamiento es <strong className="text-white">MXHUB ECOSISTEMA BLOCKCHAIN, S.A. DE C.V.</strong>, RFC <strong className="text-white">MEB2402087Z3</strong>, que opera la marca comercial <strong className="text-white">RABBITTY</strong> (nombre comercial AGOD ECOSYSTEM), con domicilio fiscal en <strong className="text-white">Lázaro Cárdenas 74, Col. Dorada, C.P. 63732, Bucerías, Nayarit, México</strong>. Aplica a nuestro sitio web oficial (<code>rabbitty.me</code>), aplicaciones móviles nativas para iOS y Android, y la integración de Telegram Mini App.
             </p>
             <p className="mt-3">
               <strong>Canal de Atención Oficial y Oficial de Privacidad:</strong> Correo electrónico:{' '}
@@ -130,10 +130,13 @@ export default function PrivacyPage() {
                 <strong className="text-white">Datos de Operación y Transaccionalidad:</strong> Historial de visitas a cafeterías y comercios afiliados, registros de escaneo de códigos QR, folios de tickets procesados, saldo y movimientos de puntos «Bunz», niveles en el programa de gamificación y códigos de referidos.
               </li>
               <li>
-                <strong className="text-white">Datos de Geolocalización:</strong> Coordenadas aproximadas o precisas de tu dispositivo (únicamente mientras la aplicación está en uso y previa autorización expresa) para mostrarte los comercios afiliados y Happy Hours cercanos.
+                <strong className="text-white">Datos de Geolocalización:</strong> Coordenadas aproximadas o precisas de tu dispositivo, únicamente mientras la aplicación está en uso y previa autorización expresa, para mostrarte comercios afiliados y Happy Hours cercanos. La ubicación no se usa en segundo plano. Se conserva el último punto asociado a la sesión y los eventos técnicos necesarios para seguridad y prevención de fraude; puedes desactivarla desde los permisos del sistema sin perder funciones que no dependen de ella.
               </li>
               <li>
-                <strong className="text-white">Acceso a Cámara:</strong> Uso del sensor de cámara estrictamente para el escaneo de códigos QR en mostrador o tickets de compra. <em>Rabbitty no almacena imágenes de la galería personal de los usuarios sin su acción directa.</em>
+                <strong className="text-white">Acceso a Cámara:</strong> Uso del sensor de cámara estrictamente para el escaneo de códigos QR en mostrador o tickets de compra. <em>RABBITTY no almacena imágenes de la galería personal de los usuarios sin su acción directa.</em>
+              </li>
+              <li>
+                <strong className="text-white">Biometría y passkeys:</strong> RABBITTY no recibe ni almacena plantillas biométricas. Face ID / Touch ID se procesa localmente por el sistema operativo. Cuando se usa una passkey/WebAuthn, RABBITTY almacena la credencial pública y metadatos técnicos de autenticación, no la biometría. La autenticación biométrica es opcional y existe una alternativa no biométrica.
               </li>
               <li>
                 <strong className="text-white">Datos de Negocios Afiliados:</strong> Nombre comercial, razón social, RFC, domicilio, representante y facultades, capacidad comercial autorizada y recuperada, dirección física de la sucursal, horarios de atención, menús y datos de contacto del responsable operativo.
@@ -225,7 +228,7 @@ export default function PrivacyPage() {
                 <li>Envíe un correo a <strong className="text-white">privacidad@rabbitty.me</strong> con el asunto «Solicitud ARCO - [Su Nombre o Usuario]».</li>
                 <li>Adjunte una copia digital de su identificación oficial para validar titularidad.</li>
                 <li>Describa puntualmente los datos sobre los que desea ejercer el derecho (ej. eliminación total de cuenta).</li>
-                <li>Rabbitty dará respuesta en un plazo no mayor a <strong>72 horas hábiles</strong> y ejecutará la resolución en los plazos previstos por la Ley mexicana.</li>
+                <li>RABBITTY acusará recibo y responderá en un plazo máximo de <strong>20 días hábiles</strong>, prorrogable por una sola vez conforme a la ley. Si la solicitud es procedente, ejecutará la medida en un plazo máximo de <strong>15 días hábiles</strong>.</li>
               </ol>
             </div>
           </section>
@@ -248,6 +251,57 @@ export default function PrivacyPage() {
             </ul>
             <p className="mt-3 text-sm text-white/60">
               Rabbitty se reserva el derecho de auditar, congelar preventivamente saldos de Bunz o dar de baja definitiva las cuentas que infrinjan estas directrices de buena fe.
+            </p>
+          </section>
+
+          {/* Section 8 */}
+          <section className="border-t border-white/10 pt-8">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-xs font-black text-[#E91E63]">
+                08
+              </div>
+              <h2 className="text-2xl font-black text-white tracking-tight">Encargados, Transferencias y Conservación</h2>
+            </div>
+            <p>
+              RABBITTY se apoya en proveedores que tratan datos por su cuenta o por instrucciones documentadas. La siguiente lista identifica los flujos principales; el inventario completo de tratamientos se mantiene actualizado y disponible para la autoridad competente.
+            </p>
+            <div className="mt-4 overflow-x-auto rounded-2xl border border-white/10">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-white/5 text-white/60 uppercase tracking-wider text-[10px]">
+                  <tr>
+                    <th className="px-3 py-2.5">Proveedor</th>
+                    <th className="px-3 py-2.5">Datos que recibe</th>
+                    <th className="px-3 py-2.5">Región</th>
+                    <th className="px-3 py-2.5">Rol</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/10 text-white/75">
+                  <tr><td className="px-3 py-2.5">Railway</td><td className="px-3 py-2.5">Infraestructura, logs y tráfico de la aplicación</td><td className="px-3 py-2.5">EE. UU.</td><td className="px-3 py-2.5">Encargado de hosting</td></tr>
+                  <tr><td className="px-3 py-2.5">Neon</td><td className="px-3 py-2.5">Base de datos PostgreSQL y respaldos</td><td className="px-3 py-2.5">EE. UU.</td><td className="px-3 py-2.5">Encargado de base de datos</td></tr>
+                  <tr><td className="px-3 py-2.5">Stripe</td><td className="px-3 py-2.5">Pagos, suscripciones y datos fiscales de cobro</td><td className="px-3 py-2.5">EE. UU.</td><td className="px-3 py-2.5">Responsable/encargado según el flujo de pago</td></tr>
+                  <tr><td className="px-3 py-2.5">Resend</td><td className="px-3 py-2.5">Correo transaccional y de avisos</td><td className="px-3 py-2.5">EE. UU.</td><td className="px-3 py-2.5">Encargado de mensajería</td></tr>
+                  <tr><td className="px-3 py-2.5">Telegram</td><td className="px-3 py-2.5">Identificadores, mensajes y datos de uso del canal</td><td className="px-3 py-2.5">Internacional</td><td className="px-3 py-2.5">Proveedor del canal; rol según el flujo</td></tr>
+                  <tr><td className="px-3 py-2.5">SignalWire</td><td className="px-3 py-2.5">Números y códigos de verificación SMS</td><td className="px-3 py-2.5">EE. UU.</td><td className="px-3 py-2.5">Encargado de mensajería</td></tr>
+                  <tr><td className="px-3 py-2.5">AWS S3</td><td className="px-3 py-2.5">Archivos, imágenes y medios del chat</td><td className="px-3 py-2.5">Según región configurada</td><td className="px-3 py-2.5">Encargado de almacenamiento</td></tr>
+                  <tr><td className="px-3 py-2.5">OpenAI</td><td className="px-3 py-2.5">Consultas y contexto necesario para asistencia IA</td><td className="px-3 py-2.5">EE. UU.</td><td className="px-3 py-2.5">Encargado de procesamiento IA</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-3 text-xs text-white/50">
+              Estos proveedores pueden estar ubicados en México o en el extranjero. RABBITTY verifica las medidas contractuales y de seguridad aplicables y no vende datos personales. Cuando actúa como encargado de un afiliado, sigue sus instrucciones documentadas.
+            </p>
+            <h3 className="mt-6 text-sm font-black text-white">Conservación</h3>
+            <ul className="list-disc pl-6 mt-2 space-y-1.5 text-sm text-white/70">
+              <li><strong className="text-white">Cuenta:</strong> mientras esté activa y por el plazo necesario para el cierre, aclaraciones y obligaciones legales.</li>
+              <li><strong className="text-white">Operaciones y Bunz:</strong> por los plazos fiscales, contables y de reclamaciones aplicables.</li>
+              <li><strong className="text-white">Evidencia contractual y aceptación:</strong> por el plazo de prescripción y para defensa de reclamaciones.</li>
+              <li><strong className="text-white">IP, logs y seguridad:</strong> por la ventana necesaria para investigación, prevención de fraude y seguridad.</li>
+              <li><strong className="text-white">Ubicación:</strong> el último punto de la sesión y los eventos técnicos necesarios; no se conserva en segundo plano.</li>
+              <li><strong className="text-white">Documentación de afiliados:</strong> durante la vigencia contractual y los plazos legales posteriores.</li>
+              <li><strong className="text-white">Sandbox:</strong> se depura al cerrar la prueba, salvo la evidencia que deba conservarse por obligación legal.</li>
+            </ul>
+            <p className="mt-3 text-xs text-white/50">
+              Al concluir los plazos, los datos se bloquean o suprimen conforme a la ley. Los registros que deban conservarse se separan y restringen.
             </p>
           </section>
 
