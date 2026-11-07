@@ -521,12 +521,17 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
               </p>
             </div>
             <div className="text-right">
-              <p className="text-lg font-black text-[#E91E63] m-0">
-                {((business?.bunzBalance ?? business?.creditLimit ?? 0)).toLocaleString()} B
-              </p>
+              {(business?.bunzBalance || 0) > 0 ? (
+                <p className="text-lg font-black text-[#E91E63] m-0">
+                  {(business?.bunzBalance || 0).toLocaleString()} B
+                </p>
+              ) : (
+                <p className="text-[12px] font-bold text-(--text-muted) m-0">En revisión</p>
+              )}
               {(business?.creditLimit || 0) > 0 && (
                 <p className="text-[10px] text-(--text-muted) m-0">
-                  autorizado {business?.creditLimit?.toLocaleString()} B
+                  {(business?.bunzBalance || 0) > 0 ? 'autorizado' : 'propuesta'}{' '}
+                  {business?.creditLimit?.toLocaleString()} B
                 </p>
               )}
             </div>

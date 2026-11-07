@@ -11,7 +11,7 @@ import { BunzyOnboarding } from './BunzyOnboarding';
 import { BunzyVideoStage } from '@/components/onboarding/BunzyVideoStage';
 import { verifyBiometric } from '@/lib/securityVault';
 import { buildCapacityOptions, estimateDailyDemand, priorForNiche, tierLabel } from '@/lib/mcceOffer';
-import { MCCE_CONTRACT_TEXT, MCCE_CONTRACT_VERSION, MCCE_CONTRACT_SUMMARY, hashContract } from '@/lib/mcceContract';
+import { MCCE_CONTRACT_TEXT, MCCE_CONTRACT_VERSION, MCCE_CONTRACT_STATUS, MCCE_CONTRACT_SUMMARY, hashContract } from '@/lib/mcceContract';
 /** Paso 0: el nicho define la categoría operativa (y por tanto los rangos). */
 const NICHE_TO_CATEGORY: Record<string, string> = {
   restaurant: 'Restaurante',
@@ -220,6 +220,7 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
         signedBy: legalSignerName.trim(),
         signedAt: new Date().toISOString(),
         contractVersion: MCCE_CONTRACT_VERSION,
+        contractStatus: MCCE_CONTRACT_STATUS,
         contractHash,
         signatureMethod: biometricVerified ? 'biometric' : 'name_checkbox',
         biometricVerified,
@@ -605,6 +606,19 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
                 {MCCE_CONTRACT_TEXT}
               </div>
 
+              {MCCE_CONTRACT_STATUS === 'draft' && (
+                <div style={{ background: 'rgba(251,191,36,0.12)', borderRadius: 12, border: '1px solid rgba(251,191,36,0.35)', padding: '12px 14px', marginBottom: 12 }}>
+                  <p style={{ margin: 0, fontSize: 12, color: '#FBBF24', lineHeight: 1.5, fontWeight: 700 }}>
+                    Borrador para revisión legal.
+                  </p>
+                  <p style={{ margin: '4px 0 0', fontSize: 11, color: 'rgba(255,255,255,0.65)', lineHeight: 1.5 }}>
+                    Este texto todavía no es un contrato ejecutable. Al continuar registras tu
+                    aceptación del borrador; la capacidad queda como propuesta y no se activa
+                    hasta la aprobación legal.
+                  </p>
+                </div>
+              )}
+
               <div style={{ background: 'rgba(233,30,99,0.08)', borderRadius: 12, border: '1px solid rgba(233,30,99,0.2)', padding: '12px 14px', marginBottom: 16 }}>
                 <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>
                   <strong>Resumen:</strong> {MCCE_CONTRACT_SUMMARY}
@@ -698,7 +712,11 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
                   transition: 'all 0.25s',
                 }}
               >
-                {isLoading ? 'Firmando y enviando...' : 'Firmar acuerdo y activar negocio'}
+                {isLoading
+                  ? 'Registrando...'
+                  : MCCE_CONTRACT_STATUS === 'draft'
+                    ? 'Registrar aceptación del borrador'
+                    : 'Firmar acuerdo y activar negocio'}
               </button>
             </motion.div>
           )}

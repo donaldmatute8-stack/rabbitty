@@ -7,6 +7,14 @@
 
 export const MCCE_CONTRACT_VERSION = "2026.11-v1";
 
+/**
+ * Estado contractual. Mientras sea "draft", el onboarding NO presenta el texto
+ * como contrato ejecutable: registra una aceptación de borrador para revisión.
+ * Cambiar a "approved" solo después del dictamen legal y de alinear el texto
+ * aprobado con este archivo.
+ */
+export const MCCE_CONTRACT_STATUS: "draft" | "approved" = "draft";
+
 export const MCCE_CONTRACT_TEXT = `ACUERDO DE CAPACIDAD COMERCIAL RABBITTY — v1.0
 
 1. Partes. Rabbitty y el negocio identificado en el alta.
