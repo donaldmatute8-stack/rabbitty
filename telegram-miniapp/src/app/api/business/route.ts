@@ -263,9 +263,22 @@ export async function POST(req: Request) {
 
     const parsedCredit = parseInt(creditLimit) || 0;
 
+    const requestIp =
+      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      req.headers.get('x-real-ip') ||
+      null;
+    const requestUserAgent = req.headers.get('user-agent') || null;
     const combinedVerificationData = {
       ...(isGoogleVerified ? { verified: true, claimedAt: new Date().toISOString() } : {}),
-      ...(contractSignature ? { contractSignature } : {}),
+      ...(contractSignature
+        ? {
+            contractSignature: {
+              ...contractSignature,
+              ip: requestIp,
+              userAgent: requestUserAgent,
+            },
+          }
+        : {}),
     };
 
     const slug = await buildUniqueSlug(name);
@@ -344,6 +357,8 @@ export async function POST(req: Request) {
           contractHash: contractSignature?.contractHash,
           signatureMethod: contractSignature?.signatureMethod,
           signedBy: contractSignature?.signedBy,
+          ip: requestIp,
+          userAgent: requestUserAgent,
           offer: contractSignature?.offer,
         }),
       });

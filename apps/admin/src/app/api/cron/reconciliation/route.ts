@@ -39,6 +39,7 @@ async function run() {
     bunzReconciliationRuns,
     bunzControlState,
   } = await import("@rabbitty/database-restaurant/schema");
+  const { merchantCapacityAccounts } = await import("@rabbitty/database-core/schema");
 
   const result = await runReconciliation(db, {
     tables: {
@@ -48,6 +49,7 @@ async function run() {
       payments,
       runs: bunzReconciliationRuns,
       controlState: bunzControlState,
+      accounts: merchantCapacityAccounts,
     },
   });
 

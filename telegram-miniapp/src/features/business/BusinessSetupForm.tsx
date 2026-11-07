@@ -143,6 +143,20 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
 
   const contractText = useMemo(() => renderContract(contractData), [contractData]);
 
+  const downloadContract = () => {
+    try {
+      const blob = new Blob([contractText], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `contrato-rabbitty-${offerId}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError('No se pudo descargar la copia del contrato.');
+    }
+  };
+
   const handleBiometric = async () => {
     setBiometricBusy(true);
     setBiometricNote('');
@@ -664,9 +678,16 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
                 />
               </div>
 
-              <div style={{ background: 'rgba(0,0,0,0.35)', borderRadius: 16, padding: 14, maxHeight: 230, overflowY: 'auto', border: '1px solid rgba(255,255,255,0.08)', fontSize: 11.5, color: 'rgba(255,255,255,0.7)', lineHeight: 1.55, marginBottom: 14, whiteSpace: 'pre-wrap' }}>
+              <div style={{ background: 'rgba(0,0,0,0.35)', borderRadius: 16, padding: 14, maxHeight: 230, overflowY: 'auto', border: '1px solid rgba(255,255,255,0.08)', fontSize: 11.5, color: 'rgba(255,255,255,0.7)', lineHeight: 1.55, marginBottom: 8, whiteSpace: 'pre-wrap' }}>
                 {contractText}
               </div>
+              <button
+                type="button"
+                onClick={downloadContract}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', color: THEME_COLOR, fontSize: 12, fontWeight: 800, cursor: 'pointer', marginBottom: 14, padding: 0 }}
+              >
+                <FileText size={13} /> Descargar copia del contrato
+              </button>
 
               {MCCE_CONTRACT_STATUS === 'draft' && (
                 <div style={{ background: 'rgba(251,191,36,0.12)', borderRadius: 12, border: '1px solid rgba(251,191,36,0.35)', padding: '12px 14px', marginBottom: 12 }}>

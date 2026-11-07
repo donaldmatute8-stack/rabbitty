@@ -27,6 +27,7 @@ import { cancelStripePaymentIntent } from "./stripeConnect";
 import { isBooksEnabled, recordEmissionBooks, recordRedemptionBooks, recordReversalBooks } from "./bunzBooks";
 import { accrueCommission } from "./bunzObligations";
 import { checkOperation, resolveAffiliateId } from "./bunzControls";
+import { consumeCapacity, recognizeActivity, restoreCapacity } from "./mcce";
 import { buildShadowReport, recordShadowReport, type ShadowReport } from "./payments/shadow";
 import { bus, EventTypes } from "@rabbitty/events";
 import crypto from "crypto";
@@ -642,6 +643,15 @@ export async function confirmPaymentIntentSettled(
           userHash: orderRow.customerId ?? null,
           tables: { attempts: bunzRedemptionAttempts, ledger: bunzLedgerEntries },
         });
+
+        // MCCE: consume capacidad de la cuenta (idempotente por intent).
+        if (businessId) {
+          await consumeCapacity(tx, {
+            affiliateId: businessId,
+            bunz: bunzToConsume,
+            intentId: intent.id,
+          });
+        }
       }
     }
 
@@ -919,6 +929,15 @@ export async function reconcileOrderCashback(
       bunz: res.bunz ?? 0,
       tables: { ledger: bunzLedgerEntries },
     });
+
+    // MCCE: reconoce capacidad generada por la actividad (idempotente).
+    await db.transaction(async (tx: Db) =>
+      recognizeActivity(tx, {
+        affiliateId: businessId,
+        reward: res.bunz ?? 0,
+        orderId: order.id,
+      })
+    );
 
     // OT-2: devengo de comisión (idempotente, no fatal).
     await accrueCommission(db, {
@@ -1339,6 +1358,13 @@ export async function refundBunzPayment(
           bunzBalance: sql`COALESCE(${ownedBusinesses.bunzBalance}, 0) + ${amount}`,
         })
         .where(eq(ownedBusinesses.id, businessId));
+
+      // MCCE: restaura capacidad de la cuenta (idempotente por reembolso).
+      await restoreCapacity(tx, {
+        affiliateId: businessId,
+        bunz: amount,
+        refundId: payment.id,
+      });
     }
 
     // Asientos de reverso (idempotentes)

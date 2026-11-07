@@ -21,6 +21,7 @@ import { users, ownedBusinesses } from "@rabbitty/database-core/schema";
 import { buildShadowReport, recordShadowReport } from "./payments/shadow";
 import { recordRedemptionBooks } from "./bunzBooks";
 import { checkOperation } from "./bunzControls";
+import { consumeCapacity } from "./mcce";
 
 /**
  * @deprecated RP-0.7 — motor legacy en migración a paymentCore.
@@ -532,6 +533,13 @@ export class PaymentIntentService {
         if (consumed.length === 0) {
           throw new Error("BUNZ_BACKING_INSUFFICIENT");
         }
+
+        // MCCE: consume capacidad de la cuenta (idempotente por intent).
+        await consumeCapacity(tx, {
+          affiliateId: rest.businessId,
+          bunz: bunzToConsume,
+          intentId: intent.id,
+        });
       }
 
       return {

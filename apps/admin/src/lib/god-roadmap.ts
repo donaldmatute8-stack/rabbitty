@@ -10,7 +10,7 @@
 
 export type RoadmapStatus = "done" | "active" | "blocked" | "pending";
 
-export const ROADMAP_VERSION = "2026-11-07.9";
+export const ROADMAP_VERSION = "2026-11-07.10";
 
 export interface RoadmapItem {
   id: string;
@@ -80,7 +80,7 @@ export const PHASES: RoadmapPhase[] = [
     title: "Capacidad híbrida",
     subtitle: "Incentivo de incorporación + capacidad adelantada",
     status: "active",
-    progress: 55,
+    progress: 75,
     items: [
       { id: "M1", title: "Contrato económico v1.0", detail: "Componentes, flujos, invariantes y lenguaje para el afiliado.", status: "done", evidence: "DOCS/MCCE-CONTRATO" },
       { id: "M2", title: "Especificación MCCE", detail: "Módulos, datos, eventos, UI y fases.", status: "done", evidence: "DOCS/MCCE-ESPECIFICACION" },
@@ -89,10 +89,11 @@ export const PHASES: RoadmapPhase[] = [
       { id: "M5", title: "Simulación v2", detail: "Crédito viable, retención 20/40/60%, piso por nicho y fungibilidad.", status: "done", evidence: "DOCS/MCCE-SIMULACION-v2" },
       { id: "M6", title: "Base aplicada", detail: "626: 2,000 provisionados / 3,500 autorizados. Ka13 y Bull Box: 1,000 de prueba, sandbox.", status: "done", evidence: "cuentas + eventos" },
       { id: "M7", title: "Sizer dinámico", detail: "Opciones por nicho, onboarding y solvencia.", status: "pending" },
-      { id: "M8", title: "Integración con flags", detail: "Sin tocar saldos históricos; reversible.", status: "pending" },
+      { id: "M8", title: "Integración con flags", detail: "Motor con modos off/shadow/dual/enforce; shadow listo para encender.", status: "active", evidence: "RABBITTY_MCCE_ENABLED" },
+      { id: "M13", title: "Motor MCCE", detail: "Actividad, consumo, reverso, recuperación e invariantes con 8 pruebas.", status: "done", evidence: "services/mcce.ts + tests" },
       { id: "M10", title: "Onboarding + contrato + firma", detail: "Aplicado en el miniapp y sincronizado a Capacitor; oferta dinámica, contrato v1.0 y Face ID con fallback.", status: "active", evidence: "BusinessSetupForm + cap sync" },
       { id: "M12", title: "Cuentas de capacidad", detail: "Tablas MCCE, eventos y propuesta desde el onboarding.", status: "done", evidence: "0041 + merchant_capacity_accounts" },
-      { id: "M11", title: "Revisión legal del contrato", detail: "Naturaleza del incentivo y de la capacidad adelantada.", status: "pending" },
+      { id: "M11", title: "Revisión legal del contrato", detail: "Anexos A/B/D/E y dictámenes Fintech, consumidor, datos, fiscal y firma.", status: "active", evidence: "DOCS/MCCE-ANEXOS-INDIVIDUALES" },
       { id: "M9", title: "Piloto de capacidad", detail: "Zona controlada, límites y monitoreo.", status: "blocked" },
     ],
   },
@@ -162,6 +163,12 @@ export interface HistoryEntry {
 }
 
 export const HISTORY: HistoryEntry[] = [
+  {
+    date: "2026-11-07",
+    title: "Motor MCCE y anexos",
+    detail: "Actividad, consumo, reverso y recuperación con modos off/shadow/dual/enforce. Anexos A/B/E y datos corporativos preparados.",
+    ref: "services/mcce.ts + 8 tests",
+  },
   {
     date: "2026-11-07",
     title: "Base de capacidad aplicada",

@@ -30,6 +30,7 @@ import { assertOpenShiftForCash } from "../services/cashShift";
 import { REDEMPTION_REASONS, recordEmissionBooks, recordRedemptionBooks } from "../services/bunzBooks";
 import { accrueCommission } from "../services/bunzObligations";
 import { checkOperation } from "../services/bunzControls";
+import { recognizeActivity } from "../services/mcce";
 
 
 /**
@@ -1290,6 +1291,13 @@ export const posRouter = router({
                 bunz: awardedBunz,
                 tables: { ledger: bunzLedgerEntries },
               });
+              await ctx.restaurantDb.transaction(async (tx) =>
+                recognizeActivity(tx, {
+                  affiliateId: linkBizId,
+                  reward: awardedBunz,
+                  orderId: order.id,
+                })
+              );
               // OT-2: devengo de la comisión del afiliado (6%). Idempotente, no fatal.
               await accrueCommission(ctx.restaurantDb, {
                 orderId: order.id,
@@ -2380,6 +2388,13 @@ export const posRouter = router({
                 bunz: totalAwardedBunz,
                 tables: { ledger: bunzLedgerEntries },
               });
+              await ctx.restaurantDb.transaction(async (tx) =>
+                recognizeActivity(tx, {
+                  affiliateId: restaurant.businessId,
+                  reward: totalAwardedBunz,
+                  orderId: order.id,
+                })
+              );
               await accrueCommission(ctx.restaurantDb, {
                 orderId: order.id,
                 affiliateId: restaurant.businessId,

@@ -15,6 +15,7 @@
 
 import { and, eq, gte, gt, inArray, sql } from "drizzle-orm";
 import type { EconomicOperation } from "./bunzControls";
+import { validateCapacityAccount } from "./mcce";
 
 export type ReconSeverity = "high" | "medium";
 
@@ -33,6 +34,7 @@ type ReconTables = {
   payments: any;
   runs: any;
   controlState: any;
+  accounts?: any;
 };
 
 type ReconDb = {
@@ -126,6 +128,21 @@ export async function runReconciliation(
       missingBunzPayment = paidOrders.filter((o) => !withPayment.has(o.id));
     }
 
+    // 4 · Cuentas de capacidad coherentes (invariantes MCCE).
+    let badAccounts: Array<{ affiliateId: string; errors: string[] }> = [];
+    if (tables.accounts) {
+      const accounts = rowsOf<Record<string, unknown>>(
+        await db.select().from(tables.accounts)
+      );
+      badAccounts = accounts
+        .map((a) => ({
+          affiliateId: String(a.affiliateId ?? ""),
+          errors: validateCapacityAccount(a),
+        }))
+        .filter((a) => a.errors.length > 0)
+        .slice(0, 20);
+    }
+
     const alerts: ReconAlert[] = [];
     if (unbalanced.length > 0) {
       alerts.push({
@@ -157,11 +174,24 @@ export async function runReconciliation(
         pause: ["redemption"],
       });
     }
+    if (badAccounts.length > 0) {
+      alerts.push({
+        code: "RECON_CAPACITY_MISMATCH",
+        severity: "high",
+        count: badAccounts.length,
+        detail: `${badAccounts.length} cuenta(s) de capacidad con invariantes rotos (${badAccounts
+          .slice(0, 2)
+          .map((a) => a.affiliateId.slice(0, 8))
+          .join(", ")})`,
+        pause: ["redemption", "settlement"],
+      });
+    }
 
     const checks = {
       unbalanced_groups: unbalanced.length,
       bad_obligations: badObligations.length,
       orders_without_bunz_payment: missingBunzPayment.length,
+      capacity_mismatches: badAccounts.length,
     };
     const status: ReconResult["status"] = alerts.length > 0 ? "ALERTS" : "OK";
 
