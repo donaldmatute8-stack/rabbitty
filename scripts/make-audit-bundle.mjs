@@ -141,6 +141,7 @@ const GROUPS = [
       "telegram-miniapp/src/features/business/LegalTerms.tsx",
       "telegram-miniapp/src/app/privacy/page.tsx",
       "apps/admin/src/app/(dashboard)/academy/page.tsx",
+      "apps/admin/src/app/(dashboard)/settings/page.tsx",
       "DOCS/MCCE-CONTRATO-MARCO-v1.2.md",
       "DOCS/AVISO-DE-PRIVACIDAD-RABBITTY.md",
       "DOCS/MCCE-SIMULACION-SOMBRA-v2-2026-11-07.md",

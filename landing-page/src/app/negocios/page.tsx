@@ -302,7 +302,7 @@ export default function NegociosPage() {
       phoneOk &&
       data.address.trim().length >= 4,
     data.reward >= 10 && data.reward <= 50,
-    data.capacityRequested >= 1000,
+    capacity >= 1000,
     data.signature.trim().length >= 3 && data.acceptedTerms,
   ];
 
@@ -421,11 +421,11 @@ export default function NegociosPage() {
           rewardPercentage: data.reward,
           monthlySales: data.monthlySales,
           coverageMonths: data.coverageMonths,
-          capacityRequested: data.capacityRequested,
+          capacityRequested: capacity,
           package: 'DYNAMIC',
           packageCode: 'DYNAMIC',
           packageName: 'Capacidad dinámica',
-          creditLimit: data.capacityRequested,
+          creditLimit: capacity,
           signature: data.signature.trim(),
           acceptedTerms: data.acceptedTerms,
           contractVersion: CONTRACT_VERSION,
@@ -1082,7 +1082,7 @@ export default function NegociosPage() {
                     <Summary label="Contacto" value={`${data.contactName} · +52 ${data.phone}`} />
                     <Summary label="Correo" value={data.email} />
                     <Summary label="Recompensa" value={`${data.reward}% en Bunz`} />
-                    <Summary label="Capacidad" value={`${formatBunz(data.capacityRequested)} Bunz · ${data.coverageMonths} ${data.coverageMonths === 1 ? 'mes' : 'meses'}`} />
+                    <Summary label="Capacidad" value={`${formatBunz(capacity)} Bunz · ${data.coverageMonths} ${data.coverageMonths === 1 ? 'mes' : 'meses'}`} />
                   </div>
                   <p className="m-0 mt-3 flex items-start gap-1.5 text-[11px] leading-relaxed text-white/40">
                     <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
