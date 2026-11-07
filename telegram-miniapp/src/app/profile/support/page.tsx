@@ -14,13 +14,13 @@ const OPTIONS = [
     icon: '❓', bg: '#EEF2FF', btnBg: '#EEF2FF', btnHover: '#E0E7FF', btnColor: '#4F46E5',
     title: 'Preguntas Frecuentes',
     desc: 'Encuentra respuestas rápidas a las dudas más comunes sobre Bunz.',
-    cta: 'Leer FAQs →', link: 'https://rabbitty.com/faq',
+    cta: 'Leer FAQs →', link: '/support/faq',
   },
   {
     icon: '📖', bg: '#F0FDF4', btnBg: '#F0FDF4', btnHover: '#DCFCE7', btnColor: '#16A34A',
     title: 'Documentación',
     desc: 'Aprende todo sobre cómo ganar, canjear y transferir tus Bunz.',
-    cta: 'Ver Docs →', link: 'https://rabbitty.com/docs',
+    cta: 'Ver Docs →', link: '/support/docs',
   },
 ];
 
@@ -86,13 +86,15 @@ export default function SupportPage() {
           </div>
         </div>
 
-        {/* Placeholder notices */}
-        <div className="bg-[#FFF9E6] rounded-[16px] p-4 border-l-4 border-l-[#F59E0B] flex items-center gap-3">
-          <div className="text-xl">🚧</div>
+        {/* Aviso de actualización */}
+        <div className="bg-[#EEF2FF] rounded-[16px] p-4 border-l-4 border-l-[#4F46E5] flex items-center gap-3">
+          <div className="text-xl">📘</div>
           <div className="flex-1">
-            <p className="font-bold text-[#111] text-[13px] m-0 mb-1">En construcción</p>
+            <p className="font-bold text-[#111] text-[13px] m-0 mb-1">Guías actualizadas</p>
             <p className="text-[#666] text-xs m-0 leading-[1.4]">
-              Preguntas Frecuentes y Documentación estarán disponibles en breve. Mientras tanto, Rabbitty Bot está listo para ayudarte.
+              Las FAQs y la documentación ya incluyen las reglas vigentes de Bunz, capacidad de
+              afiliados y recuperación con aceptación. Si algo no coincide, escríbenos a
+              hola@rabbitty.me.
             </p>
           </div>
         </div>

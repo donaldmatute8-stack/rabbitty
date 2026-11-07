@@ -140,6 +140,7 @@ const GROUPS = [
       "telegram-miniapp/src/features/business/BunzGuide.tsx",
       "telegram-miniapp/src/features/business/LegalTerms.tsx",
       "telegram-miniapp/src/app/privacy/page.tsx",
+      "telegram-miniapp/src/app/profile/support/page.tsx",
       "apps/admin/src/app/(dashboard)/academy/page.tsx",
       "apps/admin/src/app/(dashboard)/settings/page.tsx",
       "DOCS/MCCE-CONTRATO-MARCO-v1.2.md",
