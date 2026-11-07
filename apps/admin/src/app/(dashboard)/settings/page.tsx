@@ -476,6 +476,19 @@ export default function SettingsPage() {
             </div>
             <span className="text-violet-300 text-xs font-bold">Abrir →</span>
           </Link>
+          <Link
+            href="/settings/recovery"
+            className="flex items-center justify-between rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-5 py-4 hover:bg-emerald-500/15 transition-all"
+          >
+            <div>
+              <p className="text-sm font-black text-white">Recuperación de capacidad</p>
+              <p className="text-[11px] text-gray-400">
+                Propuestas por ciclo, importe exacto y aceptación en modal. Nada se descuenta sin tu
+                conformidad.
+              </p>
+            </div>
+            <span className="text-emerald-300 text-xs font-bold">Abrir →</span>
+          </Link>
           {/* Business Type Selector */}
           <div>
             <h2 className="text-lg font-black text-white mb-1 flex items-center gap-2">

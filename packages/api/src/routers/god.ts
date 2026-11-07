@@ -13,6 +13,8 @@ import {
   auditEntries,
   merchantCapacityAccounts,
   merchantCapacityEvents,
+  merchantRecoveryProposals,
+  merchantRecoveryTerms,
 } from "@rabbitty/database-core";
 import { ledgerEntries, rabbitterScoreShadow } from "@rabbitty/database-restaurant/schema";
 import {
@@ -1537,6 +1539,57 @@ export const godRouter = router({
       });
 
       return { ok: true };
+    }),
+
+  /** Propuestas de recuperación dinámica: solo lectura + auditoría. */
+  listRecoveryProposals: godAdminProcedure
+    .input(z.object({ affiliateId: z.string().optional(), limit: z.number().min(1).max(200).default(100) }).optional())
+    .query(async ({ ctx, input }) => {
+      const limit = input?.limit ?? 100;
+      const base = ctx.coreDb
+        .select({
+          id: merchantRecoveryProposals.id,
+          affiliateId: merchantRecoveryProposals.affiliateId,
+          businessName: ownedBusinesses.name,
+          periodStart: merchantRecoveryProposals.periodStart,
+          periodEnd: merchantRecoveryProposals.periodEnd,
+          grossGenerated: merchantRecoveryProposals.grossGenerated,
+          proposedRate: merchantRecoveryProposals.proposedRate,
+          proposedAmount: merchantRecoveryProposals.proposedAmount,
+          outstandingBefore: merchantRecoveryProposals.outstandingBefore,
+          outstandingAfter: merchantRecoveryProposals.outstandingAfter,
+          availableBefore: merchantRecoveryProposals.availableBefore,
+          availableAfter: merchantRecoveryProposals.availableAfter,
+          coverageBefore: merchantRecoveryProposals.coverageBefore,
+          coverageAfter: merchantRecoveryProposals.coverageAfter,
+          status: merchantRecoveryProposals.status,
+          acceptedBy: merchantRecoveryProposals.acceptedBy,
+          acceptedAt: merchantRecoveryProposals.acceptedAt,
+          evidence: merchantRecoveryProposals.evidence,
+          createdAt: merchantRecoveryProposals.createdAt,
+        })
+        .from(merchantRecoveryProposals)
+        .leftJoin(ownedBusinesses, eq(ownedBusinesses.id, merchantRecoveryProposals.affiliateId));
+
+      const rows = input?.affiliateId
+        ? await base
+            .where(eq(merchantRecoveryProposals.affiliateId, input.affiliateId))
+            .orderBy(desc(merchantRecoveryProposals.createdAt))
+            .limit(limit)
+        : await base.orderBy(desc(merchantRecoveryProposals.createdAt)).limit(limit);
+
+      const terms = await ctx.coreDb
+        .select()
+        .from(merchantRecoveryTerms)
+        .orderBy(desc(merchantRecoveryTerms.updatedAt))
+        .limit(100);
+
+      return {
+        proposals: rows,
+        terms,
+        mode: process.env.RABBITTY_MCCE_RECOVERY_MODE ?? "proposal",
+        engineMode: process.env.RABBITTY_MCCE_MODE ?? "shadow",
+      };
     }),
 
   previewSandboxPurge: godAdminProcedure

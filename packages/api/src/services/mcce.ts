@@ -23,6 +23,7 @@ import {
 
 export const MCCE_ENABLED_FLAG = "RABBITTY_MCCE_ENABLED";
 export const MCCE_MODE_FLAG = "RABBITTY_MCCE_MODE";
+export const MCCE_RECOVERY_MODE_FLAG = "RABBITTY_MCCE_RECOVERY_MODE";
 
 export type McceMode = "off" | "shadow" | "dual" | "enforce";
 
@@ -32,6 +33,18 @@ export function mcceMode(env: NodeJS.ProcessEnv = process.env): McceMode {
   const mode = env[MCCE_MODE_FLAG];
   if (mode === "shadow" || mode === "dual" || mode === "enforce") return mode;
   return "shadow";
+}
+
+/**
+ * Recuperación:
+ *   per_event → retiene en la misma operación que genera capacidad (comportamiento previo).
+ *   proposal  → no retiene por evento; acumula la base y crea una propuesta por ciclo
+ *               que el afiliado acepta o rechaza. Es el modo recomendado.
+ */
+export type RecoveryMode = "per_event" | "proposal";
+
+export function recoveryMode(env: NodeJS.ProcessEnv = process.env): RecoveryMode {
+  return env[MCCE_RECOVERY_MODE_FLAG] === "per_event" ? "per_event" : "proposal";
 }
 
 const ACTIVE_STATES = new Set(["ACTIVE", "AUTHORIZED"]);
@@ -77,12 +90,16 @@ export type ActivityResult = {
   generatedNet?: number;
   creditOutstandingAfter?: number;
   availableAfter?: number;
+  recoveryMode?: RecoveryMode;
   mode: McceMode;
 };
 
 /**
- * Reconoce capacidad nueva por actividad elegible y aplica recuperación.
+ * Reconoce capacidad nueva por actividad elegible.
  * `reward` es la capacidad bruta generada (Bunz emitidos por la venta).
+ *
+ * En recuperación `proposal` no retiene nada aquí: toda la capacidad bruta se
+ * registra y la recuperación se propone al cierre del ciclo.
  */
 export async function recognizeActivity(
   tx: Tx,
@@ -107,6 +124,7 @@ export async function recognizeActivity(
   const eventId = `mce-act-${orderId}`;
   if (await eventExists(tx, eventId)) return { ok: true, skipped: "idempotent", mode };
 
+  const recovery = recoveryMode();
   const outstanding = Math.max(0, Number(account.creditOutstanding) || 0);
   const committed = Math.max(0, Number(account.committed) || 0);
   const available = Math.max(0, Number(account.available) || 0);
@@ -114,9 +132,10 @@ export async function recognizeActivity(
 
   // Cobertura: si lo disponible ya no cubre lo comprometido, no se retiene.
   const coverageBlocked = available + EPS < committed;
-  const retained = coverageBlocked
-    ? 0
-    : Math.min(gross, outstanding, gross * retainShare);
+  const retained =
+    recovery === "proposal" || coverageBlocked
+      ? 0
+      : Math.min(gross, outstanding, gross * retainShare);
   const generatedNet = round2(gross - retained);
   const newProvisioned = round2(Number(account.provisioned) + generatedNet);
   const newGenerated = round2(Number(account.generated) + gross);
@@ -147,6 +166,7 @@ export async function recognizeActivity(
     amount: generatedNet,
     metadata: {
       mode,
+      recoveryMode: recovery,
       shadow: mode === "shadow",
       orderId,
       gross,
@@ -165,6 +185,7 @@ export async function recognizeActivity(
     generatedNet,
     creditOutstandingAfter: newOutstanding,
     availableAfter: newAvailable,
+    recoveryMode: recovery,
     mode,
   };
 }

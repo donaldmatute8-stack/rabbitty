@@ -73,6 +73,7 @@ export default function GodEconomyPage() {
   const [capacity, setCapacity] = useState<{ accounts: any[]; events: any[] } | null>(null);
   const [recon, setRecon] = useState<{ lastRun: any; control: any } | null>(null);
   const [contracts, setContracts] = useState<any[]>([]);
+  const [recovery, setRecovery] = useState<{ proposals: any[]; terms: any[]; mode: string; engineMode: string } | null>(null);
 
   const [editing, setEditing] = useState<any | null>(null);
   const [form, setForm] = useState({ authorizedTotal: 0, promo: 0, credit: 0, provisioned: 0, status: "ACTIVE", notes: "" });
@@ -84,16 +85,18 @@ export default function GodEconomyPage() {
     setLoading(true);
     setError(null);
     try {
-      const [l, c, r, k] = await Promise.all([
+      const [l, c, r, k, rec] = await Promise.all([
         godQuery("god.getLedgerReconciliation", { discrepanciesOnly: false, limit: 300 }),
         godQuery("god.listCapacityAccounts"),
         godQuery("god.getBunzReconciliation"),
         godQuery("god.listContractAcceptances"),
+        godQuery("god.listRecoveryProposals", { limit: 100 }),
       ]);
       setLedger(l);
       setCapacity(c);
       setRecon(r);
       setContracts(k ?? []);
+      setRecovery(rec ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo cargar el centro económico");
     } finally {
@@ -395,6 +398,67 @@ export default function GodEconomyPage() {
                 )}
               </tbody>
             </table>
+          </Card>
+
+          <Card className="p-5 bg-white/5 border-white/10 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-bold text-white">Recuperación dinámica</h2>
+              <div className="flex items-center gap-2 text-[10px]">
+                <span className="px-2 py-1 rounded-full border border-white/15 bg-white/5 text-gray-300">
+                  recuperación: {recovery?.mode ?? "proposal"}
+                </span>
+                <span className="px-2 py-1 rounded-full border border-white/15 bg-white/5 text-gray-300">
+                  motor: {recovery?.engineMode ?? "shadow"}
+                </span>
+              </div>
+            </div>
+            <p className="text-[11px] text-gray-500">
+              Las propuestas se crean al cierre de ciclo. Solo el afiliado puede aceptarlas; GOD
+              audita y no puede aplicar saltándose la aceptación.
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="text-gray-500 uppercase text-[9px] tracking-wider">
+                  <tr>
+                    <th className="text-left py-2">Negocio</th>
+                    <th className="text-right py-2">Generado</th>
+                    <th className="text-right py-2">Tasa</th>
+                    <th className="text-right py-2">Importe</th>
+                    <th className="text-right py-2">Pendiente</th>
+                    <th className="text-center py-2">Estado</th>
+                    <th className="text-left py-2">Creada</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(recovery?.proposals ?? []).map((p) => (
+                    <tr key={p.id} className="border-t border-white/5">
+                      <td className="py-2 text-gray-200">{p.businessName ?? p.affiliateId}</td>
+                      <td className="py-2 text-right text-gray-300">{fmt(p.grossGenerated)}</td>
+                      <td className="py-2 text-right text-gray-300">
+                        {typeof p.proposedRate === "number" ? `${Math.round(p.proposedRate * 1000) / 10}%` : "—"}
+                      </td>
+                      <td className="py-2 text-right text-amber-300">{fmt(p.proposedAmount)}</td>
+                      <td className="py-2 text-right text-gray-300">
+                        {fmt(p.outstandingBefore)} → {fmt(p.outstandingAfter)}
+                      </td>
+                      <td className="py-2 text-center">
+                        <span className="text-[10px] font-bold uppercase text-gray-300">{p.status}</span>
+                      </td>
+                      <td className="py-2 text-gray-500">
+                        {p.createdAt ? new Date(p.createdAt).toLocaleDateString("es-MX") : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                  {!recovery?.proposals?.length && (
+                    <tr>
+                      <td colSpan={7} className="py-6 text-center text-gray-500">
+                        Sin propuestas de recuperación.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </Card>
 
           {editing && (

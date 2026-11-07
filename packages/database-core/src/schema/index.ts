@@ -148,6 +148,48 @@ export const merchantCapacityAccounts = pgTable("merchant_capacity_accounts", {
   ...timestamps,
 });
 
+/** MCCE · Términos de recuperación por afiliado. */
+export const merchantRecoveryTerms = pgTable("merchant_recovery_terms", {
+  affiliateId: text("affiliateId").primaryKey(),
+  targetMonths: integer("targetMonths").default(18).notNull(),
+  minCoverageDays: integer("minCoverageDays").default(7).notNull(),
+  rateMin: real("rateMin").default(0.2).notNull(),
+  rateMax: real("rateMax").default(0.6).notNull(),
+  status: text("status").default("ACTIVE").notNull(), // DRAFT | ACTIVE | SUSPENDED
+  acceptedAt: timestamp("acceptedAt"),
+  acceptedBy: text("acceptedBy"),
+  ...timestamps,
+});
+
+/** MCCE · Propuesta de recuperación por ciclo (aceptación del afiliado). */
+export const merchantRecoveryProposals = pgTable(
+  "merchant_recovery_proposals",
+  {
+    id: text("id").primaryKey(),
+    affiliateId: text("affiliateId").notNull(),
+    periodStart: timestamp("periodStart").notNull(),
+    periodEnd: timestamp("periodEnd").notNull(),
+    grossGenerated: real("grossGenerated").default(0).notNull(),
+    proposedRate: real("proposedRate").default(0).notNull(),
+    proposedAmount: real("proposedAmount").default(0).notNull(),
+    outstandingBefore: real("outstandingBefore").default(0).notNull(),
+    outstandingAfter: real("outstandingAfter").default(0).notNull(),
+    availableBefore: real("availableBefore").default(0).notNull(),
+    availableAfter: real("availableAfter").default(0).notNull(),
+    coverageBefore: real("coverageBefore"),
+    coverageAfter: real("coverageAfter"),
+    status: text("status").default("PENDING").notNull(), // PENDING | ACCEPTED | APPLIED | REJECTED | EXPIRED
+    acceptedAt: timestamp("acceptedAt"),
+    acceptedBy: text("acceptedBy"),
+    evidence: jsonb("evidence"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [
+    index("merchant_recovery_proposals_affiliate_idx").on(t.affiliateId),
+    index("merchant_recovery_proposals_status_idx").on(t.status),
+  ]
+);
+
 /** MCCE · Eventos append-only de capacidad. */
 export const merchantCapacityEvents = pgTable(
   "merchant_capacity_events",

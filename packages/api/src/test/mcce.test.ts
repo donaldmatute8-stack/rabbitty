@@ -3,6 +3,7 @@ import { merchantCapacityAccounts } from "@rabbitty/database-core";
 import {
   MCCE_ENABLED_FLAG,
   MCCE_MODE_FLAG,
+  MCCE_RECOVERY_MODE_FLAG,
   consumeCapacity,
   mcceMode,
   recognizeActivity,
@@ -81,6 +82,7 @@ function fakeTx(account: any, eventExists = false) {
 afterEach(() => {
   delete process.env[MCCE_ENABLED_FLAG];
   delete process.env[MCCE_MODE_FLAG];
+  delete process.env[MCCE_RECOVERY_MODE_FLAG];
 });
 
 describe("MCCE — modos y motor", () => {
@@ -102,6 +104,7 @@ describe("MCCE — modos y motor", () => {
   it("dual: reconoce actividad y recupera sin duplicar valor", async () => {
     process.env[MCCE_ENABLED_FLAG] = "true";
     process.env[MCCE_MODE_FLAG] = "dual";
+    process.env[MCCE_RECOVERY_MODE_FLAG] = "per_event";
     const tx = fakeTx(ACCOUNT);
     const r = await recognizeActivity(tx, { affiliateId: "a1", reward: 100, orderId: "o1" });
     expect(r.retained).toBe(40);

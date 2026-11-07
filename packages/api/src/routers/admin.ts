@@ -6,10 +6,34 @@ import * as dbSchema from "@rabbitty/database-restaurant";
 import { ledgerEntries as ledgerEntries2, branches as dbSchemaBranches, restaurants as dbSchemaRestaurants } from "@rabbitty/database-restaurant/schema";
 import { bus, EventTypes } from "@rabbitty/events";
 import { restaurants, branches, orders, tables, staff, ledgerEntries, menuCategories, menuItems } from "@rabbitty/database-restaurant/schema";
-import { referrals, users, levels, ownedBusinesses, transactions, treasury, systemSettings, auditEntries, webSessions, niches } from "@rabbitty/database-core";
+import { referrals, users, levels, ownedBusinesses, transactions, treasury, systemSettings, auditEntries, webSessions, niches, merchantCapacityAccounts } from "@rabbitty/database-core";
 import { customers } from "@rabbitty/database-restaurant/schema";
 import { miniappClient } from "../services/miniapp-client";
+import {
+  acceptRecoveryProposal,
+  getOrCreateTerms,
+  listRecoveryProposals,
+  rejectRecoveryProposal,
+} from "../services/mcceRecovery";
+import { recoveryMode } from "../services/mcce";
 import * as cheerio from "cheerio";
+
+/** Resuelve el negocio (afiliado) del contexto actual. */
+async function resolveAffiliateId(ctx: Context): Promise<string> {
+  const restaurantId = await resolveRestaurantId(ctx);
+  if (!restaurantId) {
+    throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Sucursal no resuelta" });
+  }
+  const [rest] = await ctx.restaurantDb
+    .select({ businessId: restaurants.businessId })
+    .from(restaurants)
+    .where(eq(restaurants.id, restaurantId))
+    .limit(1);
+  if (!rest?.businessId) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Negocio no encontrado" });
+  }
+  return rest.businessId;
+}
 /** Push a la app nativa (mismo canal que usa el POS). Devuelve true si entregó. */
 async function sendOwnerPush(
   userId: string,
@@ -1955,5 +1979,94 @@ export const adminRouter = router({
         .where(eq(ownedBusinesses.id, rest.businessId));
 
       return { ok: true };
+    }),
+
+  /** Estado de recuperación: tasa vigente, pendiente, propuesta abierta e historial. */
+  getRecovery: protectedProcedure.query(async ({ ctx }) => {
+    const affiliateId = await resolveAffiliateId(ctx);
+    const [account] = await ctx.coreDb
+      .select()
+      .from(merchantCapacityAccounts)
+      .where(eq(merchantCapacityAccounts.affiliateId, affiliateId))
+      .limit(1);
+
+    const terms = await getOrCreateTerms(ctx.coreDb, affiliateId);
+    const proposals = await listRecoveryProposals(ctx.coreDb, affiliateId, 24);
+    const pending = proposals.find((p: any) => p.status === "PENDING") ?? null;
+
+    return {
+      affiliateId,
+      mode: recoveryMode(),
+      engineMode: process.env.RABBITTY_MCCE_MODE ?? "shadow",
+      account: account
+        ? {
+            status: account.status,
+            authorizedTotal: account.authorizedTotal,
+            provisioned: account.provisioned,
+            available: account.available,
+            committed: account.committed,
+            creditOutstanding: account.creditOutstanding,
+            creditDisbursed: account.creditDisbursed,
+            creditRepaid: account.creditRepaid,
+            coverageDays: account.coverageDays,
+            sandbox: account.sandbox,
+          }
+        : null,
+      terms: terms
+        ? {
+            targetMonths: terms.targetMonths,
+            minCoverageDays: terms.minCoverageDays,
+            rateMin: terms.rateMin,
+            rateMax: terms.rateMax,
+            status: terms.status,
+          }
+        : null,
+      pending,
+      proposals,
+    };
+  }),
+
+  /** Acepta una propuesta. En shadow registra conformidad; en dual/enforce aplica. */
+  acceptRecovery: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        acceptedName: z.string().min(3).max(160),
+        userAgent: z.string().max(400).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const affiliateId = await resolveAffiliateId(ctx);
+      const result = await acceptRecoveryProposal(ctx.coreDb, {
+        id: input.id,
+        affiliateId,
+        actor: String(ctx.userId ?? "affiliate"),
+        evidence: {
+          method: "name_checkbox",
+          acceptedName: input.acceptedName,
+          userAgent: input.userAgent ?? null,
+          contractVersion: "2026.11-v1.2-draft",
+        },
+      });
+      if (!result.ok) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: result.error ?? "No se pudo aceptar" });
+      }
+      return result;
+    }),
+
+  /** Rechaza una propuesta: no se descuenta nada. */
+  rejectRecovery: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const affiliateId = await resolveAffiliateId(ctx);
+      const result = await rejectRecoveryProposal(ctx.coreDb, {
+        id: input.id,
+        affiliateId,
+        actor: String(ctx.userId ?? "affiliate"),
+      });
+      if (!result.ok) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: result.error ?? "No se pudo rechazar" });
+      }
+      return result;
     }),
 });
