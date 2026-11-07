@@ -146,7 +146,7 @@ ANEXO D — DATOS PERSONALES
 Las Partes incorporarán el instrumento de tratamiento que identifique responsables, encargados, finalidades, categorías, seguridad, transferencias, derechos, incidentes y conservación. Este Anexo no sustituye los avisos de privacidad.
 
 ANEXO E — EVIDENCIA DE ACEPTACIÓN
-Se conservará identificador de contrato y oferta, identidad y facultades del representante, versión y hash, copia íntegra, fecha y hora, método de autenticación, acción afirmativa, sesión, IP y agente cuando se recaben legalmente, resultado de autenticación sin plantillas biométricas, entrega de copia y confirmación de autorización.
+Se conservará identificador de contrato y oferta, identidad y facultades del representante, versión y hash, copia íntegra, fecha y hora, método de autenticación local, acción afirmativa, sesión, IP y agente cuando se recaben legalmente, resultado de autenticación sin plantillas biométricas, entrega de copia y confirmación de autorización.
 
 RESUMEN EN LENGUAJE SIMPLE
 Te damos capacidad para recibir a los Rabbitters. No compras Bunz. Una parte es un incentivo de bienvenida y otra es capacidad adelantada que vas recuperando con tu actividad. Lo que ya está comprometido con los Rabbitters se protege siempre.`;

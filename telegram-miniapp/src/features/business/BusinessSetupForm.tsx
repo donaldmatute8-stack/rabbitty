@@ -274,7 +274,8 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
         contractHash,
         contractData,
         contractText,
-        signatureMethod: biometricVerified ? 'biometric' : 'name_checkbox',
+        signatureMethod: biometricVerified ? 'local_authentication' : 'name_checkbox',
+        acceptanceType: MCCE_CONTRACT_STATUS === 'draft' ? 'draft' : 'final',
         biometricVerified,
         acceptedTerms: true,
         acceptedCapacity: true,
@@ -711,15 +712,19 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
                 <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 12, color: 'rgba(255,255,255,0.8)', lineHeight: 1.4 }}>
                   <input type="checkbox" checked={acceptedTerms} onChange={(e) => setAcceptedTerms(e.target.checked)} style={{ marginTop: 2, width: 17, height: 17, accentColor: THEME_COLOR, flexShrink: 0 }} />
-                  <span>Acepto el Acuerdo de Capacidad Comercial {MCCE_CONTRACT_VERSION}.</span>
+                  <span>
+                    {MCCE_CONTRACT_STATUS === 'draft'
+                      ? 'He recibido y consultado la versión de trabajo del expediente MCCE. Mi acción registra la recepción/aceptación del borrador; no constituye firma del contrato definitivo, aceptación de una oferta económica, reconocimiento de adeudo ni autorización para provisionar capacidad real.'
+                      : `Acepto el Acuerdo de Capacidad Comercial ${MCCE_CONTRACT_VERSION}.`}
+                  </span>
                 </label>
                 <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 12, color: 'rgba(255,255,255,0.8)', lineHeight: 1.4 }}>
                   <input type="checkbox" checked={acceptedCollateral} onChange={(e) => setAcceptedCollateral(e.target.checked)} style={{ marginTop: 2, width: 17, height: 17, accentColor: THEME_COLOR, flexShrink: 0 }} />
-                  <span>Me comprometo a aceptar redenciones de Bunz hasta la capacidad disponible y a no condicionar ni inflar precios.</span>
+                  <span>Entiendo que la capacidad se usa para aceptar redenciones de Bunz y que no puedo condicionar ni inflar precios.</span>
                 </label>
                 <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 12, color: 'rgba(255,255,255,0.8)', lineHeight: 1.4 }}>
                   <input type="checkbox" checked={acceptedSplitClause} onChange={(e) => setAcceptedSplitClause(e.target.checked)} style={{ marginTop: 2, width: 17, height: 17, accentColor: THEME_COLOR, flexShrink: 0 }} />
-                  <span>Acepto que la capacidad adelantada se recupera con mi actividad, protegiendo lo ya comprometido.</span>
+                  <span>Entiendo que la capacidad adelantada se recupera con actividad y que lo ya comprometido se protege.</span>
                 </label>
               </div>
 
@@ -735,7 +740,7 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
                 <div style={{ marginTop: 12 }}>
                   {biometricVerified ? (
                     <p style={{ margin: 0, fontSize: 12, color: '#34D399', fontWeight: 700 }}>
-                      ✓ Face ID / Touch ID verificado
+                      ✓ Autenticación local verificada
                     </p>
                   ) : (
                     <button
@@ -750,7 +755,7 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
                       }}
                     >
                       <ScanFace size={16} />
-                      {biometricBusy ? 'Verificando…' : 'Verificar con Face ID / Touch ID'}
+                      {biometricBusy ? 'Verificando…' : 'Autenticación local con Face ID / Touch ID'}
                     </button>
                   )}
                   {biometricNote && (
