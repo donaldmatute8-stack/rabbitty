@@ -91,6 +91,15 @@ const server = http.createServer((req, res) => {
   let rest;
   if (TOKEN) {
     const prefix = `/t/${TOKEN}`;
+    // Acepta enlaces mal formados que contienen el token sin el prefijo /t/
+    // (p. ej. /t-TOKEN o /TOKEN) y redirige al enlace canónico.
+    if (!raw.startsWith(prefix) && raw.includes(TOKEN)) {
+      const tail = raw.split(TOKEN)[1] || "/";
+      const location = `${prefix}${tail.startsWith("/") ? tail : `/${tail}`}`;
+      res.writeHead(301, { location });
+      res.end();
+      return;
+    }
     if (raw === prefix) {
       // barra final para que los enlaces relativos resuelvan bajo el token
       res.writeHead(301, { location: `${prefix}/` });
