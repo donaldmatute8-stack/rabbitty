@@ -855,8 +855,7 @@ export const bunzCapacityDaily = pgTable(
 
 /**
  * OT-2 · Obligación (devengo) con ciclo de vida.
- * Estados: OPEN → DISPUTED → RESOLVED_PAYABLE → PARTIALLY_PAID → PAID
- *          DISPUTED → RESOLVED_NOT_PAYABLE
+ * Estados implementados: OPEN → LATE → PARTIAL → SETTLED (o WRITTEN_OFF).
  * `amountBunz` es la denominación; `settledFiatMxn` es MXN y solo se compara con
  * Bunz si `unit_policy.approved` (ver R24/R26).
  */
@@ -922,5 +921,32 @@ export const bunzLedgerEntries = pgTable(
     index("bunz_ledger_group_idx").on(t.groupId),
     index("bunz_ledger_ref_idx").on(t.refType, t.refId),
     index("bunz_ledger_ts_idx").on(t.ts),
+  ]
+);
+
+/**
+ * OT-5 · Señales de abuso (append-only, detección determinista).
+ *
+ * No bloquea ni sanciona: solo deja rastro para revisión humana y para que la
+ * captura semanal pueda declarar el riesgo medido. `user` va hasheado.
+ */
+export const bunzAbuseSignals = pgTable(
+  "bunz_abuse_signals",
+  {
+    id: text("id").primaryKey(),
+    detectedAt: timestamp("detectedAt").defaultNow().notNull(),
+    userHash: text("userHash").notNull(),
+    type: text("type").notNull(), // rapid_redemption | redemption_burst | discount_streak
+    severity: text("severity").notNull(), // low | medium | high
+    affiliateId: text("affiliateId"),
+    refType: text("refType"),
+    refId: text("refId"),
+    detail: jsonb("detail"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [
+    index("bunz_abuse_detected_idx").on(t.detectedAt),
+    index("bunz_abuse_user_idx").on(t.userHash),
+    index("bunz_abuse_type_idx").on(t.type),
   ]
 );

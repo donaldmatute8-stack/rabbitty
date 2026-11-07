@@ -87,6 +87,27 @@ export function capacityToDataset(rows) {
   }));
 }
 
+export const ABUSE_TYPES = ["rapid_redemption", "redemption_burst", "discount_streak", "other"];
+export const ABUSE_SEVERITIES = ["low", "medium", "high"];
+
+/** Fila de `bunz_abuse_signals` → fila de `abuse_signals` del contrato. */
+export function abuseSignalToDataset(row) {
+  const type = ABUSE_TYPES.includes(row.type) ? row.type : "other";
+  const severity = ABUSE_SEVERITIES.includes(row.severity) ? row.severity : "low";
+  return {
+    id: row.id,
+    ts: new Date(row.detectedAt).toISOString(),
+    user: row.userHash,
+    type,
+    severity,
+    ref_id: row.refId ?? null,
+  };
+}
+
+export function abuseSignalsToDataset(rows) {
+  return rows.map(abuseSignalToDataset);
+}
+
 /** Qué fuentes existen: decide si el pipeline usa captura real o fallback. */
 export function pickSources({ hasAttempts, hasCapacity, hasObligations = false, hasLedger = false }) {
   return {

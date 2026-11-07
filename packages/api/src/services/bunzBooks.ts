@@ -188,13 +188,23 @@ export async function recordRedemptionBooks(
 }
 
 /** Asientos de liquidación de una obligación en Bunz (G3=A: reclasificación interna). */
-export function buildSettlementLedger({ obligationId, bunz, at = new Date() }: { obligationId: string; bunz: number; at?: Date }) {
+export function buildSettlementLedger({
+  obligationId,
+  bunz,
+  at = new Date(),
+  seq = 1,
+}: {
+  obligationId: string;
+  bunz: number;
+  at?: Date;
+  seq?: number;
+}) {
   const amount = Number(bunz) || 0;
   if (amount <= 0) return [];
   return [
     {
-      id: `st-${obligationId}-d`,
-      groupId: `st-${obligationId}`,
+      id: `st-${obligationId}-${seq}-d`,
+      groupId: `st-${obligationId}-${seq}`,
       ts: at,
       account: "commission_reserved",
       direction: "debit",
@@ -203,8 +213,8 @@ export function buildSettlementLedger({ obligationId, bunz, at = new Date() }: {
       refId: obligationId,
     },
     {
-      id: `st-${obligationId}-c`,
-      groupId: `st-${obligationId}`,
+      id: `st-${obligationId}-${seq}-c`,
+      groupId: `st-${obligationId}-${seq}`,
       ts: at,
       account: "treasury_bunz",
       direction: "credit",
@@ -238,10 +248,22 @@ export async function recordEmissionBooks(
 /** Escribe los asientos de liquidación. No lanza. */
 export async function recordSettlementBooks(
   tx: Insertable,
-  { obligationId, bunz, at = new Date(), tables }: { obligationId: string; bunz: number; at?: Date; tables: { ledger: unknown } }
+  {
+    obligationId,
+    bunz,
+    at = new Date(),
+    seq = 1,
+    tables,
+  }: {
+    obligationId: string;
+    bunz: number;
+    at?: Date;
+    seq?: number;
+    tables: { ledger: unknown };
+  }
 ): Promise<{ ok: boolean; errors: string[] }> {
   if (!isBooksEnabled()) return { ok: true, errors: [] };
-  const entries = buildSettlementLedger({ obligationId, bunz, at });
+  const entries = buildSettlementLedger({ obligationId, bunz, at, seq });
   if (!entries.length) return { ok: true, errors: [] };
   try {
     await tx.transaction(async (sp) => {

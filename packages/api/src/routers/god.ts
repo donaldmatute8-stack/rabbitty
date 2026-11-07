@@ -21,6 +21,9 @@ import {
   orders,
   payments,
   paymentIntents,
+  bunzObligations,
+  bunzObligationEvents,
+  bunzLedgerEntries,
 } from "@rabbitty/database-restaurant/schema";
 // Campañas viven en coreDb
 import { affiliateCampaigns, campaignRedemptions } from "@rabbitty/database-core/schema";
@@ -34,6 +37,7 @@ import {
   readSnapshot,
   validationDir,
 } from "../services/validationSnapshots";
+import { isSettlementEnabled, settleObligation } from "../services/bunzObligations";
 
 /** Desenrolla result de drizzle raw SQL (rows array en pg driver). */
 const sqlRows = (r: unknown) => ((r as { rows?: unknown[] }).rows ?? r) as Array<Record<string, unknown>>;
@@ -1187,6 +1191,102 @@ export const godRouter = router({
     const { snapshots, ignored } = listSnapshots(dir);
     return { enabled: true, dir, snapshots, ignored };
   }),
+
+  // ── OT-2 · Obligaciones (lectura) ──────────────────────────────────────────
+  // No calcula ni escribe: lista la deuda devengada para operación.
+  listBunzObligations: godAdminProcedure
+    .input(
+      z
+        .object({
+          state: z.enum(["OPEN", "LATE", "PARTIAL", "SETTLED", "WRITTEN_OFF"]).optional(),
+          limit: z.number().int().min(1).max(200).default(50),
+          offset: z.number().int().min(0).default(0),
+        })
+        .optional()
+    )
+    .query(async ({ ctx, input }) => {
+      const limit = input?.limit ?? 50;
+      const offset = input?.offset ?? 0;
+      const where = input?.state ? eq(bunzObligations.state, input.state) : undefined;
+
+      const rows = await ctx.restaurantDb
+        .select({
+          id: bunzObligations.id,
+          affiliateId: bunzObligations.affiliateId,
+          origin: bunzObligations.origin,
+          accruedAt: bunzObligations.accruedAt,
+          dueAt: bunzObligations.dueAt,
+          amountBunz: bunzObligations.amountBunz,
+          state: bunzObligations.state,
+          settledBunz: bunzObligations.settledBunz,
+          settledAt: bunzObligations.settledAt,
+        })
+        .from(bunzObligations)
+        .where(where)
+        .orderBy(desc(bunzObligations.accruedAt))
+        .limit(limit)
+        .offset(offset);
+
+      const [summary] = await ctx.restaurantDb
+        .select({
+          open: sql<number>`count(*) filter (where ${bunzObligations.state} = 'OPEN')`,
+          late: sql<number>`count(*) filter (where ${bunzObligations.state} = 'LATE')`,
+          partial: sql<number>`count(*) filter (where ${bunzObligations.state} = 'PARTIAL')`,
+          settled: sql<number>`count(*) filter (where ${bunzObligations.state} = 'SETTLED')`,
+          outstanding: sql<number>`coalesce(sum(${bunzObligations.amountBunz} - ${bunzObligations.settledBunz}) filter (where ${bunzObligations.state} in ('OPEN','LATE','PARTIAL')), 0)`,
+        })
+        .from(bunzObligations);
+
+      return {
+        settlementEnabled: isSettlementEnabled(),
+        rows,
+        summary: {
+          open: Number(summary?.open) || 0,
+          late: Number(summary?.late) || 0,
+          partial: Number(summary?.partial) || 0,
+          settled: Number(summary?.settled) || 0,
+          outstanding: Number(summary?.outstanding) || 0,
+        },
+      };
+    }),
+
+  /**
+   * Liquidación de una obligación. **Apagada por defecto** (`RABBITTY_BUNZ_SETTLE`):
+   * mueve Bunz y depende de G3/G4 y de RP-2. Sin el flag, falla con PRECONDITION.
+   */
+  settleBunzObligation: godAdminProcedure
+    .input(
+      z.object({
+        obligationId: z.string().min(1).max(120),
+        bunz: z.number().positive().max(1_000_000),
+        fiatMxn: z.number().min(0).max(1_000_000).default(0),
+        instrument: z.enum(["bunz", "fiat", "mixed"]).default("bunz"),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!isSettlementEnabled()) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Liquidación no autorizada: RABBITTY_BUNZ_SETTLE está apagado.",
+        });
+      }
+      const result = await settleObligation(ctx.restaurantDb, {
+        obligationId: input.obligationId,
+        bunz: input.bunz,
+        fiatMxn: input.fiatMxn,
+        instrument: input.instrument,
+        actor: String(ctx.userId ?? "god_admin"),
+        tables: {
+          obligations: bunzObligations,
+          events: bunzObligationEvents,
+          ledger: bunzLedgerEntries,
+        },
+      });
+      if (!result.ok) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: result.errors.join("; ") || "liquidación fallida" });
+      }
+      return result;
+    }),
 
   getValidationSnapshot: godAdminProcedure
     .input(z.object({ id: z.string().max(80).optional() }).optional())

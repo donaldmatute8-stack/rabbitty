@@ -81,3 +81,127 @@ describe("OT-2 — devengo de obligaciones", () => {
     expect(r.errors).toHaveLength(1);
   });
 });
+
+// ── Ciclo de vida: mora y liquidación ────────────────────────────────────────
+import { SETTLEMENT_FLAG, markOverdue, settleObligation } from "../services/bunzObligations";
+import { BOOKS_FLAG } from "../services/bunzBooks";
+
+function fakeDb(rows: any[]) {
+  const applied: any[] = [];
+  const events: any[] = [];
+  const ledger: any[] = [];
+  const db: any = {
+    applied,
+    events,
+    ledger,
+    insert(_t: unknown) {
+      return {
+        values(v: any) {
+          if (Array.isArray(v)) ledger.push(...v);
+          else events.push(v);
+          return { onConflictDoNothing: async () => undefined };
+        },
+      };
+    },
+    update(_t: unknown) {
+      return {
+        set(patch: any) {
+          return {
+            where: async () => {
+              applied.push(patch);
+            },
+          };
+        },
+      };
+    },
+    select() {
+      const chain: any = {
+        from: () => chain,
+        where: () => Promise.resolve(rows),
+      };
+      return chain;
+    },
+    async transaction<T>(fn: (sp: any) => Promise<T>): Promise<T> {
+      return fn(db);
+    },
+  };
+  return db;
+}
+
+describe("OT-2 — mora y liquidación", () => {
+  afterEach(() => {
+    delete process.env[OBLIGATION_FLAG];
+    delete process.env[SETTLEMENT_FLAG];
+    delete process.env[BOOKS_FLAG];
+  });
+
+  it("marca LATE las obligaciones vencidas (solo estado)", async () => {
+    process.env[OBLIGATION_FLAG] = "true";
+    const db = fakeDb([{ id: "ob-1", state: "OPEN", dueAt: new Date("2026-01-01"), amountBunz: 60, settledBunz: 0 }]);
+    const r = await markOverdue(db, {
+      now: new Date("2026-02-01"),
+      tables: { obligations: {}, events: {} },
+    });
+    expect(r).toMatchObject({ ok: true, marked: 1 });
+    expect(db.applied[0]).toEqual({ state: "LATE" });
+    expect(db.events[0]).toMatchObject({ fromState: "OPEN", toState: "LATE" });
+  });
+
+  it("con el flag de obligaciones apagado no marca nada", async () => {
+    const db = fakeDb([{ id: "ob-1" }]);
+    const r = await markOverdue(db, { tables: { obligations: {}, events: {} } });
+    expect(r.marked).toBe(0);
+    expect(db.applied).toHaveLength(0);
+  });
+
+  it("la liquidación está apagada por defecto (no mueve Bunz)", async () => {
+    const db = fakeDb([{ id: "ob-1", state: "OPEN", amountBunz: 60, settledBunz: 0, settledFiatMxn: 0 }]);
+    const r = await settleObligation(db, {
+      obligationId: "ob-1",
+      bunz: 60,
+      tables: { obligations: {}, events: {}, ledger: {} },
+    });
+    expect(r.skipped).toBe(true);
+    expect(db.ledger).toHaveLength(0);
+  });
+
+  it("liquidación total: SETTLED + asiento de libro", async () => {
+    process.env[SETTLEMENT_FLAG] = "true";
+    process.env[BOOKS_FLAG] = "true";
+    const db = fakeDb([{ id: "ob-1", state: "OPEN", amountBunz: 60, settledBunz: 0, settledFiatMxn: 0 }]);
+    const r = await settleObligation(db, {
+      obligationId: "ob-1",
+      bunz: 60,
+      tables: { obligations: {}, events: {}, ledger: {} },
+    });
+    expect(r).toMatchObject({ ok: true, state: "SETTLED", settledBunz: 60 });
+    expect(db.ledger).toHaveLength(2);
+    expect(db.ledger.every((e: any) => e.groupId === "st-ob-1-6000")).toBe(true);
+  });
+
+  it("liquidación parcial: PARTIAL y no cierra", async () => {
+    process.env[SETTLEMENT_FLAG] = "true";
+    process.env[BOOKS_FLAG] = "true";
+    const db = fakeDb([{ id: "ob-1", state: "LATE", amountBunz: 60, settledBunz: 0, settledFiatMxn: 0 }]);
+    const r = await settleObligation(db, {
+      obligationId: "ob-1",
+      bunz: 20,
+      tables: { obligations: {}, events: {}, ledger: {} },
+    });
+    expect(r.state).toBe("PARTIAL");
+    expect(r.settledBunz).toBe(20);
+  });
+
+  it("no liquida dos veces por encima del importe", async () => {
+    process.env[SETTLEMENT_FLAG] = "true";
+    process.env[BOOKS_FLAG] = "true";
+    const db = fakeDb([{ id: "ob-1", state: "SETTLED", amountBunz: 60, settledBunz: 60, settledFiatMxn: 0 }]);
+    const r = await settleObligation(db, {
+      obligationId: "ob-1",
+      bunz: 10,
+      tables: { obligations: {}, events: {}, ledger: {} },
+    });
+    expect(r.ok).toBe(false);
+    expect(db.ledger).toHaveLength(0);
+  });
+});

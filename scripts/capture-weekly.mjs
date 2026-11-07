@@ -19,7 +19,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { Client } from "pg";
 import { runValidation } from "./lib/real-data-spec.mjs";
-import { attemptsToRedemptions, capacityToDataset, hashUser, pickSources } from "./lib/capture-map.mjs";
+import {
+  abuseSignalsToDataset,
+  attemptsToRedemptions,
+  capacityToDataset,
+  hashUser,
+  pickSources,
+} from "./lib/capture-map.mjs";
 import { ledgerToDataset, obligationsToDataset } from "./lib/econ-books-map.mjs";
 import { buildSnapshot } from "./lib/validation-snapshot.mjs";
 
@@ -213,13 +219,14 @@ async function collect() {
         `SELECT table_name FROM information_schema.tables
           WHERE table_schema = 'public'
             AND table_name IN ('bunz_redemption_attempts','bunz_capacity_daily',
-                               'bunz_obligations','bunz_ledger_entries')`
+                               'bunz_obligations','bunz_ledger_entries','bunz_abuse_signals')`
       )
     ).rows.map((r) => r.table_name);
     const hasAttempts = tables.includes("bunz_redemption_attempts");
     const hasCapacity = tables.includes("bunz_capacity_daily");
     const hasObligations = tables.includes("bunz_obligations");
     const hasLedger = tables.includes("bunz_ledger_entries");
+    const hasAbuse = tables.includes("bunz_abuse_signals");
 
     const branchToAffiliate = new Map();
     for (const b of branches) {
@@ -289,6 +296,17 @@ async function collect() {
       ledgerInvalid = mapped.invalid;
     }
 
+    let abuseOut = [];
+    if (hasAbuse) {
+      const rows = (
+        await db.query(
+          `SELECT id, "detectedAt", "userHash", type, severity, "refId"
+             FROM "bunz_abuse_signals" ORDER BY "detectedAt" ASC`
+        )
+      ).rows;
+      abuseOut = abuseSignalsToDataset(rows);
+    }
+
     // Una tabla vacía no es evidencia: se declara como hueco hasta que tenga filas.
     const obligationsUsable = hasObligations && obligationsOut.length > 0;
     const ledgerUsable = hasLedger && ledgerOut.length > 0;
@@ -319,6 +337,7 @@ async function collect() {
       obligations: obligationsOut,
       ledger: ledgerOut,
       invalid: { obligations: obligationsInvalid, ledger: ledgerInvalid },
+      abuse: abuseOut,
       treasuryRows,
       fiat,
       orders,
@@ -369,9 +388,10 @@ const dataset = {
   ...(data.sources.obligations === "db" ? { obligations: data.obligations } : {}),
   ...(data.sources.ledger === "db" ? { bunz_ledger: data.ledger } : {}),
   ...(treasury.length ? { treasury } : {}),
+  ...(data.abuse.length ? { abuse_signals: data.abuse } : {}),
   // Si la tabla existe pero está vacía, NO se incluye: un libro vacío rompe la
   // reconciliación (R11) sin aportar evidencia. Se declara como hueco.
-  // Deliberadamente ausente: abuse_signals (sin detección todavía)
+  // `abuse_signals` solo aparece si la detección OT-5 encontró algo.
 };
 
 const validation = runValidation(dataset);
@@ -391,7 +411,7 @@ console.log(`filas: ${JSON.stringify(validation.counts.datasets)}`);
 console.log(`válido ${validation.ok ? "SÍ" : "NO"} · calibrable ${validation.calibration_ready ? "SÍ" : "NO"}`);
 console.log(
   `fuentes: redenciones=${data.sources.redemptions} · capacidad=${data.sources.capacity} · ` +
-    `obligaciones=${data.sources.obligations} · libro=${data.sources.ledger}`
+    `obligaciones=${data.sources.obligations} · libro=${data.sources.ledger} · señales=${data.abuse.length}`
 );
 if (data.invalid.obligations.length) console.log(`  ⚠ obligaciones inválidas: ${data.invalid.obligations.length}`);
 if (data.invalid.ledger.length) console.log(`  ⚠ asientos inválidos: ${data.invalid.ledger.length}`);
