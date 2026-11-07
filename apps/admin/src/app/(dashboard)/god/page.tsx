@@ -135,8 +135,8 @@ export default function GodHubPage() {
       iconColor: "text-sky-400",
     },
     {
-      title: "Economía & Ledger",
-      description: "Auditoría en tiempo real. Compara balances en caché contra asientos inmutables del Ledger y detecta discrepancias.",
+      title: "Centro económico",
+      description: "Capacidad, conciliación, contratos e historial en un solo lugar. Ajustes con motivo, evento y auditoría.",
       href: "/god/economia",
       icon: Scale,
       badge: "Auditoría Financiera",

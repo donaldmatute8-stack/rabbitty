@@ -10,6 +10,9 @@ import {
   hatTricks,
   presenceSessions,
   systemSettings,
+  auditEntries,
+  merchantCapacityAccounts,
+  merchantCapacityEvents,
 } from "@rabbitty/database-core";
 import { ledgerEntries, rabbitterScoreShadow } from "@rabbitty/database-restaurant/schema";
 import {
@@ -52,6 +55,22 @@ import { runValidationCapture } from "../services/validationCapture";
 
 /** Desenrolla result de drizzle raw SQL (rows array en pg driver). */
 const sqlRows = (r: unknown) => ((r as { rows?: unknown[] }).rows ?? r) as Array<Record<string, unknown>>;
+
+/** Usuarios con movimientos en un negocio sandbox (solo lectura). */
+async function sandboxUserIds(db: any, businessId: string): Promise<string[]> {
+  const ref = `biz_${businessId}`;
+  const res = await db.execute(sql`
+    SELECT DISTINCT regexp_replace("payerSubjectId", '^usr_', '') AS "userId"
+    FROM "ledger_entries"
+    WHERE "payeeSubjectId" = ${ref} AND "payerSubjectId" LIKE 'usr_%'
+    UNION
+    SELECT DISTINCT regexp_replace("payeeSubjectId", '^usr_', '') AS "userId"
+    FROM "ledger_entries"
+    WHERE "payerSubjectId" = ${ref} AND "payeeSubjectId" LIKE 'usr_%'
+  `);
+  const rows = (res as { rows?: Array<{ userId?: string }> })?.rows ?? (Array.isArray(res) ? res : []);
+  return rows.map((r) => String(r.userId || "")).filter(Boolean);
+}
 
 /**
  * ── GOD ROUTER: operaciones exclusivas del God Admin (requiere identidad + 2FA) ──
@@ -1409,4 +1428,243 @@ export const godRouter = router({
       if (!id) return { enabled: true, snapshot: null };
       return { enabled: true, snapshot: readSnapshot(dir, id) };
     }),
+
+  // ── Centro económico · MCCE ──────────────────────────────────────────────
+  listCapacityAccounts: godAdminProcedure.query(async ({ ctx }) => {
+    const accounts = await ctx.coreDb
+      .select({
+        affiliateId: merchantCapacityAccounts.affiliateId,
+        status: merchantCapacityAccounts.status,
+        authorizedTotal: merchantCapacityAccounts.authorizedTotal,
+        promoAuthorized: merchantCapacityAccounts.promoAuthorized,
+        creditAuthorized: merchantCapacityAccounts.creditAuthorized,
+        provisioned: merchantCapacityAccounts.provisioned,
+        generated: merchantCapacityAccounts.generated,
+        committed: merchantCapacityAccounts.committed,
+        available: merchantCapacityAccounts.available,
+        creditOutstanding: merchantCapacityAccounts.creditOutstanding,
+        sandbox: merchantCapacityAccounts.sandbox,
+        notes: merchantCapacityAccounts.notes,
+        updatedAt: merchantCapacityAccounts.updatedAt,
+        name: ownedBusinesses.name,
+        businessSandbox: ownedBusinesses.sandbox,
+        bunzBalance: ownedBusinesses.bunzBalance,
+        creditLimit: ownedBusinesses.creditLimit,
+        creditUsed: ownedBusinesses.creditUsed,
+      })
+      .from(merchantCapacityAccounts)
+      .leftJoin(ownedBusinesses, eq(ownedBusinesses.id, merchantCapacityAccounts.affiliateId))
+      .orderBy(desc(merchantCapacityAccounts.updatedAt));
+
+    const events = await ctx.coreDb
+      .select()
+      .from(merchantCapacityEvents)
+      .orderBy(desc(merchantCapacityEvents.createdAt))
+      .limit(100);
+
+    return { accounts, events };
+  }),
+
+  updateCapacityAccount: godAdminProcedure
+    .input(
+      z.object({
+        affiliateId: z.string(),
+        authorizedTotal: z.number().min(0).max(1_000_000),
+        promoAuthorized: z.number().min(0).max(1_000_000),
+        creditAuthorized: z.number().min(0).max(1_000_000),
+        provisioned: z.number().min(0).max(1_000_000),
+        status: z.enum(["PROPOSED", "AUTHORIZED", "ACTIVE", "SUSPENDED", "CLOSED"]),
+        notes: z.string().max(500).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const [account] = await ctx.coreDb
+        .select()
+        .from(merchantCapacityAccounts)
+        .where(eq(merchantCapacityAccounts.affiliateId, input.affiliateId))
+        .limit(1);
+      if (!account) throw new TRPCError({ code: "NOT_FOUND", message: "Cuenta de capacidad no encontrada" });
+      if (Math.abs(input.promoAuthorized + input.creditAuthorized - input.authorizedTotal) > 0.01) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Incentivo + adelanto debe sumar la capacidad autorizada" });
+      }
+      if (input.provisioned > input.authorizedTotal + 0.01) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Lo provisionado no puede exceder lo autorizado" });
+      }
+      if (input.provisioned + 0.01 < Number(account.committed)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "No puede quedar por debajo de la capacidad comprometida" });
+      }
+
+      const available = Math.max(0, input.provisioned - Number(account.committed));
+      await ctx.coreDb
+        .update(merchantCapacityAccounts)
+        .set({
+          status: input.status,
+          authorizedTotal: input.authorizedTotal,
+          promoAuthorized: input.promoAuthorized,
+          creditAuthorized: input.creditAuthorized,
+          provisioned: input.provisioned,
+          available,
+          notes: input.notes ?? account.notes,
+          updatedAt: new Date(),
+        })
+        .where(eq(merchantCapacityAccounts.affiliateId, input.affiliateId));
+
+      await ctx.coreDb
+        .update(ownedBusinesses)
+        .set({ bunzBalance: input.provisioned, creditLimit: input.authorizedTotal })
+        .where(eq(ownedBusinesses.id, input.affiliateId));
+
+      await ctx.coreDb.insert(merchantCapacityEvents).values({
+        id: `mce-adjust-${crypto.randomUUID()}`,
+        affiliateId: input.affiliateId,
+        type: "CAPACITY_ADJUSTED",
+        actor: String(ctx.userId ?? "god_admin"),
+        amount: input.provisioned - Number(account.provisioned),
+        metadata: {
+          before: {
+            authorizedTotal: account.authorizedTotal,
+            provisioned: account.provisioned,
+            status: account.status,
+          },
+          after: {
+            authorizedTotal: input.authorizedTotal,
+            provisioned: input.provisioned,
+            status: input.status,
+          },
+          note: input.notes ?? null,
+        },
+      });
+
+      return { ok: true };
+    }),
+
+  previewSandboxPurge: godAdminProcedure
+    .input(z.object({ affiliateId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const [business] = await ctx.coreDb
+        .select()
+        .from(ownedBusinesses)
+        .where(eq(ownedBusinesses.id, input.affiliateId))
+        .limit(1);
+      if (!business) throw new TRPCError({ code: "NOT_FOUND", message: "Negocio no encontrado" });
+      if (!business.sandbox) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "El negocio no está marcado como sandbox" });
+
+      const ids = await sandboxUserIds(ctx.restaurantDb, business.id);
+      const userRows = ids.length
+        ? await ctx.coreDb
+            .select({
+              id: users.id,
+              earned: users.totalBunzEarned,
+              spent: users.totalBunzSpent,
+              sandbox: users.sandbox,
+            })
+            .from(users)
+            .where(inArray(users.id, ids))
+        : [];
+
+      return {
+        business: {
+          id: business.id,
+          name: business.name,
+          bunzBalance: business.bunzBalance,
+          creditLimit: business.creditLimit,
+        },
+        users: userRows,
+        count: userRows.length,
+        totalEarned: userRows.reduce((acc, u) => acc + Number(u.earned || 0), 0),
+        totalSpent: userRows.reduce((acc, u) => acc + Number(u.spent || 0), 0),
+      };
+    }),
+
+  purgeSandbox: godAdminProcedure
+    .input(z.object({ affiliateId: z.string(), confirm: z.literal(true) }))
+    .mutation(async ({ ctx, input }) => {
+      const [business] = await ctx.coreDb
+        .select()
+        .from(ownedBusinesses)
+        .where(eq(ownedBusinesses.id, input.affiliateId))
+        .limit(1);
+      if (!business) throw new TRPCError({ code: "NOT_FOUND", message: "Negocio no encontrado" });
+      if (!business.sandbox) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "El negocio no está marcado como sandbox" });
+
+      const ids = await sandboxUserIds(ctx.restaurantDb, business.id);
+
+      await ctx.coreDb
+        .update(merchantCapacityAccounts)
+        .set({
+          status: "CLOSED",
+          authorizedTotal: 0,
+          promoAuthorized: 0,
+          creditAuthorized: 0,
+          provisioned: 0,
+          generated: 0,
+          committed: 0,
+          available: 0,
+          creditOutstanding: 0,
+          notes: "Purga de prueba: capacidad retornada/depurada",
+          updatedAt: new Date(),
+        })
+        .where(eq(merchantCapacityAccounts.affiliateId, input.affiliateId));
+
+      await ctx.coreDb
+        .update(ownedBusinesses)
+        .set({ bunzBalance: 0, creditLimit: 0, creditUsed: 0 })
+        .where(eq(ownedBusinesses.id, input.affiliateId));
+
+      if (ids.length) {
+        await ctx.coreDb
+          .update(users)
+          .set({ sandbox: true, totalBunzEarned: 0, totalBunzSpent: 0 })
+          .where(inArray(users.id, ids));
+      }
+
+      await ctx.coreDb.insert(merchantCapacityEvents).values({
+        id: `mce-purge-${crypto.randomUUID()}`,
+        affiliateId: input.affiliateId,
+        type: "CAPACITY_PURGED",
+        actor: String(ctx.userId ?? "god_admin"),
+        amount: Number(business.bunzBalance) || 0,
+        metadata: {
+          usersReset: ids.length,
+          note: "Purga de prueba: saldos de negocio y usuarios a cero",
+        },
+      });
+
+      return { ok: true, usersReset: ids.length };
+    }),
+
+  listContractAcceptances: godAdminProcedure.query(async ({ ctx }) => {
+    const rows = await ctx.coreDb
+      .select()
+      .from(auditEntries)
+      .where(eq(auditEntries.action, "AFFILIATE_CONTRACT_SIGNED"))
+      .orderBy(desc(auditEntries.createdAt))
+      .limit(50);
+
+    const ids = Array.from(new Set(rows.map((r) => r.resourceId).filter(Boolean))) as string[];
+    const businesses = ids.length
+      ? await ctx.coreDb
+          .select({ id: ownedBusinesses.id, name: ownedBusinesses.name, sandbox: ownedBusinesses.sandbox })
+          .from(ownedBusinesses)
+          .where(inArray(ownedBusinesses.id, ids))
+      : [];
+    const byId = new Map(businesses.map((b) => [b.id, b]));
+
+    return rows.map((r) => {
+      let details: Record<string, unknown> = {};
+      try {
+        details = JSON.parse(r.details || "{}");
+      } catch {
+        /* detalle inválido */
+      }
+      return {
+        id: r.id,
+        businessId: r.resourceId,
+        businessName: r.resourceId ? byId.get(r.resourceId)?.name ?? null : null,
+        sandbox: r.resourceId ? Boolean(byId.get(r.resourceId)?.sandbox) : false,
+        createdAt: r.createdAt,
+        details,
+      };
+    });
+  }),
 });

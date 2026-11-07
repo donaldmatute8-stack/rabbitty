@@ -11,7 +11,7 @@ import { BunzyOnboarding } from './BunzyOnboarding';
 import { BunzyVideoStage } from '@/components/onboarding/BunzyVideoStage';
 import { verifyBiometric } from '@/lib/securityVault';
 import { buildCapacityOptions, estimateDailyDemand, priorForNiche, tierLabel } from '@/lib/mcceOffer';
-import { MCCE_CONTRACT_TEXT, MCCE_CONTRACT_VERSION, MCCE_CONTRACT_STATUS, MCCE_CONTRACT_SUMMARY, hashContract } from '@/lib/mcceContract';
+import { MCCE_CONTRACT_VERSION, MCCE_CONTRACT_STATUS, MCCE_CONTRACT_SUMMARY, renderContract, hashContract } from '@/lib/mcceContract';
 /** Paso 0: el nicho define la categoría operativa (y por tanto los rangos). */
 const NICHE_TO_CATEGORY: Record<string, string> = {
   restaurant: 'Restaurante',
@@ -46,6 +46,10 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
   const [address, setAddress] = useState('');
+  const [legalName, setLegalName] = useState('');
+  const [rfc, setRfc] = useState('');
+  const [representativePosition, setRepresentativePosition] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
 
   // Step 2
   const [rewardPercentage, setRewardPercentage] = useState(30);
@@ -61,6 +65,9 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
   const [acceptedCollateral, setAcceptedCollateral] = useState(false);
   const [acceptedSplitClause, setAcceptedSplitClause] = useState(false);
   const [legalSignerName, setLegalSignerName] = useState('');
+  const [offerId] = useState(() => `mcce-${crypto.randomUUID()}`);
+  const offerDate = new Date().toISOString().slice(0, 10);
+  const reviewDate = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
   const [biometricVerified, setBiometricVerified] = useState(false);
   const [biometricBusy, setBiometricBusy] = useState(false);
   const [biometricNote, setBiometricNote] = useState('');
@@ -102,6 +109,40 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
         : undefined
       : offerOptions.find((o) => o.tier === selectedPackage) ?? offerOptions[0];
 
+  // Step 1 additions
+  const [isVirtual, setIsVirtual] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [googleClaimed, setGoogleClaimed] = useState(false);
+
+  const contractData = useMemo(
+    () => ({
+      affiliateLegalName: legalName || name,
+      affiliateRfc: rfc || undefined,
+      affiliateAddress: isVirtual ? 'Negocio Virtual' : address,
+      representative: legalSignerName,
+      representativePosition: representativePosition || undefined,
+      businessName: name,
+      niche: niche || category,
+      offerId,
+      offerDate,
+      capacityTotal: selectedOption?.totalCapacity ?? 0,
+      promo: selectedOption?.promoCapacity ?? 0,
+      credit: selectedOption?.creditCapacity ?? 0,
+      provisioned: 0,
+      coverageDays: selectedOption?.coverageDays ?? 0,
+      reviewDate,
+      recoveryTerms: 'Recuperación desde capacidad generada por actividad elegible; sin intereses; con protección de lo comprometido.',
+      operationalTerms: 'Sucursal principal; horarios, productos y servicios declarados en el alta; reclamaciones por los canales de soporte de Rabbitty.',
+      contactEmail: contactEmail || undefined,
+    }),
+    [
+      legalName, name, rfc, isVirtual, address, legalSignerName, representativePosition,
+      niche, category, offerId, offerDate, selectedOption, reviewDate, contactEmail,
+    ]
+  );
+
+  const contractText = useMemo(() => renderContract(contractData), [contractData]);
+
   const handleBiometric = async () => {
     setBiometricBusy(true);
     setBiometricNote('');
@@ -116,11 +157,6 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
       setBiometricBusy(false);
     }
   };
-
-  // Step 1 additions
-  const [isVirtual, setIsVirtual] = useState(false);
-  const [locating, setLocating] = useState(false);
-  const [googleClaimed, setGoogleClaimed] = useState(false);
 
   const handleUseLocation = () => {
     if (!navigator.geolocation) {
@@ -164,8 +200,8 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
   };
 
   const nextStep = () => {
-    if (step === 1 && (!name || !category || (!isVirtual && !address))) {
-      setError("Por favor completa todos los campos requeridos.");
+    if (step === 1 && (!name || !category || !legalName || legalSignerName.trim().length < 3 || (!isVirtual && !address))) {
+      setError("Completa el nombre comercial, la razón social, el representante legal y la dirección.");
       return;
     }
     if (step === 2 && rewardPercentage < 10) {
@@ -189,7 +225,7 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
       setError('No hay una capacidad calculada. Revisa tus datos de operación.');
       return;
     }
-    const contractHash = await hashContract(MCCE_CONTRACT_TEXT);
+    const contractHash = await hashContract(contractText);
     const offer = {
       tier: selectedOption.tier,
       coverageDays: selectedOption.coverageDays,
@@ -222,6 +258,8 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
         contractVersion: MCCE_CONTRACT_VERSION,
         contractStatus: MCCE_CONTRACT_STATUS,
         contractHash,
+        contractData,
+        contractText,
         signatureMethod: biometricVerified ? 'biometric' : 'name_checkbox',
         biometricVerified,
         acceptedTerms: true,
@@ -330,6 +368,30 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
                 <div>
                   <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.6)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>Nombre Comercial</label>
                   <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Ej. Café Cultura" style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: '16px 20px', borderRadius: 16, color: '#fff', fontSize: 16, outline: 'none' }} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Razón social / nombre legal</label>
+                  <input type="text" value={legalName} onChange={e => setLegalName(e.target.value)} placeholder="Ej. Café Cultura SA de CV" style={inputStyle} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={labelStyle}>RFC (opcional)</label>
+                    <input type="text" value={rfc} onChange={e => setRfc(e.target.value.toUpperCase())} placeholder="XAXX010101000" style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Correo de contacto</label>
+                    <input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} placeholder="contacto@negocio.mx" style={inputStyle} />
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={labelStyle}>Representante legal</label>
+                    <input type="text" value={legalSignerName} onChange={e => setLegalSignerName(e.target.value)} placeholder="Nombre completo" style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Cargo</label>
+                    <input type="text" value={representativePosition} onChange={e => setRepresentativePosition(e.target.value)} placeholder="Titular / Administrador" style={inputStyle} />
+                  </div>
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.6)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>Categoría</label>
@@ -603,7 +665,7 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
               </div>
 
               <div style={{ background: 'rgba(0,0,0,0.35)', borderRadius: 16, padding: 14, maxHeight: 230, overflowY: 'auto', border: '1px solid rgba(255,255,255,0.08)', fontSize: 11.5, color: 'rgba(255,255,255,0.7)', lineHeight: 1.55, marginBottom: 14, whiteSpace: 'pre-wrap' }}>
-                {MCCE_CONTRACT_TEXT}
+                {contractText}
               </div>
 
               {MCCE_CONTRACT_STATUS === 'draft' && (
@@ -641,25 +703,13 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
               </div>
 
               <div style={{ marginBottom: 18 }}>
-                <label style={labelStyle}>Firma del representante legal / titular</label>
-                <input
-                  type="text"
-                  value={legalSignerName}
-                  onChange={(e) => setLegalSignerName(e.target.value)}
-                  placeholder="Escribe tu nombre completo como firma..."
-                  style={{
-                    width: '100%',
-                    background: 'rgba(255,255,255,0.05)',
-                    border: legalSignerName.trim().length >= 3 ? '1px solid rgba(16,185,129,0.5)' : '1px solid rgba(255,255,255,0.15)',
-                    padding: '13px 16px',
-                    borderRadius: 14,
-                    color: '#fff',
-                    fontSize: 14,
-                    fontStyle: 'italic',
-                    fontWeight: 600,
-                    outline: 'none',
-                  }}
-                />
+                <p style={labelStyle}>Firmante</p>
+                <p style={{ margin: '0 0 4px', fontSize: 14, fontStyle: 'italic', fontWeight: 700, color: legalSignerName.trim().length >= 3 ? '#34D399' : 'rgba(255,255,255,0.5)' }}>
+                  {legalSignerName.trim().length >= 3 ? legalSignerName : 'Completa el representante legal en el paso 1.'}
+                </p>
+                <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.4)' }}>
+                  El contrato se genera con la razón social, RFC, domicilio, representante y la oferta de capacidad de este alta.
+                </p>
 
                 <div style={{ marginTop: 12 }}>
                   {biometricVerified ? (

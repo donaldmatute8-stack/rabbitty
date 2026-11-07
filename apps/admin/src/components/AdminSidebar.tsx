@@ -146,7 +146,7 @@ const godPillars: MenuPillar[] = [
     items: [
       { href: "/loyalty", label: "Split & Deuda Bunz", icon: Award },
       { href: "/god/conciliaciones", label: "Conciliaciones", icon: Scale },
-      { href: "/god/economia", label: "Economía & Ledger", icon: Scale },
+      { href: "/god/economia", label: "Centro económico", icon: Scale },
     ],
   },
   {

@@ -7,6 +7,7 @@ import { restaurants, branches } from '@rabbitty/database-restaurant/schema';
 import { parseTelegramUser, validateTelegramInitData } from '@/lib/telegramAuth';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 import { sendEcosystemNotification } from '@/lib/push/notify';
+import { hashContract } from '@/lib/mcceContract';
 
 const ADMIN_TELEGRAM_IDS = (process.env.ADMIN_TELEGRAM_IDS || '798431743').split(',');
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -238,6 +239,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing authentication' }, { status: 401 });
     }
 
+    // MCCE: el hash debe corresponder al texto exacto que aceptó el afiliado.
+    if (contractSignature?.contractText && contractSignature?.contractHash) {
+      const expected = await hashContract(String(contractSignature.contractText));
+      if (expected !== String(contractSignature.contractHash)) {
+        return NextResponse.json(
+          { error: 'CONTRACT_HASH_MISMATCH', message: 'El contrato cambió después de la firma.' },
+          { status: 400 }
+        );
+      }
+    }
+
     const lat = manualLat ?? (19.4326 + (Math.random() - 0.5) * 0.05);
     const lng = manualLng ?? (-99.1332 + (Math.random() - 0.5) * 0.05);
 
@@ -327,7 +339,12 @@ export async function POST(req: Request) {
           category,
           package: selectedPackage || 'none',
           creditLimit: parsedCredit,
-          contractSignature,
+          contractVersion: contractSignature?.contractVersion,
+          contractStatus: contractSignature?.contractStatus,
+          contractHash: contractSignature?.contractHash,
+          signatureMethod: contractSignature?.signatureMethod,
+          signedBy: contractSignature?.signedBy,
+          offer: contractSignature?.offer,
         }),
       });
 

@@ -52,6 +52,8 @@ export const users = pgTable("users", {
   //                        (sin límite anti-spam de 12h; dedupe ventana 5 min)
   //  Otros keys se ignoran — reglas nuevas se agregan al contrato lib/push/rules.
   pushRules: text("pushRules").default("{}").notNull(),
+  /** Usuario de prueba: sus saldos se depuran y no tienen valor real. */
+  sandbox: boolean("sandbox").default(false).notNull(),
 });
 
 export const verificationTokens = pgTable("verificationTokens", {

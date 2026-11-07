@@ -126,6 +126,8 @@ const GROUPS = [
       "scripts/mcce-shadow-v2.mjs",
       "scripts/mcce-reconcile.mjs",
       "packages/database-core/migrations/manual/0041_mcce_capacity.sql",
+      "packages/database-core/migrations/manual/0042_users_sandbox.sql",
+      "apps/admin/src/app/(dashboard)/god/economia/page.tsx",
       "telegram-miniapp/src/features/business/BusinessSetupForm.tsx",
       "telegram-miniapp/src/lib/mcceOffer.ts",
       "telegram-miniapp/src/lib/mcceContract.ts",
