@@ -130,6 +130,8 @@ const GROUPS = [
       "DOCS/MCCE-RECUPERACION-DINAMICA-IMPLEMENTACION.md",
       "DOCS/ACTUALIZACION-GUIAS-Y-CAPACIDAD-DINAMICA-2026-11-07.md",
       "DOCS/AUDITORIA-LEGAL-PRIVACIDAD-HALLAZGOS-Y-CIERRE-2026-11-07.md",
+      "DOCS/RESET-BUNZ-Y-PLAN-REONBOARDING-626-2026-11-07.md",
+      "scripts/reset-bunz-economy.mjs",
       "landing-page/src/lib/capacity.ts",
       "landing-page/src/components/PricingPackagesSection.tsx",
       "landing-page/src/app/negocios/page.tsx",
