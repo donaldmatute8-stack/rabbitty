@@ -117,6 +117,8 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
 
   const contractData = useMemo(
     () => ({
+      rabbittyEntity: 'MXHUB ECOSISTEMA BLOCKCHAIN, S.A. DE C.V.',
+      rabbittyRfc: 'MEB2402087Z3',
       affiliateLegalName: legalName || name,
       affiliateRfc: rfc || undefined,
       affiliateAddress: isVirtual ? 'Negocio Virtual' : address,

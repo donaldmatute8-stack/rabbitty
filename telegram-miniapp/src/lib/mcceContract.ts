@@ -10,11 +10,14 @@
  * este archivo.
  */
 
-export const MCCE_CONTRACT_VERSION = "2026.11-v1.1-draft";
+export const MCCE_CONTRACT_VERSION = "2026.11-v1.2-draft";
+export const RABBITTY_LEGAL_ENTITY = "MXHUB ECOSISTEMA BLOCKCHAIN, S.A. DE C.V.";
+export const RABBITTY_RFC = "MEB2402087Z3";
 export const MCCE_CONTRACT_STATUS: "draft" | "approved" = "draft";
 
 export type ContractData = {
   rabbittyEntity?: string;
+  rabbittyRfc?: string;
   affiliateLegalName?: string;
   affiliateRfc?: string;
   affiliateAddress?: string;
@@ -42,7 +45,7 @@ Versión {{CONTRACT_VERSION}} — Borrador para revisión legal
 Estado: no aprobado para firma ni activación de capacidad real.
 
 PARTES
-Rabbitty: {{RABBITTY_ENTITY}}
+Rabbitty: {{RABBITTY_ENTITY}} (RFC {{RABBITTY_RFC}})
 Afiliado: {{AFFILIATE_LEGAL_NAME}} (RFC {{AFFILIATE_RFC}})
 Domicilio: {{AFFILIATE_ADDRESS}}
 Representante: {{REPRESENTATIVE}} ({{REPRESENTATIVE_POSITION}})
@@ -119,7 +122,7 @@ El Acuerdo solo se modifica por instrumento escrito o electrónico aceptado por 
 Las notificaciones se enviarán a los datos del Anexo A y deberán poder acreditarse. Ninguna Parte responderá por retrasos causados por eventos imprevisibles o inevitables fuera de su control, con notificación y mitigación. El Acuerdo se rige por las leyes federales de México y las locales aplicables. Las Partes intentarán resolver controversias de buena fe durante quince días hábiles; si no, se someten a los tribunales competentes de {{JURISDICTION}}, sin perjuicio de competencias irrenunciables.
 
 20. ACEPTACIÓN Y EVIDENCIA
-La aceptación se realiza mediante un mecanismo que identifica al firmante, acredita su intención de obligarse, vincula la versión exacta y detecta alteraciones. El Afiliado declara haber tenido oportunidad de revisar el Acuerdo y sus anexos, conservar copia y recibir información clara sobre la capacidad. La aceptación por representante de persona moral incluye evidencia razonable de facultades. El Acuerdo no se considera activado hasta cumplir aceptación, autorización y confirmación.
+La aceptación se realiza con el nombre completo del firmante y una acción afirmativa (checkbox), mediante un mecanismo que identifica al firmante, acredita su intención de obligarse, vincula la versión exacta y detecta alteraciones. La autenticación local del dispositivo (Face ID / Touch ID) es opcional y no constituye firma biométrica ni e.firma. El Afiliado declara haber tenido oportunidad de revisar el Acuerdo y sus anexos, conservar copia y recibir información clara sobre la capacidad. La aceptación por representante de persona moral incluye evidencia razonable de facultades. El Acuerdo no se considera activado hasta cumplir aceptación, autorización y confirmación.
 
 ANEXO A — OFERTA ECONÓMICA INDIVIDUAL
 Identificador: {{OFFER_ID}}
@@ -157,7 +160,8 @@ export const MCCE_CONTRACT_SUMMARY =
 export function renderContract(data: ContractData = {}): string {
   const values: Record<string, string> = {
     CONTRACT_VERSION: MCCE_CONTRACT_VERSION,
-    RABBITTY_ENTITY: data.rabbittyEntity || "Rabbitty",
+    RABBITTY_ENTITY: data.rabbittyEntity || RABBITTY_LEGAL_ENTITY,
+    RABBITTY_RFC: data.rabbittyRfc || RABBITTY_RFC,
     AFFILIATE_LEGAL_NAME: data.affiliateLegalName || MISSING,
     AFFILIATE_RFC: data.affiliateRfc || MISSING,
     AFFILIATE_ADDRESS: data.affiliateAddress || MISSING,
