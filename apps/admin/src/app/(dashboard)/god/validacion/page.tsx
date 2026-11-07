@@ -10,8 +10,11 @@ import {
   Copy,
   Download,
   FileSearch,
+  GitCompare,
   ListChecks,
+  Loader2,
   Lock,
+  Play,
   RefreshCw,
   Scale,
   ShieldCheck,
@@ -119,6 +122,11 @@ export default function GodValidationPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [capturing, setCapturing] = useState(false);
+  const [captureLines, setCaptureLines] = useState<string[]>([]);
+  const [captureError, setCaptureError] = useState<string | null>(null);
+  const [compare, setCompare] = useState<Snapshot | null>(null);
+  const [comparing, setComparing] = useState(false);
 
   const fetchList = useCallback(async () => {
     const res = await fetch(
@@ -165,6 +173,61 @@ export default function GodValidationPage() {
   const onSelect = async (id: string) => {
     setSelected(id);
     setSnapshot(await fetchSnapshot(id));
+  };
+
+  /**
+   * Ejecuta la captura ahora (misma ruta que el cron, autenticada con la sesión
+   * God + 2FA). Solo hace SELECT en la base y escribe un snapshot JSON.
+   */
+  const runCapture = async () => {
+    setCapturing(true);
+    setCaptureError(null);
+    setCaptureLines([]);
+    try {
+      const res = await fetch("/api/trpc/god.runValidationCapture?batch=1", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ "0": { json: null } }),
+      });
+      const payload = await res.json();
+      const data = payload?.[0]?.result?.data?.json;
+      if (!res.ok || !data?.ok) {
+        throw new Error(payload?.[0]?.error?.json?.message ?? "la captura falló");
+      }
+      setCaptureLines(Array.isArray(data.output) ? data.output : []);
+      const fresh = await fetchList();
+      const id = data.label ?? fresh.snapshots?.[0]?.id;
+      if (id) {
+        setSelected(id);
+        setSnapshot(await fetchSnapshot(id));
+      }
+    } catch (e) {
+      setCaptureError(e instanceof Error ? e.message : "la captura falló");
+    } finally {
+      setCapturing(false);
+    }
+  };
+
+  const prevSummary = useMemo(() => {
+    const idx = list.findIndex((s) => s.id === selected);
+    return idx >= 0 && idx < list.length - 1 ? list[idx + 1] : null;
+  }, [list, selected]);
+
+  /** Compara la captura seleccionada con la anterior (solo lectura). */
+  const toggleCompare = async () => {
+    if (compare) {
+      setCompare(null);
+      return;
+    }
+    if (!prevSummary) return;
+    setComparing(true);
+    try {
+      setCompare(await fetchSnapshot(prevSummary.id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "no se pudo cargar la captura anterior");
+    } finally {
+      setComparing(false);
+    }
   };
 
   const copyReport = async () => {
@@ -233,10 +296,11 @@ export default function GodValidationPage() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-black text-white tracking-tight">Validación económica</h1>
-              <Badge tone="info">read-only</Badge>
+              <Badge tone="info">solo lectura</Badge>
             </div>
             <p className="text-xs text-gray-400 mt-1">
               Parte semanal del pipeline: cobertura, huecos, reglas, backtest y compuertas. No aprueba nada.
+              La captura solo hace SELECT y escribe el snapshot; no toca economía.
             </p>
           </div>
         </div>
@@ -255,7 +319,30 @@ export default function GodValidationPage() {
               ))}
             </select>
           )}
-          <Button variant="ghost" onClick={() => void load()} disabled={loading}>
+          <Button
+            variant="primary"
+            onClick={() => void runCapture()}
+            disabled={capturing || loading}
+            title="Ejecutar la captura semanal ahora (solo SELECT)"
+          >
+            {capturing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Play className="h-4 w-4" />
+            )}
+            <span className="ml-2 text-xs font-bold">
+              {capturing ? "Capturando…" : "Ejecutar captura"}
+            </span>
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => void toggleCompare()}
+            disabled={!prevSummary || comparing}
+            title={prevSummary ? `Comparar con ${prevSummary.id}` : "No hay captura anterior"}
+          >
+            {comparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <GitCompare className="h-4 w-4" />}
+          </Button>
+          <Button variant="ghost" onClick={() => void load()} disabled={loading || capturing}>
             <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
           </Button>
           <Button variant="ghost" onClick={copyReport} disabled={!snapshot} title="Copiar reporte de 5 líneas">
@@ -270,6 +357,64 @@ export default function GodValidationPage() {
       {error && (
         <Card className="p-4 bg-red-500/10 border-red-500/30 text-sm text-red-200">
           {error}
+        </Card>
+      )}
+
+      {captureError && (
+        <Card className="p-4 bg-red-500/10 border-red-500/30 text-sm text-red-200">
+          <div className="font-semibold mb-1">La captura falló</div>
+          <p className="text-xs text-red-300/90">{captureError}</p>
+        </Card>
+      )}
+
+      {captureLines.length > 0 && (
+        <Card className="p-4 bg-emerald-500/10 border-emerald-500/30">
+          <div className="flex items-center gap-2 mb-2">
+            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+            <span className="text-sm font-semibold text-emerald-200">Captura ejecutada</span>
+          </div>
+          <pre className="text-[11px] leading-relaxed text-emerald-100/90 whitespace-pre-wrap m-0">
+            {captureLines.join("\n")}
+          </pre>
+        </Card>
+      )}
+
+      {compare && snapshot && (
+        <Card className="p-5 bg-white/5 border-white/10 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-bold text-white flex items-center gap-2">
+              <GitCompare className="h-4 w-4 text-sky-400" /> Comparación con {compare.export_id ?? "anterior"}
+            </h2>
+            <Button variant="ghost" onClick={() => setCompare(null)} title="Cerrar comparación">
+              <XCircle className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1">
+            {[...new Set([...Object.keys(snapshot.counts ?? {}), ...Object.keys(compare.counts ?? {})])]
+              .sort()
+              .map((key) => {
+                const now = snapshot.counts?.[key];
+                const before = compare.counts?.[key];
+                const delta = typeof now === "number" && typeof before === "number" ? now - before : null;
+                return (
+                  <div key={key} className="flex items-center justify-between gap-3 py-1.5 border-b border-white/5">
+                    <span className="text-xs text-gray-400">{key}</span>
+                    <span className="text-xs font-mono text-gray-200">
+                      {num(now)} <span className="text-gray-500">← {num(before)}</span>{" "}
+                      {delta !== null && delta !== 0 && (
+                        <span className={delta > 0 ? "text-emerald-300" : "text-amber-300"}>
+                          ({delta > 0 ? "+" : ""}
+                          {delta})
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
+          </div>
+          <p className="text-[11px] text-gray-500">
+            Comparación de conteos entre capturas. No interpreta la economía ni aprueba nada.
+          </p>
         </Card>
       )}
 

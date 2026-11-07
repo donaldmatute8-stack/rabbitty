@@ -38,6 +38,7 @@ import {
   validationDir,
 } from "../services/validationSnapshots";
 import { isSettlementEnabled, settleObligation } from "../services/bunzObligations";
+import { runValidationCapture } from "../services/validationCapture";
 
 /** Desenrolla result de drizzle raw SQL (rows array en pg driver). */
 const sqlRows = (r: unknown) => ((r as { rows?: unknown[] }).rows ?? r) as Array<Record<string, unknown>>;
@@ -1289,6 +1290,27 @@ export const godRouter = router({
       }
       return result;
     }),
+
+  /**
+   * Ejecuta la captura semanal desde el panel (botón "Ejecutar captura").
+   * Solo hace SELECT y escribe un snapshot en el volumen: no mueve economía.
+   */
+  runValidationCapture: godAdminProcedure.mutation(async () => {
+    if (!isValidationPanelEnabled()) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Panel de validación deshabilitado (GOD_VALIDATION_PANEL).",
+      });
+    }
+    const result = await runValidationCapture();
+    if (!result.ok) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: result.error ?? "la captura falló",
+      });
+    }
+    return result;
+  }),
 
   getValidationSnapshot: godAdminProcedure
     .input(z.object({ id: z.string().max(80).optional() }).optional())
