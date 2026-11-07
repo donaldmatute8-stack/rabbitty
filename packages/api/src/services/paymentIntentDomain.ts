@@ -10,10 +10,13 @@ import {
   distributionAllocations,
   settlementOperations,
   branches,
-  restaurants
+  restaurants,
+  bunzRedemptionAttempts,
+  bunzLedgerEntries,
 } from "@rabbitty/database-restaurant/schema";
 import { users, ownedBusinesses } from "@rabbitty/database-core/schema";
 import { buildShadowReport, recordShadowReport } from "./payments/shadow";
+import { recordRedemptionBooks } from "./bunzBooks";
 
 /**
  * @deprecated RP-0.7 — motor legacy en migración a paymentCore.
@@ -444,6 +447,18 @@ export class PaymentIntentService {
               : { bunzPaid: requiredBunzInt }
           )
           .where(eq(orders.id, intent.orderId));
+      }
+
+      // OT-1 / OT-3: el motor legacy (miniapp) también deja intento y asientos.
+      // Antes escribía `bunzPaid` sin pasar por el libro: la captura no lo veía.
+      if (requiredBunzInt > 0) {
+        await recordRedemptionBooks(tx, {
+          orderId: intent.orderId ?? intent.id,
+          branchId: intent.merchantId,
+          bunz: requiredBunzInt,
+          userHash: payerUser.id,
+          tables: { attempts: bunzRedemptionAttempts, ledger: bunzLedgerEntries },
+        });
       }
 
       // ── D-13 · Patrón condicional atómico (modelo §3) ──

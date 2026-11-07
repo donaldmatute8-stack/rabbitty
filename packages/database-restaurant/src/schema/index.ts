@@ -207,8 +207,10 @@ export const orders = pgTable("orders", {
   voidReason: text("voidReason"),
   cfdiStatus: text("cfdiStatus").default("NONE").notNull(),
   cfdiUrl: text("cfdiUrl"),
+  /** RP-2A: clave de idempotencia del cobro. Única cuando existe. */
+  idempotencyKey: text("idempotencyKey"),
   ...timestamps,
-});
+}, (t) => [uniqueIndex("orders_idempotency_key_idx").on(t.idempotencyKey)]);
 
 /**
  * 🛵 Entregas (última milla) — capa proveedor-agnóstica.

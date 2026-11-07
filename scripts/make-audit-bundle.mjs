@@ -48,6 +48,7 @@ const GROUPS = [
       "packages/database-restaurant/migrations/manual/0028_ot2_ot3_bunz_books.sql",
       "packages/database-restaurant/migrations/manual/0029_ot5_abuse_signals.sql",
       "packages/database-restaurant/migrations/manual/0030_ot2_settlement_equivalence.sql",
+      "packages/database-restaurant/migrations/manual/0031_rp2a_checkout_idempotency.sql",
       "DOCS/RP2-READINESS-AUDIT.md",
       "DOCS/BUNZ-CAPTURA-READONLY.sql",
     ],

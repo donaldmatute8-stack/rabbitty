@@ -149,6 +149,8 @@ export default function PosPage() {
   const verifyStripeIntentMut = trpc.payments.verifyStripePaymentIntent.useMutation();
   const requestCashPaymentMut = trpc.payments.requestCashPayment.useMutation();
   const stripeIntentId = useRef<string | null>(null);
+  // RP-2A: clave estable por intento de cobro (reintentos no duplican).
+  const checkoutKeyRef = useRef<string | null>(null);
 
   // ── H7 (race de cierre): el comensal puede liquidar segundos DESPUÉS de que
   // el operador cierra el QR. Cerrar ya no cancela a ciegas: re-lee el intent
@@ -1515,6 +1517,8 @@ export default function PosPage() {
   const requestCheckout = (method: string) => {
     if (!requirePermission("POS_CHARGE")) return;
     if (cart.length === 0 || isCharging) return;
+    // Clave nueva por intento; se conserva si el cajero reintenta el mismo cobro.
+    checkoutKeyRef.current = crypto.randomUUID();
     setPendingMethod(method);    // Para pagos en efectivo, inicializar con el total exacto o vacío para facilitar la captura
     if (method === "EFECTIVO" || method === "VENTA DIRECTA" || method === "DIVIDIDA") {
       setCashReceived("");
@@ -1648,7 +1652,10 @@ export default function PosPage() {
           // Solo se reutiliza un BORRADOR vacío. Si la comanda vinculada ya
           // es el pedido real del móvil, se cobra desde su tarjeta en Operación.
           existingOrderId: draftOrderId && !draftHasItems ? draftOrderId : undefined,
+          // RP-2A: si la red falla y el cajero reintenta, el server no duplica.
+          idempotencyKey: checkoutKeyRef.current ?? undefined,
         });
+        checkoutKeyRef.current = null;
 
         if (checkoutResult.orderNumber) {
           realOrderNumber = checkoutResult.orderNumber;
@@ -2594,14 +2601,6 @@ export default function PosPage() {
                 <CreditCard className="h-4 w-4 text-gray-400 group-hover:text-cyan-400" />
                 <span className="text-[9px] font-black uppercase tracking-wider text-gray-400 group-hover:text-cyan-400">Tarjeta</span>
               </button>
-              <button 
-                onClick={() => requestCheckout("DIVIDIDA")}
-                disabled={cart.length === 0}
-                className="group flex flex-col items-center justify-center gap-0.5 rounded-xl bg-white/5 py-1.5 border border-white/10 hover:bg-amber-500/20 hover:border-amber-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
-              >
-                <Split className="h-4 w-4 text-gray-400 group-hover:text-amber-400" />
-                <span className="text-[9px] font-black uppercase tracking-wider text-gray-400 group-hover:text-amber-400">Dividir</span>
-              </button>
             </div>
 
             {/* ── Gratificación voluntaria (D-11) — colapsada por defecto:
@@ -3053,7 +3052,6 @@ export default function PosPage() {
             {([
               ["EFECTIVO", Banknote, "Efectivo", "Cuenta en caja con cambio", "group-hover:border-emerald-400/60 group-hover:bg-emerald-400/10", "text-emerald-400"],
               ["TARJETA", CreditCard, "Tarjeta", "Rabbitty Pay o terminal física", "group-hover:border-cyan-400/60 group-hover:bg-cyan-400/10", "text-cyan-400"],
-              ["DIVIDIDA", Split, "Dividida", "Parte efectivo + parte Bunz", "group-hover:border-amber-400/60 group-hover:bg-amber-400/10", "text-amber-400"],
             ] as const).map(([method, Icon, label, desc, hoverCls, iconCls]) => (
               <button
                 key={method}

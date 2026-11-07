@@ -58,6 +58,23 @@ async function toUsdAmount(restaurantDb: any, branchId: string, mxn: number): Pr
  * Genera un claimToken criptográfico para el ticket de compra.
  * Formato: orderId.exp.hmac (de un solo uso, expira en 48 horas).
  */
+/** Respuesta de un cobro ya completado con la misma clave de idempotencia. */
+function completedCheckoutResponse(order: typeof orders.$inferSelect, fallbackBranchId: string) {
+  return {
+    success: true as const,
+    orderId: order.id,
+    orderNumber: order.id.slice(-4).toUpperCase(),
+    total: order.total,
+    subtotal: order.subtotal,
+    tax: order.tax,
+    customerName: order.customerName ?? null,
+    awardedBunz: Number(order.bunzReward ?? 0),
+    rewardQueued: Boolean(order.bunzReward && order.bunzReward > 0),
+    claimToken: generateTicketClaimToken(order.id, order.total, order.branchId ?? fallbackBranchId),
+    idempotent: true,
+  };
+}
+
 export function generateTicketClaimToken(orderId: string, amount: number, branchId: string): string {
   const secret = process.env.RABBITTY_API_SECRET;
   if (!secret) {
@@ -917,6 +934,12 @@ export const posRouter = router({
     }),
 
   payOrder: posProcedure
+    /**
+     * LEGACY. El POS activo (admin) usa `directCheckout` para fiat y
+     * `createPaymentIntent` para Bunz. Esta ruta escribía `bunzPaid` y cobraba
+     * el saldo DESPUÉS del commit: si el cobro fallaba, la orden quedaba pagada.
+     * Se bloquea Bunz salvo rollback explícito (`RABBITTY_LEGACY_BUNZ=true`).
+     */
     .input(
       z.object({
         orderId: z.string(),
@@ -929,6 +952,15 @@ export const posRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (input.method === "CASH") {
         await assertOpenShiftForCash(ctx.restaurantDb, ctx.branchId);
+      }
+      // RP-2A: ruta legacy. En Bunz no verifica saldo y cobra post-commit; se
+      // cierra para que todo cobro Bunz pase por el intento canónico.
+      if (input.method === "BUNZ" && process.env.RABBITTY_LEGACY_BUNZ !== "true") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "LEGACY_BUNZ_DISABLED: usa el intento de pago canónico (createPaymentIntent) para cobrar con Bunz.",
+        });
       }
       // P0-3: tarjeta exige referencia de terminal (no basta el cajero)
       assertCardPaymentAllowed(input.method, input.reference);
@@ -1628,6 +1660,8 @@ export const posRouter = router({
         // H-PERSIST: si el cliente fue vinculado antes, la comanda ya existe
         // (PENDING, en Tabs). El cobro la REUTILIZA en vez de crear otra.
         existingOrderId: z.string().uuid().optional(),
+        /** RP-2A: clave de idempotencia del cobro (reintentos no duplican). */
+        idempotencyKey: z.string().min(8).max(120).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -1642,6 +1676,35 @@ export const posRouter = router({
       }
       // P0-3: tarjeta exige referencia de terminal
       assertCardPaymentAllowed(input.paymentMethod, input.cardReference);
+
+      // RP-2A: el split no está habilitado en el piloto (vuelve en Fase C,
+      // migrado al intent canónico). Antes se cobraba fuera de transacción y,
+      // si fallaba, se registraba CASH en silencio.
+      if (pendingSplit(input)) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "SPLIT_DISABLED: el pago dividido no está habilitado en el piloto. Usa un intento de pago canónico.",
+        });
+      }
+
+      // RP-2A: idempotencia de request. Un reintento devuelve el mismo cobro.
+      if (input.idempotencyKey) {
+        const [prior] = await ctx.restaurantDb
+          .select()
+          .from(orders)
+          .where(eq(orders.idempotencyKey, input.idempotencyKey))
+          .limit(1);
+        if (prior) {
+          if (prior.status === ORDER_STATUS.COMPLETED) {
+            return completedCheckoutResponse(prior, ctx.branchId);
+          }
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "Ya hay un cobro en proceso con esta clave. Espera un momento y reintenta.",
+          });
+        }
+      }
 
       // 1. Orden: reutiliza la comanda persistente del cliente si existe
       //    (H-PERSIST) — así vincular no deja un borrador huérfano en Tabs.
@@ -1693,21 +1756,42 @@ export const posRouter = router({
           });
         }
       } else {
-        const [created] = await ctx.restaurantDb.insert(orders).values({
-          branchId: ctx.branchId,
-          tableId: input.tableId ?? null,
-          orderType: input.orderType,
-          customerId: input.customerId ?? null,
-          customerName: input.customerName ?? null,
-          customerPhone: input.customerPhone ?? null,
-          subtotal: 0,
-          tax: 0,
-          discount: 0,
-          tip: 0,
-          total: 0,
-          status: "PENDING",
-        }).returning();
-        if (!created) throw new Error("No se pudo crear la orden en base de datos");
+        const [created] = await ctx.restaurantDb
+          .insert(orders)
+          .values({
+            branchId: ctx.branchId,
+            tableId: input.tableId ?? null,
+            orderType: input.orderType,
+            customerId: input.customerId ?? null,
+            customerName: input.customerName ?? null,
+            customerPhone: input.customerPhone ?? null,
+            subtotal: 0,
+            tax: 0,
+            discount: 0,
+            tip: 0,
+            total: 0,
+            status: "PENDING",
+            idempotencyKey: input.idempotencyKey ?? null,
+          })
+          .onConflictDoNothing({ target: orders.idempotencyKey })
+          .returning();
+        if (!created) {
+          // Carrera: otra petición con la misma clave ganó el insert.
+          const [prior] = input.idempotencyKey
+            ? await ctx.restaurantDb
+                .select()
+                .from(orders)
+                .where(eq(orders.idempotencyKey, input.idempotencyKey))
+                .limit(1)
+            : [];
+          if (prior && prior.status === ORDER_STATUS.COMPLETED) {
+            return completedCheckoutResponse(prior, ctx.branchId);
+          }
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "Ya hay un cobro en proceso con esta clave. Espera un momento y reintenta.",
+          });
+        }
         order = created;
       }
 
@@ -1746,6 +1830,9 @@ export const posRouter = router({
       // con el saldo del pase (jamás cubre el 100%: siempre queda el settle
       // normal para que el cashback/CRM corran por su camino canónico).
       let creditApplied = 0;
+      // RP-2A: si el cierre atómico falla, se devuelven los beneficios ya
+      // consumidos (crédito/cuota) para no cobrarle al cliente dos veces.
+      const membershipCompensations: Array<() => Promise<unknown>> = [];
       if (input.entitlementIds && input.entitlementIds.length > 0) {
         if (!input.customerId) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Vincula al Rabbitter antes de aplicar su beneficio de membresía." });
@@ -1824,6 +1911,14 @@ export const posRouter = router({
               throw new TRPCError({ code: "CONFLICT", message: "El saldo de la membresía cambió — revisa y vuelve a aplicar." });
             }
             creditApplied = r2(creditApplied + applied);
+            membershipCompensations.push(() =>
+              ctx.coreDb
+                .update(coreMembershipEnts)
+                .set({
+                  creditBalance: sql`COALESCE(${coreMembershipEnts.creditBalance}, 0) + ${applied}`,
+                })
+                .where(eq(coreMembershipEnts.id, ent.id))
+            );
           } else {
             const res = await ctx.coreDb
               .update(coreMembershipEnts)
@@ -1838,6 +1933,17 @@ export const posRouter = router({
             }
             calculatedDiscount = r2(calculatedDiscount + applied);
             finalAmount = r2(Math.max(0, finalAmount - applied));
+            membershipCompensations.push(async () => {
+              await ctx.coreDb
+                .update(coreMembershipEnts)
+                .set({
+                  currentUsageInCycle: sql`GREATEST(0, COALESCE(${coreMembershipEnts.currentUsageInCycle}, 0) - 1)`,
+                })
+                .where(eq(coreMembershipEnts.id, ent.id));
+              await ctx.coreDb
+                .delete(coreEntUsages)
+                .where(eq(coreEntUsages.idempotencyKey, `ord_${order.id}_ent_${ent.id}`));
+            });
           }
           runningNet = r2(Math.max(0, runningNet - applied));
           // Registro de uso ligado a la orden (auditable + anti-doble)
@@ -1897,120 +2003,134 @@ export const posRouter = router({
         }
       }
 
-      await ctx.restaurantDb.update(orders).set({
-        subtotal: calcSubtotal,
-        tax: calcTaxAmt,
-        discount: calculatedDiscount,
-        total: calcTotal,
-        tip: posTip,
-      }).where(eq(orders.id, order.id));
+      // ── RP-2A · cierre atómico ──────────────────────────────────────────
+      // Totales, pago, estado COMPLETED, cierre de mesa y stock se confirman
+      // juntos. Si algo falla, no queda una orden pagada sin inventario ni
+      // inventario descontado sin pago.
+      // Opt-in: el descuento es atómico siempre; bloquear por stock es política
+      // aparte (actívala con RABBITTY_STOCK_STRICT=true cuando el inventario sea fiable).
+      const strictStock = process.env.RABBITTY_STOCK_STRICT === "true";
+      const createdNew = !input.existingOrderId;
+      const mainPaymentAmount = r2(Math.max(0, calcTotal - creditApplied));
 
-      // 3. Delegate to payOrder logic (insert payment, deduct inventory, trigger Bunz and CRM)
-      // GAP 1: si hubo CREDIT_BALANCE, el crédito es un pago parcial propio —
-      // el método del cajero cubre el resto (la lógica de Bunz/CRM corre sobre
-      // el cobro normal, sin duplicar).
-      // ── Split DIVIDIDA: pagos separados — efectivo + Bunz del cliente ──
-      const isSplit = pendingSplit(input);
-      const mainPaymentAmount = isSplit
-        ? r2(Math.max(0, input.splitCash! + posTip))
-        : r2(Math.max(0, calcTotal - creditApplied));
-      const [payment] = await ctx.restaurantDb.insert(payments).values({
-        orderId: order.id,
-        method: input.paymentMethod,
-        amount: mainPaymentAmount,
-        tipAmount: posTip,
-        reference: isCardMethod(input.paymentMethod) ? input.cardReference : undefined,
-        verificationMethod: isCardMethod(input.paymentMethod)
-          ? "EXTERNAL_TERMINAL"
-          : "CASHIER_CONFIRMED",
-      }).returning();
+      try {
+        await ctx.restaurantDb.transaction(async (tx: any) => {
+          await tx.update(orders).set({
+            subtotal: calcSubtotal,
+            tax: calcTaxAmt,
+            discount: calculatedDiscount,
+            total: calcTotal,
+            tip: posTip,
+          }).where(eq(orders.id, order.id));
 
-      if (creditApplied > 0) {
-        await ctx.restaurantDb.insert(payments).values({
-          orderId: order.id,
-          method: "MEMBERSHIP_CREDIT",
-          amount: creditApplied,
-          status: "COMPLETED",
-          verificationMethod: "MEMBERSHIP_PASS",
-        });
-      }
+          await tx.insert(payments).values({
+            orderId: order.id,
+            method: input.paymentMethod,
+            amount: mainPaymentAmount,
+            tipAmount: posTip,
+            reference: isCardMethod(input.paymentMethod) ? input.cardReference : undefined,
+            verificationMethod: isCardMethod(input.paymentMethod)
+              ? "EXTERNAL_TERMINAL"
+              : "CASHIER_CONFIRMED",
+          });
 
-      // ── Split: la parte Bunz se cobra del saldo del cliente (post-commit) ──
-      if (isSplit) {
-        const bunzPart = Math.max(0, r2(Number(input.splitBunz!) - creditApplied));
-        if (bunzPart > 0 && (input.customerPhone || input.customerId)) {
-          const bizIdSplit = (await resolveBusinessIdFromBranch(ctx.restaurantDb, ctx.branchId)) || ctx.branchId;
-          try {
-            await miniappClient.chargeBunz(input.customerPhone || input.customerId!, bunzPart, order.id, bizIdSplit);
-            await ctx.restaurantDb.insert(payments).values({
+          if (creditApplied > 0) {
+            await tx.insert(payments).values({
               orderId: order.id,
-              method: "BUNZ",
-              amount: bunzPart,
+              method: "MEMBERSHIP_CREDIT",
+              amount: creditApplied,
               status: "COMPLETED",
-              verificationMethod: "CASHIER_CONFIRMED",
-            }).catch?.(() => {});
-          } catch (chargeErr) {
-            console.error("[SPLIT_BUNZ] charge falló — el cajero cobra en efectivo esta parte:", chargeErr);
-            await ctx.restaurantDb.insert(payments).values({
-              orderId: order.id,
-              method: "CASH",
-              amount: bunzPart,
-              status: "COMPLETED",
-              verificationMethod: "CASHIER_CONFIRMED",
-            }).catch?.(() => {});
-          }
-        }
-      }
-
-      void payment;
-
-      await ctx.restaurantDb.update(orders).set({ status: ORDER_STATUS.COMPLETED }).where(eq(orders.id, order.id));
-
-      // Liberar la mesa: cerrar la sesión activa de la tabla para que el
-      // próximo comensal pueda reclamarla (409 anti-robo no se convierte en DoS).
-      if (order.tableId) {
-        await ctx.restaurantDb.update(tableSessions).set({
-          status: "CLOSED",
-          closedAt: new Date(),
-        }).where(and(
-          eq(tableSessions.tableId, order.tableId),
-          eq(tableSessions.status, "OPEN")
-        ));
-      }
-
-      // Deduct inventory
-      const deductRecipe = async (menuItemId: string, qty: number, path: Set<string>) => {
-        if (path.has(menuItemId)) return;
-        path.add(menuItemId);
-        const ingredients = await ctx.restaurantDb.select()
-          .from(dbSchema.menuItemIngredients)
-          .where(eq(dbSchema.menuItemIngredients.menuItemId, menuItemId));
-
-        for (const ing of ingredients) {
-          if (ing.inventoryItemId) {
-            const deductionAmount = ing.quantityRequired * qty;
-            await ctx.restaurantDb.insert(dbSchema.inventoryMovements).values({
-              itemId: ing.inventoryItemId,
-              branchId: ctx.branchId,
-              type: "SALE_DEDUCTION",
-              quantity: deductionAmount,
-              reference: order.id,
-              notes: `Order ${order.id} completed via Direct POS`,
+              verificationMethod: "MEMBERSHIP_PASS",
             });
-            await ctx.restaurantDb.execute(sql`
-              UPDATE inventory_items 
-              SET stock = stock - ${deductionAmount} 
-              WHERE id = ${ing.inventoryItemId}
-            `);
-          } else if (ing.subRecipeId) {
-            await deductRecipe(ing.subRecipeId, ing.quantityRequired * qty, path);
+          }
+
+          await tx.update(orders).set({ status: ORDER_STATUS.COMPLETED }).where(eq(orders.id, order.id));
+
+          // Liberar la mesa: cerrar la sesión activa de la tabla para que el
+          // próximo comensal pueda reclamarla (409 anti-robo no se convierte en DoS).
+          if (order.tableId) {
+            await tx.update(tableSessions).set({
+              status: "CLOSED",
+              closedAt: new Date(),
+            }).where(and(
+              eq(tableSessions.tableId, order.tableId),
+              eq(tableSessions.status, "OPEN")
+            ));
+          }
+
+          // Deducción de stock con guarda atómica: no se vende lo que no hay.
+          const deductRecipe = async (menuItemId: string, qty: number, path: Set<string>) => {
+            if (path.has(menuItemId)) return;
+            path.add(menuItemId);
+            const ingredients = await tx.select()
+              .from(dbSchema.menuItemIngredients)
+              .where(eq(dbSchema.menuItemIngredients.menuItemId, menuItemId));
+
+            for (const ing of ingredients) {
+              if (ing.inventoryItemId) {
+                const deductionAmount = ing.quantityRequired * qty;
+                if (!(deductionAmount > 0)) continue;
+                const updated = await tx
+                  .update(dbSchema.inventoryItems)
+                  .set({ stock: sql`${dbSchema.inventoryItems.stock} - ${deductionAmount}` })
+                  .where(and(
+                    eq(dbSchema.inventoryItems.id, ing.inventoryItemId),
+                    gte(dbSchema.inventoryItems.stock, deductionAmount)
+                  ))
+                  .returning({ id: dbSchema.inventoryItems.id });
+
+                if (updated.length === 0) {
+                  if (strictStock) {
+                    throw new TRPCError({
+                      code: "CONFLICT",
+                      message: `INSUFFICIENT_STOCK:${ing.inventoryItemId}`,
+                    });
+                  }
+                  // Opt-out explícito (RABBITTY_STOCK_STRICT=false): negativo.
+                  await tx
+                    .update(dbSchema.inventoryItems)
+                    .set({ stock: sql`${dbSchema.inventoryItems.stock} - ${deductionAmount}` })
+                    .where(eq(dbSchema.inventoryItems.id, ing.inventoryItemId));
+                }
+
+                await tx.insert(dbSchema.inventoryMovements).values({
+                  itemId: ing.inventoryItemId,
+                  branchId: ctx.branchId,
+                  type: "SALE_DEDUCTION",
+                  quantity: deductionAmount,
+                  reference: order.id,
+                  notes: `Order ${order.id} completed via Direct POS`,
+                });
+              } else if (ing.subRecipeId) {
+                await deductRecipe(ing.subRecipeId, ing.quantityRequired * qty, path);
+              }
+            }
+            path.delete(menuItemId);
+          };
+
+          for (const item of input.items) {
+            await deductRecipe(item.menuItemId, item.quantity, new Set());
+          }
+        });
+      } catch (err) {
+        // Compensación: devolver beneficios de membresía ya consumidos.
+        for (const undo of membershipCompensations) {
+          try {
+            await undo();
+          } catch (compensationError) {
+            console.error("[CHECKOUT_COMPENSATION]", compensationError);
           }
         }
-        path.delete(menuItemId);
-      };
-
-      for (const item of input.items) {
-        await deductRecipe(item.menuItemId, item.quantity, new Set());
+        // Si la orden era nueva, no dejar un borrador huérfano.
+        if (createdNew) {
+          try {
+            await ctx.restaurantDb.delete(orderItems).where(eq(orderItems.orderId, order.id));
+            await ctx.restaurantDb.delete(orders).where(eq(orders.id, order.id));
+          } catch (cleanupError) {
+            console.error("[CHECKOUT_CLEANUP]", cleanupError);
+          }
+        }
+        throw err;
       }
 
       // CRM Auto-segmentation & Bunz Minting
