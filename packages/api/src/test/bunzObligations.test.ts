@@ -83,7 +83,13 @@ describe("OT-2 — devengo de obligaciones", () => {
 });
 
 // ── Ciclo de vida: mora (derivada) y liquidación ─────────────────────────────
-import { SETTLEMENT_FLAG, scanOverdue, settleObligation } from "../services/bunzObligations";
+import {
+  FIAT_SETTLEMENT_FLAG,
+  SETTLEMENT_FLAG,
+  scanOverdue,
+  settleObligation,
+  settlementCapabilities,
+} from "../services/bunzObligations";
 import { BOOKS_FLAG } from "../services/bunzBooks";
 
 function fakeDb(rows: any[]) {
@@ -132,6 +138,7 @@ describe("OT-2 — mora y liquidación", () => {
   afterEach(() => {
     delete process.env[OBLIGATION_FLAG];
     delete process.env[SETTLEMENT_FLAG];
+    delete process.env[FIAT_SETTLEMENT_FLAG];
     delete process.env[BOOKS_FLAG];
   });
 
@@ -202,6 +209,111 @@ describe("OT-2 — mora y liquidación", () => {
     const r = await settleObligation(db, {
       obligationId: "ob-1",
       bunz: 10,
+      tables: { obligations: {}, events: {}, ledger: {} },
+    });
+    expect(r.ok).toBe(false);
+    expect(db.ledger).toHaveLength(0);
+  });
+});
+
+describe("OT-2 — liquidación en fiat y mixta", () => {
+  afterEach(() => {
+    delete process.env[SETTLEMENT_FLAG];
+    delete process.env[FIAT_SETTLEMENT_FLAG];
+    delete process.env[BOOKS_FLAG];
+  });
+
+  it("los flags son independientes", () => {
+    expect(settlementCapabilities({} as NodeJS.ProcessEnv)).toEqual({ bunz: false, fiat: false });
+    expect(
+      settlementCapabilities({ [FIAT_SETTLEMENT_FLAG]: "true" } as NodeJS.ProcessEnv)
+    ).toEqual({ bunz: false, fiat: true });
+  });
+
+  it("fiat apagado no liquida aunque bunz esté encendido", async () => {
+    process.env[SETTLEMENT_FLAG] = "true";
+    const db = fakeDb([{ id: "ob-1", state: "OPEN", amountBunz: 60, settledBunz: 0, settledFiatMxn: 0 }]);
+    const r = await settleObligation(db, {
+      obligationId: "ob-1",
+      instrument: "fiat",
+      fiatMxn: 600,
+      bunzPerMxn: 0.1,
+      tables: { obligations: {}, events: {}, ledger: {} },
+    });
+    expect(r.skipped).toBe(true);
+    expect(db.ledger).toHaveLength(0);
+  });
+
+  it("fiat exige tasa explícita (no asume paridad)", async () => {
+    process.env[FIAT_SETTLEMENT_FLAG] = "true";
+    const db = fakeDb([{ id: "ob-1", state: "OPEN", amountBunz: 60, settledBunz: 0, settledFiatMxn: 0 }]);
+    const r = await settleObligation(db, {
+      obligationId: "ob-1",
+      instrument: "fiat",
+      fiatMxn: 600,
+      tables: { obligations: {}, events: {}, ledger: {} },
+    });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(" ")).toContain("bunzPerMxn");
+  });
+
+  it("fiat total: PAID sin mover Bunz", async () => {
+    process.env[FIAT_SETTLEMENT_FLAG] = "true";
+    process.env[BOOKS_FLAG] = "true";
+    const db = fakeDb([{ id: "ob-1", state: "OPEN", amountBunz: 60, settledBunz: 0, settledFiatMxn: 0 }]);
+    const r = await settleObligation(db, {
+      obligationId: "ob-1",
+      instrument: "fiat",
+      fiatMxn: 600,
+      bunzPerMxn: 0.1,
+      tables: { obligations: {}, events: {}, ledger: {} },
+    });
+    expect(r).toMatchObject({ ok: true, state: "PAID", settledBunz: 0, settledFiatMxn: 600 });
+    expect(db.applied[0]).toMatchObject({ settledBunz: 0, settledFiatMxn: 600, settledEquivalentBunz: 60 });
+    expect(db.ledger).toHaveLength(0); // fiat no toca el libro Bunz
+    expect(db.events[0].note).toContain("0.1 Bunz/MXN");
+  });
+
+  it("mixta requiere ambos flags", async () => {
+    process.env[SETTLEMENT_FLAG] = "true";
+    const db = fakeDb([{ id: "ob-1", state: "OPEN", amountBunz: 60, settledBunz: 0, settledFiatMxn: 0 }]);
+    const r = await settleObligation(db, {
+      obligationId: "ob-1",
+      instrument: "mixed",
+      bunz: 30,
+      fiatMxn: 300,
+      bunzPerMxn: 0.1,
+      tables: { obligations: {}, events: {}, ledger: {} },
+    });
+    expect(r.skipped).toBe(true);
+  });
+
+  it("mixta: mueve solo la parte Bunz al libro", async () => {
+    process.env[SETTLEMENT_FLAG] = "true";
+    process.env[FIAT_SETTLEMENT_FLAG] = "true";
+    process.env[BOOKS_FLAG] = "true";
+    const db = fakeDb([{ id: "ob-1", state: "OPEN", amountBunz: 60, settledBunz: 0, settledFiatMxn: 0 }]);
+    const r = await settleObligation(db, {
+      obligationId: "ob-1",
+      instrument: "mixed",
+      bunz: 30,
+      fiatMxn: 300,
+      bunzPerMxn: 0.1,
+      tables: { obligations: {}, events: {}, ledger: {} },
+    });
+    expect(r).toMatchObject({ ok: true, state: "PAID", settledBunz: 30, settledFiatMxn: 300 });
+    expect(db.ledger).toHaveLength(2);
+    expect(db.ledger[0].amount).toBe(30);
+  });
+
+  it("no permite liquidar más que lo pendiente", async () => {
+    process.env[FIAT_SETTLEMENT_FLAG] = "true";
+    const db = fakeDb([{ id: "ob-1", state: "OPEN", amountBunz: 60, settledBunz: 0, settledFiatMxn: 0 }]);
+    const r = await settleObligation(db, {
+      obligationId: "ob-1",
+      instrument: "fiat",
+      fiatMxn: 700,
+      bunzPerMxn: 0.1,
       tables: { obligations: {}, events: {}, ledger: {} },
     });
     expect(r.ok).toBe(false);

@@ -873,6 +873,8 @@ export const bunzObligations = pgTable(
     instrument: text("instrument"), // bunz | fiat | mixed
     settledBunz: real("settledBunz").default(0).notNull(),
     settledFiatMxn: real("settledFiatMxn").default(0).notNull(),
+    /** Suma de Bunz movidos + fiat convertido a Bunz con la tasa de cada operación. */
+    settledEquivalentBunz: real("settledEquivalentBunz").default(0).notNull(),
     writtenOffAt: timestamp("writtenOffAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },

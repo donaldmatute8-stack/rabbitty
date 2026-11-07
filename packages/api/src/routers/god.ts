@@ -37,7 +37,7 @@ import {
   readSnapshot,
   validationDir,
 } from "../services/validationSnapshots";
-import { isSettlementEnabled, settleObligation } from "../services/bunzObligations";
+import { settlementCapabilities, settleObligation } from "../services/bunzObligations";
 import { runValidationCapture } from "../services/validationCapture";
 
 /** Desenrolla result de drizzle raw SQL (rows array en pg driver). */
@@ -1241,7 +1241,7 @@ export const godRouter = router({
         .from(bunzObligations);
 
       return {
-        settlementEnabled: isSettlementEnabled(),
+        settlementEnabled: settlementCapabilities(),
         rows,
         summary: {
           open: Number(summary?.open) || 0,
@@ -1261,22 +1261,31 @@ export const godRouter = router({
     .input(
       z.object({
         obligationId: z.string().min(1).max(120),
-        bunz: z.number().positive().max(1_000_000),
+        /** Bunz a aplicar (requerido en bunz/mixed). */
+        bunz: z.number().min(0).max(1_000_000).default(0),
+        /** MXN reales a aplicar (requerido en fiat/mixed). */
         fiatMxn: z.number().min(0).max(1_000_000).default(0),
+        /** Bunz por MXN. Obligatoria si hay componente fiat; queda en el evento. */
+        bunzPerMxn: z.number().positive().max(10_000).optional(),
         instrument: z.enum(["bunz", "fiat", "mixed"]).default("bunz"),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      if (!isSettlementEnabled()) {
+      const caps = settlementCapabilities();
+      const needsBunz = input.instrument === "bunz" || input.instrument === "mixed";
+      const needsFiat = input.instrument === "fiat" || input.instrument === "mixed";
+      if ((needsBunz && !caps.bunz) || (needsFiat && !caps.fiat)) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: "Liquidación no autorizada: RABBITTY_BUNZ_SETTLE está apagado.",
+          message:
+            "Liquidación no autorizada: revisa RABBITTY_BUNZ_SETTLE (Bunz) y RABBITTY_BUNZ_SETTLE_FIAT (fiat).",
         });
       }
       const result = await settleObligation(ctx.restaurantDb, {
         obligationId: input.obligationId,
         bunz: input.bunz,
         fiatMxn: input.fiatMxn,
+        bunzPerMxn: input.bunzPerMxn,
         instrument: input.instrument,
         actor: String(ctx.userId ?? "god_admin"),
         tables: {
