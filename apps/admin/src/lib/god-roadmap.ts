@@ -10,7 +10,7 @@
 
 export type RoadmapStatus = "done" | "active" | "blocked" | "pending";
 
-export const ROADMAP_VERSION = "2026-11-07.6";
+export const ROADMAP_VERSION = "2026-11-07.7";
 
 export interface RoadmapItem {
   id: string;
@@ -73,6 +73,24 @@ export const PHASES: RoadmapPhase[] = [
       { id: "B4", title: "Kill switches independientes", detail: "Detener emisión, redención o liquidación sin tocar fiat.", status: "done", evidence: "BUNZ_EMIT / BUNZ_REDEEM" },
       { id: "B5", title: "Conciliación con pausa", detail: "Diferencia entre orden, libro y obligación ⇒ alerta y pausa del flujo.", status: "done", evidence: "0033 + cron + panel" },
       { id: "B6", title: "Fase B controlada", detail: "Redención y liquidación parcial para 3 afiliados, con topes y pausa.", status: "active", evidence: "piloto ON · 5,000/5,000/2,000" },
+    ],
+  },
+  {
+    id: "MCCE",
+    title: "Capacidad híbrida",
+    subtitle: "Incentivo de incorporación + capacidad adelantada",
+    status: "active",
+    progress: 25,
+    items: [
+      { id: "M1", title: "Contrato económico v1.0", detail: "Componentes, flujos, invariantes y lenguaje para el afiliado.", status: "done", evidence: "DOCS/MCCE-CONTRATO" },
+      { id: "M2", title: "Especificación MCCE", detail: "Módulos, datos, eventos, UI y fases.", status: "done", evidence: "DOCS/MCCE-ESPECIFICACION" },
+      { id: "M3", title: "Auditoría del código", detail: "Estado real de bunzBalance, creditLimit, creditUsed, emisión y redención.", status: "done", evidence: "DOCS/MCCE-AUDITORIA" },
+      { id: "M4", title: "Simulación en sombra v1", detail: "3 afiliados reales; capacidad y recuperación sin escrituras.", status: "done", evidence: "DOCS/MCCE-SIMULACION" },
+      { id: "M5", title: "Simulación v2", detail: "Crédito viable, retención 20/40/60%, piso por nicho y fungibilidad.", status: "active" },
+      { id: "M6", title: "Reconciliar composición", detail: "¿Qué parte del stock actual es incentivo, adelanto o generado?", status: "pending" },
+      { id: "M7", title: "Sizer dinámico", detail: "Opciones por nicho, onboarding y solvencia.", status: "pending" },
+      { id: "M8", title: "Integración con flags", detail: "Sin tocar saldos históricos; reversible.", status: "pending" },
+      { id: "M9", title: "Piloto de capacidad", detail: "Zona controlada, límites y monitoreo.", status: "blocked" },
     ],
   },
   {
@@ -141,6 +159,12 @@ export interface HistoryEntry {
 }
 
 export const HISTORY: HistoryEntry[] = [
+  {
+    date: "2026-11-07",
+    title: "MCCE: contrato, especificación y sombra",
+    detail: "Modelo híbrido (incentivo condicionado + capacidad adelantada). Auditoría del código y simulación con Ka13, 626 y Bull Box. Sin cambios en producción.",
+    ref: "MCCE v1.0",
+  },
   {
     date: "2026-11-07",
     title: "Piloto encendido",
@@ -216,6 +240,18 @@ export interface NextAction {
 }
 
 export const NEXT_ACTIONS: NextAction[] = [
+  {
+    id: "N0",
+    title: "Simulación MCCE v2",
+    detail: "Crédito viable: 500/1,000/2,000/3,500 con retención 20/40/60% y meses de recuperación. Sin escrituras.",
+    owner: "Tech",
+  },
+  {
+    id: "N0b",
+    title: "Reconciliar composición",
+    detail: "Determinar qué parte del stock actual es incentivo, capacidad adelantada o generado por actividad.",
+    owner: "Tech + Negocio",
+  },
   {
     id: "N1",
     title: "Venta controlada",

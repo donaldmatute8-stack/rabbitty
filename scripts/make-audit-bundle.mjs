@@ -105,6 +105,19 @@ const GROUPS = [
     ],
   },
   {
+    title: "MCCE · Capacidad híbrida",
+    files: [
+      "DOCS/MCCE-CONTRATO-ECONOMICO-HIBRIDO-v1.0.md",
+      "DOCS/MCCE-ESPECIFICACION-FUNCIONAL-v1.0.md",
+      "DOCS/MCCE-AUDITORIA-CODIGO-2026-11-07.md",
+      "DOCS/MCCE-SIMULACION-SOMBRA-2026-11-07.md",
+      "DOCS/data/mcce-shadow-2026-11-07.json",
+      "scripts/lib/mcce.mjs",
+      "scripts/mcce.test.mjs",
+      "scripts/mcce-shadow.mjs",
+    ],
+  },
+  {
     title: "Pruebas",
     files: [
       "scripts/real-data-spec.test.mjs",
