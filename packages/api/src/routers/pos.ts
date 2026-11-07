@@ -1191,21 +1191,27 @@ export const posRouter = router({
         }
       } else {
         // RP-2B: kill switch + lista blanca/tope antes de emitir.
-        const emitControl = await checkOperation(ctx.restaurantDb, {
-          affiliateId: lp.loyaltyBusinessId,
-          operation: "emission",
-          amount: Number((result as any).loyaltyParams?.calculatedReward ?? input.amount),
-          now: new Date(),
-          tables: {
-            limits: bunzEconomicLimits,
-            orders,
-            branches,
-            restaurants,
-            attempts: bunzRedemptionAttempts,
-            obligations: bunzObligations,
-            controlState: bunzControlState,
-          },
-        });
+        let emitControl: Awaited<ReturnType<typeof checkOperation>>;
+        try {
+          emitControl = await checkOperation(ctx.restaurantDb, {
+            affiliateId: lp.loyaltyBusinessId,
+            operation: "emission",
+            amount: Number((result as any).loyaltyParams?.calculatedReward ?? input.amount),
+            now: new Date(),
+            tables: {
+              limits: bunzEconomicLimits,
+              orders,
+              branches,
+              restaurants,
+              attempts: bunzRedemptionAttempts,
+              obligations: bunzObligations,
+              controlState: bunzControlState,
+            },
+          });
+        } catch (controlError) {
+          console.error(`[BUNZ_EMIT_CONTROL] orderId=${input.orderId}`, controlError);
+          emitControl = { allowed: false, reason: "control de emisión no disponible" };
+        }
         if (!emitControl.allowed) {
           console.warn(`[BUNZ_EMIT_BLOCKED] orderId=${input.orderId} ${emitControl.reason}`);
           rewardQueued = false;
@@ -2322,21 +2328,28 @@ export const posRouter = router({
               const expectedReward = Math.floor(
                 rewardBase * ((restaurant.defaultRewardRate ?? 20) / 100)
               );
-              const emitControl = await checkOperation(ctx.restaurantDb, {
-                affiliateId: restaurant.businessId,
-                operation: "emission",
-                amount: expectedReward,
-                now: new Date(),
-                tables: {
-                  limits: bunzEconomicLimits,
-                  orders,
-                  branches,
-                  restaurants,
-                  attempts: bunzRedemptionAttempts,
-                  obligations: bunzObligations,
-                  controlState: bunzControlState,
-                },
-              });
+              let emitControl: Awaited<ReturnType<typeof checkOperation>>;
+              try {
+                emitControl = await checkOperation(ctx.restaurantDb, {
+                  affiliateId: restaurant.businessId,
+                  operation: "emission",
+                  amount: expectedReward,
+                  now: new Date(),
+                  tables: {
+                    limits: bunzEconomicLimits,
+                    orders,
+                    branches,
+                    restaurants,
+                    attempts: bunzRedemptionAttempts,
+                    obligations: bunzObligations,
+                    controlState: bunzControlState,
+                  },
+                });
+              } catch (controlError) {
+                // La venta ya está cobrada: un fallo del control no la rompe.
+                console.error(`[BUNZ_EMIT_CONTROL] orderId=${order.id}`, controlError);
+                return null;
+              }
               if (!emitControl.allowed) {
                 console.warn(`[BUNZ_EMIT_BLOCKED] orderId=${order.id} ${emitControl.reason}`);
                 return null;
