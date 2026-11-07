@@ -10,7 +10,7 @@
 
 export type RoadmapStatus = "done" | "active" | "blocked" | "pending";
 
-export const ROADMAP_VERSION = "2026-11-07.3";
+export const ROADMAP_VERSION = "2026-11-07.4";
 
 export interface RoadmapItem {
   id: string;
@@ -65,14 +65,14 @@ export const PHASES: RoadmapPhase[] = [
     title: "Piloto económico",
     subtitle: "Emisión, redención y liquidación con límites",
     status: "active",
-    progress: 65,
+    progress: 85,
     items: [
       { id: "B1", title: "Liquidación multi-instrumento", detail: "Bunz, fiat o mixto con tasa por operación; flags separados.", status: "done", evidence: "migración 0030" },
       { id: "B2", title: "Topes duros por afiliado", detail: "Máximo emitido, redimido y liquidado por periodo.", status: "done", evidence: "migración 0032 + bunzControls" },
       { id: "B3", title: "Lista blanca de afiliados", detail: "Solo los autorizados entran al piloto.", status: "done", evidence: "RABBITTY_BUNZ_PILOT" },
       { id: "B4", title: "Kill switches independientes", detail: "Detener emisión, redención o liquidación sin tocar fiat.", status: "done", evidence: "BUNZ_EMIT / BUNZ_REDEEM" },
-      { id: "B5", title: "Conciliación con pausa", detail: "Diferencia entre orden, libro, obligación y stock ⇒ alerta y freno.", status: "pending" },
-      { id: "B6", title: "Fase B controlada", detail: "Redención y liquidación parcial para 1–2 afiliados.", status: "blocked", evidence: "depende de B2–B5" },
+      { id: "B5", title: "Conciliación con pausa", detail: "Diferencia entre orden, libro y obligación ⇒ alerta y pausa del flujo.", status: "done", evidence: "0033 + cron + panel" },
+      { id: "B6", title: "Fase B controlada", detail: "Redención y liquidación parcial para 3 afiliados, con topes y pausa.", status: "active", evidence: "Ka13 · 626 · Bull Box configurados" },
     ],
   },
   {
@@ -143,6 +143,12 @@ export interface HistoryEntry {
 export const HISTORY: HistoryEntry[] = [
   {
     date: "2026-11-07",
+    title: "Piloto configurado + conciliación",
+    detail: "Ka13, 626 Café y Bull Box con topes 500/500/300 por 7 días. Conciliación diaria que pausa emisión/redención/liquidación si algo no cuadra.",
+    ref: "0032 · 0033",
+  },
+  {
+    date: "2026-11-07",
     title: "RP-2B: controles del piloto",
     detail: "Topes por afiliado y periodo, lista blanca y kill switches de emisión/redención. Todo apagado hasta configurar el piloto.",
     ref: "0032 · bunzControls",
@@ -206,8 +212,8 @@ export const NEXT_ACTIONS: NextAction[] = [
   },
   {
     id: "N2",
-    title: "Configurar el piloto",
-    detail: "Dar de alta 1–2 afiliados con topes y encender RABBITTY_BUNZ_PILOT; después SETTLE/SETTLE_FIAT.",
+    title: "Encender el piloto",
+    detail: "Los 3 afiliados ya están configurados con topes. Falta RABBITTY_BUNZ_PILOT=true y la venta controlada.",
     owner: "Negocio + Tech",
   },
   {

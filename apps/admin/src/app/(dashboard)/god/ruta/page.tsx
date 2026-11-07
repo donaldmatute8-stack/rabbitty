@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -14,8 +14,10 @@ import {
   History,
   ListChecks,
   Lock,
+  RefreshCw,
   Route,
   ShieldCheck,
+  Unlock,
   Zap,
 } from "lucide-react";
 import { Card, Button, cn } from "@rabbitty/ui";
@@ -51,6 +53,30 @@ interface PilotControls {
   emissionEnabled: boolean;
   redemptionEnabled: boolean;
   rows: PilotRow[];
+}
+
+interface ReconAlert {
+  code: string;
+  severity: string;
+  count: number;
+  detail: string;
+}
+
+interface ReconRun {
+  id: string;
+  startedAt: string;
+  finishedAt?: string | null;
+  status: string;
+  checks?: Record<string, number>;
+  alerts?: ReconAlert[];
+}
+
+interface ReconControl {
+  emissionPaused: boolean;
+  redemptionPaused: boolean;
+  settlementPaused: boolean;
+  reason: string | null;
+  updatedAt: string;
 }
 
 const statusTone: Record<RoadmapStatus, string> = {
@@ -90,6 +116,9 @@ function ItemIcon({ status }: { status: RoadmapStatus }) {
 export default function GodRoadmapPage() {
   const [copied, setCopied] = useState(false);
   const [controls, setControls] = useState<PilotControls | null>(null);
+  const [recon, setRecon] = useState<{ lastRun: ReconRun | null; control: ReconControl | null } | null>(null);
+  const [reconBusy, setReconBusy] = useState(false);
+  const [reconMsg, setReconMsg] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -108,6 +137,69 @@ export default function GodRoadmapPage() {
       alive = false;
     };
   }, []);
+
+  const fetchRecon = useCallback(async () => {
+    try {
+      const res = await fetch(
+        "/api/trpc/god.getBunzReconciliation?batch=1&input=" +
+          encodeURIComponent(JSON.stringify({ "0": { json: null } }))
+      );
+      const payload = await res.json();
+      setRecon(payload?.[0]?.result?.data?.json ?? null);
+    } catch {
+      /* sin datos de conciliación */
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchRecon();
+  }, [fetchRecon]);
+
+  const runRecon = async () => {
+    setReconBusy(true);
+    setReconMsg(null);
+    try {
+      const res = await fetch("/api/trpc/god.runBunzReconciliation?batch=1", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ "0": { json: null } }),
+      });
+      const payload = await res.json();
+      const data = payload?.[0]?.result?.data?.json;
+      if (!res.ok || !data) throw new Error(payload?.[0]?.error?.json?.message ?? "conciliación falló");
+      setReconMsg(
+        data.status === "OK"
+          ? "Conciliación OK: sin diferencias."
+          : `Conciliación con ${data.alerts?.length ?? 0} alerta(s): ${(data.alerts ?? [])
+              .map((a: ReconAlert) => a.code)
+              .join(", ")}`
+      );
+      await fetchRecon();
+    } catch (e) {
+      setReconMsg(e instanceof Error ? e.message : "conciliación falló");
+    } finally {
+      setReconBusy(false);
+    }
+  };
+
+  const resetPause = async () => {
+    setReconBusy(true);
+    setReconMsg(null);
+    try {
+      const res = await fetch("/api/trpc/god.resetBunzPause?batch=1", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ "0": { json: { note: "Liberado desde /god/ruta" } } }),
+      });
+      if (!res.ok) throw new Error("no se pudo liberar la pausa");
+      setReconMsg("Pausa liberada. Revisa el motivo antes de reanudar operaciones.");
+      await fetchRecon();
+    } catch (e) {
+      setReconMsg(e instanceof Error ? e.message : "no se pudo liberar la pausa");
+    } finally {
+      setReconBusy(false);
+    }
+  };
 
   const summary = useMemo(() => {
     const done = PHASES.filter((p) => p.status === "done").length;
@@ -364,6 +456,100 @@ export default function GodRoadmapPage() {
         <p className="text-[11px] text-gray-500">
           Topes y lista blanca viven en <code className="text-gray-400">bunz_economic_limits</code>. Este panel solo lee.
         </p>
+      </Card>
+
+      <Card className="p-5 bg-white/5 border-white/10 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-sm font-bold text-white flex items-center gap-2">
+            <RefreshCw className="h-4 w-4 text-emerald-400" /> Conciliación (RP-2B)
+          </h2>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" onClick={() => void runRecon()} disabled={reconBusy}>
+              <RefreshCw className={cn("h-4 w-4", reconBusy && "animate-spin")} />
+              <span className="ml-2 text-xs font-bold">Ejecutar</span>
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => void resetPause()}
+              disabled={
+                reconBusy ||
+                !(
+                  recon?.control?.emissionPaused ||
+                  recon?.control?.redemptionPaused ||
+                  recon?.control?.settlementPaused
+                )
+              }
+              title="Liberar pausa de conciliación"
+            >
+              <Unlock className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        {reconMsg && <p className="text-[11px] text-gray-300">{reconMsg}</p>}
+
+        {!recon ? (
+          <p className="text-[11px] text-gray-500">Cargando estado de conciliación…</p>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase">
+              <span
+                className={cn(
+                  "px-2 py-0.5 rounded-full border",
+                  recon.lastRun?.status === "OK"
+                    ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+                    : recon.lastRun?.status === "ALERTS"
+                      ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
+                      : "bg-red-500/15 text-red-300 border-red-500/30"
+                )}
+              >
+                Última: {recon.lastRun?.status ?? "sin ejecutar"}
+              </span>
+              {recon.lastRun && (
+                <span className="text-gray-500 font-normal normal-case">
+                  {recon.lastRun.startedAt?.slice(0, 19).replace("T", " ")}
+                </span>
+              )}
+              {(
+                [
+                  ["Emisión", recon.control?.emissionPaused],
+                  ["Redención", recon.control?.redemptionPaused],
+                  ["Liquidación", recon.control?.settlementPaused],
+                ] as const
+              ).map(([label, paused]) => (
+                <span
+                  key={label}
+                  className={cn(
+                    "px-2 py-0.5 rounded-full border",
+                    paused
+                      ? "bg-red-500/15 text-red-300 border-red-500/30"
+                      : "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+                  )}
+                >
+                  {label}: {paused ? "pausado" : "ok"}
+                </span>
+              ))}
+            </div>
+
+            {recon.control?.reason && (
+              <p className="text-[11px] text-amber-300/90">Motivo de pausa: {recon.control.reason}</p>
+            )}
+
+            {recon.lastRun?.alerts && recon.lastRun.alerts.length > 0 ? (
+              <div className="space-y-1">
+                {recon.lastRun.alerts.map((a) => (
+                  <div key={a.code} className="text-[11px] text-red-200">
+                    <span className="font-mono text-red-300">{a.code}</span> · {a.detail}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[11px] text-gray-400">
+                Sin diferencias en libro, obligaciones ni órdenes con Bunz.
+              </p>
+            )}
+          </div>
+        )}
       </Card>
 
       <Card className="p-5 bg-white/5 border-white/10 space-y-4">

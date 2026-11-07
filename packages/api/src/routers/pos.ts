@@ -9,7 +9,7 @@ import { ORDER_STATUS, isCashPaymentRequested, isOrderPaidStatus, isOrderPayable
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
 import { deriveOrderStage, type OrderStage, orderStageStepIndex } from "@rabbitty/events";
-import { tables as tablesTable, tableSessions, branches, menuCategories, menuItems, orders, orderItems, deliveries, payments, menuItemModifiers, restaurants, events as posEvents, paymentIntents, bunzReserves, bunzRedemptionAttempts, bunzLedgerEntries, bunzObligations, bunzObligationEvents, bunzEconomicLimits } from "@rabbitty/database-restaurant/schema";
+import { tables as tablesTable, tableSessions, branches, menuCategories, menuItems, orders, orderItems, deliveries, payments, menuItemModifiers, restaurants, events as posEvents, paymentIntents, bunzReserves, bunzRedemptionAttempts, bunzLedgerEntries, bunzObligations, bunzObligationEvents, bunzEconomicLimits, bunzControlState } from "@rabbitty/database-restaurant/schema";
 import { DELIVERY_PROVIDERS, canTransition, getProvider, type DeliveryStatus } from "../services/deliveryProviders";
 import {
   uberDirectConfigured,
@@ -1203,6 +1203,7 @@ export const posRouter = router({
             restaurants,
             attempts: bunzRedemptionAttempts,
             obligations: bunzObligations,
+            controlState: bunzControlState,
           },
         });
         if (!emitControl.allowed) {
@@ -2220,6 +2221,7 @@ export const posRouter = router({
                   restaurants,
                   attempts: bunzRedemptionAttempts,
                   obligations: bunzObligations,
+                  controlState: bunzControlState,
                 },
               });
               if (!emitControl.allowed) {

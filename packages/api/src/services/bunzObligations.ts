@@ -250,6 +250,7 @@ export async function settleObligation(
         branches: unknown;
         restaurants: unknown;
         attempts: unknown;
+        controlState?: unknown;
       };
     };
   }
@@ -318,6 +319,7 @@ export async function settleObligation(
           restaurants: tables.controls?.restaurants,
           attempts: tables.controls?.attempts,
           obligations: tables.obligations,
+          controlState: tables.controls?.controlState,
         },
       });
       if (!control.allowed) {

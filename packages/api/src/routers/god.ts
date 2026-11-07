@@ -26,6 +26,8 @@ import {
   bunzLedgerEntries,
   bunzEconomicLimits,
   bunzRedemptionAttempts,
+  bunzControlState,
+  bunzReconciliationRuns,
 } from "@rabbitty/database-restaurant/schema";
 // Campañas viven en coreDb
 import { affiliateCampaigns, campaignRedemptions } from "@rabbitty/database-core/schema";
@@ -45,6 +47,7 @@ import {
   isPilotMode,
   isRedemptionEnabled,
 } from "../services/bunzControls";
+import { runReconciliation } from "../services/bunzReconciliation";
 import { runValidationCapture } from "../services/validationCapture";
 
 /** Desenrolla result de drizzle raw SQL (rows array en pg driver). */
@@ -1305,6 +1308,7 @@ export const godRouter = router({
             branches,
             restaurants,
             attempts: bunzRedemptionAttempts,
+            controlState: bunzControlState,
           },
         },
       });
@@ -1334,6 +1338,52 @@ export const godRouter = router({
     }
     return result;
   }),
+
+  /** RP-2B: última conciliación y pausa operativa (lectura). */
+  getBunzReconciliation: godAdminProcedure.query(async ({ ctx }) => {
+    const [lastRun] = await ctx.restaurantDb
+      .select()
+      .from(bunzReconciliationRuns)
+      .orderBy(desc(bunzReconciliationRuns.startedAt))
+      .limit(1);
+    const [control] = await ctx.restaurantDb
+      .select()
+      .from(bunzControlState)
+      .where(eq(bunzControlState.id, "global"))
+      .limit(1);
+    return { lastRun: lastRun ?? null, control: control ?? null };
+  }),
+
+  /** Ejecuta la conciliación ahora (no mueve dinero; puede pausar flujos). */
+  runBunzReconciliation: godAdminProcedure.mutation(async ({ ctx }) => {
+    return runReconciliation(ctx.restaurantDb, {
+      tables: {
+        ledger: bunzLedgerEntries,
+        obligations: bunzObligations,
+        orders,
+        payments,
+        runs: bunzReconciliationRuns,
+        controlState: bunzControlState,
+      },
+    });
+  }),
+
+  /** Libera una pausa de conciliación. Solo control, no toca saldos. */
+  resetBunzPause: godAdminProcedure
+    .input(z.object({ note: z.string().max(300).optional() }).optional())
+    .mutation(async ({ ctx, input }) => {
+      await ctx.restaurantDb
+        .update(bunzControlState)
+        .set({
+          emissionPaused: false,
+          redemptionPaused: false,
+          settlementPaused: false,
+          reason: input?.note ?? "liberado por God Admin",
+          updatedAt: new Date(),
+        })
+        .where(eq(bunzControlState.id, "global"));
+      return { ok: true };
+    }),
 
   /** RP-2B: estado del piloto, kill switches y topes por afiliado (lectura). */
   listBunzControls: godAdminProcedure.query(async ({ ctx }) => {

@@ -928,6 +928,31 @@ export const bunzLedgerEntries = pgTable(
   ]
 );
 
+/** RP-2B · Resultado de cada pasada de conciliación (append-only). */
+export const bunzReconciliationRuns = pgTable(
+  "bunz_reconciliation_runs",
+  {
+    id: text("id").primaryKey(),
+    startedAt: timestamp("startedAt").defaultNow().notNull(),
+    finishedAt: timestamp("finishedAt"),
+    status: text("status").default("RUNNING").notNull(), // OK | ALERTS | ERROR
+    checks: jsonb("checks"),
+    alerts: jsonb("alerts"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [index("bunz_recon_started_idx").on(t.startedAt)]
+);
+
+/** RP-2B · Pausa operativa global (una fila, id='global'). */
+export const bunzControlState = pgTable("bunz_control_state", {
+  id: text("id").primaryKey(),
+  emissionPaused: boolean("emissionPaused").default(false).notNull(),
+  redemptionPaused: boolean("redemptionPaused").default(false).notNull(),
+  settlementPaused: boolean("settlementPaused").default(false).notNull(),
+  reason: text("reason"),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+
 /**
  * RP-2B · Controles del piloto económico por afiliado.
  * Topes por periodo para emisión, redención y liquidación.

@@ -55,6 +55,8 @@ type ControlTables = {
   restaurants: any;
   attempts: any;
   obligations: any;
+  /** Si existe, aplica la pausa escrita por la conciliación. */
+  controlState?: any;
 };
 
 type ControlDb = {
@@ -150,6 +152,26 @@ export async function checkOperation(
     tables: ControlTables;
   }
 ): Promise<ControlDecision> {
+  if (tables.controlState) {
+    const [state] = await db
+      .select()
+      .from(tables.controlState)
+      .where(eq(tables.controlState.id, "global"))
+      .limit(1);
+    const paused =
+      operation === "emission"
+        ? state?.emissionPaused
+        : operation === "redemption"
+          ? state?.redemptionPaused
+          : state?.settlementPaused;
+    if (paused) {
+      return {
+        allowed: false,
+        reason: `pausado por conciliación: ${state?.reason ?? "alerta sin detalle"}`,
+      };
+    }
+  }
+
   if (operation === "emission" && !isEmissionEnabled()) {
     return { allowed: false, reason: "RABBITTY_BUNZ_EMIT apagado" };
   }

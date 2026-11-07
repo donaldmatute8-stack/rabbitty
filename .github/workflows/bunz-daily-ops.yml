@@ -33,6 +33,25 @@ jobs:
             exit 1
           fi
 
+      - name: Conciliación con pausa (RP-2B)
+        run: |
+          APP_URL="${{ secrets.ADMIN_APP_URL || 'https://admin.rabbitty.me' }}"
+          CRON_SECRET="${{ secrets.CRON_SECRET }}"
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "$APP_URL/api/cron/reconciliation" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "x-cron-secret: $CRON_SECRET" \
+            -H "Accept: application/json")
+
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          echo "HTTP Status: $HTTP_STATUS"
+          echo "Response: $BODY"
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "::error::Reconciliation failed with HTTP $HTTP_STATUS"
+            exit 1
+          fi
+
       - name: Señales de abuso (OT-5)
         run: |
           APP_URL="${{ secrets.ADMIN_APP_URL || 'https://admin.rabbitty.me' }}"

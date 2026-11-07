@@ -20,6 +20,7 @@ import {
   bunzObligations,
   bunzObligationEvents,
   bunzEconomicLimits,
+  bunzControlState,
 } from "@rabbitty/database-restaurant/schema";
 import { users, ownedBusinesses } from "@rabbitty/database-core/schema";
 import { cancelStripePaymentIntent } from "./stripeConnect";
@@ -251,6 +252,7 @@ export async function createOrGetPaymentIntent(
           restaurants,
           attempts: bunzRedemptionAttempts,
           obligations: bunzObligations,
+          controlState: bunzControlState,
         },
       });
       if (!control.allowed) {
