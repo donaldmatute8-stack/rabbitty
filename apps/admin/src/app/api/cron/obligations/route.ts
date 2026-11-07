@@ -42,12 +42,14 @@ async function run() {
   const [summary] = await db
     .select({
       open: sql<number>`count(*) filter (where ${bunzObligations.state} = 'OPEN')`,
-      late: sql<number>`count(*) filter (where ${bunzObligations.state} = 'LATE')`,
-      partial: sql<number>`count(*) filter (where ${bunzObligations.state} = 'PARTIAL')`,
+      disputed: sql<number>`count(*) filter (where ${bunzObligations.state} = 'DISPUTED')`,
+      partial: sql<number>`count(*) filter (where ${bunzObligations.state} = 'PARTIALLY_PAID')`,
       outstanding: sql<number>`coalesce(sum(${bunzObligations.amountBunz} - ${bunzObligations.settledBunz}), 0)`,
     })
     .from(bunzObligations)
-    .where(inArray(bunzObligations.state, ["OPEN", "LATE", "PARTIAL"]));
+    .where(
+      inArray(bunzObligations.state, ["OPEN", "DISPUTED", "RESOLVED_PAYABLE", "PARTIALLY_PAID"])
+    );
 
   return NextResponse.json({
     ok: overdue.ok,
@@ -58,7 +60,7 @@ async function run() {
     errors: overdue.errors,
     states: {
       open: Number(summary?.open) || 0,
-      late: Number(summary?.late) || 0,
+      disputed: Number(summary?.disputed) || 0,
       partial: Number(summary?.partial) || 0,
     },
   });

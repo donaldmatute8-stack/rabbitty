@@ -1198,7 +1198,9 @@ export const godRouter = router({
     .input(
       z
         .object({
-          state: z.enum(["OPEN", "LATE", "PARTIAL", "SETTLED", "WRITTEN_OFF"]).optional(),
+          state: z
+            .enum(["OPEN", "DISPUTED", "RESOLVED_PAYABLE", "PARTIALLY_PAID", "PAID", "RESOLVED_NOT_PAYABLE"])
+            .optional(),
           limit: z.number().int().min(1).max(200).default(50),
           offset: z.number().int().min(0).default(0),
         })
