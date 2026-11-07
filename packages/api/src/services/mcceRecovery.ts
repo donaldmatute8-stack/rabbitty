@@ -105,8 +105,8 @@ export type RecoveryProposal = {
   createdAt: Date;
 };
 
-/** Crea una propuesta para el ciclo. No aplica nada. */
-export async function proposeRecovery(
+/** Calcula la propuesta del ciclo. Sin `persist`, no escribe nada. */
+export async function computeRecoveryProposal(
   db: Db,
   {
     affiliateId,
@@ -114,12 +114,14 @@ export async function proposeRecovery(
     periodEnd,
     grossGenerated,
     now = new Date(),
+    persist = true,
   }: {
     affiliateId: string;
     periodStart: Date;
     periodEnd: Date;
     grossGenerated: number;
     now?: Date;
+    persist?: boolean;
   }
 ): Promise<RecoveryProposal | null> {
   const [account] = await db
@@ -135,7 +137,15 @@ export async function proposeRecovery(
   const gross = Math.max(0, Number(grossGenerated) || 0);
   if (outstanding <= 0 || gross <= 0 || available <= 0) return null;
 
-  const terms = (await getOrCreateTerms(db, affiliateId)) ?? {};
+  const terms = persist
+    ? (await getOrCreateTerms(db, affiliateId)) ?? {}
+    : (
+        (await db
+          .select()
+          .from(merchantRecoveryTerms)
+          .where(eq(merchantRecoveryTerms.affiliateId, affiliateId))
+          .limit(1))[0] ?? {}
+      );
   const targetMonths = Number(terms.targetMonths) || 18;
   const minCoverageDays = Number(terms.minCoverageDays) || 7;
   const rateMin = Number(terms.rateMin) || 0.2;
@@ -182,6 +192,23 @@ export async function proposeRecovery(
     createdAt: now,
   };
 
+  return row as RecoveryProposal;
+}
+
+/** Crea y persiste la propuesta del ciclo. No aplica retenciones. */
+export async function proposeRecovery(
+  db: Db,
+  params: {
+    affiliateId: string;
+    periodStart: Date;
+    periodEnd: Date;
+    grossGenerated: number;
+    now?: Date;
+  }
+): Promise<RecoveryProposal | null> {
+  const row = await computeRecoveryProposal(db, { ...params, persist: true });
+  if (!row) return null;
+
   const [created] = await db
     .insert(merchantRecoveryProposals)
     .values(row)
@@ -189,14 +216,23 @@ export async function proposeRecovery(
     .returning();
   if (!created) return null;
 
-  await db.insert(merchantCapacityEvents).values({
-    id: `mce-recovery-proposed-${id}`,
-    affiliateId,
-    type: "RECOVERY_PROPOSED",
-    actor: "system",
-    amount,
-    metadata: { proposalId: id, rate, gross, outstanding, available },
-  }).onConflictDoNothing();
+  await db
+    .insert(merchantCapacityEvents)
+    .values({
+      id: `mce-recovery-proposed-${row.id}`,
+      affiliateId: row.affiliateId,
+      type: "RECOVERY_PROPOSED",
+      actor: "system",
+      amount: row.proposedAmount,
+      metadata: {
+        proposalId: row.id,
+        rate: row.proposedRate,
+        gross: row.grossGenerated,
+        outstanding: row.outstandingBefore,
+        available: row.availableBefore,
+      },
+    })
+    .onConflictDoNothing();
 
   return created as RecoveryProposal;
 }
@@ -422,7 +458,8 @@ export async function proposeRecoveryForAffiliate(
     periodStart,
     periodEnd,
     now = new Date(),
-  }: { affiliateId: string; periodStart: Date; periodEnd: Date; now?: Date }
+    dryRun = false,
+  }: { affiliateId: string; periodStart: Date; periodEnd: Date; now?: Date; dryRun?: boolean }
 ): Promise<CycleProposalResult> {
   const [business] = await db
     .select({
@@ -445,13 +482,22 @@ export async function proposeRecoveryForAffiliate(
     return { affiliateId, businessName: business.name, gross, proposal: null, skipped: "no-activity" };
   }
 
-  const proposal = await proposeRecovery(db, {
-    affiliateId,
-    periodStart,
-    periodEnd,
-    grossGenerated: gross,
-    now,
-  });
+  const proposal = dryRun
+    ? await computeRecoveryProposal(db, {
+        affiliateId,
+        periodStart,
+        periodEnd,
+        grossGenerated: gross,
+        now,
+        persist: false,
+      })
+    : await proposeRecovery(db, {
+        affiliateId,
+        periodStart,
+        periodEnd,
+        grossGenerated: gross,
+        now,
+      });
 
   return {
     affiliateId,

@@ -69,6 +69,7 @@ async function run(dryRun = false) {
       affiliateId: candidate.affiliateId,
       periodStart: start,
       periodEnd: end,
+      dryRun,
     });
 
     if (!result.proposal) {
