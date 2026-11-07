@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -35,6 +35,23 @@ import {
  * Solo accesible en /god/* (allowlist + 2FA + no impersonación).
  * Contenido estático versionado en `lib/god-roadmap.ts`; no toca DB ni economía.
  */
+
+interface PilotRow {
+  affiliateId: string;
+  pilotEnabled: boolean;
+  periodDays: number;
+  maxEmissionBunz: number;
+  maxRedemptionBunz: number;
+  maxSettlementBunz: number;
+  notes?: string | null;
+}
+
+interface PilotControls {
+  pilotMode: boolean;
+  emissionEnabled: boolean;
+  redemptionEnabled: boolean;
+  rows: PilotRow[];
+}
 
 const statusTone: Record<RoadmapStatus, string> = {
   done: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
@@ -72,6 +89,25 @@ function ItemIcon({ status }: { status: RoadmapStatus }) {
 
 export default function GodRoadmapPage() {
   const [copied, setCopied] = useState(false);
+  const [controls, setControls] = useState<PilotControls | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetch(
+      "/api/trpc/god.listBunzControls?batch=1&input=" +
+        encodeURIComponent(JSON.stringify({ "0": { json: null } }))
+    )
+      .then((r) => r.json())
+      .then((payload) => {
+        if (alive) setControls(payload?.[0]?.result?.data?.json ?? null);
+      })
+      .catch(() => {
+        /* el panel sigue funcionando sin datos en vivo */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const summary = useMemo(() => {
     const done = PHASES.filter((p) => p.status === "done").length;
@@ -259,6 +295,76 @@ export default function GodRoadmapPage() {
           </p>
         </Card>
       </div>
+
+      <Card className="p-5 bg-white/5 border-white/10 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-sm font-bold text-white flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-amber-400" /> Piloto económico (RP-2B)
+          </h2>
+          <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase">
+            {[
+              ["Piloto", controls?.pilotMode],
+              ["Emisión", controls?.emissionEnabled],
+              ["Redención", controls?.redemptionEnabled],
+            ].map(([label, on]) => (
+              <span
+                key={String(label)}
+                className={cn(
+                  "px-2 py-0.5 rounded-full border",
+                  on
+                    ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+                    : "bg-red-500/15 text-red-300 border-red-500/30"
+                )}
+              >
+                {label}: {on ? "on" : "off"}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {!controls ? (
+          <p className="text-[11px] text-gray-500">Cargando estado del piloto…</p>
+        ) : controls.rows.length === 0 ? (
+          <p className="text-[11px] text-gray-400">
+            Sin afiliados en el piloto. Con <code className="text-amber-300">RABBITTY_BUNZ_PILOT=false</code> no hay
+            topes; al encenderlo, solo entran los afiliados con <code>pilotEnabled=true</code>.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[11px]">
+              <thead className="text-gray-500 uppercase text-[9px] tracking-wider">
+                <tr>
+                  <th className="text-left py-1.5">Afiliado</th>
+                  <th className="text-right py-1.5">Periodo</th>
+                  <th className="text-right py-1.5">Emisión</th>
+                  <th className="text-right py-1.5">Redención</th>
+                  <th className="text-right py-1.5">Liquidación</th>
+                  <th className="text-right py-1.5">Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {controls.rows.map((r) => (
+                  <tr key={r.affiliateId} className="border-t border-white/5 text-gray-300">
+                    <td className="py-1.5 font-mono truncate max-w-[180px]">{r.affiliateId}</td>
+                    <td className="py-1.5 text-right">{r.periodDays}d</td>
+                    <td className="py-1.5 text-right">{r.maxEmissionBunz}</td>
+                    <td className="py-1.5 text-right">{r.maxRedemptionBunz}</td>
+                    <td className="py-1.5 text-right">{r.maxSettlementBunz}</td>
+                    <td className="py-1.5 text-right">
+                      <span className={r.pilotEnabled ? "text-emerald-300" : "text-gray-500"}>
+                        {r.pilotEnabled ? "en piloto" : "fuera"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="text-[11px] text-gray-500">
+          Topes y lista blanca viven en <code className="text-gray-400">bunz_economic_limits</code>. Este panel solo lee.
+        </p>
+      </Card>
 
       <Card className="p-5 bg-white/5 border-white/10 space-y-4">
         <h2 className="text-sm font-bold text-white flex items-center gap-2">

@@ -49,6 +49,7 @@ const GROUPS = [
       "packages/database-restaurant/migrations/manual/0029_ot5_abuse_signals.sql",
       "packages/database-restaurant/migrations/manual/0030_ot2_settlement_equivalence.sql",
       "packages/database-restaurant/migrations/manual/0031_rp2a_checkout_idempotency.sql",
+      "packages/database-restaurant/migrations/manual/0032_rp2b_pilot_controls.sql",
       "DOCS/RP2-READINESS-AUDIT.md",
       "DOCS/BUNZ-CAPTURA-READONLY.sql",
     ],
@@ -82,6 +83,7 @@ const GROUPS = [
       "packages/api/src/routers/pos.ts",
       "packages/api/src/services/bunzObligations.ts",
       "packages/api/src/services/bunzAbuse.ts",
+      "packages/api/src/services/bunzControls.ts",
       "packages/api/src/services/validationCapture.ts",
       "apps/admin/src/app/(dashboard)/god/validacion/page.tsx",
       "apps/admin/src/app/(dashboard)/god/ruta/page.tsx",
@@ -113,6 +115,7 @@ const GROUPS = [
       "packages/api/src/test/bunzBooks.test.ts",
       "packages/api/src/test/bunzObligations.test.ts",
       "packages/api/src/test/bunzAbuse.test.ts",
+      "packages/api/src/test/bunzControls.test.ts",
     ],
   },
   {

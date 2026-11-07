@@ -929,6 +929,22 @@ export const bunzLedgerEntries = pgTable(
 );
 
 /**
+ * RP-2B · Controles del piloto económico por afiliado.
+ * Topes por periodo para emisión, redención y liquidación.
+ */
+export const bunzEconomicLimits = pgTable("bunz_economic_limits", {
+  affiliateId: text("affiliateId").primaryKey(),
+  pilotEnabled: boolean("pilotEnabled").default(false).notNull(),
+  periodDays: integer("periodDays").default(7).notNull(),
+  maxEmissionBunz: real("maxEmissionBunz").default(0).notNull(),
+  maxRedemptionBunz: real("maxRedemptionBunz").default(0).notNull(),
+  maxSettlementBunz: real("maxSettlementBunz").default(0).notNull(),
+  notes: text("notes"),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+/**
  * OT-5 · Señales de abuso (append-only, detección determinista).
  *
  * No bloquea ni sanciona: solo deja rastro para revisión humana y para que la

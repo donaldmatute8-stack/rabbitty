@@ -9,7 +9,7 @@ import { ORDER_STATUS, isCashPaymentRequested, isOrderPaidStatus, isOrderPayable
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
 import { deriveOrderStage, type OrderStage, orderStageStepIndex } from "@rabbitty/events";
-import { tables as tablesTable, tableSessions, branches, menuCategories, menuItems, orders, orderItems, deliveries, payments, menuItemModifiers, restaurants, events as posEvents, paymentIntents, bunzReserves, bunzRedemptionAttempts, bunzLedgerEntries, bunzObligations, bunzObligationEvents } from "@rabbitty/database-restaurant/schema";
+import { tables as tablesTable, tableSessions, branches, menuCategories, menuItems, orders, orderItems, deliveries, payments, menuItemModifiers, restaurants, events as posEvents, paymentIntents, bunzReserves, bunzRedemptionAttempts, bunzLedgerEntries, bunzObligations, bunzObligationEvents, bunzEconomicLimits } from "@rabbitty/database-restaurant/schema";
 import { DELIVERY_PROVIDERS, canTransition, getProvider, type DeliveryStatus } from "../services/deliveryProviders";
 import {
   uberDirectConfigured,
@@ -29,6 +29,7 @@ import { miniappClient } from "../services/miniapp-client";
 import { assertOpenShiftForCash } from "../services/cashShift";
 import { REDEMPTION_REASONS, recordEmissionBooks, recordRedemptionBooks } from "../services/bunzBooks";
 import { accrueCommission } from "../services/bunzObligations";
+import { checkOperation } from "../services/bunzControls";
 
 
 /**
@@ -1189,19 +1190,39 @@ export const posRouter = router({
           } catch {}
         }
       } else {
-        const outcome = await callWithRetry("rewardBunz");
-        rewardQueued = outcome.ok;
-        if (outcome.ok && outcome.result) {
-          const r2 = outcome.result as { userId?: string; bunz: number };
-          if (r2.userId) {
-            try {
-              await miniappClient.sendNotification({
-                userId: r2.userId,
-                title: "¡Bunz ganados!",
-                message: `Ganaste ${r2.bunz} Bunz por tu consumo de $${input.amount}.`,
-                type: "REWARD",
-              });
-            } catch {}
+        // RP-2B: kill switch + lista blanca/tope antes de emitir.
+        const emitControl = await checkOperation(ctx.restaurantDb, {
+          affiliateId: lp.loyaltyBusinessId,
+          operation: "emission",
+          amount: Number((result as any).loyaltyParams?.calculatedReward ?? input.amount),
+          now: new Date(),
+          tables: {
+            limits: bunzEconomicLimits,
+            orders,
+            branches,
+            restaurants,
+            attempts: bunzRedemptionAttempts,
+            obligations: bunzObligations,
+          },
+        });
+        if (!emitControl.allowed) {
+          console.warn(`[BUNZ_EMIT_BLOCKED] orderId=${input.orderId} ${emitControl.reason}`);
+          rewardQueued = false;
+        } else {
+          const outcome = await callWithRetry("rewardBunz");
+          rewardQueued = outcome.ok;
+          if (outcome.ok && outcome.result) {
+            const r2 = outcome.result as { userId?: string; bunz: number };
+            if (r2.userId) {
+              try {
+                await miniappClient.sendNotification({
+                  userId: r2.userId,
+                  title: "¡Bunz ganados!",
+                  message: `Ganaste ${r2.bunz} Bunz por tu consumo de $${input.amount}.`,
+                  type: "REWARD",
+                });
+              } catch {}
+            }
           }
         }
       }
@@ -2183,6 +2204,28 @@ export const posRouter = router({
             const rewardBase = Math.max(0, finalAmount - deliveryFee);
             const attemptReward = async (): Promise<{ success: boolean; bunz?: number } | null> => {
               const directBizId = (await resolveBusinessIdFromBranch(ctx.restaurantDb, ctx.branchId)) || ctx.branchId;
+              // RP-2B: kill switch de emisión + lista blanca/tope del piloto.
+              const expectedReward = Math.floor(
+                rewardBase * ((restaurant.defaultRewardRate ?? 20) / 100)
+              );
+              const emitControl = await checkOperation(ctx.restaurantDb, {
+                affiliateId: restaurant.businessId,
+                operation: "emission",
+                amount: expectedReward,
+                now: new Date(),
+                tables: {
+                  limits: bunzEconomicLimits,
+                  orders,
+                  branches,
+                  restaurants,
+                  attempts: bunzRedemptionAttempts,
+                  obligations: bunzObligations,
+                },
+              });
+              if (!emitControl.allowed) {
+                console.warn(`[BUNZ_EMIT_BLOCKED] orderId=${order.id} ${emitControl.reason}`);
+                return null;
+              }
               // Recompensa en la moneda del país (MXN) — la tasa USD es solo
               // para valuación de cobros en dólares, no altera el mint.
               try {

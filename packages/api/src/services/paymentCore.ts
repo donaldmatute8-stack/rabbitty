@@ -19,11 +19,13 @@ import {
   bunzLedgerEntries,
   bunzObligations,
   bunzObligationEvents,
+  bunzEconomicLimits,
 } from "@rabbitty/database-restaurant/schema";
 import { users, ownedBusinesses } from "@rabbitty/database-core/schema";
 import { cancelStripePaymentIntent } from "./stripeConnect";
 import { isBooksEnabled, recordEmissionBooks, recordRedemptionBooks, recordReversalBooks } from "./bunzBooks";
 import { accrueCommission } from "./bunzObligations";
+import { checkOperation, resolveAffiliateId } from "./bunzControls";
 import { buildShadowReport, recordShadowReport, type ShadowReport } from "./payments/shadow";
 import { bus, EventTypes } from "@rabbitty/events";
 import crypto from "crypto";
@@ -232,6 +234,31 @@ export async function createOrGetPaymentIntent(
       const maxApplicableBunz = Math.min(availableBalance, centsToMxn(orderGrossCents));
       bunzToReserve = Math.min(requestedBunz, maxApplicableBunz);
       bunzDiscountCents = Math.round(bunzToReserve * BUNZ_VALUE_CENTS);
+    }
+
+    // RP-2B: lista blanca + tope de redención (solo si el piloto está activo).
+    if (bunzToReserve > 0 && input.payerUserId) {
+      const affiliateId = await resolveAffiliateId(tx, input.branchId, { branches, restaurants });
+      const control = await checkOperation(tx, {
+        affiliateId,
+        operation: "redemption",
+        amount: bunzToReserve,
+        now: new Date(),
+        tables: {
+          limits: bunzEconomicLimits,
+          orders,
+          branches,
+          restaurants,
+          attempts: bunzRedemptionAttempts,
+          obligations: bunzObligations,
+        },
+      });
+      if (!control.allowed) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `BUNZ_PILOT_BLOCKED: ${control.reason ?? "redención no autorizada"}`,
+        });
+      }
     }
 
     // d) Desglose de importes

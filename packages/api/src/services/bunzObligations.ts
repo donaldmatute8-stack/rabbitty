@@ -18,6 +18,7 @@
 
 import { and, eq, inArray, lte } from "drizzle-orm";
 import { recordSettlementBooks } from "./bunzBooks";
+import { checkOperation, isPilotMode } from "./bunzControls";
 
 export const OBLIGATION_FLAG = "RABBITTY_BUNZ_OBLIGATIONS";
 export const SETTLEMENT_FLAG = "RABBITTY_BUNZ_SETTLE";
@@ -238,7 +239,19 @@ export async function settleObligation(
     actor?: string;
     instrument?: SettlementInstrument;
     at?: Date;
-    tables: { obligations: unknown; events: unknown; ledger: unknown };
+    tables: {
+      obligations: unknown;
+      events: unknown;
+      ledger: unknown;
+      /** Requeridos si RABBITTY_BUNZ_PILOT está encendido. */
+      controls?: {
+        limits: unknown;
+        orders: unknown;
+        branches: unknown;
+        restaurants: unknown;
+        attempts: unknown;
+      };
+    };
   }
 ): Promise<SettlementResult> {
   const instrument: SettlementInstrument = INSTRUMENTS.has(rawInstrument) ? rawInstrument : "bunz";
@@ -289,6 +302,28 @@ export async function settleObligation(
       const bunzApplied = wantsBunz ? Math.min(bunzAmount, remaining) : 0;
       const fiatEquivalent = wantsFiat ? fiatAmount * Number(bunzPerMxn) : 0;
       const totalApplied = bunzApplied + fiatEquivalent;
+
+      if (isPilotMode() && !tables.controls) {
+        return { ok: false, errors: ["piloto activo sin tablas de control configuradas"] };
+      }
+      const control = await checkOperation(sp, {
+        affiliateId: row.affiliateId,
+        operation: "settlement",
+        amount: totalApplied,
+        now: at,
+        tables: {
+          limits: tables.controls?.limits,
+          orders: tables.controls?.orders,
+          branches: tables.controls?.branches,
+          restaurants: tables.controls?.restaurants,
+          attempts: tables.controls?.attempts,
+          obligations: tables.obligations,
+        },
+      });
+      if (!control.allowed) {
+        return { ok: false, state: row.state, errors: [control.reason ?? "bloqueado por el piloto"] };
+      }
+
       if (totalApplied > remaining + 0.01) {
         return {
           ok: false,

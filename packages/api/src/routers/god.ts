@@ -24,6 +24,8 @@ import {
   bunzObligations,
   bunzObligationEvents,
   bunzLedgerEntries,
+  bunzEconomicLimits,
+  bunzRedemptionAttempts,
 } from "@rabbitty/database-restaurant/schema";
 // Campañas viven en coreDb
 import { affiliateCampaigns, campaignRedemptions } from "@rabbitty/database-core/schema";
@@ -38,6 +40,11 @@ import {
   validationDir,
 } from "../services/validationSnapshots";
 import { settlementCapabilities, settleObligation } from "../services/bunzObligations";
+import {
+  isEmissionEnabled,
+  isPilotMode,
+  isRedemptionEnabled,
+} from "../services/bunzControls";
 import { runValidationCapture } from "../services/validationCapture";
 
 /** Desenrolla result de drizzle raw SQL (rows array en pg driver). */
@@ -1292,6 +1299,13 @@ export const godRouter = router({
           obligations: bunzObligations,
           events: bunzObligationEvents,
           ledger: bunzLedgerEntries,
+          controls: {
+            limits: bunzEconomicLimits,
+            orders,
+            branches,
+            restaurants,
+            attempts: bunzRedemptionAttempts,
+          },
         },
       });
       if (!result.ok) {
@@ -1319,6 +1333,20 @@ export const godRouter = router({
       });
     }
     return result;
+  }),
+
+  /** RP-2B: estado del piloto, kill switches y topes por afiliado (lectura). */
+  listBunzControls: godAdminProcedure.query(async ({ ctx }) => {
+    const rows = await ctx.restaurantDb
+      .select()
+      .from(bunzEconomicLimits)
+      .orderBy(desc(bunzEconomicLimits.updatedAt));
+    return {
+      pilotMode: isPilotMode(),
+      emissionEnabled: isEmissionEnabled(),
+      redemptionEnabled: isRedemptionEnabled(),
+      rows,
+    };
   }),
 
   getValidationSnapshot: godAdminProcedure

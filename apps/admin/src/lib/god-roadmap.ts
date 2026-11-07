@@ -10,7 +10,7 @@
 
 export type RoadmapStatus = "done" | "active" | "blocked" | "pending";
 
-export const ROADMAP_VERSION = "2026-11-07.2";
+export const ROADMAP_VERSION = "2026-11-07.3";
 
 export interface RoadmapItem {
   id: string;
@@ -65,12 +65,12 @@ export const PHASES: RoadmapPhase[] = [
     title: "Piloto económico",
     subtitle: "Emisión, redención y liquidación con límites",
     status: "active",
-    progress: 25,
+    progress: 65,
     items: [
       { id: "B1", title: "Liquidación multi-instrumento", detail: "Bunz, fiat o mixto con tasa por operación; flags separados.", status: "done", evidence: "migración 0030" },
-      { id: "B2", title: "Topes duros por afiliado", detail: "Máximo emitido, redimido y liquidado por periodo.", status: "pending" },
-      { id: "B3", title: "Lista blanca de afiliados", detail: "Solo los autorizados entran al piloto.", status: "pending" },
-      { id: "B4", title: "Kill switches independientes", detail: "Detener emisión, redención o liquidación sin tocar fiat.", status: "pending" },
+      { id: "B2", title: "Topes duros por afiliado", detail: "Máximo emitido, redimido y liquidado por periodo.", status: "done", evidence: "migración 0032 + bunzControls" },
+      { id: "B3", title: "Lista blanca de afiliados", detail: "Solo los autorizados entran al piloto.", status: "done", evidence: "RABBITTY_BUNZ_PILOT" },
+      { id: "B4", title: "Kill switches independientes", detail: "Detener emisión, redención o liquidación sin tocar fiat.", status: "done", evidence: "BUNZ_EMIT / BUNZ_REDEEM" },
       { id: "B5", title: "Conciliación con pausa", detail: "Diferencia entre orden, libro, obligación y stock ⇒ alerta y freno.", status: "pending" },
       { id: "B6", title: "Fase B controlada", detail: "Redención y liquidación parcial para 1–2 afiliados.", status: "blocked", evidence: "depende de B2–B5" },
     ],
@@ -124,6 +124,9 @@ export const FLAGS: FlagRow[] = [
   { name: "RABBITTY_BUNZ_OBLIGATIONS", value: "true", on: true, what: "Devengo de comisión (6%)" },
   { name: "RABBITTY_BUNZ_ABUSE", value: "true", on: true, what: "Señales de abuso (OT-5)" },
   { name: "GOD_VALIDATION_PANEL", value: "true", on: true, what: "Panel y captura en /god/validacion" },
+  { name: "RABBITTY_BUNZ_PILOT", value: "false", on: false, what: "Lista blanca + topes del piloto" },
+  { name: "RABBITTY_BUNZ_EMIT", value: "true", on: true, what: "Kill switch de emisión" },
+  { name: "RABBITTY_BUNZ_REDEEM", value: "true", on: true, what: "Kill switch de redención" },
   { name: "RABBITTY_BUNZ_SETTLE", value: "false", on: false, what: "Liquidar obligaciones en Bunz" },
   { name: "RABBITTY_BUNZ_SETTLE_FIAT", value: "false", on: false, what: "Extinguir obligaciones con fiat" },
   { name: "RABBITTY_LEGACY_BUNZ", value: "false", on: false, what: "Rollback del POS legacy (no usar)" },
@@ -138,6 +141,12 @@ export interface HistoryEntry {
 }
 
 export const HISTORY: HistoryEntry[] = [
+  {
+    date: "2026-11-07",
+    title: "RP-2B: controles del piloto",
+    detail: "Topes por afiliado y periodo, lista blanca y kill switches de emisión/redención. Todo apagado hasta configurar el piloto.",
+    ref: "0032 · bunzControls",
+  },
   {
     date: "2026-11-07",
     title: "RP-2A: motor de pagos canónico",
@@ -197,9 +206,9 @@ export const NEXT_ACTIONS: NextAction[] = [
   },
   {
     id: "N2",
-    title: "RP-2B: topes + lista blanca",
-    detail: "Límites por afiliado y periodo, allowlist de piloto y kill switches separados.",
-    owner: "Tech",
+    title: "Configurar el piloto",
+    detail: "Dar de alta 1–2 afiliados con topes y encender RABBITTY_BUNZ_PILOT; después SETTLE/SETTLE_FIAT.",
+    owner: "Negocio + Tech",
   },
   {
     id: "N3",
