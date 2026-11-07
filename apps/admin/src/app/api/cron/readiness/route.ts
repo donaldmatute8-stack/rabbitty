@@ -31,7 +31,7 @@ function authorized(req: NextRequest): boolean {
   return provided === expected;
 }
 
-async function run() {
+async function run(dryRun = false) {
   if (!process.env.CRON_SECRET) {
     return NextResponse.json({ ok: false, error: "CRON_SECRET no configurado" }, { status: 401 });
   }
@@ -65,6 +65,7 @@ async function run() {
   let ready = 0;
   let notified = 0;
   let skipped = 0;
+  const preview: Array<{ business: string; ready: boolean; missing: string[]; email: string | null }> = [];
 
   for (const business of businesses) {
     if (business.sandbox) {
@@ -74,6 +75,15 @@ async function run() {
 
     const readiness = await computeAffiliateReadiness(coreDb, restaurantDb, business);
     if (readiness.ready) ready++;
+    if (dryRun) {
+      preview.push({
+        business: business.name,
+        ready: readiness.ready,
+        missing: readiness.missing,
+        email: readiness.ownerEmail,
+      });
+      continue;
+    }
 
     // Anti-spam: último aviso de readiness.
     const [last] = await coreDb
@@ -152,19 +162,21 @@ async function run() {
   return NextResponse.json({
     ok: true,
     date: new Date().toISOString().slice(0, 10),
+    dryRun,
     total: businesses.length,
     ready,
     notified,
     skipped,
+    ...(dryRun ? { preview } : {}),
   });
 }
 
 export async function GET(req: NextRequest) {
   if (!authorized(req)) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  return run();
+  return run(new URL(req.url).searchParams.get("dryRun") === "1");
 }
 
 export async function POST(req: NextRequest) {
   if (!authorized(req)) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  return run();
+  return run(new URL(req.url).searchParams.get("dryRun") === "1");
 }
