@@ -1,14 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, Percent, UploadCloud, ChevronRight, ChevronLeft, HelpCircle, ShieldCheck, FileText } from 'lucide-react';
+import { MapPin, Percent, UploadCloud, ChevronRight, ChevronLeft, HelpCircle, ShieldCheck, FileText, ScanFace } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import BunzGuide from './BunzGuide';
 
 import { NichePicker } from './NichePicker';
 import { BunzyOnboarding } from './BunzyOnboarding';
 import { BunzyVideoStage } from '@/components/onboarding/BunzyVideoStage';
+import { verifyBiometric } from '@/lib/securityVault';
+import { buildCapacityOptions, estimateDailyDemand, priorForNiche, tierLabel } from '@/lib/mcceOffer';
+import { MCCE_CONTRACT_TEXT, MCCE_CONTRACT_VERSION, MCCE_CONTRACT_SUMMARY, hashContract } from '@/lib/mcceContract';
 /** Paso 0: el nicho define la categoría operativa (y por tanto los rangos). */
 const NICHE_TO_CATEGORY: Record<string, string> = {
   restaurant: 'Restaurante',
@@ -24,51 +27,12 @@ const NICHE_TO_CATEGORY: Record<string, string> = {
   other: 'Restaurante',
 };
 
-const NICHE_WELCOME_RANGES: Record<string, { label: string; min: number; max: number }> = {
-  'Cafetería': { label: 'Cafetería / Specialty Coffee', min: 25, max: 35 },
-  'Restaurante': { label: 'Restaurante Casual / Bistró', min: 25, max: 50 },
-  'Restaurante Gourmet': { label: 'Restaurante Gourmet / Gran Capacidad', min: 50, max: 100 },
-  'Bar': { label: 'Bar / Mixología / Taproom', min: 25, max: 50 },
-  'Tienda de Ropa': { label: 'Retail / Moda / Boutique', min: 35, max: 75 },
-  'Servicios de Salud': { label: 'Salud / Clínica / Consultorio', min: 50, max: 100 },
-  'Belleza y Spa': { label: 'Belleza / Barbería / Spa', min: 25, max: 50 },
-  'Gimnasio': { label: 'Gimnasio / Fitness Studio', min: 30, max: 60 },
-  'Educación': { label: 'Educación / Academia / Cursos', min: 25, max: 50 },
-  'Servicios Digitales': { label: 'Servicios Digitales / E-Commerce', min: 25, max: 40 },
-  'Otro': { label: 'Comercio General Afiliado', min: 25, max: 50 },
-};
-
-function getClientNicheRule(category: string) {
-  const info = NICHE_WELCOME_RANGES[category] || NICHE_WELCOME_RANGES['Cafetería'];
-  const totalBunz = 25; // Base homologada actual para todos los nichos
-  const affiliateSharePct = 60;
-  const treasurySharePct = 40;
-  const affiliateBunz = 15;
-  const treasuryBunz = 10;
-  return {
-    nicheLabel: info.label,
-    totalBunz,
-    affiliateSharePct,
-    treasurySharePct,
-    affiliateBunz,
-    treasuryBunz,
-    recommendedFutureMin: info.min,
-    recommendedFutureMax: info.max,
-    rule: { baseBunz: totalBunz, affiliateSplitPct: affiliateSharePct, treasurySplitPct: treasurySharePct },
-  };
-}
-
 interface BusinessSetupFormProps {
   onSubmit: (data: Record<string, unknown>) => void;
   isLoading?: boolean;
 }
 
-const PACKAGES = [
-  { id: 'Starter', credit: 10000, label: 'Starter', price: '$10,000', desc: 'Para negocios pequeños y cafés', icon: '☕', color: '#3B82F6' },
-  { id: 'Growth', credit: 20000, label: 'Growth', price: '$20,000', desc: 'Para restaurantes medianos', icon: '🍽️', color: '#8B5CF6' },
-  { id: 'Pro', credit: 50000, label: 'Pro', price: '$50,000', desc: 'Para cadenas y gimnasios', icon: '🏪', color: '#F59E0B' },
-  { id: 'Enterprise', credit: 100000, label: 'Enterprise', price: '$100,000', desc: 'Para grandes retailers', icon: '🏢', color: '#E91E63' },
-];
+
 
 export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetupFormProps) {
   const router = useRouter();
@@ -87,21 +51,71 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
   const [rewardPercentage, setRewardPercentage] = useState(30);
   const [logoBase64, setLogoBase64] = useState('');
 
-  // Step 3
-  const [selectedPackage, setSelectedPackage] = useState('Starter');
+  // Step 3 · capacidad
+  const [selectedPackage, setSelectedPackage] = useState('BASIC');
+  const [salesPerDay, setSalesPerDay] = useState(30);
+  const [avgTicket, setAvgTicket] = useState(180);
 
-  // Step 4: Digital Contract Signature & Split Acceptance
+  // Step 4 · contrato y firma
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedCollateral, setAcceptedCollateral] = useState(false);
   const [acceptedSplitClause, setAcceptedSplitClause] = useState(false);
   const [legalSignerName, setLegalSignerName] = useState('');
+  const [biometricVerified, setBiometricVerified] = useState(false);
+  const [biometricBusy, setBiometricBusy] = useState(false);
+  const [biometricNote, setBiometricNote] = useState('');
 
   const [showBunzGuide, setShowBunzGuide] = useState(false);
-  const nicheWelcomeInfo = getClientNicheRule(category || 'Cafetería');
-  const nicheRule = nicheWelcomeInfo;
 
   const THEME_COLOR = "#E91E63";
   const THEME_GRADIENT = "linear-gradient(135deg, #E91E63 0%, #D81B60 100%)";
+  const labelStyle = { display: 'block', fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.6)', marginBottom: 8, textTransform: 'uppercase' as const, letterSpacing: 1 };
+  const inputStyle = { width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: '13px 16px', borderRadius: 14, color: '#fff', fontSize: 14, outline: 'none' };
+
+  const offerDailyDemand = useMemo(
+    () =>
+      estimateDailyDemand({
+        dailyFiatSales: Math.max(0, Number(avgTicket) || 0) * Math.max(0, Number(salesPerDay) || 0),
+        rewardRate: Math.max(10, Number(rewardPercentage) || 10) / 100,
+        redemptionShare: priorForNiche(niche || category),
+      }),
+    [avgTicket, salesPerDay, rewardPercentage, niche, category]
+  );
+
+  const offerOptions = useMemo(
+    () =>
+      buildCapacityOptions({
+        dailyCapacityDemand: offerDailyDemand,
+        nicheFloor: 1000,
+        nicheCeiling: 20000,
+        solvencyCap: 10000,
+        coverageDays: [7, 14, 30],
+        promoShare: 0.4,
+      }),
+    [offerDailyDemand]
+  );
+
+  const selectedOption =
+    selectedPackage === 'CUSTOM'
+      ? offerOptions.length > 0
+        ? { ...offerOptions[offerOptions.length - 1], tier: 'CUSTOM' as const }
+        : undefined
+      : offerOptions.find((o) => o.tier === selectedPackage) ?? offerOptions[0];
+
+  const handleBiometric = async () => {
+    setBiometricBusy(true);
+    setBiometricNote('');
+    try {
+      const res = await verifyBiometric('Firma del Acuerdo de Capacidad Comercial');
+      setBiometricVerified(res.ok);
+      setBiometricNote(res.message);
+    } catch {
+      setBiometricVerified(false);
+      setBiometricNote('No se pudo verificar Face ID. Puedes firmar con tu nombre completo.');
+    } finally {
+      setBiometricBusy(false);
+    }
+  };
 
   // Step 1 additions
   const [isVirtual, setIsVirtual] = useState(false);
@@ -158,19 +172,36 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
       setError("La recompensa mínima es 10%.");
       return;
     }
-    if (step === 3) {
-      // Package is optional, no validation needed
+    if (step === 3 && !selectedOption) {
+      setError('Elige una opción de capacidad para continuar.');
+      return;
     }
     setError('');
     setStep(s => s + 1);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!acceptedTerms || !acceptedCollateral || !acceptedSplitClause || legalSignerName.trim().length < 3) {
-      setError('Debes aceptar todas las cláusulas legales y firmar con tu nombre completo.');
+      setError('Acepta las condiciones y firma con tu nombre completo.');
       return;
     }
-    const pkg = PACKAGES.find(p => p.id === selectedPackage);
+    if (!selectedOption) {
+      setError('No hay una capacidad calculada. Revisa tus datos de operación.');
+      return;
+    }
+    const contractHash = await hashContract(MCCE_CONTRACT_TEXT);
+    const offer = {
+      tier: selectedOption.tier,
+      coverageDays: selectedOption.coverageDays,
+      totalCapacity: selectedOption.totalCapacity,
+      promoCapacity: selectedOption.promoCapacity,
+      creditCapacity: selectedOption.creditCapacity,
+      dailyDemand: Math.round(offerDailyDemand * 100) / 100,
+      avgTicket: Number(avgTicket) || 0,
+      salesPerDay: Number(salesPerDay) || 0,
+      estimated: true,
+      customRequested: selectedPackage === 'CUSTOM',
+    };
     onSubmit({
       name,
       category,
@@ -182,24 +213,22 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
       activeDays: [1,2,3,4,5,6,7],
       startTime: "09:00",
       endTime: "21:00",
-      package: selectedPackage || 'Starter',
-      creditLimit: pkg?.credit || 10000,
+      package: selectedOption.tier,
+      creditLimit: selectedOption.totalCapacity,
       googleClaimed,
       contractSignature: {
         signedBy: legalSignerName.trim(),
         signedAt: new Date().toISOString(),
-        termsVersion: '2026.10-v2',
+        contractVersion: MCCE_CONTRACT_VERSION,
+        contractHash,
+        signatureMethod: biometricVerified ? 'biometric' : 'name_checkbox',
+        biometricVerified,
         acceptedTerms: true,
-        acceptedCollateral: true,
-        acceptedSplitClause: true,
+        acceptedCapacity: true,
+        acceptedRecovery: true,
+        offer,
         nicheCategory: category,
-        nicheWelcomeBaseBunz: nicheWelcomeInfo.rule.baseBunz,
-        affiliateSplitPct: nicheWelcomeInfo.rule.affiliateSplitPct,
-        treasurySplitPct: nicheWelcomeInfo.rule.treasurySplitPct,
-        affiliateSplitBunz: nicheWelcomeInfo.affiliateBunz,
-        treasurySplitBunz: nicheWelcomeInfo.treasuryBunz,
-        selectedPackage: selectedPackage || 'Starter',
-        creditLimit: pkg?.credit || 10000,
+        niche: niche || null,
       },
     });
   };
@@ -441,76 +470,118 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
             <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
               <div style={{ marginBottom: 20 }}>
                 <BunzyVideoStage
-          loop
+                  loop
                   videoSrc="/videos/bunzy/bunzy-4-descubrimiento.mp4"
                   poster="/videos/bunzy/bunzy-4-descubrimiento.jpg"
-                  stepLabel="PASO 3 · CAPACIDAD DE EMISIÓN"
-                  title="Respaldo & Crédito"
-                  description="Escoge tu paquete inicial de Bunz para respaldar las recompensas de tu negocio."
+                  stepLabel="PASO 4 · CAPACIDAD"
+                  title="Tu capacidad para recibir"
+                  description="Calculamos la capacidad según tu negocio. No compras Bunz: te habilitamos capacidad para que los Rabbitters consuman."
                   videoHeightClass="h-40 sm:h-48"
                 />
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <button
-                  onClick={() => setSelectedPackage('')}
-                  style={{
-                    width: '100%', display: 'flex', alignItems: 'center', gap: 16,
-                    padding: '16px 20px', borderRadius: 16, cursor: 'pointer',
-                    background: !selectedPackage ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)',
-                    border: !selectedPackage ? '2px solid rgba(255,255,255,0.3)' : '1px solid rgba(255,255,255,0.08)',
-                    transition: 'all 0.2s', textAlign: 'left', opacity: !selectedPackage ? 1 : 0.5,
-                  }}
-                >
-                  <span style={{ fontSize: 28, opacity: 0.6 }}>🚫</span>
-                  <div style={{ flex: 1 }}>
-                    <span style={{ fontSize: 15, fontWeight: 700, color: !selectedPackage ? '#fff' : 'rgba(255,255,255,0.5)' }}>
-                      Sin paquete (Recomendado)
-                    </span>
-                    <p style={{ margin: '2px 0 0', fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
-                      Crédito de minting sin límite
-                    </p>
-                  </div>
-                </button>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+                <div>
+                  <label style={labelStyle}>Ventas por día (aprox.)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={salesPerDay}
+                    onChange={(e) => setSalesPerDay(Number(e.target.value) || 0)}
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Ticket promedio (MXN)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={avgTicket}
+                    onChange={(e) => setAvgTicket(Number(e.target.value) || 0)}
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
 
-                {PACKAGES.map(pkg => {
-                  const selected = selectedPackage === pkg.id;
+              <div style={{ background: 'linear-gradient(135deg, rgba(233,30,99,0.12), rgba(249,115,22,0.08))', borderRadius: 20, padding: 16, marginBottom: 16, border: '1px solid rgba(233,30,99,0.28)' }}>
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 900, color: '#F472B6', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                  Capacidad estimada para tu negocio
+                </p>
+                <p style={{ margin: '4px 0', fontSize: 30, fontWeight: 900, color: '#fff' }}>
+                  {selectedOption ? selectedOption.totalCapacity.toLocaleString() : '—'}{' '}
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.6)' }}>Bunz</span>
+                </p>
+                <p style={{ margin: 0, fontSize: 11.5, color: 'rgba(255,255,255,0.7)', lineHeight: 1.45 }}>
+                  Cobertura {selectedOption?.coverageDays ?? '—'} días · Incentivo{' '}
+                  {selectedOption?.promoCapacity.toLocaleString() ?? '—'} · Capacidad adelantada{' '}
+                  {selectedOption?.creditCapacity.toLocaleString() ?? '—'}
+                </p>
+                <p style={{ margin: '8px 0 0', fontSize: 10.5, color: 'rgba(255,255,255,0.45)' }}>
+                  Estimación sujeta a autorización. El monto lo calcula el sistema; tú eliges la cobertura.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {offerOptions.map((o) => {
+                  const selected = selectedPackage === o.tier;
                   return (
                     <button
-                      key={pkg.id}
-                      onClick={() => setSelectedPackage(pkg.id)}
+                      key={o.tier}
+                      onClick={() => setSelectedPackage(o.tier)}
                       style={{
-                        width: '100%', display: 'flex', alignItems: 'center', gap: 16,
-                        padding: '16px 20px', borderRadius: 16, cursor: 'pointer',
-                        background: selected ? `${pkg.color}20` : 'rgba(255,255,255,0.05)',
-                        border: selected ? `2px solid ${pkg.color}` : '1px solid rgba(255,255,255,0.1)',
-                        transition: 'all 0.2s', textAlign: 'left',
+                        width: '100%', display: 'flex', flexDirection: 'column', gap: 4,
+                        padding: '16px 20px', borderRadius: 16, cursor: 'pointer', textAlign: 'left',
+                        background: selected ? 'rgba(233,30,99,0.16)' : 'rgba(255,255,255,0.04)',
+                        border: selected ? '2px solid rgba(233,30,99,0.7)' : '1px solid rgba(255,255,255,0.1)',
+                        transition: 'all 0.2s',
                       }}
                     >
-                      <span style={{ fontSize: 32 }}>{pkg.icon}</span>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>{pkg.label}</span>
-                          <span style={{ fontSize: 18, fontWeight: 900, color: pkg.color }}>{pkg.price}</span>
-                        </div>
-                        <p style={{ margin: '4px 0 0', fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>{pkg.desc}</p>
-                        <p style={{ margin: '2px 0 0', fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>Crédito: {pkg.credit.toLocaleString()} Bunz</p>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                        <span style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>{tierLabel(o.tier)}</span>
+                        <span style={{ fontSize: 18, fontWeight: 900, color: THEME_COLOR }}>
+                          {o.totalCapacity.toLocaleString()} Bunz
+                        </span>
                       </div>
+                      <p style={{ margin: '2px 0 0', fontSize: 12, color: 'rgba(255,255,255,0.65)' }}>
+                        {o.coverageDays} días de cobertura · Incentivo {o.promoCapacity.toLocaleString()} + Capacidad adelantada {o.creditCapacity.toLocaleString()}
+                      </p>
+                      <p style={{ margin: '2px 0 0', fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>
+                        La capacidad adelantada se recupera con tu actividad, sin tocar lo ya comprometido.
+                      </p>
                     </button>
                   );
                 })}
+
+                <button
+                  onClick={() => setSelectedPackage('CUSTOM')}
+                  style={{
+                    width: '100%', display: 'flex', flexDirection: 'column', gap: 4,
+                    padding: '16px 20px', borderRadius: 16, cursor: 'pointer', textAlign: 'left',
+                    background: selectedPackage === 'CUSTOM' ? 'rgba(233,30,99,0.16)' : 'rgba(255,255,255,0.04)',
+                    border: selectedPackage === 'CUSTOM' ? '2px solid rgba(233,30,99,0.7)' : '1px solid rgba(255,255,255,0.1)',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                    <span style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>Personalizado</span>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: '#FBBF24' }}>Sujeto a evaluación</span>
+                  </div>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'rgba(255,255,255,0.65)' }}>
+                    Si tu operación necesita otra cobertura, el equipo evalúa tu caso con tus datos.
+                  </p>
+                </button>
               </div>
 
-              <div style={{ marginTop: 20, padding: '14px 18px', background: 'rgba(233,30,99,0.08)', borderRadius: 12, border: '1px solid rgba(233,30,99,0.15)' }}>
-                <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.6)', lineHeight: 1.5 }}>
-                  💡 El crédito de minting define el límite de Bunz que puedes regalar a tus clientes. 
-                  A mayor paquete, más recompensas puedes ofrecer sin costo adicional.
+              <div style={{ marginTop: 18, padding: '14px 18px', background: 'rgba(255,255,255,0.03)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.08)' }}>
+                <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.55)', lineHeight: 1.5 }}>
+                  No compras Bunz. Te habilitamos capacidad para recibir a los Rabbitters. La capacidad
+                  está sujeta a autorización y a las condiciones del acuerdo.
                 </p>
               </div>
 
               {error && <p style={{ color: '#ef4444', fontSize: 14, marginTop: 16 }}>{error}</p>}
 
-              <button onClick={nextStep} style={{ width: '100%', padding: '16px', background: selectedPackage ? THEME_GRADIENT : 'rgba(255,255,255,0.1)', color: selectedPackage ? '#fff' : 'rgba(255,255,255,0.3)', border: 'none', borderRadius: 999, fontSize: 16, fontWeight: 900, marginTop: 24 }}>
+              <button onClick={nextStep} style={{ width: '100%', padding: '16px', background: THEME_GRADIENT, color: '#fff', border: 'none', borderRadius: 999, fontSize: 16, fontWeight: 900, marginTop: 24 }}>
                 Continuar
               </button>
             </motion.div>
@@ -520,120 +591,48 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
             <motion.div key="step4" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} style={{ textAlign: 'left', paddingTop: 12 }}>
               <div style={{ marginBottom: 20 }}>
                 <BunzyVideoStage
-          loop
+                  loop
                   videoSrc="/videos/bunzy/bunzy-5-celebra.mp4"
                   poster="/videos/bunzy/bunzy-5-celebra.jpg"
-                  stepLabel="PASO 4 · FINALIZACIÓN & FIRMA"
-                  title="Firma y activa tu negocio"
-                  description="Estás a un paso: firma digitalmente tu adhesión y comienza a operar con Rabbitty."
-                  videoHeightClass="h-40 sm:h-48"
+                  stepLabel="PASO 5 · CONTRATO Y FIRMA"
+                  title="Acuerdo de capacidad"
+                  description="Revisa el acuerdo, acepta las condiciones y firma."
+                  videoHeightClass="h-36 sm:h-44"
                 />
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                <div style={{ width: 48, height: 48, background: 'rgba(16,185,129,0.1)', borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <ShieldCheck size={26} color="#10B981" />
-                </div>
-                <div>
-                  <h2 style={{ fontSize: 22, fontWeight: 900, margin: 0 }}>Firma Digital & Garantía</h2>
-                  <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, margin: '2px 0 0' }}>
-                    Revisa tu configuración y firma el contrato de adhesión de afiliado.
-                  </p>
-                </div>
+              <div style={{ background: 'rgba(0,0,0,0.35)', borderRadius: 16, padding: 14, maxHeight: 230, overflowY: 'auto', border: '1px solid rgba(255,255,255,0.08)', fontSize: 11.5, color: 'rgba(255,255,255,0.7)', lineHeight: 1.55, marginBottom: 14, whiteSpace: 'pre-wrap' }}>
+                {MCCE_CONTRACT_TEXT}
               </div>
 
-              <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 20, padding: 16, marginBottom: 16, border: '1px solid rgba(255,255,255,0.08)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                  <div>
-                    <p style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#fff' }}>{name}</p>
-                    <p style={{ margin: '2px 0 0', fontSize: 12, color: THEME_COLOR, fontWeight: 700 }}>{category}</p>
-                  </div>
-                  <span style={{ fontSize: 11, fontWeight: 800, padding: '4px 10px', borderRadius: 999, background: 'rgba(233,30,99,0.15)', color: THEME_COLOR, border: '1px solid rgba(233,30,99,0.3)' }}>
-                    {selectedPackage ? `Paquete ${selectedPackage.toUpperCase()}` : 'Sin Paquete'}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <MapPin size={14} color="rgba(255,255,255,0.4)" />
-                    <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>{isVirtual ? 'Negocio Virtual' : address}</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Percent size={14} color="rgba(255,255,255,0.4)" />
-                    <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>{rewardPercentage}% Recompensa</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Tarjeta de Split Dinámico por Nicho */}
-              <div style={{ background: 'linear-gradient(135deg, rgba(233,30,99,0.12), rgba(249,115,22,0.08))', borderRadius: 20, padding: 16, marginBottom: 16, border: '1px solid rgba(233,30,99,0.28)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <span style={{ fontSize: 11, fontWeight: 900, color: '#F472B6', textTransform: 'uppercase', letterSpacing: 0.8 }}>
-                    ⚡ Split de Bienvenida por Nicho ({nicheRule.nicheLabel})
-                  </span>
-                  <span style={{ fontSize: 13, fontWeight: 900, color: '#fff', background: 'rgba(0,0,0,0.35)', padding: '3px 10px', borderRadius: 999 }}>
-                    +{nicheRule.totalBunz} Bunz / nuevo cliente
-                  </span>
-                </div>
-                <p style={{ margin: '0 0 10px', fontSize: 11.5, color: 'rgba(255,255,255,0.75)', lineHeight: 1.45 }}>
-                  Cuando un cliente nuevo descargue Rabbitty escaneando el QR oficial de tu negocio, recibirá <strong>{nicheRule.totalBunz} Bunz</strong> financiados en co-inversión triangular:
-                </p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <div style={{ background: 'rgba(0,0,0,0.3)', padding: '10px 12px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.06)' }}>
-                    <p style={{ margin: 0, fontSize: 10, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', fontWeight: 700 }}>Aporte de tu Paquete ({nicheRule.affiliateSharePct}%)</p>
-                    <p style={{ margin: '2px 0 0', fontSize: 16, fontWeight: 900, color: '#FBBF24' }}>{nicheRule.affiliateBunz} Bunz</p>
-                  </div>
-                  <div style={{ background: 'rgba(0,0,0,0.3)', padding: '10px 12px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.06)' }}>
-                    <p style={{ margin: 0, fontSize: 10, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', fontWeight: 700 }}>Subsidio Tesorería ({nicheRule.treasurySharePct}%)</p>
-                    <p style={{ margin: '2px 0 0', fontSize: 16, fontWeight: 900, color: '#34D399' }}>{nicheRule.treasuryBunz} Bunz</p>
-                  </div>
-                </div>
-                <p style={{ margin: '8px 0 0', fontSize: 10.5, color: 'rgba(255,255,255,0.45)' }}>
-                  * Base actual homologada en {nicheRule.totalBunz} Bunz para todos los nichos (rango proyectado para {nicheRule.nicheLabel}: {nicheRule.recommendedFutureMin}–{nicheRule.recommendedFutureMax} Bunz según volumen y ticket promedio).
+              <div style={{ background: 'rgba(233,30,99,0.08)', borderRadius: 12, border: '1px solid rgba(233,30,99,0.2)', padding: '12px 14px', marginBottom: 16 }}>
+                <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>
+                  <strong>Resumen:</strong> {MCCE_CONTRACT_SUMMARY}
                 </p>
               </div>
 
-              {/* Resumen del Contrato Legal */}
-              <div style={{ background: 'rgba(0,0,0,0.35)', borderRadius: 16, padding: 14, maxHeight: 150, overflowY: 'auto', border: '1px solid rgba(255,255,255,0.08)', fontSize: 11.5, color: 'rgba(255,255,255,0.65)', lineHeight: 1.55, marginBottom: 14 }}>
-                <p style={{ margin: '0 0 8px', color: '#fff', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <FileText size={14} color={THEME_COLOR} /> CONTRATO DIGITAL DE COLATERAL Y SPLIT DE ADQUISICIÓN (v2.0)
-                </p>
-                <p style={{ margin: '0 0 8px' }}>
-                  <strong>1. Garantía Comercial Real:</strong> El Afiliado respalda el paquete de emisión seleccionado ({selectedPackage ? `${selectedPackage.toUpperCase()} — ${(PACKAGES.find(p => p.id === selectedPackage)?.credit || 0).toLocaleString()} Bunz` : 'Emisión Abierta'}) con sus productos y servicios reales a valor de menú público, sin inflar precios ni condicionar el canje de Bunz.
-                </p>
-                <p style={{ margin: '0 0 8px' }}>
-                  <strong>2. Cláusula de Co-Inversión y Split Dinámico por Nicho:</strong> Por cada nuevo usuario registrado mediante los códigos QR del Afiliado, el Bono de Bienvenida ({nicheRule.totalBunz} Bunz base) se cubrirá en un <strong>{nicheRule.affiliateSharePct}% ({nicheRule.affiliateBunz} Bunz)</strong> con cargo al paquete de emisión del Afiliado y en un <strong>{nicheRule.treasurySharePct}% ({nicheRule.treasuryBunz} Bunz)</strong> por la Tesorería de Rabbitty.
-                </p>
-                <p style={{ margin: 0 }}>
-                  <strong>3. Liquidación y Auditoría:</strong> Toda emisión queda registrada en el libro mayor inmutable de Rabbitty. En caso de negativa de canje injustificada, Rabbitty podrá suspender la cuenta comercial y exigir la redención de los saldos emitidos.
-                </p>
-              </div>
-
-              {/* Checkboxes obligatorios */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
                 <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 12, color: 'rgba(255,255,255,0.8)', lineHeight: 1.4 }}>
-                  <input type="checkbox" checked={acceptedTerms} onChange={e => setAcceptedTerms(e.target.checked)} style={{ marginTop: 2, width: 17, height: 17, accentColor: THEME_COLOR, flexShrink: 0 }} />
-                  <span>Acepto los Términos y Condiciones de Afiliación Comercial y las políticas de canje a paridad real de menú.</span>
+                  <input type="checkbox" checked={acceptedTerms} onChange={(e) => setAcceptedTerms(e.target.checked)} style={{ marginTop: 2, width: 17, height: 17, accentColor: THEME_COLOR, flexShrink: 0 }} />
+                  <span>Acepto el Acuerdo de Capacidad Comercial {MCCE_CONTRACT_VERSION}.</span>
                 </label>
                 <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 12, color: 'rgba(255,255,255,0.8)', lineHeight: 1.4 }}>
-                  <input type="checkbox" checked={acceptedCollateral} onChange={e => setAcceptedCollateral(e.target.checked)} style={{ marginTop: 2, width: 17, height: 17, accentColor: THEME_COLOR, flexShrink: 0 }} />
-                  <span>Pongo en garantía comercial los productos/servicios de <strong>{name || 'mi negocio'}</strong> para respaldar los Bunz emitidos en mi paquete.</span>
+                  <input type="checkbox" checked={acceptedCollateral} onChange={(e) => setAcceptedCollateral(e.target.checked)} style={{ marginTop: 2, width: 17, height: 17, accentColor: THEME_COLOR, flexShrink: 0 }} />
+                  <span>Me comprometo a aceptar redenciones de Bunz hasta la capacidad disponible y a no condicionar ni inflar precios.</span>
                 </label>
                 <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 12, color: 'rgba(255,255,255,0.8)', lineHeight: 1.4 }}>
-                  <input type="checkbox" checked={acceptedSplitClause} onChange={e => setAcceptedSplitClause(e.target.checked)} style={{ marginTop: 2, width: 17, height: 17, accentColor: THEME_COLOR, flexShrink: 0 }} />
-                  <span>Autorizo el <strong>Split Triangular por Nicho ({nicheRule.affiliateBunz} Bunz Afiliado / {nicheRule.treasuryBunz} Bunz Rabbitty)</strong> por cada nuevo cliente captado vía QR de bienvenida.</span>
+                  <input type="checkbox" checked={acceptedSplitClause} onChange={(e) => setAcceptedSplitClause(e.target.checked)} style={{ marginTop: 2, width: 17, height: 17, accentColor: THEME_COLOR, flexShrink: 0 }} />
+                  <span>Acepto que la capacidad adelantada se recupera con mi actividad, protegiendo lo ya comprometido.</span>
                 </label>
               </div>
 
-              {/* Firma Digital */}
               <div style={{ marginBottom: 18 }}>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: 'rgba(255,255,255,0.6)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.8 }}>
-                  Firma Digital del Representante Legal / Titular
-                </label>
+                <label style={labelStyle}>Firma del representante legal / titular</label>
                 <input
                   type="text"
                   value={legalSignerName}
-                  onChange={e => setLegalSignerName(e.target.value)}
-                  placeholder="Escribe tu nombre completo como firma legal..."
+                  onChange={(e) => setLegalSignerName(e.target.value)}
+                  placeholder="Escribe tu nombre completo como firma..."
                   style={{
                     width: '100%',
                     background: 'rgba(255,255,255,0.05)',
@@ -644,14 +643,45 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
                     fontSize: 14,
                     fontStyle: 'italic',
                     fontWeight: 600,
-                    outline: 'none'
+                    outline: 'none',
                   }}
                 />
+
+                <div style={{ marginTop: 12 }}>
+                  {biometricVerified ? (
+                    <p style={{ margin: 0, fontSize: 12, color: '#34D399', fontWeight: 700 }}>
+                      ✓ Face ID / Touch ID verificado
+                    </p>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleBiometric}
+                      disabled={biometricBusy}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center',
+                        width: '100%', padding: '12px 16px', borderRadius: 14,
+                        background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)',
+                        color: '#fff', fontSize: 13, fontWeight: 800, cursor: biometricBusy ? 'wait' : 'pointer',
+                      }}
+                    >
+                      <ScanFace size={16} />
+                      {biometricBusy ? 'Verificando…' : 'Verificar con Face ID / Touch ID'}
+                    </button>
+                  )}
+                  {biometricNote && (
+                    <p style={{ margin: '8px 0 0', fontSize: 11, color: biometricVerified ? '#34D399' : 'rgba(255,255,255,0.55)' }}>
+                      {biometricNote}
+                    </p>
+                  )}
+                  <p style={{ margin: '8px 0 0', fontSize: 10.5, color: 'rgba(255,255,255,0.4)' }}>
+                    Si tu dispositivo no tiene biometría, tu nombre completo y las casillas son suficientes.
+                  </p>
+                </div>
               </div>
 
               {error && <p style={{ color: '#ef4444', fontSize: 13, marginBottom: 12, fontWeight: 600 }}>{error}</p>}
 
-              <button 
+              <button
                 onClick={handleSubmit}
                 disabled={isLoading || !acceptedTerms || !acceptedCollateral || !acceptedSplitClause || legalSignerName.trim().length < 3}
                 style={{
@@ -665,10 +695,10 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
                   fontWeight: 900,
                   opacity: isLoading ? 0.7 : 1,
                   cursor: (!acceptedTerms || !acceptedCollateral || !acceptedSplitClause || legalSignerName.trim().length < 3) ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.25s'
+                  transition: 'all 0.25s',
                 }}
               >
-                {isLoading ? 'Firmando y Enviando...' : '✍️ Firmar Contrato y Activar Negocio'}
+                {isLoading ? 'Firmando y enviando...' : 'Firmar acuerdo y activar negocio'}
               </button>
             </motion.div>
           )}

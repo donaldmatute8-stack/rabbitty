@@ -10,7 +10,7 @@
 
 export type RoadmapStatus = "done" | "active" | "blocked" | "pending";
 
-export const ROADMAP_VERSION = "2026-11-07.7";
+export const ROADMAP_VERSION = "2026-11-07.8";
 
 export interface RoadmapItem {
   id: string;
@@ -80,17 +80,17 @@ export const PHASES: RoadmapPhase[] = [
     title: "Capacidad híbrida",
     subtitle: "Incentivo de incorporación + capacidad adelantada",
     status: "active",
-    progress: 35,
+    progress: 45,
     items: [
       { id: "M1", title: "Contrato económico v1.0", detail: "Componentes, flujos, invariantes y lenguaje para el afiliado.", status: "done", evidence: "DOCS/MCCE-CONTRATO" },
       { id: "M2", title: "Especificación MCCE", detail: "Módulos, datos, eventos, UI y fases.", status: "done", evidence: "DOCS/MCCE-ESPECIFICACION" },
       { id: "M3", title: "Auditoría del código", detail: "Estado real de bunzBalance, creditLimit, creditUsed, emisión y redención.", status: "done", evidence: "DOCS/MCCE-AUDITORIA" },
       { id: "M4", title: "Simulación en sombra v1", detail: "3 afiliados reales; capacidad y recuperación sin escrituras.", status: "done", evidence: "DOCS/MCCE-SIMULACION" },
-      { id: "M5", title: "Simulación v2", detail: "Crédito viable, retención 20/40/60%, piso por nicho y fungibilidad.", status: "active" },
-      { id: "M6", title: "Reconciliar composición", detail: "¿Qué parte del stock actual es incentivo, adelanto o generado?", status: "pending" },
+      { id: "M5", title: "Simulación v2", detail: "Crédito viable, retención 20/40/60%, piso por nicho y fungibilidad.", status: "done", evidence: "DOCS/MCCE-SIMULACION-v2" },
+      { id: "M6", title: "Reconciliar composición", detail: "Propuesta lista; falta confirmar con 626 y Bull Box.", status: "active", evidence: "DOCS/MCCE-RECONCILIACION" },
       { id: "M7", title: "Sizer dinámico", detail: "Opciones por nicho, onboarding y solvencia.", status: "pending" },
       { id: "M8", title: "Integración con flags", detail: "Sin tocar saldos históricos; reversible.", status: "pending" },
-      { id: "M10", title: "Onboarding + contrato + firma", detail: "Datos, oferta estimada, contrato v1.0 y firma con nombre/checkbox (Face ID después).", status: "active", evidence: "DOCS/MCCE-ONBOARDING" },
+      { id: "M10", title: "Onboarding + contrato + firma", detail: "Aplicado en el miniapp: oferta dinámica, contrato v1.0 y Face ID con fallback.", status: "active", evidence: "BusinessSetupForm + mcceOffer" },
       { id: "M11", title: "Revisión legal del contrato", detail: "Naturaleza del incentivo y de la capacidad adelantada.", status: "pending" },
       { id: "M9", title: "Piloto de capacidad", detail: "Zona controlada, límites y monitoreo.", status: "blocked" },
     ],
@@ -161,6 +161,12 @@ export interface HistoryEntry {
 }
 
 export const HISTORY: HistoryEntry[] = [
+  {
+    date: "2026-11-07",
+    title: "MCCE: simulación v2 y onboarding aplicado",
+    detail: "Líneas viables 500–1,000; 3,500 no viable. Bull Box sin recuperación. Onboarding con oferta dinámica y contrato v1.0 en el miniapp.",
+    ref: "MCCE v2",
+  },
   {
     date: "2026-11-07",
     title: "MCCE: contrato, especificación y sombra",
@@ -244,15 +250,15 @@ export interface NextAction {
 export const NEXT_ACTIONS: NextAction[] = [
   {
     id: "N0",
-    title: "Simulación MCCE v2",
-    detail: "Crédito viable: 500/1,000/2,000/3,500 con retención 20/40/60% y meses de recuperación. Sin escrituras.",
-    owner: "Tech",
+    title: "Confirmar reconciliación",
+    detail: "Validar con 626 y Bull Box el origen de su capacidad; decidir si Bull Box pasa a incentivo.",
+    owner: "Negocio + Tech",
   },
   {
     id: "N0b",
-    title: "Reconciliar composición",
-    detail: "Determinar qué parte del stock actual es incentivo, capacidad adelantada o generado por actividad.",
-    owner: "Tech + Negocio",
+    title: "Revisión legal del contrato",
+    detail: "Revisar la naturaleza del incentivo y de la capacidad adelantada antes de activar montos reales.",
+    owner: "Legal",
   },
   {
     id: "N1",
