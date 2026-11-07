@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import { 
   Crown, Store, Scale, Activity, Rocket, Gamepad2, Award, 
   LayoutDashboard, Settings, ArrowRight, ShieldCheck, RefreshCw, 
-  CheckCircle2, AlertTriangle, Users, Coins, Sparkles, Megaphone, FileSearch
+  CheckCircle2, AlertTriangle, Users, Coins, Sparkles, Megaphone, FileSearch, Route
 } from "lucide-react";
 import { Card, Button, cn } from "@rabbitty/ui";
 
@@ -104,6 +104,16 @@ export default function GodHubPage() {
   };
 
   const modules = [
+    {
+      title: "Ruta & Historial",
+      description: "Hoja de ruta visual de la economía: fases, compuertas G1–G9, flags, próximos movimientos y todo lo construido.",
+      href: "/god/ruta",
+      icon: Route,
+      badge: "Seguimiento",
+      color: "from-violet-500/20 to-sky-600/20",
+      border: "border-violet-500/30",
+      iconColor: "text-violet-300",
+    },
     {
       title: "Bunzy Connect",
       description: "Comunicación institucional dentro del chat: actualizaciones, tips y avisos con identidad de Bunzy, preview y métricas de lectura.",

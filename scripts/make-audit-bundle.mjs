@@ -84,6 +84,8 @@ const GROUPS = [
       "packages/api/src/services/bunzAbuse.ts",
       "packages/api/src/services/validationCapture.ts",
       "apps/admin/src/app/(dashboard)/god/validacion/page.tsx",
+      "apps/admin/src/app/(dashboard)/god/ruta/page.tsx",
+      "apps/admin/src/lib/god-roadmap.ts",
       "apps/admin/src/app/(dashboard)/god/page.tsx",
       "apps/pos/src/components/RedemptionRejectModal.tsx",
       "apps/pos/src/components/CheckoutModal.tsx",

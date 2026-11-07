@@ -58,6 +58,8 @@ import {
   BookOpen,
   MessageSquarePlus,
   Ticket,
+  Route,
+  FileSearch,
 } from "lucide-react";
 import { useSidebar, useBranch } from "./DashboardClientWrapper";
 import { AdminFeedbackModal } from "./AdminFeedbackModal";
@@ -132,6 +134,8 @@ const godPillars: MenuPillar[] = [
     items: [
       { href: "/", label: "Resumen Operativo", icon: LayoutDashboard },
       { href: "/god", label: "Centro de Mando God", icon: Crown, badge: "Hub" },
+      { href: "/god/ruta", label: "Ruta & Historial", icon: Route, badge: "Nuevo" },
+      { href: "/god/validacion", label: "Validación económica", icon: FileSearch },
       { href: "/god/tenants", label: "Tenants & Vista Prueba", icon: Store },
     ],
   },
