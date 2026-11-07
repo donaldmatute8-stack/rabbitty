@@ -1699,15 +1699,29 @@ export const posRouter = router({
       // P0-3: tarjeta exige referencia de terminal
       assertCardPaymentAllowed(input.paymentMethod, input.cardReference);
 
-      // RP-2A: el split no está habilitado en el piloto (vuelve en Fase C,
-      // migrado al intent canónico). Antes se cobraba fuera de transacción y,
-      // si fallaba, se registraba CASH en silencio.
-      if (pendingSplit(input)) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message:
-            "SPLIT_DISABLED: el pago dividido no está habilitado en el piloto. Usa un intento de pago canónico.",
-        });
+      // RP-2A/RP-2B: split efectivo + Bunz sobre el motor canónico.
+      // La parte Bunz se captura con paymentCore (saldo + capacidad + libro);
+      // nada se cobra fuera de transacción ni se registra CASH en silencio.
+      const isSplit = pendingSplit(input);
+      if (isSplit) {
+        if (!(Number(input.splitCash) > 0) || !(Number(input.splitBunz) > 0)) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "SPLIT_INVALID: indica un monto de efectivo y otro de Bunz mayores a 0.",
+          });
+        }
+        if (!input.customerId) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "SPLIT_REQUIRES_CUSTOMER: vincula al Rabbitter para cobrar la parte Bunz.",
+          });
+        }
+        if ((input.discountPercent ?? 0) > 0 || (input.entitlementIds?.length ?? 0) > 0) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "SPLIT_NO_DISCOUNT: no combines cuenta dividida con descuento o membresía.",
+          });
+        }
       }
 
       // RP-2A: idempotencia de request. Un reintento devuelve el mismo cobro.
@@ -2033,7 +2047,72 @@ export const posRouter = router({
       // aparte (actívala con RABBITTY_STOCK_STRICT=true cuando el inventario sea fiable).
       const strictStock = process.env.RABBITTY_STOCK_STRICT === "true";
       const createdNew = !input.existingOrderId;
-      const mainPaymentAmount = r2(Math.max(0, calcTotal - creditApplied));
+
+      const splitCashPart = isSplit ? r2(Number(input.splitCash)) : 0;
+      const splitBunzPart = isSplit ? r2(Number(input.splitBunz)) : 0;
+      if (isSplit && Math.abs(splitCashPart + splitBunzPart - calcTotal) > 0.01) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `SPLIT_MISMATCH: efectivo ${splitCashPart} + Bunz ${splitBunzPart} ≠ total ${calcTotal}.`,
+        });
+      }
+
+      // El intent de Bunz necesita el total de la orden ya escrito.
+      if (isSplit) {
+        await ctx.restaurantDb
+          .update(orders)
+          .set({
+            subtotal: calcSubtotal,
+            tax: calcTaxAmt,
+            discount: calculatedDiscount,
+            total: calcTotal,
+            tip: posTip,
+          })
+          .where(eq(orders.id, order.id));
+      }
+
+      // 1) Capturar la parte Bunz con el motor canónico (antes del efectivo).
+      let splitBunzPaymentId: string | null = null;
+      if (isSplit) {
+        const { createOrGetPaymentIntent, confirmPaymentIntentSettled } = await import(
+          "../services/paymentCore"
+        );
+        const intent = await createOrGetPaymentIntent(ctx.restaurantDb, {
+          orderId: order.id,
+          branchId: ctx.branchId,
+          bunzToApply: splitBunzPart,
+          payerUserId: input.customerId!,
+          tipMxn: 0,
+        });
+        const settled = await confirmPaymentIntentSettled(ctx.restaurantDb, {
+          paymentIntentId: intent.intentId,
+          verifiedMethod: "BUNZ_ONLY",
+          expectedBranchId: ctx.branchId,
+        });
+        if (!settled.success || settled.recoveryHold) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: settled.recoveryHold
+              ? "SPLIT_BUNZ_FAILED: el afiliado no tiene capacidad para la parte Bunz; no se cobró nada."
+              : "SPLIT_BUNZ_FAILED: no se pudo capturar la parte Bunz.",
+          });
+        }
+        const [bunzPayment] = await ctx.restaurantDb
+          .select()
+          .from(payments)
+          .where(
+            and(
+              eq(payments.orderId, order.id),
+              eq(payments.method, "BUNZ"),
+              eq(payments.status, "COMPLETED")
+            )
+          )
+          .orderBy(desc(payments.createdAt))
+          .limit(1);
+        splitBunzPaymentId = bunzPayment?.id ?? null;
+      }
+
+      const mainPaymentAmount = isSplit ? splitCashPart : r2(Math.max(0, calcTotal - creditApplied));
 
       try {
         await ctx.restaurantDb.transaction(async (tx: any) => {
@@ -2063,6 +2142,17 @@ export const posRouter = router({
               amount: creditApplied,
               status: "COMPLETED",
               verificationMethod: "MEMBERSHIP_PASS",
+            });
+          }
+
+          const [paidSum] = await tx
+            .select({ total: sql<number>`coalesce(sum(${payments.amount}), 0)` })
+            .from(payments)
+            .where(and(eq(payments.orderId, order.id), eq(payments.status, "COMPLETED")));
+          if (Number(paidSum?.total) + 0.01 < calcTotal) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: `SPLIT_INCOMPLETE: pagado ${Number(paidSum?.total).toFixed(2)} de ${calcTotal.toFixed(2)}.`,
             });
           }
 
@@ -2135,6 +2225,19 @@ export const posRouter = router({
           }
         });
       } catch (err) {
+        // Si la parte Bunz ya se capturó y el cierre falla, se devuelve.
+        if (splitBunzPaymentId) {
+          try {
+            const { refundBunzPayment } = await import("../services/paymentCore");
+            await refundBunzPayment(ctx.restaurantDb, {
+              paymentId: splitBunzPaymentId,
+              amountMxn: splitBunzPart,
+              reason: "split: falló el cierre en efectivo",
+            });
+          } catch (refundError) {
+            console.error("[CHECKOUT_SPLIT_REFUND]", refundError);
+          }
+        }
         // Compensación: devolver beneficios de membresía ya consumidos.
         for (const undo of membershipCompensations) {
           try {
@@ -2150,6 +2253,16 @@ export const posRouter = router({
             await ctx.restaurantDb.delete(orders).where(eq(orders.id, order.id));
           } catch (cleanupError) {
             console.error("[CHECKOUT_CLEANUP]", cleanupError);
+          }
+        } else if (input.idempotencyKey) {
+          // Orden reutilizada: liberar la clave para permitir reintento.
+          try {
+            await ctx.restaurantDb
+              .update(orders)
+              .set({ idempotencyKey: null })
+              .where(eq(orders.id, order.id));
+          } catch (cleanupError) {
+            console.error("[CHECKOUT_CLEANUP_KEY]", cleanupError);
           }
         }
         throw err;

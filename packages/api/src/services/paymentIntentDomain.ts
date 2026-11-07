@@ -13,10 +13,14 @@ import {
   restaurants,
   bunzRedemptionAttempts,
   bunzLedgerEntries,
+  bunzEconomicLimits,
+  bunzControlState,
+  bunzObligations,
 } from "@rabbitty/database-restaurant/schema";
 import { users, ownedBusinesses } from "@rabbitty/database-core/schema";
 import { buildShadowReport, recordShadowReport } from "./payments/shadow";
 import { recordRedemptionBooks } from "./bunzBooks";
+import { checkOperation } from "./bunzControls";
 
 /**
  * @deprecated RP-0.7 — motor legacy en migración a paymentCore.
@@ -491,6 +495,27 @@ export class PaymentIntentService {
 
         if (!rest?.businessId) {
           throw new Error("BUNZ_BACKING_UNRESOLVED");
+        }
+
+        // RP-2B: la app nativa y el mini app comparten el mismo piloto,
+        // kill switches y pausa de conciliación.
+        const control = await checkOperation(tx, {
+          affiliateId: rest.businessId,
+          operation: "redemption",
+          amount: bunzToConsume,
+          now: new Date(),
+          tables: {
+            limits: bunzEconomicLimits,
+            orders,
+            branches,
+            restaurants,
+            attempts: bunzRedemptionAttempts,
+            obligations: bunzObligations,
+            controlState: bunzControlState,
+          },
+        });
+        if (!control.allowed) {
+          throw new Error(`BUNZ_PILOT_BLOCKED: ${control.reason ?? "redención no autorizada"}`);
         }
 
         const consumed = await tx

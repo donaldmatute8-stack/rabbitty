@@ -1091,6 +1091,12 @@ export const paymentsRouter = router({
         const msg = err instanceof Error ? err.message : String(err);
         // D-13: el respaldo del afiliado es una regla ECONÓMICA, no un fallo técnico.
         // Se devuelve un error de negocio legible en vez de un 500 opaco.
+        if (msg.startsWith("BUNZ_PILOT_BLOCKED")) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: msg.replace("BUNZ_PILOT_BLOCKED: ", ""),
+          });
+        }
         if (msg === "BUNZ_BACKING_INSUFFICIENT") {
           throw new TRPCError({
             code: "BAD_REQUEST",

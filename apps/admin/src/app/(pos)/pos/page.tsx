@@ -2601,6 +2601,14 @@ export default function PosPage() {
                 <CreditCard className="h-4 w-4 text-gray-400 group-hover:text-cyan-400" />
                 <span className="text-[9px] font-black uppercase tracking-wider text-gray-400 group-hover:text-cyan-400">Tarjeta</span>
               </button>
+              <button 
+                onClick={() => requestCheckout("DIVIDIDA")}
+                disabled={cart.length === 0}
+                className="group flex flex-col items-center justify-center gap-0.5 rounded-xl bg-white/5 py-1.5 border border-white/10 hover:bg-amber-500/20 hover:border-amber-500/50 transition-all active:scale-95 cursor-pointer disabled:opacity-40"
+              >
+                <Split className="h-4 w-4 text-gray-400 group-hover:text-amber-400" />
+                <span className="text-[9px] font-black uppercase tracking-wider text-gray-400 group-hover:text-amber-400">Dividir</span>
+              </button>
             </div>
 
             {/* ── Gratificación voluntaria (D-11) — colapsada por defecto:
@@ -3052,6 +3060,7 @@ export default function PosPage() {
             {([
               ["EFECTIVO", Banknote, "Efectivo", "Cuenta en caja con cambio", "group-hover:border-emerald-400/60 group-hover:bg-emerald-400/10", "text-emerald-400"],
               ["TARJETA", CreditCard, "Tarjeta", "Rabbitty Pay o terminal física", "group-hover:border-cyan-400/60 group-hover:bg-cyan-400/10", "text-cyan-400"],
+              ["DIVIDIDA", Split, "Dividida", "Parte efectivo + parte Bunz", "group-hover:border-amber-400/60 group-hover:bg-amber-400/10", "text-amber-400"],
             ] as const).map(([method, Icon, label, desc, hoverCls, iconCls]) => (
               <button
                 key={method}

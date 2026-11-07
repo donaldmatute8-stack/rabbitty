@@ -1372,6 +1372,14 @@ export async function refundBunzPayment(
       ])
       .onConflictDoNothing();
 
+    // G7: el importe Bunz pagado de la orden baja con el reembolso.
+    if (payment.orderId) {
+      await tx
+        .update(orders)
+        .set({ bunzPaid: sql`GREATEST(0, COALESCE(${orders.bunzPaid}, 0) - ${amount})` })
+        .where(eq(orders.id, payment.orderId));
+    }
+
     // Asiento negativo + estado
     await tx.insert(payments).values({
       orderId: payment.orderId,

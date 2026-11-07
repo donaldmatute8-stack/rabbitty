@@ -10,7 +10,7 @@
 
 export type RoadmapStatus = "done" | "active" | "blocked" | "pending";
 
-export const ROADMAP_VERSION = "2026-11-07.4";
+export const ROADMAP_VERSION = "2026-11-07.5";
 
 export interface RoadmapItem {
   id: string;
@@ -55,7 +55,7 @@ export const PHASES: RoadmapPhase[] = [
       { id: "A1", title: "Bunz por intent canónico", detail: "Hold atómico, capacidad del afiliado, recuperación y reembolso.", status: "done", evidence: "paymentCore" },
       { id: "A2", title: "Cobro fiat atómico", detail: "Totales + pago + COMPLETED + mesa + stock en una transacción.", status: "done", evidence: "RP-2A" },
       { id: "A3", title: "Idempotencia de cobro", detail: "Clave por intento; reintentos no duplican.", status: "done", evidence: "migración 0031" },
-      { id: "A4", title: "Split bloqueado", detail: "Fuera del piloto; vuelve en Fase C vía intent.", status: "done", evidence: "SPLIT_DISABLED" },
+      { id: "A4", title: "Split sobre motor canónico", detail: "Efectivo + Bunz vía paymentCore; si el cierre falla, se revierte la parte Bunz.", status: "done", evidence: "directCheckout split" },
       { id: "A5", title: "Legacy Bunz cerrado", detail: "payOrder rechaza BUNZ; el miniapp deja libro e intento.", status: "done", evidence: "RABBITTY_LEGACY_BUNZ" },
       { id: "A6", title: "Validación con venta real", detail: "Una venta efectivo + un intento Bunz, revisar libros y captura.", status: "active", evidence: "pendiente de caja" },
     ],
@@ -143,6 +143,12 @@ export interface HistoryEntry {
 export const HISTORY: HistoryEntry[] = [
   {
     date: "2026-11-07",
+    title: "Split de cuenta restaurado",
+    detail: "Efectivo + Bunz con captura canónica, validación de suma y reverso automático si falla el cierre. Paridad de controles en el motor legacy.",
+    ref: "directCheckout + paymentCore",
+  },
+  {
+    date: "2026-11-07",
     title: "Piloto configurado + conciliación",
     detail: "Ka13, 626 Café y Bull Box con topes 500/500/300 por 7 días. Conciliación diaria que pausa emisión/redención/liquidación si algo no cuadra.",
     ref: "0032 · 0033",
@@ -207,7 +213,7 @@ export const NEXT_ACTIONS: NextAction[] = [
   {
     id: "N1",
     title: "Venta controlada",
-    detail: "Una venta en efectivo y un intento Bunz; revisar orders, payments, libro, obligación y captura.",
+    detail: "Una venta en efectivo, un intento Bunz y una cuenta dividida; revisar orders, payments, libro, obligación y captura.",
     owner: "Operación",
   },
   {
