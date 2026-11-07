@@ -249,6 +249,16 @@ async function collect() {
       capacityOut = capacityToDataset(rows);
     }
 
+    let treasuryRows = [];
+    if (CORE) {
+      treasuryRows = await withClient(CORE, async (core) => {
+        const r = await core.query(
+          `SELECT "createdAt", amount FROM "treasury" ORDER BY "createdAt" ASC`
+        );
+        return r.rows;
+      });
+    }
+
     let obligationsOut = [];
     let obligationsInvalid = [];
     if (hasObligations) {
@@ -308,6 +318,7 @@ async function collect() {
       obligations: obligationsOut,
       ledger: ledgerOut,
       invalid: { obligations: obligationsInvalid, ledger: ledgerInvalid },
+      treasuryRows,
       fiat,
       orders,
       sources,
@@ -317,6 +328,23 @@ async function collect() {
 
 const data = await collect();
 const win = windowOf(data.orders.map((o) => o.createdAt));
+
+// Tesorería: saldo acumulado de los movimientos (amount va con signo).
+const treasuryByDay = new Map();
+let treasuryBalance = 0;
+for (const r of data.treasuryRows) {
+  treasuryBalance += Number(r.amount) || 0;
+  treasuryByDay.set(isoDay(r.createdAt), treasuryBalance);
+}
+const treasury = [...treasuryByDay.entries()]
+  .filter(([d]) => d >= win.from && d <= win.to)
+  .map(([date, bunz_balance]) => ({
+    date,
+    bunz_balance,
+    fiat_balance: null,
+    bank_balance: null,
+    reconciled: false,
+  }));
 
 const dataset = {
   spec_version: "1.0.0",
@@ -339,9 +367,10 @@ const dataset = {
   // Se incluyen si las tablas existen; si no, el validador las declara como hueco.
   ...(data.sources.obligations === "db" ? { obligations: data.obligations } : {}),
   ...(data.sources.ledger === "db" ? { bunz_ledger: data.ledger } : {}),
+  ...(treasury.length ? { treasury } : {}),
   // Si la tabla existe pero está vacía, NO se incluye: un libro vacío rompe la
   // reconciliación (R11) sin aportar evidencia. Se declara como hueco.
-  // Deliberadamente ausentes: treasury, abuse_signals (sin fuente todavía)
+  // Deliberadamente ausente: abuse_signals (sin detección todavía)
 };
 
 const validation = runValidation(dataset);

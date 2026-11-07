@@ -1,0 +1,35 @@
+name: Bunz Capacity Snapshot
+
+on:
+  schedule:
+    # diario 06:10 UTC: foto de capacidad autorizada vs consumida por afiliado
+    - cron: '10 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  snapshot:
+    name: Snapshot de capacidad (read-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Trigger capacity snapshot
+        run: |
+          APP_URL="${{ secrets.ADMIN_APP_URL || 'https://admin.rabbitty.me' }}"
+          CRON_SECRET="${{ secrets.CRON_SECRET }}"
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "$APP_URL/api/cron/capacity" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "x-cron-secret: $CRON_SECRET" \
+            -H "Accept: application/json")
+
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "HTTP Status: $HTTP_STATUS"
+          echo "Response: $BODY"
+
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "::error::Capacity snapshot failed with HTTP $HTTP_STATUS"
+            exit 1
+          fi

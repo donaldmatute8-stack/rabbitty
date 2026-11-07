@@ -9,7 +9,7 @@ import { ORDER_STATUS, isCashPaymentRequested, isOrderPaidStatus, isOrderPayable
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
 import { deriveOrderStage, type OrderStage, orderStageStepIndex } from "@rabbitty/events";
-import { tables as tablesTable, tableSessions, branches, menuCategories, menuItems, orders, orderItems, deliveries, payments, menuItemModifiers, restaurants, events as posEvents, paymentIntents, bunzReserves, bunzRedemptionAttempts, bunzLedgerEntries } from "@rabbitty/database-restaurant/schema";
+import { tables as tablesTable, tableSessions, branches, menuCategories, menuItems, orders, orderItems, deliveries, payments, menuItemModifiers, restaurants, events as posEvents, paymentIntents, bunzReserves, bunzRedemptionAttempts, bunzLedgerEntries, bunzObligations, bunzObligationEvents } from "@rabbitty/database-restaurant/schema";
 import { DELIVERY_PROVIDERS, canTransition, getProvider, type DeliveryStatus } from "../services/deliveryProviders";
 import {
   uberDirectConfigured,
@@ -28,6 +28,7 @@ function pendingSplit(input: { splitBunz?: number; splitCash?: number }): boolea
 import { miniappClient } from "../services/miniapp-client";
 import { assertOpenShiftForCash } from "../services/cashShift";
 import { REDEMPTION_REASONS, recordEmissionBooks, recordRedemptionBooks } from "../services/bunzBooks";
+import { accrueCommission } from "../services/bunzObligations";
 
 
 /**
@@ -1229,6 +1230,13 @@ export const posRouter = router({
                 bunz: awardedBunz,
                 tables: { ledger: bunzLedgerEntries },
               });
+              // OT-2: devengo de la comisión del afiliado (6%). Idempotente, no fatal.
+              await accrueCommission(ctx.restaurantDb, {
+                orderId: order.id,
+                affiliateId: linkBizId,
+                fiatAmount: Number(order.total || 0),
+                tables: { obligations: bunzObligations, events: bunzObligationEvents },
+              });
             }
           } catch (err) {
             console.error("[POS_REWARD_FAIL] post-assign orderId=" + order.id, err);
@@ -2080,6 +2088,12 @@ export const posRouter = router({
                 orderId: order.id,
                 bunz: totalAwardedBunz,
                 tables: { ledger: bunzLedgerEntries },
+              });
+              await accrueCommission(ctx.restaurantDb, {
+                orderId: order.id,
+                affiliateId: restaurant.businessId,
+                fiatAmount: finalAmount,
+                tables: { obligations: bunzObligations, events: bunzObligationEvents },
               });
             }
           }

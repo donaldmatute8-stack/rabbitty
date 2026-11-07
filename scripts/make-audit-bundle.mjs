@@ -77,6 +77,8 @@ const GROUPS = [
       "apps/pos/src/components/RedemptionRejectModal.tsx",
       "apps/pos/src/components/CheckoutModal.tsx",
       "apps/pos/src/app/orders/page.tsx",
+      "apps/admin/src/app/api/cron/validation/route.ts",
+      ".github/workflows/bunz-validation-cron.yml",
     ],
   },
   {

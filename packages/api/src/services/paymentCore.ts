@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import {
   orders,
@@ -17,10 +17,13 @@ import {
   ledgerEntries,
   bunzRedemptionAttempts,
   bunzLedgerEntries,
+  bunzObligations,
+  bunzObligationEvents,
 } from "@rabbitty/database-restaurant/schema";
 import { users, ownedBusinesses } from "@rabbitty/database-core/schema";
 import { cancelStripePaymentIntent } from "./stripeConnect";
-import { recordEmissionBooks, recordRedemptionBooks, recordReversalBooks } from "./bunzBooks";
+import { isBooksEnabled, recordEmissionBooks, recordRedemptionBooks, recordReversalBooks } from "./bunzBooks";
+import { accrueCommission } from "./bunzObligations";
 import { buildShadowReport, recordShadowReport, type ShadowReport } from "./payments/shadow";
 import { bus, EventTypes } from "@rabbitty/events";
 import crypto from "crypto";
@@ -887,9 +890,39 @@ export async function reconcileOrderCashback(
       bunz: res.bunz ?? 0,
       tables: { ledger: bunzLedgerEntries },
     });
+
+    // OT-2: devengo de comisión (idempotente, no fatal).
+    await accrueCommission(db, {
+      orderId: order.id,
+      affiliateId: businessId,
+      fiatAmount: fiatMxn,
+      tables: { obligations: bunzObligations, events: bunzObligationEvents },
+    });
     return { minted: true, bunz: res.bunz ?? 0 };
   }
   return { minted: false };
+}
+
+/**
+ * Reversión genérica de los asientos de un pedido por tipo (`reward`/`redemption`).
+ * Idempotente y no fatal: si falla, el reembolso sigue.
+ */
+export async function reverseOrderLedger(
+  db: Db,
+  { orderId, types }: { orderId: string; types: string[] }
+): Promise<{ ok: boolean; errors: string[] }> {
+  if (!isBooksEnabled()) return { ok: true, errors: [] };
+  try {
+    const entries = await db
+      .select()
+      .from(bunzLedgerEntries)
+      .where(and(eq(bunzLedgerEntries.refId, orderId), inArray(bunzLedgerEntries.refType, types)));
+    return await recordReversalBooks(db, { original: entries, tables: { ledger: bunzLedgerEntries } });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn(`[bunzBooks] reversión de ${orderId} no registrada (no fatal): ${msg}`);
+    return { ok: false, errors: [msg] };
+  }
 }
 
 /**
@@ -1324,14 +1357,9 @@ export async function refundBunzPayment(
       .set({ status: amount >= original ? "REFUNDED" : "PARTIALLY_REFUNDED" })
       .where(eq(payments.id, payment.id));
 
-    // OT-3: reembolso total de la pata Bunz ⇒ revertir sus asientos de redención.
-    // La reversión de la RECOMPENSA es una decisión de negocio aparte (¿se clawback?).
+    // OT-3: reembolso total ⇒ revertir redención y recompensa del pedido.
     if (amount >= original && payment.orderId) {
-      const entries = await tx
-        .select()
-        .from(bunzLedgerEntries)
-        .where(and(eq(bunzLedgerEntries.refId, payment.orderId), eq(bunzLedgerEntries.refType, "redemption")));
-      await recordReversalBooks(tx, { original: entries, tables: { ledger: bunzLedgerEntries } });
+      await reverseOrderLedger(tx, { orderId: payment.orderId, types: ["reward", "redemption"] });
     }
 
     return { refunded: true, amount };

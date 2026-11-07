@@ -252,6 +252,12 @@ export const paymentsRouter = router({
         .set({ status: isFull ? "REFUNDED" : "PARTIALLY_REFUNDED" })
         .where(eq(payments.id, input.paymentId));
 
+      // OT-3: reembolso total ⇒ revertir la recompensa emitida (clawback).
+      if (isFull && payment.orderId) {
+        const { reverseOrderLedger } = await import("../services/paymentCore");
+        await reverseOrderLedger(ctx.restaurantDb, { orderId: payment.orderId, types: ["reward"] });
+      }
+
       bus.emit(EventTypes.PAYMENT_PROCESSED, { paymentId: refund!.id, orderId: payment.orderId, type: "REFUND" });
       return refund;
     }),
