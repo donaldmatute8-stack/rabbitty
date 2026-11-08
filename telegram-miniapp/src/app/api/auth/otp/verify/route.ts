@@ -28,6 +28,8 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const rawInput = (body?.input || body?.email || '').trim();
     const code = body?.code?.trim();
+    const acceptedTerms = body?.acceptedTerms === true;
+    const consentVersion = typeof body?.consentVersion === 'string' ? body.consentVersion.slice(0, 40) : null;
 
     const isTesterDemo = process.env.NODE_ENV !== 'production' && (rawInput.toLowerCase() === 'tester' || rawInput.toLowerCase() === 'tester@rabbitty.me');
     const isAcceptedDemoCode = isTesterDemo && (code === '123456' || code === 'demo12' || code === 'demo123' || (code?.length === 6));
@@ -198,6 +200,19 @@ export async function POST(req: NextRequest) {
         role: 'USER',
         ...(firstSeenCampaignId ? { firstSeenCampaignId } : {}),
       }).returning();
+    }
+
+    // ── Evidencia de aceptación de Términos/Privacidad (Rabbitters) ──
+    if (acceptedTerms) {
+      const consentAt = new Date();
+      await db.update(users).set({
+        termsAcceptedAt: consentAt,
+        termsVersion: consentVersion,
+        privacyAcceptedAt: consentAt,
+        privacyVersion: consentVersion,
+        consentIp: getClientIp(req),
+        consentUserAgent: req.headers.get('user-agent') || null,
+      }).where(eq(users.id, resolvedUser.id));
     }
 
     // reclamar automáticamente Bono de Bienvenida reservado en /download (pendingVaults) o promoRef con Split Triangular + Push Notification

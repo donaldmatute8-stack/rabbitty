@@ -54,6 +54,13 @@ export const users = pgTable("users", {
   pushRules: text("pushRules").default("{}").notNull(),
   /** Usuario de prueba: sus saldos se depuran y no tienen valor real. */
   sandbox: boolean("sandbox").default(false).notNull(),
+  /** Evidencia de aceptación de Términos y Aviso de Privacidad. */
+  termsAcceptedAt: timestamp("termsAcceptedAt"),
+  termsVersion: text("termsVersion"),
+  privacyAcceptedAt: timestamp("privacyAcceptedAt"),
+  privacyVersion: text("privacyVersion"),
+  consentIp: text("consentIp"),
+  consentUserAgent: text("consentUserAgent"),
 });
 
 export const verificationTokens = pgTable("verificationTokens", {

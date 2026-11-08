@@ -712,6 +712,17 @@ export default function BusinessSetupForm({ onSubmit, isLoading }: BusinessSetup
                 </p>
               </div>
 
+              <p style={{ margin: '0 0 12px', fontSize: 11, color: 'rgba(255,255,255,0.55)', lineHeight: 1.5 }}>
+                Consulta el{' '}
+                <a href="https://rabbitty.me/contrato" target="_blank" rel="noreferrer" style={{ color: '#F472B6', textDecoration: 'underline' }}>
+                  Contrato de Participación
+                </a>{' '}
+                y el{' '}
+                <a href="https://rabbitty.me/privacy" target="_blank" rel="noreferrer" style={{ color: '#F472B6', textDecoration: 'underline' }}>
+                  Aviso de Privacidad
+                </a>.
+              </p>
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
                 <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: 12, color: 'rgba(255,255,255,0.8)', lineHeight: 1.4 }}>
                   <input type="checkbox" checked={acceptedTerms} onChange={(e) => setAcceptedTerms(e.target.checked)} style={{ marginTop: 2, width: 17, height: 17, accentColor: THEME_COLOR, flexShrink: 0 }} />

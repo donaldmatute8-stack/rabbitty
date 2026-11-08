@@ -66,6 +66,8 @@ const STEPS: Array<{
   },
 ];
 
+const CONSENT_VERSION = '2026-11-08';
+
 const COUNTRIES = [
   { code: 'MX', dialCode: '+52', flag: '🇲🇽', name: 'México' },
   { code: 'US', dialCode: '+1', flag: '🇺🇸', name: 'EE.UU. / CA' },
@@ -87,6 +89,7 @@ export default function OnboardingPage() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [username, setUsername] = useState('');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const [recipient, setRecipient] = useState('');
   const [loading, setLoading] = useState(false);
@@ -177,7 +180,7 @@ export default function OnboardingPage() {
       const res = await fetch('/api/auth/otp/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input: recipient, code }),
+        body: JSON.stringify({ input: recipient, code, acceptedTerms, consentVersion: CONSENT_VERSION }),
       });
       const data = await res.json();
       if (!res.ok || !data?.success) {
@@ -290,16 +293,38 @@ export default function OnboardingPage() {
       <div className="w-full max-w-md mx-auto space-y-3">
         {step === 0 && (
           <>
+            <label className="flex cursor-pointer items-start gap-2.5 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-left">
+              <input
+                type="checkbox"
+                checked={acceptedTerms}
+                onChange={(e) => setAcceptedTerms(e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-pink-500"
+              />
+              <span className="text-[11px] leading-relaxed text-white/60">
+                He leído y acepto los{' '}
+                <a
+                  href="https://rabbitty.me/privacy"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-bold text-pink-300 underline"
+                >
+                  Términos y el Aviso de Privacidad
+                </a>
+                . Entiendo que mis datos se usan para operar mi cuenta, mis Bunz y la seguridad del
+                servicio.
+              </span>
+            </label>
             <motion.button
               onClick={() => {
                 setError('');
                 setStep(1);
               }}
+              disabled={!acceptedTerms}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              whileTap={{ scale: 0.97 }}
-              className="w-full rounded-full py-[17px] text-[16px] font-black text-white shadow-[0_6px_25px_rgba(233,30,99,0.35)]"
-              style={{ background: 'linear-gradient(135deg, #FF2E93 0%, #E91E63 100%)' }}
+              whileTap={{ scale: acceptedTerms ? 0.97 : 1 }}
+              className="w-full rounded-full py-[17px] text-[16px] font-black text-white shadow-[0_6px_25px_rgba(233,30,99,0.35)] disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ background: acceptedTerms ? 'linear-gradient(135deg, #FF2E93 0%, #E91E63 100%)' : 'rgba(255,255,255,0.12)' }}
             >
               Comenzar Ahora
             </motion.button>

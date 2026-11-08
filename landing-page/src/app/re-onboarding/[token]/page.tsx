@@ -374,6 +374,9 @@ export default function ReonboardingPage() {
                 Privacidad y la capacidad propuesta. Declaro ser el representante legal del negocio.{" "}
                 <a href="/contrato" target="_blank" rel="noreferrer" className="text-pink-300 underline">
                   Leer contrato completo
+                </a>{" · "}
+                <a href="/privacy" target="_blank" rel="noreferrer" className="text-pink-300 underline">
+                  Aviso de Privacidad
                 </a>
               </span>
             </label>

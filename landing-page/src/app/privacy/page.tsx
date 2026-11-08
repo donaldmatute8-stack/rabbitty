@@ -124,13 +124,13 @@ export default function PrivacyPage() {
             </p>
             <ul className="list-disc pl-6 mt-3 space-y-2 text-white/70">
               <li>
-                <strong className="text-white">Identificación y Perfil:</strong> Nombre de usuario, identificador de Telegram (Telegram User ID / Chat ID en caso de utilizar este canal), dirección de correo electrónico y foto de perfil si el usuario la suministra voluntariamente.
+                <strong className="text-white">Identificación y Perfil:</strong> Nombre, número de teléfono (para verificación por SMS/OTP), nombre de usuario, identificador de Telegram (Telegram User ID / Chat ID en caso de utilizar este canal), dirección de correo electrónico y foto de perfil si el usuario la suministra voluntariamente.
               </li>
               <li>
                 <strong className="text-white">Datos de Operación y Transaccionalidad:</strong> Historial de visitas a cafeterías y comercios afiliados, registros de escaneo de códigos QR, folios de tickets procesados, saldo y movimientos de puntos «Bunz», niveles en el programa de gamificación y códigos de referidos.
               </li>
               <li>
-                <strong className="text-white">Datos de Geolocalización:</strong> Coordenadas aproximadas o precisas de tu dispositivo, únicamente mientras la aplicación está en uso y previa autorización expresa, para mostrarte comercios afiliados y Happy Hours cercanos. La ubicación no se usa en segundo plano. Se conserva el último punto asociado a la sesión y los eventos técnicos necesarios para seguridad y prevención de fraude; puedes desactivarla desde los permisos del sistema sin perder funciones que no dependen de ella.
+                <strong className="text-white">Datos de Geolocalización:</strong> Coordenadas aproximadas o precisas de tu dispositivo, con tu autorización, para mostrarte comercios afiliados y Happy Hours cercanos. Si activas las alertas de proximidad, podemos usar la ubicación también en segundo plano (con permiso del sistema) para avisarte cuando estés cerca de un comercio; puedes desactivar ese permiso en cualquier momento. Se conserva el último punto asociado a la sesión y los eventos técnicos necesarios para seguridad y prevención de fraude.
               </li>
               <li>
                 <strong className="text-white">Acceso a Cámara:</strong> Uso del sensor de cámara estrictamente para el escaneo de códigos QR en mostrador o tickets de compra. <em>RABBITTY no almacena imágenes de la galería personal de los usuarios sin su acción directa.</em>

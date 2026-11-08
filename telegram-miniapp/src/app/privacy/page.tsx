@@ -6,7 +6,7 @@ import { Eye, FileText, Database, ShieldOff, type LucideIcon } from 'lucide-reac
 const HAIRLINE = '1px solid var(--border-subtle)';
 
 const POLICIES: { icon: LucideIcon; title: string; desc: string }[] = [
-  { icon: Database, title: 'Minimización de Datos', desc: 'Solo recolectamos lo estrictamente necesario para que la app funcione. Ni tu nombre, ni tu teléfono.' },
+  { icon: Database, title: 'Minimización de Datos', desc: 'Solo recolectamos los datos necesarios para operar tu cuenta, tus recompensas y la seguridad del servicio.' },
   { icon: ShieldOff, title: 'Cero Rastreo Publicitario', desc: 'No vendemos tus datos a terceros ni usamos trackers de publicidad invasivos.' },
   { icon: FileText, title: 'Transparencia Total', desc: 'Todas las transacciones de recompensas quedan registradas inmutablemente en nuestro ledger abierto.' },
 ];

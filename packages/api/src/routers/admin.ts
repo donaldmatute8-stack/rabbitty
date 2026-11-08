@@ -1460,9 +1460,29 @@ export const adminRouter = router({
       const targetBiz = biz || firstBiz;
 
       // ── Métricas desde transactions (fuente semántica del comercio) ──
-      // Entregados = recompensas minteadas (+); Redimidos = gastos aceptados (−)
+      // Entregados = recompensas minteadas (+); Redimidos = gastos aceptados (−).
+      // Tras un reset de economía, la métrica vigente cuenta solo lo posterior al
+      // corte. El histórico se conserva en `transactions` (incluye fiat) y se
+      // devuelve aparte para no confundir "entregado histórico" con "vigente".
       let totalBunzMinted = 0;
       let totalBunzRedimido = 0;
+      let totalBunzMintedAllTime = 0;
+      let totalBunzRedimidoAllTime = 0;
+      let resetAt: Date | null = null;
+      try {
+        const [resetRow] = await ctx.coreDb
+          .select({ value: systemSettings.value })
+          .from(systemSettings)
+          .where(eq(systemSettings.key, "bunz_economy_reset_at"))
+          .limit(1);
+        if (resetRow?.value) {
+          const parsed = new Date(resetRow.value);
+          if (!Number.isNaN(parsed.getTime())) resetAt = parsed;
+        }
+      } catch {
+        // Sin marcador de reset: se comporta como antes (todo el historial).
+      }
+
       if (targetBiz?.id) {
         try {
           const [txAgg] = await ctx.coreDb
@@ -1471,9 +1491,23 @@ export const adminRouter = router({
               redeemed: sql<number>`COALESCE(-SUM(${transactions.bunzMinted}) FILTER (WHERE ${transactions.status} = 'CHARGED'), 0)::int`,
             })
             .from(transactions)
-            .where(eq(transactions.businessId, targetBiz.id));
+            .where(
+              resetAt
+                ? and(eq(transactions.businessId, targetBiz.id), gte(transactions.createdAt, resetAt))
+                : eq(transactions.businessId, targetBiz.id)
+            );
           totalBunzMinted = Number(txAgg?.delivered ?? 0);
           totalBunzRedimido = Number(txAgg?.redeemed ?? 0);
+
+          const [txAllAgg] = await ctx.coreDb
+            .select({
+              delivered: sql<number>`COALESCE(SUM(${transactions.bunzMinted}) FILTER (WHERE ${transactions.status} = 'MINTED' OR ${transactions.status} = 'COMPLETED'), 0)::int`,
+              redeemed: sql<number>`COALESCE(-SUM(${transactions.bunzMinted}) FILTER (WHERE ${transactions.status} = 'CHARGED'), 0)::int`,
+            })
+            .from(transactions)
+            .where(eq(transactions.businessId, targetBiz.id));
+          totalBunzMintedAllTime = Number(txAllAgg?.delivered ?? 0);
+          totalBunzRedimidoAllTime = Number(txAllAgg?.redeemed ?? 0);
         } catch (aggErr) {
           console.warn("[getAffiliateBunzInventory] Could not aggregate:", aggErr);
         }
@@ -1488,6 +1522,9 @@ export const adminRouter = router({
           bunzBalance: biz.bunzBalance ?? 0,
           totalBunzMinted,
           totalBunzRedimido,
+          totalBunzMintedAllTime,
+          totalBunzRedimidoAllTime,
+          resetAt: resetAt?.toISOString() ?? null,
           package: biz.package || "Personalizado",
           rewardPercentage: biz.rewardPercentage ?? 10,
           status: biz.status,
@@ -1502,6 +1539,10 @@ export const adminRouter = router({
         category: firstBiz?.category || "Comercio",
         bunzBalance: firstBiz?.bunzBalance ?? 0,
         totalBunzMinted,
+        totalBunzRedimido,
+        totalBunzMintedAllTime,
+        totalBunzRedimidoAllTime,
+        resetAt: resetAt?.toISOString() ?? null,
         package: firstBiz?.package || "Personalizado",
         rewardPercentage: firstBiz?.rewardPercentage ?? 10,
         status: firstBiz?.status || "APPROVED",
@@ -1516,6 +1557,10 @@ export const adminRouter = router({
         category: "Comercio",
         bunzBalance: 0,
         totalBunzMinted: 0,
+        totalBunzRedimido: 0,
+        totalBunzMintedAllTime: 0,
+        totalBunzRedimidoAllTime: 0,
+        resetAt: null,
         package: "Sin paquete",
         rewardPercentage: 10,
         status: "APPROVED",

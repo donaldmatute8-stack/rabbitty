@@ -203,12 +203,33 @@ export default function AdminPage() {
                   </p>
                 </div>
                 <div className="pl-4">
-                  <span className="text-[10px] uppercase tracking-wider text-amber-300 font-black block">Entregados</span>
-                  <p className="text-base font-black text-white leading-none mt-0.5">
+                  <span className="text-[10px] uppercase tracking-wider text-amber-300 font-black block">
+                    Entregados
+                    {(bunzInventory as any)?.resetAt && (
+                      <span className="ml-1 text-[8px] font-bold normal-case tracking-normal text-gray-500">
+                        desde reset
+                      </span>
+                    )}
+                  </span>
+                  <p
+                    className="text-base font-black text-white leading-none mt-0.5"
+                    title={
+                      (bunzInventory as any)?.resetAt
+                        ? `Histórico total: ${((bunzInventory as any)?.totalBunzMintedAllTime ?? 0).toLocaleString()} BZ`
+                        : undefined
+                    }
+                  >
                     {((bunzInventory as any)?.totalBunzMinted ?? 0).toLocaleString()} <span className="text-xs font-bold text-amber-400">BZ</span>
                   </p>
                   <span className="text-[10px] uppercase tracking-wider text-emerald-300 font-black block mt-1.5">Redimidos</span>
-                  <p className="text-base font-black text-white leading-none mt-0.5">
+                  <p
+                    className="text-base font-black text-white leading-none mt-0.5"
+                    title={
+                      (bunzInventory as any)?.resetAt
+                        ? `Histórico total: ${((bunzInventory as any)?.totalBunzRedimidoAllTime ?? 0).toLocaleString()} BZ`
+                        : undefined
+                    }
+                  >
                     {((bunzInventory as any)?.totalBunzRedimido ?? 0).toLocaleString()} <span className="text-xs font-bold text-emerald-400">BZ</span>
                   </p>
                 </div>
