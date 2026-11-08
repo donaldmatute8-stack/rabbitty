@@ -131,11 +131,12 @@ export default function BusinessPortal() {
             setRecentTxs(txs.slice(0, 8));
             const uniqueClients = new Set(txs.map((t) => t.userId));
             const totalBunz = txs.reduce((sum: number, t) => sum + (t.bunzMinted || 0), 0);
+            const totals = txData.currentTotals as { delivered?: number; count?: number; clients?: number } | undefined;
             setStats({
-              clients: uniqueClients.size,
-              tickets: txs.length,
-              bunz: totalBunz,
-              visits: txs.length,
+              clients: totals?.clients ?? uniqueClients.size,
+              tickets: totals?.count ?? txs.length,
+              bunz: totals?.delivered ?? totalBunz,
+              visits: totals?.count ?? txs.length,
             });
           }
 

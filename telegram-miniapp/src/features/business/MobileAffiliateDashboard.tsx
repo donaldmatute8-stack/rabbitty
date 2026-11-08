@@ -129,13 +129,14 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
       PlatformBridge.getAuthHeaders()
         .then(headers => fetch(`/api/business/transactions?businessId=${business.id}`, { headers }))
         .then(r => r.json())
-        .then((data: { success?: boolean; transactions?: TransactionItem[] }) => {
+        .then((data: { success?: boolean; transactions?: TransactionItem[]; currentTotals?: { delivered: number; redeemed: number; count: number; clients: number } }) => {
           if (data.success && data.transactions) {
-            setTxCount(data.transactions.length);
             const uniqueClients = new Set(data.transactions.map((t) => t.userId));
-            setClientCount(uniqueClients.size);
+            const totals = data.currentTotals;
+            setTxCount(totals?.count ?? data.transactions.length);
+            setClientCount(totals?.clients ?? uniqueClients.size);
             const total = data.transactions.reduce((sum: number, t) => sum + (t.bunzMinted || 0), 0);
-            setTotalBunz(total);
+            setTotalBunz(totals?.delivered ?? total);
           }
         })
         .catch(() => {});

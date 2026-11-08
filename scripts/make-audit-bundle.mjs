@@ -210,6 +210,10 @@ const GROUPS = [
       "landing-page/src/lib/contractContent.ts",
       "landing-page/src/lib/contractEvidence.ts",
       "landing-page/src/app/api/re-onboarding/contract/route.ts",
+      "telegram-miniapp/src/app/api/auth/consent/route.ts",
+      "telegram-miniapp/src/components/ConsentGate.tsx",
+      "telegram-miniapp/src/app/api/auth/otp/verify/route.ts",
+      "packages/database-core/migrations/manual/0053_user_consent.sql",
     ],
   },
   {

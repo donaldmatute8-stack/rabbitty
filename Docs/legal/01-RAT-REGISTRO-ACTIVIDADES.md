@@ -29,11 +29,11 @@
 |---|---|
 | Finalidad | Crear cuenta, autenticar, recuperar acceso, prevenir abuso |
 | Titulares | Usuarios (Rabbitters) |
-| Datos | Nombre, usuario, correo, teléfono, Telegram ID, wallet TON, credenciales, TOTP, passkeys (llave pública y metadatos), dispositivos push, sesiones, IP/UA |
+| Datos | Nombre, usuario, correo, teléfono, Telegram ID, wallet TON, credenciales, TOTP, passkeys (llave pública y metadatos), dispositivos push, sesiones, IP/UA, aceptación de Términos/Privacidad (versión, fecha, IP, UA) |
 | Base legal | CT, IL (seguridad), LEG (cuando aplique) |
 | Rol | R |
 | Encargados | Railway, Neon, AWS S3, APNs, Telegram, Resend, SignalWire |
-| Tablas | `users`, `passkeys`, `trustedSessions`, `pushDevices`, `verificationTokens`, `webSessions` |
+| Tablas | `users` (`termsAcceptedAt`, `termsVersion`, `privacyAcceptedAt`, `privacyVersion`, `consentIp`, `consentUserAgent`), `passkeys`, `trustedSessions`, `pushDevices`, `verificationTokens`, `webSessions` |
 | Conservación | Cuenta activa + 5 años para evidencia; logs 12 meses |
 | Notas | No se guardan plantillas biométricas; passkey = credencial pública |
 
